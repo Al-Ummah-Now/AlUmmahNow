@@ -4,11 +4,11 @@ import { redirect } from 'next/navigation'
 import Image from 'next/image';
 import { VideoInfo } from '@/app/interfaces';
 
-const RelatedVideo: React.FC<VideoInfo> = ( info ) => {
+const RelatedVideo: React.FC<VideoInfo> = (info) => {
   let handleClick = () => {
     redirect(`?vid=${info.id}`);
   }
-  
+
   return (
     <div className="flex items-center space-x-4 p-4" onClick={handleClick}>
       <div className="w-1/3 bg-gray-300 rounded-lg overflow-hidden">

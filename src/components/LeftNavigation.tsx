@@ -12,14 +12,14 @@ const navItems = [
 const LeftNavigation: React.FC<{ isCollapsed: boolean }> = ({ isCollapsed }) => {
     return (
         <nav
-            className={`bg-ummah-bg p-4 rounded-sm ${isCollapsed ? "md:w-22 w-0 hidden md:block" : "md:w-56" } transition-all duration-300`}
+            className={`bg-ummah-bg p-4 rounded-sm ${isCollapsed ? "md:w-22 w-0 hidden md:block" : "md:w-56"} transition-all duration-300`}
         >
             <ul>
                 {navItems.map((item, index) => (
                     <li key={index}>
                         <a
                             href={item.href}
-                            className={`flex items-center space-x-2 hover:bg-ummah-400 rounded-sm py-2 pl-2 ${isCollapsed ? "" : "" }`}
+                            className={`flex items-center space-x-2 hover:bg-ummah-400 rounded-sm py-2 pl-2 ${isCollapsed ? "" : ""}`}
                         >
                             <IcoButton style={item.icon} color="text-ummah-bg bg-ummah-text" />
                             <span

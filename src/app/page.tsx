@@ -93,8 +93,8 @@ export default function Home() {
           video: video.videoUrl,
           views: `${video.views || 0}`,
           dateCreated: new Date(video.dateCreated),
-          dateModified: new Date(video.dateModified) 
-         })));
+          dateModified: new Date(video.dateModified)
+        })));
       } catch (error) {
         console.error(error);
       }
@@ -121,35 +121,35 @@ export default function Home() {
 
   return (
     <ThemeProvider value={{}}>
-    <div className="flex flex-col min-h-screen bg-ummah-bg">
-      {/* Header */}
-      <Header toggleCollapse={toggleCollapse} />
+      <div className="flex flex-col min-h-screen bg-ummah-bg">
+        {/* Header */}
+        <Header toggleCollapse={toggleCollapse} />
 
-      <div className="flex flex-1 flex-col md:flex-row">
-        {/* Left Navigation */}
-        <LeftNavigation isCollapsed={isCollapsed} />
+        <div className="flex flex-1 flex-col md:flex-row">
+          {/* Left Navigation */}
+          <LeftNavigation isCollapsed={isCollapsed} />
 
-        <main className="flex flex-col items-center justify-between p-4 w-full mt-0 lg:mt-0">
-          {/* Video Player Section */}
-          {videoDetails && (
-            <div className="w-full mt-0">
-              <VideoPlayer options={videoDetails} />
-            </div>
-          )}
-          <div className="flex flex-col lg:flex-row w-full mt-4 gap-6">
-            {/* Comments Section */}
-            <div className="w-full lg:w-3/5 p-4">
-              <CommentsSection comments={comments} />
-            </div>
+          <main className="flex flex-col items-center justify-between p-4 w-full mt-0 lg:mt-0">
+            {/* Video Player Section */}
+            {videoDetails && (
+              <div className="w-full mt-0">
+                <VideoPlayer options={videoDetails} />
+              </div>
+            )}
+            <div className="flex flex-col lg:flex-row w-full mt-4 gap-6">
+              {/* Comments Section */}
+              <div className="w-full lg:w-3/5 p-4">
+                <CommentsSection comments={comments} />
+              </div>
 
-            {/* Related Videos Section */}
-            <div className="w-full lg:w-2/5 pt-4">
-              <RelatedVideosSection relatedVideos={relatedVideos} />
+              {/* Related Videos Section */}
+              <div className="w-full lg:w-2/5 pt-4">
+                <RelatedVideosSection relatedVideos={relatedVideos} />
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
-    </div>
-  </ThemeProvider>
+    </ThemeProvider>
   );
 }

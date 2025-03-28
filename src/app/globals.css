@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @config '../../tailwind.config.ts';
 
@@ -31,5 +31,4 @@
   body {
     height: 100%;
   }
-
 }
