@@ -20,7 +20,7 @@ const Header: React.FC<{ toggleCollapse: () => void }> = ({ toggleCollapse }) =>
   return (
     <header className="flex items-center justify-between p-4 bg-ummah-bg ">
       {/* Menu Section */}
-      <div className="flex items-center space-x-4 ">
+      <div className="flex items-center space-x-4 pl-2">
         <IcoButton style="fa-bars" color='text-ummah-bg bg-ummah-text' onClick={toggleCollapse}>
         </IcoButton>
       </div>

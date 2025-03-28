@@ -1,81 +1,107 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { RelatedVideoProps } from '@/lib/relatedVideo';
-import RelatedVideosSection from '@/lib/related';
-import CommentsSection from '@/lib/commentsSection';
-import { CommentProps } from '@/lib/comment';
-import Header from '@/lib/Header';
-import LeftNavigation from '@/lib/LeftNavigation';
-import VideoPlayer, { PlayerOptions } from '@/lib/videoPlayer';
-import { ThemeProvider } from "@material-tailwind/react";
-import { darkModeStore } from "../lib/darkMode";
+import { ThemeProvider } from "@material-tailwind/react"; // External library imports
+import { useQueryState } from 'nuqs'
+
+// Local imports
+import { darkModeStore } from "../components/darkMode";
+import { CommentProps } from '@/components/comment';
+import RelatedVideosSection from '@/components/related';
+import CommentsSection from '@/components/commentsSection';
+import Header from '@/components/Header';
+import LeftNavigation from '@/components/LeftNavigation';
+import VideoPlayer, { PlayerOptions } from '@/components/videoPlayer';
+import { PaginationResponse, VideoInfo, VideoObject } from './interfaces';
 
 export default function Home() {
-  const [isCollapsed, setIsCollapsed] = useState(false);    
-    const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
-   
-    useEffect(() => {
-      return darkModeStore.subscribe(setDarkmode);
-    }, []);
-  
-    useEffect(() => {
-      if (darkmode) {
-        document.body.classList.add("dark");
-      } else {
-        document.body.classList.remove("dark");
-      }
-    }, [darkmode]);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
+  const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
+  const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null); // Add this state
+  const [vid, setVid] = useQueryState('vid', { shallow: false });
+
+  useEffect(() => {
+    setIsMounted(true); // Ensure the component is mounted on the client
+  }, []);
+
+
+  useEffect(() => {
+    return darkModeStore.subscribe(setDarkmode);
+  }, []);
+
+  useEffect(() => {
+    if (darkmode) {
+      document.body.classList.add("dark");
+    } else {
+      document.body.classList.remove("dark");
+    }
+  }, [darkmode]);
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
   };
 
-  const videoOptions:PlayerOptions = {
-    autoplay: true,
-    url: "https://alummahnow-mostafa-elbadry.b-cdn.net/Mostafa%20Elbadry/%D8%A7%D9%84%D8%AA%D8%B9%D9%82%D9%8A%D8%A8%20%D8%B9%D9%84%D9%89%20%D8%A7%D9%84%D9%86%D8%B5%D8%A7%D8%A6%D8%AD%20%D9%88%D8%A7%D9%84%D8%AA%D9%88%D8%AC%D9%8A%D9%87%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D8%AA%D9%84%D8%A7%D8%AD%D9%82%D8%A9%20%D9%84%D9%82%D8%A7%D8%AF%D8%A9%20%D8%A7%D9%84%D8%AF%D9%88%D9%84%D8%A9%20%D8%A7%D9%84%D8%B3%D9%88%D8%B1%D9%8A%D8%A9%20%D8%A7%D9%84%D8%AC%D8%AF%D9%8A%D8%AF%D8%A9!!%20%D9%85%D8%B5%D8%B7%D9%81%D9%89%20%D8%A7%D9%84%D8%A8%D8%AF%D8%B1%D9%8A..mp4",
-    type: "video/mp4",
-    height: 720,
-    width: 1280
-  };
+  // Fetch video by ID from query string
+  useEffect(() => {
+    if (!isMounted) return;
 
-  const relatedVideos: RelatedVideoProps[] = [
-    {
-      title: "تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم.",
-      channel: "مصطفى البدري",
-      views: "123K views",
-      thumbnail: "/img/تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم - مصطفى البدري..jpg",
-      time: "3 days ago"
-    },
-    {
-      title: "تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم.",
-      channel: "مصطفى البدري",
-      views: "123K views",
-      thumbnail: "/img/تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم - مصطفى البدري..jpg",
-      time: "3 days ago"
-    },
-    {
-      title: "تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم.",
-      channel: "مصطفى البدري",
-      views: "123K views",
-      thumbnail: "/img/تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم - مصطفى البدري..jpg",
-      time: "3 days ago"
-    },
-    {
-      title: "تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم.",
-      channel: "مصطفى البدري",
-      views: "123K views",
-      thumbnail: "/img/تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم - مصطفى البدري..jpg",
-      time: "3 days ago"
-    },
-    {
-      title: "تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم.",
-      channel: "مصطفى البدري",
-      views: "123K views",
-      thumbnail: "/img/تاريخ المذاهب الأربعة وأهمية التمذهب لطالب العلم - مصطفى البدري..jpg",
-      time: "3 days ago"
-    },
-    // Add more related videos here
-  ];
+    const fetchVideoById = async () => {
+      if (!vid) return;
+
+      try {
+        const response = await fetch(`/api/videos/${vid}/`);
+        if (!response.ok) {
+          throw new Error(`Error fetching video: ${response.statusText}`);
+        }
+        const video: VideoObject = await response.json();
+        setVideoDetails({
+          id: video.id,
+          title: video.title,
+          description: video.description,
+          channel: video.channel,
+          url: video.videoUrl,
+          views: `${video.views || 0}`,
+          dateCreated: new Date(video.dateCreated),
+          autoplay: false,
+          type: "video/mp4",
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    fetchVideoById();
+  }, [vid, isMounted]); // Add this useEffect
+
+  // Fetch related videos from the API
+  useEffect(() => {
+    const fetchRelatedVideos = async () => {
+      try {
+        const response = await fetch('/api/videos?page=1&limit=15'); // Fetch first 5 related videos
+        if (!response.ok) {
+          throw new Error(`Error fetching related videos: ${response.statusText}`);
+        }
+        const result: PaginationResponse<VideoObject> = await response.json();
+        setRelatedVideos(result.data.map(video => ({
+          id: video.id,
+          title: video.title,
+          description: video.description,
+          channel: video.channel,
+          channelId: video.channelId,
+          thumbnail: video.thumbnailUrl,
+          video: video.videoUrl,
+          views: `${video.views || 0}`,
+          dateCreated: new Date(video.dateCreated),
+          dateModified: new Date(video.dateModified) 
+         })));
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    fetchRelatedVideos();
+  }, []);
 
   const comments: CommentProps[] = [
     {
@@ -94,29 +120,36 @@ export default function Home() {
   ];
 
   return (
-  <ThemeProvider value={{}}>
-  <div className="flex flex-col min-h-screen  bg-ummah-bg">
-    <Header toggleCollapse={toggleCollapse} />
-    <div className="flex flex-1">
-      <LeftNavigation isCollapsed={isCollapsed} />
-      <main className="flex flex-col items-center justify-between p-4 flex-1 ">
-        <div className="flex ">
-          {/* Video Player Section */}
-          <div className="flex-1 m-5">
-            <VideoPlayer options={videoOptions} />
-            <div className="mt-4">
-              <h1 className="text-2xl font-semibold text-ummah-text">آخر مستجدات فتنة محمد بن شمس الدين!! مصطفى البدري.</h1>
-              <p className="text-ummah-label">1,234,567 views • Mar 24, 2025</p>
-            </div>
-            <CommentsSection comments={comments} />
-          </div>
+    <ThemeProvider value={{}}>
+    <div className="flex flex-col min-h-screen bg-ummah-bg">
+      {/* Header */}
+      <Header toggleCollapse={toggleCollapse} />
 
-          {/* Sidebar Section */}
-          <RelatedVideosSection relatedVideos={relatedVideos} />
-        </div>
-      </main>
+      <div className="flex flex-1 flex-col md:flex-row">
+        {/* Left Navigation */}
+        <LeftNavigation isCollapsed={isCollapsed} />
+
+        <main className="flex flex-col items-center justify-between p-4 w-full mt-0 lg:mt-0">
+          {/* Video Player Section */}
+          {videoDetails && (
+            <div className="w-full mt-0">
+              <VideoPlayer options={videoDetails} />
+            </div>
+          )}
+          <div className="flex flex-col lg:flex-row w-full mt-4 gap-6">
+            {/* Comments Section */}
+            <div className="w-full lg:w-3/5 p-4">
+              <CommentsSection comments={comments} />
+            </div>
+
+            {/* Related Videos Section */}
+            <div className="w-full lg:w-2/5 pt-4">
+              <RelatedVideosSection relatedVideos={relatedVideos} />
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
-  </div>
   </ThemeProvider>
   );
 }

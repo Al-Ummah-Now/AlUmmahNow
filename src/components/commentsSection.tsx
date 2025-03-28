@@ -4,7 +4,7 @@ import Comment, { CommentProps } from './comment';
 
 const CommentsSection: React.FC<{ comments: CommentProps[] }> = ({ comments }) => {
   return (
-    <div className="mt-8">
+    <div className=" ">
       <h2 className="text-xl font-semibold mb-4 text-ummah-text">Comments</h2>
       <div className="space-y-4">
         {comments.map((comment, index) => (

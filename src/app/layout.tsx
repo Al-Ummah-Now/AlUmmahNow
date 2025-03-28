@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -31,7 +32,7 @@ export default function RootLayout({
           referrerPolicy="no-referrer"
         />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}><NuqsAdapter>{children}</NuqsAdapter></body>
       <script async src="https://unpkg.com/@material-tailwind/html@latest/scripts/ripple.js"></script>
     </html>
   );
