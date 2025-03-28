@@ -36,9 +36,9 @@ const VideoPlayer: React.FC<IVideoPlayerProps> = ({ options, onReady }) => {
         document.createElement("video-js")
       );
 
-     // videoElement.classList.add('vjs-big-play-centered');
+      // videoElement.classList.add('vjs-big-play-centered');
       //videoRef.current.appendChild(videoElement);
-      
+
       playerRef.current = videojs(videoElement, {
         ...initialOptions,
         ...options
@@ -59,7 +59,7 @@ const VideoPlayer: React.FC<IVideoPlayerProps> = ({ options, onReady }) => {
       if (player && !player.isDisposed()) {
         player.dispose();
         if (!playerRef.current) {
-          playerRef.current = undefined ;
+          playerRef.current = undefined;
         }
       }
     };
