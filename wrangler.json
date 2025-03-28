@@ -11,5 +11,15 @@
   "observability": {
     "enabled": true
   },
-  "upload_source_maps": true
+  "upload_source_maps": true,
+  "env": {
+    "BunnyImageKey": "",
+    "BunnyImageZone": "al-ummah-now-images",
+    "BunnyVideoKey": "",
+    "BunnyVideoZone": "videos-mostafa-elbadry",
+    "S3Api": "https://videos.alummahnow.net",
+    "S3Key": "",
+    "S3Secret": "",
+    "S3Token": ""
+  }
 }

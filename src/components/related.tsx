@@ -1,25 +1,29 @@
 "use client";
 import React from 'react';
 import Image from 'next/image';
-import RelatedVideo, { RelatedVideoProps } from '@/lib/relatedVideo';
+import RelatedVideo from '@/components/relatedVideo';
+import { VideoInfo } from '@/app/interfaces';
 
-const Related: React.FC<{ relatedVideos: RelatedVideoProps[] }> = ({ relatedVideos }) => {
+const Related: React.FC<{ relatedVideos: VideoInfo[] }> = ({ relatedVideos }) => {
     return (
-        <div className="flex-none mt-5">
+        <div className="flex flex-col w-full  ">
             <h2 className="text-xl font-semibold mb-4 text-ummah-text">Related Videos</h2>
             <div className="space-y-4">
-                {/* Example of a related video item */}
                 {relatedVideos.map((video, index) => (
                     <RelatedVideo
                         key={index}
+                        id={video.id}
                         title={video.title}
+                        description={video.description}
                         channel={video.channel}
                         views={video.views}
                         thumbnail={video.thumbnail}
-                        time={video.time}
+                        video={video.video}
+                        dateModified={video.dateModified}
+                        dateCreated={video.dateCreated}
+                        channelId={video.channelId}
                     />
                 ))}
-                {/* Repeat similar blocks for more related videos */}
             </div>
         </div>
     );
