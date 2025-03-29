@@ -8,11 +8,10 @@ const config = {
       wrapper: "cloudflare-node",
       converter: "edge",
       proxyExternalRequest: "fetch",
-      incrementalCache: kvIncrementalCache,
+      incrementalCache: "dummy",
       tagCache: "dummy",
       queue: "dummy",
     },
   },
 };
-
 export default config;
