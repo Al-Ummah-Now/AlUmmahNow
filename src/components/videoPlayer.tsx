@@ -1,5 +1,7 @@
 "use client";
 import React from 'react';
+import Image from 'next/image';
+
 
 export interface PlayerOptions {
   id: string;
@@ -32,9 +34,14 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
           Your browser does not support the video tag.
         </video>
       </div>
-      <div className="mt-4">
-        <h1 className="text-2xl font-semibold text-ummah-text">{options.title}</h1>
-        <p className="text-ummah-label">{options.views} views • {options.dateCreated.toLocaleDateString()}</p>
+      <div className="flex items-center space-x-4 mt-4">
+        <div className="w-10 h-10 rounded-full overflow-hidden relative">
+          <Image src="/avatar.png" alt="User" width={40} height={40} objectFit="cover" className='bg-ummah-label' />
+        </div>
+        <div className="mt-4">
+          <h1 className="text-2xl font-semibold text-ummah-text">{options.title}</h1>
+          <p className="text-ummah-label">{options.views} views • {options.dateCreated.toLocaleDateString()}</p>
+        </div>
       </div>
     </>
   );

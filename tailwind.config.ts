@@ -37,13 +37,13 @@ module.exports = withMT({
       },
       colors: {
         ummah: {
-          text: "#ffa037",
-          label: "#8e6c53",
-          bg: "#091f29",
+          text: "#000000",
+          label: "#aaaaaa",
+          bg: "#ffffff",
           50: "#ffa037",
           100: "#f6e196",
           150: "#8e6c53",
-          400: "#093041",
+          400: "#888888",
           500: "#092735",
           900: "#091f29",
         },
