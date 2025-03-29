@@ -7,14 +7,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const bucketName = 'videos'; // Replace with your bucket name
     const repository = new R2Repository<VideoObject>(bucketName);
 
-    const video = await repository.getObject(id);
+    try {
+        const video = await repository.getObject(id);
+    
+        if (!video) {
+            return NextResponse.json(
+                { message: `Video with id: ${id} not found.` },
+                { status: 404 },
+            );
+        }
 
-    if (!video) {
+        return NextResponse.json(video);
+    } catch (error) {
         return NextResponse.json(
-            { message: `Video with id: ${id} not found.` },
-            { status: 404 },
+            { message: `Error fetching objects from R2.`, error: error},
+            { status: 500 },
         );
     }
-
-    return NextResponse.json(video);
 }
