@@ -36,7 +36,7 @@ const Header: React.FC<{ toggleCollapse: () => void }> = ({ toggleCollapse }) =>
         <IcoButton style={darkmode ? "fa-sun" : "fa-moon"} color='text-ummah-bg bg-ummah-text' size="lg" onClick={handleClick}>
         </IcoButton>
         <div className="w-10 h-10 rounded-full overflow-hidden relative">
-          <Image src="/avatar.png" alt="User" width={40} height={40} objectFit="cover" className='bg-ummah-text' />
+          <Image src="/avatar.png" alt="User" width={40} height={40} objectFit="cover" className='bg-ummah-label' />
         </div>
       </div>
     </header>
