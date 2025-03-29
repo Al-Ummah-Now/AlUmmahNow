@@ -20,6 +20,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
     <>
       <div className="video-container w-full h-auto mt-0 max-w-[1920px]">
         <video
+          key={options.id}
           className="video-js vjs-default-skin w-full h-auto rounded-lg overflow-hidden"
           controls
           preload="auto"
