@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import R2Repository from './r2Repo';
-import { VideoObject } from '../interfaces';
+import { VideoObject } from '../../interfaces';
 
 const bucketName = 'videos'; // Replace with your bucket name
 const repository = new R2Repository<VideoObject>(bucketName);

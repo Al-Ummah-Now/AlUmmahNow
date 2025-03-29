@@ -1,4 +1,4 @@
-import { ResponseError, VideoInfo, VideoObject } from "@/app/interfaces";
+import { ResponseError, VideoInfo, VideoObject } from "@/interfaces";
 import { NextResponse } from "next/server";
 import R2Repository from "../../r2Repo";
 

@@ -3,7 +3,7 @@ import React from "react";
 import IcoButton from "./iconButton";
 
 const navItems = [
-    { label: "Home", icon: "fa-house", href: "#" },
+    { label: "Home", icon: "fa-house", href: "/" },
     { label: "Trending", icon: "fa-magnifying-glass", href: "#" },
     { label: "Subscriptions", icon: "fa-tv", href: "#" },
     { label: "Library", icon: "fa-bookmark", href: "#" },

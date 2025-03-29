@@ -1,4 +1,4 @@
-import { PaginationResponse, ResponseError, VideoInfo, VideoObject } from "@/app/interfaces";
+import { PaginationResponse, ResponseError, VideoInfo, VideoObject } from "@/interfaces";
 import { NextRequest, NextResponse } from "next/server";
 import R2Repository from "../r2Repo";
 

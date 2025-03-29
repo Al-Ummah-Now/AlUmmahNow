@@ -2,7 +2,7 @@
 import React from 'react';
 import Image from 'next/image';
 import RelatedVideo from '@/components/relatedVideo';
-import { VideoInfo } from '@/app/interfaces';
+import { VideoInfo } from '@/interfaces';
 
 const Related: React.FC<{ relatedVideos: VideoInfo[] }> = ({ relatedVideos }) => {
     return (
