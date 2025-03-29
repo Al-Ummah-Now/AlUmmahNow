@@ -13,19 +13,6 @@ const config = {
       queue: "dummy",
     },
   },
-
-  middleware: {
-    external: true,
-    override: {
-      wrapper: "cloudflare-edge",
-      converter: "edge",
-      proxyExternalRequest: "fetch",
-    },
-  },
-
-  dangerous: {
-    enableCacheInterception: false,
-  },
 };
 
 export default config;
