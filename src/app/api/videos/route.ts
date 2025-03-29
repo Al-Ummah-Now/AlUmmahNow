@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) : Promise<NextResponse<Paginatio
         };
         return NextResponse.json(response);
     } catch (error) {
+        console.error(error);
         return NextResponse.json(
             { message: `Error fetching objects from R2.`, error: error},
             { status: 500 },

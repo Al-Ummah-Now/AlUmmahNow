@@ -19,6 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
         return NextResponse.json(video);
     } catch (error) {
+        console.error(error);
         return NextResponse.json(
             { message: `Error fetching objects from R2.`, error: error},
             { status: 500 },
