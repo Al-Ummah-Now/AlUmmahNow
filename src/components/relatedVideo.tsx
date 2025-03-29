@@ -2,11 +2,11 @@
 import React from 'react';
 import { redirect } from 'next/navigation'
 import Image from 'next/image';
-import { VideoInfo } from '@/app/interfaces';
+import { VideoInfo } from '@/interfaces';
 
 const RelatedVideo: React.FC<VideoInfo> = (info) => {
   let handleClick = () => {
-    redirect(`?vid=${info.id}`);
+    redirect(`/video?vid=${info.id}`);
   }
 
   return (
