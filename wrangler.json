@@ -17,7 +17,7 @@
     "BunnyImageZone": "al-ummah-now-images",
     "BunnyVideoKey": "",
     "BunnyVideoZone": "videos-mostafa-elbadry",
-    "S3Api": "https://videos.alummahnow.net",
+    "S3Api": "https://0e4b6e7f9faf280c3c9bf95995edc64f.r2.cloudflarestorage.com",
     "S3Key": "",
     "S3Secret": "",
     "S3Token": ""
