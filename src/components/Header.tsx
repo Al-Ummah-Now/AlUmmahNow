@@ -1,20 +1,9 @@
 "use client";
-import React, { useEffect } from "react";
+import React from "react";
 import Image from 'next/image';
 import IcoButton from './iconButton';
-import { darkModeStore } from "./darkMode";
 
 const Header: React.FC<{ toggleCollapse: () => void }> = ({ toggleCollapse }) => {
-  const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
-
-  useEffect(() => {
-    return darkModeStore.subscribe(setDarkmode);
-  }, []);
-
-  const handleClick = () => {
-    const dark = !darkmode;
-    darkModeStore.set(dark);
-  };
 
 
   return (
@@ -33,8 +22,6 @@ const Header: React.FC<{ toggleCollapse: () => void }> = ({ toggleCollapse }) =>
 
       {/* User Account Section */}
       <div className="flex items-center space-x-4">
-        <IcoButton style={darkmode ? "fa-sun" : "fa-moon"} color='text-ummah-bg bg-ummah-text' size="lg" onClick={handleClick}>
-        </IcoButton>
         <div className="w-10 h-10 rounded-full overflow-hidden relative">
           <Image src="/avatar.png" alt="User" width={40} height={40} objectFit="cover" className='bg-ummah-label' />
         </div>
