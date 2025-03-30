@@ -1,8 +1,7 @@
 export type PaginationResponse<T> = {
-    page: number;
+    cursor: string;
     limit: number;
     total: number;
-    totalPages: number;
     data: T[];
 };
 

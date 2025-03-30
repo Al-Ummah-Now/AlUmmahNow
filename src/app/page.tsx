@@ -4,25 +4,24 @@ import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard";
 import Header from "@/components/Header";
 import LeftNavigation from "@/components/LeftNavigation";
+import { useQueryState } from 'nuqs'
 
 const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [cursor, setCursor] = useQueryState('cursor', { shallow: false });
   const [loading, setLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
 
-  const fetchVideos = async (page: number) => {
+  const fetchVideos = async (cursor: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/videos?page=${page}&limit=9`);
+      const response = await fetch(`/api/videos?cursor=${cursor}&limit=9`);
       if (!response.ok) {
         throw new Error(`Error fetching videos: ${response.statusText}`);
       }
       const data: PaginationResponse<VideoObject> = await response.json();
       setVideos(data.data);
-      setPage(data.page);
-      setTotalPages(data.totalPages);
+      setCursor(data.cursor);
     } catch (error) {
       console.error(error);
     } finally {
@@ -31,18 +30,12 @@ const VideosPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchVideos(page);
-  }, [page]);
+    fetchVideos(cursor);
+  }, [cursor]);
 
   const handleNextPage = () => {
-    if (page < totalPages) {
-      setPage(page + 1);
-    }
-  };
-
-  const handlePreviousPage = () => {
-    if (page > 1) {
-      setPage(page - 1);
+    if (cursor != '') {
+      setCursor(cursor);
     }
   };
 
@@ -75,21 +68,11 @@ const VideosPage: React.FC = () => {
           )}
           <div className="flex justify-between items-center mt-6">
             <button
-              onClick={handlePreviousPage}
-              disabled={page === 1}
-              className="px-4 py-2 bg-ummah-400 text-white rounded disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <p className="text-ummah-label">
-              Page {page} of {totalPages}
-            </p>
-            <button
               onClick={handleNextPage}
-              disabled={page === totalPages}
+              disabled={cursor === ''}
               className="px-4 py-2 bg-ummah-400 text-white rounded disabled:opacity-50"
             >
-              Next
+              Load More
             </button>
           </div>
         </main>

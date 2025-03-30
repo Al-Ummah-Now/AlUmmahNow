@@ -78,7 +78,7 @@ export default function Home() {
   useEffect(() => {
     const fetchRelatedVideos = async () => {
       try {
-        const response = await fetch('/api/videos?page=1&limit=15'); // Fetch first 5 related videos
+        const response = await fetch('/api/videos?limit=15'); // Fetch first 5 related videos
         if (!response.ok) {
           throw new Error(`Error fetching related videos: ${response.statusText}`);
         }
