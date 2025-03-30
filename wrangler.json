@@ -22,5 +22,11 @@
     "S3Key": "",
     "S3Secret": "",
     "S3Token": ""
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "videos",
+      "bucket_name": "videos"
+    }
+  ]
 }
