@@ -5,7 +5,7 @@ export class DarkModeStore {
   darkMode: Observable<boolean>;
 
   constructor() {
-    const dark = typeof localStorage !== "undefined" ? localStorage.getItem("darkmode") == "true" : false;
+    const dark = typeof localStorage !== "undefined" ? localStorage.getItem("darkmode") == "true" : true;
     this.darkMode = new Observable(dark.valueOf());
     this.darkMode.subscribe(this.saveDarkMode);
   }

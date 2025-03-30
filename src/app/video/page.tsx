@@ -9,13 +9,13 @@ import { CommentProps } from '@/components/comment';
 import RelatedVideosSection from '@/components/related';
 import CommentsSection from '@/components/commentsSection';
 import Header from '@/components/Header';
-import LeftNavigation from '@/components/LeftNavigation';
+import LeftNavigationWithOverlay from '@/components/LeftNavigationWithOverlay';
 import VideoPlayer, { PlayerOptions } from '@/components/videoPlayer';
 import { PaginationResponse, VideoInfo, VideoObject } from '../../interfaces';
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null); // Add this state
@@ -124,10 +124,13 @@ export default function Home() {
       <div className="flex flex-col min-h-screen bg-ummah-bg">
         {/* Header */}
         <Header toggleCollapse={toggleCollapse} />
+          {/* Left Navigation */}
+          <LeftNavigationWithOverlay 
+            isCollapsed={isCollapsed} 
+            onCollapse={() => setIsCollapsed(true)} 
+          />
 
         <div className="flex flex-1 flex-col md:flex-row">
-          {/* Left Navigation */}
-          <LeftNavigation isCollapsed={isCollapsed} />
 
           <main className="flex flex-col items-center justify-between p-4 w-full mt-0 lg:mt-0">
             {/* Video Player Section */}
@@ -138,9 +141,9 @@ export default function Home() {
             )}
             <div className="flex flex-col lg:flex-row w-full mt-4 gap-6">
               {/* Comments Section */}
-              <div className="w-full lg:w-3/5 p-4">
+              {/* <div className="w-full lg:w-3/5 p-4">
                 <CommentsSection comments={comments} />
-              </div>
+              </div> */}
 
               {/* Related Videos Section */}
               <div className="w-full lg:w-2/5 pt-4">
