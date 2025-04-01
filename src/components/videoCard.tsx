@@ -25,7 +25,7 @@ const VideoCard: React.FC<VideoObject> = (video) => {
 
             {/* Video Details */}
             <div className="p-4">
-                <h3 className="text-lg font-semibold text-ummah-text truncate">
+                <h3 className="text-lg  text-ummah-text truncate font-[Tahoma]">
                     {video.title}
                 </h3>
                 <p className="text-sm text-ummah-label truncate">{video.channel}</p>

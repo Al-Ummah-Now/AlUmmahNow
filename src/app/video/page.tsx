@@ -50,7 +50,7 @@ export default function Home() {
       if (!vid) return;
 
       try {
-        const response = await fetch(`https://videos.api.alummahnow.net/api/videos/${vid}/`);
+        const response = await fetch(`https://videos.api.alummahnow.net/api/videos/${vid}`);
         if (!response.ok) {
           throw new Error(`Error fetching video: ${response.statusText}`);
         }
@@ -141,9 +141,9 @@ export default function Home() {
             )}
             <div className="flex flex-col lg:flex-row w-full mt-4 gap-6">
               {/* Comments Section */}
-              {/* <div className="w-full lg:w-3/5 p-4">
-                <CommentsSection comments={comments} />
-              </div> */}
+              <div className="w-full lg:w-3/5 p-4">
+              {/*   <CommentsSection comments={comments} />*/}
+              </div> 
 
               {/* Related Videos Section */}
               <div className="w-full lg:w-2/5 pt-4">

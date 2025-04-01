@@ -75,7 +75,7 @@ const VideosPage: React.FC = () => {
               ))}
             </div>
           )}
-          <div className="flex justify-between items-center mt-6">
+          <div className="flex justify-center items-center mt-6">
             <button
               onClick={handleNextPage}
               disabled={!nextCursor || loading}
