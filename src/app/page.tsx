@@ -18,7 +18,7 @@ const VideosPage: React.FC = () => {
     try {
       const cursorString = cursor ? `&cursor=${cursor}` : "";
       const response = await fetch(
-        `https://videos.api.alummahnow.net/api/videos?limit=9${cursorString}`
+        `https://videos.api.alummahnow.net/api/videos?limit=15${cursorString}`
       );
       if (!response.ok) {
         throw new Error(`Error fetching videos: ${response.statusText}`);
@@ -69,7 +69,7 @@ const VideosPage: React.FC = () => {
           {loading && videos.length === 0 ? (
             <p className="text-ummah-label">Loading...</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
               {videos.map((video) => (
                 <VideoCard key={video.id} {...video} />
               ))}

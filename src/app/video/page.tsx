@@ -9,7 +9,7 @@ import { CommentProps } from '@/components/comment';
 import RelatedVideosSection from '@/components/related';
 import CommentsSection from '@/components/commentsSection';
 import Header from '@/components/Header';
-import LeftNavigationWithOverlay from '@/components/LeftNavigationWithOverlay';
+import LeftNavigation from "@/components/LeftNavigation";
 import VideoPlayer, { PlayerOptions } from '@/components/videoPlayer';
 import { PaginationResponse, VideoInfo, VideoObject } from '../../interfaces';
 
@@ -125,7 +125,8 @@ export default function Home() {
         {/* Header */}
         <Header toggleCollapse={toggleCollapse} />
           {/* Left Navigation */}
-          <LeftNavigationWithOverlay 
+          <LeftNavigation
+            withOverlay={true} 
             isCollapsed={isCollapsed} 
             onCollapse={() => setIsCollapsed(true)} 
           />
