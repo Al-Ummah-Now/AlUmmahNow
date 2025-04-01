@@ -10,6 +10,13 @@ const nextConfig = {
             pathname: "**",
             search: "",
           },
+          {
+            protocol: "https",
+            hostname: "al-ummah-now-images.b-cdn.net",
+            port: "",
+            pathname: "**",
+            search: "",
+          },
         ],
       },
 };
