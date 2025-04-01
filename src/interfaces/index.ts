@@ -14,6 +14,7 @@ export interface VideoObject {
     userId: string;
     channel: string;
     channelId: string;
+    channelThumbnailUr: string;
     dateCreated: string;
     dateModified: string;
     views?: number;
