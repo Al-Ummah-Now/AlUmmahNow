@@ -15,7 +15,8 @@ const VideosPage: React.FC = () => {
   const fetchVideos = async (cursor: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`https://videos.api.alummahnow.net/api/videos?cursor=${cursor}&limit=9`);
+      var cursorString = cursor ? `&cursor=${cursor}` : '';
+      const response = await fetch(`https://videos.api.alummahnow.net/api/videos?limit=9${cursorString}`);
       if (!response.ok) {
         throw new Error(`Error fetching videos: ${response.statusText}`);
       }
