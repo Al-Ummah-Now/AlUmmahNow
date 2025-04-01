@@ -50,7 +50,7 @@ export default function Home() {
       if (!vid) return;
 
       try {
-        const response = await fetch(`/api/videos/${vid}/`);
+        const response = await fetch(`https://videos.api.alummahnow.net/api/videos/${vid}/`);
         if (!response.ok) {
           throw new Error(`Error fetching video: ${response.statusText}`);
         }
@@ -78,7 +78,7 @@ export default function Home() {
   useEffect(() => {
     const fetchRelatedVideos = async () => {
       try {
-        const response = await fetch('/api/videos?limit=15'); // Fetch first 5 related videos
+        const response = await fetch('https://videos.api.alummahnow.net/api/videos?limit=15'); // Fetch first 5 related videos
         if (!response.ok) {
           throw new Error(`Error fetching related videos: ${response.statusText}`);
         }
