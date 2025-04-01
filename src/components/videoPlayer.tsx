@@ -20,7 +20,7 @@ export interface PlayerOptions {
 const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   return (
     <>
-      <div className="video-container w-full h-auto mt-0 max-w-[1920px]">
+      <div className="video-container w-full h-auto mt-0 max-w-[1920px] max-h-[1080px]">
         <video
           key={options.id}
           className="video-js vjs-default-skin w-full h-auto rounded-lg overflow-hidden"
