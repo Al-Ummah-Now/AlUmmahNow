@@ -4,25 +4,30 @@ import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard";
 import Header from "@/components/Header";
 import LeftNavigation from "@/components/LeftNavigation";
-import { useQueryState } from 'nuqs'
+import { useQueryState } from "nuqs";
 
 const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
-  const [cursor, setCursor] = useQueryState('cursor', { shallow: false });
+  const [cursor, setCursor] = useQueryState("cursor", { shallow: true });
+  const [nextCursor, setNextCursor] = useState<string | null>(null); 
   const [loading, setLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
 
-  const fetchVideos = async (cursor: string) => {
+  const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
     try {
-      var cursorString = cursor ? `&cursor=${cursor}` : '';
-      const response = await fetch(`https://videos.api.alummahnow.net/api/videos?limit=9${cursorString}`);
+      const cursorString = cursor ? `&cursor=${cursor}` : "";
+      const response = await fetch(
+        `https://videos.api.alummahnow.net/api/videos?limit=9${cursorString}`
+      );
       if (!response.ok) {
         throw new Error(`Error fetching videos: ${response.statusText}`);
       }
       const data: PaginationResponse<VideoObject> = await response.json();
-      setVideos(data.data);
-      setCursor(data.cursor);
+
+      // Append new videos to the existing list
+      setVideos((prevVideos) => [...prevVideos, ...data.data]);
+      setNextCursor(data.cursor); // Update the next cursor
     } catch (error) {
       console.error(error);
     } finally {
@@ -31,12 +36,14 @@ const VideosPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchVideos(cursor);
-  }, [cursor]);
+    // Fetch videos on initial render
+    fetchVideos(null);
+  }, []); // Empty dependency array to run only once
 
   const handleNextPage = () => {
-    if (cursor != '') {
-      setCursor(cursor);
+    if (nextCursor) {
+      setNextCursor(nextCursor); // Update the cursor in the query state
+      fetchVideos(nextCursor); // Fetch the next page of videos
     }
   };
 
@@ -54,11 +61,12 @@ const VideosPage: React.FC = () => {
         <LeftNavigation isCollapsed={isCollapsed} />
 
         <main
-          className={`flex flex-col p-4 w-full transition-all duration-300 ${isCollapsed ? "md:pl-20" : "md:pl-56"
-            }`}
+          className={`flex flex-col p-4 w-full transition-all duration-300 ${
+            isCollapsed ? "md:pl-20" : "md:pl-56"
+          }`}
         >
           <h1 className="text-2xl font-bold text-ummah-text mb-4">Videos</h1>
-          {loading ? (
+          {loading && videos.length === 0 ? (
             <p className="text-ummah-label">Loading...</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-4">
@@ -70,10 +78,10 @@ const VideosPage: React.FC = () => {
           <div className="flex justify-between items-center mt-6">
             <button
               onClick={handleNextPage}
-              disabled={cursor === ''}
+              disabled={!nextCursor || loading}
               className="px-4 py-2 bg-ummah-400 text-white rounded disabled:opacity-50"
             >
-              Load More
+              {loading ? "Loading..." : "Load More"}
             </button>
           </div>
         </main>
