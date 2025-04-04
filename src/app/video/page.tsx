@@ -1,30 +1,25 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { ThemeProvider } from "@material-tailwind/react"; // External library imports
-import { useQueryState } from 'nuqs'
-
-// Local imports
+import React, { useState, useEffect } from "react";
+import { ThemeProvider } from "@material-tailwind/react";
 import { darkModeStore } from "@/components/darkMode";
-import { CommentProps } from '@/components/comment';
-import RelatedVideosSection from '@/components/related';
-import CommentsSection from '@/components/commentsSection';
-import Header from '@/components/Header';
-import LeftNavigation from "@/components/LeftNavigation";
-import VideoPlayer, { PlayerOptions } from '@/components/videoPlayer';
-import { PaginationResponse, VideoInfo, VideoObject } from '../../interfaces';
+import Header from "@/components/Header/index";
+import LeftNavigation from "@/components/LeftNavigation/index";
+import VideoPlayer, { PlayerOptions } from "@/components/videoPlayer/index";
+import RelatedVideosSection from "@/components/related/index";
+import { useQueryState } from "nuqs";
+import { PaginationResponse, VideoInfo, VideoObject } from "../../interfaces";
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
+  const [darkmode, setDarkmode] = useState(darkModeStore.get());
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
-  const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null); // Add this state
-  const [vid, setVid] = useQueryState('vid', { shallow: false });
+  const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
+  const [vid, setVid] = useQueryState("vid", { shallow: false });
 
   useEffect(() => {
     setIsMounted(true); // Ensure the component is mounted on the client
   }, []);
-
 
   useEffect(() => {
     return darkModeStore.subscribe(setDarkmode);
@@ -38,6 +33,7 @@ export default function Home() {
     }
   }, [darkmode]);
 
+
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
   };
@@ -50,7 +46,9 @@ export default function Home() {
       if (!vid) return;
 
       try {
-        const response = await fetch(`https://videos.api.alummahnow.net/api/videos/${vid}`);
+        const response = await fetch(
+          `https://videos.api.alummahnow.net/api/videos/${vid}`
+        );
         if (!response.ok) {
           throw new Error(`Error fetching video: ${response.statusText}`);
         }
@@ -73,29 +71,33 @@ export default function Home() {
     };
 
     fetchVideoById();
-  }, [vid, isMounted]); // Add this useEffect
+  }, [vid, isMounted]);
 
   // Fetch related videos from the API
   useEffect(() => {
     const fetchRelatedVideos = async () => {
       try {
-        const response = await fetch('https://videos.api.alummahnow.net/api/videos?limit=15'); // Fetch first 5 related videos
+        const response = await fetch(
+          "https://videos.api.alummahnow.net/api/videos?limit=15"
+        );
         if (!response.ok) {
           throw new Error(`Error fetching related videos: ${response.statusText}`);
         }
         const result: PaginationResponse<VideoObject> = await response.json();
-        setRelatedVideos(result.data.map(video => ({
-          id: video.id,
-          title: video.title,
-          description: video.description,
-          channel: video.channel,
-          channelId: video.channelId,
-          thumbnail: video.thumbnailUrl,
-          video: video.videoUrl,
-          views: `${video.views || 0}`,
-          dateCreated: new Date(video.dateCreated),
-          dateModified: new Date(video.dateModified)
-        })));
+        setRelatedVideos(
+          result.data.map((video) => ({
+            id: video.id,
+            title: video.title,
+            description: video.description,
+            channel: video.channel,
+            channelId: video.channelId,
+            thumbnail: video.thumbnailUrl,
+            video: video.videoUrl,
+            views: `${video.views || 0}`,
+            dateCreated: new Date(video.dateCreated),
+            dateModified: new Date(video.dateModified),
+          }))
+        );
       } catch (error) {
         console.error(error);
       }
@@ -104,64 +106,49 @@ export default function Home() {
     fetchRelatedVideos();
   }, []);
 
-  const comments: CommentProps[] = [
-    {
-      author: "User1",
-      text: "This is a great video!",
-      time: "2 hours ago",
-      avatar: "/avatar.png"
-    },
-    {
-      author: "User2",
-      text: "Very informative, thanks for sharing.",
-      time: "1 day ago",
-      avatar: "/avatar.png"
-    },
-    // Add more comments here
-  ];
-
   return (
-<ThemeProvider value={{}}>
-  <div className="flex flex-col min-h-screen bg-ummah-bg overflow-hidden">
-    {/* Header */}
-    <Header toggleCollapse={toggleCollapse} />
+    <ThemeProvider value={{}}>
+      <div className="flex flex-col min-h-screen bg-white overflow-hidden">
+        {/* Header */}
+        <Header toggleCollapse={toggleCollapse} />
 
-    {/* Left Navigation */}
-    <LeftNavigation
-      withOverlay={true}
-      isCollapsed={isCollapsed}
-      onCollapse={() => setIsCollapsed(true)}
-    />
+        {/* Left Navigation */}
+        <LeftNavigation
+          withOverlay={true}
+          isCollapsed={isCollapsed}
+          onCollapse={() => setIsCollapsed(true)}
+        />
 
-    <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
-      <main className="flex gap-4 p-4 w-full mt-0 lg:mt-0 justify-center overflow-auto">
-        <div className="flex w-auto flex-wrap">
-          {/* Video Player Section */}
-          {videoDetails && (
-            <div className="flex flex-col w-full mt-0">
-              <VideoPlayer options={videoDetails} />
-            </div>
-          )}
-          <div className="flex flex-col lg:flex-row w-full mt-4 gap-6">
-            {/* Comments Section */}
-            <div className="w-full lg:w-3/5 p-4 overflow-auto">
-              {/* <CommentsSection comments={comments} /> */}
+        <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+          <main className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
+            <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
+              {/* Video Player Section */}
+              {videoDetails && (
+                <div className="flex flex-col w-full mt-0">
+                  <VideoPlayer options={videoDetails} />
+                </div>
+              )}
+
+              {/* Comments Section */}
+              <div className="flex flex-col w-full mt-4 gap-6 overflow-auto">
+                <div className="w-full p-4">
+                  {/* <CommentsSection comments={comments} /> */}
+                </div>
+              </div>
             </div>
 
             {/* Related Videos Section */}
-            <div className="w-full lg:w-2/5 pt-4 overflow-auto">
-              {/* Related videos content */}
+            <div className="hidden lg:block lg:w-1/4 min-w-[350px] max-w-[500px] pt-4 overflow-auto">
+              <RelatedVideosSection relatedVideos={relatedVideos} />
             </div>
+          </main>
+
+          {/* Related Videos Section (Mobile Only) */}
+          <div className="block lg:hidden w-full mt-4 overflow-auto">
+            <RelatedVideosSection relatedVideos={relatedVideos} />
           </div>
         </div>
-
-        {/* Related Videos Section */}
-        <div className="hidden md:block min-w-[350px] max-w-[500px] pt-4 overflow-auto">
-          <RelatedVideosSection relatedVideos={relatedVideos} />
-        </div>
-      </main>
-    </div>
-  </div>
-</ThemeProvider>
+      </div>
+    </ThemeProvider>
   );
 }

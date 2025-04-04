@@ -22,7 +22,7 @@ const initialOptions: PlayerOptions = {
   }
 };
 
-const VideoPlayer: React.FC<IVideoPlayerProps> = ({ options, onReady }) => {
+const VideoPlayerRTL: React.FC<IVideoPlayerProps> = ({ options, onReady }) => {
   const placeholderRef = React.useRef(null);
   const videoRef = React.useRef<HTMLVideoElement>();
   const playerRef = React.useRef<Player>();
@@ -66,8 +66,8 @@ const VideoPlayer: React.FC<IVideoPlayerProps> = ({ options, onReady }) => {
   }, [playerRef]);
 
   return (
-    <div ref={placeholderRef} />
+    <div ref={placeholderRef} dir="rtl" />
   );
 }
 
-export default VideoPlayer;
+export default VideoPlayerRTL;

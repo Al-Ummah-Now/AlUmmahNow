@@ -50,6 +50,11 @@ module.exports = withMT({
       },
     },
   },
+  variants: {
+    extend: {
+      backgroundColor: ['hover'],
+    },
+  },
   plugins: [],
 });
 

@@ -4,13 +4,13 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import { VideoInfo } from "@/interfaces";
 
-const RelatedVideo: React.FC<VideoInfo> = (info) => {
+const RelatedVideoRTL: React.FC<VideoInfo> = (info) => {
   const handleClick = () => {
-    redirect(`/video?vid=${info.id}`);
+    redirect(`/rtl/video?vid=${info.id}`);
   };
 
   return (
-    <div className="flex items-center space-x-4" onClick={handleClick}>
+    <div className="flex items-center space-x-4" onClick={handleClick} dir="rtl">
       <div className="w-1/3 bg-gray-300 rounded-lg overflow-hidden">
         {info.thumbnail && (
           <Image
@@ -22,11 +22,11 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
         )}
       </div>
       <div className="w-2/3">
-        <h3 className="text-sm font-semibold text-ummah-text truncate">
+        <h3 className="text-sm font-semibold text-black truncate">
           {info.title}
         </h3>
-        <p className="text-xs text-ummah-label truncate">{info.channel}</p>
-        <p className="text-xs text-ummah-label">
+        <p className="text-xs text-gray-500 truncate">{info.channel}</p>
+        <p className="text-xs text-gray-500">
           {info.views} • {info?.dateModified?.toLocaleDateString()}
         </p>
       </div>
@@ -34,4 +34,4 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
   );
 };
 
-export default RelatedVideo;
+export default RelatedVideoRTL;
