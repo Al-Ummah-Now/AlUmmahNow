@@ -1,9 +1,9 @@
 "use client";
 import React, { useState } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
-import VideoCard from "@/components/videoCard";
-import Header from "@/components/Header";
-import LeftNavigation from "@/components/LeftNavigation";
+import VideoCard from "@/components/videoCard/index";
+import Header from "@/components/Header/index";
+import LeftNavigation from "@/components/LeftNavigation/index";
 
 const SearchPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
@@ -34,7 +34,7 @@ const SearchPage: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-ummah-bg">
+        <div className="flex flex-col min-h-screen bg-white">
             {/* Header */}
             <Header toggleCollapse={() => setIsCollapsed(!isCollapsed)} />
 
@@ -47,7 +47,7 @@ const SearchPage: React.FC = () => {
 
             <main
                 className={`flex flex-col p-4 w-full transition-all duration-300 "md:pl-56"`}>
-                <h1 className="text-2xl font-bold text-ummah-text mb-4">Search Videos</h1>
+                <h1 className="text-2xl font-bold text-black mb-4">Search Videos</h1>
 
                 {/* Search Bar */}
                 <div className="flex items-center mb-6">
@@ -56,11 +56,11 @@ const SearchPage: React.FC = () => {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search for videos..."
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-ummah-400"
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-offset-gray-700"
                     />
                     <button
                         onClick={handleSearch}
-                        className="px-4 py-2 bg-ummah-400 text-white rounded-r-md"
+                        className="px-4 py-2 bg-gray-700 text-white rounded-r-md"
                     >
                         Search
                     </button>
@@ -68,7 +68,7 @@ const SearchPage: React.FC = () => {
 
                 {/* Search Results */}
                 {loading ? (
-                    <p className="text-ummah-label">Loading...</p>
+                    <p className="text-gray-500">Loading...</p>
                 ) : videos.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {videos.map((video) => (
@@ -76,7 +76,7 @@ const SearchPage: React.FC = () => {
                         ))}
                     </div>
                 ) : (
-                    <p className="text-ummah-label">No results found.</p>
+                    <p className="text-gray-500">No results found.</p>
                 )}
             </main>
         </div>

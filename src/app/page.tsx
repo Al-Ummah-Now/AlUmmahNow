@@ -1,9 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
-import VideoCard from "@/components/videoCard";
-import Header from "@/components/Header";
-import LeftNavigation from "@/components/LeftNavigation";
+import VideoCard from "@/components/videoCard/index";
+import Header from "@/components/Header/index";
+import LeftNavigation from "@/components/LeftNavigation/index";
 import { useQueryState } from "nuqs";
 
 const VideosPage: React.FC = () => {
@@ -52,7 +52,7 @@ const VideosPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-ummah-bg">
+    <div className="flex flex-col min-h-screen bg-white">
       {/* Header */}
       <Header toggleCollapse={toggleCollapse} />
 
@@ -65,9 +65,9 @@ const VideosPage: React.FC = () => {
             isCollapsed ? "md:pl-20" : "md:pl-56"
           }`}
         >
-          <h1 className="text-2xl font-bold text-ummah-text mb-4">Videos</h1>
+          <h1 className="text-2xl font-bold text-black mb-4">Videos</h1>
           {loading && videos.length === 0 ? (
-            <p className="text-ummah-label">Loading...</p>
+            <p className="text-gray-500">Loading...</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
               {videos.map((video) => (
@@ -79,7 +79,7 @@ const VideosPage: React.FC = () => {
             <button
               onClick={handleNextPage}
               disabled={!nextCursor || loading}
-              className="px-4 py-2 bg-ummah-400 text-white rounded disabled:opacity-50"
+              className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
             >
               {loading ? "Loading..." : "Load More"}
             </button>

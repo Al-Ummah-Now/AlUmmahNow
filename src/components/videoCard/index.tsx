@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation';
 import Image from "next/image";
 import { VideoObject } from "@/interfaces";
 
@@ -25,11 +25,11 @@ const VideoCard: React.FC<VideoObject> = (video) => {
 
             {/* Video Details */}
             <div className="p-4">
-                <h3 className="text-lg  text-ummah-text truncate font-[Tahoma]">
+                <h3 className="text-lg  text-black truncate font-[Tahoma]">
                     {video.title}
                 </h3>
-                <p className="text-sm text-ummah-label truncate">{video.channel}</p>
-                <p className="text-sm text-ummah-label">
+                <p className="text-sm text-gray-500 truncate">{video.channel}</p>
+                <p className="text-sm text-gray-500">
                     {video.views} views • {new Date(video.dateCreated).toLocaleDateString()}
                 </p>
             </div>
