@@ -21,10 +21,10 @@ export interface PlayerOptions {
 const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   return (
     <>
-      <div className="flex justify-center w-full h-auto mt-0 max-w-[1280px] max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
+      <div className="flex justify-center w-full h-auto mt-0 max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
         <video
           key={options.id}
-          className="video-js vjs-default-skin h-auto rounded-lg overflow-hidden max-w-[1280px] max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px]"
+          className="video-js vjs-default-skin h-auto rounded-lg overflow-hidden max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px]"
           controls
           preload="auto"
         >

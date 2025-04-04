@@ -65,7 +65,7 @@ export default function Home() {
           dateCreated: new Date(video.dateCreated),
           autoplay: false,
           type: "video/mp4",
-          channelAvatar: video.channelThumbnailUr,
+          channelAvatar: video.channelThumbnailUrl,
         });
       } catch (error) {
         console.error(error);
@@ -121,45 +121,47 @@ export default function Home() {
   ];
 
   return (
-    <ThemeProvider value={{}}>
-      <div className="flex flex-col min-h-screen bg-ummah-bg">
-        {/* Header */}
-        <Header toggleCollapse={toggleCollapse} />
-        {/* Left Navigation */}
-        <LeftNavigation
-          withOverlay={true}
-          isCollapsed={isCollapsed}
-          onCollapse={() => setIsCollapsed(true)}
-        />
+<ThemeProvider value={{}}>
+  <div className="flex flex-col min-h-screen bg-ummah-bg overflow-hidden">
+    {/* Header */}
+    <Header toggleCollapse={toggleCollapse} />
 
-        <div className="flex flex-1 flex-col md:flex-row">
-          <main className="flex  p-4 w-full mt-0 lg:mt-0">
-            <div className="flex w-full flex-wrap">
-              {/* Video Player Section */}
-              {videoDetails && (
-                <div className="flex flex-col w-full mt-0">
-                  <VideoPlayer options={videoDetails} />
-                </div>
-              )}
-              <div className="flex flex-col lg:flex-row w-full mt-4 gap-6">
-                {/* Comments Section */}
-                <div className="w-full lg:w-3/5 p-4">
-                  {/*   <CommentsSection comments={comments} />*/}
-                </div>
+    {/* Left Navigation */}
+    <LeftNavigation
+      withOverlay={true}
+      isCollapsed={isCollapsed}
+      onCollapse={() => setIsCollapsed(true)}
+    />
 
-                {/* Related Videos Section */}
-                <div className="w-full lg:w-2/5 pt-4">
-                </div>
-              </div>
+    <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+      <main className="flex gap-4 p-4 w-full mt-0 lg:mt-0 justify-center overflow-auto">
+        <div className="flex w-auto flex-wrap">
+          {/* Video Player Section */}
+          {videoDetails && (
+            <div className="flex flex-col w-full mt-0">
+              <VideoPlayer options={videoDetails} />
             </div>
+          )}
+          <div className="flex flex-col lg:flex-row w-full mt-4 gap-6">
+            {/* Comments Section */}
+            <div className="w-full lg:w-3/5 p-4 overflow-auto">
+              {/* <CommentsSection comments={comments} /> */}
+            </div>
+
             {/* Related Videos Section */}
-            <div className="max-w-[500px] pt-4">
-
-              <RelatedVideosSection relatedVideos={relatedVideos} />
+            <div className="w-full lg:w-2/5 pt-4 overflow-auto">
+              {/* Related videos content */}
             </div>
-          </main>
+          </div>
         </div>
-      </div>
-    </ThemeProvider>
+
+        {/* Related Videos Section */}
+        <div className="hidden md:block min-w-[350px] max-w-[500px] pt-4 overflow-auto">
+          <RelatedVideosSection relatedVideos={relatedVideos} />
+        </div>
+      </main>
+    </div>
+  </div>
+</ThemeProvider>
   );
 }
