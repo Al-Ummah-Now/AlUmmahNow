@@ -1,8 +1,8 @@
 "use client";
 import React from "react";
-import { redirect } from "next/navigation";
 import Image from "next/image";
 import { VideoInfo } from "@/interfaces";
+import { redirect } from "next/navigation";
 
 const RelatedVideo: React.FC<VideoInfo> = (info) => {
   const handleClick = () => {
@@ -22,10 +22,8 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
         )}
       </div>
       <div className="w-2/3">
-        <h3 className="text-sm font-semibold text-black truncate">
-          {info.title}
-        </h3>
-        <p className="text-xs text-gray-500 truncate">{info.channel}</p>
+        <h3 className="text-sm font-semibold text-black dark:text-white truncate">{info.title}</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{info.channel}</p>
         <p className="text-xs text-gray-500">
           {info.views} • {info?.dateModified?.toLocaleDateString()}
         </p>

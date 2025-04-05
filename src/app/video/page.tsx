@@ -33,7 +33,6 @@ export default function Home() {
     }
   }, [darkmode]);
 
-
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
   };
@@ -108,7 +107,7 @@ export default function Home() {
 
   return (
     <ThemeProvider value={{}}>
-      <div className="flex flex-col min-h-screen bg-white overflow-hidden">
+      <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 overflow-hidden">
         {/* Header */}
         <Header toggleCollapse={toggleCollapse} />
 

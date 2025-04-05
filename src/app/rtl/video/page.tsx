@@ -113,7 +113,7 @@ export default function Home() {
 
   return (
     <ThemeProvider value={{}}>
-      <div className="flex flex-col min-h-screen bg-white overflow-hidden" dir="rtl">
+      <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 overflow-hidden" dir="rtl">
         {/* Header */}
         <Header toggleCollapse={toggleCollapse} />
 
