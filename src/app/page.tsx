@@ -5,6 +5,7 @@ import VideoCard from "@/components/videoCard/index";
 import Header from "@/components/Header/index";
 import LeftNavigation from "@/components/LeftNavigation/index";
 import { useQueryState } from "nuqs";
+import { darkModeStore } from "@/components/darkMode";
 
 const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -12,6 +13,19 @@ const VideosPage: React.FC = () => {
   const [nextCursor, setNextCursor] = useState<string | null>(null); 
   const [loading, setLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
+    const [darkmode, setDarkmode] = useState(darkModeStore.get());
+
+    useEffect(() => {
+      return darkModeStore.subscribe(setDarkmode);
+    }, []);
+  
+    useEffect(() => {
+      if (darkmode) {
+        document.body.classList.add("dark");
+      } else {
+        document.body.classList.remove("dark");
+      }
+    }, [darkmode]);
 
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
@@ -52,7 +66,7 @@ const VideosPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
       {/* Header */}
       <Header toggleCollapse={toggleCollapse} />
 
@@ -65,9 +79,9 @@ const VideosPage: React.FC = () => {
             isCollapsed ? "md:pl-20" : "md:pl-56"
           }`}
         >
-          <h1 className="text-2xl font-bold text-black mb-4">Videos</h1>
+          <h1 className="text-2xl font-bold text-black dark:text-white mb-4">Videos</h1>
           {loading && videos.length === 0 ? (
-            <p className="text-gray-500">Loading...</p>
+            <p className="text-gray-500 dark:text-gray-400">Loading...</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
               {videos.map((video) => (

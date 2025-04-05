@@ -11,7 +11,7 @@ const Header: React.FC<{ toggleCollapse: () => void }> = ({ toggleCollapse }) =>
     };
 
   return (
-    <header className="flex items-center justify-between p-4 bg-white ">
+    <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-900">
       {/* Menu Section */}
       <div className="flex items-center space-x-4 pl-2">
         <IcoButton style="fa-bars" color='text-white bg-black' onClick={toggleCollapse}>
@@ -21,7 +21,7 @@ const Header: React.FC<{ toggleCollapse: () => void }> = ({ toggleCollapse }) =>
       {/* Logo Section */}
       <div className="flex-1 flex justify-center items-center space-x-2 cursor-pointer" onClick={handleClick}>
         <Image src="/logo.png" alt="Logo" width={80} height={80} />
-        <h2 className="text-xl font-semibold text-black">Al Ummah Now</h2>
+        <h2 className="text-xl font-semibold text-black dark:text-white">Al Ummah Now</h2>
       </div>
 
       {/* User Account Section */}

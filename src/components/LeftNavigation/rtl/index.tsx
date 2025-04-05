@@ -2,6 +2,7 @@
 import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
 import { darkModeStore } from "@/components/darkMode";
+import { redirect, useSearchParams, usePathname } from "next/navigation";
 
 interface NavItems {
     label: string;
@@ -22,6 +23,8 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     withOverlay = false, // Default to no overlay
 }) => {
     const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
+    const path = usePathname();
+    const params = useSearchParams().toString();
 
     const handleClick = () => {
         const dark = !darkmode;
@@ -29,15 +32,20 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     };
 
     const navItems: NavItems[] = [
-        { label: "Home", icon: "fa-house", href: "/" },
-        { label: "Trending", icon: "fa-magnifying-glass", href: "/search" },
-        { label: "Subscriptions", icon: "fa-tv", href: "#" },
-        { label: "Library", icon: "fa-bookmark", href: "#" },
+        { label: "الرئيسية", icon: "fa-house", href: "/rtl/" }, // Home
+        { label: "الشائع", icon: "fa-magnifying-glass", href: "/rtl/search" }, // Trending
+        { label: "الاشتراكات", icon: "fa-tv", href: "#" }, // Subscriptions
+        { label: "المكتبة", icon: "fa-bookmark", href: "#" }, // Library
         {
-            label: "Dark Mode",
+            label: "الوضع الداكن",
             icon: `${darkmode ? "fa-sun" : "fa-moon"}`,
             href: "#",
-            onClick: handleClick,
+            onClick: handleClick, // Dark Mode
+        },
+        {
+            label: "English",
+            icon: "fa-align-left",
+            href: `${path.replace("/rtl", "/")}?${params}`,
         },
     ];
 
@@ -57,7 +65,10 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
 
             {/* Navigation */}
             <nav
-                className={`${withOverlay ? "fixed bg-white p-4 rounded-sm z-50 h-screen" : "bg-white p-4 rounded-sm md:absolute"} ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
+                className={`${withOverlay
+                        ? "fixed bg-white dark:bg-gray-900 p-4 rounded-sm z-50 h-screen"
+                        : "bg-white dark:bg-gray-900 p-4 rounded-sm md:absolute"
+                    } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
                     } transition-all duration-300`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
@@ -73,10 +84,13 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                 )}
                 <ul>
                     {navItems.map((item, index) => (
-                        <li key={index} className="rounded-sm hover:bg-gray-200 cursor-pointer">
+                        <li
+                            key={index}
+                            className="rounded-sm hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer"
+                        >
                             <a
                                 href={item.href}
-                                className={`flex items-center space-x-reverse space-x-2 rounded-sm py-2 pr-2`}
+                                className={`flex items-center space-x-reverse space-x-2 py-2 pr-2`}
                                 onClick={item.onClick}
                             >
                                 <IcoButton
@@ -85,7 +99,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                                 />
                                 <span
                                     className={`${isCollapsed ? "hidden" : "block"
-                                        } text-black text-sm md:text-base`}
+                                        } text-black dark:text-white text-sm md:text-base pr-2`}
                                 >
                                     {item.label}
                                 </span>

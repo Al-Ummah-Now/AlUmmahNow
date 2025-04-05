@@ -34,7 +34,7 @@ const SearchPage: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-white">
+        <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
             {/* Header */}
             <Header toggleCollapse={() => setIsCollapsed(!isCollapsed)} />
 
@@ -47,7 +47,7 @@ const SearchPage: React.FC = () => {
 
             <main
                 className={`flex flex-col p-4 w-full transition-all duration-300 "md:pl-56"`}>
-                <h1 className="text-2xl font-bold text-black mb-4">Search Videos</h1>
+                <h1 className="text-2xl font-bold text-black dark:text-white mb-4">Search Videos</h1>
 
                 {/* Search Bar */}
                 <div className="flex items-center mb-6">
@@ -76,7 +76,7 @@ const SearchPage: React.FC = () => {
                         ))}
                     </div>
                 ) : (
-                    <p className="text-gray-500">No results found.</p>
+                    <p className="text-gray-500 dark:text-gray-400">No results found.</p>
                 )}
             </main>
         </div>

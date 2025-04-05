@@ -2,6 +2,7 @@
 import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
 import { darkModeStore } from "@/components/darkMode";
+import { redirect, useSearchParams, usePathname } from "next/navigation";
 
 interface NavItems {
     label: string;
@@ -22,6 +23,8 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     withOverlay = false, // Default to no overlay
 }) => {
     const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
+    let path = usePathname();
+    let params = useSearchParams().toString();
 
     const handleClick = () => {
         const dark = !darkmode;
@@ -38,6 +41,11 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
             icon: `${darkmode ? "fa-sun" : "fa-moon"}`,
             href: "#",
             onClick: handleClick,
+        },
+        {
+            label: "Arabic",
+            icon: "fa-align-right",
+            href: `/rtl${path}?${params}`,
         },
     ];
 
@@ -57,7 +65,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
 
             {/* Navigation */}
             <nav
-                className={`${withOverlay ? 'fixed bg-white p-4 rounded-sm z-50 h-screen' : 'bg-white p-4 rounded-sm md:absolute'} ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
+                className={`${withOverlay ? "fixed bg-white dark:bg-gray-900 p-4 rounded-sm z-50 h-screen" : "bg-white dark:bg-gray-900 p-4 rounded-sm md:absolute"} ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
                     } transition-all duration-300`}
             >
                 {/* Show the bars button only in overlay mode */}
@@ -72,7 +80,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                 )}
                 <ul>
                     {navItems.map((item, index) => (
-                        <li key={index} className="rounded-sm hover:bg-gray-200 cursor-pointer">
+                        <li key={index} className="rounded-sm hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer">
                             <a
                                 href={item.href}
                                 className={`flex items-center space-x-2 py-2 pl-2`}
@@ -83,8 +91,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                                     color="text-white bg-black cursor-pointer"
                                 />
                                 <span
-                                    className={`${isCollapsed ? "hidden" : "block"
-                                        } text-black text-sm md:text-base`}
+                                    className={`${isCollapsed ? "hidden" : "block"} text-black dark:text-white text-sm md:text-base`}
                                 >
                                     {item.label}
                                 </span>

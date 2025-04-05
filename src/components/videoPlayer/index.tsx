@@ -29,8 +29,8 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
       <div className="flex justify-center w-full h-auto mt-0 max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] relative">
         {/* Loading Spinner */}
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-200 z-10">
-            <div className="w-8 h-8 border-4 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-800 z-10">
+            <div className="w-8 h-8 border-4 border-gray-400 dark:border-gray-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
         )}
 
@@ -63,7 +63,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
           />
         </div>
         <div className="mt-4">
-          <h1 className="text-xl font-semibold text-black">
+          <h1 className="text-xl font-semibold text-black dark:text-white">
             {options.title}
           </h1>
         </div>
