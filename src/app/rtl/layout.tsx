@@ -20,6 +20,7 @@ export default function RootLayout({
     <html lang="ar" dir="rtl">
       <head>
         <meta charSet="utf-8" />
+        <meta name="referrer" content="origin" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="description" content={metadata.description} />
         <meta name="keywords" content="Al Ummah Now, Islamic, Videos, Clips, RTL" />
