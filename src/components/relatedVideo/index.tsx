@@ -12,7 +12,7 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
 
   return (
     <div className="flex items-center space-x-4 cursor-pointer" onClick={handleClick}>
-      <div className="w-1/3 bg-gray-300 rounded-lg overflow-hidden h-16 relative">
+      <div className="w-1/3 bg-gray-300 rounded-lg overflow-hidden h-16 relative max-w-[100px]">
         {info.thumbnail && (
           <Image
             src={resolveUrl(info.thumbnail)}

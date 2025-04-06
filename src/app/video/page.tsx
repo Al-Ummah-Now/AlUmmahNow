@@ -138,13 +138,13 @@ export default function Home() {
 
             {/* Related Videos Section */}
             <div className="hidden lg:block lg:w-1/4 min-w-[350px] max-w-[500px] pt-4 overflow-auto">
-              <RelatedVideosSection relatedVideos={relatedVideos} />
+              <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="t_" />
             </div>
           </main>
 
           {/* Related Videos Section (Mobile Only) */}
           <div className="block lg:hidden w-full mt-4 overflow-auto">
-            <RelatedVideosSection relatedVideos={relatedVideos} />
+            <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="b_" />
           </div>
         </div>
       </div>

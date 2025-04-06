@@ -21,18 +21,16 @@ export interface PlayerOptions {
 const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   return (
     <>
-      <div className="video-player-container bg-white dark:bg-gray-800">
-        <div className="flex justify-center w-full h-auto mt-0 max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] relative">
-          
-          <div className="w-[1920px] h-[1080px] rounded-lg overflow-hidden max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] dark:bg-gray-900" >
-            {/* Video Player */}
-            <iframe src={`https://iframe.mediadelivery.net/embed/400189/${options.id}?autoplay=false`}
-              loading="lazy" style={{ border: "none", position: "absolute", top: 0, height: "100%", width: "100%" }}
-              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;" allowFullScreen={true}>
-            </iframe>
-          </div>
-        </div>
+    <div
+      className="flex justify-center w-full h-auto mt-0 max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] relative">
+      <div className="w-[1920px] h-[1080px] rounded-lg overflow-hidden max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] dark:bg-gray-900" >
+        {/* Video Player */}
+        <iframe src={`https://iframe.mediadelivery.net/embed/400189/${options.id}?autoplay=false`}
+          loading="lazy" style={{ border: "none", position: "absolute", top: 0, height: "100%", width: "100%" }}
+          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;" allowFullScreen={true} referrerPolicy="origin">
+        </iframe>
       </div>
+    </div>
 
       {/* Video Details */}
       <div className="flex space-x-4 mt-4 justify-start items-center w-full">
