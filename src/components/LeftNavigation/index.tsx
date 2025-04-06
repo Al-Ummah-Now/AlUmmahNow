@@ -44,7 +44,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
             onClick: handleClick,
         },
         {
-            label: "Arabic",
+            label: "العربية",
             icon: "fa-align-right",
             href: `/rtl${path}?${params}`,
         },
