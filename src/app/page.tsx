@@ -5,7 +5,7 @@ import VideoCard from "@/components/videoCard/index";
 import Header from "@/components/Header/index";
 import LeftNavigation from "@/components/LeftNavigation/index";
 import { useQueryState } from "nuqs";
-import { darkModeStore } from "@/components/darkMode";
+import { darkModeStore } from "@/lib/darkMode";
 
 const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -66,7 +66,7 @@ const VideosPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800">
       {/* Header */}
       <Header toggleCollapse={toggleCollapse} />
 

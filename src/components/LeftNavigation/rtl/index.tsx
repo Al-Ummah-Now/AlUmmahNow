@@ -1,8 +1,9 @@
 "use client";
 import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
-import { darkModeStore } from "@/components/darkMode";
+import { darkModeStore } from "@/lib/darkMode";
 import { redirect, useSearchParams, usePathname } from "next/navigation";
+import Link from 'next/link'
 
 interface NavItems {
     label: string;
@@ -45,7 +46,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
         {
             label: "English",
             icon: "fa-align-left",
-            href: `${path.replace("/rtl", "/")}?${params}`,
+            href: `${path.replace("/rtl", "")}?${params}`,
         },
     ];
 
@@ -66,18 +67,18 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
             {/* Navigation */}
             <nav
                 className={`${withOverlay
-                        ? "fixed bg-white dark:bg-gray-900 p-4 rounded-sm z-50 h-screen"
-                        : "bg-white dark:bg-gray-900 p-4 rounded-sm md:absolute"
+                        ? "fixed bg-white dark:bg-gray-800 p-4 rounded-sm z-50 h-screen"
+                        : "bg-white dark:bg-gray-800 p-4 rounded-sm md:absolute"
                     } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
                     } transition-all duration-300`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
                 {/* Show the bars button only in overlay mode */}
                 {withOverlay && (
-                    <div className="flex items-center space-x-reverse space-x-4 mb-4 mt-4 pr-2">
+                    <div className="flex items-center space-x-reverse space-x-4 mb-4 mt-4 pr-4">
                         <IcoButton
                             style="fa-bars"
-                            color="text-white bg-black"
+                            color="text-black dark:text-white bg-gray-200 dark:bg-gray-700"
                             onClick={onCollapse}
                         />
                     </div>
@@ -86,16 +87,16 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                     {navItems.map((item, index) => (
                         <li
                             key={index}
-                            className="rounded-sm hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer"
+                            className="rounded-sm hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
                         >
-                            <a
+                            <Link
                                 href={item.href}
                                 className={`flex items-center space-x-reverse space-x-2 py-2 pr-2`}
                                 onClick={item.onClick}
                             >
                                 <IcoButton
                                     style={item.icon}
-                                    color="text-white bg-black cursor-pointer"
+                                    color="text-black dark:text-white bg-gray-200 dark:bg-gray-700 cursor-pointer"
                                 />
                                 <span
                                     className={`${isCollapsed ? "hidden" : "block"
@@ -103,7 +104,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                                 >
                                     {item.label}
                                 </span>
-                            </a>
+                            </Link>
                         </li>
                     ))}
                 </ul>

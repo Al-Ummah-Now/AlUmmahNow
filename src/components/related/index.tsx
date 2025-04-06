@@ -5,9 +5,9 @@ import { VideoInfo } from "@/interfaces";
 
 const RelatedVideosSection: React.FC<{ relatedVideos: VideoInfo[] }> = ({ relatedVideos }) => {
   return (
-    <div>
+    <div className="related-videos bg-white dark:bg-gray-800">
       <h2 className="text-lg font-bold mb-4 text-black dark:text-white ">Related Videos</h2>
-      <div className="space-y-4">
+      <div className="space-y-4 mx-4 md:mx-0">
         {relatedVideos.map((video) => (
           <RelatedVideo key={video.id} {...video} />
         ))}

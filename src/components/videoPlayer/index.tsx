@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import Image from "next/image";
+import { removeUnwantedChars } from "@/lib/utility";
 
 export interface PlayerOptions {
   id: string;
@@ -18,53 +19,35 @@ export interface PlayerOptions {
 }
 
 const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
-  const [isLoading, setIsLoading] = useState(true);
-
-  const handleCanPlay = () => {
-    setIsLoading(false); // Video is ready to play
-  };
-
   return (
     <>
-      <div className="flex justify-center w-full h-auto mt-0 max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] relative">
-        {/* Loading Spinner */}
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-800 z-10">
-            <div className="w-8 h-8 border-4 border-gray-400 dark:border-gray-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="video-player-container bg-white dark:bg-gray-800">
+        <div className="flex justify-center w-full h-auto mt-0 max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] relative">
+          
+          <div className="w-[1920px] h-[1080px] rounded-lg overflow-hidden max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] dark:bg-gray-900" >
+            {/* Video Player */}
+            <iframe src={`https://iframe.mediadelivery.net/embed/400189/${options.id}?autoplay=false`}
+              loading="lazy" style={{ border: "none", position: "absolute", top: 0, height: "100%", width: "100%" }}
+              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;" allowFullScreen={true}>
+            </iframe>
           </div>
-        )}
-
-        {/* Video Player */}
-        <video
-          key={options.id}
-          className="video-js vjs-default-skin h-auto rounded-lg overflow-hidden max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px]"
-          controls
-          preload="auto"
-          onCanPlay={handleCanPlay} // Trigger when the video is ready
-        >
-          <source
-            src={options?.url ? `https://${options.url}` : ""}
-            type={options?.type ?? "video/mp4"}
-          />
-          Your browser does not support the video tag.
-        </video>
+        </div>
       </div>
 
       {/* Video Details */}
-      <div className="flex space-x-4 mt-4 justify-start items-center">
+      <div className="flex space-x-4 mt-4 justify-start items-center w-full">
         <div className="w-10 h-10 rounded-full overflow-hidden relative">
           <Image
             src={options.channelAvatar}
             alt="User"
-            width={40}
-            height={40}
-            objectFit="cover"
+            sizes="10vw"
             className="bg-gray-500"
+            fill
           />
         </div>
         <div className="mt-4">
-          <h1 className="text-xl font-semibold text-black dark:text-white">
-            {options.title}
+          <h1 className="sm:text-md md:text-xl  font-semibold text-black dark:text-white">
+            {removeUnwantedChars(options.title)}
           </h1>
         </div>
       </div>

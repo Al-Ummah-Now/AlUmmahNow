@@ -3,6 +3,7 @@ import React from "react";
 import Image from "next/image";
 import { VideoInfo } from "@/interfaces";
 import { redirect } from "next/navigation";
+import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
 
 const RelatedVideo: React.FC<VideoInfo> = (info) => {
   const handleClick = () => {
@@ -10,22 +11,27 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
   };
 
   return (
-    <div className="flex items-center space-x-4" onClick={handleClick}>
-      <div className="w-1/3 bg-gray-300 rounded-lg overflow-hidden">
+    <div className="flex items-center space-x-4 cursor-pointer" onClick={handleClick}>
+      <div className="w-1/3 bg-gray-300 rounded-lg overflow-hidden h-16 relative">
         {info.thumbnail && (
           <Image
-            src={`https://${info.thumbnail}`}
+            src={resolveUrl(info.thumbnail)}
             alt="Thumbnail"
-            className="!relative"
+            sizes="10vw"
             fill
+            style={{
+              objectFit: 'cover',
+            }}
           />
         )}
       </div>
       <div className="w-2/3">
-        <h3 className="text-sm font-semibold text-black dark:text-white truncate">{info.title}</h3>
+        <h3 className="text-sm font-semibold text-black dark:text-white truncate">
+          {removeUnwantedChars(info.title)}
+        </h3>
         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{info.channel}</p>
         <p className="text-xs text-gray-500">
-          {info.views} • {info?.dateModified?.toLocaleDateString()}
+          {info.views} views • {info?.dateModified?.toLocaleDateString()}
         </p>
       </div>
     </div>
