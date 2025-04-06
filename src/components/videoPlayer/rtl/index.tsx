@@ -19,12 +19,6 @@ export interface PlayerOptions {
 }
 
 const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
-  const [isLoading, setIsLoading] = useState(true);
-
-  const handleCanPlay = () => {
-    setIsLoading(false); // Video is ready to play
-  };
-
   return (
     <>
       <div
