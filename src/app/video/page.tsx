@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { ThemeProvider } from "@material-tailwind/react";
-import { darkModeStore } from "@/components/darkMode";
+import { darkModeStore } from "@/lib/darkMode";
 import Header from "@/components/Header/index";
 import LeftNavigation from "@/components/LeftNavigation/index";
 import VideoPlayer, { PlayerOptions } from "@/components/videoPlayer/index";
@@ -107,7 +107,7 @@ export default function Home() {
 
   return (
     <ThemeProvider value={{}}>
-      <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 overflow-hidden">
+      <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800 overflow-hidden">
         {/* Header */}
         <Header toggleCollapse={toggleCollapse} />
 
@@ -123,14 +123,14 @@ export default function Home() {
             <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
               {/* Video Player Section */}
               {videoDetails && (
-                <div className="flex flex-col w-full mt-0">
+                <div className="flex flex-col w-full mt-0 items-center">
                   <VideoPlayer options={videoDetails} />
                 </div>
               )}
 
               {/* Comments Section */}
               <div className="flex flex-col w-full mt-4 gap-6 overflow-auto">
-                <div className="w-full p-4">
+                <div className="w-full ">
                   {/* <CommentsSection comments={comments} /> */}
                 </div>
               </div>

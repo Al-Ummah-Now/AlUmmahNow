@@ -34,3 +34,22 @@ export class Observable<T> {
     this.listeners = this.listeners.filter((l) => l !== listenerFunc);
   }
 }
+
+export function resolveUrl(url: string, baseUrl?: string): string {
+  // Use the provided baseUrl or fallback to window.location.origin in the browser
+  const resolvedBaseUrl = baseUrl || (typeof window !== "undefined" ? window.location.origin : "");
+
+  if (url.startsWith("http")) {
+    return url; // Fully qualified URL
+  } else if (url.startsWith("/")) {
+    return `${resolvedBaseUrl}${url}`; // Relative URL
+  } else {
+    return `https://${url}`; // Domain or subdomain
+  }
+}
+
+export function removeUnwantedChars(str: string): string {
+  // remove extension from the string
+  str = str.replace(/\.[^/.]+$/, "");
+  return str.replace(/⧸/g, ".");
+}
