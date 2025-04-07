@@ -2,8 +2,6 @@
 import React, { useState } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
-import Header from "@/components/Header/index";
-import LeftNavigation from "@/components/LeftNavigation/index";
 
 const SearchPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
@@ -34,52 +32,40 @@ const SearchPage: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
-            {/* Header */}
-            <Header toggleCollapse={() => setIsCollapsed(!isCollapsed)} />
+        <main
+            className={`flex flex-col p-4 w-full transition-all duration-300 "md:pl-56"`}>
+            <h1 className="text-2xl font-bold text-black dark:text-white mb-4">Search Videos</h1>
 
-            {/* Left Navigation */}
-            <LeftNavigation
-                withOverlay={true}
-                isCollapsed={isCollapsed}
-                onCollapse={() => setIsCollapsed(true)}
-            />
+            {/* Search Bar */}
+            <div className="flex items-center mb-6">
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search for videos..."
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-offset-gray-700"
+                />
+                <button
+                    onClick={handleSearch}
+                    className="px-4 py-2 bg-gray-700 text-white rounded-r-md"
+                >
+                    Search
+                </button>
+            </div>
 
-            <main
-                className={`flex flex-col p-4 w-full transition-all duration-300 "md:pl-56"`}>
-                <h1 className="text-2xl font-bold text-black dark:text-white mb-4">Search Videos</h1>
-
-                {/* Search Bar */}
-                <div className="flex items-center mb-6">
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search for videos..."
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-offset-gray-700"
-                    />
-                    <button
-                        onClick={handleSearch}
-                        className="px-4 py-2 bg-gray-700 text-white rounded-r-md"
-                    >
-                        Search
-                    </button>
+            {/* Search Results */}
+            {loading ? (
+                <p className="text-gray-500">Loading...</p>
+            ) : videos.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {videos.map((video) => (
+                        <VideoCard key={video.id} {...video} />
+                    ))}
                 </div>
-
-                {/* Search Results */}
-                {loading ? (
-                    <p className="text-gray-500">Loading...</p>
-                ) : videos.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {videos.map((video) => (
-                            <VideoCard key={video.id} {...video} />
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-gray-500 dark:text-gray-400">No results found.</p>
-                )}
-            </main>
-        </div>
+            ) : (
+                <p className="text-gray-500 dark:text-gray-400">No results found.</p>
+            )}
+        </main>
     );
 };
 
