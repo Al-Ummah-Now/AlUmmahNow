@@ -3,7 +3,7 @@ import { IconButton } from "@material-tailwind/react";
 
 const IcoButton: React.FC<{ style: string, color?: string, size?: string, onClick?: () => void }> = ({ style, color, size, onClick }) => {
   return (
-    <IconButton onClick={onClick} className={`${color ? color : ""} ${size ? size : ""}`}>
+    <IconButton onClick={onClick} className={`shadow-none hover:shadow-none ${color ? color : ""} ${size ? size : ""}`}>
       <i className={`fas ${style}`} />
     </IconButton>
   );

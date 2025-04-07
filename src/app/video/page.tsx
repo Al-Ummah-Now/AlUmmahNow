@@ -1,9 +1,5 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { ThemeProvider } from "@material-tailwind/react";
-import { darkModeStore } from "@/lib/darkMode";
-import Header from "@/components/Header/index";
-import LeftNavigation from "@/components/LeftNavigation/index";
 import VideoPlayer, { PlayerOptions } from "@/components/videoPlayer/index";
 import RelatedVideosSection from "@/components/related/index";
 import { useQueryState } from "nuqs";
@@ -11,8 +7,6 @@ import { PaginationResponse, VideoInfo, VideoObject } from "../../interfaces";
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(true);
-  const [darkmode, setDarkmode] = useState(darkModeStore.get());
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
   const [vid, setVid] = useQueryState("vid", { shallow: false });
@@ -20,22 +14,6 @@ export default function Home() {
   useEffect(() => {
     setIsMounted(true); // Ensure the component is mounted on the client
   }, []);
-
-  useEffect(() => {
-    return darkModeStore.subscribe(setDarkmode);
-  }, []);
-
-  useEffect(() => {
-    if (darkmode) {
-      document.body.classList.add("dark");
-    } else {
-      document.body.classList.remove("dark");
-    }
-  }, [darkmode]);
-
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-  };
 
   // Fetch video by ID from query string
   useEffect(() => {
@@ -106,48 +84,34 @@ export default function Home() {
   }, []);
 
   return (
-    <ThemeProvider value={{}}>
-      <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800 overflow-hidden">
-        {/* Header */}
-        <Header toggleCollapse={toggleCollapse} />
-
-        {/* Left Navigation */}
-        <LeftNavigation
-          withOverlay={true}
-          isCollapsed={isCollapsed}
-          onCollapse={() => setIsCollapsed(true)}
-        />
-
-        <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
-          <main className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
-            <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
-              {/* Video Player Section */}
-              {videoDetails && (
-                <div className="flex flex-col w-full mt-0 items-center">
-                  <VideoPlayer options={videoDetails} />
-                </div>
-              )}
-
-              {/* Comments Section */}
-              <div className="flex flex-col w-full mt-4 gap-6 overflow-auto">
-                <div className="w-full ">
-                  {/* <CommentsSection comments={comments} /> */}
-                </div>
-              </div>
+    <main className="flex flex-1 flex-col md:flex-row overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
+        <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
+          {/* Video Player Section */}
+          {videoDetails && (
+            <div className="flex flex-col w-full mt-0 items-center">
+              <VideoPlayer options={videoDetails} />
             </div>
+          )}
 
-            {/* Related Videos Section */}
-            <div className="hidden lg:block lg:w-1/4 min-w-[350px] max-w-[500px] pt-4 overflow-auto">
-              <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="t_" />
+          {/* Comments Section */}
+          <div className="flex flex-col w-full mt-4 gap-6 overflow-auto">
+            <div className="w-full ">
+              {/* <CommentsSection comments={comments} /> */}
             </div>
-          </main>
-
-          {/* Related Videos Section (Mobile Only) */}
-          <div className="block lg:hidden w-full mt-4 overflow-auto">
-            <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="b_" />
           </div>
         </div>
+
+        {/* Related Videos Section */}
+        <div className="hidden lg:block lg:w-1/4 min-w-[350px] max-w-[500px] pt-4 overflow-auto">
+          <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="t_" />
+        </div>
       </div>
-    </ThemeProvider>
+
+      {/* Related Videos Section (Mobile Only) */}
+      <div className="block lg:hidden w-full mt-4 overflow-auto">
+        <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="b_" />
+      </div>
+    </main>
   );
 }
