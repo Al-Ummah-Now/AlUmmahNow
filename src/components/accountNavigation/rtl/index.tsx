@@ -5,17 +5,17 @@ import { redirect, useSearchParams, usePathname } from "next/navigation";
 import IcoButton from "@/components/iconButton";
 import Image from 'next/image';
 import Link from "next/link";
-
-interface AccountNavigationProps {
-    isVisible: boolean;
-    onClose: () => void;
-}
+import { Profile } from "@/interfaces";
+import { AccountNavigationProps, fetchProfile } from "./../interfaces";
 
 const AccountNavigation: React.FC<AccountNavigationProps> = ({
+    user,
     isVisible,
     onClose,
 }) => {
     const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
+        const [profile, setProfile] = React.useState<Profile | null>(null);
+        const [naveItems, setNaveItems] = React.useState([]);
     const path = usePathname();
     const params = useSearchParams()?.toString();
 
@@ -31,6 +31,39 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
     useEffect(() => {
         return darkModeStore.subscribe(setDarkmode);
     }, []);
+    
+        useEffect(() => {
+    
+            fetchProfile(user, setProfile);
+        }, [user]);
+        
+        useEffect(() => {
+            const handleClick = () => {
+                const dark = !darkmode;
+                darkModeStore.set(dark);
+            };
+    
+            let items =[
+                { label: "Profile", icon: "fa-user", href: "/profile" },
+                {
+                    label: "Dark Mode",
+                    icon: `${darkmode ? "fa-sun" : "fa-moon"}`,
+                    href: "#",
+                    onClick: handleClick,
+                },
+                {
+                    label: "العربية",
+                    icon: "fa-align-right",
+                    href: newUrl,
+                },
+                { label: "Settings", icon: "fa-cog", href: "/settings" },
+                { label: "Logout", icon: "fa-sign-out-alt", href: "/logout" },
+            ];
+            user
+            ? items.push({ label: "Logout", icon: "fa-sign-out-alt", href: "/logout" }) 
+            : items.push({ label: "Login", icon: "fa-sign-in-alt", href: "/login" });
+            setNaveItems(items);
+        }, [user, newUrl, darkmode]);
 
     const accountItems = [
         { label: "الملف الشخصي", icon: "fa-user", href: "/profile" }, // Profile

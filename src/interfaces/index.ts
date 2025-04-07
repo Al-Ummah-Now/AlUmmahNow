@@ -37,3 +37,16 @@ export interface VideoInfo {
     dateCreated: Date;
     dateModified: Date;
 }
+
+export interface Profile {
+    id: string;
+    userName: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl: string;
+    coverUrl: string;
+}
+
+export interface User {
+    id: string;
+}
