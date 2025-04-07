@@ -15,10 +15,12 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.775.0",
     "@material-tailwind/react": "^2.1.10",
+    "@openauthjs/openauth": "^0.4.3",
     "next": "^15.2.3",
     "nuqs": "^2.4.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "valibot": "^1.0.0",
     "video.js": "^8.22.0"
   },
   "devDependencies": {
