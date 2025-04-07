@@ -11,8 +11,11 @@ import AccountNavigation from "@/components/accountNavigation";
 import AccountNavigationRtl from "@/components/accountNavigation/rtl";
 import { darkModeStore } from "@/lib/darkMode";
 import { redirect, useSearchParams, usePathname } from "next/navigation";
+import { auth, login, logout } from "./actions"
 import { Suspense } from "react"
 import "./globals.css";
+import { subjects } from "./auth";
+import { set } from "video.js/dist/types/tech/middleware";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,11 +26,18 @@ export default function RootLayout({
 }>) {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isAccountCollapsed, setIsAccountCollapsed] = useState(true);
+  const [user, setUser] = useState<{id:string}>(null);
   const [darkmode, setDarkmode] = useState(darkModeStore.get());
   const path = usePathname();
   const params = useSearchParams()?.toString();
   const rtl = path.indexOf('/rtl') > -1;
   const withOverlay = path.indexOf('/video') > -1 ? true : false;
+  
+  auth().then((subject) => {
+    if (subject) {
+      setUser(subject.properties);
+    }
+  });
 
   useEffect(() => {
     return darkModeStore.subscribe(setDarkmode);
@@ -102,8 +112,8 @@ export default function RootLayout({
 
                   {/* Account Navigation */}
                   {path.indexOf('/rtl') > -1
-                    ? <AccountNavigationRtl isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
-                    : <AccountNavigation isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
+                    ? <AccountNavigationRtl user={user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
+                    : <AccountNavigation user={user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
                     
                 </div>
                 {children}
