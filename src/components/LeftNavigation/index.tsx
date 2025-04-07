@@ -1,8 +1,6 @@
 "use client";
 import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
-import { darkModeStore } from "@/lib/darkMode";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
 import Link from 'next/link'
 
 interface NavItems {
@@ -23,36 +21,12 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     onCollapse,
     withOverlay = false, // Default to no overlay
 }) => {
-    const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
-    let path = usePathname();
-    let params = useSearchParams().toString();
-
-    const handleClick = () => {
-        const dark = !darkmode;
-        darkModeStore.set(dark);
-    };
-
     const navItems: NavItems[] = [
         { label: "Home", icon: "fa-house", href: "/" },
         { label: "Trending", icon: "fa-magnifying-glass", href: "/search" },
         { label: "Subscriptions", icon: "fa-tv", href: "#" },
         { label: "Library", icon: "fa-bookmark", href: "#" },
-        {
-            label: "Dark Mode",
-            icon: `${darkmode ? "fa-sun" : "fa-moon"}`,
-            href: "#",
-            onClick: handleClick,
-        },
-        {
-            label: "العربية",
-            icon: "fa-align-right",
-            href: `/rtl${path}?${params}`,
-        },
     ];
-
-    useEffect(() => {
-        return darkModeStore.subscribe(setDarkmode);
-    }, []);
 
     return (
         <>
@@ -66,19 +40,18 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
 
             {/* Navigation */}
             <nav
-                className={`${withOverlay
-                        ? "fixed bg-white dark:bg-gray-800 p-4 rounded-sm z-50 h-screen"
-                        : "bg-white dark:bg-gray-800 p-4 rounded-sm md:absolute"
-                    } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
-                    } transition-all duration-300`}
+                className={`transition-all duration-300 ease-in-out ${withOverlay
+                    ? "fixed top-0 bg-white dark:bg-gray-900 px-4 pb-4 pt-2.5 rounded-sm z-50 h-screen"
+                    : "bg-white dark:bg-gray-900 p-4 rounded-sm md:absolute"
+                    } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"} `}
             >
                 {/* Show the bars button only in overlay mode */}
                 {withOverlay && (
-                    <div className="flex items-center space-x-4 mb-4 mt-4 pl-2">
+                    <div className="flex items-center space-x-4 mb-4 pl-2">
                         <IcoButton
                             style="fa-bars"
-                            color="text-black dark:text-white bg-gray-200 dark:bg-gray-700"
-                            onClick={onCollapse}
+                            size="text-lg"
+                            color="text-[#ffa037]  bg-transparent"
                         />
                     </div>
                 )}
@@ -95,7 +68,8 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                             >
                                 <IcoButton
                                     style={item.icon}
-                                    color="text-black dark:text-white bg-gray-200 dark:bg-gray-700 cursor-pointer"
+                                    size="text-lg"
+                                    color="text-black dark:text-white bg-transparent cursor-pointer"
                                 />
                                 <span
                                     className={`${isCollapsed ? "hidden" : "block"

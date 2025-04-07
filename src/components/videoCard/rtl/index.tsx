@@ -11,7 +11,7 @@ const VideoCardRTL: React.FC<VideoObject> = (video) => {
   }
 
   return (
-    <div className="video-card cursor-pointer bg-white dark:bg-gray-800 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden"
+    <div className="video-card cursor-pointer bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden"
       onClick={handleClick} dir="rtl">
       {/* Thumbnail */}
       <div className="relative w-full h-48 bg-gray-200">

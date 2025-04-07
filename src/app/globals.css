@@ -18,6 +18,14 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentColor);
   }
+  
+  @font-face {
+    font-family: 'Farsi Simple Bold';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(/fonts/FRSSPBL.TTF) format('woff2');
+  }
 }
 
 @layer utilities {

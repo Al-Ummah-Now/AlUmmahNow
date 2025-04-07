@@ -27,8 +27,12 @@ module.exports = withMT({
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/lib/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}"],
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}"
+  ],
   theme: {
+    fontfamily: {
+      farsi: ["Farsi Simple Bold"],
+    },
     extend: {
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",

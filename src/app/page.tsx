@@ -2,10 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
-import Header from "@/components/Header/index";
-import LeftNavigation from "@/components/LeftNavigation/index";
 import { useQueryState } from "nuqs";
-import { darkModeStore } from "@/lib/darkMode";
 
 const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -13,19 +10,6 @@ const VideosPage: React.FC = () => {
   const [nextCursor, setNextCursor] = useState<string | null>(null); 
   const [loading, setLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
-    const [darkmode, setDarkmode] = useState(darkModeStore.get());
-
-    useEffect(() => {
-      return darkModeStore.subscribe(setDarkmode);
-    }, []);
-  
-    useEffect(() => {
-      if (darkmode) {
-        document.body.classList.add("dark");
-      } else {
-        document.body.classList.remove("dark");
-      }
-    }, [darkmode]);
 
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
@@ -61,19 +45,7 @@ const VideosPage: React.FC = () => {
     }
   };
 
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-  };
-
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800">
-      {/* Header */}
-      <Header toggleCollapse={toggleCollapse} />
-
-      <div className="flex flex-1 flex-col">
-        {/* Left Navigation */}
-        <LeftNavigation isCollapsed={isCollapsed} />
-
         <main
           className={`flex flex-col p-4 w-full transition-all duration-300 ${
             isCollapsed ? "md:pl-20" : "md:pl-56"
@@ -99,8 +71,6 @@ const VideosPage: React.FC = () => {
             </button>
           </div>
         </main>
-      </div>
-    </div>
   );
 };
 

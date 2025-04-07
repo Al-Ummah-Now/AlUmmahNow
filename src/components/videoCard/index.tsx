@@ -11,7 +11,7 @@ const VideoCard: React.FC<VideoObject> = (video) => {
     }
 
     return (
-        <div className="video-card cursor-pointer bg-white dark:bg-gray-800 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden" onClick={handleClick}>
+        <div className="video-card cursor-pointer bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden" onClick={handleClick}>
             {/* Thumbnail */}
             <div className="relative w-full h-48 bg-gray-200">
                 {video.thumbnailUrl && (

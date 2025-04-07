@@ -1,8 +1,6 @@
 "use client";
 import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
-import { darkModeStore } from "@/lib/darkMode";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
 import Link from 'next/link'
 
 interface NavItems {
@@ -23,36 +21,12 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     onCollapse,
     withOverlay = false, // Default to no overlay
 }) => {
-    const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
-    const path = usePathname();
-    const params = useSearchParams().toString();
-
-    const handleClick = () => {
-        const dark = !darkmode;
-        darkModeStore.set(dark);
-    };
-
     const navItems: NavItems[] = [
         { label: "الرئيسية", icon: "fa-house", href: "/rtl/" }, // Home
         { label: "الشائع", icon: "fa-magnifying-glass", href: "/rtl/search" }, // Trending
         { label: "الاشتراكات", icon: "fa-tv", href: "#" }, // Subscriptions
         { label: "المكتبة", icon: "fa-bookmark", href: "#" }, // Library
-        {
-            label: "الوضع الداكن",
-            icon: `${darkmode ? "fa-sun" : "fa-moon"}`,
-            href: "#",
-            onClick: handleClick, // Dark Mode
-        },
-        {
-            label: "English",
-            icon: "fa-align-left",
-            href: `${path.replace("/rtl", "")}?${params}`,
-        },
     ];
-
-    useEffect(() => {
-        return darkModeStore.subscribe(setDarkmode);
-    }, []);
 
     return (
         <>
@@ -67,19 +41,19 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
             {/* Navigation */}
             <nav
                 className={`${withOverlay
-                        ? "fixed bg-white dark:bg-gray-800 p-4 rounded-sm z-50 h-screen"
-                        : "bg-white dark:bg-gray-800 p-4 rounded-sm md:absolute"
+                    ? "fixed top-0 bg-white dark:bg-gray-900 px-4 pb-4 pt-2.5 rounded-sm z-50 h-screen"
+                    : "bg-white dark:bg-gray-900 p-4 rounded-sm md:absolute"
                     } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
                     } transition-all duration-300`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
                 {/* Show the bars button only in overlay mode */}
                 {withOverlay && (
-                    <div className="flex items-center space-x-reverse space-x-4 mb-4 mt-4 pr-4">
+                    <div className="flex items-center space-x-reverse space-x-4 mb-4 pr-4">
                         <IcoButton
                             style="fa-bars"
-                            color="text-black dark:text-white bg-gray-200 dark:bg-gray-700"
-                            onClick={onCollapse}
+                            size="text-lg"
+                            color="text-[#ffa037] bg-transparent"
                         />
                     </div>
                 )}
@@ -91,16 +65,17 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                         >
                             <Link
                                 href={item.href}
-                                className={`flex items-center space-x-reverse space-x-2 py-2 pr-2`}
+                                className={`flex items-center space-x-2 p-2 pr-4`}
                                 onClick={item.onClick}
                             >
                                 <IcoButton
                                     style={item.icon}
-                                    color="text-black dark:text-white bg-gray-200 dark:bg-gray-700 cursor-pointer"
+                                    size="text-lg"
+                                    color="text-black dark:text-white bg-transparent cursor-pointer"
                                 />
                                 <span
                                     className={`${isCollapsed ? "hidden" : "block"
-                                        } text-black dark:text-white text-sm md:text-base pr-2`}
+                                        } text-black dark:text-white text-sm md:text-base`}
                                 >
                                     {item.label}
                                 </span>
