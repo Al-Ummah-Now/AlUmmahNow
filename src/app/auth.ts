@@ -1,11 +1,10 @@
 import { createClient } from "@openauthjs/openauth/client"
-import { env } from "cloudflare:workers"
 import { cookies as getCookies } from "next/headers"
 export { subjects } from "@/interfaces/subjects"
 
 export const client = createClient({
-  clientID: env.ClientId,
-  issuer: env.Issuer, // url to the OpenAuth server
+  clientID: process.env.ClientId,
+  issuer: process.env.Issuer, // url to the OpenAuth server
 });
 
 export async function setTokens(access: string, refresh: string) {

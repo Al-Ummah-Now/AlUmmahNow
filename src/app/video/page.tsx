@@ -1,9 +1,11 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import VideoPlayer, { PlayerOptions } from "@/components/videoPlayer/index";
+import VideoPlayer from "@/components/videoPlayer/index";
 import RelatedVideosSection from "@/components/related/index";
 import { useQueryState } from "nuqs";
 import { PaginationResponse, VideoInfo, VideoObject } from "../../interfaces";
+import { PlayerOptions } from "@/components/videoPlayer/interface";
+import { fetchVideoById, fetchVideos } from "@/lib/videoClient";
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
@@ -17,67 +19,21 @@ export default function Home() {
 
   // Fetch video by ID from query string
   useEffect(() => {
-    if (!isMounted) return;
+    const fetchVideoDetails = async () => {
+      if (!isMounted) return;
 
-    const fetchVideoById = async () => {
-      if (!vid) return;
-
-      try {
-        const response = await fetch(
-          `https://videos.api.alummahnow.net/api/videos/${vid}`
-        );
-        if (!response.ok) {
-          throw new Error(`Error fetching video: ${response.statusText}`);
-        }
-        const video: VideoObject = await response.json();
-        setVideoDetails({
-          id: video.id,
-          title: video.title,
-          description: video.description,
-          channel: video.channel,
-          url: video.videoUrl,
-          views: `${video.views || 0}`,
-          dateCreated: new Date(video.dateCreated),
-          autoplay: false,
-          type: "video/mp4",
-          channelAvatar: video.channelThumbnailUrl,
-        });
-      } catch (error) {
-        console.error(error);
-      }
+      const details = await fetchVideoById(vid);
+      setVideoDetails(details);
     };
 
-    fetchVideoById();
+    fetchVideoDetails();
   }, [vid, isMounted]);
 
   // Fetch related videos from the API
   useEffect(() => {
     const fetchRelatedVideos = async () => {
-      try {
-        const response = await fetch(
-          "https://videos.api.alummahnow.net/api/videos?limit=15"
-        );
-        if (!response.ok) {
-          throw new Error(`Error fetching related videos: ${response.statusText}`);
-        }
-        const result: PaginationResponse<VideoObject> = await response.json();
-        setRelatedVideos(
-          result.data.map((video) => ({
-            id: video.id,
-            title: video.title,
-            description: video.description,
-            channel: video.channel,
-            channelId: video.channelId,
-            thumbnail: video.thumbnailUrl,
-            video: video.videoUrl,
-            views: `${video.views || 0}`,
-            dateCreated: new Date(video.dateCreated),
-            dateModified: new Date(video.dateModified),
-          }))
-        );
-      } catch (error) {
-        console.error(error);
-      }
+      const videos = await fetchVideos();
+      setRelatedVideos(videos);
     };
 
     fetchRelatedVideos();

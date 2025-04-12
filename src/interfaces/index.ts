@@ -18,6 +18,9 @@ export interface VideoObject {
     dateCreated: string;
     dateModified: string;
     views?: number;
+    width?: number;
+    height?: number;
+    availableResolutions?: string[];
 };
 
 export type ResponseError = {
@@ -36,6 +39,9 @@ export interface VideoInfo {
     views: string;
     dateCreated: Date;
     dateModified: Date;
+    width?: number;
+    height?: number;
+    availableResolutions?: string[];
 }
 
 export interface Profile {
