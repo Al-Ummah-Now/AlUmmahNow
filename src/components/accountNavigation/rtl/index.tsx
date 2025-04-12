@@ -1,86 +1,70 @@
 "use client";
 import React, { useEffect } from "react";
-import { darkModeStore } from "@/lib/darkMode";
 import { redirect, useSearchParams, usePathname } from "next/navigation";
 import IcoButton from "@/components/iconButton";
 import Image from 'next/image';
 import Link from "next/link";
 import { Profile } from "@/interfaces";
-import { AccountNavigationProps, fetchProfile } from "./../interfaces";
+import { AccountNavigationProps, fetchProfile, NavItem } from "./../interfaces";
+import { useAuth } from "@/components/AuthProvider/authContext";
+import { useTheme } from "next-themes"
 
 const AccountNavigation: React.FC<AccountNavigationProps> = ({
-    user,
     isVisible,
     onClose,
 }) => {
-    const [darkmode, setDarkmode] = React.useState(darkModeStore.get());
-        const [profile, setProfile] = React.useState<Profile | null>(null);
-        const [naveItems, setNaveItems] = React.useState([]);
-    const path = usePathname();
-    const params = useSearchParams()?.toString();
-
-    const handleClick = () => {
-        const dark = !darkmode;
-        darkModeStore.set(dark);
-    };
+    const [profile, setProfile] = React.useState<Profile | null>(null);
+    const [naveItems, setNaveItems] = React.useState([]);
+    const [login, setLogin] = React.useState(false);
+    const [logout, setLogout] = React.useState(false);
+    const { user } = useAuth();
+    const { theme, setTheme } = useTheme();
+    let path = usePathname();
+    let params = useSearchParams()?.toString();
 
     const newPath = path.replace("rtl", "").replace("//", "/");
     const newParams = params ? `?${params}` : "";
     const newUrl = `${newPath}${newParams}`;
 
     useEffect(() => {
-        return darkModeStore.subscribe(setDarkmode);
-    }, []);
-    
-        useEffect(() => {
-    
-            fetchProfile(user, setProfile);
-        }, [user]);
-        
-        useEffect(() => {
-            const handleClick = () => {
-                const dark = !darkmode;
-                darkModeStore.set(dark);
-            };
-    
-            let items =[
-                { label: "Profile", icon: "fa-user", href: "/profile" },
-                {
-                    label: "Dark Mode",
-                    icon: `${darkmode ? "fa-sun" : "fa-moon"}`,
-                    href: "#",
-                    onClick: handleClick,
-                },
-                {
-                    label: "العربية",
-                    icon: "fa-align-right",
-                    href: newUrl,
-                },
-                { label: "Settings", icon: "fa-cog", href: "/settings" },
-                { label: "Logout", icon: "fa-sign-out-alt", href: "/logout" },
-            ];
-            user
-            ? items.push({ label: "Logout", icon: "fa-sign-out-alt", href: "/logout" }) 
-            : items.push({ label: "Login", icon: "fa-sign-in-alt", href: "/login" });
-            setNaveItems(items);
-        }, [user, newUrl, darkmode]);
 
-    const accountItems = [
-        { label: "الملف الشخصي", icon: "fa-user", href: "/profile" }, // Profile
-        {
-            label: "الوضع الداكن",
-            icon: `${darkmode ? "fa-sun" : "fa-moon"}`,
-            href: "#",
-            onClick: handleClick, // Dark Mode
-        },
-        {
-            label: "English",
-            icon: "fa-align-left",
-            href: newUrl,
-        },
-        { label: "الإعدادات", icon: "fa-cog", href: "/settings" }, // Settings
-        { label: "تسجيل الخروج", icon: "fa-sign-out-alt", href: "/logout" },
-    ];
+        fetchProfile(user, setProfile);
+    }, [user]);
+
+    useEffect(() => {
+        const handleLogin = () => setLogin(!login);
+        const handleLogout = () => setLogout(!logout);
+        const handleClick = () => {
+          if (theme === "dark") {
+            setTheme("light");
+          } else if (theme === "light") {
+            setTheme("dark");
+          }
+        };
+
+        let items: NavItem[] = [
+            {
+                label: "الوضع الداكن",
+                icon: `${theme === "dark" ? "fa-sun" : "fa-moon"}`,
+                href: "#",
+                onClick: handleClick,
+            },
+            {
+                label: "English",
+                icon: "fa-align-right",
+                href: newUrl,
+            },
+        ];
+        if(profile){
+            items.push({ label: "الملف الشخصي", icon: "fa-user", href: "/profile" });
+            items.push({ label: "الإعدادات", icon: "fa-cog", href: "/settings" });
+        }
+        user
+            ? items.push({ label: "تسجيل الخروج", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout })
+            : items.push({ label: "تسجيل الدخول", icon: "fa-sign-in-alt", href: "#", onClick: handleLogin });
+
+        setNaveItems(items);
+    }, [user, newUrl, login, logout, profile, theme, setTheme]);
 
     return (
         <>
@@ -94,7 +78,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
 
             {/* Account Navigation */}
             <nav className={`fixed top-0 left-0 h-screen bg-white dark:bg-gray-900 z-50 transition-all duration-300 ease-in-out 
-                ${isVisible ? "w-64" : "w-0 hidden"}`}
+                ${isVisible ? "w-48" : "w-0 hidden"}`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
                 <div className="flex justify-end px-2 py-2.5">
@@ -103,7 +87,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                     </div>
                 </div>
                 <ul>
-                    {accountItems.map((item, index) => (
+                    {naveItems.map((item, index) => (
                         <li
                             key={index}
                             className="rounded-sm hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"

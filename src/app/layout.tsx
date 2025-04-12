@@ -1,21 +1,21 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { ThemeProvider } from "@material-tailwind/react";
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { Inter } from "next/font/google";
+import { ThemeProvider } from "@/components/themeProvider";
 import Header from "@/components/Header/index";
 import LeftNavigation from "@/components/LeftNavigation/index";
 import HeaderRtl from "@/components/Header/rtl/index";
 import LeftNavigationRtl from "@/components/LeftNavigation/rtl/index";
 import AccountNavigation from "@/components/accountNavigation";
 import AccountNavigationRtl from "@/components/accountNavigation/rtl";
-import { darkModeStore } from "@/lib/darkMode";
 import { redirect, useSearchParams, usePathname } from "next/navigation";
 import { auth, login, logout } from "./actions"
 import { Suspense } from "react"
 import "./globals.css";
 import { subjects } from "./auth";
 import { set } from "video.js/dist/types/tech/middleware";
+import AuthProvider from "@/components/AuthProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,30 +26,10 @@ export default function RootLayout({
 }>) {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isAccountCollapsed, setIsAccountCollapsed] = useState(true);
-  const [user, setUser] = useState<{id:string}>(null);
-  const [darkmode, setDarkmode] = useState(darkModeStore.get());
   const path = usePathname();
   const params = useSearchParams()?.toString();
   const rtl = path.indexOf('/rtl') > -1;
   const withOverlay = path.indexOf('/video') > -1 ? true : false;
-  
-  auth().then((subject) => {
-    if (subject) {
-      setUser(subject.properties);
-    }
-  });
-
-  useEffect(() => {
-    return darkModeStore.subscribe(setDarkmode);
-  }, []);
-
-  useEffect(() => {
-    if (darkmode) {
-      document.body.classList.add("dark");
-    } else {
-      document.body.classList.remove("dark");
-    }
-  }, [darkmode]);
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
@@ -60,7 +40,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="referrer" content="origin" />
@@ -98,31 +78,39 @@ export default function RootLayout({
       <body className={inter.className}>
         <Suspense>
           <NuqsAdapter>
-            <ThemeProvider value={{}}>
-              <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900" style={{ direction: rtl ? "rtl" : "ltr" }}>
-                {/* Header */}
-                {rtl 
-                ? <HeaderRtl toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} /> 
-                : <Header toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse}  />}
-                <div className="flex flex-1">
-                  {/* Left Navigation */}
-                  {path.indexOf('/rtl') > -1
-                    ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
-                    : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange>
+              <AuthProvider>
+                <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900" style={{ direction: rtl ? "rtl" : "ltr" }}>
+                  {/* Header */}
+                  {rtl
+                    ? <HeaderRtl toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />
+                    : <Header toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />}
+                  <div className="flex flex-1">
+                    {/* Left Navigation */}
+                    {path.indexOf('/rtl') > -1
+                      ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
+                      : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
 
-                  {/* Account Navigation */}
-                  {path.indexOf('/rtl') > -1
-                    ? <AccountNavigationRtl user={user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
-                    : <AccountNavigation user={user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
-                    
+                    {/* Account Navigation */}
+                    {path.indexOf('/rtl') > -1
+                      ? <AccountNavigationRtl isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
+                      : <AccountNavigation isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
+
+                  </div>
+                  {children}
                 </div>
-                {children}
-              </div>
+              </AuthProvider>
             </ThemeProvider>
           </NuqsAdapter>
         </Suspense>
       </body>
       <script async src="https://unpkg.com/@material-tailwind/html@latest/scripts/ripple.js"></script>
+      <script async type="text/javascript" src="//assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>
+
     </html>
   );
 }

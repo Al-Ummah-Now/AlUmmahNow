@@ -59,7 +59,9 @@ module.exports = withMT({
       backgroundColor: ['hover'],
     },
   },
-  plugins: [],
+  plugins: [
+    require("@tailwindcss/aspect-ratio"), // Add this plugin
+  ],
 });
 
 const config: Config = {

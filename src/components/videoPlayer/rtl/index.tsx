@@ -2,35 +2,35 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { removeUnwantedChars } from "@/lib/utility";
-
-export interface PlayerOptions {
-  id: string;
-  title: string;
-  channel: string;
-  channelAvatar: string;
-  description: string;
-  views: string;
-  url: string;
-  autoplay: boolean;
-  type: string;
-  width?: number;
-  height?: number;
-  dateCreated: Date;
-}
+import { PlayerOptions } from "../interface";
 
 const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
+  const aspectRatio = options.width / options.height;
   return (
     <>
-      <div
-        className="flex justify-center w-full h-auto mt-0 max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] relative"
-        dir="rtl"
-      >
-        <div className="w-[1920px] h-[1080px] rounded-lg overflow-hidden max-w-[320px] max-h-[200px] md:max-w-[720px] md:max-h-[480px] xl:max-w-[1024px] xl:max-h-[720px] 2xl:max-w-[1920px] 2xl:max-h-[1080px] dark:bg-gray-900" >
+      <div className="flex w-full mt-0 relative dark:bg-gray-900" dir="rtl">
+        <div className={`w-full rounded-lg overflow-hidden`}
+          style={{
+            aspectRatio: `${aspectRatio}`, // Dynamically set the aspect ratio
+            margin: 0,
+            padding: 0,
+            lineHeight: 0,
+          }}>
           {/* Video Player */}
-          <iframe src={`https://iframe.mediadelivery.net/embed/400189/${options.id}?autoplay=false`}
-            loading="lazy" style={{ border: "none", position: "absolute", top: 0, height: "100%", width: "100%" }}
-            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;" allowFullScreen={true} referrerPolicy="origin">
-          </iframe>
+          <iframe
+            src={`https://iframe.mediadelivery.net/embed/400189/${options.id}?autoplay=false`}
+            loading="lazy"
+            style={{
+              border: "none",
+              position: "absolute",
+              top: 0,
+              height: "100%",
+              width: "100%",
+            }}
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+            allowFullScreen={true}
+            referrerPolicy="origin"
+          ></iframe>
         </div>
       </div>
 
