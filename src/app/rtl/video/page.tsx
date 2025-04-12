@@ -6,12 +6,15 @@ import { useQueryState } from "nuqs";
 import { PaginationResponse, VideoInfo, VideoObject } from "../../../interfaces";
 import { fetchVideoById, fetchVideos } from "@/lib/videoClient";
 import { PlayerOptions } from "@/components/videoPlayer/interface";
+import { redirect, useSearchParams, usePathname } from "next/navigation";
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
   const [vid, setVid] = useQueryState("vid", { shallow: false });
+    const path = usePathname();
+    const rtl = path.indexOf('/rtl') > -1;
 
   useEffect(() => {
     setIsMounted(true); // Ensure the component is mounted on the client
@@ -41,7 +44,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
-      <main className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
+      <main className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden" style={{ direction: rtl ? "rtl" : "ltr" }}>
         <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
           {/* Video Player Section */}
           {videoDetails && (

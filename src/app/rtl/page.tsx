@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/rtl/index";
 import { useQueryState } from "nuqs";
+import { redirect, useSearchParams, usePathname } from "next/navigation";
 
 const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -10,6 +11,8 @@ const VideosPage: React.FC = () => {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [loading, setLoading] = useState(false);
+  const path = usePathname();
+  const rtl = path.indexOf('/rtl') > -1;
 
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
@@ -44,10 +47,7 @@ const VideosPage: React.FC = () => {
   };
 
   return (
-    <main
-      className={`flex flex-col p-4 w-full transition-all duration-300 ${isCollapsed ? "md:pr-20" : "md:pr-56"
-        }`}
-    >
+    <main className={`flex flex-col p-4 w-full transition-all duration-300 ${isCollapsed ? "md:pr-20" : "md:pr-56"}`} style={{ direction: rtl ? "rtl" : "ltr" }}>
       <h1 className="text-2xl font-bold text-black dark:text-white mb-4">الفيديوهات</h1>
       {loading && videos.length === 0 ? (
         <p className="text-gray-500 dark:text-gray-400">جاري التحميل...</p>

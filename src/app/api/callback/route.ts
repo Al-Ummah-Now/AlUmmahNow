@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   if (exchanged.err) return NextResponse.json(exchanged.err, { status: 400 });
   else if (exchanged.err == false) {
     await setTokens(exchanged.tokens.access, exchanged.tokens.refresh)
+    console.log(`${url.origin}`);
     return NextResponse.redirect(`${url.origin}/`)
   }
 }

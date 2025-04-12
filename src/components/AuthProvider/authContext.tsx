@@ -6,10 +6,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthContextProvider: React.FC<{
+export type AuthContextProviderProps = {
   user: { id: string } | null;
   children: React.ReactNode;
-}> = ({ user, children }) => {
+}
+
+export const AuthContextProvider: React.FC<AuthContextProviderProps> = ({ user, children }) => {
   return (
     <AuthContext.Provider value={{ user }}>
       {children}
