@@ -13,8 +13,8 @@ export default function Home() {
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
   const [vid, setVid] = useQueryState("vid", { shallow: false });
-    const path = usePathname();
-    const rtl = path.indexOf('/rtl') > -1;
+  const path = usePathname();
+  const rtl = path.indexOf('/rtl') > -1;
 
   useEffect(() => {
     setIsMounted(true); // Ensure the component is mounted on the client

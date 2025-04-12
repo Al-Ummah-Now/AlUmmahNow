@@ -2,14 +2,14 @@
 import React, { useState } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/rtl/index";
-import Header from "@/components/Header/rtl/index";
-import LeftNavigation from "@/components/LeftNavigation/rtl/index";
+import { redirect, useSearchParams, usePathname } from "next/navigation";
 
 const SearchPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [videos, setVideos] = useState<VideoObject[]>([]);
     const [loading, setLoading] = useState(false);
-    const [isCollapsed, setIsCollapsed] = useState(true);
+    const path = usePathname();
+    const rtl = path.indexOf('/rtl') > -1;
 
     const handleSearch = async () => {
         if (!searchQuery.trim()) return;
@@ -34,19 +34,8 @@ const SearchPage: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-white" dir="rtl">
-            {/* Header */}
-            <Header toggleCollapse={() => setIsCollapsed(!isCollapsed)} />
-
-            {/* Left Navigation */}
-            <LeftNavigation
-                withOverlay={true}
-                isCollapsed={isCollapsed}
-                onCollapse={() => setIsCollapsed(true)}
-            />
-
             <main
-                className={`flex flex-col p-4 w-full transition-all duration-300 "md:pl-56"`}>
+                className={`flex flex-col p-4 w-full transition-all duration-300 "md:pl-56"`} style={{ direction: rtl ? "rtl" : "ltr" }}>
                 <h1 className="text-2xl font-bold text-black mb-4">بحث الفيديوهات</h1>
 
                 {/* Search Bar */}
@@ -79,7 +68,6 @@ const SearchPage: React.FC = () => {
                     <p className="text-gray-500">لم يتم العثور على نتائج.</p>
                 )}
             </main>
-        </div>
     );
 };
 
