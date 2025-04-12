@@ -1,5 +1,5 @@
 import React from "react";
-import { auth } from "./../../app/actions";
+import { auth } from "../../lib/actions";
 import { AuthContextProvider } from "./authContext";
 import { User } from "@/interfaces";
 

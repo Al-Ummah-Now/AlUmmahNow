@@ -1,5 +1,5 @@
 import React from "react";
-import { login } from "@/app/actions";
+import { login } from "@/lib/actions";
 
 const LoginWrapper: React.FC = () => {
     return (

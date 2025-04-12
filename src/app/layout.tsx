@@ -2,7 +2,7 @@ import React from "react";
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/themeProvider";
-import { auth, login, logout } from "./actions"
+import { auth, login, logout } from "../lib/actions"
 import { Suspense } from "react"
 import "./globals.css";
 import Navigation from "@/components/navigation";
