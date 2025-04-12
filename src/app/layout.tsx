@@ -1,44 +1,17 @@
-"use client";
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/themeProvider";
-import Header from "@/components/Header/index";
-import LeftNavigation from "@/components/LeftNavigation/index";
-import HeaderRtl from "@/components/Header/rtl/index";
-import LeftNavigationRtl from "@/components/LeftNavigation/rtl/index";
-import AccountNavigation from "@/components/accountNavigation";
-import AccountNavigationRtl from "@/components/accountNavigation/rtl";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
 import { auth, login, logout } from "./actions"
 import { Suspense } from "react"
 import "./globals.css";
-import { subjects } from "./auth";
-import { set } from "video.js/dist/types/tech/middleware";
-import AuthProvider from "@/components/AuthProvider";
+import Navigation from "@/components/navigation";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const [isCollapsed, setIsCollapsed] = useState(true);
-  const [isAccountCollapsed, setIsAccountCollapsed] = useState(true);
-  const path = usePathname();
-  const params = useSearchParams()?.toString();
-  const rtl = path.indexOf('/rtl') > -1;
-  const withOverlay = path.indexOf('/video') > -1 ? true : false;
-
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-  };
-
-  const toggleAccountCollapse = () => {
-    setIsAccountCollapsed(!isAccountCollapsed);
-  };
-
+export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
+  const subject = await auth()
+  
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -83,27 +56,11 @@ export default function RootLayout({
               defaultTheme="system"
               enableSystem
               disableTransitionOnChange>
-              <AuthProvider>
-                <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900" style={{ direction: rtl ? "rtl" : "ltr" }}>
-                  {/* Header */}
-                  {rtl
-                    ? <HeaderRtl toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />
-                    : <Header toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />}
-                  <div className="flex flex-1">
-                    {/* Left Navigation */}
-                    {path.indexOf('/rtl') > -1
-                      ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
-                      : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
-
-                    {/* Account Navigation */}
-                    {path.indexOf('/rtl') > -1
-                      ? <AccountNavigationRtl isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
-                      : <AccountNavigation isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
-
-                  </div>
-                  {children}
-                </div>
-              </AuthProvider>
+              <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                {/* Header */}
+                <Navigation user={subject}></Navigation>
+                {children}
+              </div>
             </ThemeProvider>
           </NuqsAdapter>
         </Suspense>

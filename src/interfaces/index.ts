@@ -56,3 +56,7 @@ export interface Profile {
 export interface User {
     id: string;
 }
+
+export interface AuthSubject {
+    properties: User
+  }

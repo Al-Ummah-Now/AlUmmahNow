@@ -3,22 +3,22 @@ import { auth } from "./../../app/actions";
 import { AuthContextProvider } from "./authContext";
 import { User } from "@/interfaces";
 
-export default function AuthProvider({
-    children,
-}: {
+export type AuthProviderProps = {
     children: React.ReactNode;
-}) {
+}
+
+export default function AuthProvider(props: AuthProviderProps) {
     let user: User | null = null;
-    // auth().then(
-    //     subject => user = subject ? subject.properties : null
-    // );
-    // const subject = await auth(); // Call the server-side auth function
-    // const user = subject ? subject.properties : null;
+    auth().then(
+        subject => user = subject ? subject.properties : null
+    );
+    //const subject = auth(); // Call the server-side auth function
+    //user = subject ? subject.properties : null;
 
 
     return (
         <AuthContextProvider user={user}>
-            {children}
+            {props.children}
         </AuthContextProvider>
     );
 }

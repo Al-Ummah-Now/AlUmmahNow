@@ -3,8 +3,9 @@
 import { redirect } from "next/navigation"
 import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { client, subjects, setTokens } from "./auth"
+import { AuthSubject } from "@/interfaces"
 
-export async function auth() {
+export async function auth():Promise<AuthSubject | false> {
   const cookies = await getCookies()
   const accessToken = cookies.get("access_token")
   const refreshToken = cookies.get("refresh_token")

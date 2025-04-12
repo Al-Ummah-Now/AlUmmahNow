@@ -7,18 +7,17 @@ import Link from "next/link";
 import { Profile } from "@/interfaces";
 import { AccountNavigationProps, fetchProfile, NavItem } from "./interfaces";
 import DialogDefault from "../login";
-import { useAuth } from "../AuthProvider/authContext";
 import { useTheme } from "next-themes"
 
 const AccountNavigation: React.FC<AccountNavigationProps> = ({
     isVisible,
     onClose,
+    user
 }) => {
     const [profile, setProfile] = React.useState<Profile | null>(null);
     const [naveItems, setNaveItems] = React.useState([]);
     const [login, setLogin] = React.useState(false);
     const [logout, setLogout] = React.useState(false);
-    const { user } = useAuth();
     const { theme, setTheme } = useTheme();
   
     let path = usePathname();
@@ -29,8 +28,8 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
     const newUrl = `${newPath}${newParams}`;
 
     useEffect(() => {
-
-        fetchProfile(user, setProfile);
+        if (!user) return;
+        fetchProfile(user.properties, setProfile);
     }, [user]);
 
     useEffect(() => {

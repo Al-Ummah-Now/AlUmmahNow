@@ -1,8 +1,9 @@
-import { Profile, User } from "@/interfaces";
+import { AuthSubject, Profile, User } from "@/interfaces";
 
 export interface AccountNavigationProps {
     isVisible: boolean;
     onClose: () => void;
+    user: AuthSubject | false;
 }
 
 export interface NavItem {

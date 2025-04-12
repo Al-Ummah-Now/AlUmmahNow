@@ -6,7 +6,7 @@ import {
   DialogBody,
   DialogFooter,
 } from "@material-tailwind/react";
-import { login } from "@/app/actions";
+import LoginWrapper from "../server";
 
 const DialogDefault: React.FC<{ open: boolean; setOpen: (open: boolean) => void }> = ({ open, setOpen }) => {
   const handleOpen = () => setOpen(!open);
@@ -27,11 +27,7 @@ const DialogDefault: React.FC<{ open: boolean; setOpen: (open: boolean) => void 
           >
             <span>إلغاء</span>
           </Button>
-          <form action={login}>
-            <Button variant="gradient" color="green" type="submit">
-              <span>تأكيد</span>
-            </Button>
-          </form>
+          <LoginWrapper />
         </DialogFooter>
       </Dialog>
     </>
