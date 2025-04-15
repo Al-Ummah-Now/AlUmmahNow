@@ -4,17 +4,16 @@ import { redirect, useSearchParams, usePathname } from "next/navigation";
 import IcoButton from "@/components/iconButton";
 import Image from 'next/image';
 import Link from "next/link";
-import { Profile } from "@/interfaces";
-import { AccountNavigationProps, fetchProfile, NavItem } from "./interfaces";
+import { AccountNavigationProps, NavItem } from "./interfaces";
 import DialogDefault from "../login";
 import { useTheme } from "next-themes"
 
 const AccountNavigation: React.FC<AccountNavigationProps> = ({
     isVisible,
     onClose,
-    user
+    user,
+    profile
 }) => {
-    const [profile, setProfile] = React.useState<Profile | null>(null);
     const [naveItems, setNaveItems] = React.useState([]);
     const [login, setLogin] = React.useState(false);
     const [logout, setLogout] = React.useState(false);
@@ -26,11 +25,6 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
     const newPath = `/rtl${path}`;
     const newParams = params ? `?${params}` : "";
     const newUrl = `${newPath}${newParams}`;
-
-    useEffect(() => {
-        if (!user) return;
-        fetchProfile(user.properties, setProfile);
-    }, [user]);
 
     useEffect(() => {
         const handleLogin = () => setLogin(!login);
@@ -84,7 +78,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             >
                 <div className="flex justify-end px-2 py-2.5">
                     <div className="w-10 h-10 rounded-full overflow-hidden relative">
-                        <Image src="/avatar.png" alt="User" width={40} height={40} objectFit="cover" className="bg-gray-500" />
+                        <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" width={40} height={40} objectFit="cover" className="bg-gray-500" />
                     </div>
                 </div>
                 <ul>

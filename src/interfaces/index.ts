@@ -46,15 +46,17 @@ export interface VideoInfo {
 
 export interface Profile {
     id: string;
-    userName: string;
-    firstName: string;
-    lastName: string;
-    avatarUrl: string;
-    coverUrl: string;
+    email: string;
+    userName?: string;
+    firstName?: string;
+    lastName?: string;
+    avatarUrl?: string;
+    coverUrl?: string;
 }
 
 export interface User {
     id: string;
+    email: string;
 }
 
 export interface AuthSubject {

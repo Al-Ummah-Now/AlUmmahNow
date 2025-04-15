@@ -5,26 +5,28 @@ import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { client, subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 
-export async function auth():Promise<AuthSubject | false> {
+export async function auth(): Promise<AuthSubject | false> {
   const cookies = await getCookies()
   const accessToken = cookies.get("access_token")
   const refreshToken = cookies.get("refresh_token")
-
+  
   if (!accessToken) {
     return false
   }
 
-  const verified = await client.verify(subjects, accessToken.value, {
-    refresh: refreshToken?.value,
-  })
+  const verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
 
   if (verified.err) {
     return false
   }
   else if (!verified.err && 'tokens' in verified) {
     await setTokens(verified.tokens.access, verified.tokens.refresh)
+  }
+  
+  if (!verified.err && 'subject' in verified) {
     return verified.subject;
   }
+  return false;
 }
 
 export async function login() {

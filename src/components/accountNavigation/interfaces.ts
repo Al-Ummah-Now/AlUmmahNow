@@ -4,6 +4,7 @@ export interface AccountNavigationProps {
     isVisible: boolean;
     onClose: () => void;
     user: AuthSubject | false;
+    profile?: Profile | null;
 }
 
 export interface NavItem {
@@ -12,20 +13,3 @@ export interface NavItem {
     href: string;
     onClick?: () => void;
 }
-
-export const fetchProfile = async (user: User, setProfile: (profile: Profile) => void) => {
-    if (!user) return;
-
-    try {
-        const response = await fetch(
-            `https://videos.api.alummahnow.net/api/profile/${user.id}`
-        );
-        if (!response.ok) {
-            //throw new Error(`Error fetching video: ${response.statusText}`);
-        }
-        const profile: Profile = await response.json();
-        setProfile(profile);
-    } catch (error) {
-        console.error(error);
-    }
-};

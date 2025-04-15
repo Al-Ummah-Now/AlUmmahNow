@@ -26,20 +26,17 @@
         "./src/*"
       ]
     },
-    "target": "ES2017",
-    "strictNullChecks": false
+    "target": "esnext",
+    "strictNullChecks": false,
+    "types": [
+      "@types/node"
+    ],
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts",
-    "cloudflare-env.d.ts"
-  ],
-  "types": [
-    "node",
-    "@types/node",
-    "cloudflare-env.d.ts"
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
