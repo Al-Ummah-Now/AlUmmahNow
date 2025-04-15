@@ -6,12 +6,13 @@ import { auth, login, logout } from "../lib/actions"
 import { Suspense } from "react"
 import "./globals.css";
 import Navigation from "@/components/navigation";
+import AuthProvider from "@/components/AuthProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
   const subject = await auth()
-  
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -56,11 +57,13 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
               defaultTheme="system"
               enableSystem
               disableTransitionOnChange>
-              <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
-                {/* Header */}
-                <Navigation user={subject}></Navigation>
-                {children}
-              </div>
+              <AuthProvider>
+                <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                  {/* Header */}
+                  <Navigation></Navigation>
+                  {children}
+                </div>
+              </AuthProvider>
             </ThemeProvider>
           </NuqsAdapter>
         </Suspense>

@@ -1,37 +1,29 @@
 import React from "react";
-import {
-  Button,
-  Dialog,
-  DialogHeader,
-  DialogBody,
-  DialogFooter,
-} from "@material-tailwind/react";
-import LoginWrapper from "./server";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
+import { DialogDefaultProps } from "./interfaces";
 
-const DialogDefault: React.FC<{ open: boolean, setOpen: (open: boolean) => void }> = ({ open, setOpen }) => {
+const DialogDefault: React.FC<DialogDefaultProps> = ({ title, message, open, setOpen, children }) => {
 
   const handleOpen = () => setOpen(!open);
 
   return (
     <>
-      <Dialog open={open} handler={handleOpen}>
-        <DialogHeader>Login!</DialogHeader>
-        <DialogBody>
-          You will be redirected to the login page. Please enter your credentials
-          to access your account. If you don&apos;t have an account, please register
-        </DialogBody>
-        <DialogFooter>
-          <Button
-            variant="text"
-            color="red"
-            onClick={handleOpen}
-            className="mr-1"
-          >
-            <span>Cancel</span>
-          </Button>
-          <LoginWrapper />
-        </DialogFooter>
-      </Dialog>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {title}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleOpen}>Cancel</AlertDialogCancel>
+            {children}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

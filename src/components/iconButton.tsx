@@ -1,11 +1,12 @@
 "use client";
-import { IconButton } from "@material-tailwind/react";
+
+import { Button } from "./ui/button";
 
 const IcoButton: React.FC<{ style: string, color?: string, size?: string, onClick?: () => void }> = ({ style, color, size, onClick }) => {
   return (
-    <IconButton onClick={onClick} className={`shadow-none hover:shadow-none ${color ? color : ""} ${size ? size : ""}`}>
+    <Button variant="ghost" onClick={onClick} className={`shadow-none hover:shadow-none ${color ? color : ""} ${size ? size : ""}`}>
       <i className={`fas ${style}`} />
-    </IconButton>
+    </Button>
   );
 }
 

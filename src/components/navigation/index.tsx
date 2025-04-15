@@ -9,11 +9,13 @@ import AccountNavigationRtl from "@/components/accountNavigation/rtl";
 import { redirect, useSearchParams, usePathname } from "next/navigation";
 import { AuthSubject, Profile } from "@/interfaces";
 import { fetchProfile } from "@/lib/profiles";
+import { useAuth } from "../AuthProvider/authContext";
 
-const Navigation: React.FC<{ user: AuthSubject | false }> = ({ user }) => {
+const Navigation: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = useState(true);
     const [isAccountCollapsed, setIsAccountCollapsed] = useState(true);
     const [profile, setProfile] = React.useState<Profile | null>(null);
+    const auth = useAuth();
     const path = usePathname();
     const rtl = path.indexOf('/rtl') > -1;
 
@@ -26,9 +28,9 @@ const Navigation: React.FC<{ user: AuthSubject | false }> = ({ user }) => {
     };
 
     useEffect(() => {
-        if (!user) return;
-        fetchProfile(user.properties, setProfile);
-    }, [user]);
+        if (!auth) return;
+        fetchProfile(auth.user, setProfile);
+    }, [auth]);
 
     return (
         <>
@@ -44,8 +46,8 @@ const Navigation: React.FC<{ user: AuthSubject | false }> = ({ user }) => {
 
                     {/* Account Navigation */}
                     {path.indexOf('/rtl') > -1
-                        ? <AccountNavigationRtl profile={profile} user={user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
-                        : <AccountNavigation profile={profile} user={user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
+                        ? <AccountNavigationRtl profile={profile} user={auth.user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
+                        : <AccountNavigation profile={profile} user={auth.user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
 
                 </div>
             </div>

@@ -1,35 +1,28 @@
 import React from "react";
-import {
-  Button,
-  Dialog,
-  DialogHeader,
-  DialogBody,
-  DialogFooter,
-} from "@material-tailwind/react";
-import LoginWrapper from "../server/rtl/";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../ui/alert-dialog";
+import { DialogDefaultProps } from "../interfaces";
 
-const DialogDefault: React.FC<{ open: boolean; setOpen: (open: boolean) => void }> = ({ open, setOpen }) => {
+const DialogDefault: React.FC<DialogDefaultProps> = ({ title, message, open, setOpen, children }) => {
   const handleOpen = () => setOpen(!open);
 
   return (
     <>
-      <Dialog open={open} handler={handleOpen} className="rtl">
-        <DialogHeader>تسجيل الدخول!</DialogHeader>
-        <DialogBody>
-          سيتم توجيهك إلى صفحة تسجيل الدخول. يرجى إدخال بيانات الاعتماد الخاصة بك للوصول إلى حسابك. إذا لم يكن لديك حساب، يرجى التسجيل.
-        </DialogBody>
-        <DialogFooter>
-          <Button
-            variant="text"
-            color="red"
-            onClick={handleOpen}
-            className="mr-1"
-          >
-            <span>إلغاء</span>
-          </Button>
-          <LoginWrapper />
-        </DialogFooter>
-      </Dialog>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent  style={{ direction: "rtl" }}>
+          <AlertDialogHeader >
+            <AlertDialogTitle className="text-right">
+              {title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              {message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleOpen}>إلغاء</AlertDialogCancel>
+            {children}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

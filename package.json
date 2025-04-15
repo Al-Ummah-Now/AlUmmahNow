@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.775.0",
-    "@material-tailwind/react": "^2.1.10",
     "@openauthjs/openauth": "^0.4.3",
+    "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-dropdown-menu": "^2.1.7",
     "@radix-ui/react-slot": "^1.2.0",
     "@tailwindcss/aspect-ratio": "^0.4.2",

@@ -7,13 +7,10 @@ export type AuthProviderProps = {
     children: React.ReactNode;
 }
 
-export default function AuthProvider(props: AuthProviderProps) {
+export default async function AuthProvider(props: AuthProviderProps) {
     let user: User | null = null;
-    auth().then(
-        subject => user = subject ? subject.properties : null
-    );
-    //const subject = auth(); // Call the server-side auth function
-    //user = subject ? subject.properties : null;
+    const subject = await auth(); // Call the server-side auth function
+    user = subject ? subject.properties : null;
 
 
     return (
