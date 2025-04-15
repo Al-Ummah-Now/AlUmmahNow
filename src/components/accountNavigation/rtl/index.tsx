@@ -7,6 +7,8 @@ import Link from "next/link";
 import { Profile } from "@/interfaces";
 import { AccountNavigationProps, NavItem } from "./../interfaces";
 import { useTheme } from "next-themes"
+import LoginWrapper from "@/components/login/loginButton/rtl";
+import LogoutWrapper from "@/components/login/logoutButton/rtl";
 import DialogDefault from "@/components/login/rtl";
 
 const AccountNavigation: React.FC<AccountNavigationProps> = ({
@@ -51,8 +53,8 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             },
         ];
         if(profile){
-            items.push({ label: "الملف الشخصي", icon: "fa-user", href: "/profile" });
-            items.push({ label: "الإعدادات", icon: "fa-cog", href: "/settings" });
+            items.push({ label: "الملف الشخصي", icon: "fa-user", href: "/rtl/profile" });
+            items.push({ label: "الإعدادات", icon: "fa-cog", href: "/rtl/settings" });
         }
         user
             ? items.push({ label: "تسجيل الخروج", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout })
@@ -105,7 +107,20 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                     ))}
                 </ul>
             </nav>
-            <DialogDefault open={login} setOpen={setLogin}></DialogDefault>
+            <DialogDefault
+                title="تسجيل الدخول!"
+                message="سيتم توجيهك إلى صفحة تسجيل الدخول. يرجى إدخال بيانات الاعتماد الخاصة بك للوصول إلى حسابك. إذا لم يكن لديك حساب، يرجى التسجيل"
+                open={login}
+                setOpen={setLogin}>
+                <LoginWrapper />
+            </DialogDefault>
+            <DialogDefault
+                title="تسجيل الخروج؟"
+                message="هل أنت متأكد أنك تريد تسجيل الخروج؟"
+                open={logout}
+                setOpen={setLogout}>
+                <LogoutWrapper />
+            </DialogDefault>
         </>
     );
 };

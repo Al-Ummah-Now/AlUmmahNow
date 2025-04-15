@@ -7,6 +7,8 @@ import Link from "next/link";
 import { AccountNavigationProps, NavItem } from "./interfaces";
 import DialogDefault from "../login";
 import { useTheme } from "next-themes"
+import LoginWrapper from "../login/loginButton";
+import LogoutWrapper from "../login/logoutButton";
 
 const AccountNavigation: React.FC<AccountNavigationProps> = ({
     isVisible,
@@ -18,7 +20,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
     const [login, setLogin] = React.useState(false);
     const [logout, setLogout] = React.useState(false);
     const { theme, setTheme } = useTheme();
-  
+
     let path = usePathname();
     let params = useSearchParams()?.toString();
 
@@ -30,11 +32,11 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
         const handleLogin = () => setLogin(!login);
         const handleLogout = () => setLogout(!logout);
         const handleClick = () => {
-          if (theme === "dark") {
-            setTheme("light");
-          } else if (theme === "light") {
-            setTheme("dark");
-          }
+            if (theme === "dark") {
+                setTheme("light");
+            } else if (theme === "light") {
+                setTheme("dark");
+            }
         };
 
         let items: NavItem[] = [
@@ -50,7 +52,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                 href: newUrl,
             }
         ];
-        if(profile){
+        if (profile) {
             items.push({ label: "Profile", icon: "fa-user", href: "/profile" });
             items.push({ label: "Settings", icon: "fa-cog", href: "/settings" });
         }
@@ -84,7 +86,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                 <ul>
                     {naveItems.map((item, index) => (
                         <li
-                            key={index+1}
+                            key={index + 1}
                             className="rounded-sm hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
                         >
                             <Link
@@ -105,7 +107,21 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                     ))}
                 </ul>
             </nav>
-            <DialogDefault open={login} setOpen={setLogin}></DialogDefault>
+            <DialogDefault
+                title="Login?"
+                message="You will be redirected to the login page. Please enter your credentials
+              to access your account. If you don&apos;t have an account, please register"
+                open={login}
+                setOpen={setLogin}>
+                <LoginWrapper />
+            </DialogDefault>
+            <DialogDefault
+                title="Logout?"
+                message="You will be logged out of your account. Please confirm to proceed."
+                open={logout}
+                setOpen={setLogout}>
+                <LogoutWrapper />
+            </DialogDefault>
         </>
     );
 };

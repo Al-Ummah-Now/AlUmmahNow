@@ -24,3 +24,27 @@ export const fetchProfile = async (user: User, setProfile: (profile: Profile) =>
         console.error(error);
     }
 };
+
+export const updateProfile = async (profile: Profile, setProfile: (profile: Profile) => void) => {
+    if (!profile) return;
+    try {
+        const response = await fetch(
+            `https://videos.api.alummahnow.net/api/profile/${profile.id}`,
+            {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(profile),
+            }
+        );
+        if (!response.ok) {
+            throw new Error(`Error updating profile: ${response.statusText}`);
+        }
+        const updatedProfile: Profile = await response.json();
+        setProfile(profile);
+        return true;
+    } catch (error) {
+        console.error(error);
+    }
+}

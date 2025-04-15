@@ -1,13 +1,15 @@
+"use client";
+import { User } from "@/interfaces";
 import React, { createContext, useContext } from "react";
 
 interface AuthContextType {
-  user: { id: string } | null;
+  user: User | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export type AuthContextProviderProps = {
-  user: { id: string } | null;
+  user: User | null;
   children: React.ReactNode;
 }
 
