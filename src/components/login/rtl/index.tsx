@@ -6,7 +6,7 @@ import {
   DialogBody,
   DialogFooter,
 } from "@material-tailwind/react";
-import LoginWrapper from "../server";
+import LoginWrapper from "../server/rtl/";
 
 const DialogDefault: React.FC<{ open: boolean; setOpen: (open: boolean) => void }> = ({ open, setOpen }) => {
   const handleOpen = () => setOpen(!open);

@@ -3,8 +3,9 @@ import React from "react";
 import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
 import { redirect } from "next/navigation";
+import { HeaderProps } from "./interfaces";
 
-const Header: React.FC<{ toggleCollapse: () => void, toggleAccountCollapse: () => void  }> = ({ toggleCollapse, toggleAccountCollapse }) => {
+const Header: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, profile }) => {
 
   const handleClick = () => {
     redirect('/');
@@ -35,7 +36,7 @@ const Header: React.FC<{ toggleCollapse: () => void, toggleAccountCollapse: () =
       {/* User Account Section */}
       <div className="flex items-center space-x-4">
         <div className="w-10 h-10 rounded-full overflow-hidden relative cursor-pointer" onClick={toggleAccountCollapse}>
-          <Image src="/avatar.png" alt="User" width={40} height={40} objectFit="cover" className="bg-gray-500" />
+          <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" width={40} height={40} objectFit="cover" className="bg-gray-500" />
         </div>
       </div>
     </header>
