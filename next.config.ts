@@ -45,6 +45,13 @@ const nextConfig = {
             pathname: "**",
             search: "",
           },
+          {
+            protocol: "https",
+            hostname: "auth.alummahnow.net",
+            port: "",
+            pathname: "**",
+            search: "",
+          },
         ],
       },
 };
