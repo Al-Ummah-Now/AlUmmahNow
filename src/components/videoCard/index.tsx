@@ -7,7 +7,7 @@ import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
 
 const VideoCard: React.FC<VideoObject> = (video) => {
     let handleClick = () => {
-        redirect(`/video?vid=${video.id}`);
+        redirect(`/en/video?vid=${video.id}`);
     }
 
     return (

@@ -9,7 +9,7 @@ const SearchPage: React.FC = () => {
     const [videos, setVideos] = useState<VideoObject[]>([]);
     const [loading, setLoading] = useState(false);
     const path = usePathname();
-    const rtl = path.indexOf('/rtl') > -1;
+    const rtl = path.indexOf('/ar') > -1;
 
     const handleSearch = async () => {
         if (!searchQuery.trim()) return;
