@@ -22,8 +22,8 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     withOverlay = false, // Default to no overlay
 }) => {
     const navItems: NavItems[] = [
-        { label: "الرئيسية", icon: "fa-house", href: "/rtl/" }, // Home
-        { label: "الشائع", icon: "fa-magnifying-glass", href: "/rtl/search" }, // Trending
+        { label: "الرئيسية", icon: "fa-house", href: "/ar/" }, // Home
+        { label: "الشائع", icon: "fa-magnifying-glass", href: "/ar/search" }, // Trending
         { label: "الاشتراكات", icon: "fa-tv", href: "#" }, // Subscriptions
         { label: "المكتبة", icon: "fa-bookmark", href: "#" }, // Library
     ];
@@ -41,8 +41,8 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
             {/* Navigation */}
             <nav
                 className={`${withOverlay
-                    ? "fixed top-0 bg-white dark:bg-gray-900 px-4 pb-4 pt-2.5 rounded-sm z-50 h-screen"
-                    : "bg-white dark:bg-gray-900 p-4 rounded-sm md:absolute"
+                    ? "fixed top-0 bg-white dark:bg-gray-900 px-4 pb-4 pt-2.5 z-50 h-screen"
+                    : "bg-white dark:bg-gray-900 p-4 md:absolute"
                     } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
                     } transition-all duration-300`}
                 style={{ direction: "rtl" }} // Set RTL direction

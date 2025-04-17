@@ -6,7 +6,7 @@ export const fetchProfile = async (user: User, setProfile: (profile: Profile) =>
 
     try {
         const response = await fetch(
-            `https://videos.api.alummahnow.net/api/profile/${user.id}`
+            `https://videos.api.alummahnow.net/api/profiles/${user.id}`
         );
         if(response.status === 404) {
             setProfile({
@@ -18,7 +18,9 @@ export const fetchProfile = async (user: User, setProfile: (profile: Profile) =>
             //throw new Error(`Error fetching video: ${response.statusText}`);
         }
         const profile: Profile = await response.json();
-        setProfile(profile);
+        if (profile) {
+            setProfile(profile);
+        }
         return true;
     } catch (error) {
         console.error(error);
@@ -29,7 +31,7 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
     if (!profile) return;
     try {
         const response = await fetch(
-            `https://videos.api.alummahnow.net/api/profile/${profile.id}`,
+            `https://videos.api.alummahnow.net/api/profiles/${profile.id}`,
             {
                 method: "PUT",
                 headers: {
@@ -42,7 +44,55 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
             throw new Error(`Error updating profile: ${response.statusText}`);
         }
         const updatedProfile: Profile = await response.json();
-        setProfile(profile);
+        setProfile(updatedProfile);
+        return true;
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+export const updateProfilePhoto = async (profile: Profile, file: File, setProfile: (profile: Profile) => void) => {
+    if (!profile || !file) return;
+    try {
+        const formData = new FormData();
+        formData.append("photo", file);
+
+        const response = await fetch(
+            `https://videos.api.alummahnow.net/api/profiles/${profile.id}/avatar`,
+            {
+                method: "PUT",
+                body: formData,
+            }
+        );
+        if (!response.ok) {
+            throw new Error(`Error updating profile photo: ${response.statusText}`);
+        }
+        const updatedProfile: Profile = await response.json();
+        setProfile(updatedProfile);
+        return true;
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+export const updateCoverPhoto = async (profile: Profile, file: File, setProfile: (profile: Profile) => void) => {
+    if (!profile || !file) return;
+    try {
+        const formData = new FormData();
+        formData.append("photo", file);
+
+        const response = await fetch(
+            `https://videos.api.alummahnow.net/api/profiles/${profile.id}/cover`,
+            {
+                method: "PUT",
+                body: formData,
+            }
+        );
+        if (!response.ok) {
+            throw new Error(`Error updating cover photo: ${response.statusText}`);
+        }
+        const updatedProfile: Profile = await response.json();
+        setProfile(updatedProfile);
         return true;
     } catch (error) {
         console.error(error);

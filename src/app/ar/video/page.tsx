@@ -1,17 +1,20 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import VideoPlayer from "@/components/videoPlayer/index";
-import RelatedVideosSection from "@/components/related/index";
+import VideoPlayer from "@/components/videoPlayer/rtl/index";
+import RelatedVideosSection from "@/components/related/rtl/index";
 import { useQueryState } from "nuqs";
-import { PaginationResponse, VideoInfo, VideoObject } from "../../interfaces";
-import { PlayerOptions } from "@/components/videoPlayer/interface";
+import { PaginationResponse, VideoInfo, VideoObject } from "../../../interfaces";
 import { fetchVideoById, fetchVideos } from "@/lib/videoClient";
+import { PlayerOptions } from "@/components/videoPlayer/interface";
+import { redirect, useSearchParams, usePathname } from "next/navigation";
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
   const [vid, setVid] = useQueryState("vid", { shallow: false });
+  const path = usePathname();
+  const rtl = path.indexOf('/ar') > -1;
 
   useEffect(() => {
     setIsMounted(true); // Ensure the component is mounted on the client
@@ -40,12 +43,12 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="flex flex-1 flex-col md:flex-row overflow-hidden">
-      <div className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
+    <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+      <main className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden" style={{ direction: rtl ? "rtl" : "ltr" }}>
         <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
           {/* Video Player Section */}
           {videoDetails && (
-            <div className="flex flex-col w-full mt-0 items-center">
+            <div className="flex flex-col w-full mt-0 items-start">
               <VideoPlayer options={videoDetails} />
             </div>
           )}
@@ -60,14 +63,14 @@ export default function Home() {
 
         {/* Related Videos Section */}
         <div className="hidden lg:block lg:w-1/4 min-w-[350px] max-w-[500px] pt-4 overflow-auto">
-          <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="t_" />
+          <RelatedVideosSection relatedVideos={relatedVideos} />
         </div>
-      </div>
+      </main>
 
       {/* Related Videos Section (Mobile Only) */}
       <div className="block lg:hidden w-full mt-4 overflow-auto">
-        <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="b_" />
+        <RelatedVideosSection relatedVideos={relatedVideos} />
       </div>
-    </main>
+    </div>
   );
 }

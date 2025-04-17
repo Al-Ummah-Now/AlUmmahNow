@@ -12,7 +12,7 @@ const VideosPage: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [loading, setLoading] = useState(false);
   const path = usePathname();
-  const rtl = path.indexOf('/rtl') > -1;
+  const rtl = path.indexOf('/ar') > -1;
 
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);

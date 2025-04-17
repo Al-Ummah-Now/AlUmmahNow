@@ -24,7 +24,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
     let path = usePathname();
     let params = useSearchParams()?.toString();
 
-    const newPath = `/rtl${path}`;
+    const newPath = path.replace("en", "ar");
     const newParams = params ? `?${params}` : "";
     const newUrl = `${newPath}${newParams}`;
 
@@ -52,15 +52,15 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                 href: newUrl,
             }
         ];
-        if (profile) {
-            items.push({ label: "Profile", icon: "fa-user", href: "/profile" });
-            items.push({ label: "Settings", icon: "fa-cog", href: "/settings" });
+        if (user) {
+            items.push({ label: "Profile", icon: "fa-user", href: "/en/profile", onClick: onClose });
+            items.push({ label: "Settings", icon: "fa-cog", href: "/en/settings", onClick: onClose });
         }
         user
             ? items.push({ label: "Logout", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout })
             : items.push({ label: "Login", icon: "fa-sign-in-alt", href: "#", onClick: handleLogin });
         setNaveItems(items);
-    }, [user, newUrl, login, logout, profile, theme, setTheme]);
+    }, [user, newUrl, login, logout, profile, theme, setTheme, onClose]);
 
 
     return (
@@ -80,7 +80,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             >
                 <div className="flex justify-end px-2 py-2.5">
                     <div className="w-10 h-10 rounded-full overflow-hidden relative">
-                        <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" width={40} height={40} objectFit="cover" className="bg-gray-500" />
+                        <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" objectFit="cover" fill className="bg-gray-500" />
                     </div>
                 </div>
                 <ul>

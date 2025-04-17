@@ -17,7 +17,7 @@ const Navigation: React.FC = () => {
     const [profile, setProfile] = React.useState<Profile | null>(null);
     const auth = useAuth();
     const path = usePathname();
-    const rtl = path.indexOf('/rtl') > -1;
+    const rtl = path.indexOf('/ar') > -1;
 
     const toggleCollapse = () => {
         setIsCollapsed(!isCollapsed);
@@ -40,12 +40,12 @@ const Navigation: React.FC = () => {
                     : <Header profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />}
                 <div className="flex flex-1">
                     {/* Left Navigation */}
-                    {path.indexOf('/rtl') > -1
+                    {path.indexOf('/ar') > -1
                         ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
                         : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
 
                     {/* Account Navigation */}
-                    {path.indexOf('/rtl') > -1
+                    {path.indexOf('/ar') > -1
                         ? <AccountNavigationRtl profile={profile} user={auth.user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
                         : <AccountNavigation profile={profile} user={auth.user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
 

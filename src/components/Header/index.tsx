@@ -8,7 +8,7 @@ import { HeaderProps } from "./interfaces";
 const Header: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, profile }) => {
 
   const handleClick = () => {
-    redirect('/');
+    redirect('/en/');
   };
 
   return (
@@ -36,7 +36,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, 
       {/* User Account Section */}
       <div className="flex items-center space-x-4">
         <div className="w-10 h-10 rounded-full overflow-hidden relative cursor-pointer" onClick={toggleAccountCollapse}>
-          <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" width={40} height={40} objectFit="cover" className="bg-gray-500" />
+          <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" objectFit="cover" className="bg-gray-500" fill />
         </div>
       </div>
     </header>

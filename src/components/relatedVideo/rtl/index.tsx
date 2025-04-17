@@ -7,7 +7,7 @@ import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
 
 const RelatedVideoRTL: React.FC<VideoInfo> = (info) => {
   const handleClick = () => {
-    redirect(`/rtl/video?vid=${info.id}`);
+    redirect(`/ar/video?vid=${info.id}`);
   };
 
   return (

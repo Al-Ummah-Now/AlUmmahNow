@@ -22,8 +22,8 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     withOverlay = false, // Default to no overlay
 }) => {
     const navItems: NavItems[] = [
-        { label: "Home", icon: "fa-house", href: "/" },
-        { label: "Trending", icon: "fa-magnifying-glass", href: "/search" },
+        { label: "Home", icon: "fa-house", href: "/en/" },
+        { label: "Trending", icon: "fa-magnifying-glass", href: "/en/search" },
         { label: "Subscriptions", icon: "fa-tv", href: "#" },
         { label: "Library", icon: "fa-bookmark", href: "#" },
     ];
@@ -41,8 +41,8 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
             {/* Navigation */}
             <nav
                 className={`transition-all duration-300 ease-in-out ${withOverlay
-                    ? "fixed top-0 bg-white dark:bg-gray-900 px-4 pb-4 pt-2.5 rounded-sm z-50 h-screen"
-                    : "bg-white dark:bg-gray-900 p-4 rounded-sm md:absolute"
+                    ? "fixed top-0 bg-white dark:bg-gray-900 px-4 pb-4 pt-2.5 z-50 h-screen"
+                    : "bg-white dark:bg-gray-900 p-4 md:absolute"
                     } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"} `}
             >
                 {/* Show the bars button only in overlay mode */}
