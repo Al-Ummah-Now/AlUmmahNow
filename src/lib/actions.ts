@@ -15,14 +15,15 @@ export async function auth(): Promise<AuthSubject | false> {
   if (!accessToken) {
     return false
   }
-
+  console.log("process.env.ClientId", process.env.ClientId)
+  console.log("process.env.Issuer", process.env.Issuer)
   const client = createClient({
     clientID: process.env.ClientId,
     issuer: process.env.Issuer, // url to the OpenAuth server
   });
   const verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
   console.log("verified", verified)
-  
+
   if (verified.err) {
     return false
   }
