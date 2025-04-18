@@ -29,6 +29,7 @@ const Navigation: React.FC = () => {
 
     useEffect(() => {
         if (!auth) return;
+        console.log("auth", auth.user);
         fetchProfile(auth.user, setProfile);
     }, [auth]);
 
