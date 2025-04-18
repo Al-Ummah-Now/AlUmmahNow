@@ -14,6 +14,7 @@ export type AuthContextProviderProps = {
 }
 
 export const AuthContextProvider: React.FC<AuthContextProviderProps> = ({ user, children }) => {
+  console.log("user", user);
   return (
     <AuthContext.Provider value={{ user }}>
       {children}
