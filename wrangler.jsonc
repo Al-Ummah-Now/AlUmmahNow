@@ -2,7 +2,7 @@
   "name": "al-ummah-now",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-04-12",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat","nodejs_compat_populate_process_env"],
   "logpush": true,
   "minify": true,
   "assets": {
