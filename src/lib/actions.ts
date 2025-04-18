@@ -1,19 +1,23 @@
 "use server"
-
+import { createClient } from "@openauthjs/openauth/client"
 import { redirect } from "next/navigation"
 import { headers as getHeaders, cookies as getCookies } from "next/headers"
-import { client, subjects, setTokens } from "./auth"
+import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 
 export async function auth(): Promise<AuthSubject | false> {
   const cookies = await getCookies()
   const accessToken = cookies.get("access_token")
   const refreshToken = cookies.get("refresh_token")
-  
+
   if (!accessToken) {
     return false
   }
 
+  const client = createClient({
+    clientID: process.env.ClientId,
+    issuer: process.env.Issuer, // url to the OpenAuth server
+  });
   const verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
 
   if (verified.err) {
@@ -22,7 +26,7 @@ export async function auth(): Promise<AuthSubject | false> {
   else if (!verified.err && 'tokens' in verified) {
     await setTokens(verified.tokens.access, verified.tokens.refresh)
   }
-  
+
   if (!verified.err && 'subject' in verified) {
     return verified.subject;
   }
@@ -33,6 +37,10 @@ export async function login() {
   const cookies = await getCookies()
   const accessToken = cookies.get("access_token")
   const refreshToken = cookies.get("refresh_token")
+  const client = createClient({
+    clientID: process.env.ClientId,
+    issuer: process.env.Issuer, // url to the OpenAuth server
+  });
 
   if (accessToken) {
     const verified = await client.verify(subjects, accessToken.value, {
