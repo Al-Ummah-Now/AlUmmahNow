@@ -26,7 +26,9 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   var result = await validate(code, url);
-  if (result) return NextResponse.redirect(`${url.origin}/`);
+  console.log("result", result)
+  console.log("redirect", `${url.origin}/`)
+  if (result.result === true) return NextResponse.redirect(`${url.origin}/`);
   return NextResponse.json(result.err, { status: 400 });
 
 }
