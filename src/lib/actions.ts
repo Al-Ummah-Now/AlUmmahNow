@@ -9,6 +9,8 @@ export async function auth(): Promise<AuthSubject | false> {
   const cookies = await getCookies()
   const accessToken = cookies.get("access_token")
   const refreshToken = cookies.get("refresh_token")
+  console.log("accessToken", accessToken)
+  console.log("refreshToken", refreshToken)
 
   if (!accessToken) {
     return false
@@ -19,7 +21,8 @@ export async function auth(): Promise<AuthSubject | false> {
     issuer: process.env.Issuer, // url to the OpenAuth server
   });
   const verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
-
+  console.log("verified", verified)
+  
   if (verified.err) {
     return false
   }
