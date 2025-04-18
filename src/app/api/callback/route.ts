@@ -4,12 +4,16 @@ import { setTokens } from "../../../lib/auth"
 import { type NextRequest, NextResponse } from "next/server"
 
 async function validate(code: string | null, url: URL): Promise<{ result: boolean, err?: InvalidAccessTokenError}> {
+  console.log("code", code)
+  console.log("url", url)
+
    const client = createClient({
     clientID: process.env.ClientId,
     issuer: process.env.Issuer, // url to the OpenAuth server
   });
   
   const exchanged = await client.exchange(code!, `${url.origin}/api/callback`);
+  console.log("exchanged", exchanged)
   if (exchanged.err == false) {
     await setTokens(exchanged.tokens.access, exchanged.tokens.refresh);
     return { result: true };
