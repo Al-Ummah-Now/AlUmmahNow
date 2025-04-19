@@ -26,8 +26,6 @@ export async function auth(): Promise<AuthSubject | false> {
 
   if (verified.err) {
     console.log("verified.err", verified.err)
-    cookies.delete("access_token");
-    cookies.delete("refresh_token");
     return false
   }
   else if (!verified.err && 'tokens' in verified) {
