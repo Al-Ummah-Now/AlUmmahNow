@@ -32,8 +32,10 @@ export async function auth(): Promise<AuthSubject | false> {
   }
 
   if (!verified.err && 'subject' in verified) {
+    console.log("verified", verified.subject)
     return verified.subject;
   }
+  console.log("false", false)
   return false;
 }
 
