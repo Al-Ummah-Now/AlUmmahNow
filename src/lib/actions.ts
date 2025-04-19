@@ -25,14 +25,16 @@ export async function auth(): Promise<AuthSubject | false> {
   console.log("verified", verified)
 
   if (verified.err) {
+    console.log("verified.err", verified.err)
     return false
   }
   else if (!verified.err && 'tokens' in verified) {
+    console.log("tokens", verified.tokens)
     await setTokens(verified.tokens.access, verified.tokens.refresh)
   }
 
   if (!verified.err && 'subject' in verified) {
-    console.log("verified", verified.subject)
+    console.log("verified.subject", verified.subject)
     return verified.subject;
   }
   console.log("false", false)
