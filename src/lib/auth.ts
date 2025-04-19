@@ -8,7 +8,7 @@ export async function setTokens(access: string, refresh: string) {
     name: "access_token",
     value: access,
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     path: "/",
     maxAge: 34560000,
   })
@@ -16,7 +16,7 @@ export async function setTokens(access: string, refresh: string) {
     name: "refresh_token",
     value: refresh,
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     path: "/",
     maxAge: 34560000,
   })
