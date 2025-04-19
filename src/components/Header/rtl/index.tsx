@@ -14,7 +14,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollaps
   return (
     <header className="header flex items-center justify-between px-2 bg-[#093041]  text-black dark:text-white " dir="rtl">
       {/* Menu Section */}
-      <div className="flex items-center space-x-reverse space-x-4 !pr-6">
+      <div className="flex items-center space-x-reverse space-x-4 ">
         <IcoButton
           style="fa-bars"
           size="text-lg"

@@ -41,13 +41,13 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
             {/* Navigation */}
             <nav
                 className={`transition-all duration-300 ease-in-out ${withOverlay
-                    ? "fixed top-0 bg-white dark:bg-gray-900 px-4 pb-4 pt-2.5 z-50 h-screen"
+                    ? "fixed top-0 bg-white dark:bg-gray-900  z-50 h-screen"
                     : "bg-white dark:bg-gray-900 p-4 md:absolute"
                     } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"} `}
             >
                 {/* Show the bars button only in overlay mode */}
                 {withOverlay && (
-                    <div className="flex items-center space-x-4 mb-4 pl-2">
+                    <div className="flex items-center space-x-4 mb-4  pl-2 h-15 bg-[#093041]">
                         <IcoButton
                             style="fa-bars"
                             size="text-lg"

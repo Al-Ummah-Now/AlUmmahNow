@@ -32,7 +32,6 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
         const handleLogin = () => setLogin(!login);
         const handleLogout = () => setLogout(!logout);
         const handleClick = () => {
-            console.log("theme", theme);
             if (theme === "dark") {
                 setTheme("light");
             } else if (theme === "light") {
@@ -79,7 +78,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                 className={`fixed top-0 right-0 h-screen bg-white dark:bg-gray-900 z-50 transition-all duration-300 ease-in-out 
                     ${isVisible ? "w-48" : "w-0 hidden"}`}
             >
-                <div className="flex justify-end px-2 py-2.5">
+                <div className="flex justify-end px-2 py-2.5 bg-[#093041]">
                     <div className="w-10 h-10 rounded-full overflow-hidden relative">
                         <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" objectFit="cover" fill className="bg-gray-500" />
                     </div>

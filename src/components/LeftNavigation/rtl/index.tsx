@@ -41,7 +41,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
             {/* Navigation */}
             <nav
                 className={`${withOverlay
-                    ? "fixed top-0 bg-white dark:bg-gray-900 px-4 pb-4 pt-2.5 z-50 h-screen"
+                    ? "fixed top-0 bg-white dark:bg-gray-900 z-50 h-screen "
                     : "bg-white dark:bg-gray-900 p-4 md:absolute"
                     } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
                     } transition-all duration-300`}
@@ -49,7 +49,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
             >
                 {/* Show the bars button only in overlay mode */}
                 {withOverlay && (
-                    <div className="flex items-center space-x-reverse space-x-4 mb-4 pr-4">
+                    <div className="flex items-center space-x-reverse space-x-4 mb-4 pr-2 h-15 bg-[#093041]">
                         <IcoButton
                             style="fa-bars"
                             size="text-lg"
@@ -65,7 +65,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                         >
                             <Link
                                 href={item.href}
-                                className={`flex items-center space-x-2 p-2 pr-4`}
+                                className={`flex items-center space-x-2 p-2 `}
                                 onClick={item.onClick}
                             >
                                 <IcoButton
