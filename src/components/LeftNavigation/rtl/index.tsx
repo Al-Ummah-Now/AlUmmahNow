@@ -40,16 +40,14 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
 
             {/* Navigation */}
             <nav
-                className={`${withOverlay
-                    ? "fixed top-0 bg-white dark:bg-gray-900 z-50 h-screen "
-                    : "bg-white dark:bg-gray-900 p-4 md:absolute"
-                    } ${isCollapsed ? "md:w-22 w-0 hidden" : "md:w-56"
-                    } transition-all duration-300`}
+                className={`${withOverlay? "fixed top-0 bg-transparent z-50 h-screen " : "bg-white dark:bg-gray-900 p-4 md:absolute"} 
+                    ${isCollapsed ? "w-0 hidden" : "w-48"} 
+                    transition-all duration-300`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
                 {/* Show the bars button only in overlay mode */}
                 {withOverlay && (
-                    <div className="flex items-center space-x-reverse space-x-4 mb-4 pr-2 h-15 bg-[#093041]">
+                    <div className="flex items-center space-x-reverse space-x-4 pr-2 h-15">
                         <IcoButton
                             style="fa-bars"
                             size="text-lg"
@@ -57,11 +55,11 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                         />
                     </div>
                 )}
-                <ul>
+                <ul className="bg-white dark:bg-gray-900 h-screen">
                     {navItems.map((item, index) => (
                         <li
                             key={index}
-                            className="rounded-sm hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
+                            className="hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
                         >
                             <Link
                                 href={item.href}
