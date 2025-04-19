@@ -32,11 +32,11 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
         const handleLogin = () => setLogin(!login);
         const handleLogout = () => setLogout(!logout);
         const handleClick = () => {
-          if (theme === "dark") {
-            setTheme("light");
-          } else if (theme === "light") {
-            setTheme("dark");
-          }
+            if (theme === "dark" || theme === "system") {
+                setTheme("light");
+            } else if (theme === "light" || theme === "system") {
+                setTheme("dark");
+            }
         };
 
         let items: NavItem[] = [
@@ -74,20 +74,20 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             )}
 
             {/* Account Navigation */}
-            <nav className={`fixed top-0 left-0 h-screen bg-white dark:bg-gray-900 z-50 transition-all duration-300 ease-in-out 
-                ${isVisible ? "w-48" : "w-0 hidden"}`}
+            <nav className={`fixed top-0 left-0 h-screen bg-transparent z-50 transition-all duration-300 ease-in-out 
+                ${isVisible ? "w-44" : "w-0 hidden"}`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
-                <div className="flex justify-end px-2 py-2.5 bg-[#093041]">
+                <div className="flex justify-end px-2 py-2.5">
                     <div className="w-10 h-10 rounded-full overflow-hidden relative">
                         <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" fill objectFit="cover" className="bg-gray-500" />
                     </div>
                 </div>
-                <ul>
+                <ul className="bg-white dark:bg-gray-900 h-screen">
                     {naveItems.map((item, index) => (
                         <li
                             key={index}
-                            className="rounded-sm hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
+                            className="hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
                         >
                             <Link
                                 href={item.href}

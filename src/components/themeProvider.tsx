@@ -8,7 +8,6 @@ export function ThemeProvider({
     ...props
 }: React.ComponentProps<typeof NextThemesProvider>) {
     const { theme, setTheme } = useTheme();
-    setTheme("light");
     return  <NextThemesProvider {...props}>
             {children}
         </NextThemesProvider>
