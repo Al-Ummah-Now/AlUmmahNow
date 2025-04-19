@@ -32,6 +32,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
         const handleLogin = () => setLogin(!login);
         const handleLogout = () => setLogout(!logout);
         const handleClick = () => {
+            console.log("theme", theme);
             if (theme === "dark") {
                 setTheme("light");
             } else if (theme === "light") {
