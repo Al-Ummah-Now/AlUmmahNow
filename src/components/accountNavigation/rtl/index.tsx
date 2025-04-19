@@ -78,7 +78,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                 ${isVisible ? "w-48" : "w-0 hidden"}`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
-                <div className="flex justify-end px-2 py-2.5">
+                <div className="flex justify-end px-2 py-2.5 bg-[#093041]">
                     <div className="w-10 h-10 rounded-full overflow-hidden relative">
                         <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" fill objectFit="cover" className="bg-gray-500" />
                     </div>
