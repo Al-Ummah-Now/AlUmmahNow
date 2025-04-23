@@ -1,11 +1,19 @@
 "use server"
-import { createClient } from "@openauthjs/openauth/client"
+import { createClient, Client } from "@openauthjs/openauth/client"
 import { redirect } from "next/navigation"
 import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 
-export async function auth(): Promise<AuthSubject | false> {
+export async function getClient() {
+  const client = createClient({
+    clientID: process.env.ClientId,
+    issuer: process.env.Issuer, 
+  });
+  return client;
+}
+
+export async function authenticated(): Promise<AuthSubject | false> {
   const cookies = await getCookies()
   const accessToken = cookies.get("access_token")
   const refreshToken = cookies.get("refresh_token")
@@ -17,10 +25,7 @@ export async function auth(): Promise<AuthSubject | false> {
   }
   console.log("process.env.ClientId", process.env.ClientId)
   console.log("process.env.Issuer", process.env.Issuer)
-  const client = createClient({
-    clientID: process.env.ClientId,
-    issuer: process.env.Issuer, // url to the OpenAuth server
-  });
+  const client = await getClient();
   const verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
   console.log("verified", verified)
 
@@ -45,10 +50,7 @@ export async function login() {
   const cookies = await getCookies()
   const accessToken = cookies.get("access_token")
   const refreshToken = cookies.get("refresh_token")
-  const client = createClient({
-    clientID: process.env.ClientId,
-    issuer: process.env.Issuer, // url to the OpenAuth server
-  });
+  const client = await getClient();
 
   if (accessToken) {
     const verified = await client.verify(subjects, accessToken.value, {

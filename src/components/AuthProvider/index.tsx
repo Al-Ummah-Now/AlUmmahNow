@@ -1,5 +1,5 @@
 import React from "react";
-import { auth } from "../../lib/actions";
+import { authenticated } from "../../lib/actions";
 import { AuthContextProvider } from "./authContext";
 import { User } from "@/interfaces";
 
@@ -9,7 +9,7 @@ export type AuthProviderProps = {
 
 export default async function AuthProvider(props: AuthProviderProps) {
     let user: User | null = null;
-    const subject = await auth(); // Call the server-side auth function
+    const subject = await authenticated(); // Call the server-side auth function
     user = subject ? subject.properties : null;
 
     console.log("user", user);
