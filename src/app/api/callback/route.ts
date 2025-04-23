@@ -1,16 +1,13 @@
 import { InvalidAccessTokenError } from "@openauthjs/openauth/error";
-import { createClient } from "@openauthjs/openauth/client"
-import { setTokens } from "../../../lib/auth"
+import { setTokens } from "@/lib/auth"
 import { type NextRequest, NextResponse } from "next/server"
+import { getClient } from "@/lib/actions";
 
 async function validate(code: string | null, url: URL): Promise<{ result: boolean, err?: InvalidAccessTokenError}> {
   console.log("code", code)
   console.log("url", url)
 
-   const client = createClient({
-    clientID: process.env.ClientId,
-    issuer: process.env.Issuer, // url to the OpenAuth server
-  });
+  const client = await getClient();
   
   const exchanged = await client.exchange(code!, `${url.origin}/api/callback`);
   console.log("exchanged", exchanged)
