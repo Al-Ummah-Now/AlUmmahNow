@@ -1,12 +1,13 @@
 import { Profile, User } from "@/interfaces";
 
+var baseUrl = process.env.API_URL || "https://videos.api.alummahnow.net";
 
 export const fetchProfile = async (user: User, setProfile: (profile: Profile) => void) => {
     if (!user) return;
 
     try {
         const response = await fetch(
-            `https://videos.api.alummahnow.net/api/profiles/${user.id}`
+            `${baseUrl}/api/profiles/${user.id}`
         );
         if(response.status === 404) {
             setProfile({
@@ -31,7 +32,7 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
     if (!profile) return;
     try {
         const response = await fetch(
-            `https://videos.api.alummahnow.net/api/profiles/${profile.id}`,
+            `${baseUrl}/api/profiles/${profile.id}`,
             {
                 method: "PUT",
                 headers: {

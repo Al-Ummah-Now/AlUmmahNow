@@ -4,7 +4,7 @@ import VideoPlayer from "@/components/videoPlayer/rtl/index";
 import RelatedVideosSection from "@/components/related/rtl/index";
 import { useQueryState } from "nuqs";
 import { PaginationResponse, VideoInfo, VideoObject } from "../../../interfaces";
-import { fetchVideoById, fetchVideos } from "@/lib/videoClient";
+import { fetchVideoById, fetchVideos } from "@/lib/clients/videos";
 import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { redirect, useSearchParams, usePathname } from "next/navigation";
 

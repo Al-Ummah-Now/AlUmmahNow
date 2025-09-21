@@ -14,36 +14,45 @@ export async function getClient() {
 }
 
 export async function authenticated(): Promise<AuthSubject | false> {
-  const cookies = await getCookies()
-  const accessToken = cookies.get("access_token")
-  const refreshToken = cookies.get("refresh_token")
-  console.log("accessToken", accessToken)
-  console.log("refreshToken", refreshToken)
+  try {
+    const cookies = await getCookies()
+    console.log("All cookies:", cookies.getAll())
+    
+    const accessToken = cookies.get("access_token")
+    const refreshToken = cookies.get("refresh_token")
+    console.log("accessToken", accessToken)
+    console.log("refreshToken", refreshToken)
 
-  if (!accessToken) {
-    return false
-  }
-  console.log("process.env.ClientId", process.env.ClientId)
-  console.log("process.env.Issuer", process.env.Issuer)
-  const client = await getClient();
-  const verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
-  console.log("verified", verified)
+    if (!accessToken?.value) {
+      console.log("No access token found")
+      return false
+    }
+    
+    console.log("process.env.ClientId", process.env.ClientId)
+    console.log("process.env.Issuer", process.env.Issuer)
+    const client = await getClient();
+    const verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
+    console.log("verified", verified)
 
-  if (verified.err) {
-    console.log("verified.err", verified.err)
-    return false
-  }
-  else if (!verified.err && 'tokens' in verified) {
-    console.log("tokens", verified.tokens)
-    await setTokens(verified.tokens.access, verified.tokens.refresh)
-  }
+    if (verified.err) {
+      console.log("verified.err", verified.err)
+      return false
+    }
+    else if (!verified.err && 'tokens' in verified) {
+      console.log("tokens", verified.tokens)
+      await setTokens(verified.tokens.access, verified.tokens.refresh)
+    }
 
-  if (!verified.err && 'subject' in verified) {
-    console.log("verified.subject", verified.subject)
-    return verified.subject;
+    if (!verified.err && 'subject' in verified) {
+      console.log("verified.subject", verified.subject)
+      return verified.subject;
+    }
+    console.log("false", false)
+    return false;
+  } catch (error) {
+    console.error("Error in authenticated function:", error)
+    return false;
   }
-  console.log("false", false)
-  return false;
 }
 
 export async function login() {

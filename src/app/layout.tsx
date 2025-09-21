@@ -68,7 +68,6 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
           </NuqsAdapter>
         </Suspense>
       </body>
-      <script async src="https://unpkg.com/@material-tailwind/html@latest/scripts/ripple.js"></script>
       <script async type="text/javascript" src="//assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>
 
     </html>
