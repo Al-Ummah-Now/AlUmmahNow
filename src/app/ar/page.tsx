@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/rtl/index";
 import { useQueryState } from "nuqs";
@@ -14,6 +14,9 @@ const VideosPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const path = usePathname();
   const rtl = path.indexOf('/ar') > -1;
+  
+  // Prevent duplicate initial fetch
+  const hasInitialFetch = useRef(false);
 
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
@@ -40,6 +43,14 @@ const VideosPage: React.FC = () => {
   };
 
   useEffect(() => {
+    // Prevent duplicate initial fetch
+    if (hasInitialFetch.current) {
+      console.log('VideosPage (AR): Skipping duplicate initial fetch');
+      return;
+    }
+    
+    console.log('VideosPage (AR): Performing initial fetch');
+    hasInitialFetch.current = true;
     fetchVideos(null);
   }, []);
 

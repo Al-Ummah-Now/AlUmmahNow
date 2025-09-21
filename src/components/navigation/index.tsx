@@ -28,9 +28,15 @@ const Navigation: React.FC = () => {
     };
 
     useEffect(() => {
-        if (!auth) return;
-        console.log("auth", auth.user);
-        fetchProfile(auth.user, setProfile);
+        console.log("Navigation: auth state changed", { hasAuth: !!auth, hasUser: !!auth?.user });
+        
+        if (auth?.user) {
+            console.log("Navigation: 🚀 Calling fetchProfile for user:", auth.user.id);
+            fetchProfile(auth.user, setProfile);
+        } else {
+            console.log("Navigation: No user, clearing profile");
+            setProfile(null);
+        }
     }, [auth]);
 
     return (

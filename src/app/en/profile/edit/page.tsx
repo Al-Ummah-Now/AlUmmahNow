@@ -1,16 +1,18 @@
 "use client";
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/clients/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 
-const ProfilePage = () => {
-  const [profile, setProfile] = React.useState<Profile | null>(null);
+const ProfileEditPage = () => {
+  const [profile, setProfile] = useState<Profile | null>(null);
   const auth = useAuth();
 
   useEffect(() => {
-    if (!auth) return;
-    fetchProfile(auth.user, setProfile);
+    console.log("Profile Edit (EN): auth state changed", { hasAuth: !!auth, hasUser: !!auth?.user });
+    if (auth?.user) {
+      fetchProfile(auth.user, setProfile);
+    }
   }, [auth]);
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -168,4 +170,4 @@ const ProfilePage = () => {
   );
 };
 
-export default ProfilePage;
+export default ProfileEditPage;
