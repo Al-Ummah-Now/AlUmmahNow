@@ -74,6 +74,17 @@ export async function authenticated(): Promise<AuthSubject | false> {
           currentTime: Math.floor(Date.now() / 1000),
           isExpired: payload.exp < Math.floor(Date.now() / 1000)
         });
+        
+        // Compare token claims with environment variables
+        console.log("🔍 CLAIM COMPARISON:");
+        console.log("Token issuer (iss):", payload.iss);
+        console.log("Config issuer:", process.env.Issuer);
+        console.log("Issuer match:", payload.iss === process.env.Issuer);
+        
+        console.log("Token audience (aud):", payload.aud);
+        console.log("Config clientID:", process.env.ClientId);
+        console.log("Audience match:", payload.aud === process.env.ClientId);
+        
       } catch (decodeError) {
         console.log("Could not decode token payload:", decodeError);
       }
