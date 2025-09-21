@@ -11,7 +11,6 @@ export default async function AuthProvider(props: AuthProviderProps) {
     let user: User | null = null;
     const subject = await authenticated(); // Call the server-side auth function
     user = subject ? subject.properties : null;
-    console.log("AuthProvider: Authenticated user:", JSON.stringify(user, null, 2));
 
     return (
         <AuthContextProvider user={user}>
