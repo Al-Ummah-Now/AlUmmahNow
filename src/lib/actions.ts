@@ -68,6 +68,21 @@ export async function authenticated(): Promise<AuthSubject | false> {
       return verified.subject;
     }
     
+    // If no subject but verification succeeded, try manual extraction
+    console.log("No subject found, attempting manual extraction");
+    try {
+      const payload = JSON.parse(atob(accessToken.value.split('.')[1]));
+      if (payload.type === "user" && payload.properties) {
+        console.log("Manual extraction successful:", JSON.stringify(payload.properties, null, 2));
+        return {
+          type: "user",
+          properties: payload.properties
+        } as AuthSubject;
+      }
+    } catch (manualError) {
+      console.log("Manual extraction failed:", manualError.message);
+    }
+    
     console.log("No subject found in verified response");
     return false;
   } catch (error) {
