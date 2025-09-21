@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
 import { useQueryState } from "nuqs";
@@ -11,6 +11,9 @@ const VideosPage: React.FC = () => {
   const [nextCursor, setNextCursor] = useState<string | null>(null); 
   const [loading, setLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
+  
+  // Prevent duplicate initial fetch
+  const hasInitialFetch = useRef(false);
 
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
@@ -37,7 +40,14 @@ const VideosPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // Fetch videos on initial render
+    // Prevent duplicate initial fetch
+    if (hasInitialFetch.current) {
+      console.log('VideosPage: Skipping duplicate initial fetch');
+      return;
+    }
+    
+    console.log('VideosPage: Performing initial fetch');
+    hasInitialFetch.current = true;
     fetchVideos(null);
   }, []); // Empty dependency array to run only once
 

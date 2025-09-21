@@ -1,4 +1,5 @@
 import { Profile, User } from "@/interfaces";
+import { ProfilesAPI } from "@/lib/api";
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
 
@@ -21,39 +22,45 @@ interface ProfilesListApiResponse {
     };
 }
 
-export const fetchProfile = async (user: User, setProfile: (profile: Profile) => void) => {
-    if (!user) return;
+export const fetchProfile = async (user: User | null | undefined, setProfile: (profile: Profile) => void): Promise<boolean> => {
+    console.log('fetchProfile: 🔥 API CALL STARTING for user:', user?.id);
+    
+    // Early return for any invalid input
+    if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
+        console.log('fetchProfile: ❌ Invalid input, skipping');
+        return false;
+    }
 
     try {
-        const response = await fetch(
-            `${baseUrl}/api/profiles/${user.id}`
-        );
-        if(response.status === 404) {
+        console.log('fetchProfile: 🌐 Calling ProfilesAPI.getCurrent with userId:', user.id);
+        
+        // Call the API with the user ID in the URL path and headers for auth
+        const profile = await ProfilesAPI.getCurrent(user.id, {
+            userId: user.id,
+            channelId: user.id
+        });
+        
+        console.log('fetchProfile: ProfilesAPI response:', profile);
+        
+        if (profile) {
+            console.log('fetchProfile: ✅ Success - API returned profile');
+            setProfile(profile);
+            return true;
+        } else {
+            console.log('fetchProfile: ⚠️ API returned null, creating default profile');
+            // Create default profile if API returns null
             setProfile({
                 id: user.id,
                 email: user.email,
-            })
+                firstName: user.email?.split('@')[0] || 'User',
+                lastName: '',
+                avatarUrl: '/avatar.png',
+                coverUrl: null
+            });
             return true;
         }
-        if (!response.ok) {
-            throw new Error(`Error fetching profile: ${response.statusText}`);
-        }
-        const data: ProfileApiResponse = await response.json();
-        
-        // Handle the API response structure: {success: true, result: {profile: Profile}}
-        if (data.success && data.result && data.result.profile) {
-            const profile: Profile = data.result.profile;
-            setProfile(profile);
-        } else {
-            // If no profile found, create a default one
-            setProfile({
-                id: user.id,
-                email: user.email,
-            });
-        }
-        return true;
     } catch (error) {
-        console.error(error);
+        console.error('fetchProfile: ❌ Error:', error);
         return false;
     }
 };
@@ -61,6 +68,26 @@ export const fetchProfile = async (user: User, setProfile: (profile: Profile) =>
 export const updateProfile = async (profile: Profile, setProfile: (profile: Profile) => void) => {
     if (!profile) return;
     try {
+        // Try new API first
+        const result = await ProfilesAPI.update(
+            {
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+                avatarUrl: profile.avatarUrl,
+                coverUrl: profile.coverUrl,
+            },
+            {
+                userId: profile.id,
+                channelId: profile.id // Assuming profile.id can be used as channelId
+            }
+        );
+        
+        if (result?.result?.profile) {
+            setProfile(result.result.profile);
+            return true;
+        }
+        
+        // Fallback to old API
         const response = await fetch(
             `${baseUrl}/api/profiles/${profile.id}`,
             {

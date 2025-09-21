@@ -1,5 +1,6 @@
 import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { PaginationResponse, VideoInfo, VideoObject } from "@/interfaces";
+import { VideosAPI } from "@/lib/api";
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
 
@@ -7,13 +8,11 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions> {
     if (!vid) return;
 
     try {
-        const response = await fetch(
-            `${baseUrl}/api/videos/${vid}`
-        );
-        if (!response.ok) {
-            throw new Error(`Error fetching video: ${response.statusText}`);
+        const video = await VideosAPI.getById(vid);
+        if (!video) {
+            throw new Error('Video not found');
         }
-        const video: VideoObject = await response.json();
+        
         return {
             id: video.id,
             title: video.title,
@@ -37,14 +36,15 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions> {
 
 export async function fetchVideos(cursor: string | null = null): Promise<VideoInfo[]> {
     try {
-        const cursorString = cursor ? `&cursor=${cursor}` : "";
-        const response = await fetch(
-            `${baseUrl}/api/videos?limit=15${cursorString}`
-        );
-        if (!response.ok) {
-            throw new Error(`Error fetching related videos: ${response.statusText}`);
+        const result = await VideosAPI.list({ 
+            limit: 15, 
+            cursor: cursor || undefined 
+        });
+        
+        if (!result) {
+            throw new Error('Failed to fetch videos');
         }
-        const result: PaginationResponse<VideoObject> = await response.json();
+        
         return result.data.map((video) => ({
             id: video.id,
             title: video.title,
@@ -72,14 +72,10 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
 
 export async function fetchVideosWithPagination(cursor: string | null = null): Promise<PaginationResponse<VideoObject> | null> {
     try {
-        const cursorString = cursor ? `&cursor=${cursor}` : "";
-        const response = await fetch(
-            `${baseUrl}/api/videos?limit=15${cursorString}`
-        );
-        if (!response.ok) {
-            throw new Error(`Error fetching videos: ${response.statusText}`);
-        }
-        const result: PaginationResponse<VideoObject> = await response.json();
+        const result = await VideosAPI.list({ 
+            limit: 15, 
+            cursor: cursor || undefined 
+        });
         return result;
     } catch (error) {
         console.error(error);
