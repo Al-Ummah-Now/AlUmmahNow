@@ -1,26 +1,31 @@
 export type PaginationResponse<T> = {
     cursor: string;
     limit: number;
-    total: number;
     data: T[];
 };
 
 export interface VideoObject {
     id: string;
     title: string;
-    description: string;
+    description: string | null;
     thumbnailUrl: string;
     videoUrl: string;
     userId: string;
     channel: string;
-    channelId: string;
-    channelThumbnailUrl: string;
+    channelId: string | null;
+    channelAvatarUrl: string; // Changed from channelThumbnailUrl to match API
+    channelName: string;
     dateCreated: string;
     dateModified: string;
     views?: number;
     width?: number;
     height?: number;
     availableResolutions?: string[];
+    likesCount: number;
+    dislikesCount: number;
+    commentsCount: number;
+    isPublic?: boolean; // Added from API spec
+    isLive?: boolean;   // Added from API spec
     comments?: Comments[]; // Optional array of Comments
     likes?: Likes[];       // Optional array of Likes
     dislikes?: Dislikes[]; // Optional array of Dislikes
@@ -34,9 +39,10 @@ export type ResponseError = {
 export interface VideoInfo {
     id: string;
     title: string;
-    description: string;
+    description: string | null;
     channel: string;
-    channelId: string;
+    channelId: string | null;
+    channelName: string;
     thumbnail: string;
     video: string;
     views: string;
@@ -45,16 +51,20 @@ export interface VideoInfo {
     width?: number;
     height?: number;
     availableResolutions?: string[];
+    likesCount: number;
+    dislikesCount: number;
+    commentsCount: number;
 }
 
 export interface Profile {
     id: string;
     email: string;
-    userName?: string;
+    displayName?: string;
     firstName?: string;
     lastName?: string;
     avatarUrl?: string;
     coverUrl?: string;
+    channelsCount?: number;
     dateCreated?: string;
     dateModified?: string;
     playlists?: string[];
@@ -76,11 +86,13 @@ export interface Playlist {
     title: string;
     description?: string;
     thumbnailUrl?: string;
-    userId?: string;
-    channelId?: string;
+    userId: string; // Made required to match API spec
+    channelId: string; // Made required to match API spec
+    channelName?: string; // Added from API spec
     dateCreated: string;
     dateModified: string;
     videos?: string[];
+    videosCount?: number; // Added from API spec
     isPublic?: boolean;
 }
 
@@ -89,10 +101,16 @@ export interface Channel {
     userId: string;
     email: string;
     name: string;
+    isMain: boolean; // Added from API spec
     avatarUrl?: string;
     coverUrl?: string;
-    dateCreated?: string;
-    dateModified?: string;
+    dateCreated: string; // Made required to match API spec
+    dateModified: string; // Made required to match API spec
+    playlistsCount: number; // Added from API spec
+    videosCount: number; // Added from API spec
+    subscribersCount: number; // Added from API spec
+    subscriptionsCount: number; // Added from API spec
+    likesCount: number; // Added from API spec
     playlists?: string[];
     videos?: string[];
 }
@@ -100,16 +118,17 @@ export interface Channel {
 export interface Comments {
     id: string;
     userId: string;
+    channelId: string; // Added from API spec
     videoId: string;
     text: string;
-    dateCreated?: string;
-    dateModified?: string;
-    replies?: string[];
-    likes?: string[];
-    dislikes?: string[];
-    isEdited?: boolean;
-    isDeleted?: boolean;
-    isPinned?: boolean;
+    dateCreated: string;     // Made required to match API spec
+    dateModified: string;    // Made required to match API spec
+    likesCount: number;      // Changed from likes array to count
+    dislikesCount: number;   // Changed from dislikes array to count
+    repliesCount: number;    // Changed from replies array to count
+    isEdited: boolean;       // Made required to match API spec
+    isDeleted: boolean;      // Made required to match API spec
+    isPinned: boolean;       // Made required to match API spec
 }
 
 export interface Likes {
