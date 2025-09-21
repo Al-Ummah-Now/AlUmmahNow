@@ -9,7 +9,6 @@ const ProfilePage = () => {
   const auth = useAuth();
 
   useEffect(() => {
-    console.log("Profile Edit (AR): auth state changed", { hasAuth: !!auth, hasUser: !!auth?.user });
     if (auth?.user) {
       fetchProfile(auth.user, setProfile);
     }

@@ -34,7 +34,6 @@ class ProfileManager {
 
     // If no user or no user ID, clear everything
     if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
-      console.log('ProfileManager: 🧹 Clearing profile (no valid user)');
       this.currentUserId = null;
       this.profile = null;
       this.isLoading = false;
@@ -45,19 +44,16 @@ class ProfileManager {
 
     // If same user and already loading, wait for existing promise
     if (this.currentUserId === user.id && this.fetchPromise) {
-      console.log('ProfileManager: ⏳ Already loading for this user, waiting...');
       await this.fetchPromise;
       return;
     }
 
     // If same user and already loaded, do nothing
     if (this.currentUserId === user.id && this.profile && !this.isLoading) {
-      console.log('ProfileManager: ✅ Profile already loaded for this user');
       return;
     }
 
     // New user or need to reload
-    console.log('ProfileManager: 🚀 Starting fetch for user:', user.id);
     this.currentUserId = user.id;
     this.isLoading = true;
     this.notify();
@@ -69,15 +65,12 @@ class ProfileManager {
 
   private async performFetch(user: User) {
     try {
-      console.log('ProfileManager: 🔥 MAKING ACTUAL API CALL for user:', user.id);
-      
       const profile = await ProfilesAPI.getCurrent(user.id, {
         userId: user.id,
         channelId: user.id
       });
 
       if (profile) {
-        console.log('ProfileManager: ✅ API call successful, got profile:', profile.id);
         this.profile = profile;
       } else {
         console.log('ProfileManager: ⚠️ API returned null/undefined');
@@ -103,7 +96,6 @@ class ProfileManager {
   // Method to refresh the current profile
   async refreshProfile() {
     if (this.currentUserId) {
-      console.log('ProfileManager: Refreshing profile for current user:', this.currentUserId);
       // Find a user object - we'll need to get this from the caller
       // For now, just clear and notify - the components will re-fetch
       this.profile = null;
@@ -114,7 +106,6 @@ class ProfileManager {
 
   // Method to update profile in memory (after successful API update)
   updateProfile(newProfile: Profile) {
-    console.log('ProfileManager: Updating profile in memory');
     this.profile = newProfile;
     this.notify();
   }
