@@ -12,11 +12,6 @@ export const useProfile = (user: User | null) => {
   const isFetching = useRef<boolean>(false);
 
   useEffect(() => {
-    console.log('useProfile: Effect triggered for user:', user?.id, {
-      lastFetched: lastFetchedUserId.current,
-      isFetching: isFetching.current
-    });
-
     // Clear state if no user
     if (!user || !user.id) {
       setProfile(null);
@@ -29,12 +24,9 @@ export const useProfile = (user: User | null) => {
 
     // Skip if already fetched for this user or currently fetching
     if (lastFetchedUserId.current === user.id || isFetching.current) {
-      console.log('useProfile: � Skipping - already fetched or fetching for user:', user.id);
       return;
     }
 
-    console.log('useProfile: 🚀 Starting API call for user:', user.id);
-    
     // Mark as fetching and set the user ID
     lastFetchedUserId.current = user.id;
     isFetching.current = true;

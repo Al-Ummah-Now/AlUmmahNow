@@ -30,7 +30,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
     try {
       verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
     } catch (verifyError) {
-      console.error("Token verification error:", verifyError.message);
+      console.log("Token verification failed:", verifyError.message);
       return false;
     }
 
@@ -42,6 +42,8 @@ export async function authenticated(): Promise<AuthSubject | false> {
       return false;
     }
     
+    console.log("Token verification successful");
+    
     if ('tokens' in verified) {
       await setTokens(verified.tokens.access, verified.tokens.refresh);
     }
@@ -52,7 +54,6 @@ export async function authenticated(): Promise<AuthSubject | false> {
     
     return false;
   } catch (error) {
-    console.error("Error in authenticated function:", error)
     return false;
   }
 }
@@ -78,7 +79,7 @@ export async function login() {
         redirect("/");
       }
     } catch (loginVerifyError) {
-      console.error("Login verification error:", loginVerifyError.message);
+      console.log("Login verification failed:", loginVerifyError.message);
     }
   }
 

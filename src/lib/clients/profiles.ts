@@ -23,24 +23,17 @@ interface ProfilesListApiResponse {
 }
 
 export const fetchProfile = async (user: User | null | undefined, setProfile: (profile: Profile) => void): Promise<boolean> => {
-    console.log('fetchProfile: 🔥 API CALL STARTING for user:', user?.id);
-    
     // Early return for any invalid input
     if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
-        console.log('fetchProfile: ❌ Invalid input, skipping');
         return false;
     }
 
     try {
-        console.log('fetchProfile: 🌐 Calling ProfilesAPI.getCurrent with userId:', user.id);
-        
         // Call the API with the user ID in the URL path and headers for auth
         const profile = await ProfilesAPI.getCurrent(user.id, {
             userId: user.id,
             channelId: user.id
         });
-        
-        console.log('fetchProfile: ProfilesAPI response:', profile);
         
         if (profile) {
             console.log('fetchProfile: ✅ Success - API returned profile');
