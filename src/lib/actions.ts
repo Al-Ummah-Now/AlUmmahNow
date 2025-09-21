@@ -20,7 +20,10 @@ export async function authenticated(): Promise<AuthSubject | false> {
     const accessToken = cookies.get("access_token")
     const refreshToken = cookies.get("refresh_token")
 
+    console.log("Auth check - has access token:", !!accessToken?.value);
+
     if (!accessToken?.value) {
+      console.log("No access token found");
       return false
     }
     
@@ -29,6 +32,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
     let verified;
     try {
       verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
+      console.log("Verification response:", JSON.stringify(verified, null, 2));
     } catch (verifyError) {
       console.log("Token verification failed:", verifyError.message);
       return false;
@@ -49,9 +53,11 @@ export async function authenticated(): Promise<AuthSubject | false> {
     }
 
     if ('subject' in verified) {
+      console.log("Found subject in verified response:", JSON.stringify(verified.subject, null, 2));
       return verified.subject;
     }
     
+    console.log("No subject found in verified response");
     return false;
   } catch (error) {
     return false;
