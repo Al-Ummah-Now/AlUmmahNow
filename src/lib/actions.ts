@@ -6,10 +6,17 @@ import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 
 export async function getClient() {
+  console.log("Creating client with:", {
+    clientID: process.env.ClientId,
+    issuer: process.env.Issuer
+  });
+  
   const client = createClient({
     clientID: process.env.ClientId,
     issuer: process.env.Issuer, 
   });
+  
+  console.log("Client created successfully");
   return client;
 }
 
@@ -55,11 +62,36 @@ export async function authenticated(): Promise<AuthSubject | false> {
     
     let verified;
     try {
+      // Try to decode the JWT payload to see what's inside (for debugging)
+      try {
+        const payload = JSON.parse(atob(accessToken.value.split('.')[1]));
+        console.log("Token payload:", {
+          exp: payload.exp,
+          iat: payload.iat,
+          iss: payload.iss,
+          aud: payload.aud,
+          sub: payload.sub,
+          currentTime: Math.floor(Date.now() / 1000),
+          isExpired: payload.exp < Math.floor(Date.now() / 1000)
+        });
+      } catch (decodeError) {
+        console.log("Could not decode token payload:", decodeError);
+      }
+      
       verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
       console.log("verified", verified)
     } catch (verifyError) {
       console.error("Error during token verification:", verifyError);
+      console.error("Error message:", verifyError.message);
+      console.error("Error stack:", verifyError.stack);
       console.error("Token that failed:", accessToken.value.substring(0, 20) + "...");
+      
+      // Clear potentially corrupted tokens
+      console.log("Clearing potentially corrupted tokens");
+      const cookies = await getCookies();
+      cookies.delete("access_token");
+      cookies.delete("refresh_token");
+      
       return false;
     }
 
@@ -101,12 +133,26 @@ export async function login() {
   const client = await getClient();
 
   if (accessToken) {
-    const verified = await client.verify(subjects, accessToken.value, {
-      refresh: refreshToken?.value,
-    })
-    if (!verified.err && 'tokens' in verified) {
-      await setTokens(verified.tokens.access, verified.tokens.refresh)
-      redirect("/")
+    console.log("Login: Found existing access token, verifying...");
+    try {
+      const verified = await client.verify(subjects, accessToken.value, {
+        refresh: refreshToken?.value,
+      })
+      console.log("Login: Verification result:", verified);
+      
+      if (!verified.err && 'tokens' in verified) {
+        console.log("Login: Setting refreshed tokens");
+        await setTokens(verified.tokens.access, verified.tokens.refresh)
+        redirect("/")
+      } else if (!verified.err) {
+        console.log("Login: Token valid, redirecting");
+        redirect("/")
+      } else {
+        console.log("Login: Token verification failed, proceeding with new auth");
+      }
+    } catch (loginVerifyError) {
+      console.error("Login: Error during verification:", loginVerifyError);
+      console.log("Login: Proceeding with new authorization");
     }
   }
 
