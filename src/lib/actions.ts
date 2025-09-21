@@ -29,10 +29,21 @@ export async function authenticated(): Promise<AuthSubject | false> {
     
     const client = await getClient();
     
+    console.log("Subjects schema:", JSON.stringify(subjects, null, 2));
+    
+    // Debug the token payload
+    try {
+      const payload = JSON.parse(atob(accessToken.value.split('.')[1]));
+      console.log("Token payload:", JSON.stringify(payload, null, 2));
+    } catch (e) {
+      console.log("Could not decode token payload");
+    }
+    
     let verified;
     try {
       verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
       console.log("Verification response:", JSON.stringify(verified, null, 2));
+      console.log("Verification response keys:", Object.keys(verified));
     } catch (verifyError) {
       console.log("Token verification failed:", verifyError.message);
       return false;
