@@ -1,7 +1,19 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-function ChannelPage({params}: {  params: { id: string }}) {
+function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
+  const [channelId, setChannelId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Resolve the params Promise
+    params.then((resolvedParams) => {
+      setChannelId(resolvedParams.id);
+    });
+  }, [params]);
+
+  if (!channelId) {
+    return <div>Loading...</div>;
+  }
   return (
     <div className="font-sans text-gray-800 max-w-6xl mx-auto">
       {/* Channel Banner */}
@@ -11,7 +23,7 @@ function ChannelPage({params}: {  params: { id: string }}) {
 
       {/* Channel Info */}
       <div className="pt-16 pb-5 px-5 border-b border-gray-300">
-        <h1 className="text-2xl font-bold">Channel Name</h1>
+        <h1 className="text-2xl font-bold">Channel {channelId}</h1>
         <p className="text-gray-600 mt-1">1.2M subscribers</p>
       </div>
 
