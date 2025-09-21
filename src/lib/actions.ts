@@ -20,23 +20,62 @@ export async function authenticated(): Promise<AuthSubject | false> {
     
     const accessToken = cookies.get("access_token")
     const refreshToken = cookies.get("refresh_token")
-    console.log("accessToken", accessToken)
-    console.log("refreshToken", refreshToken)
+    console.log("accessToken exists:", !!accessToken)
+    console.log("refreshToken exists:", !!refreshToken)
 
     if (!accessToken?.value) {
       console.log("No access token found")
       return false
     }
     
-    console.log("process.env.ClientId", process.env.ClientId)
-    console.log("process.env.Issuer", process.env.Issuer)
+    // Check if token looks like a JWT
+    const tokenParts = accessToken.value.split('.');
+    console.log("Token format analysis:", {
+      isJWT: tokenParts.length === 3,
+      parts: tokenParts.length,
+      firstPartLength: tokenParts[0]?.length,
+      tokenStart: accessToken.value.substring(0, 30) + "..."
+    });
+    
+    console.log("Environment check:", {
+      hasClientId: !!process.env.ClientId,
+      hasIssuer: !!process.env.Issuer,
+      clientIdStart: process.env.ClientId?.substring(0, 10) + "...",
+      issuer: process.env.Issuer
+    });
+    
     const client = await getClient();
-    const verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
-    console.log("verified", verified)
+    
+    console.log("About to verify token with:", {
+      hasSubjects: !!subjects,
+      tokenLength: accessToken.value.length,
+      hasRefreshToken: !!refreshToken?.value,
+      refreshTokenLength: refreshToken?.value?.length
+    });
+    
+    let verified;
+    try {
+      verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
+      console.log("verified", verified)
+    } catch (verifyError) {
+      console.error("Error during token verification:", verifyError);
+      console.error("Token that failed:", accessToken.value.substring(0, 20) + "...");
+      return false;
+    }
 
     if (verified.err) {
-      console.log("verified.err", verified.err)
-      return false
+      console.log("Token verification failed:", verified.err)
+      
+      // If we have a refresh token, the verification might have automatically refreshed
+      // In that case, we should have new tokens in the verified response
+      if (refreshToken?.value && 'tokens' in verified) {
+        console.log("Tokens were refreshed during verification")
+        await setTokens(verified.tokens.access, verified.tokens.refresh)
+        // Continue with the verification result
+      } else {
+        console.log("No refresh possible, authentication failed")
+        return false
+      }
     }
     else if (!verified.err && 'tokens' in verified) {
       console.log("tokens", verified.tokens)
