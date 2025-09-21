@@ -1,6 +1,25 @@
 import { Profile, User } from "@/interfaces";
 
-var baseUrl = process.env.API_URL || "https://videos.api.alummahnow.net";
+const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
+
+interface ProfileApiResponse {
+    success: boolean;
+    result: {
+        profile: Profile;
+    };
+}
+
+interface ProfilesListApiResponse {
+    success: boolean;
+    result: {
+        profiles: Profile[];
+        pagination: {
+            limit: number;
+            cursor?: string;
+            hasMore: boolean;
+        };
+    };
+}
 
 export const fetchProfile = async (user: User, setProfile: (profile: Profile) => void) => {
     if (!user) return;
@@ -14,17 +33,28 @@ export const fetchProfile = async (user: User, setProfile: (profile: Profile) =>
                 id: user.id,
                 email: user.email,
             })
+            return true;
         }
         if (!response.ok) {
-            //throw new Error(`Error fetching video: ${response.statusText}`);
+            throw new Error(`Error fetching profile: ${response.statusText}`);
         }
-        const profile: Profile = await response.json();
-        if (profile) {
+        const data: ProfileApiResponse = await response.json();
+        
+        // Handle the API response structure: {success: true, result: {profile: Profile}}
+        if (data.success && data.result && data.result.profile) {
+            const profile: Profile = data.result.profile;
             setProfile(profile);
+        } else {
+            // If no profile found, create a default one
+            setProfile({
+                id: user.id,
+                email: user.email,
+            });
         }
         return true;
     } catch (error) {
         console.error(error);
+        return false;
     }
 };
 

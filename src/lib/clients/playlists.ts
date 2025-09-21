@@ -1,6 +1,6 @@
-import { Playlist, User } from "@/interfaces";
+import { Playlist, User, PaginationResponse } from "@/interfaces";
 
-var baseUrl = process.env.API_URL || "https://videos.api.alummahnow.net";
+const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
 
 export const fetchPlaylist = async (user: User, setPlaylist: (playlist: Playlist) => void) => {
     if (!user) return;
@@ -9,22 +9,21 @@ export const fetchPlaylist = async (user: User, setPlaylist: (playlist: Playlist
         const response = await fetch(
             `${baseUrl}/api/playlists/${user.id}`
         );
-        // if(response.status === 404) {
-        //     setPlaylist({
-        //         id: user.id,
-        //         email: user.email,
-        //     })
-        // }
-        if (!response.ok) {
-            //throw new Error(`Error fetching video: ${response.statusText}`);
+        if(response.status === 404) {
+            // Handle case where user has no playlists
+            return true;
         }
-        const playlist: Playlist = await response.json();
-        if (playlist) {
-            setPlaylist(playlist);
+        if (!response.ok) {
+            throw new Error(`Error fetching playlist: ${response.statusText}`);
+        }
+        const data: PaginationResponse<Playlist> = await response.json();
+        if (data.data && data.data.length > 0) {
+            setPlaylist(data.data[0]); // Set the first playlist
         }
         return true;
     } catch (error) {
         console.error(error);
+        return false;
     }
 };
 

@@ -1,7 +1,7 @@
 import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { PaginationResponse, VideoInfo, VideoObject } from "@/interfaces";
 
-var baseUrl = process.env.API_URL || "https://videos.api.alummahnow.net";
+const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
 
 export async function fetchVideoById(vid: string): Promise<PlayerOptions> {
     if (!vid) return;
@@ -27,7 +27,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions> {
             width: video.width,
             height: video.height,
             availableResolutions: video.availableResolutions,
-            channelAvatar: video.channelThumbnailUrl,
+            channelAvatar: video.channelAvatarUrl, // Updated field name
         };
     } catch (error) {
         console.error(error);
@@ -51,6 +51,7 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
             description: video.description,
             channel: video.channel,
             channelId: video.channelId,
+            channelName: video.channelName,
             thumbnail: video.thumbnailUrl,
             video: video.videoUrl,
             views: `${video.views || 0}`,
@@ -59,6 +60,9 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
             availableResolutions: video.availableResolutions,
             dateCreated: new Date(video.dateCreated),
             dateModified: new Date(video.dateModified),
+            likesCount: video.likesCount,
+            dislikesCount: video.dislikesCount,
+            commentsCount: video.commentsCount,
         }));
 
     } catch (error) {
