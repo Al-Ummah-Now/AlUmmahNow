@@ -8,7 +8,7 @@ import AccountNavigation from "@/components/accountNavigation";
 import AccountNavigationRtl from "@/components/accountNavigation/rtl";
 import { redirect, useSearchParams, usePathname } from "next/navigation";
 import { AuthSubject, Profile } from "@/interfaces";
-import { fetchProfile } from "@/lib/profiles";
+import { fetchProfile } from "@/lib/clients/profiles";
 import { useAuth } from "../AuthProvider/authContext";
 
 const Navigation: React.FC = () => {

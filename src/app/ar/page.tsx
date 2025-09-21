@@ -4,6 +4,7 @@ import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/rtl/index";
 import { useQueryState } from "nuqs";
 import { redirect, useSearchParams, usePathname } from "next/navigation";
+import { fetchVideosWithPagination } from "@/lib/clients/videos";
 
 const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -17,19 +18,22 @@ const VideosPage: React.FC = () => {
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
     try {
-      const cursorString = cursor ? `&cursor=${cursor}` : "";
-      const response = await fetch(
-        `https://videos.api.alummahnow.net/api/videos?limit=15${cursorString}`
-      );
-      if (!response.ok) {
-        throw new Error(`Error fetching videos: ${response.statusText}`);
+      const data = await fetchVideosWithPagination(cursor);
+      
+      if (!data) {
+        console.error("Failed to fetch videos");
+        return;
       }
-      const data: PaginationResponse<VideoObject> = await response.json();
 
-      setVideos((prevVideos) => [...prevVideos, ...data.data]);
+      // Append new videos to the existing list, avoiding duplicates
+      setVideos((prevVideos) => {
+        const existingIds = new Set(prevVideos.map(video => video.id));
+        const newVideos = data.data.filter(video => !existingIds.has(video.id));
+        return [...prevVideos, ...newVideos];
+      });
       setNextCursor(data.cursor);
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching videos:", error);
     } finally {
       setLoading(false);
     }
@@ -41,8 +45,8 @@ const VideosPage: React.FC = () => {
 
   const handleNextPage = () => {
     if (nextCursor) {
-      setNextCursor(nextCursor);
-      fetchVideos(nextCursor);
+      setCursor(nextCursor); // Update the cursor in the query state
+      fetchVideos(nextCursor); // Fetch the next page of videos
     }
   };
 

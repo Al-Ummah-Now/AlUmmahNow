@@ -5,7 +5,7 @@ import RelatedVideosSection from "@/components/related/index";
 import { useQueryState } from "nuqs";
 import { PaginationResponse, VideoInfo, VideoObject } from "@/interfaces";
 import { PlayerOptions } from "@/components/videoPlayer/interface";
-import { fetchVideoById, fetchVideos } from "@/lib/videoClient";
+import { fetchVideoById, fetchVideos } from "@/lib/clients/videos";
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);

@@ -1,12 +1,14 @@
 import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { PaginationResponse, VideoInfo, VideoObject } from "@/interfaces";
 
+var baseUrl = process.env.API_URL || "https://videos.api.alummahnow.net";
+
 export async function fetchVideoById(vid: string): Promise<PlayerOptions> {
     if (!vid) return;
 
     try {
         const response = await fetch(
-            `https://videos.api.alummahnow.net/api/videos/${vid}`
+            `${baseUrl}/api/videos/${vid}`
         );
         if (!response.ok) {
             throw new Error(`Error fetching video: ${response.statusText}`);
@@ -37,7 +39,7 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
     try {
         const cursorString = cursor ? `&cursor=${cursor}` : "";
         const response = await fetch(
-            `https://videos.api.alummahnow.net/api/videos?limit=15${cursorString}`
+            `${baseUrl}/api/videos?limit=15${cursorString}`
         );
         if (!response.ok) {
             throw new Error(`Error fetching related videos: ${response.statusText}`);
@@ -61,5 +63,22 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
 
     } catch (error) {
         console.error(error);
+    }
+};
+
+export async function fetchVideosWithPagination(cursor: string | null = null): Promise<PaginationResponse<VideoObject> | null> {
+    try {
+        const cursorString = cursor ? `&cursor=${cursor}` : "";
+        const response = await fetch(
+            `${baseUrl}/api/videos?limit=15${cursorString}`
+        );
+        if (!response.ok) {
+            throw new Error(`Error fetching videos: ${response.statusText}`);
+        }
+        const result: PaginationResponse<VideoObject> = await response.json();
+        return result;
+    } catch (error) {
+        console.error(error);
+        return null;
     }
 };
