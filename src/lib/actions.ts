@@ -85,11 +85,36 @@ export async function authenticated(): Promise<AuthSubject | false> {
         console.log("Config clientID:", process.env.ClientId);
         console.log("Audience match:", payload.aud === process.env.ClientId);
         
+        // Check what's in the subjects configuration
+        console.log("🔧 SUBJECTS ANALYSIS:");
+        console.log("Subjects object:", subjects);
+        console.log("Subjects keys:", Object.keys(subjects || {}));
+        
+        // Try to understand the subject format issue
+        console.log("🎯 SUBJECT FORMAT ANALYSIS:");
+        console.log("Token sub claim:", payload.sub);
+        console.log("Sub claim type:", typeof payload.sub);
+        console.log("Has 'user:' prefix:", payload.sub?.startsWith?.('user:'));
+        
+        // Check if there are other claims that might contain user data
+        console.log("All token claims:", Object.keys(payload));
+        console.log("Full payload (limited):", {
+          ...payload,
+          // Don't log sensitive data, just structure
+          iss: payload.iss,
+          aud: payload.aud,
+          sub: payload.sub,
+          exp: payload.exp,
+          iat: payload.iat
+        });
+        
       } catch (decodeError) {
         console.log("Could not decode token payload:", decodeError);
       }
       
+      console.log("🚀 ATTEMPTING VERIFICATION...");
       verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value, });
+      console.log("✅ VERIFICATION COMPLETED");
       console.log("verified", verified)
     } catch (verifyError) {
       console.error("Error during token verification:", verifyError);
