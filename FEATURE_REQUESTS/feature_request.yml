@@ -1,0 +1,19 @@
+---
+name: 'Implement video upload system with drag-and-drop and progress tracking'
+about: 'A feature request for implementing a video upload system that includes drag-and-drop functionality and progress tracking.'
+labels: ['enhancement', 'needs-discussion']
+---
+
+## Detailed Description
+
+The goal is to create a robust video upload system that allows users to easily upload videos using drag-and-drop functionality. Additionally, the system should provide real-time progress tracking during the upload process. This feature aims to enhance user experience by simplifying video uploads and keeping users informed of upload status.
+
+### Requirements:
+- Implement drag-and-drop interface for video uploads.
+- Provide visual progress tracking during uploads.
+- Ensure compatibility with various video formats and sizes.
+- Implement error handling for failed uploads.
+- Consider user feedback for further enhancements.
+
+### Expected Outcome:
+A fully functional video upload system that improves user engagement and streamlines the content submission process.
