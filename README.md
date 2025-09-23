@@ -33,6 +33,8 @@ Al Ummah Now aims to create a comprehensive Islamic content ecosystem including:
 
 A live deployment is available at: [https://al-ummah-now.templates.workers.dev](https://al-ummah-now.templates.workers.dev)
 
+*Updated to resolve merge conflicts*
+
 ## 🚀 Current Status
 
 **Phase**: Foundation Development (Video Portal UI)  
