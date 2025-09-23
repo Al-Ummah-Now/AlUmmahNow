@@ -54,6 +54,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
         ];
         if (user) {
             items.push({ label: "Profile", icon: "fa-user", href: "/en/profile", onClick: onClose });
+            items.push({ label: "Analytics", icon: "fa-chart-line", href: "/en/analytics", onClick: onClose });
             items.push({ label: "Settings", icon: "fa-cog", href: "/en/settings", onClick: onClose });
         }
         user
