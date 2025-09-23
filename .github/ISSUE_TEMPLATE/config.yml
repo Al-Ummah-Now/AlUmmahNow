@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📋 Project Board  
+    url: https://github.com/users/meywd/projects/1/views/1
+    about: Track development progress and milestones
+  - name: 💬 Discussions
+    url: https://github.com/meywd/AlUmmahNow/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 📚 Documentation
+    url: https://github.com/meywd/AlUmmahNow#-complete-documentation
+    about: Read the comprehensive project documentation
