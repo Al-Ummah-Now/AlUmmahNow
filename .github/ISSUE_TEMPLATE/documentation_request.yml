@@ -1,0 +1,206 @@
+---
+name: 📚 Documentation Request
+about: Request improvements or additions to documentation
+title: '[DOCS] '
+labels: ['documentation', 'needs-review']
+assignees: ''
+---
+
+## 📚 Documentation Type
+
+**What type of documentation needs attention?**
+- [ ] API Documentation
+- [ ] User Guide/Tutorial
+- [ ] Developer Documentation
+- [ ] Architecture Documentation
+- [ ] Installation/Setup Guide
+- [ ] Troubleshooting Guide
+- [ ] Contributing Guidelines
+- [ ] Islamic Guidelines/Values
+- [ ] Translation/Localization
+- [ ] Other: ___________
+
+## 🎯 Documentation Request
+
+**What documentation do you need?**
+
+### Missing Documentation:
+**Describe what documentation is missing or needs to be created.**
+
+### Existing Documentation Issues:
+**Describe problems with current documentation (unclear, outdated, incorrect, etc.)**
+
+### Documentation Improvement:
+**How can existing documentation be improved?**
+
+## 👥 Target Audience
+
+**Who is this documentation for?**
+- [ ] End Users (Video Viewers)
+- [ ] Content Creators
+- [ ] Developers (Frontend)
+- [ ] Developers (Backend)
+- [ ] System Administrators
+- [ ] Contributors/Community
+- [ ] Islamic Scholars/Reviewers
+- [ ] Translators
+
+## 🔍 Current Pain Points
+
+**What problems does the lack of documentation cause?**
+- Difficulty understanding how to...
+- Users frequently ask about...
+- Development is slowed by...
+- Onboarding is difficult because...
+
+## 📖 Proposed Content Structure
+
+**How should this documentation be organized?**
+
+### Table of Contents:
+1. 
+2. 
+3. 
+
+### Key Topics to Cover:
+- 
+- 
+- 
+
+### Examples Needed:
+- Code examples
+- Screenshots
+- Step-by-step tutorials
+- Video walkthroughs
+
+## 🌍 Localization Requirements
+
+**Should this documentation be available in multiple languages?**
+- [ ] English only
+- [ ] Arabic translation needed
+- [ ] Both languages from start
+- [ ] Other languages: ___________
+
+### Cultural Considerations:
+- Islamic terminology usage
+- Cultural sensitivity requirements
+- Region-specific information
+
+## 📱 Platform Coverage
+
+**Which platforms should this documentation cover?**
+- [ ] Web Application
+- [ ] Mobile Web
+- [ ] API Usage
+- [ ] Admin Panel
+- [ ] Development Environment
+- [ ] Deployment/Production
+
+## 🔧 Technical Requirements
+
+**What technical aspects need documentation?**
+
+### Code Examples:
+- [ ] TypeScript/JavaScript
+- [ ] API requests/responses
+- [ ] Configuration files
+- [ ] Database schemas
+- [ ] Deployment scripts
+
+### Diagrams Needed:
+- [ ] Architecture diagrams
+- [ ] User flow diagrams
+- [ ] Database ERD
+- [ ] API flow charts
+- [ ] UI mockups
+
+## 📊 Format Preferences
+
+**How should this documentation be delivered?**
+- [ ] Markdown files in repository
+- [ ] Wiki pages
+- [ ] Interactive tutorials
+- [ ] Video documentation
+- [ ] API documentation site
+- [ ] PDF guides
+
+## 🚀 Priority Level
+
+**How urgent is this documentation?**
+- [ ] Critical - Blocking development/users
+- [ ] High - Significantly improves developer/user experience  
+- [ ] Medium - Good to have improvement
+- [ ] Low - Future enhancement
+
+## ✅ Success Criteria
+
+**How will we know this documentation is successful?**
+- [ ] Reduces support questions
+- [ ] Improves developer onboarding time
+- [ ] Increases community contributions
+- [ ] Better user adoption of features
+- [ ] Fewer implementation errors
+
+## 🔗 Related Resources
+
+**Link to existing documentation or related issues:**
+- Current documentation: 
+- Related issues: #
+- External references:
+- Similar documentation examples:
+
+## 📝 Content Draft
+
+**If you have ideas for the content, include them here:**
+
+```markdown
+<!-- Provide any draft content, outline, or specific text suggestions -->
+```
+
+## 🎨 Visual Requirements
+
+**Are there specific visual elements needed?**
+- [ ] Screenshots with annotations
+- [ ] Video demonstrations
+- [ ] Interactive examples
+- [ ] Code syntax highlighting
+- [ ] Diagrams and flowcharts
+
+### Screenshot Requirements:
+- [ ] English interface
+- [ ] Arabic interface (RTL)
+- [ ] Mobile view
+- [ ] Desktop view
+- [ ] Dark/light themes
+
+## 🤝 Contribution Offer
+
+**Are you willing to help create this documentation?**
+- [ ] Yes, I can write the content
+- [ ] Yes, I can provide technical review
+- [ ] Yes, I can help with translation
+- [ ] Yes, I can provide screenshots/examples
+- [ ] I can only provide requirements/feedback
+
+## 📋 Additional Context
+
+**Any other context about this documentation request:**
+
+### Use Cases:
+**Describe specific scenarios where this documentation would be helpful.**
+
+### Current Workarounds:
+**How are people currently solving this problem without documentation?**
+
+---
+
+**Documentation Maintenance Notes:**
+- [ ] Requires regular updates
+- [ ] Version-specific content
+- [ ] Needs automated testing
+- [ ] Should be linked from main documentation
+- [ ] Requires Islamic scholarly review
+
+---
+
+**Thank you for helping improve Al Ummah Now documentation! جزاكم الله خيراً**
