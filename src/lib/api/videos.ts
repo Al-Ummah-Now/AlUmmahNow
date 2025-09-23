@@ -554,6 +554,11 @@ export class VideosAPI {
     query: string,
     limit: number = 5
   ): Promise<SearchSuggestion[]> {
+    // In development/demo environment, return mock data immediately
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      return this.getMockSuggestions(query);
+    }
+    
     try {
       const queryParams = new URLSearchParams({
         q: query,
@@ -591,6 +596,11 @@ export class VideosAPI {
     category?: string,
     limit: number = 20
   ): Promise<VideoObject[]> {
+    // In development/demo environment, return mock data immediately to avoid network errors
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      return this.getMockTrendingVideos();
+    }
+    
     try {
       const queryParams = new URLSearchParams({
         period,
@@ -680,17 +690,21 @@ export class VideosAPI {
   }
 
   private static getMockTrendingVideos(): VideoObject[] {
+    // Use simple data URIs for placeholders to avoid external network calls
+    const videoThumbnail = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMzUgNzVMMTY1IDkwTDEzNSAxMDVWNzVaIiBmaWxsPSIjNjM2NzZEIi8+Cjx0ZXh0IHg9IjE2MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2MzY3NkQiPklzbGFtaWMgVmlkZW88L3RleHQ+Cjwvc3ZnPgo=';
+    const avatarPlaceholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iIzlCA0E0QjEiLz4KPHBhdGggZD0iTTggMzJDOCAyNi40NzcyIDEyLjQ3NzIgMjIgMTggMjJIMjJDMjcuNTIyOCAyMiAzMiAyNi40NzcyIDMyIDMyVjMySDhaIiBmaWxsPSIjOUNBM0FGIS8+Cjwvc3ZnPgo=';
+    
     return [
       {
         id: 'trending-1',
         title: 'Understanding Islamic Ethics in Modern Times',
         description: 'A comprehensive guide to applying Islamic principles in contemporary life',
-        thumbnailUrl: '/api/placeholder/320/180',
+        thumbnailUrl: videoThumbnail,
         videoUrl: '#',
         userId: 'user-1',
         channel: 'Islamic Studies',
         channelId: 'channel-1',
-        channelAvatarUrl: '/api/placeholder/40/40',
+        channelAvatarUrl: avatarPlaceholder,
         channelName: 'Islamic Studies',
         dateCreated: new Date(Date.now() - 86400000).toISOString(),
         dateModified: new Date(Date.now() - 86400000).toISOString(),
@@ -700,22 +714,86 @@ export class VideosAPI {
         commentsCount: 89,
         isPublic: true,
         isLive: false
+      },
+      {
+        id: 'trending-2',
+        title: 'The Beauty of Quran Recitation',
+        description: 'Experience the divine beauty of Quranic verses with proper Tajweed',
+        thumbnailUrl: videoThumbnail,
+        videoUrl: '#',
+        userId: 'user-2',
+        channel: 'Quran Academy',
+        channelId: 'channel-2',
+        channelAvatarUrl: avatarPlaceholder,
+        channelName: 'Quran Academy',
+        dateCreated: new Date(Date.now() - 172800000).toISOString(),
+        dateModified: new Date(Date.now() - 172800000).toISOString(),
+        views: 8734,
+        likesCount: 234,
+        dislikesCount: 8,
+        commentsCount: 56,
+        isPublic: true,
+        isLive: false
+      },
+      {
+        id: 'trending-3',
+        title: 'Islamic History: The Golden Age',
+        description: 'Discover the remarkable achievements during the Islamic Golden Age',
+        thumbnailUrl: videoThumbnail,
+        videoUrl: '#',
+        userId: 'user-3',
+        channel: 'History Channel',
+        channelId: 'channel-3',
+        channelAvatarUrl: avatarPlaceholder,
+        channelName: 'History Channel',
+        dateCreated: new Date(Date.now() - 259200000).toISOString(),
+        dateModified: new Date(Date.now() - 259200000).toISOString(),
+        views: 12450,
+        likesCount: 567,
+        dislikesCount: 15,
+        commentsCount: 123,
+        isPublic: true,
+        isLive: false
+      },
+      {
+        id: 'trending-4',
+        title: 'Prayer Guidance for New Muslims',
+        description: 'Step-by-step guide to performing the five daily prayers',
+        thumbnailUrl: videoThumbnail,
+        videoUrl: '#',
+        userId: 'user-4',
+        channel: 'Islamic Guidance',
+        channelId: 'channel-4',
+        channelAvatarUrl: avatarPlaceholder,
+        channelName: 'Islamic Guidance',
+        dateCreated: new Date(Date.now() - 345600000).toISOString(),
+        dateModified: new Date(Date.now() - 345600000).toISOString(),
+        views: 9876,
+        likesCount: 423,
+        dislikesCount: 7,
+        commentsCount: 89,
+        isPublic: true,
+        isLive: false
       }
     ];
   }
 
   private static getMockRecommendations(): VideoObject[] {
+    // Use simple data URIs for placeholders to avoid external network calls
+    const videoThumbnail = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMzUgNzVMMTY1IDkwTDEzNSAxMDVWNzVaIiBmaWxsPSIjNjM2NzZEIi8+Cjx0ZXh0IHg9IjE2MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2MzY3NkQiPklzbGFtaWMgVmlkZW88L3RleHQ+Cjwvc3ZnPgo=';
+    const avatarPlaceholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iIzlCA0E0QjEiLz4KPHBhdGggZD0iTTggMzJDOCAyNi40NzcyIDEyLjQ3NzIgMjIgMTggMjJIMjJDMjcuNTIyOCAyMiAzMiAyNi40NzcyIDMyIDMyVjMySDhaIiBmaWxsPSIjOUNBM0FGIS8+Cjwvc3ZnPgo=';
+    
     return [
       {
         id: 'rec-1',
         title: 'Recommended: Islamic Architecture Through Ages',
         description: 'Explore the beautiful architectural heritage of Islamic civilization',
-        thumbnailUrl: '/api/placeholder/320/180',
+        thumbnailUrl: videoThumbnail,
         videoUrl: '#',
         userId: 'user-2',
         channel: 'Islamic Heritage',
         channelId: 'channel-2',
-        channelAvatarUrl: '/api/placeholder/40/40',
+        channelAvatarUrl: avatarPlaceholder,
         channelName: 'Islamic Heritage',
         dateCreated: new Date(Date.now() - 172800000).toISOString(),
         dateModified: new Date(Date.now() - 172800000).toISOString(),
@@ -723,6 +801,26 @@ export class VideosAPI {
         likesCount: 234,
         dislikesCount: 8,
         commentsCount: 56,
+        isPublic: true,
+        isLive: false
+      },
+      {
+        id: 'rec-2',
+        title: 'Islamic Calligraphy: Art of Divine Words',
+        description: 'Learn the sacred art of Arabic calligraphy and its spiritual significance',
+        thumbnailUrl: videoThumbnail,
+        videoUrl: '#',
+        userId: 'user-5',
+        channel: 'Islamic Arts',
+        channelId: 'channel-5',
+        channelAvatarUrl: avatarPlaceholder,
+        channelName: 'Islamic Arts',
+        dateCreated: new Date(Date.now() - 432000000).toISOString(),
+        dateModified: new Date(Date.now() - 432000000).toISOString(),
+        views: 6543,
+        likesCount: 198,
+        dislikesCount: 4,
+        commentsCount: 67,
         isPublic: true,
         isLive: false
       }
