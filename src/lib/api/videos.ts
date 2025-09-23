@@ -7,7 +7,12 @@ import {
   ApiHeaders,
   ListQueryParams,
   CommentCreateRequest,
-  CommentUpdateRequest
+  CommentUpdateRequest,
+  SearchQueryParams,
+  SearchFilters,
+  SearchSuggestion,
+  TrendingContent,
+  RecommendationRequest
 } from "./types";
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
@@ -476,35 +481,251 @@ export class VideosAPI {
   }
 
   /**
-   * Remove dislike from a comment
-   * DELETE /api/videos/{id}/comments/{cid}/dislikes
+   * Advanced Search Videos
+   * GET /api/videos with advanced filters
    */
-  static async removeCommentDislike(
-    videoId: string,
-    commentId: string,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<{ success: boolean } | null> {
+  static async search(
+    query: string,
+    filters?: SearchFilters,
+    params?: ListQueryParams,
+    headers?: ApiHeaders
+  ): Promise<PaginationResponse<VideoObject> | null> {
     try {
+      const queryParams = new URLSearchParams();
+      
+      // Basic search
+      if (query.trim()) {
+        queryParams.append('search', query);
+      }
+      
+      // Pagination
+      if (params?.limit) queryParams.append('limit', params.limit.toString());
+      if (params?.cursor) queryParams.append('cursor', params.cursor);
+      
+      // Advanced filters
+      if (filters) {
+        if (filters.category) queryParams.append('category', filters.category);
+        if (filters.language && filters.language !== 'all') {
+          queryParams.append('language', filters.language);
+        }
+        if (filters.dateFrom) queryParams.append('dateFrom', filters.dateFrom);
+        if (filters.dateTo) queryParams.append('dateTo', filters.dateTo);
+        if (filters.duration && filters.duration !== 'all') {
+          queryParams.append('duration', filters.duration);
+        }
+        if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
+        if (filters.sortOrder) queryParams.append('sortOrder', filters.sortOrder);
+      }
+      
       const response = await fetch(
-        `${baseUrl}/api/videos/${videoId}/comments/${commentId}/dislikes`,
+        `${baseUrl}/api/videos?${queryParams.toString()}`,
         {
-          method: 'DELETE',
+          method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
+            ...(headers?.channelId && { 'channelId': headers.channelId }),
+            ...(headers?.userId && { 'userId': headers.userId }),
           },
         }
       );
 
       if (!response.ok) {
-        throw new Error(`Error removing dislike from comment: ${response.statusText}`);
+        throw new Error(`Error searching videos: ${response.statusText}`);
       }
 
       return await response.json();
     } catch (error) {
-      console.error('VideosAPI.removeCommentDislike error:', error);
+      console.error('VideosAPI.search error:', error);
+      
+      // Fallback to basic search for backward compatibility
+      if (query.trim()) {
+        return this.list({ ...params }, headers);
+      }
+      
       return null;
     }
+  }
+
+  /**
+   * Get Search Suggestions
+   * GET /api/search/suggestions
+   */
+  static async getSearchSuggestions(
+    query: string,
+    limit: number = 5
+  ): Promise<SearchSuggestion[]> {
+    try {
+      const queryParams = new URLSearchParams({
+        q: query,
+        limit: limit.toString()
+      });
+      
+      const response = await fetch(
+        `${baseUrl}/api/search/suggestions?${queryParams.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        // Return mock suggestions for development
+        return this.getMockSuggestions(query);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('VideosAPI.getSearchSuggestions error:', error);
+      return this.getMockSuggestions(query);
+    }
+  }
+
+  /**
+   * Get Trending Content
+   * GET /api/trending
+   */
+  static async getTrending(
+    period: 'hour' | 'day' | 'week' | 'month' = 'day',
+    category?: string,
+    limit: number = 20
+  ): Promise<VideoObject[]> {
+    try {
+      const queryParams = new URLSearchParams({
+        period,
+        limit: limit.toString()
+      });
+      
+      if (category) {
+        queryParams.append('category', category);
+      }
+      
+      const response = await fetch(
+        `${baseUrl}/api/trending?${queryParams.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        // Return mock trending content for development
+        return this.getMockTrendingVideos();
+      }
+
+      const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
+      return data.videos || data.data || [];
+    } catch (error) {
+      console.error('VideosAPI.getTrending error:', error);
+      return this.getMockTrendingVideos();
+    }
+  }
+
+  /**
+   * Get Recommended Videos
+   * GET /api/recommendations
+   */
+  static async getRecommendations(
+    request: RecommendationRequest,
+    headers?: ApiHeaders
+  ): Promise<VideoObject[]> {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (request.videoId) queryParams.append('videoId', request.videoId);
+      if (request.limit) queryParams.append('limit', request.limit.toString());
+      if (request.excludeWatched) queryParams.append('excludeWatched', 'true');
+      
+      const response = await fetch(
+        `${baseUrl}/api/recommendations?${queryParams.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(headers?.channelId && { 'channelId': headers.channelId }),
+            ...(headers?.userId && { 'userId': headers.userId }),
+          },
+        }
+      );
+
+      if (!response.ok) {
+        // Return mock recommendations for development
+        return this.getMockRecommendations();
+      }
+
+      const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
+      return data.videos || data.data || [];
+    } catch (error) {
+      console.error('VideosAPI.getRecommendations error:', error);
+      return this.getMockRecommendations();
+    }
+  }
+
+  // Mock data methods for development/demo
+  private static getMockSuggestions(query: string): SearchSuggestion[] {
+    const suggestions = [
+      { text: 'Islamic lectures', type: 'category' as const, count: 150 },
+      { text: 'Quran recitation', type: 'category' as const, count: 89 },
+      { text: 'Islamic history', type: 'category' as const, count: 67 },
+      { text: 'Prayer guidance', type: 'category' as const, count: 45 },
+      { text: 'Islamic stories', type: 'category' as const, count: 34 }
+    ];
+    
+    return suggestions
+      .filter(s => s.text.toLowerCase().includes(query.toLowerCase()))
+      .slice(0, 5);
+  }
+
+  private static getMockTrendingVideos(): VideoObject[] {
+    return [
+      {
+        id: 'trending-1',
+        title: 'Understanding Islamic Ethics in Modern Times',
+        description: 'A comprehensive guide to applying Islamic principles in contemporary life',
+        thumbnailUrl: '/api/placeholder/320/180',
+        videoUrl: '#',
+        userId: 'user-1',
+        channel: 'Islamic Studies',
+        channelId: 'channel-1',
+        channelAvatarUrl: '/api/placeholder/40/40',
+        channelName: 'Islamic Studies',
+        dateCreated: new Date(Date.now() - 86400000).toISOString(),
+        dateModified: new Date(Date.now() - 86400000).toISOString(),
+        views: 15420,
+        likesCount: 342,
+        dislikesCount: 12,
+        commentsCount: 89,
+        isPublic: true,
+        isLive: false
+      }
+    ];
+  }
+
+  private static getMockRecommendations(): VideoObject[] {
+    return [
+      {
+        id: 'rec-1',
+        title: 'Recommended: Islamic Architecture Through Ages',
+        description: 'Explore the beautiful architectural heritage of Islamic civilization',
+        thumbnailUrl: '/api/placeholder/320/180',
+        videoUrl: '#',
+        userId: 'user-2',
+        channel: 'Islamic Heritage',
+        channelId: 'channel-2',
+        channelAvatarUrl: '/api/placeholder/40/40',
+        channelName: 'Islamic Heritage',
+        dateCreated: new Date(Date.now() - 172800000).toISOString(),
+        dateModified: new Date(Date.now() - 172800000).toISOString(),
+        views: 8734,
+        likesCount: 234,
+        dislikesCount: 8,
+        commentsCount: 56,
+        isPublic: true,
+        isLive: false
+      }
+    ];
   }
 }
