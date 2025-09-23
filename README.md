@@ -8,19 +8,34 @@ This repository contains the frontend user interface for the Al Ummah Now video 
 
 Al Ummah Now aims to create a comprehensive Islamic content ecosystem including:
 - **Video Portal** (this repository) - Video sharing and consumption platform
-- **News Website** - Islamic news and articles
+- **News Website** - Islamic news and articles  
 - **Academy Platform** - Educational courses and learning paths
 - **Community Features** - Discussion, messaging, and interaction tools
 
-## 📋 Project Documentation
+## 📋 Complete Documentation
 
-- **[📈 ROADMAP.md](./ROADMAP.md)** - Comprehensive development roadmap and milestones
-- **[⚡ FEATURES.md](./FEATURES.md)** - Detailed feature analysis and implementation status
-- **[🏗️ ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical architecture and system design
+### 📊 Project Planning & Analysis
+- **[🗺️ ROADMAP.md](./ROADMAP.md)** - Comprehensive 4-phase development roadmap with timeline and milestones
+- **[📊 FEATURES.md](./FEATURES.md)** - Current implementation analysis (~60% complete) and missing features  
+- **[🏗️ ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical system design and microservices architecture
+
+### 🤝 Contributing & Development
+- **[🤝 CONTRIBUTING.md](./CONTRIBUTING.md)** - Developer guidelines, setup instructions, and contribution workflow
+- **[🐛 Bug Reports](./.github/ISSUE_TEMPLATE/bug_report.yml)** - Report bugs and issues
+- **[✨ Feature Requests](./.github/ISSUE_TEMPLATE/feature_request.yml)** - Suggest new features and enhancements
+- **[📚 Documentation Requests](./.github/ISSUE_TEMPLATE/documentation_request.yml)** - Request documentation improvements
+
+### 🔗 Project Management
+- **[📋 Project Board](https://github.com/users/meywd/projects/1/views/1)** - Track development progress and milestones
+- **[📋 Issues](https://github.com/meywd/AlUmmahNow/issues)** - Current tasks, bugs, and feature requests
+
+## 🌐 Live Demo
+
+A live deployment is available at: [https://al-ummah-now.templates.workers.dev](https://al-ummah-now.templates.workers.dev)
 
 ## 🚀 Current Status
 
-**Phase**: Foundation Development (Video Portal UI)
+**Phase**: Foundation Development (Video Portal UI)  
 **Progress**: ~60% Complete
 
 ### ✅ Implemented Features
@@ -49,10 +64,6 @@ Al Ummah Now aims to create a comprehensive Islamic content ecosystem including:
 - **Styling**: Tailwind CSS with dark/light themes
 - **Internationalization**: Built-in RTL support
 
-## 🌐 Live Demo
-
-A live deployment is available at: [https://al-ummah-now.templates.workers.dev](https://al-ummah-now.templates.workers.dev)
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -69,7 +80,23 @@ npm install
 ```
 
 2. **Set up environment variables:**
+git clone https://github.com/meywd/AlUmmahNow.git
+cd AlUmmahNow
+npm install
+```
+
+2. **Set up environment variables:**
 ```bash
+# Copy example environment file
+cp .env.example .env.local
+
+# Configure required variables:
+# - NEXT_PUBLIC_API_URL: Backend API endpoint
+# - ClientId: OAuth client ID
+# - Issuer: OAuth issuer URL
+```
+
+3. **Start development server:**
 # Copy example environment file
 cp .env.example .env.local
 
@@ -182,6 +209,8 @@ We welcome contributions to the Al Ummah Now platform:
 - Test both English and Arabic layouts
 - Ensure mobile responsiveness
 - Add JSDoc comments for complex functions
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
 
 ## 📊 Analytics & Monitoring
 

@@ -65,19 +65,19 @@ The Al Ummah Now ecosystem is designed as a microservices architecture hosted on
 
 - **Domain & Hosting**: Cloudflare (domains, workers, storage, CDN)
 - **Media & CDN**: Bunny.net for video delivery and storage
-- **Database**: (To be determined - likely Cloudflare D1 or external)
+- **Database**: Cloudflare D1 for metadata and user data
 - **Analytics**: Cloudflare Analytics and custom metrics
 
 ## Current State Analysis
 
 ### Video Portal UI (Current Repository)
-**Status**: 🟡 Partially Implemented
+**Status**: 🟡 Partially Implemented (~60% Complete)
 
 **Implemented Features**:
 - ✅ Next.js 15 with TypeScript
 - ✅ Cloudflare Workers deployment via OpenNext
 - ✅ Video player using Video.js
-- ✅ OpenAPI-based API client architecture
+- ✅ Complete OpenAPI-based API client architecture
 - ✅ Authentication with OpenAuth
 - ✅ Bilingual support (English/Arabic) with RTL
 - ✅ Basic video browsing and search
@@ -95,400 +95,278 @@ The Al Ummah Now ecosystem is designed as a microservices architecture hosted on
 - Playlists: List, Get, Create, Update, Delete, Add/Remove videos
 - Comments: Create, Update, Delete (interfaces ready)
 
-**Missing Features**:
-- 🔴 Live streaming support
+**Missing Critical Features**:
 - 🔴 Video upload functionality
-- 🔴 Advanced search filters
-- 🔴 Subscription management
-- 🔴 Notification system
-- 🔴 Advanced analytics dashboard
+- 🔴 Real-time notifications and WebSocket integration
+- 🔴 Advanced search filters and content discovery
+- 🔴 Subscription management system
 - 🔴 Content moderation tools
-- 🔴 Mobile app companion
+- 🔴 Live streaming support
+- 🔴 Mobile app optimization
+- 🔴 Advanced analytics dashboard
 
-## Detailed Roadmaps by Component
+## Development Roadmap
 
-## Phase 1: Foundation (Q1 2024)
+## Phase 1: Foundation (Q1 2024) - 12-14 weeks
 
-### 1.1 Video Portal UI Completion
-**Repository**: `meywd/AlUmmahNow`
-**Duration**: 6-8 weeks
-**Priority**: High
+### 1.1 Video Portal UI Completion (This Repository)
+**Duration**: 6-8 weeks | **Priority**: High
 
-**Features to Implement**:
-- [ ] Video upload functionality with progress tracking
-- [ ] Advanced video search with filters (date, duration, category)
-- [ ] Subscription system (subscribe to channels)
-- [ ] Notification system (new videos, comments, likes)
-- [ ] Video quality selection and adaptive streaming
-- [ ] Video analytics dashboard for creators
-- [ ] Content moderation interface
-- [ ] Mobile responsive optimization
-- [ ] SEO optimization and meta tags
-- [ ] Performance optimizations and caching
+**Critical Features to Implement**:
+- [ ] **Video Upload System** - Drag-and-drop upload with progress tracking
+- [ ] **Real-time Features** - WebSocket integration for live updates
+- [ ] **Advanced Search** - Filters, suggestions, and content discovery
+- [ ] **Subscription System** - Channel subscriptions and notifications
+- [ ] **Content Moderation** - Admin interface and reporting tools
+- [ ] **Analytics Dashboard** - Creator performance metrics
+- [ ] **Mobile Optimization** - PWA features and responsive design
+- [ ] **Performance Optimization** - Caching and loading improvements
 
-**Technical Tasks**:
-- [ ] Integrate with Bunny.net video upload API
-- [ ] Implement WebSocket connections for real-time updates
-- [ ] Add video processing status tracking
-- [ ] Implement advanced search backend integration
-- [ ] Add comprehensive error handling and retry logic
-- [ ] Implement progressive web app (PWA) features
-- [ ] Add automated testing suite
+**Technical Implementation**:
+- [ ] Bunny.net video upload API integration
+- [ ] WebSocket connections for real-time updates
+- [ ] Advanced search backend integration
+- [ ] Comprehensive error handling and retry logic
+- [ ] Progressive web app (PWA) implementation
+- [ ] Automated testing suite
 
-### 1.2 API Backend Development
-**Repository**: `meywd/AlUmmahNowVideos`
-**Duration**: 8-10 weeks
-**Priority**: High
+### 1.2 API Backend Development (`meywd/AlUmmahNowVideos`)
+**Duration**: 8-10 weeks | **Priority**: High
 
 **Core Features**:
 - [ ] RESTful API with OpenAPI specification
-- [ ] Video metadata management
-- [ ] User and channel management
-- [ ] Playlist and collection management
+- [ ] Video metadata and file management
+- [ ] User authentication and channel management
 - [ ] Comment and interaction systems
 - [ ] Search and recommendation engine
 - [ ] Content moderation API
 - [ ] Analytics and metrics collection
-- [ ] Rate limiting and security measures
 
-**Technical Implementation**:
-- [ ] Node.js/TypeScript with Fastify or Express
-- [ ] Database schema design (Cloudflare D1 or PostgreSQL)
-- [ ] File storage integration (Cloudflare R2)
-- [ ] Video processing pipeline (FFmpeg integration)
-- [ ] Caching layer (Redis or Cloudflare KV)
-- [ ] API documentation and testing
-- [ ] CI/CD pipeline setup
-- [ ] Monitoring and logging
+**Technical Stack**:
+- Node.js/TypeScript with Fastify framework
+- Cloudflare D1 database for metadata
+- Cloudflare R2 for file storage
+- Video processing pipeline with FFmpeg
+- Caching layer with Cloudflare KV
+- Comprehensive API documentation
 
-**API Endpoints to Implement**:
-```
-Videos:
-  GET    /api/videos              - List videos with filters
-  GET    /api/videos/{id}         - Get video details
-  POST   /api/videos              - Upload new video
-  PUT    /api/videos/{id}         - Update video
-  DELETE /api/videos/{id}         - Delete video
-  POST   /api/videos/{id}/like    - Like video
-  DELETE /api/videos/{id}/like    - Unlike video
-  POST   /api/videos/{id}/view    - Record view
-  GET    /api/videos/{id}/stats   - Get video statistics
-
-Channels:
-  GET    /api/channels            - List channels
-  GET    /api/channels/{id}       - Get channel details
-  POST   /api/channels            - Create channel
-  PUT    /api/channels/{id}       - Update channel
-  DELETE /api/channels/{id}       - Delete channel
-  POST   /api/channels/{id}/subscribe - Subscribe to channel
-  GET    /api/channels/{id}/videos    - Get channel videos
-
-Search:
-  GET    /api/search              - Global search
-  GET    /api/search/videos       - Video search
-  GET    /api/search/channels     - Channel search
-  GET    /api/search/suggestions  - Search suggestions
-
-Upload:
-  POST   /api/upload/initiate     - Initiate upload
-  POST   /api/upload/chunk        - Upload video chunk
-  POST   /api/upload/complete     - Complete upload
-  GET    /api/upload/status       - Get upload status
-```
-
-### 1.3 SSO Authentication Service
-**Repository**: `meywd/AlUmmahNowAuth`
-**Duration**: 4-6 weeks
-**Priority**: High
+### 1.3 SSO Authentication Service (`meywd/AlUmmahNowAuth`)
+**Duration**: 4-6 weeks | **Priority**: High
 
 **Features**:
 - [ ] OAuth 2.0 / OpenID Connect implementation
-- [ ] JWT token management
+- [ ] JWT token management with refresh rotation
 - [ ] User registration and profile management
-- [ ] Password reset and email verification
 - [ ] Multi-factor authentication
-- [ ] Session management
-- [ ] Integration with external providers (Google, Apple)
-- [ ] Admin panel for user management
+- [ ] External provider integration (Google, Apple)
+- [ ] Session management and security
 
-**Technical Implementation**:
-- [ ] OpenAuth framework continuation
-- [ ] Database for user storage
-- [ ] Email service integration
-- [ ] Security hardening
-- [ ] Rate limiting for auth endpoints
-- [ ] Audit logging
+## Phase 2: Core Platform (Q2 2024) - 16-20 weeks
 
-## Phase 2: Core Platform (Q2 2024)
-
-### 2.1 Events Processor
-**Repository**: `meywd/AlUmmahNowProcessor`
-**Duration**: 6-8 weeks
-**Priority**: Medium
+### 2.1 Events Processor (`meywd/AlUmmahNowProcessor`)
+**Duration**: 6-8 weeks | **Priority**: Medium
 
 **Features**:
-- [ ] Real-time event streaming
-- [ ] Analytics data processing
-- [ ] Recommendation engine
-- [ ] Content popularity tracking
-- [ ] User behavior analysis
-- [ ] Automated content tagging
-- [ ] Spam and abuse detection
-- [ ] Performance metrics collection
+- [ ] Real-time event streaming infrastructure
+- [ ] Analytics data processing and insights
+- [ ] Content recommendation algorithms
+- [ ] User behavior analysis and tracking
+- [ ] Automated content tagging and categorization
+- [ ] Spam and abuse detection systems
 
-**Technical Implementation**:
-- [ ] Event streaming with Cloudflare Workers
-- [ ] Message queue system
-- [ ] Machine learning model integration
-- [ ] Time-series database for analytics
-- [ ] Real-time dashboard
-- [ ] Alert and notification system
-
-### 2.2 Main Portal CMS Backend
-**Repository**: `meywd/AlUmmahNowCMS`
-**Duration**: 8-10 weeks
-**Priority**: Medium
+### 2.2 Main Portal CMS Backend (`meywd/AlUmmahNowCMS`)
+**Duration**: 8-10 weeks | **Priority**: Medium
 
 **Features**:
-- [ ] Article and news management
-- [ ] Editorial workflow
-- [ ] Content scheduling
-- [ ] Media library management
+- [ ] Article and news content management
+- [ ] Editorial workflow and publishing system
+- [ ] Media library and asset management
 - [ ] SEO optimization tools
 - [ ] Multi-language content support
-- [ ] Content versioning
-- [ ] Social media integration
+- [ ] Content scheduling and automation
 
-**Technical Implementation**:
-- [ ] Headless CMS architecture
-- [ ] Rich text editor integration
-- [ ] Image optimization pipeline
-- [ ] Content delivery optimization
-- [ ] Editorial review system
-- [ ] Publishing automation
-
-## Phase 3: Expansion (Q3 2024)
-
-### 3.1 Main Portal Frontend
-**Duration**: 6-8 weeks
-**Priority**: Medium
+### 2.3 Main Portal Frontend
+**Duration**: 6-8 weeks | **Priority**: Medium
 
 **Features**:
-- [ ] News website frontend
-- [ ] Article browsing and reading
-- [ ] Category and tag navigation
-- [ ] Author profiles
-- [ ] Related content suggestions
-- [ ] Social sharing
-- [ ] Newsletter subscription
-- [ ] Mobile optimization
+- [ ] News website frontend with Next.js
+- [ ] Article browsing and reading experience
+- [ ] Category and tag-based navigation
+- [ ] Author profiles and bylines
+- [ ] Related content recommendations
+- [ ] Social sharing and newsletter integration
 
-### 3.2 Academy Platform
-**Duration**: 10-12 weeks
-**Priority**: Medium
+## Phase 3: Educational Platform (Q3 2024) - 10-12 weeks
+
+### 3.1 Academy Platform
+**Duration**: 10-12 weeks | **Priority**: Medium
 
 **Features**:
-- [ ] Course management system
+- [ ] Course management and curriculum system
 - [ ] Video-based learning modules
-- [ ] Progress tracking
-- [ ] Quizzes and assessments
-- [ ] Certification system
-- [ ] Discussion forums
-- [ ] Instructor tools
-- [ ] Student dashboard
+- [ ] Student progress tracking and analytics
+- [ ] Quizzes, assessments, and evaluations
+- [ ] Certification and achievement system
+- [ ] Discussion forums and community features
+- [ ] Instructor tools and dashboards
 
 **Technical Implementation**:
-- [ ] Learning Management System (LMS) core
-- [ ] Video streaming for education
-- [ ] Assessment engine
-- [ ] Progress analytics
-- [ ] Certificate generation
-- [ ] Integration with main video platform
+- Learning Management System (LMS) core
+- Video streaming optimized for education
+- Assessment and quiz engine
+- Progress analytics and reporting
+- Certificate generation system
+- Integration with main video platform
 
-## Phase 4: Advanced Features (Q4 2024)
+## Phase 4: Advanced Features (Q4 2024) - 16-20 weeks
 
 ### 4.1 AI Chat Integration
-**Duration**: 8-10 weeks
-**Priority**: Low
+**Duration**: 8-10 weeks | **Priority**: Low
 
 **Features**:
-- [ ] Islamic knowledge chatbot
-- [ ] Content discovery assistance
-- [ ] Learning path recommendations
-- [ ] Q&A support
-- [ ] Multi-language support
-- [ ] Integration with video content
-- [ ] Scholarly reference system
-
-**Technical Implementation**:
-- [ ] LLM integration (Claude, GPT, or local models)
-- [ ] Islamic knowledge base
-- [ ] Context-aware responses
-- [ ] Citation and reference system
-- [ ] Conversation memory
-- [ ] Moderation and safety filters
+- [ ] Islamic knowledge chatbot with scholarly accuracy
+- [ ] Content discovery and recommendation assistance
+- [ ] Learning path suggestions and guidance
+- [ ] Q&A support with referenced answers
+- [ ] Multi-language support (Arabic/English)
+- [ ] Integration with video and course content
 
 ### 4.2 Real-time Messaging
-**Duration**: 10-12 weeks
-**Priority**: Low
+**Duration**: 10-12 weeks | **Priority**: Low
 
 **Features**:
 - [ ] Direct messaging between users
-- [ ] Group chats and communities
-- [ ] File and media sharing
+- [ ] Group chats and community discussions
+- [ ] File and media sharing capabilities
 - [ ] Live chat during video streams
-- [ ] Message encryption
-- [ ] Moderation tools
-- [ ] Notification system
-
-**Technical Implementation**:
-- [ ] WebSocket infrastructure
-- [ ] Message queue system
-- [ ] End-to-end encryption
-- [ ] File upload and sharing
-- [ ] Real-time presence indicators
-- [ ] Message history and search
+- [ ] Message encryption and privacy
+- [ ] Comprehensive moderation tools
 
 ### 4.3 Web Archive
-**Duration**: 6-8 weeks
-**Priority**: Low
+**Duration**: 6-8 weeks | **Priority**: Low
 
 **Features**:
-- [ ] Historical content preservation
-- [ ] Automated backup system
-- [ ] Version control for content
-- [ ] Disaster recovery
-- [ ] Content migration tools
-- [ ] Archive search functionality
-- [ ] Data export capabilities
-
-## Development Priorities and Timeline
-
-### High Priority (Must Have - Phase 1)
-1. **Video Portal UI Completion** - 6-8 weeks
-2. **API Backend Development** - 8-10 weeks  
-3. **SSO Authentication** - 4-6 weeks
-
-**Total Phase 1 Duration**: 12-14 weeks (parallel development)
-
-### Medium Priority (Should Have - Phases 2-3)
-4. **Events Processor** - 6-8 weeks
-5. **Main Portal CMS** - 8-10 weeks
-6. **Main Portal Frontend** - 6-8 weeks
-7. **Academy Platform** - 10-12 weeks
-
-**Total Phase 2-3 Duration**: 20-24 weeks
-
-### Low Priority (Nice to Have - Phase 4)
-8. **AI Chat Integration** - 8-10 weeks
-9. **Real-time Messaging** - 10-12 weeks
-10. **Web Archive** - 6-8 weeks
-
-**Total Phase 4 Duration**: 16-20 weeks
+- [ ] Historical content preservation system
+- [ ] Automated backup and disaster recovery
+- [ ] Content versioning and change tracking
+- [ ] Archive search and discovery tools
+- [ ] Data export and migration capabilities
 
 ## Technical Requirements
 
-### Development Stack
+### Infrastructure Stack
 - **Frontend**: Next.js 15, TypeScript, Tailwind CSS
 - **Backend**: Node.js/TypeScript, Fastify/Express
-- **Database**: Cloudflare D1 or PostgreSQL
+- **Database**: Cloudflare D1, PostgreSQL for complex queries
 - **Authentication**: OpenAuth/OAuth 2.0
 - **Deployment**: Cloudflare Workers, Pages
-- **Storage**: Cloudflare R2, Bunny.net
-- **CDN**: Cloudflare, Bunny.net
-
-### Infrastructure Requirements
-- **Cloudflare Services**:
-  - Workers (compute)
-  - Pages (static hosting)
-  - R2 (object storage)
-  - D1 (database)
-  - KV (caching)
-  - Analytics
-  - Domain management
-
-- **Bunny.net Services**:
-  - Video streaming
-  - Video storage
-  - CDN for media delivery
-  - Video processing
-
-### Security Considerations
-- [ ] HTTPS everywhere
-- [ ] Content Security Policy (CSP)
-- [ ] Rate limiting and DDoS protection
-- [ ] Input validation and sanitization
-- [ ] Secure authentication flow
-- [ ] Data encryption at rest and in transit
-- [ ] Regular security audits
-- [ ] Compliance with data protection laws
+- **Storage**: Cloudflare R2, Bunny.net for media
+- **CDN**: Cloudflare global network, Bunny.net
 
 ### Performance Targets
 - [ ] Page load time < 3 seconds
-- [ ] Video start time < 2 seconds
+- [ ] Video start time < 2 seconds  
 - [ ] 99.9% uptime SLA
 - [ ] Support for 10,000+ concurrent users
-- [ ] Global CDN coverage
-- [ ] Mobile-first performance optimization
+- [ ] Global CDN coverage and optimization
 
-## Success Metrics
+### Security Requirements
+- [ ] HTTPS everywhere with TLS 1.3
+- [ ] Content Security Policy (CSP) implementation
+- [ ] Rate limiting and DDoS protection
+- [ ] Input validation and sanitization
+- [ ] Secure authentication flows
+- [ ] Data encryption at rest and in transit
+
+## Success Metrics and KPIs
 
 ### User Engagement
-- Monthly Active Users (MAU)
-- Daily Active Users (DAU)
-- Average session duration
-- Video completion rates
-- User retention rates
+- Monthly Active Users (MAU) growth
+- Daily Active Users (DAU) retention
+- Average session duration increase
+- Video completion rates improvement
+- User-generated content volume
 
 ### Content Metrics
-- Total videos uploaded
-- Total watch time
-- Content creator adoption
-- User-generated content volume
+- Total videos uploaded per month
+- Total watch time and engagement
+- Content creator adoption and retention
+- Search success and relevance rates
 - Content discovery effectiveness
 
-### Technical Metrics
-- Page load performance
-- Video streaming quality
-- Error rates and uptime
-- API response times
-- Search relevance scores
-
-## Risk Assessment and Mitigation
-
-### Technical Risks
-- **Risk**: Cloudflare service limitations
-  - **Mitigation**: Design for multi-cloud architecture
-- **Risk**: Video processing scalability
-  - **Mitigation**: Implement queue-based processing
-- **Risk**: Database performance at scale
-  - **Mitigation**: Implement caching and read replicas
-
-### Business Risks
-- **Risk**: Content moderation challenges
-  - **Mitigation**: Implement AI-assisted moderation
-- **Risk**: Legal compliance issues
-  - **Mitigation**: Regular legal review and compliance audits
-- **Risk**: Competition from larger platforms
-  - **Mitigation**: Focus on Islamic niche and community building
+### Technical Performance
+- Page load speed and Core Web Vitals
+- Video streaming quality and buffering
+- API response times and error rates
+- Search relevance and accuracy scores
+- System uptime and reliability
 
 ## Resource Requirements
 
 ### Development Team
-- **Phase 1**: 3-4 developers (full-stack, frontend, backend)
-- **Phase 2-3**: 4-6 developers (adding DevOps, UI/UX)
-- **Phase 4**: 6-8 developers (adding AI/ML specialist)
+- **Phase 1**: 3-4 developers (full-stack, frontend, backend specialists)
+- **Phase 2-3**: 4-6 developers (adding DevOps and UI/UX expertise)
+- **Phase 4**: 6-8 developers (including AI/ML and mobile specialists)
 
-### Infrastructure Costs (Estimated Monthly)
-- **Phase 1**: $200-500/month (Cloudflare + Bunny.net)
-- **Phase 2**: $500-1000/month (increased usage)
-- **Phase 3**: $1000-2000/month (full platform)
-- **Phase 4**: $2000-5000/month (enterprise features)
+### Infrastructure Costs (Monthly Estimates)
+- **Phase 1**: $200-500 (Cloudflare + Bunny.net basic usage)
+- **Phase 2**: $500-1000 (increased usage and features)
+- **Phase 3**: $1000-2000 (full platform with educational content)
+- **Phase 4**: $2000-5000 (enterprise features and AI integration)
+
+## Risk Assessment
+
+### Technical Risks
+- **Cloudflare service limitations**: Mitigate with multi-cloud architecture design
+- **Video processing scalability**: Implement queue-based processing with auto-scaling
+- **Database performance at scale**: Use caching layers and read replicas
+
+### Business Risks  
+- **Content moderation challenges**: Implement AI-assisted moderation with human oversight
+- **Legal compliance requirements**: Regular legal review and compliance audits
+- **Competition from established platforms**: Focus on Islamic niche and community building
+
+## Project Management
+
+### Development Methodology
+- 2-week sprint cycles with regular demos
+- Continuous integration and deployment
+- User feedback integration at each phase
+- Cross-repository coordination and dependencies
+
+### Quality Assurance
+- Automated testing at all levels (unit, integration, e2e)
+- Performance monitoring and alerting
+- Security audits and penetration testing
+- User acceptance testing for each feature
+
+### Documentation Standards
+- API documentation with OpenAPI specifications
+- Component documentation with Storybook
+- User guides and tutorials
+- Technical architecture documentation
+
+## Integration with Project Board
+
+All roadmap items are tracked in the main project board: https://github.com/users/meywd/projects/1/views/1
+
+### Project Board Structure
+- **Backlog**: All planned features and enhancements
+- **To Do**: Ready for development (next 2-3 sprints)
+- **In Progress**: Currently being developed
+- **Review**: Completed and awaiting review/testing
+- **Done**: Completed and deployed features
+
+### Cross-Repository Coordination
+- Issues linked across all ecosystem repositories
+- Dependencies tracked and managed
+- Regular cross-team synchronization meetings
+- Shared milestones and delivery targets
 
 ## Conclusion
 
-This roadmap provides a comprehensive plan for developing the Al Ummah Now ecosystem from the current state to a full-featured Islamic content platform. The phased approach ensures that critical functionality is delivered first, with advanced features added progressively.
+This roadmap transforms Al Ummah Now from a basic video portal into a comprehensive Islamic content ecosystem. The phased approach ensures critical functionality is delivered first, with advanced features added progressively based on user feedback and adoption.
 
-The focus on Cloudflare infrastructure provides scalability and global reach, while the microservices architecture ensures maintainability and allows for independent development and deployment of different components.
+The focus on Cloudflare infrastructure provides global scalability, while the microservices architecture ensures maintainability and independent development across teams. Success depends on careful execution of Phase 1 to establish a solid foundation, followed by iterative development guided by community needs and Islamic values.
 
-Success will depend on careful execution of Phase 1 to establish a solid foundation, followed by iterative development based on user feedback and adoption metrics.
+The ultimate goal is to create a platform that serves the global Muslim community with high-quality Islamic content, educational resources, and meaningful social connections while maintaining the highest standards of technical excellence and user experience.
