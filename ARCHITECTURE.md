@@ -2,15 +2,17 @@
 
 ## System Architecture Overview
 
-The Al Ummah Now platform is designed as a distributed microservices architecture deployed on Cloudflare infrastructure, with external media delivery via Bunny.net.
+The Al Ummah Now platform is designed as a distributed microservices architecture deployed on Cloudflare infrastructure, with external media delivery via Bunny.net. This architecture ensures scalability, performance, and global reach for the Islamic content ecosystem.
+
+## High-Level Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Al Ummah Now Ecosystem                      │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
+│                        Client Layer                             │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │   Web Frontend  │  │  Mobile App     │  │   Admin Panel   │ │
+│  │   Web Frontend  │  │  Mobile Apps    │  │   Admin Panel   │ │
 │  │                 │  │                 │  │                 │ │
 │  │  - Video Portal │  │  - iOS/Android  │  │  - Content Mgmt │ │
 │  │  - News Site    │  │  - Native Video │  │  - User Mgmt    │ │
@@ -18,9 +20,9 @@ The Al Ummah Now platform is designed as a distributed microservices architectur
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
 │           │                     │                     │         │
 ├───────────┼─────────────────────┼─────────────────────┼─────────┤
-│           │                     │                     │         │
+│                           API Gateway Layer                     │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │                    API Gateway                             │ │
+│  │                    Cloudflare Workers                      │ │
 │  │                                                            │ │
 │  │  - Authentication & Authorization                         │ │
 │  │  - Rate Limiting & Security                               │ │
@@ -29,7 +31,7 @@ The Al Ummah Now platform is designed as a distributed microservices architectur
 │  └─────────────────────────────────────────────────────────────┘ │
 │           │                     │                     │         │
 ├───────────┼─────────────────────┼─────────────────────┼─────────┤
-│           │                     │                     │         │
+│                          Microservices Layer                   │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
 │  │   Video API     │  │   Auth Service  │  │   CMS API       │ │
 │  │                 │  │                 │  │                 │ │
@@ -49,182 +51,158 @@ The Al Ummah Now platform is designed as a distributed microservices architectur
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
 │           │                     │                     │         │
 ├───────────┼─────────────────────┼─────────────────────┼─────────┤
-│           │                     │                     │         │
+│                            Data Layer                           │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │                    Data Layer                              │ │
+│  │                    Cloudflare Services                     │ │
 │  │                                                            │ │
 │  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │ │
-│  │  │ Primary DB   │ │   Cache      │ │   Search     │       │ │
+│  │  │ D1 Database  │ │   KV Store   │ │   R2 Storage │       │ │
 │  │  │              │ │              │ │              │       │ │
-│  │  │ - User Data  │ │ - Sessions   │ │ - Content    │       │ │
-│  │  │ - Videos     │ │ - API Cache  │ │ - Users      │       │ │
-│  │  │ - Content    │ │ - Temp Data  │ │ - Analytics  │       │ │
+│  │  │ - User Data  │ │ - Sessions   │ │ - Video Files│       │ │
+│  │  │ - Videos     │ │ - Cache      │ │ - Images     │       │ │
+│  │  │ - Content    │ │ - Config     │ │ - Documents  │       │ │
 │  │  └──────────────┘ └──────────────┘ └──────────────┘       │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 │           │                     │                     │         │
 ├───────────┼─────────────────────┼─────────────────────┼─────────┤
-│           │                     │                     │         │
+│                        External Services Layer                 │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │                External Services                           │ │
+│  │                External Integrations                       │ │
 │  │                                                            │ │
 │  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │ │
-│  │  │ Media CDN    │ │  Email       │ │  Monitoring  │       │ │
+│  │  │ Bunny.net    │ │  Email       │ │  Monitoring  │       │ │
 │  │  │              │ │              │ │              │       │ │
-│  │  │ - Video      │ │ - Notifications│ │ - Logs      │       │ │
-│  │  │ - Images     │ │ - Marketing  │ │ - Metrics    │       │ │
-│  │  │ - Assets     │ │ - Support    │ │ - Alerts     │       │ │
+│  │  │ - Video CDN  │ │ - Notifications│ │ - Logs      │       │ │
+│  │  │ - Streaming  │ │ - Marketing  │ │ - Metrics    │       │ │
+│  │  │ - Transcoding│ │ - Support    │ │ - Alerts     │       │ │
 │  │  └──────────────┘ └──────────────┘ └──────────────┘       │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Infrastructure Components
-
-### Cloudflare Services
-
-**Cloudflare Workers** (Compute Layer)
-- Video Portal UI (Next.js via OpenNext)
-- API Gateway and routing
-- Authentication service
-- Events processing
-- Real-time features (WebSockets)
-
-**Cloudflare Pages** (Static Hosting)
-- News website frontend
-- Admin dashboard
-- Documentation sites
-- Landing pages
-
-**Cloudflare D1** (Database)
-- User accounts and profiles
-- Video metadata
-- Comments and interactions
-- Course and academy data
-- Analytics data
-
-**Cloudflare R2** (Object Storage)
-- User uploaded files
-- Generated thumbnails
-- Course materials
-- Backup data
-- Static assets
-
-**Cloudflare KV** (Key-Value Store)
-- Session data
-- Cache layer
-- Configuration settings
-- Temporary data
-
-**Cloudflare Analytics**
-- User behavior tracking
-- Performance monitoring
-- Business intelligence
-- Real-time dashboards
-
-### External Services
-
-**Bunny.net** (Media Delivery)
-- Video storage and transcoding
-- Global CDN for video delivery
-- Live streaming infrastructure
-- Image optimization and delivery
-
-**Email Service**
-- User notifications
-- Marketing campaigns
-- System alerts
-- Support communications
-
-## Service Architecture Details
+## Core Service Architectures
 
 ### 1. Video Portal UI (Current Repository)
 
 **Technology Stack**:
-- Next.js 15 with App Router
-- TypeScript for type safety
-- Tailwind CSS for styling
-- Video.js for media playback
-- OpenAuth for authentication
+- **Framework**: Next.js 15 with App Router
+- **Language**: TypeScript for type safety
+- **Styling**: Tailwind CSS with custom Islamic design system
+- **Video Player**: Video.js with custom controls and plugins
+- **Authentication**: OpenAuth with JWT token management
+- **Deployment**: Cloudflare Workers via OpenNext
 
-**Deployment**:
-- Cloudflare Workers via OpenNext
-- Static assets on Cloudflare CDN
-- Edge-side rendering capabilities
+**Application Structure**:
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── [locale]/           # Internationalized routes
+│   │   ├── (auth)/         # Authentication pages
+│   │   ├── video/          # Video viewing pages
+│   │   ├── channel/        # Channel pages
+│   │   └── search/         # Search results
+│   ├── api/                # API routes and middleware
+│   └── globals.css         # Global styles
+├── components/             # Reusable components
+│   ├── ui/                 # Base UI components
+│   ├── video/              # Video-related components
+│   ├── navigation/         # Navigation components
+│   └── auth/               # Authentication components
+├── lib/                    # Utilities and configurations
+│   ├── api/                # API client implementation
+│   ├── auth/               # Authentication utilities
+│   ├── utils/              # Helper functions
+│   └── validations/        # Input validation schemas
+└── types/                  # TypeScript type definitions
+```
 
-**API Integration**:
+**API Client Architecture**:
 ```typescript
-// API Client Architecture
-const apiClient = new APIClient({
-  baseURL: 'https://videos.api.alummahnow.net',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'channelId': userChannelId,
-    'userId': userId
+// Centralized API client with automatic authentication
+class APIClient {
+  private baseURL: string;
+  private defaultHeaders: Record<string, string>;
+  
+  constructor(config: APIConfig) {
+    this.baseURL = config.baseURL;
+    this.defaultHeaders = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
   }
-});
+  
+  async request<T>(endpoint: string, options: RequestOptions): Promise<T> {
+    // Automatic token refresh and retry logic
+    // Error handling and logging
+    // Request/response transformation
+  }
+}
 
-// Usage
-await apiClient.videos.list({ limit: 20 });
-await apiClient.channels.getById(channelId);
-await apiClient.playlists.create(playlistData);
+// Service-specific API clients
+export const VideosAPI = {
+  list: (params?: ListParams, headers?: AuthHeaders) => 
+    apiClient.get<VideoListResponse>('/api/videos', { params, headers }),
+  
+  getById: (id: string, headers?: AuthHeaders) =>
+    apiClient.get<VideoObject>(`/api/videos/${id}`, { headers }),
+  
+  create: (data: VideoCreateRequest, headers: AuthHeaders) =>
+    apiClient.post<VideoObject>('/api/videos', data, { headers }),
+  
+  // ... other video operations
+};
 ```
 
 ### 2. Video API Service (AlUmmahNowVideos)
 
-**Purpose**: Core video management and content delivery API
+**Service Architecture**:
+```typescript
+// Fastify-based API server with TypeScript
+import Fastify from 'fastify';
+import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 
-**Technology Stack**:
-- Node.js with TypeScript
-- Fastify or Express.js framework
-- OpenAPI 3.0 specification
-- Database ORM (Prisma or similar)
+const server = Fastify({
+  logger: true,
+  ajv: {
+    customOptions: {
+      strict: 'log',
+      keywords: ['kind', 'modifier']
+    }
+  }
+}).withTypeProvider<TypeBoxTypeProvider>();
 
-**Deployment**: Cloudflare Workers
-
-**Core Endpoints**:
-```
-Video Management:
-  GET    /api/videos                    - List videos with pagination
-  GET    /api/videos/{id}               - Get video details
-  POST   /api/videos                    - Create/upload video
-  PUT    /api/videos/{id}               - Update video metadata
-  DELETE /api/videos/{id}               - Delete video
-  
-Video Interactions:
-  POST   /api/videos/{id}/like          - Like video
-  DELETE /api/videos/{id}/like          - Remove like
-  POST   /api/videos/{id}/dislike       - Dislike video
-  DELETE /api/videos/{id}/dislike       - Remove dislike
-  POST   /api/videos/{id}/view          - Record view
-  
-Comments:
-  GET    /api/videos/{id}/comments      - Get comments
-  POST   /api/videos/{id}/comments      - Add comment
-  PUT    /api/videos/{id}/comments/{cid} - Update comment
-  DELETE /api/videos/{id}/comments/{cid} - Delete comment
-  
-Upload:
-  POST   /api/upload/initiate           - Start upload session
-  POST   /api/upload/chunk              - Upload video chunk
-  POST   /api/upload/complete           - Complete upload
-  GET    /api/upload/status             - Check upload progress
+// Plugin registration
+await server.register(cors, { origin: true });
+await server.register(helmet);
+await server.register(rateLimit, {
+  max: 100,
+  timeWindow: '1 minute'
+});
+await server.register(authPlugin);
+await server.register(videoRoutes, { prefix: '/api/videos' });
 ```
 
-**Database Schema**:
+**Database Schema Design**:
 ```sql
--- Core Tables
+-- Core entities with optimized indexing
 CREATE TABLE users (
-  id UUID PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE NOT NULL,
   display_name VARCHAR(100),
   avatar_url TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  email_verified BOOLEAN DEFAULT false,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Indexes for performance
+  INDEX idx_users_email (email),
+  INDEX idx_users_active (is_active, created_at)
 );
 
 CREATE TABLE channels (
-  id UUID PRIMARY KEY,
-  user_id UUID REFERENCES users(id),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
   description TEXT,
   avatar_url TEXT,
@@ -232,386 +210,699 @@ CREATE TABLE channels (
   is_main BOOLEAN DEFAULT false,
   subscribers_count INTEGER DEFAULT 0,
   videos_count INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  is_verified BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Indexes for queries
+  INDEX idx_channels_user (user_id),
+  INDEX idx_channels_main (user_id, is_main),
+  INDEX idx_channels_verified (is_verified, subscribers_count DESC)
 );
 
 CREATE TABLE videos (
-  id UUID PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title VARCHAR(255) NOT NULL,
   description TEXT,
-  channel_id UUID REFERENCES channels(id),
-  user_id UUID REFERENCES users(id),
+  channel_id UUID NOT NULL REFERENCES channels(id),
+  user_id UUID NOT NULL REFERENCES users(id),
+  
+  -- Video metadata
   video_url TEXT NOT NULL,
   thumbnail_url TEXT,
-  duration INTEGER, -- seconds
+  duration_seconds INTEGER,
+  file_size_bytes BIGINT,
+  resolution VARCHAR(20), -- e.g., "1920x1080"
+  format VARCHAR(10), -- e.g., "mp4", "webm"
+  
+  -- Engagement metrics
   views_count INTEGER DEFAULT 0,
   likes_count INTEGER DEFAULT 0,
   dislikes_count INTEGER DEFAULT 0,
   comments_count INTEGER DEFAULT 0,
+  shares_count INTEGER DEFAULT 0,
+  
+  -- Status and visibility
   is_public BOOLEAN DEFAULT true,
   is_live BOOLEAN DEFAULT false,
-  processing_status VARCHAR(50) DEFAULT 'pending',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  is_featured BOOLEAN DEFAULT false,
+  processing_status video_processing_status DEFAULT 'pending',
+  
+  -- SEO and categorization
+  tags TEXT[], -- Array of tags
+  category VARCHAR(50),
+  language VARCHAR(10) DEFAULT 'en',
+  
+  -- Timestamps
+  published_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Indexes for performance
+  INDEX idx_videos_channel (channel_id, published_at DESC),
+  INDEX idx_videos_user (user_id, created_at DESC),
+  INDEX idx_videos_public (is_public, published_at DESC),
+  INDEX idx_videos_featured (is_featured, published_at DESC),
+  INDEX idx_videos_category (category, published_at DESC),
+  INDEX idx_videos_search (title, description), -- Full-text search
+  INDEX idx_videos_engagement (views_count DESC, likes_count DESC)
 );
 
-CREATE TABLE comments (
-  id UUID PRIMARY KEY,
-  video_id UUID REFERENCES videos(id),
-  user_id UUID REFERENCES users(id),
-  channel_id UUID REFERENCES channels(id),
-  text TEXT NOT NULL,
-  likes_count INTEGER DEFAULT 0,
-  dislikes_count INTEGER DEFAULT 0,
-  replies_count INTEGER DEFAULT 0,
-  parent_id UUID REFERENCES comments(id),
-  is_edited BOOLEAN DEFAULT false,
-  is_deleted BOOLEAN DEFAULT false,
-  is_pinned BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+-- Enum for video processing status
+CREATE TYPE video_processing_status AS ENUM (
+  'pending',
+  'processing',
+  'transcoding',
+  'completed',
+  'failed',
+  'archived'
 );
+```
 
-CREATE TABLE playlists (
-  id UUID PRIMARY KEY,
-  title VARCHAR(255) NOT NULL,
-  description TEXT,
-  channel_id UUID REFERENCES channels(id),
-  user_id UUID REFERENCES users(id),
-  thumbnail_url TEXT,
-  is_public BOOLEAN DEFAULT true,
-  videos_count INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Interaction Tables
-CREATE TABLE video_likes (
-  id UUID PRIMARY KEY,
-  video_id UUID REFERENCES videos(id),
-  user_id UUID REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(video_id, user_id)
-);
-
-CREATE TABLE video_dislikes (
-  id UUID PRIMARY KEY,
-  video_id UUID REFERENCES videos(id),
-  user_id UUID REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(video_id, user_id)
-);
-
-CREATE TABLE subscriptions (
-  id UUID PRIMARY KEY,
-  subscriber_id UUID REFERENCES users(id),
-  channel_id UUID REFERENCES channels(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(subscriber_id, channel_id)
-);
-
-CREATE TABLE playlist_videos (
-  id UUID PRIMARY KEY,
-  playlist_id UUID REFERENCES playlists(id),
-  video_id UUID REFERENCES videos(id),
-  position INTEGER NOT NULL,
-  added_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(playlist_id, video_id)
-);
+**Video Processing Pipeline**:
+```typescript
+// Queue-based video processing
+export class VideoProcessor {
+  private queue: Queue;
+  private storage: R2Bucket;
+  
+  async processVideo(videoId: string, fileData: Buffer): Promise<void> {
+    try {
+      // 1. Upload original file to R2
+      await this.storage.put(`videos/originals/${videoId}`, fileData);
+      
+      // 2. Queue transcoding jobs
+      await this.queue.send({
+        type: 'transcode',
+        videoId,
+        resolutions: ['360p', '720p', '1080p'],
+        formats: ['mp4', 'webm']
+      });
+      
+      // 3. Generate thumbnail
+      await this.queue.send({
+        type: 'thumbnail',
+        videoId,
+        timestamps: [0, 30, 60] // Multiple thumbnail options
+      });
+      
+      // 4. Extract metadata
+      await this.queue.send({
+        type: 'metadata',
+        videoId
+      });
+      
+    } catch (error) {
+      await this.handleProcessingError(videoId, error);
+    }
+  }
+}
 ```
 
 ### 3. Authentication Service (AlUmmahNowAuth)
 
-**Purpose**: Centralized authentication and user management
-
-**Technology Stack**:
-- OpenAuth framework
-- JWT tokens with refresh rotation
-- OAuth 2.0 / OpenID Connect
-- Multi-factor authentication support
-
-**Core Features**:
+**OpenAuth Implementation**:
 ```typescript
-// Authentication Endpoints
-POST   /auth/register                  - User registration
-POST   /auth/login                     - User login
-POST   /auth/logout                    - User logout
-POST   /auth/refresh                   - Refresh tokens
-POST   /auth/forgot-password           - Password reset request
-POST   /auth/reset-password            - Password reset confirmation
+// OpenAuth configuration for Al Ummah Now
+import { createAuthConfig } from '@openauthjs/openauth';
 
-// OAuth Integration
-GET    /auth/oauth/{provider}          - OAuth login (Google, Apple)
-GET    /auth/oauth/{provider}/callback - OAuth callback
-
-// User Management
-GET    /auth/me                        - Get current user
-PUT    /auth/me                        - Update user profile
-DELETE /auth/me                        - Delete user account
-POST   /auth/change-password           - Change password
-POST   /auth/enable-2fa                - Enable 2FA
-POST   /auth/verify-2fa                - Verify 2FA token
+export const authConfig = createAuthConfig({
+  baseURL: 'https://auth.alummahnow.net',
+  providers: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      scopes: ['openid', 'email', 'profile']
+    },
+    apple: {
+      clientId: process.env.APPLE_CLIENT_ID!,
+      teamId: process.env.APPLE_TEAM_ID!,
+      keyId: process.env.APPLE_KEY_ID!,
+      privateKey: process.env.APPLE_PRIVATE_KEY!
+    }
+  },
+  
+  // JWT configuration
+  jwt: {
+    issuer: 'al-ummah-now',
+    audience: ['video-portal', 'api-backend', 'mobile-app'],
+    algorithms: ['RS256'],
+    expiresIn: '15m' // Short-lived access tokens
+  },
+  
+  // Refresh token configuration
+  refresh: {
+    expiresIn: '7d',
+    rotateOnUse: true, // Security best practice
+    revokeOnLogout: true
+  },
+  
+  // Session management
+  session: {
+    store: 'cloudflare-kv', // Use Cloudflare KV for session storage
+    cookie: {
+      name: 'auth-session',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax'
+    }
+  }
+});
 ```
 
-### 4. Events Processor (AlUmmahNowProcessor)
-
-**Purpose**: Real-time event processing, analytics, and recommendations
-
-**Technology Stack**:
-- Event-driven architecture
-- Message queues (Cloudflare Queues)
-- Real-time analytics processing
-- Machine learning recommendations
-
-**Event Types**:
+**Multi-Factor Authentication**:
 ```typescript
-interface VideoViewEvent {
-  type: 'video_view';
+// TOTP-based MFA implementation
+import { authenticator } from 'otplib';
+
+export class MFAService {
+  async enableMFA(userId: string): Promise<{ secret: string; qrCode: string }> {
+    const secret = authenticator.generateSecret();
+    const qrCode = await this.generateQRCode(userId, secret);
+    
+    // Store encrypted secret
+    await this.storeMFASecret(userId, secret);
+    
+    return { secret, qrCode };
+  }
+  
+  async verifyMFA(userId: string, token: string): Promise<boolean> {
+    const secret = await this.getMFASecret(userId);
+    return authenticator.verify({ token, secret });
+  }
+  
+  async generateBackupCodes(userId: string): Promise<string[]> {
+    const codes = Array.from({ length: 10 }, () => 
+      crypto.randomBytes(4).toString('hex').toUpperCase()
+    );
+    
+    await this.storeBackupCodes(userId, codes);
+    return codes;
+  }
+}
+```
+
+### 4. Events Processing Service (AlUmmahNowProcessor)
+
+**Event-Driven Architecture**:
+```typescript
+// Event streaming with Cloudflare Workers and Queues
+export interface VideoEvent {
+  type: 'video_view' | 'video_like' | 'video_comment' | 'video_share';
   userId?: string;
   videoId: string;
+  channelId: string;
   sessionId: string;
   timestamp: Date;
-  duration: number; // seconds watched
-  quality: string;
-  device: string;
+  metadata: Record<string, any>;
 }
 
-interface UserInteractionEvent {
-  type: 'user_interaction';
-  userId: string;
-  action: 'like' | 'dislike' | 'comment' | 'subscribe' | 'share';
-  targetId: string; // video, channel, or comment ID
-  targetType: 'video' | 'channel' | 'comment';
-  timestamp: Date;
-}
-
-interface ContentUploadEvent {
-  type: 'content_upload';
-  userId: string;
-  videoId: string;
-  channelId: string;
-  status: 'started' | 'processing' | 'completed' | 'failed';
-  metadata: {
-    title: string;
-    duration: number;
-    fileSize: number;
-    format: string;
-  };
-  timestamp: Date;
-}
-```
-
-### 5. CMS Backend (AlUmmahNowCMS)
-
-**Purpose**: Content management for news, articles, and editorial content
-
-**Features**:
-- Article creation and editing
-- Editorial workflow management
-- Multi-language content support
-- SEO optimization
-- Publishing automation
-
-### 6. Academy API (Future)
-
-**Purpose**: Educational content and course management
-
-**Features**:
-- Course structure management
-- Progress tracking
-- Assessment and certification
-- Learning analytics
-
-## Security Architecture
-
-### Authentication Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant Auth Service
-    participant API Gateway
-    participant Backend APIs
-
-    User->>Frontend: Login Request
-    Frontend->>Auth Service: Authenticate Credentials
-    Auth Service->>Auth Service: Validate & Generate Tokens
-    Auth Service->>Frontend: Return JWT + Refresh Token
-    Frontend->>Frontend: Store Tokens Securely
+export class EventProcessor {
+  private queue: CloudflareQueue;
+  private analytics: AnalyticsEngine;
+  
+  async processEvent(event: VideoEvent): Promise<void> {
+    // Real-time processing
+    await this.updateRealTimeMetrics(event);
     
-    Frontend->>API Gateway: API Request + JWT
-    API Gateway->>Auth Service: Validate JWT
-    Auth Service->>API Gateway: Token Valid + User Info
-    API Gateway->>Backend APIs: Forward Request + User Context
-    Backend APIs->>API Gateway: Response
-    API Gateway->>Frontend: Response
+    // Queue for batch processing
+    await this.queue.send({
+      batch: 'analytics',
+      event,
+      processAt: new Date(Date.now() + 5000) // 5-second delay for batching
+    });
+    
+    // Trigger real-time updates
+    await this.notifySubscribers(event);
+  }
+  
+  async updateRealTimeMetrics(event: VideoEvent): Promise<void> {
+    switch (event.type) {
+      case 'video_view':
+        await this.incrementViewCount(event.videoId);
+        await this.trackUserEngagement(event.userId, event.videoId);
+        break;
+      
+      case 'video_like':
+        await this.incrementLikeCount(event.videoId);
+        await this.updateRecommendations(event.userId, event.videoId);
+        break;
+    }
+  }
+}
 ```
 
-### Data Protection
-
-**Encryption**:
-- Data at rest: AES-256 encryption
-- Data in transit: TLS 1.3
-- Database: Column-level encryption for sensitive data
-
-**Access Control**:
-- Role-based access control (RBAC)
-- API rate limiting
-- Content-based permissions
-- Geographic restrictions
-
-### Content Security
-
-**Upload Security**:
-- File type validation
-- Virus scanning
-- Content filtering
-- Size limitations
-
-**Content Moderation**:
-- AI-powered content analysis
-- User reporting system
-- Manual review workflow
-- Automated flagging
+**Recommendation Engine**:
+```typescript
+// Content-based and collaborative filtering
+export class RecommendationEngine {
+  async generateRecommendations(userId: string): Promise<VideoObject[]> {
+    // Get user preferences and history
+    const userProfile = await this.getUserProfile(userId);
+    const viewHistory = await this.getViewHistory(userId);
+    
+    // Content-based filtering
+    const contentBased = await this.getContentBasedRecommendations(
+      userProfile, 
+      viewHistory
+    );
+    
+    // Collaborative filtering
+    const collaborative = await this.getCollaborativeRecommendations(userId);
+    
+    // Combine and rank
+    return this.rankRecommendations([...contentBased, ...collaborative]);
+  }
+  
+  private async getContentBasedRecommendations(
+    profile: UserProfile, 
+    history: VideoObject[]
+  ): Promise<VideoObject[]> {
+    // Analyze content features: tags, categories, duration, etc.
+    const features = this.extractContentFeatures(history);
+    
+    // Find similar content
+    return this.findSimilarContent(features);
+  }
+}
+```
 
 ## Performance Architecture
 
 ### Caching Strategy
 
-**Multi-level Caching**:
-```
-Browser Cache (Client)
-  ↓
-CDN Cache (Cloudflare)
-  ↓
-Edge Cache (Workers KV)
-  ↓
-Application Cache (Redis/KV)
-  ↓
-Database
+**Multi-Layer Caching**:
+```typescript
+// Hierarchical caching implementation
+export class CacheManager {
+  private layers = {
+    l1: new Map(), // In-memory cache
+    l2: null as CloudflareKV | null, // Edge cache
+    l3: null as Database | null // Database cache
+  };
+  
+  async get<T>(key: string): Promise<T | null> {
+    // L1: Memory cache (fastest)
+    if (this.layers.l1.has(key)) {
+      return this.layers.l1.get(key);
+    }
+    
+    // L2: Edge cache (fast)
+    const edgeValue = await this.layers.l2?.get(key);
+    if (edgeValue) {
+      this.layers.l1.set(key, edgeValue);
+      return JSON.parse(edgeValue);
+    }
+    
+    // L3: Database (slower but persistent)
+    const dbValue = await this.layers.l3?.getCached(key);
+    if (dbValue) {
+      await this.layers.l2?.put(key, JSON.stringify(dbValue), { expirationTtl: 3600 });
+      this.layers.l1.set(key, dbValue);
+      return dbValue;
+    }
+    
+    return null;
+  }
+}
 ```
 
-**Cache Invalidation**:
-- Time-based expiration
-- Event-driven invalidation
-- Manual cache clearing
-- Graceful degradation
+**Cache Invalidation Strategy**:
+```typescript
+// Event-driven cache invalidation
+export class CacheInvalidator {
+  async invalidateVideoCache(videoId: string): Promise<void> {
+    const keys = [
+      `video:${videoId}`,
+      `video:${videoId}:comments`,
+      `video:${videoId}:analytics`,
+      `channel:${channelId}:videos`, // Assuming we have channelId
+      'videos:trending',
+      'videos:featured'
+    ];
+    
+    await Promise.all(keys.map(key => this.invalidateKey(key)));
+  }
+  
+  private async invalidateKey(key: string): Promise<void> {
+    // Invalidate at all cache levels
+    await Promise.all([
+      this.memoryCache.delete(key),
+      this.edgeCache.delete(key),
+      this.databaseCache.invalidate(key)
+    ]);
+  }
+}
+```
 
 ### Video Delivery Optimization
 
 **Adaptive Bitrate Streaming**:
-- Multiple quality levels (360p, 720p, 1080p, 4K)
-- Automatic quality switching
-- Bandwidth optimization
-- Device-specific optimization
-
-**Global Distribution**:
-- Bunny.net global CDN
-- Edge locations worldwide
-- Regional content optimization
-- Reduced latency delivery
-
-## Monitoring and Observability
-
-### Metrics Collection
-
-**Application Metrics**:
-- Request latency and throughput
-- Error rates and types
-- User engagement metrics
-- Content performance analytics
-
-**Infrastructure Metrics**:
-- CPU and memory usage
-- Database performance
-- Cache hit rates
-- Network latency
-
-### Logging Strategy
-
-**Structured Logging**:
-```json
-{
-  "timestamp": "2024-01-15T10:30:00Z",
-  "level": "INFO",
-  "service": "video-api",
-  "request_id": "req_123456",
-  "user_id": "user_789",
-  "action": "video_upload",
-  "video_id": "vid_abc123",
-  "duration_ms": 1250,
-  "status": "success"
+```typescript
+// Integration with Bunny.net for ABR streaming
+export class VideoStreamingService {
+  async getStreamingManifest(videoId: string, userAgent: string): Promise<StreamManifest> {
+    const video = await this.getVideoMetadata(videoId);
+    const deviceCapabilities = this.analyzeDevice(userAgent);
+    
+    return {
+      formats: [
+        {
+          resolution: '360p',
+          bitrate: '500k',
+          url: `${video.baseUrl}/360p/playlist.m3u8`,
+          codecs: 'avc1.42E01E,mp4a.40.2'
+        },
+        {
+          resolution: '720p',
+          bitrate: '2500k',
+          url: `${video.baseUrl}/720p/playlist.m3u8`,
+          codecs: 'avc1.64001F,mp4a.40.2'
+        },
+        {
+          resolution: '1080p',
+          bitrate: '5000k',
+          url: `${video.baseUrl}/1080p/playlist.m3u8`,
+          codecs: 'avc1.640028,mp4a.40.2',
+          enabled: deviceCapabilities.supportsHD
+        }
+      ],
+      defaultQuality: this.selectDefaultQuality(deviceCapabilities),
+      adaptiveBitrate: true
+    };
+  }
 }
 ```
 
-### Alerting
+## Security Architecture
 
-**Alert Conditions**:
-- High error rates (>5%)
-- Slow response times (>2s)
-- Database connection issues
-- Video processing failures
-- Security incidents
+### Authentication & Authorization Flow
 
-## Deployment Strategy
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant AuthService
+    participant APIGateway
+    participant VideoAPI
+    participant Database
 
-### Environment Management
+    User->>Frontend: Login Request
+    Frontend->>AuthService: Authenticate (email/password or OAuth)
+    AuthService->>AuthService: Validate Credentials
+    AuthService->>Database: Verify User & Get Profile
+    Database-->>AuthService: User Data
+    AuthService->>AuthService: Generate JWT + Refresh Token
+    AuthService-->>Frontend: Return Tokens + User Info
+    Frontend->>Frontend: Store Tokens Securely
+    
+    Frontend->>APIGateway: API Request + JWT
+    APIGateway->>AuthService: Validate JWT
+    AuthService-->>APIGateway: Token Valid + User Context
+    APIGateway->>VideoAPI: Forward Request + User Context
+    VideoAPI->>Database: Query with Authorization
+    Database-->>VideoAPI: Filtered Results
+    VideoAPI-->>APIGateway: Response
+    APIGateway-->>Frontend: Final Response
+```
 
-**Development Environment**:
-- Local development with Docker
-- Feature branch deployments
-- Automated testing pipeline
+### Content Security
 
-**Staging Environment**:
-- Production-like configuration
-- Integration testing
-- Performance testing
-- User acceptance testing
+**Upload Security Pipeline**:
+```typescript
+// Comprehensive file upload security
+export class UploadSecurityService {
+  async validateUpload(file: File, userId: string): Promise<ValidationResult> {
+    const validations = await Promise.all([
+      this.validateFileType(file),
+      this.validateFileSize(file),
+      this.scanForMalware(file),
+      this.validateContent(file),
+      this.checkUserQuota(userId)
+    ]);
+    
+    return {
+      isValid: validations.every(v => v.passed),
+      errors: validations.filter(v => !v.passed).map(v => v.error),
+      warnings: validations.filter(v => v.warning).map(v => v.warning)
+    };
+  }
+  
+  private async scanForMalware(file: File): Promise<ValidationResult> {
+    // Integration with security scanning service
+    const scanResult = await this.securityScanner.scan(file.buffer);
+    
+    return {
+      passed: scanResult.clean,
+      error: scanResult.clean ? null : 'File contains malicious content'
+    };
+  }
+  
+  private async validateContent(file: File): Promise<ValidationResult> {
+    // AI-powered content analysis for Islamic compliance
+    const analysis = await this.contentAnalyzer.analyze(file);
+    
+    return {
+      passed: analysis.compliant,
+      warning: analysis.needsReview ? 'Content flagged for manual review' : null
+    };
+  }
+}
+```
 
-**Production Environment**:
-- Blue-green deployments
-- Canary releases
-- Automated rollbacks
-- Health checks
+## Monitoring and Observability
+
+### Comprehensive Logging Strategy
+
+```typescript
+// Structured logging with correlation IDs
+export class Logger {
+  private correlationId: string;
+  
+  constructor(correlationId?: string) {
+    this.correlationId = correlationId || this.generateCorrelationId();
+  }
+  
+  info(message: string, metadata: Record<string, any> = {}): void {
+    this.log('INFO', message, metadata);
+  }
+  
+  error(message: string, error: Error, metadata: Record<string, any> = {}): void {
+    this.log('ERROR', message, {
+      ...metadata,
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      }
+    });
+  }
+  
+  private log(level: string, message: string, metadata: Record<string, any>): void {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      correlationId: this.correlationId,
+      service: 'video-api',
+      ...metadata
+    };
+    
+    console.log(JSON.stringify(logEntry));
+    
+    // Send to external logging service
+    this.sendToLoggingService(logEntry);
+  }
+}
+```
+
+### Performance Monitoring
+
+```typescript
+// Real-time performance tracking
+export class PerformanceMonitor {
+  async trackAPIRequest(
+    endpoint: string,
+    method: string,
+    startTime: number,
+    statusCode: number,
+    userId?: string
+  ): Promise<void> {
+    const duration = Date.now() - startTime;
+    
+    const metrics = {
+      endpoint,
+      method,
+      duration,
+      statusCode,
+      userId,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Real-time metrics
+    await this.analytics.writeDataPoint('api_request', metrics);
+    
+    // Alert on performance issues
+    if (duration > 5000) { // 5 second threshold
+      await this.alertService.send({
+        type: 'performance_degradation',
+        severity: 'high',
+        message: `Slow API response: ${endpoint} took ${duration}ms`,
+        metadata: metrics
+      });
+    }
+  }
+}
+```
+
+## Deployment Architecture
 
 ### CI/CD Pipeline
 
 ```yaml
-# Example GitHub Actions workflow
-name: Deploy to Production
+# GitHub Actions workflow for deployment
+name: Deploy Al Ummah Now
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Run Tests
-        run: npm test
-      - name: Run E2E Tests
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run type checking
+        run: npm run type-check
+      
+      - name: Run linting
+        run: npm run lint
+      
+      - name: Run tests
+        run: npm run test
+      
+      - name: Run E2E tests
         run: npm run test:e2e
 
   build:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Build Application
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build application
         run: npm run build
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v3
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: .next/
 
-  deploy:
+  deploy-staging:
     needs: build
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: staging
     steps:
-      - name: Deploy to Cloudflare
-        run: wrangler deploy
+      - uses: actions/checkout@v4
+      - name: Deploy to Cloudflare Workers (Staging)
+        run: npx wrangler deploy --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  deploy-production:
+    needs: [build, deploy-staging]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Cloudflare Workers (Production)
+        run: npx wrangler deploy --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```
 
-This technical architecture provides a solid foundation for building a scalable, secure, and high-performance Islamic content platform that can grow with user demand and feature requirements.
+### Infrastructure as Code
+
+```typescript
+// Cloudflare infrastructure configuration
+export const infraConfig = {
+  // Cloudflare Workers configuration
+  workers: {
+    'video-portal-ui': {
+      name: 'al-ummah-now-ui',
+      route: 'alummahnow.net/*',
+      vars: {
+        ENVIRONMENT: 'production',
+        API_BASE_URL: 'https://api.alummahnow.net'
+      },
+      secrets: ['JWT_SECRET', 'OPENAUTH_SECRET'],
+      compatibility_date: '2024-01-01'
+    },
+    
+    'video-api': {
+      name: 'al-ummah-now-api',
+      route: 'api.alummahnow.net/*',
+      vars: {
+        ENVIRONMENT: 'production'
+      },
+      bindings: {
+        DB: 'al-ummah-now-db',
+        BUCKET: 'al-ummah-now-storage',
+        KV: 'al-ummah-now-cache'
+      }
+    }
+  },
+  
+  // D1 Database configuration
+  d1Databases: {
+    'al-ummah-now-db': {
+      name: 'al-ummah-now-production',
+      migrations: './migrations'
+    }
+  },
+  
+  // R2 Storage configuration
+  r2Buckets: {
+    'al-ummah-now-storage': {
+      name: 'al-ummah-now-storage-prod',
+      cors: [
+        {
+          allowedOrigins: ['https://alummahnow.net'],
+          allowedMethods: ['GET', 'PUT', 'POST'],
+          allowedHeaders: ['*']
+        }
+      ]
+    }
+  },
+  
+  // KV Namespaces
+  kvNamespaces: {
+    'al-ummah-now-cache': {
+      title: 'Al Ummah Now Cache',
+      preview_id: 'cache-preview'
+    }
+  }
+};
+```
+
+This technical architecture provides a robust, scalable foundation for the Al Ummah Now platform, ensuring high performance, security, and maintainability while leveraging modern cloud infrastructure and best practices.
