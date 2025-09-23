@@ -2,11 +2,13 @@
 export { VideosAPI } from './videos';
 export { ProfilesAPI, ChannelsAPI } from './channels';
 export { PlaylistsAPI } from './playlists';
+export { AnalyticsAPI } from './analytics';
 
 // Import for internal use
 import { VideosAPI } from './videos';
 import { ProfilesAPI, ChannelsAPI } from './channels';
 import { PlaylistsAPI } from './playlists';
+import { AnalyticsAPI } from './analytics';
 
 // Type exports
 export * from './types';
@@ -69,6 +71,16 @@ export class APIClient {
       delete: (id, headers?) => PlaylistsAPI.delete(id, { ...this.headers, ...headers }),
       addVideo: (playlistId, data, headers?) => PlaylistsAPI.addVideo(playlistId, data, { ...this.headers, ...headers }),
       removeVideo: (playlistId, videoId, headers?) => PlaylistsAPI.removeVideo(playlistId, videoId, { ...this.headers, ...headers }),
+    };
+  }
+
+  // Analytics
+  get analytics() {
+    return {
+      getSummary: (params?, headers?) => AnalyticsAPI.getSummary(params, { ...this.headers, ...headers }),
+      getChannelAnalytics: (channelId, params?, headers?) => AnalyticsAPI.getChannelAnalytics(channelId, params, { ...this.headers, ...headers }),
+      getVideoAnalytics: (videoId, params?, headers?) => AnalyticsAPI.getVideoAnalytics(videoId, params, { ...this.headers, ...headers }),
+      getMetrics: (params?, headers?) => AnalyticsAPI.getMetrics(params, { ...this.headers, ...headers }),
     };
   }
 

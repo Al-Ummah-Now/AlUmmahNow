@@ -123,3 +123,61 @@ export interface ChannelUpdateRequest {
 export interface SubscriptionRequest {
   notificationsEnabled?: boolean;
 }
+
+// Analytics Types
+export interface VideoAnalyticsData {
+  videoId: string;
+  title: string;
+  views: number;
+  likes: number;
+  dislikes: number;
+  comments: number;
+  shares: number;
+  watchTime: number; // in seconds
+  avgViewDuration: number; // in seconds
+  clickThroughRate: number; // percentage
+  engagementRate: number; // percentage
+  dateCreated: string;
+  thumbnailUrl?: string;
+}
+
+export interface ChannelAnalyticsData {
+  channelId: string;
+  totalViews: number;
+  totalVideos: number;
+  totalSubscribers: number;
+  totalLikes: number;
+  totalComments: number;
+  avgViewsPerVideo: number;
+  avgEngagementRate: number;
+  topPerformingVideos: VideoAnalyticsData[];
+  recentMetrics: AnalyticsMetrics[];
+}
+
+export interface AnalyticsMetrics {
+  date: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  subscribers: number;
+  watchTime: number;
+}
+
+export interface AnalyticsSummary {
+  totalViews: number;
+  totalLikes: number;
+  totalComments: number;
+  totalSubscribers: number;
+  totalVideos: number;
+  avgViewsPerVideo: number;
+  engagementRate: number;
+  topVideo: VideoAnalyticsData | null;
+}
+
+export interface AnalyticsQueryParams extends ListQueryParams {
+  dateFrom?: string; // ISO date string
+  dateTo?: string; // ISO date string
+  videoId?: string;
+  channelId?: string;
+}
