@@ -36,6 +36,11 @@ export class Observable<T> {
 }
 
 export function resolveUrl(url: string, baseUrl?: string): string {
+  // Handle data URIs (base64 encoded images)
+  if (url.startsWith("data:")) {
+    return url; // Data URIs should be returned as-is
+  }
+
   // Use the provided baseUrl or fallback to window.location.origin in the browser
   const resolvedBaseUrl = baseUrl || (typeof window !== "undefined" ? window.location.origin : "");
 
