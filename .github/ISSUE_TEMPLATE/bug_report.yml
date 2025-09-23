@@ -1,0 +1,95 @@
+---
+name: 🐛 Bug Report
+about: Report a bug or issue with Al Ummah Now
+title: '[BUG] '
+labels: ['bug', 'needs-triage']
+assignees: ''
+---
+
+## 🐛 Bug Description
+
+**A clear and concise description of what the bug is.**
+
+## 🔄 Steps to Reproduce
+
+1. Go to '...'
+2. Click on '...'
+3. Scroll down to '...'
+4. See error
+
+## ✅ Expected Behavior
+
+**A clear and concise description of what you expected to happen.**
+
+## ❌ Actual Behavior
+
+**A clear and concise description of what actually happened.**
+
+## 📸 Screenshots
+
+**If applicable, add screenshots to help explain your problem.**
+
+## 🌍 Environment
+
+**Please complete the following information:**
+
+### Device Information:
+- **OS**: [e.g. iOS, Android, Windows, macOS, Linux]
+- **Browser**: [e.g. Chrome 91, Safari 14, Firefox 89]
+- **Version**: [e.g. 22]
+- **Device Type**: [e.g. Desktop, Mobile, Tablet]
+
+### App Information:
+- **Al Ummah Now Version**: [if known]
+- **Language**: [e.g. English, Arabic]
+- **Page/Feature**: [e.g. Video Player, Profile Page, Search]
+
+## 🔗 Additional Context
+
+**Add any other context about the problem here.**
+
+### Network Information:
+- **Connection Type**: [e.g. WiFi, Mobile Data, Ethernet]
+- **Connection Speed**: [if relevant]
+
+### Islamic Content Context:
+- **Content Type**: [e.g. Scholarly video, Educational content, News article]
+- **Language**: [e.g. Arabic, English, Mixed]
+
+## 🚨 Severity
+
+**Select the impact level:**
+- [ ] Critical - App crashes or major functionality broken
+- [ ] High - Important feature not working properly
+- [ ] Medium - Feature works but has issues
+- [ ] Low - Minor issue or cosmetic problem
+
+## 🎯 Priority
+
+**How urgent is this fix?**
+- [ ] Urgent - Blocks users from core functionality
+- [ ] High - Important for user experience
+- [ ] Medium - Should be fixed soon
+- [ ] Low - Can be addressed in future updates
+
+## 📋 Checklist
+
+**Before submitting, please check:**
+- [ ] I have searched existing issues to avoid duplicates
+- [ ] I have provided clear steps to reproduce
+- [ ] I have included relevant screenshots/videos
+- [ ] I have specified my environment details
+- [ ] I have tested this in different browsers (if applicable)
+- [ ] I have tested in both English and Arabic (if applicable)
+
+## 🔍 Logs or Error Messages
+
+**If applicable, please include any console logs, error messages, or relevant technical details:**
+
+```
+Paste any error messages or logs here
+```
+
+---
+
+**Thank you for helping improve Al Ummah Now! جزاك الله خيراً**
