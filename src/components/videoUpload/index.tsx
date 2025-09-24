@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useRef, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
+import { VideosAPI } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider/authContext";
 import { Upload, X, AlertCircle, CheckCircle, Loader } from "lucide-react";
 
 interface VideoUploadProps {
@@ -41,6 +43,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const [showMetadataForm, setShowMetadataForm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const auth = useAuth();
 
   // File validation
   const validateFile = (file: File): string | null => {
@@ -108,40 +111,42 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const uploadVideo = async () => {
     if (!selectedFile) return;
 
+    // Check authentication
+    if (!auth.user) {
+      onError('Authentication required. Please log in to upload videos.');
+      return;
+    }
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
     try {
       setUploadProgress({ percentage: 0, stage: 'preparing' });
       
-      // Create FormData for multipart upload
-      const formData = new FormData();
-      formData.append('video', selectedFile);
-      formData.append('title', metadata.title);
-      formData.append('description', metadata.description || '');
-      formData.append('isPublic', metadata.isPublic.toString());
-      if (metadata.tags && metadata.tags.length > 0) {
-        formData.append('tags', JSON.stringify(metadata.tags));
-      }
-
       setUploadProgress({ percentage: 10, stage: 'uploading' });
       onProgress(10);
 
-      const response = await fetch('/api/upload/video', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
-      });
+      // Use the VideosAPI to upload to the external backend (AlUmmahNowVideos repository)
+      const uploadData = {
+        title: metadata.title,
+        description: metadata.description,
+        isPublic: metadata.isPublic,
+        tags: metadata.tags,
+      };
 
-      if (!response.ok) {
-        const errorData = await response.json() as { message?: string };
-        throw new Error(errorData.message || 'Upload failed');
+      const headers = {
+        channelId: auth.user.id, // Using user ID as channel ID for now
+        userId: auth.user.id,
+      };
+
+      const result = await VideosAPI.upload(selectedFile, uploadData, headers);
+
+      if (!result) {
+        throw new Error('Upload failed. Please try again.');
       }
 
       setUploadProgress({ percentage: 80, stage: 'processing' });
       onProgress(80);
-
-      const result = await response.json() as { video: VideoObject };
 
       setUploadProgress({ percentage: 100, stage: 'complete' });
       onProgress(100);
@@ -157,7 +162,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         isPublic: true
       });
 
-      onUploadComplete(result.video);
+      onUploadComplete(result.result?.video || result as any);
     } catch (error: any) {
       if (error.name === 'AbortError') {
         setUploadProgress(null);
