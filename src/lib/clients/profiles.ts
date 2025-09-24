@@ -58,6 +58,37 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
     }
 };
 
+export const checkProfileExists = async (user: User | null | undefined): Promise<boolean> => {
+    // Early return for any invalid input
+    if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
+        return false;
+    }
+
+    try {
+        // Call the API with the user ID in the URL path and headers for auth
+        const profile = await ProfilesAPI.getCurrent(user.id, {
+            userId: user.id,
+            channelId: user.id
+        });
+        
+        return profile !== null;
+    } catch (error) {
+        console.error('checkProfileExists: ❌ Error:', error);
+        return false;
+    }
+};
+
+export const isProfileComplete = (profile: Profile | null): boolean => {
+    if (!profile) return false;
+    
+    // Check if essential profile fields are filled
+    return !!(
+        profile.firstName && 
+        profile.firstName.trim() !== '' && 
+        profile.firstName !== profile.email?.split('@')[0] // Not just the default email prefix
+    );
+};
+
 export const updateProfile = async (profile: Profile, setProfile: (profile: Profile) => void) => {
     if (!profile) return;
     try {

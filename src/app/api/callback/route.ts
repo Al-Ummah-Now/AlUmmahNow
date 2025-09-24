@@ -2,8 +2,10 @@ import { InvalidAccessTokenError } from "@openauthjs/openauth/error";
 import { setTokens } from "@/lib/auth"
 import { type NextRequest, NextResponse } from "next/server"
 import { getClient } from "@/lib/actions";
+import { shouldRedirectToProfileCreation } from "@/lib/profile-helpers";
+import { User } from "@/interfaces";
 
-async function validate(code: string | null, url: URL): Promise<{ result: boolean, err?: InvalidAccessTokenError}> {
+async function validate(code: string | null, url: URL): Promise<{ result: boolean, user?: User, err?: InvalidAccessTokenError}> {
   console.log("code", code)
   console.log("url", url)
 
@@ -13,6 +15,20 @@ async function validate(code: string | null, url: URL): Promise<{ result: boolea
   console.log("exchanged", exchanged)
   if (exchanged.err == false) {
     await setTokens(exchanged.tokens.access, exchanged.tokens.refresh);
+    
+    // Extract user info from the access token
+    try {
+      const payload = JSON.parse(atob(exchanged.tokens.access.split('.')[1]));
+      if (payload.type === "user" && payload.properties) {
+        return { 
+          result: true, 
+          user: payload.properties as User
+        };
+      }
+    } catch (error) {
+      console.error("Error extracting user from token:", error);
+    }
+    
     return { result: true };
   }
   return { result: false, err: exchanged.err };
@@ -24,8 +40,20 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
   var result = await validate(code, url);
   console.log("result", result)
-  console.log("redirect", `${url.origin}/`)
-  if (result.result === true) return NextResponse.redirect(`${url.origin}/`);
+  
+  if (result.result === true) {
+    // Check if user needs to create profile
+    if (result.user) {
+      const profileCheck = await shouldRedirectToProfileCreation(result.user);
+      if (profileCheck.shouldRedirect && profileCheck.redirectPath) {
+        console.log("Redirecting new user to profile creation:", profileCheck.redirectPath);
+        return NextResponse.redirect(`${url.origin}${profileCheck.redirectPath}`);
+      }
+    }
+    
+    console.log("redirect", `${url.origin}/`)
+    return NextResponse.redirect(`${url.origin}/`);
+  }
   return NextResponse.json(result.err, { status: 400 });
 
 }
