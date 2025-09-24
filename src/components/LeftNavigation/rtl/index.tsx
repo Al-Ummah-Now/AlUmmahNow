@@ -24,6 +24,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     const navItems: NavItems[] = [
         { label: "الرئيسية", icon: "fa-house", href: "/ar/" }, // Home
         { label: "الشائع", icon: "fa-magnifying-glass", href: "/ar/search" }, // Trending
+        { label: "رفع فيديو", icon: "fa-upload", href: "/ar/upload" }, // Upload
         { label: "الاشتراكات", icon: "fa-tv", href: "#" }, // Subscriptions
         { label: "المكتبة", icon: "fa-bookmark", href: "#" }, // Library
     ];
