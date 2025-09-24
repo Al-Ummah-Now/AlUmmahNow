@@ -906,3 +906,553 @@ export const infraConfig = {
 ```
 
 This technical architecture provides a robust, scalable foundation for the Al Ummah Now platform, ensuring high performance, security, and maintainability while leveraging modern cloud infrastructure and best practices.
+
+## Subscription System Architecture
+
+The Al Ummah Now subscription system enables users to follow channels, receive notifications, and access personalized content feeds. This system is designed for high scalability and real-time performance.
+
+### Subscription System Overview Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Subscription System Architecture             │
+├─────────────────────────────────────────────────────────────────┤
+│                           Frontend Layer                       │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │ Subscribe Button│  │ Subscription    │  │ Subscription    │ │
+│  │                 │  │ Management      │  │ Feed            │ │
+│  │ - Subscribe     │  │                 │  │                 │ │
+│  │ - Unsubscribe   │  │ - View Subs     │  │ - Latest Videos │ │
+│  │ - Notifications │  │ - Manage Prefs  │  │ - Feed Timeline │ │
+│  │ - Status        │  │ - Bulk Actions  │  │ - Load More     │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│           │                     │                     │         │
+├───────────┼─────────────────────┼─────────────────────┼─────────┤
+│                              API Layer                          │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │                  Subscription API                           │ │
+│  │                                                            │ │
+│  │  POST /api/channels/{id}/subscribe                        │ │
+│  │  DELETE /api/channels/{id}/subscribe                      │ │
+│  │  GET /api/subscriptions                                   │ │
+│  │  PUT /api/subscriptions/{id}/preferences                  │ │
+│  │  GET /api/subscriptions/feed                              │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                     │                     │         │
+├───────────┼─────────────────────┼─────────────────────┼─────────┤
+│                          Business Logic Layer                   │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │ Subscription    │  │ Notification    │  │ Feed Generator  │ │
+│  │ Service         │  │ Service         │  │                 │ │
+│  │                 │  │                 │  │                 │ │
+│  │ - Subscribe     │  │ - Send Alerts   │  │ - Aggregate     │ │
+│  │ - Unsubscribe   │  │ - Batch Process │  │ - Personalize   │ │
+│  │ - Validate      │  │ - Preferences   │  │ - Rank Content  │ │
+│  │ - Count Update  │  │ - Delivery      │  │ - Cache Results │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│           │                     │                     │         │
+├───────────┼─────────────────────┼─────────────────────┼─────────┤
+│                            Data Layer                           │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │                    Database Tables                          │ │
+│  │                                                            │ │
+│  │  ┌────────────────┐ ┌──────────────┐ ┌──────────────────┐  │ │
+│  │  │ subscriptions  │ │ subscription │ │ subscription     │  │ │
+│  │  │                │ │ _preferences │ │ _feed_cache      │  │ │
+│  │  │ - user_id      │ │              │ │                  │  │ │
+│  │  │ - channel_id   │ │ - sub_id     │ │ - user_id        │  │ │
+│  │  │ - created_at   │ │ - notifications│ │ - video_ids     │  │ │
+│  │  │ - is_active    │ │ - email_alerts│ │ - last_updated   │  │ │
+│  │  └────────────────┘ └──────────────┘ └──────────────────┘  │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Subscription Lifecycle Diagram
+
+```mermaid
+graph TD
+    A[User Views Channel] --> B{User Authenticated?}
+    B -->|No| C[Show Login Prompt]
+    B -->|Yes| D[Show Subscribe Button]
+    
+    D --> E[User Clicks Subscribe]
+    E --> F[Send Subscribe Request]
+    F --> G[Validate User & Channel]
+    G --> H{Validation Passed?}
+    
+    H -->|No| I[Return Error]
+    H -->|Yes| J[Create Subscription Record]
+    J --> K[Update Subscriber Count]
+    K --> L[Set Default Notifications]
+    L --> M[Send Welcome Notification]
+    M --> N[Update UI State]
+    
+    N --> O[User Manages Preferences]
+    O --> P[Update Notification Settings]
+    P --> Q[Save Preferences]
+    
+    N --> R[User Views Subscription Feed]
+    R --> S[Generate Personalized Feed]
+    S --> T[Cache Feed Results]
+    T --> U[Display Latest Videos]
+    
+    N --> V[User Unsubscribes]
+    V --> W[Send Unsubscribe Request]
+    W --> X[Remove Subscription Record]
+    X --> Y[Update Subscriber Count]
+    Y --> Z[Clear Feed Cache]
+    Z --> AA[Update UI State]
+```
+
+### Notification Fan-out Architecture
+
+```mermaid
+graph TD
+    A[Channel Uploads Video] --> B[Video Published Event]
+    B --> C[Subscription Query Service]
+    C --> D[Get Channel Subscribers]
+    D --> E{Notification Preferences}
+    
+    E -->|Immediate| F[Real-time Notifications]
+    E -->|Daily Digest| G[Daily Batch Queue]
+    E -->|Weekly Digest| H[Weekly Batch Queue]
+    E -->|Disabled| I[Skip Notification]
+    
+    F --> J[WebSocket Push]
+    F --> K[Mobile Push Notification]
+    F --> L[In-App Notification]
+    
+    G --> M[Daily Email Digest]
+    H --> N[Weekly Email Summary]
+    
+    J --> O[Update Feed Cache]
+    K --> O
+    L --> O
+    M --> O
+    N --> O
+    
+    O --> P[User Sees Updated Feed]
+```
+
+### Database Schema for Subscriptions
+
+```sql
+-- Subscription relationships
+CREATE TABLE subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  is_active BOOLEAN DEFAULT true,
+  
+  -- Prevent duplicate subscriptions
+  UNIQUE(user_id, channel_id),
+  
+  -- Indexes for performance
+  INDEX idx_subscriptions_user (user_id, is_active, created_at DESC),
+  INDEX idx_subscriptions_channel (channel_id, is_active, created_at DESC),
+  INDEX idx_subscriptions_active (is_active, created_at DESC)
+);
+
+-- Subscription notification preferences
+CREATE TABLE subscription_preferences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+  
+  -- Notification settings
+  notifications_enabled BOOLEAN DEFAULT true,
+  email_notifications BOOLEAN DEFAULT false,
+  push_notifications BOOLEAN DEFAULT true,
+  in_app_notifications BOOLEAN DEFAULT true,
+  
+  -- Notification frequency
+  notification_frequency notification_frequency_type DEFAULT 'immediate',
+  
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- One preference set per subscription
+  UNIQUE(subscription_id)
+);
+
+-- Enum for notification frequency
+CREATE TYPE notification_frequency_type AS ENUM (
+  'immediate',
+  'hourly',
+  'daily',
+  'weekly',
+  'disabled'
+);
+
+-- Subscription feed cache for performance
+CREATE TABLE subscription_feed_cache (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  
+  -- Cached feed data
+  video_ids TEXT[], -- Array of video IDs in feed order
+  last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  expires_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() + INTERVAL '1 hour',
+  
+  -- Cache metadata
+  total_videos INTEGER DEFAULT 0,
+  feed_version VARCHAR(50) DEFAULT 'v1',
+  
+  -- One cache entry per user
+  UNIQUE(user_id),
+  
+  -- Index for cleanup
+  INDEX idx_feed_cache_expiry (expires_at)
+);
+
+-- Subscription statistics for analytics
+CREATE TABLE subscription_stats (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  
+  -- Daily statistics
+  stats_date DATE NOT NULL,
+  new_subscribers INTEGER DEFAULT 0,
+  unsubscribes INTEGER DEFAULT 0,
+  total_subscribers INTEGER DEFAULT 0,
+  active_subscribers INTEGER DEFAULT 0,
+  
+  -- Engagement metrics
+  notification_clicks INTEGER DEFAULT 0,
+  feed_views INTEGER DEFAULT 0,
+  video_views_from_feed INTEGER DEFAULT 0,
+  
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- One record per channel per day
+  UNIQUE(channel_id, stats_date),
+  
+  -- Indexes for analytics queries
+  INDEX idx_subscription_stats_channel (channel_id, stats_date DESC),
+  INDEX idx_subscription_stats_date (stats_date DESC)
+);
+```
+
+### Subscription Service Implementation
+
+```typescript
+// Core subscription service with business logic
+export class SubscriptionService {
+  private db: Database;
+  private eventBus: EventBus;
+  private notificationService: NotificationService;
+  
+  async subscribe(
+    userId: string, 
+    channelId: string, 
+    preferences: SubscriptionPreferences = {}
+  ): Promise<SubscriptionResult> {
+    const trx = await this.db.beginTransaction();
+    
+    try {
+      // Check if subscription already exists
+      const existing = await trx
+        .select('*')
+        .from('subscriptions')
+        .where({ user_id: userId, channel_id: channelId })
+        .first();
+        
+      if (existing) {
+        if (existing.is_active) {
+          throw new Error('Already subscribed to this channel');
+        } else {
+          // Reactivate subscription
+          await trx
+            .update({ is_active: true, updated_at: new Date() })
+            .from('subscriptions')
+            .where({ id: existing.id });
+        }
+      } else {
+        // Create new subscription
+        await trx
+          .insert({
+            user_id: userId,
+            channel_id: channelId,
+            is_active: true
+          })
+          .into('subscriptions');
+      }
+      
+      // Update channel subscriber count
+      await trx
+        .increment('subscribers_count', 1)
+        .from('channels')
+        .where({ id: channelId });
+      
+      // Create or update preferences
+      await this.updateSubscriptionPreferences(
+        userId, 
+        channelId, 
+        preferences, 
+        trx
+      );
+      
+      // Commit transaction
+      await trx.commit();
+      
+      // Emit subscription event
+      await this.eventBus.emit('user.subscribed', {
+        userId,
+        channelId,
+        timestamp: new Date()
+      });
+      
+      // Clear user's feed cache
+      await this.clearFeedCache(userId);
+      
+      // Send welcome notification if enabled
+      if (preferences.notifications_enabled !== false) {
+        await this.notificationService.sendWelcomeNotification(
+          userId, 
+          channelId
+        );
+      }
+      
+      return { success: true, subscription_id: existing?.id };
+      
+    } catch (error) {
+      await trx.rollback();
+      throw error;
+    }
+  }
+  
+  async unsubscribe(userId: string, channelId: string): Promise<void> {
+    const trx = await this.db.beginTransaction();
+    
+    try {
+      // Deactivate subscription
+      const result = await trx
+        .update({ is_active: false, updated_at: new Date() })
+        .from('subscriptions')
+        .where({ 
+          user_id: userId, 
+          channel_id: channelId, 
+          is_active: true 
+        });
+        
+      if (result === 0) {
+        throw new Error('Subscription not found or already inactive');
+      }
+      
+      // Update channel subscriber count
+      await trx
+        .decrement('subscribers_count', 1)
+        .from('channels')
+        .where({ id: channelId });
+      
+      await trx.commit();
+      
+      // Emit unsubscription event
+      await this.eventBus.emit('user.unsubscribed', {
+        userId,
+        channelId,
+        timestamp: new Date()
+      });
+      
+      // Clear user's feed cache
+      await this.clearFeedCache(userId);
+      
+    } catch (error) {
+      await trx.rollback();
+      throw error;
+    }
+  }
+  
+  async generateSubscriptionFeed(
+    userId: string, 
+    limit: number = 20, 
+    offset: number = 0
+  ): Promise<VideoObject[]> {
+    // Check cache first
+    const cached = await this.getCachedFeed(userId);
+    if (cached && !this.isCacheExpired(cached)) {
+      return this.paginateResults(cached.video_ids, limit, offset);
+    }
+    
+    // Generate fresh feed
+    const subscriptions = await this.db
+      .select('channel_id')
+      .from('subscriptions')
+      .where({ user_id: userId, is_active: true });
+      
+    if (subscriptions.length === 0) {
+      return [];
+    }
+    
+    const channelIds = subscriptions.map(s => s.channel_id);
+    
+    // Get latest videos from subscribed channels
+    const videos = await this.db
+      .select('videos.*', 'channels.name as channel_name')
+      .from('videos')
+      .join('channels', 'videos.channel_id', 'channels.id')
+      .whereIn('videos.channel_id', channelIds)
+      .where({ 'videos.is_public': true })
+      .orderBy('videos.published_at', 'desc')
+      .limit(1000); // Large limit for sorting
+    
+    // Apply personalization algorithm
+    const personalizedFeed = await this.personalizeContent(userId, videos);
+    
+    // Cache the results
+    await this.cacheFeed(userId, personalizedFeed.map(v => v.id));
+    
+    return this.paginateResults(personalizedFeed, limit, offset);
+  }
+  
+  private async personalizeContent(
+    userId: string, 
+    videos: VideoObject[]
+  ): Promise<VideoObject[]> {
+    // Get user preferences and viewing history
+    const userProfile = await this.getUserPreferences(userId);
+    const viewHistory = await this.getViewingHistory(userId, 100);
+    
+    // Score videos based on multiple factors
+    const scoredVideos = videos.map(video => ({
+      ...video,
+      score: this.calculatePersonalizationScore(video, userProfile, viewHistory)
+    }));
+    
+    // Sort by score and recency
+    return scoredVideos
+      .sort((a, b) => {
+        // Combine recency and personalization score
+        const recencyWeight = 0.3;
+        const personalizationWeight = 0.7;
+        
+        const aRecency = this.getRecencyScore(a.published_at);
+        const bRecency = this.getRecencyScore(b.published_at);
+        
+        const aFinalScore = (aRecency * recencyWeight) + (a.score * personalizationWeight);
+        const bFinalScore = (bRecency * recencyWeight) + (b.score * personalizationWeight);
+        
+        return bFinalScore - aFinalScore;
+      })
+      .slice(0, 200); // Limit to top 200 personalized results
+  }
+  
+  private calculatePersonalizationScore(
+    video: VideoObject, 
+    userProfile: UserProfile, 
+    viewHistory: VideoObject[]
+  ): number {
+    let score = 0;
+    
+    // Channel engagement history
+    const channelViews = viewHistory.filter(v => v.channel_id === video.channel_id);
+    score += Math.min(channelViews.length * 0.1, 1.0);
+    
+    // Category preference
+    if (userProfile.preferredCategories?.includes(video.category)) {
+      score += 0.3;
+    }
+    
+    // Video performance metrics
+    const engagementRate = video.likes_count / Math.max(video.views_count, 1);
+    score += Math.min(engagementRate * 0.5, 0.2);
+    
+    // Duration preference
+    const avgWatchTime = userProfile.averageWatchDuration || 600; // 10 minutes default
+    const durationMatch = 1 - Math.abs(video.duration_seconds - avgWatchTime) / avgWatchTime;
+    score += Math.max(durationMatch * 0.2, 0);
+    
+    return Math.min(score, 1.0);
+  }
+}
+```
+
+### Real-time Subscription Updates
+
+```typescript
+// WebSocket service for real-time subscription updates
+export class SubscriptionWebSocketService {
+  private connections: Map<string, WebSocket> = new Map();
+  
+  async notifySubscribers(channelId: string, event: SubscriptionEvent): Promise<void> {
+    // Get all subscribers for the channel
+    const subscribers = await this.db
+      .select('user_id')
+      .from('subscriptions')
+      .join('subscription_preferences', 'subscriptions.id', 'subscription_preferences.subscription_id')
+      .where({
+        'subscriptions.channel_id': channelId,
+        'subscriptions.is_active': true,
+        'subscription_preferences.in_app_notifications': true
+      });
+    
+    // Send real-time notifications
+    const notifications = subscribers.map(async (subscriber) => {
+      const connection = this.connections.get(subscriber.user_id);
+      if (connection && connection.readyState === WebSocket.OPEN) {
+        const message = {
+          type: 'subscription_update',
+          channelId,
+          event,
+          timestamp: new Date().toISOString()
+        };
+        
+        connection.send(JSON.stringify(message));
+        
+        // Track notification delivery
+        await this.trackNotificationDelivery(
+          subscriber.user_id, 
+          channelId, 
+          'websocket',
+          true
+        );
+      }
+    });
+    
+    await Promise.all(notifications);
+  }
+  
+  handleConnection(userId: string, ws: WebSocket): void {
+    // Store connection
+    this.connections.set(userId, ws);
+    
+    // Handle disconnection
+    ws.on('close', () => {
+      this.connections.delete(userId);
+    });
+    
+    // Send initial subscription status
+    this.sendSubscriptionStatus(userId, ws);
+  }
+  
+  private async sendSubscriptionStatus(userId: string, ws: WebSocket): Promise<void> {
+    const subscriptions = await this.db
+      .select(
+        'subscriptions.channel_id',
+        'channels.name',
+        'subscription_preferences.notifications_enabled'
+      )
+      .from('subscriptions')
+      .join('channels', 'subscriptions.channel_id', 'channels.id')
+      .leftJoin('subscription_preferences', 'subscriptions.id', 'subscription_preferences.subscription_id')
+      .where({
+        'subscriptions.user_id': userId,
+        'subscriptions.is_active': true
+      });
+    
+    const message = {
+      type: 'subscription_status',
+      subscriptions,
+      timestamp: new Date().toISOString()
+    };
+    
+    ws.send(JSON.stringify(message));
+  }
+}
+```
+
+This comprehensive subscription system architecture ensures scalable, real-time subscription management with personalized content delivery, robust notification handling, and optimal performance through intelligent caching strategies.

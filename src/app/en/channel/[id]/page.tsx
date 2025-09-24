@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import { SubscribeButton } from '@/components/subscription';
 
 function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
   const [channelId, setChannelId] = useState<string | null>(null);
@@ -15,16 +16,26 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
     return <div>Loading...</div>;
   }
   return (
-    <div className="font-sans text-gray-800 max-w-6xl mx-auto">
+    <div className="font-sans text-gray-800 dark:text-gray-200 max-w-6xl mx-auto">
       {/* Channel Banner */}
-      <div className="relative h-52 bg-gray-200">
-        <div className="absolute bottom-[-50px] left-5 w-24 h-24 rounded-full bg-gray-400 border-4 border-white"></div>
+      <div className="relative h-52 bg-gray-200 dark:bg-gray-700">
+        <div className="absolute bottom-[-50px] left-5 w-24 h-24 rounded-full bg-gray-400 border-4 border-white dark:border-gray-800"></div>
       </div>
 
       {/* Channel Info */}
-      <div className="pt-16 pb-5 px-5 border-b border-gray-300">
-        <h1 className="text-2xl font-bold">Channel {channelId}</h1>
-        <p className="text-gray-600 mt-1">1.2M subscribers</p>
+      <div className="pt-16 pb-5 px-5 border-b border-gray-300 dark:border-gray-600">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Channel {channelId}</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">1.2M subscribers</p>
+          </div>
+          <SubscribeButton
+            channelId={channelId}
+            channelName={`Channel ${channelId}`}
+            subscribersCount={1200000}
+            initialSubscribed={false}
+          />
+        </div>
       </div>
 
       {/* Navigation Tabs */}
