@@ -1,14 +1,11 @@
 import React from "react";
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
-import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/themeProvider";
 import { authenticated } from "../lib/actions"
 import { Suspense } from "react"
 import "./globals.css";
 import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
   const subject = await authenticated()
@@ -49,7 +46,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
           referrerPolicy="no-referrer"
         />
       </head>
-      <body className={inter.className}>
+      <body className="font-inter">
         <Suspense>
           <NuqsAdapter>
             <ThemeProvider

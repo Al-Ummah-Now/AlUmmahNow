@@ -1,0 +1,110 @@
+name: 🚀 Deployment Issue
+description: Report issues with CI/CD pipeline or deployments
+title: "[DEPLOY] "
+labels: ["deployment", "infrastructure"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a deployment issue! Please provide as much detail as possible.
+
+  - type: dropdown
+    id: deployment-type
+    attributes:
+      label: Deployment Type
+      description: Which deployment is affected?
+      options:
+        - Manual deployment
+        - GitHub Actions CI/CD
+        - Staging environment
+        - Production environment
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment-stage
+    attributes:
+      label: Failed Stage
+      description: At which stage did the issue occur?
+      options:
+        - Test stage (TypeScript, linting, audit)
+        - Build stage (npm run build)
+        - Staging deployment
+        - Production deployment
+        - Post-deployment verification
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: Error Logs
+      description: Please paste the relevant error logs or output
+      placeholder: |
+        Paste error logs here...
+        
+        Example:
+        ```
+        Error: Failed to deploy to Cloudflare Workers
+        [ERROR] A request to the Cloudflare API failed.
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Push to main branch
+        2. GitHub Actions starts
+        3. Build stage fails with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What should have happened?
+      placeholder: Deployment should complete successfully and application should be accessible
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: environment-check
+    attributes:
+      label: Environment Verification
+      description: Please verify these common issues
+      options:
+        - label: Cloudflare API token is valid and has correct permissions
+        - label: Wrangler configuration files exist and are valid
+        - label: All required environment variables are set
+        - label: No conflicting deployments are running
+        - label: Dependencies are up to date
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency Level
+      description: How urgent is this issue?
+      options:
+        - Low - Development/staging issue
+        - Medium - Affects deployment pipeline
+        - High - Production is down
+        - Critical - Security or data loss risk
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any additional information that might be helpful
+      placeholder: |
+        - Recent changes made to the repository
+        - External service status (Cloudflare, Bunny.net)
+        - Timing of when the issue started
+        - Any workarounds attempted
