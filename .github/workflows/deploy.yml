@@ -1,0 +1,125 @@
+name: Deploy Al Ummah Now
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run type checking
+        run: npx tsc --noEmit
+      
+      - name: Run linting
+        run: npm run lint
+      
+      - name: Security audit
+        run: npm audit --audit-level moderate
+        continue-on-error: true
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build application
+        run: npm run build
+        timeout-minutes: 10
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            .open-next/
+            package.json
+            package-lock.json
+            wrangler.jsonc
+          retention-days: 30
+
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+      
+      - name: Deploy to Cloudflare Workers (Staging)
+        run: npx wrangler deploy --config wrangler.staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      
+      - name: Notify deployment status
+        if: always()
+        run: |
+          echo "Staging deployment completed with status: ${{ job.status }}"
+
+  deploy-production:
+    needs: [build, deploy-staging]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+      
+      - name: Deploy to Cloudflare Workers (Production)
+        run: npx wrangler deploy --config wrangler.production.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "Production deployment successful! 🚀"
+          echo "Application deployed to Cloudflare Workers with Bunny.net integration"
+      
+      - name: Notify deployment failure
+        if: failure()
+        run: |
+          echo "Production deployment failed ❌"
+          echo "Please check logs and consider rolling back if necessary"
