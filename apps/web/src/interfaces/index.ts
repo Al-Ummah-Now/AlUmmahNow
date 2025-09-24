@@ -146,3 +146,6 @@ export interface Dislikes {
     dateCreated?: string;
 }
 
+// Re-export WebSocket types
+export * from './websocket';
+

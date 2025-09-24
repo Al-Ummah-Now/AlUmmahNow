@@ -6,9 +6,12 @@ import { Suspense } from "react"
 import "./globals.css";
 import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
+import { WebSocketProvider } from "@/lib/websocket/WebSocketProvider";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
-  await authenticated(); // Check authentication on server side
+  const subject = await authenticated()
+  const user = subject ? subject.properties : null;
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -55,11 +58,16 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
               enableSystem
               disableTransitionOnChange>
               <AuthProvider>
-                <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
-                  {/* Header */}
-                  <Navigation></Navigation>
-                  {children}
-                </div>
+                <WebSocketProvider user={user}>
+                  <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                    {/* Header */}
+                    <Navigation></Navigation>
+                    {children}
+                    
+                    {/* Real-time notification center */}
+                    <NotificationCenter user={user} />
+                  </div>
+                </WebSocketProvider>
               </AuthProvider>
             </ThemeProvider>
           </NuqsAdapter>
