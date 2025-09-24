@@ -27,7 +27,9 @@
   },
   "vars":{
     "Issuer": "https://auth.alummahnow.net",
-    "OPENAUTH_ISSUER": "https://auth.alummahnow.net"
+    "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
+    "NEXTJS_ENV": "development",
+    "API_URL": "https://videos.api.alummahnow.net"
   },
   "r2_buckets": [
     {

@@ -50,11 +50,20 @@
     "build": "next build",
     "check": "opennextjs-cloudflare build && tsc && wrangler deploy --dry-run",
     "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "deploy:staging": "opennextjs-cloudflare build && wrangler deploy --config wrangler.staging.jsonc",
+    "deploy:production": "opennextjs-cloudflare build && wrangler deploy --config wrangler.production.jsonc",
     "dev": "next dev",
     "lint": "next lint",
     "preview": "opennextjs-cloudflare build && wrangler dev",
+    "preview:staging": "opennextjs-cloudflare build && wrangler dev --config wrangler.staging.jsonc",
     "start": "next start",
     "types": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "logs": "wrangler tail",
+    "logs:staging": "wrangler tail --config wrangler.staging.jsonc",
+    "logs:production": "wrangler tail --config wrangler.production.jsonc",
+    "deployments": "wrangler deployments list",
+    "rollback": "wrangler rollback",
+    "status": "wrangler status"
   }
 }
