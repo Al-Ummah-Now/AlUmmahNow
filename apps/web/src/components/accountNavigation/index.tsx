@@ -56,6 +56,11 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             items.push({ label: "Profile", icon: "fa-user", href: "/en/profile", onClick: onClose });
             items.push({ label: "Analytics", icon: "fa-chart-line", href: "/en/analytics", onClick: onClose });
             items.push({ label: "Settings", icon: "fa-cog", href: "/en/settings", onClick: onClose });
+            
+            // Add moderation link for admin/moderator users
+            if (user.role === 'admin' || user.role === 'moderator') {
+                items.push({ label: "Moderation", icon: "fa-shield-alt", href: "/en/moderation", onClick: onClose });
+            }
         }
         user
             ? items.push({ label: "Logout", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout })
