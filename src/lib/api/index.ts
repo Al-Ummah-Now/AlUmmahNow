@@ -28,6 +28,7 @@ export class APIClient {
       list: (params?, headers?) => VideosAPI.list(params, { ...this.headers, ...headers }),
       getById: (id, headers?) => VideosAPI.getById(id, { ...this.headers, ...headers }),
       create: (data, headers?) => VideosAPI.create(data, { ...this.headers, ...headers }),
+      upload: (file, metadata, headers?) => VideosAPI.upload(file, metadata, { ...this.headers, ...headers }),
       delete: (id, headers?) => VideosAPI.delete(id, { ...this.headers, ...headers }),
       createComment: (videoId, data, headers?) => VideosAPI.createComment(videoId, data, { ...this.headers, ...headers }),
       updateComment: (videoId, commentId, data, headers?) => VideosAPI.updateComment(videoId, commentId, data, { ...this.headers, ...headers }),
