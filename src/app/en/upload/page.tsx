@@ -4,6 +4,7 @@ import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle, Upload } from "lucide-react";
+import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 
 const UploadPage: React.FC = () => {
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -158,15 +159,15 @@ const UploadPage: React.FC = () => {
               </li>
               <li className="flex items-start">
                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                <span>Supported formats: MP4, MOV, AVI, WebM</span>
+                <span>Supported formats: {VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY}</span>
               </li>
               <li className="flex items-start">
                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                <span>Maximum file size: 2GB</span>
+                <span>Maximum file size: {VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE_DISPLAY}</span>
               </li>
               <li className="flex items-start">
                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                <span>Maximum duration: 2 hours</span>
+                <span>Maximum duration: {VIDEO_UPLOAD_CONFIG.MAX_DURATION_DISPLAY}</span>
               </li>
               <li className="flex items-start">
                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
