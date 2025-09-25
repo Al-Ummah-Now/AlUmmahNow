@@ -555,7 +555,7 @@ export class VideosAPI {
     limit: number = 5
   ): Promise<SearchSuggestion[]> {
     // In development/demo environment, return mock data immediately
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    if (this.isLocalhost()) {
       return this.getMockSuggestions(query);
     }
     
@@ -597,7 +597,7 @@ export class VideosAPI {
     limit: number = 20
   ): Promise<VideoObject[]> {
     // In development/demo environment, return mock data immediately to avoid network errors
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    if (this.isLocalhost()) {
       return this.getMockTrendingVideos();
     }
     
@@ -692,6 +692,14 @@ export class VideosAPI {
   // Class-level static constants for base64-encoded SVG data URIs
   private static readonly VIDEO_THUMBNAIL_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMzUgNzVMMTY1IDkwTDEzNSAxMDVWNzVaIiBmaWxsPSIjNjM2NzZEIi8+Cjx0ZXh0IHg9IjE2MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2MzY3NkQiPklzbGFtaWMgVmlkZW88L3RleHQ+Cjwvc3ZnPgo=';
   private static readonly AVATAR_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iIzlCA0E0QjEiLz4KPHBhdGggZD0iTTggMzJDOCAyNi40NzcyIDEyLjQ3NzIgMjIgMTggMjJIMjJDMjcuNTIyOCAyMiAzMiAyNi40NzcyIDMyIDMyVjMySDhaIiBmaWxsPSIjOUNBM0FGIS8+Cjwvc3ZnPgo=';
+
+  /**
+   * Check if running in localhost development environment
+   * @private
+   */
+  private static isLocalhost(): boolean {
+    return typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  }
 
   private static getMockTrendingVideos(): VideoObject[] {
     // Use simple data URIs for placeholders to avoid external network calls
