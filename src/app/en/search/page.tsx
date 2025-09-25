@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
 import SearchFilters from "@/components/search/SearchFilters/index";
@@ -21,8 +21,15 @@ const SearchPage: React.FC = () => {
         sortOrder: 'desc'
     });
     const [hasSearched, setHasSearched] = useState(false);
+    const [triggerSearch, setTriggerSearch] = useState(false); // Flag to trigger search from suggestion
 
-    const handleSearch = async () => {
+    const hasActiveFilters = useCallback(() => {
+        return Object.values(filters).some(value => 
+            value && value !== 'all' && value !== 'relevance'
+        );
+    }, [filters]);
+
+    const handleSearch = useCallback(async () => {
         if (!searchQuery.trim() && !hasActiveFilters()) return;
 
         setLoading(true);
@@ -36,12 +43,20 @@ const SearchPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [searchQuery, filters, hasActiveFilters]);
 
     const handleSuggestionSelect = (suggestion: string) => {
         setSearchQuery(suggestion);
-        setTimeout(() => handleSearch(), 100);
+        setTriggerSearch(true); // Set flag to trigger search after state update
     };
+
+    // Effect to trigger search when suggestion is selected
+    useEffect(() => {
+        if (triggerSearch && searchQuery.trim()) {
+            handleSearch();
+            setTriggerSearch(false); // Reset flag
+        }
+    }, [triggerSearch, searchQuery, handleSearch]);
 
     const handleApplyFilters = () => {
         setShowFilters(false);
@@ -59,14 +74,8 @@ const SearchPage: React.FC = () => {
         setShowFilters(false);
         // Re-search if there's a query
         if (searchQuery.trim()) {
-            setTimeout(() => handleSearch(), 100);
+            handleSearch();
         }
-    };
-
-    const hasActiveFilters = () => {
-        return Object.values(filters).some(value => 
-            value && value !== 'all' && value !== 'relevance'
-        );
     };
 
     // Handle Enter key in search

@@ -695,8 +695,8 @@ export class VideosAPI {
 
   private static getMockTrendingVideos(): VideoObject[] {
     // Use simple data URIs for placeholders to avoid external network calls
-    const videoThumbnail = VideosApi.VIDEO_THUMBNAIL_PLACEHOLDER;
-    const avatarPlaceholder = VideosApi.AVATAR_PLACEHOLDER;
+    const videoThumbnail = VideosAPI.VIDEO_THUMBNAIL_PLACEHOLDER;
+    const avatarPlaceholder = VideosAPI.AVATAR_PLACEHOLDER;
     
     return [
       {
