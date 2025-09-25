@@ -147,7 +147,7 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
           placeholder={placeholder}
-          className="w-full px-4 py-2 border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           dir="rtl"
         />
         
