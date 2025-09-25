@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
 import { VideosAPI } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, CheckCircle, Loader } from "lucide-react";
 
 interface VideoUploadProps {
@@ -47,16 +48,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   // File validation
   const validateFile = (file: File): string | null => {
-    const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
-    const allowedTypes = ['video/mp4', 'video/mov', 'video/avi', 'video/webm'];
-    const maxDuration = 60 * 60 * 2; // 2 hours in seconds
-
-    if (!allowedTypes.includes(file.type)) {
-      return 'Please upload a valid video file (MP4, MOV, AVI, or WebM)';
+    if (!VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type)) {
+      return VIDEO_UPLOAD_ERRORS.INVALID_TYPE;
     }
 
-    if (file.size > maxSize) {
-      return 'File size must be less than 2GB';
+    if (file.size > VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE) {
+      return VIDEO_UPLOAD_ERRORS.FILE_TOO_LARGE;
     }
 
     // TODO: Add duration validation when we can read video metadata
@@ -113,7 +110,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
     // Check authentication
     if (!auth.user) {
-      onError('Authentication required. Please log in to upload videos.');
+      onError(VIDEO_UPLOAD_ERRORS.AUTH_REQUIRED);
       return;
     }
 
@@ -142,7 +139,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       const result = await VideosAPI.upload(selectedFile, uploadData, headers);
 
       if (!result) {
-        throw new Error('Upload failed. Please try again.');
+        throw new Error(VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
       }
 
       setUploadProgress({ percentage: 80, stage: 'processing' });
@@ -162,7 +159,14 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         isPublic: true
       });
 
-      onUploadComplete(result.result?.video || result as any);
+      // Type-safe handling of the API response
+      const videoData = result.result?.video;
+      if (videoData) {
+        onUploadComplete(videoData);
+      } else {
+        // Fallback with proper error handling instead of 'as any'
+        throw new Error('Invalid API response: missing video data');
+      }
     } catch (error: any) {
       if (error.name === 'AbortError') {
         setUploadProgress(null);
@@ -355,7 +359,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             Drag and drop a video file, or click to browse
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Supports MP4, MOV, AVI, WebM • Max 2GB • Max 2 hours
+            Supports {VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY} • Max {VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE_DISPLAY} • Max {VIDEO_UPLOAD_CONFIG.MAX_DURATION_DISPLAY}
           </p>
         </div>
       </div>

@@ -545,7 +545,21 @@ export class VideosAPI {
       );
 
       if (!response.ok) {
-        throw new Error(`Error uploading video: ${response.statusText}`);
+        let errorDetails = '';
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorJson = await response.json();
+            errorDetails = JSON.stringify(errorJson);
+          } else {
+            errorDetails = await response.text();
+          }
+        } catch (e) {
+          errorDetails = 'Unable to parse error details';
+        }
+        throw new Error(
+          `Error uploading video: ${response.status} ${response.statusText}. Details: ${errorDetails}`
+        );
       }
 
       return await response.json();
