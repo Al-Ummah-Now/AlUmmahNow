@@ -9,6 +9,7 @@ interface SearchSuggestionsProps {
   onQueryChange: (query: string) => void;
   onSearch: () => void;
   placeholder?: string;
+  debounceDelay?: number; // Configurable debounce delay in milliseconds
 }
 
 export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
@@ -16,7 +17,8 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
   onSuggestionSelect,
   onQueryChange,
   onSearch,
-  placeholder = "ابحث عن الفيديوهات..."
+  placeholder = "ابحث عن الفيديوهات...",
+  debounceDelay = 300 // Default 300ms debounce delay
 }) => {
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -44,10 +46,10 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
         setSuggestions([]);
         setShowSuggestions(false);
       }
-    }, 300); // 300ms debounce
+    }, debounceDelay); // Configurable debounce delay
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, debounceDelay]);
 
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
