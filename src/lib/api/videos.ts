@@ -507,4 +507,65 @@ export class VideosAPI {
       return null;
     }
   }
+
+  /**
+   * Upload a video file
+   * POST /api/upload/video
+   */
+  static async upload(
+    file: File,
+    metadata: {
+      title: string;
+      description?: string;
+      isPublic: boolean;
+      tags?: string[];
+    },
+    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  ): Promise<ApiResponse<{ video: VideoObject }> | null> {
+    try {
+      const formData = new FormData();
+      formData.append('video', file);
+      formData.append('title', metadata.title);
+      formData.append('description', metadata.description || '');
+      formData.append('isPublic', metadata.isPublic.toString());
+      if (metadata.tags && metadata.tags.length > 0) {
+        formData.append('tags', JSON.stringify(metadata.tags));
+      }
+
+      const response = await fetch(
+        `${baseUrl}/api/upload/video`,
+        {
+          method: 'POST',
+          headers: {
+            'channelId': headers.channelId,
+            'userId': headers.userId,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        let errorDetails = '';
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorJson = await response.json();
+            errorDetails = JSON.stringify(errorJson);
+          } else {
+            errorDetails = await response.text();
+          }
+        } catch (e) {
+          errorDetails = 'Unable to parse error details';
+        }
+        throw new Error(
+          `Error uploading video: ${response.status} ${response.statusText}. Details: ${errorDetails}`
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('VideosAPI.upload error:', error);
+      return null;
+    }
+  }
 }

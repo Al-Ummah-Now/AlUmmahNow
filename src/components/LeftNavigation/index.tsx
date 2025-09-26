@@ -24,6 +24,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     const navItems: NavItems[] = [
         { label: "Home", icon: "fa-house", href: "/en/" },
         { label: "Trending", icon: "fa-magnifying-glass", href: "/en/search" },
+        { label: "Upload", icon: "fa-upload", href: "/en/upload" },
         { label: "Subscriptions", icon: "fa-tv", href: "#" },
         { label: "Library", icon: "fa-bookmark", href: "#" },
     ];
