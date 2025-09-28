@@ -48,7 +48,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   // File validation
   const validateFile = (file: File): string | null => {
-    if (!VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type)) {
+    if (!VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type as any)) {
       return VIDEO_UPLOAD_ERRORS.INVALID_TYPE;
     }
 
