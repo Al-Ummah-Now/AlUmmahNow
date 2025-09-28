@@ -3,7 +3,6 @@
 declare namespace Cloudflare {
 	interface Env {
 		Issuer: "https://auth.alummahnow.net";
-		Issuer: "https://auth.alummahnow.net";
 		OPENAUTH_ISSUER: "https://auth.alummahnow.net";
 		NEXTJS_ENV: "development";
 		API_URL: "https://videos.api.alummahnow.net";
