@@ -44,7 +44,7 @@ jobs:
       
       - name: Build application
         run: npm run build
-        timeout-minutes: 10
+        timeout-minutes: 120
       
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
