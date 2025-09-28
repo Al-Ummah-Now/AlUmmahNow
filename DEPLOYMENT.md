@@ -21,7 +21,7 @@ Al Ummah Now uses GitHub Actions for automated CI/CD deployment to Cloudflare Wo
 
 ## Deployment Pipeline
 
-The deployment pipeline consists of 4 stages:
+The deployment pipeline consists of 5 stages:
 
 ### 1. Test Stage
 - **Trigger**: Push to `main` branch or Pull Request
@@ -39,7 +39,21 @@ The deployment pipeline consists of 4 stages:
   - Upload build artifacts (`.open-next/`, configs)
 - **Artifacts**: Stored for 30 days
 
-### 3. Staging Deployment
+### 3. Preview Deployment (Pull Requests Only)
+- **Trigger**: Pull Request creation or updates
+- **Environment**: `preview`
+- **Worker Name**: `al-ummah-now-pr-{PR_NUMBER}`
+- **Configuration**: `wrangler.preview.jsonc`
+- **Resources**:
+  - Bunny.net zones: `al-ummah-now-images-preview`, `videos-preview`
+  - R2 bucket: `videos-preview`
+- **Features**:
+  - Automatic PR comment with preview URL
+  - Dynamic worker naming per PR
+  - Automatic cleanup when PR is closed
+  - Isolated preview environment
+
+### 4. Staging Deployment
 - **Trigger**: Push to `main` branch (after successful build)
 - **Environment**: `staging`
 - **Worker Name**: `al-ummah-now-staging`
@@ -48,7 +62,7 @@ The deployment pipeline consists of 4 stages:
   - Bunny.net zones: `al-ummah-now-images-staging`, `videos-staging`
   - R2 bucket: `videos-staging`
 
-### 4. Production Deployment
+### 5. Production Deployment
 - **Trigger**: After successful staging deployment
 - **Environment**: `production`
 - **Worker Name**: `al-ummah-now-production`
@@ -87,6 +101,22 @@ CLOUDFLARE_API_TOKEN=<your-cloudflare-api-token>
   "env": {
     "BunnyImageZone": "al-ummah-now-images",
     "BunnyVideoZone": "videos-mostafa-elbadry"
+  }
+}
+```
+
+#### Preview (wrangler.preview.jsonc)
+```json
+{
+  "vars": {
+    "Issuer": "https://auth.alummahnow.net",
+    "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
+    "NEXTJS_ENV": "preview",
+    "API_URL": "https://videos.api.alummahnow.net"
+  },
+  "env": {
+    "BunnyImageZone": "al-ummah-now-images-preview",
+    "BunnyVideoZone": "videos-preview"
   }
 }
 ```
@@ -149,10 +179,18 @@ The following variables need to be set in Cloudflare Workers dashboard as encryp
 - **CDN**: Global edge delivery
 - **Security**: API key authentication
 
+#### Preview (Pull Requests)
+- **Image Zone**: `al-ummah-now-images-preview`
+- **Video Zone**: `videos-preview`
+- **CDN**: Global edge delivery
+- **Security**: API key authentication
+- **Isolation**: Separate resources for PR testing
+
 ### R2 Bucket Configuration
 
 - **Production**: `videos` bucket
 - **Staging**: `videos-staging` bucket
+- **Preview**: `videos-preview` bucket
 - **Binding**: Accessible as `env.videos` in Workers
 - **CORS**: Configured for web uploads
 
@@ -161,16 +199,19 @@ The following variables need to be set in Cloudflare Workers dashboard as encryp
 ### Manual Deployment
 
 ```bash
+# Deploy to preview environment
+npm run deploy:preview           # Deploy to preview worker
+
 # Deploy to staging
-npm run build
-npx wrangler deploy --config wrangler.staging.jsonc
+npm run deploy:staging          # Deploy to staging environment
 
-# Deploy to production
-npm run build
-npx wrangler deploy --config wrangler.production.jsonc
+# Deploy to production  
+npm run deploy:production       # Deploy to production environment
 
-# Preview deployment locally
-npm run preview
+# Preview deployments locally
+npm run preview                 # Preview development build
+npm run preview:staging         # Preview staging configuration
+npm run preview:local           # Preview with preview configuration
 ```
 
 ### Development
@@ -185,6 +226,28 @@ npm run check
 # Generate types after config changes
 npm run cf-typegen
 ```
+
+### Preview Deployments
+
+Preview deployments are automatically created for pull requests using Cloudflare Workers preview functionality:
+
+```bash
+# Manual preview deployment with custom name
+npx wrangler deploy --config wrangler.preview.jsonc --name al-ummah-now-pr-123
+
+# View preview logs
+npm run logs:preview
+
+# Clean up preview deployment
+npx wrangler delete al-ummah-now-pr-123
+```
+
+**Preview Features**:
+- Automatic deployment on PR creation/update
+- Dynamic worker naming: `al-ummah-now-pr-{PR_NUMBER}`
+- PR comments with preview URLs
+- Automatic cleanup when PR is closed
+- Isolated preview resources (separate Bunny.net zones and R2 buckets)
 
 ## Monitoring & Observability
 
