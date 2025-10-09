@@ -43,7 +43,7 @@ export class APIClient {
       list: (params?: ListQueryParams, headers?: ApiHeaders) => VideosAPI.list(params, { ...this.headers, ...headers }),
       getById: (id: string, headers?: ApiHeaders) => VideosAPI.getById(id, { ...this.headers, ...headers }),
       create: (data: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.create(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      upload: (file: File, metadata: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.upload(file, metadata, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      upload: (file: File, metadata: { title: string; description?: string; isPublic: boolean; tags?: string[] }, headers?: ApiHeaders) => VideosAPI.upload(file, metadata, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
       delete: (id: string, headers?: ApiHeaders) => VideosAPI.delete(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
       createComment: (videoId: string, data: CommentCreateRequest, headers?: ApiHeaders) => VideosAPI.createComment(videoId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
       updateComment: (videoId: string, commentId: string, data: CommentUpdateRequest, headers?: ApiHeaders) => VideosAPI.updateComment(videoId, commentId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
