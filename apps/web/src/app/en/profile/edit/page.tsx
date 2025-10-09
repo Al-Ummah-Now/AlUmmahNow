@@ -19,8 +19,8 @@ const ProfileEditPage = () => {
     // Handle form submission logic here
     const formData = new FormData(event.target as HTMLFormElement);
     const newProfile = {
-      id: auth.user?.id,
-      email: auth.user?.email,
+      id: auth.user!.id,
+      email: auth.user!.email,
       firstName: formData.get('firstName') as string,
       lastName: formData.get('lastName') as string,
     };
@@ -29,6 +29,8 @@ const ProfileEditPage = () => {
 
   const handlePhotoUpdate = (type: 'profilePhoto' | 'coverPhoto', file: File) => {
     // Logic to handle photo update
+    if (!profile) return;
+
     if (type === 'profilePhoto') {
       updateProfilePhoto(profile, file, setProfile);
     }
