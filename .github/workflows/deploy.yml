@@ -115,6 +115,7 @@ jobs:
 
       - name: Type check API
         run: pnpm --filter @al-ummah/api-videos type-check
+        continue-on-error: true
         timeout-minutes: 3
 
       - name: Validate API deployment

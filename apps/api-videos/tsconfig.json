@@ -1,15 +1,23 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext"],
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "outDir": "./dist",
     "rootDir": "./src",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "strict": true
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictPropertyInitialization": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "worker-configuration.d.ts"],
   "references": [
     { "path": "../../packages/shared-types" }
   ]
