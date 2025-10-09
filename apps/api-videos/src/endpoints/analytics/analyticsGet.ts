@@ -181,14 +181,14 @@ export class AnalyticsGet extends OpenAPIRoute {
 				// Get specific entity metrics
 				const entityKey = `${entityType}:${entityId}`;
 				const repository = new (await import("../../lib/r2Repo")).default(bucket);
-				const entity = await repository.getObject(entityKey);
-				
+				const entity = await repository.getObject(entityKey) as any;
+
 				if (entity) {
-					localMetrics.views = entity.views || 0;
-					localMetrics.likes = entity.likes?.length || 0;
-					localMetrics.dislikes = entity.dislikes?.length || 0;
-					localMetrics.comments = entity.comments?.length || 0;
-					localMetrics.shares = entity.shares?.length || 0;
+					localMetrics.views = (entity as any).views || 0;
+					localMetrics.likes = (entity as any).likes?.length || 0;
+					localMetrics.dislikes = (entity as any).dislikes?.length || 0;
+					localMetrics.comments = (entity as any).comments?.length || 0;
+					localMetrics.shares = (entity as any).shares?.length || 0;
 				}
 			} else {
 				// Aggregate metrics for user's content
@@ -197,13 +197,13 @@ export class AnalyticsGet extends OpenAPIRoute {
 					for (const obj of listResult.objects) {
 						if (obj.key) {
 							const repository = new (await import("../../lib/r2Repo")).default(bucket);
-							const entity = await repository.getObject(obj.key);
-							if (entity && entity.userId === userId) {
-								localMetrics.views += entity.views || 0;
-								localMetrics.likes += entity.likes?.length || 0;
-								localMetrics.dislikes += entity.dislikes?.length || 0;
-								localMetrics.comments += entity.comments?.length || 0;
-								localMetrics.shares += entity.shares?.length || 0;
+							const entity = await repository.getObject(obj.key) as any;
+							if (entity && (entity as any).userId === userId) {
+								localMetrics.views += (entity as any).views || 0;
+								localMetrics.likes += (entity as any).likes?.length || 0;
+								localMetrics.dislikes += (entity as any).dislikes?.length || 0;
+								localMetrics.comments += (entity as any).comments?.length || 0;
+								localMetrics.shares += (entity as any).shares?.length || 0;
 							}
 						}
 					}
