@@ -16,7 +16,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
     user,
     profile
 }) => {
-    const [naveItems, setNaveItems] = React.useState([]);
+    const [naveItems, setNaveItems] = React.useState<NavItem[]>([]);
     const [login, setLogin] = React.useState(false);
     const [logout, setLogout] = React.useState(false);
     const { theme, setTheme } = useTheme();
