@@ -42,16 +42,16 @@ export class APIClient {
     return {
       list: (params?: ListQueryParams, headers?: ApiHeaders) => VideosAPI.list(params, { ...this.headers, ...headers }),
       getById: (id: string, headers?: ApiHeaders) => VideosAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.create(data, { ...this.headers, ...headers }),
-      upload: (file: File, metadata: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.upload(file, metadata, { ...this.headers, ...headers }),
-      delete: (id: string, headers?: ApiHeaders) => VideosAPI.delete(id, { ...this.headers, ...headers }),
-      createComment: (videoId: string, data: CommentCreateRequest, headers?: ApiHeaders) => VideosAPI.createComment(videoId, data, { ...this.headers, ...headers }),
-      updateComment: (videoId: string, commentId: string, data: CommentUpdateRequest, headers?: ApiHeaders) => VideosAPI.updateComment(videoId, commentId, data, { ...this.headers, ...headers }),
-      deleteComment: (videoId: string, commentId: string, headers?: ApiHeaders) => VideosAPI.deleteComment(videoId, commentId, { ...this.headers, ...headers }),
-      like: (videoId: string, headers?: ApiHeaders) => VideosAPI.like(videoId, { ...this.headers, ...headers }),
-      unlike: (videoId: string, headers?: ApiHeaders) => VideosAPI.unlike(videoId, { ...this.headers, ...headers }),
-      dislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.dislike(videoId, { ...this.headers, ...headers }),
-      removeDislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.removeDislike(videoId, { ...this.headers, ...headers }),
+      create: (data: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.create(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      upload: (file: File, metadata: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.upload(file, metadata, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      delete: (id: string, headers?: ApiHeaders) => VideosAPI.delete(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      createComment: (videoId: string, data: CommentCreateRequest, headers?: ApiHeaders) => VideosAPI.createComment(videoId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      updateComment: (videoId: string, commentId: string, data: CommentUpdateRequest, headers?: ApiHeaders) => VideosAPI.updateComment(videoId, commentId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      deleteComment: (videoId: string, commentId: string, headers?: ApiHeaders) => VideosAPI.deleteComment(videoId, commentId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      like: (videoId: string, headers?: ApiHeaders) => VideosAPI.like(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      unlike: (videoId: string, headers?: ApiHeaders) => VideosAPI.unlike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      dislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.dislike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      removeDislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.removeDislike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
     };
   }
 
