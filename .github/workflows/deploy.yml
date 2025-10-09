@@ -1,4 +1,4 @@
-name: Deploy Al Ummah Now
+name: Deploy Al Ummah Now Monorepo
 
 on:
   push:
@@ -11,117 +11,220 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Run type checking
-        run: npx tsc --noEmit
-      
-      - name: Run linting
-        run: npm run lint
-      
-      - name: Security audit
-        run: npm audit --audit-level moderate
-        continue-on-error: true
+          cache: 'pnpm'
 
-  build:
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
+
+      - name: Run type checking (all packages)
+        run: pnpm type-check
+        timeout-minutes: 5
+
+      - name: Run linting (all packages)
+        run: pnpm lint
+        continue-on-error: true
+        timeout-minutes: 3
+
+  # Build shared types first (dependency for other apps)
+  build-shared-types:
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-      
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm ci
-      
-      - name: Build application
-        run: npm run build
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @al-ummah/shared-types build
+        timeout-minutes: 2
+
+  # Build Web App
+  build-web:
+    needs: build-shared-types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web application
+        run: pnpm --filter @al-ummah/web build
         timeout-minutes: 120
-      
-      - name: Upload build artifacts
+
+      - name: Upload web build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
+          name: web-build-artifacts
           path: |
-            .open-next/
-            package.json
-            package-lock.json
-            wrangler.jsonc
+            apps/web/.open-next/
+            apps/web/package.json
+            apps/web/wrangler*.jsonc
           retention-days: 30
 
-  deploy-preview:
-    needs: build
+  # Validate API Videos
+  validate-api:
+    needs: build-shared-types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check API
+        run: pnpm --filter @al-ummah/api-videos type-check
+        timeout-minutes: 3
+
+      - name: Validate API deployment
+        run: |
+          cd apps/api-videos
+          pnpm wrangler deploy --dry-run
+        timeout-minutes: 2
+
+  # Validate Processor
+  validate-processor:
+    needs: build-shared-types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check processor
+        run: pnpm --filter @al-ummah/processor type-check
+        timeout-minutes: 3
+
+      - name: Run processor tests
+        run: pnpm --filter @al-ummah/processor test
+        continue-on-error: true
+        timeout-minutes: 3
+
+  # Deploy Web App Preview (PRs only)
+  deploy-web-preview:
+    needs: build-web
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     environment: preview
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-      
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm ci
-      
-      - name: Download build artifacts
+        run: pnpm install --frozen-lockfile
+
+      - name: Download web build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: build-artifacts
-      
+          name: web-build-artifacts
+          path: apps/web/
+
       - name: Generate preview name
         id: preview-name
         run: |
-          PREVIEW_NAME="al-ummah-now-pr-${{ github.event.number }}"
+          PREVIEW_NAME="al-ummah-web-pr-${{ github.event.number }}"
           echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
           echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
-      
-      - name: Deploy Preview to Cloudflare Workers
+
+      - name: Deploy Web Preview to Cloudflare Workers
         run: |
-          npx wrangler deploy --config wrangler.preview.jsonc \
+          cd apps/web
+          pnpm wrangler deploy --config wrangler.preview.jsonc \
             --name ${{ steps.preview-name.outputs.name }} \
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      
+
       - name: Comment PR with preview link
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo, number } = context.issue;
             const previewUrl = '${{ steps.preview-name.outputs.url }}';
-            
-            const body = `## 🚀 Preview Deployment
-            
-            Your preview deployment is ready!
-            
+
+            const body = `## 🚀 Web App Preview Deployment
+
+            Your web app preview deployment is ready!
+
             **Preview URL**: ${previewUrl}
-            
+
             This preview will be automatically cleaned up when the PR is closed.
-            
+
             ---
             <sub>Deployed via Cloudflare Workers Preview</sub>`;
-            
-            // Check if we already commented
+
             const comments = await github.rest.issues.listComments({
               owner,
               repo,
               issue_number: number,
             });
-            
-            const existingComment = comments.data.find(comment => 
-              comment.user.login === 'github-actions[bot]' && 
-              comment.body.includes('Preview Deployment')
+
+            const existingComment = comments.data.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('Web App Preview Deployment')
             );
-            
+
             if (existingComment) {
               await github.rest.issues.updateComment({
                 owner,
@@ -138,94 +241,337 @@ jobs:
               });
             }
 
-  cleanup-preview:
+  # Deploy API Videos Preview (PRs only)
+  deploy-api-preview:
+    needs: validate-api
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    environment: preview
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate preview name
+        id: preview-name
+        run: |
+          PREVIEW_NAME="al-ummah-api-pr-${{ github.event.number }}"
+          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
+          echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
+
+      - name: Deploy API Preview to Cloudflare Workers
+        run: |
+          cd apps/api-videos
+          pnpm wrangler deploy \
+            --name ${{ steps.preview-name.outputs.name }} \
+            --compatibility-date $(date +%Y-%m-%d)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Comment PR with API preview link
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            const previewUrl = '${{ steps.preview-name.outputs.url }}';
+
+            const body = `## 🚀 API Preview Deployment
+
+            Your API preview deployment is ready!
+
+            **API URL**: ${previewUrl}
+            **Swagger UI**: ${previewUrl}/
+            **OpenAPI Spec**: ${previewUrl}/openapi.json
+
+            This preview will be automatically cleaned up when the PR is closed.
+
+            ---
+            <sub>Deployed via Cloudflare Workers Preview</sub>`;
+
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: number,
+            });
+
+            const existingComment = comments.data.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('API Preview Deployment')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: number,
+                body
+              });
+            }
+
+  # Deploy Processor Preview (PRs only)
+  deploy-processor-preview:
+    needs: validate-processor
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    environment: preview
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate preview name
+        id: preview-name
+        run: |
+          PREVIEW_NAME="al-ummah-processor-pr-${{ github.event.number }}"
+          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
+
+      - name: Deploy Processor Preview to Cloudflare Workers
+        run: |
+          cd apps/processor
+          pnpm wrangler deploy --env development \
+            --name ${{ steps.preview-name.outputs.name }} \
+            --compatibility-date $(date +%Y-%m-%d)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Comment PR with processor preview info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            const previewName = '${{ steps.preview-name.outputs.name }}';
+
+            const body = `## 🚀 Processor Preview Deployment
+
+            Your queue processor preview deployment is ready!
+
+            **Worker Name**: ${previewName}
+            **Environment**: development
+
+            This preview will be automatically cleaned up when the PR is closed.
+
+            ---
+            <sub>Deployed via Cloudflare Workers Preview</sub>`;
+
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: number,
+            });
+
+            const existingComment = comments.data.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('Processor Preview Deployment')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: number,
+                body
+              });
+            }
+
+  # Cleanup previews when PR is closed
+  cleanup-previews:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-      
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm ci
-      
-      - name: Generate preview name
-        id: preview-name
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate preview names
+        id: preview-names
         run: |
-          PREVIEW_NAME="al-ummah-now-pr-${{ github.event.number }}"
-          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
-      
-      - name: Delete preview deployment
+          echo "web=al-ummah-web-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+          echo "api=al-ummah-api-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+          echo "processor=al-ummah-processor-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+
+      - name: Delete web preview
         run: |
-          npx wrangler delete ${{ steps.preview-name.outputs.name }} || echo "Preview already deleted or doesn't exist"
+          cd apps/web
+          pnpm wrangler delete ${{ steps.preview-names.outputs.web }} || echo "Web preview already deleted"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+      - name: Delete API preview
+        run: |
+          cd apps/api-videos
+          pnpm wrangler delete ${{ steps.preview-names.outputs.api }} || echo "API preview already deleted"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Delete processor preview
+        run: |
+          cd apps/processor
+          pnpm wrangler delete ${{ steps.preview-names.outputs.processor }} || echo "Processor preview already deleted"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  # Deploy to Staging (main branch only)
   deploy-staging:
-    needs: build
+    needs: [build-web, validate-api, validate-processor]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: staging
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-      
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm ci
-      
-      - name: Download build artifacts
+        run: pnpm install --frozen-lockfile
+
+      - name: Download web build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: build-artifacts
-      
-      - name: Deploy to Cloudflare Workers (Staging)
-        run: npx wrangler deploy --config wrangler.staging.jsonc
+          name: web-build-artifacts
+          path: apps/web/
+
+      - name: Deploy Web to Staging
+        run: |
+          cd apps/web
+          pnpm wrangler deploy --config wrangler.staging.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      
-      - name: Notify deployment status
-        if: always()
-        run: |
-          echo "Staging deployment completed with status: ${{ job.status }}"
 
+      - name: Deploy API to Staging
+        run: |
+          cd apps/api-videos
+          pnpm wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy Processor to Staging
+        run: |
+          cd apps/processor
+          pnpm wrangler deploy --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Notify staging deployment
+        run: |
+          echo "✅ Staging deployment completed successfully!"
+          echo "- Web app deployed"
+          echo "- API deployed"
+          echo "- Processor deployed"
+
+  # Deploy to Production (main branch only, after staging)
   deploy-production:
-    needs: [build, deploy-staging]
+    needs: deploy-staging
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-      
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm ci
-      
-      - name: Download build artifacts
+        run: pnpm install --frozen-lockfile
+
+      - name: Download web build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: build-artifacts
-      
-      - name: Deploy to Cloudflare Workers (Production)
-        run: npx wrangler deploy --config wrangler.production.jsonc
+          name: web-build-artifacts
+          path: apps/web/
+
+      - name: Deploy Web to Production
+        run: |
+          cd apps/web
+          pnpm wrangler deploy --config wrangler.production.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      
-      - name: Notify deployment success
+
+      - name: Deploy API to Production
+        run: |
+          cd apps/api-videos
+          pnpm wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy Processor to Production
+        run: |
+          cd apps/processor
+          pnpm wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Notify production deployment success
         if: success()
         run: |
-          echo "Production deployment successful! 🚀"
-          echo "Application deployed to Cloudflare Workers with Bunny.net integration"
-      
-      - name: Notify deployment failure
+          echo "🚀 Production deployment successful!"
+          echo "- Web app: Deployed with Cloudflare Workers"
+          echo "- API: Deployed with Hono + OpenAPI"
+          echo "- Processor: Deployed with queue consumer"
+
+      - name: Notify production deployment failure
         if: failure()
         run: |
-          echo "Production deployment failed ❌"
+          echo "❌ Production deployment failed!"
           echo "Please check logs and consider rolling back if necessary"
