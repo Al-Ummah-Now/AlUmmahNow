@@ -68,7 +68,7 @@ export async function authMiddleware(c: Context, next: Next) {
     // Set userId in context for backward compatibility with existing endpoints
     c.set('userId', payload.sub);
 
-    await next();
+    return await next();
   } catch (error) {
     console.error('Auth middleware error:', error);
     return c.json({
