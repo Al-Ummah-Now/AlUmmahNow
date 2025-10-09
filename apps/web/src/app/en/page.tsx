@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { PaginationResponse, VideoObject } from "@/interfaces";
+import { VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
 import { useQueryState } from "nuqs";
 import { fetchVideosWithPagination } from "@/lib/clients/videos";
