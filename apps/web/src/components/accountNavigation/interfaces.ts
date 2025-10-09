@@ -3,7 +3,7 @@ import { Profile, User } from "@/interfaces";
 export interface AccountNavigationProps {
     isVisible: boolean;
     onClose: () => void;
-    user: User | false;
+    user: User | null;
     profile?: Profile | null;
 }
 
