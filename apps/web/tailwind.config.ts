@@ -1,24 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 
-const theme = {
-  component: {
-    defaultProps: {},
-    colors: {
-      ummah: {
-        text: "#ffa037",
-        label: "#8e6c53",
-        bg: "#091f29",
-        50: "#ffa037",
-        100: "#f6e196",
-        150: "#8e6c53",
-        400: "#093041",
-        500: "#092735",
-        900: "#091f29",
-      }
-    }
-  }
-}
-
 module.exports = {
   darkmode: "class",
   content: [
