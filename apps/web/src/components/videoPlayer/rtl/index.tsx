@@ -5,7 +5,7 @@ import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "../interface";
 
 const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
-  const aspectRatio = options.width / options.height;
+  const aspectRatio = (options.width ?? 1920) / (options.height ?? 1080);
   return (
     <>
       <div className="flex w-full mt-0 relative dark:bg-gray-900" dir="rtl">
