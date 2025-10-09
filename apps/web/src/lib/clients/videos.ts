@@ -2,8 +2,6 @@ import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { PaginationResponse, VideoInfo, VideoObject } from "@/interfaces";
 import { VideosAPI } from "@/lib/api";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
-
 export async function fetchVideoById(vid: string): Promise<PlayerOptions> {
     if (!vid) return;
 

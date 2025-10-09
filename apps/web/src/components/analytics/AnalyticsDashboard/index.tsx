@@ -117,7 +117,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             Top Performing Videos
           </h3>
           <div className="space-y-4">
-            {channelData.topPerformingVideos.slice(0, 5).map((video, index) => (
+            {channelData.topPerformingVideos.slice(0, 5).map((video) => (
               <div key={video.videoId} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="flex-1">
                   <h4 className="font-medium text-gray-800 dark:text-white">

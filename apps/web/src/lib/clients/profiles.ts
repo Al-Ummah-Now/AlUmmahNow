@@ -3,25 +3,6 @@ import { ProfilesAPI } from "@/lib/api";
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
 
-interface ProfileApiResponse {
-    success: boolean;
-    result: {
-        profile: Profile;
-    };
-}
-
-interface ProfilesListApiResponse {
-    success: boolean;
-    result: {
-        profiles: Profile[];
-        pagination: {
-            limit: number;
-            cursor?: string;
-            hasMore: boolean;
-        };
-    };
-}
-
 export const fetchProfile = async (user: User | null | undefined, setProfile: (profile: Profile) => void): Promise<boolean> => {
     // Early return for any invalid input
     if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
