@@ -1,0 +1,17 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📋 Project Board
+    url: https://github.com/users/meywd/projects/1/views/1
+    about: View current development status and roadmap progress
+  - name: 🚀 Live API Documentation
+    url: https://videos.api.alummahnow.net/
+    about: Interactive API documentation with authentication support
+  - name: 📖 Technical Documentation
+    url: https://github.com/meywd/AlUmmahNowVideos/blob/master/TECHNICAL_DOCUMENTATION.md
+    about: Complete technical documentation and architecture guide
+  - name: 🗺️ Roadmap
+    url: https://github.com/meywd/AlUmmahNowVideos/blob/master/ROADMAP.md
+    about: Feature roadmap and development phases
+  - name: 💬 Discussions
+    url: https://github.com/meywd/AlUmmahNowVideos/discussions
+    about: General questions, ideas, and community discussions

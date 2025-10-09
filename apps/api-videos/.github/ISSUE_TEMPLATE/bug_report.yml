@@ -1,0 +1,136 @@
+name: 🐛 Bug Report
+description: Report a bug or issue with the Videos API
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+projects: ["meywd/1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report for the Al-Ummah Now Videos API!
+        
+        **Project Board**: [Al-Ummah Now Master Project](https://github.com/users/meywd/projects/1/views/1)
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: A clear and concise description of what actually happened.
+      placeholder: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Make API call to '...'
+        2. With parameters '...'
+        3. Using authentication '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: request-details
+    attributes:
+      label: Request Details
+      description: Details about the API request that caused the issue
+      render: http
+      placeholder: |
+        Method: GET/POST/PUT/DELETE
+        Endpoint: /api/...
+        Headers: {...}
+        Body: {...}
+
+  - type: textarea
+    id: error-response
+    attributes:
+      label: Error Response
+      description: The error response from the API
+      render: json
+      placeholder: |
+        {
+          "error": "...",
+          "message": "..."
+        }
+
+  - type: dropdown
+    id: api-environment
+    attributes:
+      label: API Environment
+      description: Which environment are you using?
+      options:
+        - Production (videos.api.alummahnow.net)
+        - Development (localhost:8686)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: other-environment
+    attributes:
+      label: Other Environment
+      description: If you selected "Other" above, please specify
+      placeholder: e.g., staging.videos.api.alummahnow.net
+
+  - type: textarea
+    id: client-environment
+    attributes:
+      label: Client Environment
+      description: Details about your client environment
+      placeholder: |
+        - Browser: [e.g. Chrome 91, Safari 14]
+        - OS: [e.g. macOS 12, Windows 11]
+        - Client Library: [e.g. fetch, axios, curl]
+        - Version: [e.g. 1.0.0]
+
+  - type: dropdown
+    id: authentication
+    attributes:
+      label: Authentication Method
+      description: What authentication method are you using?
+      options:
+        - JWT Bearer token
+        - No authentication (public endpoint)
+        - OAuth2 flow
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any additional context, screenshots, logs, related issues, or workarounds
+      placeholder: Add any other context about the problem here...
+
+  - type: checkboxes
+    id: internal-checklist
+    attributes:
+      label: Internal Checklist (for maintainers)
+      options:
+        - label: API endpoint affected identified
+        - label: Severity assessed (Low/Medium/High/Critical)
+        - label: Impact area identified (Frontend/Backend/Infrastructure)
+        - label: Documentation needs update
