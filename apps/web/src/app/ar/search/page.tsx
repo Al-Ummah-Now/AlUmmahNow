@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { PaginationResponse, VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/rtl/index";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 const SearchPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");

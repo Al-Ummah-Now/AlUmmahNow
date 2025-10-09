@@ -10,7 +10,7 @@ const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, _setIsCollapsed] = useState(true);
   const [loading, setLoading] = useState(false);
   const path = usePathname();
   const rtl = path.indexOf('/ar') > -1;

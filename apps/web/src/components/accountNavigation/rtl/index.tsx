@@ -1,10 +1,9 @@
 "use client";
 import React, { useEffect } from "react";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import IcoButton from "@/components/iconButton";
 import Image from 'next/image';
 import Link from "next/link";
-import { Profile } from "@/interfaces";
 import { AccountNavigationProps, NavItem } from "./../interfaces";
 import { useTheme } from "next-themes"
 import LoginWrapper from "@/components/login/loginButton/rtl";

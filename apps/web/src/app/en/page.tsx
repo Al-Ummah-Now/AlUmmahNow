@@ -10,7 +10,7 @@ const VideosPage: React.FC = () => {
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
   const [nextCursor, setNextCursor] = useState<string | null>(null); 
   const [loading, setLoading] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, _setIsCollapsed] = useState(true);
   
   // Prevent duplicate initial fetch
   const hasInitialFetch = useRef(false);

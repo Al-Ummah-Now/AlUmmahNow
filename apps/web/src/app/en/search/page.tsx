@@ -7,7 +7,7 @@ const SearchPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [videos, setVideos] = useState<VideoObject[]>([]);
     const [loading, setLoading] = useState(false);
-    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [_isCollapsed, _setIsCollapsed] = useState(true);
 
     const handleSearch = async () => {
         if (!searchQuery.trim()) return;
