@@ -4,7 +4,7 @@ import { VideoObject } from "@/interfaces";
 import { VideosAPI } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
-import { Upload, X, AlertCircle, CheckCircle, Loader } from "lucide-react";
+import { Upload, X, AlertCircle } from "lucide-react";
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;

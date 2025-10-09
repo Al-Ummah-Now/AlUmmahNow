@@ -1,9 +1,8 @@
 import { VideoObject } from "@/interfaces";
-import { 
-  ApiResponse, 
-  PaginationResponse, 
-  VideoCreateRequest, 
-  VideoUpdateRequest,
+import {
+  ApiResponse,
+  PaginationResponse,
+  VideoCreateRequest,
   ApiHeaders,
   ListQueryParams,
   CommentCreateRequest,

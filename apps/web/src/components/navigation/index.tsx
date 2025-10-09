@@ -6,8 +6,8 @@ import HeaderRtl from "@/components/Header/rtl/index";
 import LeftNavigationRtl from "@/components/LeftNavigation/rtl/index";
 import AccountNavigation from "@/components/accountNavigation";
 import AccountNavigationRtl from "@/components/accountNavigation/rtl";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
-import { AuthSubject, Profile } from "@/interfaces";
+import { usePathname } from "next/navigation";
+import { Profile } from "@/interfaces";
 import { fetchProfile } from "@/lib/clients/profiles";
 import { useAuth } from "../AuthProvider/authContext";
 
