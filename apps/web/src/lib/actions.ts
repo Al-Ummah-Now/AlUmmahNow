@@ -7,10 +7,10 @@ import { AuthSubject } from "@/interfaces"
 
 export async function getClient() {
   const client = createClient({
-    clientID: process.env.ClientId,
-    issuer: process.env.Issuer, 
+    clientID: process.env.ClientId!,
+    issuer: process.env.Issuer!,
   });
-  
+
   return client;
 }
 
