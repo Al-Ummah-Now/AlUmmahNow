@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import IcoButton from "@/components/iconButton";
 import Image from 'next/image';
 import Link from "next/link";
