@@ -41,7 +41,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
     }
     
     if ('tokens' in verified) {
-      await setTokens(verified.tokens.access, verified.tokens.refresh);
+      await setTokens(verified.tokens!.access, verified.tokens!.refresh);
     }
 
     if ('subject' in verified) {
@@ -80,9 +80,9 @@ export async function login() {
       });
       
       const hasError = verified.err && Object.keys(verified.err).length > 0;
-      
+
       if (!hasError && 'tokens' in verified) {
-        await setTokens(verified.tokens.access, verified.tokens.refresh);
+        await setTokens(verified.tokens!.access, verified.tokens!.refresh);
         redirect("/");
       } else if (!hasError) {
         redirect("/");
