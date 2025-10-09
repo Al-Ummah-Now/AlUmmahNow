@@ -1,94 +1,261 @@
-# Al Ummah Now - Monorepo
+# Al Ummah Now - Islamic Content Platform
 
-Islamic content platform with video portal, API backend, and shared services.
+[![Deploy](https://github.com/meywd/AlUmmahNow/actions/workflows/deploy.yml/badge.svg)](https://github.com/meywd/AlUmmahNow/actions/workflows/deploy.yml)
+
+A comprehensive Islamic content platform built as a Turborepo monorepo with three Cloudflare Workers applications.
+
+## 🌟 Features
+
+- **Bilingual Support**: Full English/Arabic with RTL layout
+- **Video Platform**: Upload, stream, and manage Islamic video content
+- **Authentication**: Secure OpenAuth integration with JWT tokens
+- **Real-time Processing**: Queue-based event processing and analytics
+- **Modern Stack**: Next.js 15, Hono, Cloudflare Workers, Bunny.net CDN
+- **Type-Safe**: Shared TypeScript types across all applications
 
 ## 🏗️ Monorepo Structure
 
 ```
 al-ummah-now/
 ├── apps/
-│   ├── web/              Next.js frontend (Cloudflare Workers)
-│   └── api-videos/       Video API backend (Fastify)
+│   ├── web/                Next.js 15 frontend
+│   ├── api-videos/         Hono API backend with OpenAPI
+│   └── processor/          Queue consumer for events
 ├── packages/
-│   └── shared-types/     Shared TypeScript types
-├── package.json          Workspace root
-├── turbo.json            Turborepo configuration
-└── pnpm-workspace.yaml   pnpm workspaces
+│   └── shared-types/       Shared TypeScript types
+├── pnpm-workspace.yaml     Workspace configuration
+├── turbo.json              Build orchestration
+└── package.json            Root scripts
 ```
+
+### Applications
+
+| App | Description | Port | Docs |
+|-----|-------------|------|------|
+| **web** | Next.js frontend with bilingual support | 3000 | [README](apps/web/README.md) |
+| **api-videos** | Hono API backend with OpenAPI/Swagger | 8686 | [CLAUDE.md](apps/api-videos/CLAUDE.md) |
+| **processor** | Cloudflare Queue consumer | 8787 | [README](apps/processor/README.md) |
+| **shared-types** | Shared TypeScript types | - | Built package |
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+- Node.js 18+
+- pnpm 9.15.4+
+- Cloudflare account (for deployment)
+
+### Setup
+
 ```bash
+# Clone repository
+git clone https://github.com/meywd/AlUmmahNow.git
+cd AlUmmahNow
+
 # Install dependencies
 pnpm install
 
 # Build shared types (required first)
 pnpm --filter @al-ummah/shared-types build
-
-# Development
-pnpm web:dev         # Frontend on :3000
-pnpm api:dev         # API on :3001
-pnpm dev             # All apps
-
-# Build
-pnpm build           # Build all packages
-
-# Deploy
-pnpm web:deploy      # Deploy frontend to Cloudflare
 ```
 
-## 📦 Apps & Packages
-
-### apps/web - Frontend
-- Next.js 15 with App Router
-- Cloudflare Workers deployment
-- OpenAuth authentication
-- Bilingual (English/Arabic) with RTL support
-- Video.js player with quality selection
-
-### apps/api-videos - Backend API
-- Fastify REST API
-- Shared TypeScript types
-- Cloudflare D1 + R2 integration
-- OpenAPI specification
-
-### packages/shared-types
-Shared types for type-safe development:
-- Video, Channel, Playlist, User, Comment, Analytics types
-- Used by both frontend and backend
-
-## 🔧 Development
+### Development
 
 ```bash
-# First time setup
-pnpm install
-pnpm --filter @al-ummah/shared-types build
+# Run all apps in parallel
+pnpm dev
 
-# Start dev servers
-pnpm web:dev      # Frontend: http://localhost:3000
-pnpm api:dev      # API: http://localhost:3001
+# Or run individual apps
+pnpm web:dev          # Frontend: http://localhost:3000
+pnpm api:dev          # API: http://127.0.0.1:8686 (Swagger UI at root)
+pnpm processor:dev    # Processor: http://localhost:8787
 ```
 
-## 📖 Documentation
+### Build & Test
 
-- [CLAUDE.md](./CLAUDE.md) - AI assistant guidance
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment guide
-- [ROADMAP.md](./ROADMAP.md) - Development roadmap
+```bash
+# Build all packages
+pnpm build
+
+# Type check all packages
+pnpm type-check
+
+# Lint all packages
+pnpm lint
+```
+
+## 📦 Technology Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | Next.js 15, React 19, Tailwind CSS, shadcn/ui |
+| **API** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
+| **Processing** | Cloudflare Queue Consumer, TypeScript |
+| **Authentication** | OpenAuth (JWT/OAuth2) |
+| **Storage** | Cloudflare R2 (object storage), KV (key-value) |
+| **CDN** | Bunny.net (video streaming + images) |
+| **Deployment** | Cloudflare Workers (all apps) |
+| **Package Manager** | pnpm v9.15.4 with workspaces |
+| **Build System** | Turborepo v2 with caching |
+
+## 🎯 Key Features by App
+
+### Web App (`apps/web`)
+- 🌐 Bilingual routes: `/en/*` (LTR) and `/ar/*` (RTL)
+- 🎥 Video.js player with quality selection
+- 🔐 OpenAuth authentication with JWT tokens
+- 🎨 Dark/light theme support
+- 📱 Fully responsive design
+- ⚡ Deployed via @opennextjs/cloudflare
+
+### API Videos (`apps/api-videos`)
+- 📚 OpenAPI 3.1 with interactive Swagger UI
+- 🗄️ R2 object storage (no traditional database)
+- 🎬 Bunny.net integration for video streaming
+- 🔒 JWT authentication middleware
+- ✅ Zod schema validation
+- 📊 Complete REST API for videos, channels, playlists, profiles
+
+### Processor (`apps/processor`)
+- 📨 Cloudflare Queue consumer
+- 📊 Processes 13+ message types (views, likes, comments, subscriptions)
+- 💾 Saves events to R2 for analytics
+- 🔄 Retry logic with dead letter queue
+- 🏥 Health check and monitoring endpoints
 
 ## 🚢 Deployment
 
-Frontend deploys to Cloudflare Workers via GitHub Actions:
-- **Preview**: PRs get `al-ummah-now-pr-{PR_NUMBER}.workers.dev`
-- **Staging**: Automatic on merge to main
+### Environments
+
+- **Preview**: PR-specific deployments
+  - `al-ummah-web-pr-{number}.workers.dev`
+  - `al-ummah-api-pr-{number}.workers.dev`
+  - `al-ummah-processor-pr-{number}`
+
+- **Staging**: Automatic on merge to `main`
 - **Production**: After staging validation
+
+### Deploy Manually
+
+```bash
+# Deploy web app
+pnpm web:deploy:production
+
+# Deploy API
+pnpm api:deploy
+
+# Deploy processor
+pnpm processor:deploy
+```
+
+### CI/CD Pipeline
+
+GitHub Actions workflow automatically:
+1. ✅ Type checks and lints all packages
+2. 🏗️ Builds shared-types and web app
+3. ✅ Validates API and processor
+4. 🚀 Deploys previews for PRs (all 3 apps)
+5. 🎯 Deploys to staging on merge to main
+6. 🌐 Deploys to production after staging validation
+
+**Required Secret**: `CLOUDFLARE_API_TOKEN`
+
+## 📖 Documentation
+
+### Getting Started
+- **[CLAUDE.md](./CLAUDE.md)** - AI assistant guidance for development
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Development guidelines
+
+### App-Specific
+- **[Web App](.github/CLAUDE.md)** - Frontend development guide
+- **[API Videos](./apps/api-videos/CLAUDE.md)** - API architecture and development
+- **[API Authentication](./apps/api-videos/AUTHENTICATION.md)** - API authentication guide
+- **[Processor](./apps/processor/README.md)** - Queue processor documentation
+
+### Legacy Docs
+- **[MONOREPO_MIGRATION.md](./MONOREPO_MIGRATION.md)** - Migration history
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Original architecture (pre-monorepo)
+
+## 🔧 Development Workflow
+
+### Adding Dependencies
+
+```bash
+# Add to specific app
+pnpm --filter @al-ummah/web add package-name
+pnpm --filter @al-ummah/api-videos add package-name
+
+# Add to root devDependencies
+pnpm add -D -w package-name
+```
+
+### Working with Shared Types
+
+```bash
+# Edit types
+vim packages/shared-types/src/video.ts
+
+# Rebuild
+pnpm --filter @al-ummah/shared-types build
+
+# Use in apps
+import { VideoObject } from '@al-ummah/shared-types'
+```
+
+### Common Commands
+
+```bash
+# Build specific app
+pnpm --filter @al-ummah/web build
+
+# Type check specific app
+pnpm --filter @al-ummah/api-videos type-check
+
+# Run tests
+pnpm --filter @al-ummah/processor test
+
+# Deploy staging
+pnpm processor:deploy:staging
+```
+
+## 🐛 Troubleshooting
+
+### Cannot find module '@al-ummah/shared-types'
+```bash
+pnpm --filter @al-ummah/shared-types build
+# Then restart VS Code TypeScript server:
+# Ctrl+Shift+P → "TypeScript: Restart TS Server"
+```
+
+### VS Code IntelliSense errors
+```bash
+# Reload VS Code window
+# Ctrl+Shift+P → "Developer: Reload Window"
+```
+
+### Using npm instead of pnpm
+This is a **pnpm monorepo**. Always use `pnpm` instead of `npm`.
 
 ## 🔗 Links
 
-- **Live Demo**: https://al-ummah-now.templates.workers.dev
-- **Project Board**: https://github.com/users/meywd/projects/1
 - **Repository**: https://github.com/meywd/AlUmmahNow
+- **Project Board**: https://github.com/users/meywd/projects/1
+- **Issues**: https://github.com/meywd/AlUmmahNow/issues
+
+## 📝 License
+
+MIT
+
+## 👥 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run `pnpm type-check` and `pnpm lint`
+5. Submit a pull request
 
 ---
 
-Built with Turborepo, Next.js, Fastify, and Cloudflare Workers.
+Built with ❤️ using Turborepo, Next.js, Hono, and Cloudflare Workers.

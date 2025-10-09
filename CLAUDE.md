@@ -1,418 +1,359 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this monorepo.
 
 ## Project Overview
 
-Al Ummah Now is a Next.js 15 video platform for Islamic content deployed on Cloudflare Workers with R2 storage. The platform features OpenAuth authentication, Bunny.net CDN integration, bilingual support (English/Arabic with RTL), and a comprehensive video management system.
+**Al Ummah Now** is an Islamic content platform monorepo with three Cloudflare Workers applications:
 
-**Live Demo**: https://al-ummah-now.templates.workers.dev
+1. **web** - Next.js 15 frontend with bilingual support (English/Arabic, RTL)
+2. **api-videos** - Hono API backend with OpenAPI 3.1 (chanfana)
+3. **processor** - Queue consumer for message processing and analytics
+
+All apps share TypeScript types via `@al-ummah/shared-types` workspace package.
+
+**Repository**: https://github.com/meywd/AlUmmahNow
+
+## Monorepo Structure
+
+```
+al-ummah-now/
+├── apps/
+│   ├── web/              Next.js frontend (Cloudflare Workers + OpenNext)
+│   ├── api-videos/       Hono API backend (Cloudflare Workers + R2)
+│   └── processor/        Queue consumer (Cloudflare Workers + R2)
+├── packages/
+│   └── shared-types/     Shared TypeScript types
+├── package.json          Root workspace config
+├── pnpm-workspace.yaml   pnpm workspaces
+├── turbo.json            Turborepo orchestration
+└── tsconfig.json         Root TypeScript project references
+```
 
 ## Essential Commands
 
+**Important**: This is a **pnpm monorepo**. Always use `pnpm` instead of `npm`.
+
+### Setup
+```bash
+pnpm install                              # Install all dependencies (1-2 min)
+pnpm --filter @al-ummah/shared-types build # Build shared types (required first)
+```
+
 ### Development
 ```bash
-npm install              # Install dependencies (65 seconds)
-npm run dev             # Start dev server on port 3000
-npm run build           # Production build (38s - 90+ min depending on environment)
-npm run lint            # Run ESLint (3 warnings acceptable)
-npx tsc --noEmit        # Type checking only (6 seconds)
+pnpm dev                 # Run all apps in parallel
+pnpm web:dev             # Web app: http://localhost:3000
+pnpm api:dev             # API: http://127.0.0.1:8686
+pnpm processor:dev       # Processor: http://localhost:8787
 ```
 
-### Cloudflare Deployment
+### Build & Validation
 ```bash
-npm run cf-typegen            # Generate Cloudflare types
-npm run check                 # Build + type check + dry-run deploy (8s)
-npm run preview               # Build and preview with Wrangler
-npm run deploy:preview        # Deploy to preview environment
-npm run deploy:staging        # Deploy to staging
-npm run deploy:production     # Deploy to production
-npm run logs                  # Tail production logs
-npm run logs:staging          # Tail staging logs
-npm run logs:preview          # Tail preview logs
-npm run deployments           # List all deployments
-npm run rollback              # Rollback to previous deployment
-npm run status                # Check worker status
+pnpm build               # Build all packages
+pnpm type-check          # Type check all packages
+pnpm lint                # Lint all packages
 ```
 
-**Deployment Environments**:
-- **Preview**: PR-specific workers (`al-ummah-now-pr-{PR_NUMBER}`), separate Bunny.net zones
-- **Staging**: `al-ummah-now-staging`, staging Bunny.net zones
-- **Production**: `al-ummah-now-production`, production Bunny.net zones
+### Deployment
+```bash
+pnpm web:deploy:production      # Deploy web to production
+pnpm api:deploy                 # Deploy API to production
+pnpm processor:deploy           # Deploy processor to production
+pnpm processor:deploy:staging   # Deploy processor to staging
+```
 
-### Testing
-- **Manual validation required**: Run `npm run dev` and test at http://localhost:3000
-- Verify homepage redirects to `/en/` with header, logo, and Videos section
-- Test navigation between `/en` and `/ar` routes for bilingual support
-- Check responsive design and dark/light theme switching
+### Per-App Commands
+```bash
+# Build specific app
+pnpm --filter @al-ummah/web build
+pnpm --filter @al-ummah/api-videos type-check
+pnpm --filter @al-ummah/processor test
 
-## High-Level Architecture
+# Run app-specific scripts
+cd apps/web && pnpm dev
+cd apps/api-videos && pnpm wrangler deploy --dry-run
+cd apps/processor && pnpm lint:fix
+```
 
-### Deployment Stack
-- **Frontend**: Next.js 15 with App Router, deployed via @opennextjs/cloudflare
-- **Hosting**: Cloudflare Workers with edge computing
-- **Storage**: Cloudflare R2 for video files
-- **CDN**: Bunny.net for image/video delivery (zones: al-ummah-now-images, videos-mostafa-elbadry)
-- **Authentication**: OpenAuth with JWT tokens, refresh rotation
-- **Cache**: Cloudflare KV for incremental cache
+## Architecture Overview
 
-### Multi-Environment Pipeline
-**Status**: Complete CI/CD pipeline (commits dd20755, 9585e83)
+### Technology Stack
 
-Automated CI/CD via GitHub Actions (.github/workflows/deploy.yml):
+| Component | Technology |
+|-----------|-----------|
+| **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS |
+| **API Backend** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
+| **Processor** | TypeScript, Cloudflare Queue Consumer |
+| **Authentication** | OpenAuth (JWT/OAuth2) via auth.alummahnow.net |
+| **Storage** | Cloudflare R2 (object storage), KV (key-value) |
+| **CDN** | Bunny.net (video streaming + image storage) |
+| **Deployment** | Cloudflare Workers (all 3 apps) |
+| **Package Manager** | pnpm v9.15.4 with workspaces |
+| **Build System** | Turborepo v2 with caching |
+
+### App Responsibilities
+
+**apps/web** - User-facing frontend
+- Next.js 15 with App Router deployed via @opennextjs/cloudflare
+- Bilingual routes: `/en/*` (LTR) and `/ar/*` (RTL)
+- OpenAuth authentication with JWT tokens
+- Video.js player with quality selection
+- Responsive design with dark/light themes
+- See: `apps/web/README.md` or `.github/CLAUDE.md`
+
+**apps/api-videos** - Video platform API
+- Hono web framework with chanfana for OpenAPI integration
+- R2 object storage (no traditional database) via repository pattern
+- Bunny.net integration for video streaming and image storage
+- JWT authentication middleware (OpenAuth)
+- Interactive Swagger UI at root URL
+- See: `apps/api-videos/CLAUDE.md`
+
+**apps/processor** - Event queue processor
+- Consumes messages from Cloudflare Queue `al-ummah-now-videos`
+- Processes video views, likes, comments, subscriptions, channel/playlist events
+- Saves all messages to R2 bucket `al-ummah-now-messages` as JSON
+- Retry logic (max 3 retries) + dead letter queue support
+- Health checks and monitoring endpoints
+- See: `apps/processor/README.md`
+
+**packages/shared-types** - Shared TypeScript types
+- Video, Channel, Playlist, User, Comment, Analytics types
+- Used by all apps via workspace protocol: `@al-ummah/shared-types`
+- Must be built before other apps: `pnpm --filter @al-ummah/shared-types build`
+
+## CI/CD Pipeline
+
+### GitHub Actions Workflow (`.github/workflows/deploy.yml`)
+
+**Trigger**: Push to `main` or pull requests
 
 **Pipeline Stages**:
-1. **Test Stage**: Type check (`npx tsc --noEmit`), lint (`npm run lint`), security audit (`npm audit`)
-2. **Build Stage**: Production build with 120min timeout, artifacts uploaded for 30 days
-3. **Preview Deployment** (PRs only):
-   - Dynamic worker per PR: `al-ummah-now-pr-{PR_NUMBER}`
-   - Preview URL posted as PR comment
-   - Automatic cleanup when PR closes
-   - Separate Bunny.net zones: `al-ummah-now-images-preview`, `videos-preview`
-   - R2 bucket: `videos-preview`
-4. **Staging Deployment** (main branch):
-   - Worker: `al-ummah-now-staging`
-   - Bunny.net zones: `al-ummah-now-images-staging`, `videos-staging`
-   - R2 bucket: `videos-staging`
-5. **Production Deployment** (main branch):
-   - Worker: `al-ummah-now-production`
-   - Bunny.net zones: `al-ummah-now-images`, `videos-mostafa-elbadry`
-   - R2 bucket: `videos`
-   - Deployed only after staging validation
 
-**GitHub Secrets Required**:
-- `CLOUDFLARE_API_TOKEN` - Required for all deployments
+1. **Test** - Type check + lint all packages (5 min)
+2. **Build shared-types** - Required dependency for all apps (2 min)
+3. **Build & Validate** - Parallel jobs:
+   - `build-web`: Build Next.js app (up to 120 min)
+   - `validate-api`: Type check + dry-run deployment
+   - `validate-processor`: Type check + run tests
 
-**Pipeline Features**:
-- Artifact caching for faster builds
-- Build artifacts retained for 30 days
-- Preview URLs automatically posted to PRs
-- Staging gate before production
-- Failed deployments halt pipeline
+**Pull Request Previews**:
+- **Web**: `al-ummah-web-pr-{number}.workers.dev`
+- **API**: `al-ummah-api-pr-{number}.workers.dev` (with Swagger UI)
+- **Processor**: `al-ummah-processor-pr-{number}` (development env)
+- Each app posts separate PR comment with deployment info
+- Auto-cleanup when PR closes
 
-### API Integration Pattern
-The application uses a centralized OpenAPI client in `src/lib/api/`:
-- **VideosAPI**: Video CRUD, comments, likes/dislikes, upload
-- **ProfilesAPI**: User profile management
-- **ChannelsAPI**: Channel management, subscriptions
-- **PlaylistsAPI**: Playlist CRUD, video management
-- **AnalyticsAPI**: Metrics and analytics data
+**Staging Deployment** (main branch):
+- All 3 apps deployed in parallel after validation
+- Web uses `wrangler.staging.jsonc`
+- API and Processor use `--env staging`
 
-All API clients follow a consistent pattern with automatic error handling and optional authentication headers (`channelId`, `userId`).
+**Production Deployment** (after staging):
+- All 3 apps deployed to production
+- Web uses `wrangler.production.jsonc`
+- API and Processor use default configs
 
-### Authentication Flow
-OpenAuth implementation in `src/lib/actions.ts`:
-- JWT access tokens (15min expiry) + refresh tokens (7 days, rotated on use)
-- Stored in httpOnly cookies (`access_token`, `refresh_token`)
-- `authenticated()` server action validates and refreshes tokens automatically
-- OAuth providers: Google, Apple (configured in auth.alummahnow.net)
-
-### Bilingual Architecture
-- **English routes**: `/en/*` with LTR layout
-- **Arabic routes**: `/ar/*` with RTL layout
-- Dual component implementations: `components/ComponentName/index.tsx` (LTR) and `components/ComponentName/rtl/index.tsx` (RTL)
-- Root route `/` redirects to `/en/` as default
-
-## Critical Build Information
-
-### Build Timing
-- Development server: ~4 seconds
-- Type checking: ~6 seconds
-- Production build: 38 seconds (can extend to 90+ minutes in network-restricted environments)
-- **Always set explicit timeouts**: 120+ seconds for `npm install`, 120+ minutes for builds
-
-### Known Build Issues
-1. **Google Fonts**: Build fails in network-restricted environments. Workaround: Remove `import { Inter } from "next/font/google"` from `src/app/layout.tsx`
-2. **TypeScript Version Warning**: Using 5.7.2 vs supported <5.5.0 - safe to ignore
-3. **ESLint Warnings**: 3 warnings about dependencies and img elements - acceptable
-4. **Network Restrictions**: External API calls (videos.api.alummahnow.net) fail in development - expected
-
-### Environment Variables (wrangler.jsonc)
-```json
-{
-  "vars": {
-    "Issuer": "https://auth.alummahnow.net",
-    "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
-    "API_URL": "https://videos.api.alummahnow.net"
-  },
-  "env": {
-    "BunnyImageZone": "al-ummah-now-images",
-    "BunnyVideoZone": "videos-mostafa-elbadry",
-    "ClientId": "3f8c9b2e-4d6a-4b8e-9f3a-2c7d5e8f1a6b"
-  },
-  "r2_buckets": [{ "binding": "videos", "bucket_name": "videos" }]
-}
-```
-
-Sensitive variables (set in Cloudflare dashboard): `BunnyImageKey`, `BunnyVideoKey`, `S3Key`, `S3Secret`, `S3Token`
-
-## Code Patterns and Conventions
-
-### API Client Usage
-```typescript
-import { VideosAPI, ChannelsAPI } from '@/lib/api';
-
-// Without auth headers (public endpoints)
-const videos = await VideosAPI.list({ limit: 20 });
-
-// With auth headers (authenticated endpoints)
-const headers = { channelId: 'channel-id', userId: 'user-id' };
-const video = await VideosAPI.create(videoData, headers);
-```
-
-### Authentication Check
-```typescript
-import { authenticated } from '@/lib/actions';
-
-// In server components or actions
-const user = await authenticated();
-if (!user) {
-  redirect('/login');
-}
-// user.properties contains userId, email, displayName
-```
-
-### Component Pattern (Bilingual Support)
-Components requiring RTL support have two implementations:
-- `src/components/VideoCard/index.tsx` (LTR - English)
-- `src/components/VideoCard/rtl/index.tsx` (RTL - Arabic)
-
-### TypeScript Standards
-- All new code must use TypeScript
-- Use interfaces from `src/interfaces/` for domain types
-- API types defined in `src/lib/api/types.ts`
-- Cloudflare environment types in `cloudflare-env.d.ts`
-
-### Styling
-- Tailwind CSS with custom configuration in `tailwind.config.ts`
-- Dark/light theme support via next-themes
-- Radix UI primitives for interactive components
-- Follow existing component patterns from `src/components/ui/`
-
-## Project Structure Overview
-
-```
-src/
-├── app/                          # Next.js App Router
-│   ├── layout.tsx               # Root layout with auth/navigation
-│   ├── page.tsx                 # Redirect to /en/
-│   ├── en/                      # English routes
-│   │   ├── page.tsx            # Homepage
-│   │   ├── video/page.tsx      # Video viewer
-│   │   ├── channel/[id]/       # Channel pages
-│   │   ├── profile/            # User profile
-│   │   ├── analytics/          # Analytics dashboard
-│   │   └── upload/             # Video upload
-│   ├── ar/                      # Arabic routes (mirrors en/)
-│   └── api/callback/route.ts   # OAuth callback
-├── components/                   # React components
-│   ├── Header/                  # Navigation (+ rtl/)
-│   ├── videoPlayer/             # Video.js player (+ rtl/)
-│   ├── videoCard/               # Video display (+ rtl/)
-│   ├── AuthProvider/            # Auth context
-│   ├── navigation/              # Navigation components
-│   ├── analytics/               # Analytics components
-│   └── ui/                      # Shadcn/ui components
-├── lib/                         # Core utilities
-│   ├── api/                     # OpenAPI client (videos, channels, playlists, analytics)
-│   ├── clients/                 # Legacy API clients
-│   ├── actions.ts               # Server actions (auth)
-│   ├── auth.ts                  # Auth utilities
-│   ├── profileManager.ts        # Profile state management
-│   └── constants/               # App constants
-├── hooks/                       # Custom React hooks
-│   └── useProfile.ts           # Profile hook
-└── interfaces/                  # TypeScript types
-    ├── index.ts                # Domain types
-    └── subjects.ts             # Auth subject types
-```
-
-### Key Configuration Files
-- `next.config.ts`: Next.js + OpenNext Cloudflare initialization
-- `open-next.config.ts`: Cloudflare-specific config (KV incremental cache)
-- `wrangler.jsonc`: Development environment config
-- `wrangler.staging.jsonc`: Staging environment
-- `wrangler.production.jsonc`: Production environment
-- `wrangler.preview.jsonc`: PR preview deployments
-
-## Important Patterns
-
-### Video Upload Flow
-**Status**: Recently implemented (commits 86e0c10, db0339a), may need refinement
-
-Video upload uses multi-part upload to Cloudflare R2 via `src/lib/api/videos.ts`:
-1. Client uploads file chunks to R2 bucket using `src/components/videoUpload/`
-2. Upload progress tracked with real-time feedback
-3. Metadata posted to backend API at videos.api.alummahnow.net
-4. Backend triggers Bunny.net transcoding
-5. Transcoded videos served via Bunny.net CDN zones
-6. Upload configuration in `src/lib/constants/uploadConfig.ts`
-
-**Key Files**:
-- `src/components/videoUpload/index.tsx` - Upload UI component
-- `src/lib/api/videos.ts` - `VideosAPI.upload()` method
-- `src/lib/constants/uploadConfig.ts` - Size limits, allowed formats
-- `src/app/en/upload/page.tsx` and `src/app/ar/upload/page.tsx` - Upload pages
-
-**Note**: Upload functionality integrates with external backend API. In development, API calls may fail if backend is not running.
-
-### Error Handling
-All API calls should handle null returns gracefully:
-```typescript
-const videos = await VideosAPI.list();
-if (!videos) {
-  // Handle error - API may be unreachable
-  return null;
-}
-```
-
-### Authentication State
-- Use `AuthProvider` context from `src/components/AuthProvider/`
-- Server components use `authenticated()` action
-- Client components use `useProfile()` hook
-
-### Routing
-- Root `/` redirects to `/en/`
-- All pages duplicated under `/en/` and `/ar/`
-- Use Next.js Link component for navigation
-- Language switching handled by Header component
+**Required Secrets**:
+- `CLOUDFLARE_API_TOKEN` - For all deployments
 
 ## Development Workflow
 
-### Making Changes
-1. Read relevant documentation: ARCHITECTURE.md, DEPLOYMENT.md, CONTRIBUTING.md
-2. Test changes with `npm run dev`
-3. Validate with `npm run lint` and `npx tsc --noEmit`
-4. Build test with `npm run build` for core changes
-5. Commit with conventional commit format: `type(scope): description`
+### Working with the Monorepo
 
-### Working with Issues
-The repository uses a structured issue system:
+1. **Install dependencies**:
+   ```bash
+   pnpm install
+   ```
 
-**Issue Templates** (.github/ISSUE_TEMPLATE/):
-- `bug_report.yml` - Report bugs with reproduction steps
-- `feature_request.yml` - Suggest new features
-- `implementation_issue.yml` - Track roadmap implementation tasks
-- `deployment_issue.yml` - Report deployment problems
-- `documentation_request.yml` - Request documentation improvements
+2. **Build shared types** (required before other apps):
+   ```bash
+   pnpm --filter @al-ummah/shared-types build
+   ```
 
-**Issue Labels** (from IMPLEMENTATION_ISSUES.md):
-- Priority: `priority-high`, `priority-medium`, `priority-low`
-- Phase: `phase-1`, `phase-2`, `phase-3`, `phase-4`
-- Epic: `epic-video-upload`, `epic-real-time`, `epic-search`, etc.
-- Type: `enhancement`, `bug`, `infrastructure`, `documentation`, `security`
+3. **Start development**:
+   ```bash
+   # All apps
+   pnpm dev
 
-**Project Board**: https://github.com/users/meywd/projects/1/views/1
-- All issues should be linked to the project board
-- Columns: Backlog → To Do → In Progress → Review → Done
+   # Or individual apps
+   pnpm web:dev
+   pnpm api:dev
+   pnpm processor:dev
+   ```
 
-**Milestones**:
-- Phase 1: Foundation (High priority, blocking features)
-- Phase 2: Core Platform (Backend infrastructure)
-- Phase 3: Educational Platform (Academy features)
-- Phase 4: Advanced Features (AI, messaging, archives)
+4. **Make changes**:
+   - Edit files in respective app directories
+   - Shared types go in `packages/shared-types/src/`
+   - Hot reload enabled for all apps
 
-### Pull Request Process
-- PRs automatically trigger preview deployment
-- Preview URL posted as PR comment: `https://al-ummah-now-pr-{PR_NUMBER}.workers.dev`
-- Preview deployments use separate Bunny.net zones (preview environment)
-- Staging deployment on merge to main
-- Production deployment after staging validation
-- PR cleanup: Preview workers automatically deleted when PR closes
+5. **Validate changes**:
+   ```bash
+   pnpm type-check        # Type check all packages
+   pnpm lint              # Lint all packages
+   pnpm --filter @al-ummah/web build  # Test web build
+   ```
 
-### Debugging
-- Use `npm run logs` to tail production logs
-- `npm run logs:staging` for staging environment
-- `npm run logs:preview` for preview deployments
-- Check Cloudflare Workers dashboard for metrics
-- Review `npm run check` output for deployment issues
-- Use `npm run rollback` if production has issues
+6. **Commit**:
+   ```bash
+   git add .
+   git commit -m "feat(web): add video upload feature"
+   git push
+   ```
 
-## Performance Targets
-- First Contentful Paint: < 1.5s
-- Largest Contentful Paint: < 2.5s
-- Time to Interactive: < 3.5s
-- Production uptime: 99.9% SLA
+### Adding Dependencies
 
-## Current Implementation Status
+**Workspace package** (shared types):
+```bash
+pnpm --filter @al-ummah/web add @al-ummah/shared-types
+# Already configured for all apps
+```
 
-### Platform Completion: ~60%
-The platform has a solid foundation with key features implemented. See FEATURES.md for detailed analysis.
+**App-specific package**:
+```bash
+pnpm --filter @al-ummah/web add next@latest
+pnpm --filter @al-ummah/api-videos add hono
+pnpm --filter @al-ummah/processor add -D jest
+```
 
-### ✅ Completed Features
-- Complete API client architecture (Videos, Channels, Playlists, Profiles, Analytics APIs)
-- OpenAuth authentication with JWT tokens and refresh rotation
-- Bilingual support (English/Arabic) with RTL layouts
-- Video.js player integration with quality selection
-- User profiles, channels, and playlist management
-- Comment system and social interactions (likes/dislikes)
-- Responsive design with dark/light themes
-- Analytics dashboard for content creators
-- Cloudflare Workers deployment with CI/CD pipeline
+**Root devDependencies**:
+```bash
+pnpm add -D -w turbo
+```
 
-### 🚧 Phase 1 Priorities (In Development)
-Based on IMPLEMENTATION_ISSUES.md and recent commits:
+### TypeScript Configuration
 
-**High Priority (Blocking)**:
-1. **Video Upload System** - Multi-part upload with Cloudflare R2/Bunny.net (recently implemented, may need refinement)
-2. **Real-time Features** - WebSocket integration for live comments, notifications, view counts
-3. **Content Moderation** - Admin interface, reporting system, automated filtering
-4. **Testing Infrastructure** - Comprehensive unit, integration, and e2e tests (Issue #10)
-5. **Security Hardening** - Compliance measures, security audit (Issue #11)
+**Root**: `tsconfig.json` with project references to all apps
+**Base**: `tsconfig.base.json` with shared compiler options
+**Each app**: Extends base and adds app-specific config
 
-**Medium Priority**:
-- Advanced search with filters and content discovery
-- Subscription system with notifications
-- Creator analytics enhancements
-- PWA features and offline functionality
-- Performance optimization and caching improvements
+**Restart VS Code TypeScript server** after config changes:
+- `Ctrl+Shift+P` → "TypeScript: Restart TS Server"
 
-**Low Priority**:
-- SEO optimization and meta tags
-- Mobile app companion (Phase 2)
-- AI-powered recommendations (Phase 4)
+## App-Specific Documentation
 
-### ⚠️ Known Gaps and Limitations
-- **No automated tests** - Testing infrastructure is planned but not yet implemented
-- **Limited real-time features** - WebSocket integration pending
-- **Basic search** - Advanced filtering and content discovery needs enhancement
-- **Manual moderation only** - Automated content filtering not yet implemented
-- **External API dependency** - Backend APIs (videos.api.alummahnow.net) required for full functionality
+Each app has its own detailed documentation:
 
-### 🔄 Recent Development Activity (from git log)
-- Cloudflare Workers preview deployments for PRs
-- Complete CI/CD pipeline implementation
-- Video upload functionality with R2/Bunny.net integration
-- Video analytics dashboard with bilingual support
-- TypeScript safety improvements and error handling enhancements
+### Web App (`apps/web/`)
+- **Overview**: See root `.github/CLAUDE.md` (legacy, mostly accurate)
+- **Authentication**: OpenAuth with JWT tokens in `src/lib/actions.ts`
+- **API Clients**: OpenAPI clients in `src/lib/api/`
+- **Components**: Dual LTR/RTL implementations in `src/components/`
+- **Routes**: `/en/*` (English/LTR) and `/ar/*` (Arabic/RTL)
+- **Config**: `wrangler.{preview,staging,production}.jsonc`
 
-## Multi-Repository Ecosystem
+### API Videos (`apps/api-videos/`)
+- **Complete Guide**: `apps/api-videos/CLAUDE.md`
+- **Architecture**: Hono + chanfana, R2 repository pattern
+- **Auth Guide**: `apps/api-videos/AUTHENTICATION.md` (API user guide)
+- **Developer Guide**: `apps/api-videos/DEVELOPER_AUTH_GUIDE.md`
+- **Technical Docs**: `apps/api-videos/TECHNICAL_DOCUMENTATION.md`
+- **Roadmap**: `apps/api-videos/ROADMAP.md`
 
-This repository (AlUmmahNow) is the **Video Portal UI**. The complete platform includes:
+### Processor (`apps/processor/`)
+- **Overview**: `apps/processor/README.md`
+- **Message Types**: 13+ types (Video, Profile, Channel, Playlist, Comment, Subscription)
+- **Config**: `apps/processor/wrangler.toml` with multi-environment support
+- **Testing**: Jest tests in `src/__tests__/`
 
-1. **AlUmmahNow** (this repo) - Next.js frontend
-2. **AlUmmahNowVideos** (planned) - API backend with Fastify/Express, Issue #7
-3. **AlUmmahNowAuth** (planned) - SSO authentication service, Issue #8
-4. **AlUmmahNowProcessor** (planned) - Event streaming and analytics, Issue #9
-5. **AlUmmahNowCMS** (planned) - Content management for news/articles
+## Common Tasks
 
-**Important**: When working on features that require backend APIs, be aware that some repos may not exist yet. Check ISSUE_TEMPLATES.md for planned repository structure.
+### Adding a New Shared Type
+
+1. Edit `packages/shared-types/src/video.ts` (or relevant file)
+2. Export from `packages/shared-types/src/index.ts`
+3. Rebuild: `pnpm --filter @al-ummah/shared-types build`
+4. Use in apps: `import { VideoObject } from '@al-ummah/shared-types'`
+
+### Adding a New API Endpoint
+
+1. Create endpoint in `apps/api-videos/src/endpoints/{category}/`
+2. Register in `apps/api-videos/src/index.ts`
+3. Add authentication middleware if needed
+4. Use `addAuthToSchema()` helper for OpenAPI docs
+5. Test with Swagger UI at http://127.0.0.1:8686/
+
+### Adding a New Page (Bilingual)
+
+1. Create page in `apps/web/src/app/en/{route}/page.tsx`
+2. Create Arabic version in `apps/web/src/app/ar/{route}/page.tsx`
+3. Create component in `apps/web/src/components/{name}/index.tsx` (LTR)
+4. Create RTL variant in `apps/web/src/components/{name}/rtl/index.tsx`
+5. Test both routes: http://localhost:3000/en/{route} and /ar/{route}
+
+### Deploying to Production
+
+```bash
+# Deploy all apps
+pnpm web:deploy:production
+pnpm api:deploy
+pnpm processor:deploy
+
+# Or push to main branch → GitHub Actions handles it
+git push origin main
+```
+
+## Troubleshooting
+
+### "Cannot find module '@al-ummah/shared-types'"
+```bash
+# Rebuild shared types
+pnpm --filter @al-ummah/shared-types build
+
+# Restart VS Code TypeScript server
+# Ctrl+Shift+P → "TypeScript: Restart TS Server"
+```
+
+### "npm: command not found" errors
+This is a **pnpm monorepo**. Replace `npm` with `pnpm` in all commands.
+
+### VS Code IntelliSense errors
+```bash
+# Reload VS Code window
+# Ctrl+Shift+P → "Developer: Reload Window"
+```
+
+### Wrangler deployment fails
+```bash
+# Login to Cloudflare
+pnpm wrangler login
+
+# Validate deployment
+cd apps/api-videos
+pnpm wrangler deploy --dry-run
+```
+
+### Build fails with Google Fonts error (web app)
+Network-restricted environments may block Google Fonts. See `.github/CLAUDE.md` for workarounds.
+
+## Important Notes
+
+1. **Always use pnpm**, never npm or yarn
+2. **Build shared-types first** before other apps
+3. **Restart VS Code** after TypeScript config changes
+4. **Never cancel long builds** - web app can take up to 120 minutes
+5. **Test bilingual support** - verify both `/en/*` and `/ar/*` routes
+6. **API validation** - Use Swagger UI to test API endpoints
+7. **Auth service is separate** - Not part of this monorepo
 
 ## Additional Resources
-- **ARCHITECTURE.md**: Technical architecture, microservices design, security patterns
-- **DEPLOYMENT.md**: Complete deployment guide, environment variables, monitoring
-- **CONTRIBUTING.md**: Development guidelines, code standards, testing requirements
-- **ROADMAP.md**: 4-phase development plan with timeline and milestones
-- **FEATURES.md**: Detailed implementation status analysis (~60% complete)
-- **IMPLEMENTATION_ISSUES.md**: 20 planned issues for roadmap implementation
-- **GITHUB_ISSUES.md**: Specific issue templates for Phase 1 features
-- **ISSUE_TEMPLATES.md**: Templates for multi-repository coordination
 
-## Common Pitfalls
-1. **Never cancel builds** - they may take up to 90 minutes
-2. **Always test bilingual support** - verify both `/en/` and `/ar/` routes
-3. **Handle API failures gracefully** - external APIs may be unreachable in development
-4. **Update Cloudflare types** - run `npm run cf-typegen` after modifying wrangler.jsonc
-5. **Test authentication flows** - ensure login/logout work correctly
-6. **Verify responsive design** - test mobile and desktop layouts
-7. **Check dark/light themes** - both themes should work properly
+- **Root README**: `README.md` - Quick start and overview
+- **Architecture**: `docs/ARCHITECTURE.md` (if exists)
+- **Contributing**: `CONTRIBUTING.md` - Development guidelines
+- **Roadmap**: `docs/ROADMAP.md` - Development roadmap
+- **GitHub Issues**: Use templates in `.github/ISSUE_TEMPLATE/`
+- **Project Board**: https://github.com/users/meywd/projects/1
+
+## Legacy Documentation
+
+The following files contain legacy information from pre-monorepo structure:
+- `.github/CLAUDE.md` - Original web app guidance (mostly accurate)
+- `.github/copilot-instructions.md` - GitHub Copilot specific
+- `MONOREPO_*.md` - Migration documentation (historical)
+
+For current information, always refer to:
+1. This file (`CLAUDE.md`) for monorepo overview
+2. App-specific `CLAUDE.md` or `README.md` in each app directory
+3. CI/CD workflow: `.github/workflows/deploy.yml`
