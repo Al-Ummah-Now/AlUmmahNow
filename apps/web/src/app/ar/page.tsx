@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/rtl/index";
 import { useQueryState } from "nuqs";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { fetchVideosWithPagination } from "@/lib/clients/videos";
 
 const VideosPage: React.FC = () => {
