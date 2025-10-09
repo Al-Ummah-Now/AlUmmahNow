@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from "react";
+import React from "react";
 import IcoButton from "@/components/iconButton";
 import Link from 'next/link'
 
