@@ -8,7 +8,7 @@ import { fetchVideosWithPagination } from "@/lib/clients/videos";
 
 const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
-  const [cursor, setCursor] = useQueryState("cursor", { shallow: true });
+  const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [loading, setLoading] = useState(false);
