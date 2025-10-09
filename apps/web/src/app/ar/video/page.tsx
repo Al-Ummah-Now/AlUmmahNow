@@ -3,16 +3,16 @@ import React, { useState, useEffect } from "react";
 import VideoPlayer from "@/components/videoPlayer/rtl/index";
 import RelatedVideosSection from "@/components/related/rtl/index";
 import { useQueryState } from "nuqs";
-import { PaginationResponse, VideoInfo, VideoObject } from "../../../interfaces";
+import { VideoInfo } from "../../../interfaces";
 import { fetchVideoById, fetchVideos } from "@/lib/clients/videos";
 import { PlayerOptions } from "@/components/videoPlayer/interface";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
-  const [vid, setVid] = useQueryState("vid", { shallow: false });
+  const [vid, _setVid] = useQueryState("vid", { shallow: false });
   const path = usePathname();
   const rtl = path.indexOf('/ar') > -1;
 

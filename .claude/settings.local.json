@@ -1,15 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git push:*)",
-      "Bash(gh pr create:*)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)",
-      "Bash(\"/c/Program Files (x86)/GitHub CLI/gh.exe\" --version)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr edit 22 --title \"feat: migrate to monorepo with 3 Cloudflare Workers apps\")",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr view 22 --web)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr checks 22)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 18384430485 --log-failed)",
-      "Bash(pnpm add:*)"
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 18386148919)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 18386148919 --log-failed --job 52385079014)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run list --branch copilot/fix-9 --limit 1)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run watch 18386792233 --exit-status)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 18386792233 --log-failed --job 52387215837)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

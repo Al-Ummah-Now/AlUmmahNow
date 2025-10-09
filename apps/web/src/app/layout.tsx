@@ -8,7 +8,7 @@ import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
 
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
-  const subject = await authenticated()
+  const _subject = await authenticated()
 
   return (
     <html lang="en" suppressHydrationWarning>
