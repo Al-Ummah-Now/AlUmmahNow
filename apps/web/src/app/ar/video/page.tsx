@@ -23,7 +23,7 @@ export default function Home() {
   // Fetch video by ID from query string
   useEffect(() => {
     const fetchVideoDetails = async () => {
-      if (!isMounted) return;
+      if (!isMounted || !vid) return;
 
       const details = await fetchVideoById(vid);
       setVideoDetails(details);
