@@ -47,7 +47,7 @@ export const useProfile = (user: User | null) => {
           firstName: user.email?.split('@')[0] || 'User',
           lastName: '',
           avatarUrl: '/avatar.png',
-          coverUrl: null
+          coverUrl: undefined
         });
         setError(null); // Don't show error, just use fallback
       }
