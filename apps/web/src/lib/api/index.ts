@@ -9,6 +9,21 @@ import { VideosAPI } from './videos';
 import { ProfilesAPI, ChannelsAPI } from './channels';
 import { PlaylistsAPI } from './playlists';
 import { AnalyticsAPI } from './analytics';
+import type {
+  ListQueryParams,
+  ApiHeaders,
+  VideoCreateRequest,
+  CommentCreateRequest,
+  CommentUpdateRequest,
+  ProfileUpdateRequest,
+  ChannelCreateRequest,
+  ChannelUpdateRequest,
+  SubscriptionRequest,
+  PlaylistCreateRequest,
+  PlaylistUpdateRequest,
+  PlaylistAddVideoRequest,
+  AnalyticsQueryParams
+} from './types';
 
 // Type exports
 export * from './types';
@@ -25,63 +40,63 @@ export class APIClient {
   // Videos
   get videos() {
     return {
-      list: (params?, headers?) => VideosAPI.list(params, { ...this.headers, ...headers }),
-      getById: (id, headers?) => VideosAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data, headers?) => VideosAPI.create(data, { ...this.headers, ...headers }),
-      upload: (file, metadata, headers?) => VideosAPI.upload(file, metadata, { ...this.headers, ...headers }),
-      delete: (id, headers?) => VideosAPI.delete(id, { ...this.headers, ...headers }),
-      createComment: (videoId, data, headers?) => VideosAPI.createComment(videoId, data, { ...this.headers, ...headers }),
-      updateComment: (videoId, commentId, data, headers?) => VideosAPI.updateComment(videoId, commentId, data, { ...this.headers, ...headers }),
-      deleteComment: (videoId, commentId, headers?) => VideosAPI.deleteComment(videoId, commentId, { ...this.headers, ...headers }),
-      like: (videoId, headers?) => VideosAPI.like(videoId, { ...this.headers, ...headers }),
-      unlike: (videoId, headers?) => VideosAPI.unlike(videoId, { ...this.headers, ...headers }),
-      dislike: (videoId, headers?) => VideosAPI.dislike(videoId, { ...this.headers, ...headers }),
-      removeDislike: (videoId, headers?) => VideosAPI.removeDislike(videoId, { ...this.headers, ...headers }),
+      list: (params?: ListQueryParams, headers?: ApiHeaders) => VideosAPI.list(params, { ...this.headers, ...headers }),
+      getById: (id: string, headers?: ApiHeaders) => VideosAPI.getById(id, { ...this.headers, ...headers }),
+      create: (data: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.create(data, { ...this.headers, ...headers }),
+      upload: (file: File, metadata: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.upload(file, metadata, { ...this.headers, ...headers }),
+      delete: (id: string, headers?: ApiHeaders) => VideosAPI.delete(id, { ...this.headers, ...headers }),
+      createComment: (videoId: string, data: CommentCreateRequest, headers?: ApiHeaders) => VideosAPI.createComment(videoId, data, { ...this.headers, ...headers }),
+      updateComment: (videoId: string, commentId: string, data: CommentUpdateRequest, headers?: ApiHeaders) => VideosAPI.updateComment(videoId, commentId, data, { ...this.headers, ...headers }),
+      deleteComment: (videoId: string, commentId: string, headers?: ApiHeaders) => VideosAPI.deleteComment(videoId, commentId, { ...this.headers, ...headers }),
+      like: (videoId: string, headers?: ApiHeaders) => VideosAPI.like(videoId, { ...this.headers, ...headers }),
+      unlike: (videoId: string, headers?: ApiHeaders) => VideosAPI.unlike(videoId, { ...this.headers, ...headers }),
+      dislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.dislike(videoId, { ...this.headers, ...headers }),
+      removeDislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.removeDislike(videoId, { ...this.headers, ...headers }),
     };
   }
 
   // Profiles
   get profiles() {
     return {
-      getCurrent: (userId: string, headers?) => ProfilesAPI.getCurrent(userId, { ...this.headers, ...headers }),
-      update: (data, headers?) => ProfilesAPI.update(data, { ...this.headers, ...headers }),
-      delete: (headers?) => ProfilesAPI.delete({ ...this.headers, ...headers }),
+      getCurrent: (userId: string, headers?: ApiHeaders) => ProfilesAPI.getCurrent(userId, { ...this.headers, ...headers }),
+      update: (data: ProfileUpdateRequest, headers?: ApiHeaders) => ProfilesAPI.update(data, { ...this.headers, ...headers }),
+      delete: (headers?: ApiHeaders) => ProfilesAPI.delete({ ...this.headers, ...headers }),
     };
   }
 
   // Channels
   get channels() {
     return {
-      list: (params?, headers?) => ChannelsAPI.list(params, { ...this.headers, ...headers }),
-      getById: (id, headers?) => ChannelsAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data, headers?) => ChannelsAPI.create(data, { ...this.headers, ...headers }),
-      update: (id, data, headers?) => ChannelsAPI.update(id, data, { ...this.headers, ...headers }),
-      delete: (id, headers?) => ChannelsAPI.delete(id, { ...this.headers, ...headers }),
-      subscribe: (channelId, data, headers?) => ChannelsAPI.subscribe(channelId, data, { ...this.headers, ...headers }),
-      unsubscribe: (channelId, headers?) => ChannelsAPI.unsubscribe(channelId, { ...this.headers, ...headers }),
+      list: (params?: ListQueryParams, headers?: ApiHeaders) => ChannelsAPI.list(params, { ...this.headers, ...headers }),
+      getById: (id: string, headers?: ApiHeaders) => ChannelsAPI.getById(id, { ...this.headers, ...headers }),
+      create: (data: ChannelCreateRequest, headers?: ApiHeaders) => ChannelsAPI.create(data, { ...this.headers, ...headers }),
+      update: (id: string, data: ChannelUpdateRequest, headers?: ApiHeaders) => ChannelsAPI.update(id, data, { ...this.headers, ...headers }),
+      delete: (id: string, headers?: ApiHeaders) => ChannelsAPI.delete(id, { ...this.headers, ...headers }),
+      subscribe: (channelId: string, data: SubscriptionRequest, headers?: ApiHeaders) => ChannelsAPI.subscribe(channelId, data, { ...this.headers, ...headers }),
+      unsubscribe: (channelId: string, headers?: ApiHeaders) => ChannelsAPI.unsubscribe(channelId, { ...this.headers, ...headers }),
     };
   }
 
   // Playlists
   get playlists() {
     return {
-      list: (params?, headers?) => PlaylistsAPI.list(params, { ...this.headers, ...headers }),
-      getById: (id, headers?) => PlaylistsAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data, headers?) => PlaylistsAPI.create(data, { ...this.headers, ...headers }),
-      update: (id, data, headers?) => PlaylistsAPI.update(id, data, { ...this.headers, ...headers }),
-      delete: (id, headers?) => PlaylistsAPI.delete(id, { ...this.headers, ...headers }),
-      addVideo: (playlistId, data, headers?) => PlaylistsAPI.addVideo(playlistId, data, { ...this.headers, ...headers }),
-      removeVideo: (playlistId, videoId, headers?) => PlaylistsAPI.removeVideo(playlistId, videoId, { ...this.headers, ...headers }),
+      list: (params?: ListQueryParams, headers?: ApiHeaders) => PlaylistsAPI.list(params, { ...this.headers, ...headers }),
+      getById: (id: string, headers?: ApiHeaders) => PlaylistsAPI.getById(id, { ...this.headers, ...headers }),
+      create: (data: PlaylistCreateRequest, headers?: ApiHeaders) => PlaylistsAPI.create(data, { ...this.headers, ...headers }),
+      update: (id: string, data: PlaylistUpdateRequest, headers?: ApiHeaders) => PlaylistsAPI.update(id, data, { ...this.headers, ...headers }),
+      delete: (id: string, headers?: ApiHeaders) => PlaylistsAPI.delete(id, { ...this.headers, ...headers }),
+      addVideo: (playlistId: string, data: PlaylistAddVideoRequest, headers?: ApiHeaders) => PlaylistsAPI.addVideo(playlistId, data, { ...this.headers, ...headers }),
+      removeVideo: (playlistId: string, videoId: string, headers?: ApiHeaders) => PlaylistsAPI.removeVideo(playlistId, videoId, { ...this.headers, ...headers }),
     };
   }
 
   // Analytics
   get analytics() {
     return {
-      getSummary: (params?, headers?) => AnalyticsAPI.getSummary(params, { ...this.headers, ...headers }),
-      getChannelAnalytics: (channelId, params?, headers?) => AnalyticsAPI.getChannelAnalytics(channelId, params, { ...this.headers, ...headers }),
-      getVideoAnalytics: (videoId, params?, headers?) => AnalyticsAPI.getVideoAnalytics(videoId, params, { ...this.headers, ...headers }),
-      getMetrics: (params?, headers?) => AnalyticsAPI.getMetrics(params, { ...this.headers, ...headers }),
+      getSummary: (params?: AnalyticsQueryParams, headers?: ApiHeaders) => AnalyticsAPI.getSummary(params, { ...this.headers, ...headers }),
+      getChannelAnalytics: (channelId: string, params?: AnalyticsQueryParams, headers?: ApiHeaders) => AnalyticsAPI.getChannelAnalytics(channelId, params, { ...this.headers, ...headers }),
+      getVideoAnalytics: (videoId: string, params?: AnalyticsQueryParams, headers?: ApiHeaders) => AnalyticsAPI.getVideoAnalytics(videoId, params, { ...this.headers, ...headers }),
+      getMetrics: (params?: AnalyticsQueryParams, headers?: ApiHeaders) => AnalyticsAPI.getMetrics(params, { ...this.headers, ...headers }),
     };
   }
 
