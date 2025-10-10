@@ -16,9 +16,20 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(gh run watch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git rm:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(git stash:*)",
+      "Bash(git pull:*)",
+      "Bash(git rebase:*)",
       "Bash(gh issue create:*)",
       "Bash(gh api:*)",
-      "Bash(npx wrangler:*)"
+      "Bash(npx wrangler:*)",
+      "Bash(gh run rerun:*)",
+      "Bash(gh pr checkout:*)"
     ],
     "deny": [],
     "ask": []
