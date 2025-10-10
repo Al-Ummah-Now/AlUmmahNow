@@ -1,0 +1,81 @@
+import { OpenAPIRoute, Str } from "chanfana";
+import { z } from "zod";
+import { Playlist, ResponseError } from "../../lib/types";
+import { env } from 'cloudflare:workers';
+import R2Repository from "../../lib/r2Repo";
+
+export class PlaylistFetch extends OpenAPIRoute {
+    schema = {
+        tags: ["Playlists"],
+        summary: "Get a single playlist by id",
+        request: {
+            params: z.object({
+                id: Str({ description: "Playlist id" }),
+            }),
+			headers: z.object({
+				channelId: Str({ description: "Channel ID" }).optional().nullable(),
+				userId: Str({ description: "User ID" }).optional().nullable(),
+			}),
+        },
+        responses: {
+            "200": {
+                description: "Returns a single playlist if found",
+                content: {
+                    "application/json": {
+                        schema: Playlist,
+                    },
+                },
+            },
+            "404": {
+                description: "Playlist not found",
+                content: {
+                    "application/json": {
+                        schema: ResponseError,
+                    },
+                },
+            },
+            "400": {
+                description: "Bad request - invalid input data",
+                content: {
+                    "application/json": {
+                        schema: ResponseError,
+                    },
+                },
+            },
+            "500": {
+                description: "Internal server error",
+                content: {
+                    "application/json": {
+                        schema: ResponseError,
+                    },
+                },
+            },
+        },
+    };
+
+    async handle(c) {
+        // Get validated data
+        const request = await this.getValidatedData<typeof this.schema>();
+
+        // Retrieve the validated slug
+        const { id } = request.params;
+		const { channelId, userId } = request.headers;
+
+        // Implement your own object fetch here
+        const bucket = env.playlists;
+        type PlaylistType = z.infer<typeof Playlist>;
+        const repository = new R2Repository<PlaylistType>(bucket);
+        let playlist = await repository.getObject(id);
+
+        if (!playlist) {
+            return c.json({ success: false, error: "Playlist not found" }, 404);
+        }
+
+        // Check privacy permissions
+        if (playlist.isPublic === false && (!userId || playlist.userId !== userId)) {
+            return c.json({ success: false, error: "Playlist not found" }, 404); // Don't reveal that private playlist exists
+        }
+
+        return playlist;
+    }
+}
