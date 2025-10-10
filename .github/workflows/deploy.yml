@@ -81,16 +81,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web application
-        run: pnpm --filter @al-ummah/web build
-        timeout-minutes: 120
-
-      - name: Debug - List build output
         run: |
-          echo "=== Listing apps/web directory ==="
-          ls -la apps/web/
-          echo "=== Looking for .open-next ==="
-          find apps/web -name ".open-next" -type d || echo "Not found"
-          find . -name ".open-next" -type d || echo "Not found anywhere"
+          pnpm --filter @al-ummah/web build
+          cd apps/web && pnpm opennextjs-cloudflare build
+        timeout-minutes: 120
 
       - name: Prepare web artifacts (workaround for .gitignore)
         run: |
