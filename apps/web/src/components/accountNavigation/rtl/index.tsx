@@ -55,6 +55,11 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             items.push({ label: "الملف الشخصي", icon: "fa-user", href: "/ar/profile", onClick: onClose });
             items.push({ label: "التحليلات", icon: "fa-chart-line", href: "/ar/analytics", onClick: onClose });
             items.push({ label: "الإعدادات", icon: "fa-cog", href: "/ar/settings", onClick: onClose });
+            
+            // Add moderation link for admin/moderator users
+            if (user.role === 'admin' || user.role === 'moderator') {
+                items.push({ label: "الإشراف", icon: "fa-shield-alt", href: "/ar/moderation", onClick: onClose });
+            }
         }
         user
             ? items.push({ label: "تسجيل الخروج", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout })

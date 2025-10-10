@@ -58,3 +58,43 @@ export function removeUnwantedChars(str: string): string {
   str = str.replace(/\.[^/.]+$/, "");
   return str.replace(/⧸/g, ".");
 }
+
+/**
+ * Create API headers from user information
+ * @param user - User object containing id and other properties
+ * @param channelId - Optional channelId to include in headers
+ * @returns API headers object or undefined if no user
+ */
+export function createApiHeaders(user: { id: string } | null | undefined, channelId?: string): { userId: string; channelId?: string } | undefined {
+  if (!user?.id) return undefined;
+  return {
+    userId: user.id,
+    ...(channelId && { channelId }),
+  };
+}
+
+/**
+ * Arabic pluralization for time units
+ * In Arabic, word forms change based on the number:
+ * - 1: singular form
+ * - 2: dual form
+ * - 3-10: plural form
+ * - 11+: singular form with number
+ *
+ * @param count - The number to pluralize
+ * @param singular - Singular form (e.g., "ساعة")
+ * @param dual - Dual form (e.g., "ساعتان")
+ * @param plural - Plural form (e.g., "ساعات")
+ * @returns Properly pluralized Arabic text
+ */
+export function pluralizeArabic(count: number, singular: string, dual: string, plural: string): string {
+  if (count === 1) {
+    return `${count} ${singular}`;
+  } else if (count === 2) {
+    return dual;
+  } else if (count >= 3 && count <= 10) {
+    return `${count} ${plural}`;
+  } else {
+    return `${count} ${singular}`;
+  }
+}

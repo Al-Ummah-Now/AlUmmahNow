@@ -9,6 +9,7 @@ import { VideosAPI } from './videos';
 import { ProfilesAPI, ChannelsAPI } from './channels';
 import { PlaylistsAPI } from './playlists';
 import { AnalyticsAPI } from './analytics';
+import { ModerationAPI, type ReportCreateRequest, type ModerationActionRequest } from './moderation';
 import type {
   ListQueryParams,
   ApiHeaders,
@@ -97,6 +98,18 @@ export class APIClient {
       getChannelAnalytics: (channelId: string, params?: AnalyticsQueryParams, headers?: ApiHeaders) => AnalyticsAPI.getChannelAnalytics(channelId, params, { ...this.headers, ...headers }),
       getVideoAnalytics: (videoId: string, params?: AnalyticsQueryParams, headers?: ApiHeaders) => AnalyticsAPI.getVideoAnalytics(videoId, params, { ...this.headers, ...headers }),
       getMetrics: (params?: AnalyticsQueryParams, headers?: ApiHeaders) => AnalyticsAPI.getMetrics(params, { ...this.headers, ...headers }),
+    };
+  }
+
+  // Moderation
+  get moderation() {
+    return {
+      getReports: (params?: ListQueryParams & { status?: string; priority?: string; contentType?: string; assignedTo?: string; reason?: string }, headers?: ApiHeaders) => ModerationAPI.getReports(params, { ...this.headers, ...headers }),
+      getReportById: (reportId: string, headers?: ApiHeaders) => ModerationAPI.getReportById(reportId, { ...this.headers, ...headers }),
+      createReport: (reportData: ReportCreateRequest, headers?: ApiHeaders) => ModerationAPI.createReport(reportData, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      takeModerationAction: (actionData: ModerationActionRequest, headers?: ApiHeaders) => ModerationAPI.takeModerationAction(actionData, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      getStats: (headers?: ApiHeaders) => ModerationAPI.getStats({ ...this.headers, ...headers }),
+      getUserModeration: (userId: string, headers?: ApiHeaders) => ModerationAPI.getUserModeration(userId, { ...this.headers, ...headers }),
     };
   }
 

@@ -75,6 +75,7 @@ export interface Profile {
 export interface User {
     id: string;
     email: string;
+    role?: 'user' | 'moderator' | 'admin'; // Add role field for moderation access
 }
 
 export interface AuthSubject {
