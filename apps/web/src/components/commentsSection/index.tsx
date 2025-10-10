@@ -11,7 +11,7 @@ import { User } from "@/interfaces";
 interface CommentsSectionProps {
   videoId: string;
   initialComments?: Comments[];
-  user?: User | null;
+  user: User | null;
 }
 
 const CommentsSection: React.FC<CommentsSectionProps> = ({ 
