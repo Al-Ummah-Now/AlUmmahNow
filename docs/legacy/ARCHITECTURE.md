@@ -487,6 +487,488 @@ export class RecommendationEngine {
 }
 ```
 
+## Search & Content Discovery Architecture
+
+### Search Query Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Search & Discovery Flow                     │
+├─────────────────────────────────────────────────────────────────┤
+│  User Query                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Search Input + Filters                                     │ │
+│  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────────┐ │ │
+│  │  │   Query Text  │ │   Category    │ │   Advanced        │ │ │
+│  │  │               │ │   Language    │ │   Date Range      │ │ │
+│  │  │   "islamic    │ │   Duration    │ │   Sort Options    │ │ │
+│  │  │   lectures"   │ │               │ │                   │ │ │
+│  │  └───────────────┘ └───────────────┘ └───────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Frontend Processing Layer                                  │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐ │ │
+│  │  │   Debounced     │ │   Filter        │ │   Query       │ │ │
+│  │  │   Suggestions   │ │   Validation    │ │   Sanitization│ │ │
+│  │  │                 │ │                 │ │               │ │ │
+│  │  │   300ms delay   │ │   Type checking │ │   XSS protect │ │ │
+│  │  │   Autocomplete  │ │   Range limits  │ │   Encoding    │ │ │
+│  │  └─────────────────┘ └─────────────────┘ └───────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  API Gateway Layer (Cloudflare Workers)                    │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐ │ │
+│  │  │   Rate Limiting │ │   Authentication│ │   Caching     │ │ │
+│  │  │                 │ │                 │ │               │ │ │
+│  │  │   100 req/min   │ │   Optional for  │ │   Popular     │ │ │
+│  │  │   per user      │ │   personalized │ │   queries     │ │ │
+│  │  │                 │ │   results       │ │   TTL: 5min   │ │ │
+│  │  └─────────────────┘ └─────────────────┘ └───────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Search Processing Engine                                   │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐ │ │
+│  │  │   Query Parser  │ │   Filter Engine │ │   Ranking     │ │ │
+│  │  │                 │ │                 │ │   Algorithm   │ │ │
+│  │  │   Text analysis │ │   SQL WHERE     │ │               │ │ │
+│  │  │   Tokenization  │ │   clause build  │ │   Relevance   │ │ │
+│  │  │   Stemming      │ │   Index usage   │ │   + Popularity│ │ │
+│  │  └─────────────────┘ └─────────────────┘ └───────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Database Query Layer                                       │ │
+│  │  ┌─────────────────────────────────────────────────────────┐ │ │
+│  │  │  SELECT * FROM videos                                   │ │ │
+│  │  │  WHERE                                                  │ │ │
+│  │  │    (title ILIKE '%islamic%' OR description ILIKE '%')   │ │ │
+│  │  │    AND category = 'islamic-lectures'                    │ │ │
+│  │  │    AND language = 'en'                                  │ │ │
+│  │  │    AND created_at >= '2024-01-01'                       │ │ │
+│  │  │    AND is_public = true                                 │ │ │
+│  │  │  ORDER BY                                               │ │ │
+│  │  │    ts_rank(search_vector, plainto_tsquery('islamic'))   │ │ │
+│  │  │    DESC, views_count DESC                               │ │ │
+│  │  │  LIMIT 20 OFFSET 0;                                     │ │ │
+│  │  └─────────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Result Processing & Response                               │ │  
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐ │ │
+│  │  │   Format Results│ │   Add Metadata  │ │   Cache       │ │ │
+│  │  │                 │ │                 │ │   Response    │ │ │
+│  │  │   Pagination    │ │   Thumbnails    │ │               │ │ │
+│  │  │   Total count   │ │   Channel info  │ │   TTL based   │ │ │
+│  │  │   Cursor logic  │ │   View counts   │ │   on query    │ │ │
+│  │  └─────────────────┘ └─────────────────┘ └───────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Search Implementation Components
+
+**Frontend Search Components**:
+```typescript
+// Advanced search filters with bilingual support
+interface SearchFiltersProps {
+  filters: SearchFilters;
+  onFiltersChange: (filters: SearchFilters) => void;
+  onApplyFilters: () => void;
+  onClearFilters: () => void;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+interface SearchFilters {
+  category?: string;           // 'islamic-lectures', 'quran-recitation', etc.
+  language?: 'en' | 'ar' | 'all';
+  dateFrom?: string;          // ISO date string
+  dateTo?: string;            // ISO date string  
+  duration?: 'short' | 'medium' | 'long' | 'all';
+  sortBy?: 'relevance' | 'date' | 'views' | 'likes';
+  sortOrder?: 'asc' | 'desc';
+}
+
+// Search suggestions with debouncing and keyboard navigation
+export class SearchSuggestions {
+  private debounceTimer: NodeJS.Timeout;
+  
+  async fetchSuggestions(query: string): Promise<SearchSuggestion[]> {
+    clearTimeout(this.debounceTimer);
+    
+    return new Promise((resolve) => {
+      this.debounceTimer = setTimeout(async () => {
+        const suggestions = await VideosAPI.getSearchSuggestions(query, 5);
+        resolve(suggestions);
+      }, 300); // 300ms debounce
+    });
+  }
+  
+  handleKeyboardNavigation(event: KeyboardEvent, suggestions: SearchSuggestion[]) {
+    switch (event.key) {
+      case 'ArrowDown':
+        this.selectNext(suggestions);
+        break;
+      case 'ArrowUp':
+        this.selectPrevious(suggestions);
+        break;
+      case 'Enter':
+        this.confirmSelection();
+        break;
+      case 'Escape':
+        this.closeSuggestions();
+        break;
+    }
+  }
+}
+```
+
+### Content Discovery & Recommendation Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  Recommendation Pipeline                        │
+├─────────────────────────────────────────────────────────────────┤
+│  Data Collection                                                │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  User Behavior Tracking                                     │ │
+│  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────────┐ │ │
+│  │  │   View History│ │   Search       │ │   Engagement      │ │ │
+│  │  │               │ │   Queries      │ │   Metrics         │ │ │
+│  │  │   • Videos    │ │               │ │                   │ │ │
+│  │  │   • Duration  │ │   • Terms     │ │   • Likes         │ │ │
+│  │  │   • Completion│ │   • Filters   │ │   • Comments      │ │ │
+│  │  │   • Skip rates│ │   • Results   │ │   • Shares        │ │ │
+│  │  └───────────────┘ └───────────────┘ └───────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Content Analysis                                           │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐ │ │
+│  │  │   Metadata      │ │   Content       │ │   Social      │ │ │
+│  │  │   Features      │ │   Features      │ │   Signals     │ │ │
+│  │  │                 │ │                 │ │               │ │ │
+│  │  │   • Category    │ │   • Tags        │ │   • Views     │ │ │
+│  │  │   • Language    │ │   • Topics      │ │   • Likes     │ │ │
+│  │  │   • Duration    │ │   • Speakers    │ │   • Comments  │ │ │
+│  │  │   • Upload date │ │   • Quality     │ │   • Trending  │ │ │
+│  │  └─────────────────┘ └─────────────────┘ └───────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Recommendation Algorithms                                  │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐ │ │
+│  │  │   Content-Based │ │   Collaborative │ │   Trending    │ │ │
+│  │  │   Filtering     │ │   Filtering     │ │   Algorithm   │ │ │
+│  │  │                 │ │                 │ │               │ │ │
+│  │  │   Similar       │ │   User          │ │   Time-based  │ │ │
+│  │  │   content by    │ │   similarity    │ │   popularity  │ │ │
+│  │  │   features      │ │   patterns      │ │   scoring     │ │ │
+│  │  └─────────────────┘ └─────────────────┘ └───────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Ranking & Personalization                                 │ │
+│  │  ┌─────────────────────────────────────────────────────────┐ │ │
+│  │  │  final_score = (                                        │ │ │
+│  │  │    content_similarity * 0.4 +                           │ │ │
+│  │  │    user_preference_match * 0.3 +                        │ │ │
+│  │  │    trending_factor * 0.2 +                              │ │ │
+│  │  │    recency_boost * 0.1                                  │ │ │
+│  │  │  ) * islamic_compliance_score                           │ │ │
+│  │  └─────────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  Output & Delivery                                          │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐ │ │
+│  │  │   Trending      │ │   Related       │ │   Personalized│ │ │
+│  │  │   Videos        │ │   Videos        │ │   Feed        │ │ │
+│  │  │                 │ │                 │ │               │ │ │
+│  │  │   Period-based  │ │   Context-aware │ │   User-specific│ │ │
+│  │  │   (hour/day/    │ │   suggestions   │ │   homepage    │ │ │
+│  │  │   week/month)   │ │   during play   │ │   content     │ │ │
+│  │  └─────────────────┘ └─────────────────┘ └───────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Advanced Search API Implementation
+
+**Search Endpoint with Filters**:
+```typescript
+// GET /api/videos/search
+interface SearchRequest {
+  query?: string;                 // Free text search
+  category?: string;              // Content category filter
+  language?: 'en' | 'ar' | 'all'; // Language preference  
+  dateFrom?: string;              // Start date filter
+  dateTo?: string;                // End date filter
+  duration?: 'short' | 'medium' | 'long' | 'all';
+  sortBy?: 'relevance' | 'date' | 'views' | 'likes';
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;                 // Results per page
+  cursor?: string;                // Pagination cursor
+}
+
+export class AdvancedSearchEngine {
+  async search(request: SearchRequest): Promise<SearchResponse> {
+    // Build dynamic SQL query with full-text search
+    const query = this.buildSearchQuery(request);
+    
+    // Execute with proper indexing
+    const results = await this.database.execute(query);
+    
+    // Apply post-processing filters
+    const filtered = await this.applyContentFilters(results);
+    
+    // Add recommendation boost for personalized results
+    const ranked = await this.applyRecommendationBoost(filtered, request);
+    
+    return {
+      data: ranked,
+      pagination: this.buildPaginationMeta(results, request),
+      facets: await this.buildSearchFacets(request), // Category counts, etc.
+      suggestions: await this.getRelatedSearches(request.query)
+    };
+  }
+  
+  private buildSearchQuery(request: SearchRequest): string {
+    let sql = `
+      SELECT v.*, c.name as channel_name, c.avatar_url as channel_avatar_url,
+             ts_rank(v.search_vector, plainto_tsquery($1)) as relevance_score
+      FROM videos v
+      JOIN channels c ON v.channel_id = c.id
+      WHERE v.is_public = true AND v.is_deleted = false
+    `;
+    
+    const params: any[] = [request.query || ''];
+    let paramIndex = 1;
+    
+    // Add text search condition
+    if (request.query) {
+      sql += ` AND (v.search_vector @@ plainto_tsquery($${paramIndex}))`;
+    }
+    
+    // Add category filter
+    if (request.category) {
+      sql += ` AND v.category = $${++paramIndex}`;
+      params.push(request.category);
+    }
+    
+    // Add language filter
+    if (request.language && request.language !== 'all') {
+      sql += ` AND v.language = $${++paramIndex}`;
+      params.push(request.language);
+    }
+    
+    // Add date range filters
+    if (request.dateFrom) {
+      sql += ` AND v.published_at >= $${++paramIndex}`;
+      params.push(request.dateFrom);
+    }
+    
+    if (request.dateTo) {
+      sql += ` AND v.published_at <= $${++paramIndex}`;
+      params.push(request.dateTo);
+    }
+    
+    // Add duration filter
+    if (request.duration && request.duration !== 'all') {
+      switch (request.duration) {
+        case 'short':
+          sql += ` AND v.duration_seconds < 240`; // < 4 minutes
+          break;
+        case 'medium':
+          sql += ` AND v.duration_seconds BETWEEN 240 AND 1200`; // 4-20 minutes
+          break;
+        case 'long':
+          sql += ` AND v.duration_seconds > 1200`; // > 20 minutes
+          break;
+      }
+    }
+    
+    // Add ordering
+    sql += this.buildOrderClause(request);
+    
+    // Add pagination
+    sql += ` LIMIT ${request.limit || 20}`;
+    if (request.cursor) {
+      // Implement cursor-based pagination
+      sql += ` OFFSET ${this.decodeCursor(request.cursor)}`;
+    }
+    
+    return sql;
+  }
+}
+```
+
+### Trending Content Algorithm
+
+**Trending Score Calculation**:
+```typescript
+interface TrendingMetrics {
+  views: number;
+  likes: number;  
+  comments: number;
+  shares: number;
+  timeDecay: number;    // Exponential decay based on age
+  categoryBoost: number; // Category-specific boost
+}
+
+export class TrendingAlgorithm {
+  calculateTrendingScore(video: VideoObject, period: TrendingPeriod): number {
+    const metrics = this.getMetricsForPeriod(video, period);
+    
+    // Base engagement score
+    const engagementScore = (
+      metrics.views * 1.0 +
+      metrics.likes * 5.0 +
+      metrics.comments * 3.0 +
+      metrics.shares * 8.0
+    );
+    
+    // Time decay factor (newer content gets boost)
+    const ageHours = this.getAgeInHours(video.dateCreated);
+    const timeDecay = Math.exp(-ageHours / 24); // Exponential decay over 24 hours
+    
+    // Category boost for religious content
+    const categoryBoost = this.getCategoryBoost(video.category);
+    
+    // Islamic compliance factor (content moderation score)
+    const complianceScore = video.complianceScore || 1.0;
+    
+    return engagementScore * timeDecay * categoryBoost * complianceScore;
+  }
+  
+  async getTrendingVideos(
+    period: 'hour' | 'day' | 'week' | 'month',
+    category?: string,
+    limit: number = 20
+  ): Promise<VideoObject[]> {
+    const timeWindow = this.getTimeWindow(period);
+    
+    // Get videos from the specified time window
+    const candidates = await this.database.query(`
+      SELECT v.*, 
+             COUNT(vv.id) as period_views,
+             COUNT(vl.id) as period_likes,
+             COUNT(vc.id) as period_comments
+      FROM videos v
+      LEFT JOIN video_views vv ON v.id = vv.video_id 
+        AND vv.created_at >= $1
+      LEFT JOIN video_likes vl ON v.id = vl.video_id 
+        AND vl.created_at >= $1  
+      LEFT JOIN video_comments vc ON v.id = vc.video_id 
+        AND vc.created_at >= $1
+      WHERE v.is_public = true 
+        AND v.published_at >= $2
+        ${category ? 'AND v.category = $3' : ''}
+      GROUP BY v.id
+      ORDER BY (
+        COUNT(vv.id) * 1.0 +
+        COUNT(vl.id) * 5.0 + 
+        COUNT(vc.id) * 3.0
+      ) DESC
+      LIMIT $${category ? '4' : '3'}
+    `, [timeWindow.start, timeWindow.start, ...(category ? [category] : [])]);
+    
+    // Calculate trending scores and re-rank
+    const scored = candidates.map(video => ({
+      ...video,
+      trendingScore: this.calculateTrendingScore(video, period)
+    }));
+    
+    return scored
+      .sort((a, b) => b.trendingScore - a.trendingScore)
+      .slice(0, limit);
+  }
+}
+```
+
+### Search Performance Optimizations
+
+**Database Indexing Strategy**:
+```sql
+-- Full-text search index for video content
+CREATE INDEX idx_videos_search_vector ON videos 
+USING gin(search_vector);
+
+-- Composite indexes for common filter combinations
+CREATE INDEX idx_videos_category_published ON videos 
+(category, published_at DESC) 
+WHERE is_public = true;
+
+CREATE INDEX idx_videos_language_category ON videos 
+(language, category, published_at DESC)
+WHERE is_public = true;
+
+-- Trending algorithm indexes  
+CREATE INDEX idx_videos_engagement_score ON videos 
+((views_count + likes_count * 5 + comments_count * 3) DESC, published_at DESC)
+WHERE is_public = true;
+
+-- Duration-based filtering
+CREATE INDEX idx_videos_duration_category ON videos 
+(duration_seconds, category, published_at DESC)
+WHERE is_public = true;
+```
+
+**Caching Strategy for Search**:
+```typescript
+export class SearchCacheManager {
+  private static readonly CACHE_KEYS = {
+    TRENDING: (period: string, category?: string) => 
+      `trending:${period}:${category || 'all'}`,
+    POPULAR_SEARCHES: 'searches:popular',
+    SEARCH_RESULTS: (queryHash: string) => `search:${queryHash}`,
+    SUGGESTIONS: (query: string) => `suggestions:${btoa(query)}`
+  };
+  
+  async getTrendingVideos(period: string, category?: string): Promise<VideoObject[]> {
+    const cacheKey = SearchCacheManager.CACHE_KEYS.TRENDING(period, category);
+    
+    // Try cache first
+    let cached = await this.kv.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+    
+    // Generate fresh data
+    const trending = await this.trendingAlgorithm.getTrendingVideos(period, category);
+    
+    // Cache with appropriate TTL
+    const ttl = this.getTTLForPeriod(period);
+    await this.kv.put(cacheKey, JSON.stringify(trending), { expirationTtl: ttl });
+    
+    return trending;
+  }
+  
+  private getTTLForPeriod(period: string): number {
+    switch (period) {
+      case 'hour': return 300;   // 5 minutes
+      case 'day': return 1800;   // 30 minutes  
+      case 'week': return 3600;  // 1 hour
+      case 'month': return 7200; // 2 hours
+      default: return 1800;
+    }
+  }
+}
+```
+
 ## Performance Architecture
 
 ### Caching Strategy

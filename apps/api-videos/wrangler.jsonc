@@ -44,6 +44,11 @@
 			"binding": "playlists",
 			"bucket_name": "playlists",
 			"preview_bucket_name": "playlists-preview"
+		},
+		{
+			"binding": "reports",
+			"bucket_name": "reports",
+			"preview_bucket_name": "reports-preview"
 		}
 	],
 	"kv_namespaces": [
