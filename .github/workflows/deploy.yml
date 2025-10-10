@@ -173,6 +173,7 @@ jobs:
     needs: build-web
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    environment: preview
     steps:
       - uses: actions/checkout@v4
 
@@ -221,6 +222,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with preview link
         uses: actions/github-script@v7
@@ -272,6 +274,7 @@ jobs:
     needs: validate-api
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    environment: preview
     steps:
       - uses: actions/checkout@v4
 
@@ -303,6 +306,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with API preview link
         uses: actions/github-script@v7
@@ -356,6 +360,7 @@ jobs:
     needs: validate-processor
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    environment: preview
     steps:
       - uses: actions/checkout@v4
 
@@ -386,6 +391,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with processor preview info
         uses: actions/github-script@v7
@@ -515,6 +521,7 @@ jobs:
           pnpm wrangler deploy --config wrangler.staging.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy API to Staging
         run: |
@@ -522,6 +529,7 @@ jobs:
           pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Processor to Staging
         run: |
@@ -529,6 +537,7 @@ jobs:
           pnpm wrangler deploy --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Notify staging deployment
         run: |
@@ -571,6 +580,7 @@ jobs:
           pnpm wrangler deploy --config wrangler.production.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy API to Production
         run: |
@@ -578,6 +588,7 @@ jobs:
           pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Processor to Production
         run: |
@@ -585,6 +596,7 @@ jobs:
           pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Notify production deployment success
         if: success()
