@@ -47,9 +47,11 @@ export const checkProfileExists = async (user: User | null | undefined): Promise
 
     try {
         // Call the API with the user ID in the URL path and headers for auth
+        // Note: In our application, user.id is used as channelId because each user has a default channel
+        // associated with their account. This 1:1 relationship means user.id === channelId.
         const profile = await ProfilesAPI.getCurrent(user.id, {
             userId: user.id,
-            channelId: user.id
+            channelId: user.id  // user.id serves as the default channel ID for the user
         });
         
         return profile !== null;
@@ -61,12 +63,17 @@ export const checkProfileExists = async (user: User | null | undefined): Promise
 
 export const isProfileComplete = (profile: Profile | null): boolean => {
     if (!profile) return false;
-    
-    // Check if essential profile fields are filled
+
+    // Business rule: By default, when a user profile is created, the firstName is set to the prefix
+    // of the user's email address (the part before the '@'). A profile is only considered "complete"
+    // if the user has updated their firstName to something other than the email prefix.
+    // This check ensures that users personalize their profile and do not leave the default value.
+    // If this business rule changes (e.g., if the default firstName is set differently),
+    // this logic should be updated accordingly.
     return !!(
-        profile.firstName && 
-        profile.firstName.trim() !== '' && 
-        profile.firstName !== profile.email?.split('@')[0] // Not just the default email prefix
+        profile.firstName &&
+        profile.firstName.trim() !== '' &&
+        profile.firstName !== profile.email?.split('@')[0]  // Not just the default email prefix
     );
 };
 
