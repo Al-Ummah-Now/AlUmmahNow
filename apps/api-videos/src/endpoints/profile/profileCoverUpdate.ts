@@ -4,7 +4,6 @@ import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile } from '../../lib/types';
 import { z } from "zod";
 import { env } from 'cloudflare:workers';
-import { ReadableStream } from 'stream/web';
 
 const app = new Hono();
 
