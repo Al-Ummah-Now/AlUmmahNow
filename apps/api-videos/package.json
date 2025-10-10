@@ -1,0 +1,36 @@
+{
+  "name": "@al-ummah/api-videos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Al Ummah Now - Video API Backend with Cloudflare Workers",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:node": "tsx watch --inspect --env-file=.env.dev src/index.ts",
+    "build": "tsc --noEmit",
+    "start": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf .wrangler",
+    "test": "npm run test:api",
+    "test:api": "curl -s http://127.0.0.1:8686/test | jq .",
+    "test:health": "curl -s http://127.0.0.1:8686/health | jq .",
+    "test:metrics": "curl -s http://127.0.0.1:8686/metrics | jq ."
+  },
+  "dependencies": {
+    "@al-ummah/shared-types": "workspace:*",
+    "@bunny.net/storage-sdk": "0.3.0",
+    "@openauthjs/openauth": "^0.4.3",
+    "chanfana": "^2.8.0",
+    "hono": "^4.4.7",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "@types/node": "20.8.3",
+    "@types/service-worker-mock": "^2.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "5.7.2",
+    "wrangler": "^4.11.1"
+  }
+}
