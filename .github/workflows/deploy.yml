@@ -106,6 +106,7 @@ jobs:
           name: web-build-artifacts
           path: /tmp/web-artifacts
           retention-days: 30
+          include-hidden-files: true
 
   # Validate API Videos
   validate-api:
