@@ -1,0 +1,40 @@
+{
+  "name": "@al-ummah/processor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker for processing AlUmmah queue messages",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:development": "wrangler deploy --env development",
+    "build": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "test": "jest",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "cloudflare-worker",
+    "queue",
+    "message-processor",
+    "alummah"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@al-ummah/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "@types/jest": "^29.5.12",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.5.4",
+    "wrangler": "^4.11.1"
+  }
+}

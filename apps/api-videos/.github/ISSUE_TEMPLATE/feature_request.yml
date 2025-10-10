@@ -1,0 +1,185 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement for the Videos API
+title: "[FEATURE] "
+labels: ["enhancement", "needs-review"]
+projects: ["meywd/1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature for the Al-Ummah Now Videos API!
+        
+        **Project Board**: [Al-Ummah Now Master Project](https://github.com/users/meywd/projects/1/views/1)
+        **Roadmap**: [View current roadmap](../ROADMAP.md)
+
+  - type: dropdown
+    id: feature-category
+    attributes:
+      label: Feature Category
+      description: What category does this feature belong to?
+      options:
+        - Video Management
+        - Authentication & Security
+        - User Engagement (likes, comments, etc.)
+        - Content Organization (playlists, channels)
+        - Analytics & Metrics
+        - Performance & Optimization
+        - Developer Experience
+        - Integration & External APIs
+        - Live Streaming
+        - Content Moderation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature-summary
+    attributes:
+      label: Feature Summary
+      description: A brief, clear summary of the feature you'd like to see added
+      placeholder: Provide a concise summary of the feature...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? What use case does it address?
+      placeholder: |
+        Describe the problem or use case this feature addresses:
+        - What current limitation or pain point does this solve?
+        - What user need does this fulfill?
+        - How does this align with the API's goals?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed solution in detail
+      placeholder: |
+        Describe your proposed solution:
+        - How would this feature work?
+        - What new API endpoints or modifications are needed?
+        - What would the request/response format look like?
+        - How would authentication/authorization work?
+
+  - type: textarea
+    id: api-design
+    attributes:
+      label: API Design (if applicable)
+      description: Proposed API endpoints, request/response formats
+      render: http
+      placeholder: |
+        Example API design:
+        
+        POST /api/new-endpoint
+        Content-Type: application/json
+        Authorization: Bearer <token>
+        
+        {
+          "param1": "value",
+          "param2": 123
+        }
+        
+        Response:
+        {
+          "success": true,
+          "data": {...}
+        }
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: What alternative solutions have you considered?
+      placeholder: Describe any alternative approaches you've considered and why you prefer your proposed solution...
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Low - Nice to have
+        - Medium - Would significantly improve my workflow
+        - High - Blocking my current use case
+        - Critical - Essential for production use
+    validations:
+      required: true
+
+  - type: dropdown
+    id: target-users
+    attributes:
+      label: Target Users
+      description: Who would benefit from this feature?
+      multiple: true
+      options:
+        - API consumers/developers
+        - End users of video platform
+        - Content creators
+        - Platform administrators
+        - Mobile app developers
+        - Web developers
+        - Enterprise users
+        - All users
+
+  - type: checkboxes
+    id: roadmap-alignment
+    attributes:
+      label: Roadmap Alignment
+      description: Does this feature align with our current roadmap phases?
+      options:
+        - label: "Phase 1: Enhanced Core Features (Q1 2025)"
+        - label: "Phase 2: Advanced Platform Features (Q2 2025)"  
+        - label: "Phase 3: Enterprise & Scale Features (Q3-Q4 2025)"
+        - label: "Not sure / doesn't align with current roadmap"
+
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: Success Criteria
+      description: How would you measure the success of this feature?
+      placeholder: |
+        Define success criteria:
+        - What metrics would indicate success?
+        - How would you know this feature is working well?
+        - What would adoption look like?
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any additional context, mockups, external references, or examples
+      placeholder: |
+        Add any additional context:
+        - Links to similar implementations
+        - Screenshots or mockups
+        - External references
+        - Business justification
+        - Technical considerations
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution Interest
+      description: Are you interested in contributing to this feature?
+      options:
+        - label: I'm willing to help implement this feature
+        - label: I can provide testing and feedback
+        - label: I can help with documentation
+        - label: I prefer to just track progress
+
+  - type: checkboxes
+    id: internal-checklist
+    attributes:
+      label: Internal Checklist (for maintainers)
+      options:
+        - label: Feature feasibility assessed
+        - label: Resource requirements estimated  
+        - label: Roadmap placement determined
+        - label: Breaking changes impact evaluated
+        - label: Security implications reviewed
+        - label: Documentation requirements identified
