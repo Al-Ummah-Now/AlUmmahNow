@@ -86,6 +86,13 @@ jobs:
           cd apps/web && pnpm opennextjs-cloudflare build
         timeout-minutes: 120
 
+      - name: Debug - Check .open-next contents
+        run: |
+          echo "=== Checking if .open-next exists ==="
+          ls -la apps/web/.open-next || echo ".open-next directory not found"
+          echo "=== Contents of .open-next ==="
+          find apps/web/.open-next -type f || echo "No files found"
+
       - name: Prepare web artifacts (workaround for .gitignore)
         run: |
           mkdir -p /tmp/web-artifacts
