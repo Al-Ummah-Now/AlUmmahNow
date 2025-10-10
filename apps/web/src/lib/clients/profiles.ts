@@ -80,6 +80,7 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
         return true;
     } catch (error) {
         console.error(error);
+        return false;
     }
 }
 
@@ -104,6 +105,7 @@ export const updateProfilePhoto = async (profile: Profile, file: File, setProfil
         return true;
     } catch (error) {
         console.error(error);
+        return false;
     }
 }
 
@@ -128,5 +130,6 @@ export const updateCoverPhoto = async (profile: Profile, file: File, setProfile:
         return true;
     } catch (error) {
         console.error(error);
+        return false;
     }
 }
