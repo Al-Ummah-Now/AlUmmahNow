@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
 import { ChannelsAPI } from '@/lib/api/channels';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell } from 'lucide-react';
 
 interface SubscribeButtonProps {
   channelId: string;
@@ -16,7 +16,6 @@ interface SubscribeButtonProps {
 
 export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   channelId,
-  channelName,
   initialSubscribed = false,
   subscribersCount = 0,
   className = ''

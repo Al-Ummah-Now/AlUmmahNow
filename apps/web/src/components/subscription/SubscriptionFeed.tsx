@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
-import { useProfile } from '@/hooks/useProfile';
 import { VideoObject } from '@/interfaces';
 import VideoCard from '@/components/videoCard';
 import { Button } from '@/components/ui/button';
