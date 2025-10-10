@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { PaginationResponse, VideoObject } from "@/interfaces";
+import { VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
 import SearchFilters from "@/components/search/SearchFilters/index";
 import SearchSuggestions from "@/components/search/SearchSuggestions/index";
@@ -74,13 +74,6 @@ const SearchPage: React.FC = () => {
         setShowFilters(false);
         // Re-search if there's a query
         if (searchQuery.trim()) {
-            handleSearch();
-        }
-    };
-
-    // Handle Enter key in search
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
             handleSearch();
         }
     };
