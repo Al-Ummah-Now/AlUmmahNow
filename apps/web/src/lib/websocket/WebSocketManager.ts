@@ -1,9 +1,9 @@
-import { 
-  WebSocketConfig, 
-  WebSocketConnectionState, 
-  WebSocketMessage, 
+import {
+  WebSocketConfig,
+  WebSocketConnectionState,
+  WebSocketMessage,
   WebSocketSubscription,
-  WebSocketEventType 
+  WebSocketEventType
 } from '@/interfaces/websocket';
 
 export class WebSocketManager {
@@ -19,11 +19,11 @@ export class WebSocketManager {
   constructor(config: WebSocketConfig) {
     this.config = {
       ...config,
-      reconnectInterval: config.reconnectInterval ?? 1000,
-      maxReconnectAttempts: config.maxReconnectAttempts ?? 5,
-      heartbeatInterval: config.heartbeatInterval ?? 30000
+      reconnectInterval: config.reconnectInterval || 1000,
+      maxReconnectAttempts: config.maxReconnectAttempts || 5,
+      heartbeatInterval: config.heartbeatInterval || 30000
     };
-    
+
     this.state = {
       status: 'disconnected',
       reconnectAttempts: 0,
@@ -42,38 +42,38 @@ export class WebSocketManager {
       }
 
       this.state.status = 'connecting';
-      
+
       try {
         // Build WebSocket URL with authentication if available
         let wsUrl = this.config.url;
         const params = new URLSearchParams();
-        
+
         if (userId || this.config.userId) {
           params.append('userId', userId || this.config.userId!);
         }
-        
+
         if (this.config.authToken) {
           params.append('token', this.config.authToken);
         }
-        
+
         if (params.toString()) {
           wsUrl += `?${params.toString()}`;
         }
 
         console.log('🔌 Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
-        
+
         this.ws = new WebSocket(wsUrl);
-        
+
         this.ws.onopen = () => {
           console.log('✅ WebSocket connected');
           this.state.status = 'connected';
           this.state.lastConnected = new Date();
           this.state.reconnectAttempts = 0;
-          
+
           this.startHeartbeat();
           this.flushMessageQueue();
           this.notifyStateChange();
-          
+
           resolve();
         };
 
@@ -91,7 +91,7 @@ export class WebSocketManager {
           this.state.status = 'disconnected';
           this.stopHeartbeat();
           this.notifyStateChange();
-          
+
           if (!event.wasClean && this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
             this.scheduleReconnect();
           }
@@ -120,13 +120,13 @@ export class WebSocketManager {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    
+
     this.stopHeartbeat();
-    
+
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.close(1000, 'Client disconnect');
     }
-    
+
     this.ws = null;
     this.state.status = 'disconnected';
     this.notifyStateChange();
@@ -139,17 +139,17 @@ export class WebSocketManager {
     if (!this.subscriptions.has(channel)) {
       this.subscriptions.set(channel, []);
     }
-    
+
     const subscription: WebSocketSubscription = { channel, callback };
     this.subscriptions.get(channel)!.push(subscription);
-    
+
     // Send subscription message if connected
     if (this.state.status === 'connected') {
       this.sendMessage('subscribe', { channel });
     }
-    
+
     console.log(`📡 Subscribed to channel: ${channel}`);
-    
+
     // Return unsubscribe function
     return () => {
       const channelSubs = this.subscriptions.get(channel);
@@ -158,7 +158,7 @@ export class WebSocketManager {
         if (index !== -1) {
           channelSubs.splice(index, 1);
           console.log(`📡 Unsubscribed from channel: ${channel}`);
-          
+
           if (channelSubs.length === 0) {
             this.subscriptions.delete(channel);
             if (this.state.status === 'connected') {
@@ -202,7 +202,7 @@ export class WebSocketManager {
     const listeners = this.eventListeners.get('stateChange') || new Set();
     listeners.add(callback);
     this.eventListeners.set('stateChange', listeners);
-    
+
     return () => {
       listeners.delete(callback);
     };
@@ -224,19 +224,19 @@ export class WebSocketManager {
 
   private handleMessage(message: WebSocketMessage): void {
     console.log('📥 Received message:', message.type, message.data);
-    
+
     // Handle connection acknowledgment
     if (message.type === 'connection_acknowledged') {
       console.log('✅ Connection acknowledged by server');
       return;
     }
-    
+
     // Handle heartbeat
     if (message.type === 'heartbeat') {
       this.sendMessage('heartbeat', { timestamp: Date.now() });
       return;
     }
-    
+
     // Route message to appropriate subscribers
     const channelKey = this.getChannelKeyFromMessage(message);
     if (channelKey) {
@@ -251,7 +251,7 @@ export class WebSocketManager {
         });
       }
     }
-    
+
     // Broadcast to all subscribers for certain message types
     if (['notification', 'presence_update'].includes(message.type)) {
       this.subscriptions.forEach(subscribers => {
@@ -268,7 +268,7 @@ export class WebSocketManager {
 
   private getChannelKeyFromMessage(message: WebSocketMessage): string | null {
     const { type, data } = message;
-    
+
     switch (type) {
       case 'comment_added':
       case 'comment_updated':
@@ -289,15 +289,15 @@ export class WebSocketManager {
     if (this.reconnectTimer) {
       return;
     }
-    
+
     this.state.reconnectAttempts++;
     const delay = Math.min(
       this.config.reconnectInterval * Math.pow(2, this.state.reconnectAttempts - 1),
       30000 // Max 30 seconds
     );
-    
+
     console.log(`🔄 Scheduling reconnect attempt ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`);
-    
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect().catch(error => {
@@ -311,7 +311,7 @@ export class WebSocketManager {
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    
+
     this.heartbeatTimer = setInterval(() => {
       if (this.state.status === 'connected') {
         this.sendMessage('heartbeat', { timestamp: Date.now() });

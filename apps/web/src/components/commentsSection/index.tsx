@@ -19,7 +19,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   initialComments = [], 
   user 
 }) => {
-  const { profile } = useProfile(user);
+  const { profile } = useProfile(user || null);
   const [newCommentText, setNewCommentText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   

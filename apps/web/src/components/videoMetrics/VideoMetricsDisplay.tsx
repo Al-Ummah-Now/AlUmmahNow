@@ -125,7 +125,7 @@ export function LiveViewerIndicator({ channelId, className = "" }: LiveViewerInd
       {/* Show some viewer avatars if available */}
       {viewers.length > 0 && viewers.length <= 3 && (
         <div className="flex -space-x-2">
-          {viewers.slice(0, 3).map((viewer) => (
+          {viewers.slice(0, 3).map((viewer, _index) => (
             <div
               key={viewer.userId}
               className="w-6 h-6 bg-gray-300 rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center text-xs"
