@@ -48,6 +48,7 @@ export const updatePlaylist = async (profile: Playlist, setPlaylist: (playlist: 
         return true;
     } catch (error) {
         console.error(error);
+        return false;
     }
 }
 
