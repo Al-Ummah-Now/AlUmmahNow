@@ -84,6 +84,14 @@ jobs:
         run: pnpm --filter @al-ummah/web build
         timeout-minutes: 120
 
+      - name: Debug - List build output
+        run: |
+          echo "=== Listing apps/web directory ==="
+          ls -la apps/web/
+          echo "=== Looking for .open-next ==="
+          find apps/web -name ".open-next" -type d || echo "Not found"
+          find . -name ".open-next" -type d || echo "Not found anywhere"
+
       - name: Prepare web artifacts (workaround for .gitignore)
         run: |
           mkdir -p /tmp/web-artifacts
