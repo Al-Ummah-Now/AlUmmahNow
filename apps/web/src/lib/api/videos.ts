@@ -7,10 +7,8 @@ import {
   ListQueryParams,
   CommentCreateRequest,
   CommentUpdateRequest,
-  SearchQueryParams,
   SearchFilters,
   SearchSuggestion,
-  TrendingContent,
   RecommendationRequest
 } from "./types";
 

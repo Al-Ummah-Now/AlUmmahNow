@@ -1,13 +1,13 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { PaginationResponse, VideoObject } from "@/interfaces";
+import { VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/rtl/index";
 import SearchFilters from "@/components/search/SearchFilters/rtl/index";
 import SearchSuggestions from "@/components/search/SearchSuggestions/rtl/index";
 import TrendingContent from "@/components/search/TrendingContent/rtl/index";
 import { SearchFilters as SearchFiltersType } from "@/lib/api/types";
 import { VideosAPI } from "@/lib/api/videos";
-import { redirect, useSearchParams, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 const SearchPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
