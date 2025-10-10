@@ -159,7 +159,6 @@ jobs:
     needs: build-web
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
-    environment: preview
     steps:
       - uses: actions/checkout@v4
 
@@ -248,7 +247,6 @@ jobs:
     needs: validate-api
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
-    environment: preview
     steps:
       - uses: actions/checkout@v4
 
@@ -333,7 +331,6 @@ jobs:
     needs: validate-processor
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
-    environment: preview
     steps:
       - uses: actions/checkout@v4
 
