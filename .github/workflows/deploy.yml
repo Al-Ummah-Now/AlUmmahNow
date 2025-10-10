@@ -178,6 +178,17 @@ jobs:
           name: web-build-artifacts
           path: .
 
+      - name: Debug - List artifact contents
+        run: |
+          echo "=== Repository root ==="
+          ls -la
+          echo "=== apps/web directory ==="
+          ls -la apps/web/ || echo "apps/web directory not found"
+          echo "=== Looking for .open-next ==="
+          find . -name ".open-next" -type d
+          echo "=== Looking for worker.js ==="
+          find . -name "worker.js"
+
       - name: Generate preview name
         id: preview-name
         run: |
