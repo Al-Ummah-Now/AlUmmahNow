@@ -112,6 +112,41 @@ export interface ListQueryParams {
   cursor?: string;
 }
 
+// Search and Discovery Types
+export interface SearchFilters {
+  category?: string;
+  language?: 'en' | 'ar' | 'all';
+  dateFrom?: string; // ISO date string
+  dateTo?: string; // ISO date string
+  duration?: 'short' | 'medium' | 'long' | 'all'; // <4min, 4-20min, >20min
+  sortBy?: 'relevance' | 'date' | 'views' | 'likes';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface SearchQueryParams extends ListQueryParams {
+  search?: string;
+  filters?: SearchFilters;
+}
+
+export interface SearchSuggestion {
+  text: string;
+  type: 'query' | 'channel' | 'category';
+  count?: number;
+}
+
+export interface TrendingContent {
+  videos: any[]; // VideoObject from interfaces
+  period: 'hour' | 'day' | 'week' | 'month';
+  category?: string;
+}
+
+export interface RecommendationRequest {
+  userId?: string;
+  videoId?: string; // for related videos
+  limit?: number;
+  excludeWatched?: boolean;
+}
+
 // Additional request types not defined in OpenAPI but needed for implementation
 export interface ChannelUpdateRequest {
   name?: string;

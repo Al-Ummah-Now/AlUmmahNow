@@ -32,12 +32,10 @@ jobs:
 
       - name: Run type checking (all packages)
         run: pnpm type-check
-        continue-on-error: true
         timeout-minutes: 5
 
       - name: Run linting (all packages)
         run: pnpm lint
-        continue-on-error: true
         timeout-minutes: 3
 
   # Build shared types first (dependency for other apps)
