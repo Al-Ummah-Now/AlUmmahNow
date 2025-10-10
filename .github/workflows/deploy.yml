@@ -88,8 +88,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-build-artifacts
-          path: apps/web
+          path: |
+            apps/web/.open-next/
+            apps/web/package.json
+            apps/web/wrangler*.jsonc
           retention-days: 30
+          include-hidden-files: true
 
   # Validate API Videos
   validate-api:
@@ -176,7 +180,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: web-build-artifacts
-          path: .
+          path: apps/web/
 
       - name: Debug - List artifact contents
         run: |
@@ -490,7 +494,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: web-build-artifacts
-          path: .
+          path: apps/web/
 
       - name: Deploy Web to Staging
         run: |
@@ -546,7 +550,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: web-build-artifacts
-          path: .
+          path: apps/web/
 
       - name: Deploy Web to Production
         run: |
