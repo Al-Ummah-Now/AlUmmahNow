@@ -2,19 +2,19 @@ import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { PaginationResponse, VideoInfo, VideoObject } from "@/interfaces";
 import { VideosAPI } from "@/lib/api";
 
-export async function fetchVideoById(vid: string): Promise<PlayerOptions> {
-    if (!vid) return;
+export async function fetchVideoById(vid: string): Promise<PlayerOptions | undefined> {
+    if (!vid) return undefined;
 
     try {
         const video = await VideosAPI.getById(vid);
         if (!video) {
             throw new Error('Video not found');
         }
-        
+
         return {
             id: video.id,
             title: video.title,
-            description: video.description,
+            description: video.description || '',
             channel: video.channel,
             url: video.videoUrl,
             views: `${video.views || 0}`,
@@ -28,21 +28,22 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions> {
         };
     } catch (error) {
         console.error(error);
+        return undefined;
     }
 };
 
 
-export async function fetchVideos(cursor: string | null = null): Promise<VideoInfo[]> {
+export async function fetchVideos(cursor: string | null = null): Promise<VideoInfo[] | undefined> {
     try {
-        const result = await VideosAPI.list({ 
-            limit: 15, 
-            cursor: cursor || undefined 
+        const result = await VideosAPI.list({
+            limit: 15,
+            cursor: cursor || undefined
         });
-        
+
         if (!result) {
             throw new Error('Failed to fetch videos');
         }
-        
+
         return result.data.map((video) => ({
             id: video.id,
             title: video.title,
@@ -65,6 +66,7 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
 
     } catch (error) {
         console.error(error);
+        return undefined;
     }
 };
 

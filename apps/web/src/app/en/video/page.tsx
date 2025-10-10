@@ -23,7 +23,7 @@ export default function Home() {
       if (!isMounted || !vid) return;
 
       const details = await fetchVideoById(vid);
-      setVideoDetails(details);
+      setVideoDetails(details || null);
     };
 
     fetchVideoDetails();
@@ -33,7 +33,7 @@ export default function Home() {
   useEffect(() => {
     const fetchRelatedVideos = async () => {
       const videos = await fetchVideos();
-      setRelatedVideos(videos);
+      setRelatedVideos(videos || []);
     };
 
     fetchRelatedVideos();
