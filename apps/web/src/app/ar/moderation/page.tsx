@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
+import { pluralizeArabic } from "@/lib/utility";
 
 interface ModerationDashboardProps {}
 
@@ -216,7 +217,7 @@ const ModerationDashboard: React.FC<ModerationDashboardProps> = () => {
               <CardTitle className="text-sm font-medium">متوسط وقت الاستجابة</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.averageResponseTime} ساعة</div>
+              <div className="text-2xl font-bold text-green-600">{pluralizeArabic(stats.averageResponseTime, 'ساعة', 'ساعتان', 'ساعات')}</div>
               <p className="text-xs text-gray-500 dark:text-gray-400">متوسط الحل</p>
             </CardContent>
           </Card>

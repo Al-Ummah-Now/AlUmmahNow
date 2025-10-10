@@ -4,7 +4,11 @@ import {
   ListQueryParams
 } from "./types";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
+// Use NEXT_PUBLIC_API_URL if defined (not just truthy), otherwise fall back to default.
+const baseUrl =
+  typeof process.env.NEXT_PUBLIC_API_URL !== "undefined" && process.env.NEXT_PUBLIC_API_URL !== ""
+    ? process.env.NEXT_PUBLIC_API_URL
+    : "https://videos.api.alummahnow.net";
 
 // Moderation Types
 export interface ContentReport {

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { createApiHeaders } from "@/lib/utility";
 
 interface ReportDetailPageProps {}
 
@@ -49,7 +50,7 @@ const ReportDetailPage: React.FC<ReportDetailPageProps> = () => {
       setLoading(true);
       setError(null);
 
-      const headers = auth?.user ? { userId: auth.user.id } : undefined;
+      const headers = createApiHeaders(auth?.user);
       const reportData = await ModerationAPI.getReportById(reportId, headers);
 
       setReport(reportData);
@@ -67,8 +68,8 @@ const ReportDetailPage: React.FC<ReportDetailPageProps> = () => {
       setActionLoading(true);
       setError(null);
 
-      const headers = auth?.user ? { userId: auth.user.id } : undefined;
-      
+      const headers = createApiHeaders(auth?.user);
+
       const actionData: ModerationActionRequest = {
         reportId: report.id,
         contentType: report.contentType,
