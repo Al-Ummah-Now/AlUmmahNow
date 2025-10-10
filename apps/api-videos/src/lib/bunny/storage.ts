@@ -1,5 +1,4 @@
 import * as BunnyStorageSDK from "@bunny.net/storage-sdk";
-import { ReadableStream } from 'stream/web';
 
 class BunnyStorageClient {
     readonly sz: BunnyStorageSDK.StorageZone;
