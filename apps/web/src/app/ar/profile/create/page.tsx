@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
-import { updateProfile, fetchProfile } from "@/lib/clients/profiles";
+import { updateProfile } from "@/lib/clients/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 
 const ProfileCreatePage = () => {
@@ -22,7 +22,7 @@ const ProfileCreatePage = () => {
         lastName: '',
         displayName: '',
         avatarUrl: '/avatar.png',
-        coverUrl: null
+        coverUrl: undefined
       });
     }
   }, [auth]);
