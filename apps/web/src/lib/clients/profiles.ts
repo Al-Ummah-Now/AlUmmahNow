@@ -29,7 +29,7 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
                 firstName: user.email?.split('@')[0] || 'User',
                 lastName: '',
                 avatarUrl: '/avatar.png',
-                coverUrl: null
+                coverUrl: undefined
             });
             return true;
         }
