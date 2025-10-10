@@ -84,16 +84,19 @@ jobs:
         run: pnpm --filter @al-ummah/web build
         timeout-minutes: 120
 
+      - name: Prepare web artifacts (workaround for .gitignore)
+        run: |
+          mkdir -p /tmp/web-artifacts
+          cp -r apps/web/.open-next /tmp/web-artifacts/
+          cp apps/web/package.json /tmp/web-artifacts/
+          cp apps/web/wrangler*.jsonc /tmp/web-artifacts/
+
       - name: Upload web build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: web-build-artifacts
-          path: |
-            apps/web/.open-next/
-            apps/web/package.json
-            apps/web/wrangler*.jsonc
+          path: /tmp/web-artifacts
           retention-days: 30
-          include-hidden-files: true
 
   # Validate API Videos
   validate-api:
