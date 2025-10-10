@@ -1,10 +1,9 @@
-import { 
-  ApiResponse, 
+import {
+  ApiResponse,
   ApiHeaders,
   ListQueryParams
 } from "./types";
 
-// Use NEXT_PUBLIC_API_URL if defined (not just truthy), otherwise fall back to default.
 const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://videos.api.alummahnow.net";
 
 // Moderation Types

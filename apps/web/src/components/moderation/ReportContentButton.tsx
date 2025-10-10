@@ -4,6 +4,7 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { ModerationAPI, ReportCreateRequest } from "@/lib/api/moderation";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { createApiHeaders } from "@/lib/utility";
 
 interface ReportContentButtonProps {
   contentType: 'video' | 'comment' | 'channel' | 'playlist';
@@ -61,7 +62,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
         ...(reportForm.description && { description: reportForm.description }),
       };
 
-      const headers = { userId: auth.user.id, ...(contentType === 'channel' && { channelId: contentId }) };
+      const headers = createApiHeaders(auth.user, contentType === 'channel' ? contentId : undefined);
       await ModerationAPI.createReport(reportData, headers);
 
       setSuccess(true);

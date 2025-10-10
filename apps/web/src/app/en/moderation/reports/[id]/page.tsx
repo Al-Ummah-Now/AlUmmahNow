@@ -68,7 +68,7 @@ const ReportDetailPage: React.FC<ReportDetailPageProps> = () => {
       setActionLoading(true);
       setError(null);
 
-      const headers = createApiHeaders(auth?.user);
+      const headers = createApiHeaders(auth?.user, report.contentType === 'channel' ? report.contentId : undefined);
 
       const actionData: ModerationActionRequest = {
         reportId: report.id,
