@@ -58,9 +58,9 @@ export class APIClient {
   // Profiles
   get profiles() {
     return {
-      getCurrent: (userId: string, headers?: ApiHeaders) => ProfilesAPI.getCurrent(userId, { ...this.headers, ...headers }),
-      update: (data: ProfileUpdateRequest, headers?: ApiHeaders) => ProfilesAPI.update(data, { ...this.headers, ...headers }),
-      delete: (headers?: ApiHeaders) => ProfilesAPI.delete({ ...this.headers, ...headers }),
+      getCurrent: (userId: string, headers?: ApiHeaders) => ProfilesAPI.getCurrent(userId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      update: (data: ProfileUpdateRequest, headers?: ApiHeaders) => ProfilesAPI.update(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      delete: (headers?: ApiHeaders) => ProfilesAPI.delete({ ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
     };
   }
 
@@ -69,11 +69,11 @@ export class APIClient {
     return {
       list: (params?: ListQueryParams, headers?: ApiHeaders) => ChannelsAPI.list(params, { ...this.headers, ...headers }),
       getById: (id: string, headers?: ApiHeaders) => ChannelsAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data: ChannelCreateRequest, headers?: ApiHeaders) => ChannelsAPI.create(data, { ...this.headers, ...headers }),
-      update: (id: string, data: ChannelUpdateRequest, headers?: ApiHeaders) => ChannelsAPI.update(id, data, { ...this.headers, ...headers }),
-      delete: (id: string, headers?: ApiHeaders) => ChannelsAPI.delete(id, { ...this.headers, ...headers }),
-      subscribe: (channelId: string, data: SubscriptionRequest, headers?: ApiHeaders) => ChannelsAPI.subscribe(channelId, data, { ...this.headers, ...headers }),
-      unsubscribe: (channelId: string, headers?: ApiHeaders) => ChannelsAPI.unsubscribe(channelId, { ...this.headers, ...headers }),
+      create: (data: ChannelCreateRequest, headers?: ApiHeaders) => ChannelsAPI.create(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      update: (id: string, data: ChannelUpdateRequest, headers?: ApiHeaders) => ChannelsAPI.update(id, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      delete: (id: string, headers?: ApiHeaders) => ChannelsAPI.delete(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      subscribe: (channelId: string, data: SubscriptionRequest, headers?: ApiHeaders) => ChannelsAPI.subscribe(channelId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      unsubscribe: (channelId: string, headers?: ApiHeaders) => ChannelsAPI.unsubscribe(channelId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
     };
   }
 
@@ -82,11 +82,11 @@ export class APIClient {
     return {
       list: (params?: ListQueryParams, headers?: ApiHeaders) => PlaylistsAPI.list(params, { ...this.headers, ...headers }),
       getById: (id: string, headers?: ApiHeaders) => PlaylistsAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data: PlaylistCreateRequest, headers?: ApiHeaders) => PlaylistsAPI.create(data, { ...this.headers, ...headers }),
-      update: (id: string, data: PlaylistUpdateRequest, headers?: ApiHeaders) => PlaylistsAPI.update(id, data, { ...this.headers, ...headers }),
-      delete: (id: string, headers?: ApiHeaders) => PlaylistsAPI.delete(id, { ...this.headers, ...headers }),
-      addVideo: (playlistId: string, data: PlaylistAddVideoRequest, headers?: ApiHeaders) => PlaylistsAPI.addVideo(playlistId, data, { ...this.headers, ...headers }),
-      removeVideo: (playlistId: string, videoId: string, headers?: ApiHeaders) => PlaylistsAPI.removeVideo(playlistId, videoId, { ...this.headers, ...headers }),
+      create: (data: PlaylistCreateRequest, headers?: ApiHeaders) => PlaylistsAPI.create(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      update: (id: string, data: PlaylistUpdateRequest, headers?: ApiHeaders) => PlaylistsAPI.update(id, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      delete: (id: string, headers?: ApiHeaders) => PlaylistsAPI.delete(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      addVideo: (playlistId: string, data: PlaylistAddVideoRequest, headers?: ApiHeaders) => PlaylistsAPI.addVideo(playlistId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      removeVideo: (playlistId: string, videoId: string, headers?: ApiHeaders) => PlaylistsAPI.removeVideo(playlistId, videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
     };
   }
 
