@@ -1,12 +1,12 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider/authContext";
-import { ModerationAPI, ContentReport, ModerationAction, ModerationActionRequest } from "@/lib/api/moderation";
+import { ModerationAPI, ContentReport, ModerationActionRequest } from "@/lib/api/moderation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 
 interface ReportDetailPageProps {}
@@ -28,7 +28,6 @@ const ReportDetailPage: React.FC<ReportDetailPageProps> = () => {
   });
 
   const params = useParams();
-  const router = useRouter();
   const auth = useAuth();
   const reportId = params.id as string;
 
