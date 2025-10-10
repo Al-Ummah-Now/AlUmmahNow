@@ -1,0 +1,25 @@
+{
+  "name": "@al-ummah/shared-types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript types for Al Ummah Now",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  }
+}

@@ -1,456 +1,261 @@
-# Al Ummah Now - Video Portal UI
+# Al Ummah Now - Islamic Content Platform
 
-**An Islamic content platform for scholars' clips, educational content, and community building**
+[![Deploy](https://github.com/meywd/AlUmmahNow/actions/workflows/deploy.yml/badge.svg)](https://github.com/meywd/AlUmmahNow/actions/workflows/deploy.yml)
 
-This repository contains the frontend user interface for the Al Ummah Now video platform - a YouTube alternative focused on Islamic content, educational materials, and scholarly discussions.
+A comprehensive Islamic content platform built as a Turborepo monorepo with three Cloudflare Workers applications.
 
-## 🎯 Project Vision
+## 🌟 Features
 
-Al Ummah Now aims to create a comprehensive Islamic content ecosystem including:
-- **Video Portal** (this repository) - Video sharing and consumption platform
-- **News Website** - Islamic news and articles  
-- **Academy Platform** - Educational courses and learning paths
-- **Community Features** - Discussion, messaging, and interaction tools
+- **Bilingual Support**: Full English/Arabic with RTL layout
+- **Video Platform**: Upload, stream, and manage Islamic video content
+- **Authentication**: Secure OpenAuth integration with JWT tokens
+- **Real-time Processing**: Queue-based event processing and analytics
+- **Modern Stack**: Next.js 15, Hono, Cloudflare Workers, Bunny.net CDN
+- **Type-Safe**: Shared TypeScript types across all applications
 
-## 📋 Complete Documentation
+## 🏗️ Monorepo Structure
 
-### 📊 Project Planning & Analysis
-- **[🗺️ ROADMAP.md](./ROADMAP.md)** - Comprehensive 4-phase development roadmap with timeline and milestones
-- **[📊 FEATURES.md](./FEATURES.md)** - Current implementation analysis (~60% complete) and missing features  
-- **[🏗️ ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical system design and microservices architecture
+```
+al-ummah-now/
+├── apps/
+│   ├── web/                Next.js 15 frontend
+│   ├── api-videos/         Hono API backend with OpenAPI
+│   └── processor/          Queue consumer for events
+├── packages/
+│   └── shared-types/       Shared TypeScript types
+├── pnpm-workspace.yaml     Workspace configuration
+├── turbo.json              Build orchestration
+└── package.json            Root scripts
+```
 
-### 🤝 Contributing & Development
-- **[🤝 CONTRIBUTING.md](./CONTRIBUTING.md)** - Developer guidelines, setup instructions, and contribution workflow
-- **[🐛 Bug Reports](./.github/ISSUE_TEMPLATE/bug_report.yml)** - Report bugs and issues
-- **[✨ Feature Requests](./.github/ISSUE_TEMPLATE/feature_request.yml)** - Suggest new features and enhancements
-- **[📚 Documentation Requests](./.github/ISSUE_TEMPLATE/documentation_request.yml)** - Request documentation improvements
+### Applications
 
-### 🔗 Project Management
-- **[📋 Project Board](https://github.com/users/meywd/projects/1/views/1)** - Track development progress and milestones
-- **[📋 Issues](https://github.com/meywd/AlUmmahNow/issues)** - Current tasks, bugs, and feature requests
-
-## 🌐 Live Demo
-
-A live deployment is available at: [https://al-ummah-now.templates.workers.dev](https://al-ummah-now.templates.workers.dev)
-
-*Updated to resolve merge conflicts*
-
-## 🚀 Current Status
-
-**Phase**: Foundation Development (Video Portal UI)  
-**Progress**: ~60% Complete
-
-### ✅ Implemented Features
-- Next.js 15 with TypeScript and Tailwind CSS
-- Video player with Video.js integration
-- Complete OpenAPI-based API client
-- Authentication system using OpenAuth
-- Bilingual support (English/Arabic) with RTL layout
-- User profiles, channels, and playlist management
-- Comment system and social interactions
-- Responsive design and dark/light themes
-
-### 🔧 In Development
-- Video upload functionality
-- Real-time notifications and live features
-- Advanced search and content discovery
-- Mobile app companion
-- Content moderation tools
-
-## 🛠️ Technology Stack
-
-- **Frontend**: Next.js 15, TypeScript, Tailwind CSS
-- **Authentication**: OpenAuth with JWT tokens
-- **Video Player**: Video.js with custom controls
-- **Deployment**: Cloudflare Workers via OpenNext
-- **Styling**: Tailwind CSS with dark/light themes
-- **Internationalization**: Built-in RTL support
+| App | Description | Port | Docs |
+|-----|-------------|------|------|
+| **web** | Next.js frontend with bilingual support | 3000 | [README](apps/web/README.md) |
+| **api-videos** | Hono API backend with OpenAPI/Swagger | 8686 | [CLAUDE.md](apps/api-videos/CLAUDE.md) |
+| **processor** | Cloudflare Queue consumer | 8787 | [README](apps/processor/README.md) |
+| **shared-types** | Shared TypeScript types | - | Built package |
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ and npm
-- Cloudflare account for deployment
 
-### Development Setup
+- Node.js 18+
+- pnpm 9.15.4+
+- Cloudflare account (for deployment)
 
-1. **Clone and install dependencies:**
-# Al Ummah Now - Video Portal UI
+### Setup
 
-**An Islamic content platform for scholars' clips, educational content, and community building**
-
-This repository contains the frontend user interface for the Al Ummah Now video platform - a YouTube alternative focused on Islamic content, educational materials, and scholarly discussions.
-
-## 🎯 Project Vision
-
-Al Ummah Now aims to create a comprehensive Islamic content ecosystem including:
-- **Video Portal** (this repository) - Video sharing and consumption platform
-- **News Website** - Islamic news and articles  
-- **Academy Platform** - Educational courses and learning paths
-- **Community Features** - Discussion, messaging, and interaction tools
-
-## 📋 Complete Documentation
-
-### 📊 Project Planning & Analysis
-- **[🗺️ ROADMAP.md](./ROADMAP.md)** - Comprehensive 4-phase development roadmap with timeline and milestones
-- **[📊 FEATURES.md](./FEATURES.md)** - Current implementation analysis (~60% complete) and missing features  
-- **[🏗️ ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical system design and microservices architecture
-
-### 🤝 Contributing & Development
-- **[🤝 CONTRIBUTING.md](./CONTRIBUTING.md)** - Developer guidelines, setup instructions, and contribution workflow
-- **[🐛 Bug Reports](./.github/ISSUE_TEMPLATE/bug_report.yml)** - Report bugs and issues
-- **[✨ Feature Requests](./.github/ISSUE_TEMPLATE/feature_request.yml)** - Suggest new features and enhancements
-- **[📚 Documentation Requests](./.github/ISSUE_TEMPLATE/documentation_request.yml)** - Request documentation improvements
-
-### 🔗 Project Management
-- **[📋 Project Board](https://github.com/users/meywd/projects/1/views/1)** - Track development progress and milestones
-- **[📋 Issues](https://github.com/meywd/AlUmmahNow/issues)** - Current tasks, bugs, and feature requests
-
-## 🌐 Live Demo
-
-A live deployment is available at: [https://al-ummah-now.templates.workers.dev](https://al-ummah-now.templates.workers.dev)
-
-*Updated to resolve merge conflicts*
-
-## 🚀 Current Status
-
-**Phase**: Foundation Development (Video Portal UI)  
-**Progress**: ~60% Complete
-
-### ✅ Implemented Features
-- Next.js 15 with TypeScript and Tailwind CSS
-- Video player with Video.js integration
-- Complete OpenAPI-based API client
-- Authentication system using OpenAuth
-- Bilingual support (English/Arabic) with RTL layout
-- User profiles, channels, and playlist management
-- Comment system and social interactions
-- Responsive design and dark/light themes
-
-### 🔧 In Development
-- Video upload functionality
-- Real-time notifications and live features
-- Advanced search and content discovery
-- Mobile app companion
-- Content moderation tools
-
-## 🛠️ Technology Stack
-
-- **Frontend**: Next.js 15, TypeScript, Tailwind CSS
-- **Authentication**: OpenAuth with JWT tokens
-- **Video Player**: Video.js with custom controls
-- **Deployment**: Cloudflare Workers via OpenNext
-- **Styling**: Tailwind CSS with dark/light themes
-- **Internationalization**: Built-in RTL support
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 18+ and npm
-- Cloudflare account for deployment
-
-### Development Setup
-
-1. **Clone and install dependencies:**
 ```bash
+# Clone repository
 git clone https://github.com/meywd/AlUmmahNow.git
 cd AlUmmahNow
-npm install
+
+# Install dependencies
+pnpm install
+
+# Build shared types (required first)
+pnpm --filter @al-ummah/shared-types build
 ```
 
-2. **Set up environment variables:**
-git clone https://github.com/meywd/AlUmmahNow.git
-cd AlUmmahNow
-npm install
-```
-
-2. **Set up environment variables:**
-```bash
-# Copy example environment file
-cp .env.example .env.local
-
-# Configure required variables:
-# - NEXT_PUBLIC_API_URL: Backend API endpoint
-# - ClientId: OAuth client ID
-# - Issuer: OAuth issuer URL
-```
-
-3. **Start development server:**
-# Copy example environment file
-cp .env.example .env.local
-
-# Configure required variables:
-# - NEXT_PUBLIC_API_URL: Backend API endpoint
-# - ClientId: OAuth client ID
-# - Issuer: OAuth issuer URL
-```
-
-3. **Start development server:**
-```bash
-npm run dev
-```
-
-4. **Open your browser:**
-Navigate to [http://localhost:3000](http://localhost:3000)
-
-### Production Deployment
+### Development
 
 ```bash
-# Build and deploy to Cloudflare Workers
-npm run deploy
+# Run all apps in parallel
+pnpm dev
 
-# Or preview before deployment
-npm run preview
+# Or run individual apps
+pnpm web:dev          # Frontend: http://localhost:3000
+pnpm api:dev          # API: http://127.0.0.1:8686 (Swagger UI at root)
+pnpm processor:dev    # Processor: http://localhost:8787
 ```
 
-## 📁 Project Structure
+### Build & Test
 
-```
-src/
-├── app/                    # Next.js App Router pages
-│   ├── en/                # English language routes
-│   ├── ar/                # Arabic language routes (RTL)
-│   └── api/               # API routes
-├── components/            # React components
-│   ├── Header/            # Navigation header
-│   ├── videoPlayer/       # Video playback component
-│   ├── AuthProvider/      # Authentication context
-│   └── ...
-├── lib/                   # Utility libraries
-│   ├── api/               # OpenAPI client implementation
-│   ├── auth.ts            # Authentication utilities
-│   └── actions.ts         # Server actions
-└── interfaces/            # TypeScript type definitions
+```bash
+# Build all packages
+pnpm build
+
+# Type check all packages
+pnpm type-check
+
+# Lint all packages
+pnpm lint
 ```
 
-## 🔌 API Integration
+## 📦 Technology Stack
 
-The frontend integrates with the Al Ummah Now API ecosystem:
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | Next.js 15, React 19, Tailwind CSS, shadcn/ui |
+| **API** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
+| **Processing** | Cloudflare Queue Consumer, TypeScript |
+| **Authentication** | OpenAuth (JWT/OAuth2) |
+| **Storage** | Cloudflare R2 (object storage), KV (key-value) |
+| **CDN** | Bunny.net (video streaming + images) |
+| **Deployment** | Cloudflare Workers (all apps) |
+| **Package Manager** | pnpm v9.15.4 with workspaces |
+| **Build System** | Turborepo v2 with caching |
 
-```typescript
-// Example API usage
-import { VideosAPI, ChannelsAPI } from '@/lib/api';
+## 🎯 Key Features by App
 
-// Get videos with pagination
-const videos = await VideosAPI.list({ limit: 20, cursor: 'next_page' });
+### Web App (`apps/web`)
+- 🌐 Bilingual routes: `/en/*` (LTR) and `/ar/*` (RTL)
+- 🎥 Video.js player with quality selection
+- 🔐 OpenAuth authentication with JWT tokens
+- 🎨 Dark/light theme support
+- 📱 Fully responsive design
+- ⚡ Deployed via @opennextjs/cloudflare
 
-// Get channel details
-const channel = await ChannelsAPI.getById('channel-id');
+### API Videos (`apps/api-videos`)
+- 📚 OpenAPI 3.1 with interactive Swagger UI
+- 🗄️ R2 object storage (no traditional database)
+- 🎬 Bunny.net integration for video streaming
+- 🔒 JWT authentication middleware
+- ✅ Zod schema validation
+- 📊 Complete REST API for videos, channels, playlists, profiles
 
-// Create authenticated requests
-const headers = { channelId: 'user-channel', userId: 'user-id' };
-await VideosAPI.create(videoData, headers);
+### Processor (`apps/processor`)
+- 📨 Cloudflare Queue consumer
+- 📊 Processes 13+ message types (views, likes, comments, subscriptions)
+- 💾 Saves events to R2 for analytics
+- 🔄 Retry logic with dead letter queue
+- 🏥 Health check and monitoring endpoints
+
+## 🚢 Deployment
+
+### Environments
+
+- **Preview**: PR-specific deployments
+  - `al-ummah-web-pr-{number}.workers.dev`
+  - `al-ummah-api-pr-{number}.workers.dev`
+  - `al-ummah-processor-pr-{number}`
+
+- **Staging**: Automatic on merge to `main`
+- **Production**: After staging validation
+
+### Deploy Manually
+
+```bash
+# Deploy web app
+pnpm web:deploy:production
+
+# Deploy API
+pnpm api:deploy
+
+# Deploy processor
+pnpm processor:deploy
 ```
 
-## 🌍 Internationalization
+### CI/CD Pipeline
 
-Built-in support for English and Arabic:
+GitHub Actions workflow automatically:
+1. ✅ Type checks and lints all packages
+2. 🏗️ Builds shared-types and web app
+3. ✅ Validates API and processor
+4. 🚀 Deploys previews for PRs (all 3 apps)
+5. 🎯 Deploys to staging on merge to main
+6. 🌐 Deploys to production after staging validation
 
-- **English**: `/en/` routes with LTR layout
-- **Arabic**: `/ar/` routes with RTL layout
-- **Components**: Dual implementations for proper text direction
-- **Navigation**: Language-aware routing and UI
+**Required Secret**: `CLOUDFLARE_API_TOKEN`
 
-## 🎨 Customization
+## 📖 Documentation
 
-### Themes
-- Light and dark mode support
-- Configurable via `src/components/themeProvider.tsx`
-- Tailwind CSS classes for consistent styling
+### Getting Started
+- **[CLAUDE.md](./CLAUDE.md)** - AI assistant guidance for development
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Development guidelines
 
-### Video Player
-- Customizable Video.js configuration
-- Support for multiple video qualities
-- Adaptive bitrate streaming ready
+### App-Specific
+- **[Web App](.github/CLAUDE.md)** - Frontend development guide
+- **[API Videos](./apps/api-videos/CLAUDE.md)** - API architecture and development
+- **[API Authentication](./apps/api-videos/AUTHENTICATION.md)** - API authentication guide
+- **[Processor](./apps/processor/README.md)** - Queue processor documentation
 
-## 🔒 Authentication
+### Legacy Docs
+- **[MONOREPO_MIGRATION.md](./MONOREPO_MIGRATION.md)** - Migration history
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Original architecture (pre-monorepo)
 
-Integrated with OpenAuth for secure authentication:
-- JWT token management with refresh rotation
-- OAuth provider support (Google, Apple)
-- Protected routes and middleware
-- Session management
+## 🔧 Development Workflow
 
-## 🤝 Contributing
+### Adding Dependencies
 
-We welcome contributions to the Al Ummah Now platform:
+```bash
+# Add to specific app
+pnpm --filter @al-ummah/web add package-name
+pnpm --filter @al-ummah/api-videos add package-name
 
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes** and test thoroughly
-4. **Commit changes**: `git commit -m 'Add amazing feature'`
-5. **Push to branch**: `git push origin feature/amazing-feature`
-6. **Open a Pull Request**
+# Add to root devDependencies
+pnpm add -D -w package-name
+```
 
-### Development Guidelines
-- Follow TypeScript best practices
-- Maintain component modularity
-- Test both English and Arabic layouts
-- Ensure mobile responsiveness
-- Add JSDoc comments for complex functions
+### Working with Shared Types
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
+```bash
+# Edit types
+vim packages/shared-types/src/video.ts
 
-## 📊 Analytics & Monitoring
+# Rebuild
+pnpm --filter @al-ummah/shared-types build
 
-The platform includes built-in analytics:
-- User engagement tracking
-- Video performance metrics
-- API usage monitoring
-- Error reporting and logging
+# Use in apps
+import { VideoObject } from '@al-ummah/shared-types'
+```
 
-## 🔮 Upcoming Features
+### Common Commands
 
-See [ROADMAP.md](./ROADMAP.md) for detailed development plans:
+```bash
+# Build specific app
+pnpm --filter @al-ummah/web build
 
-- **Phase 1**: Video upload, live streaming, advanced search
-- **Phase 2**: Mobile apps, AI recommendations, moderation tools
-- **Phase 3**: Academy platform, news integration, community features
-- **Phase 4**: AI chat, messaging, advanced analytics
+# Type check specific app
+pnpm --filter @al-ummah/api-videos type-check
 
-## 📄 License
+# Run tests
+pnpm --filter @al-ummah/processor test
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+# Deploy staging
+pnpm processor:deploy:staging
+```
 
-## 🆘 Support
+## 🐛 Troubleshooting
 
-For support and questions:
-- **Documentation**: Check the [FEATURES.md](./FEATURES.md) and [ARCHITECTURE.md](./ARCHITECTURE.md)
-- **Issues**: Open an issue on GitHub
-- **Community**: Join our discussions for feature requests and feedback
+### Cannot find module '@al-ummah/shared-types'
+```bash
+pnpm --filter @al-ummah/shared-types build
+# Then restart VS Code TypeScript server:
+# Ctrl+Shift+P → "TypeScript: Restart TS Server"
+```
+
+### VS Code IntelliSense errors
+```bash
+# Reload VS Code window
+# Ctrl+Shift+P → "Developer: Reload Window"
+```
+
+### Using npm instead of pnpm
+This is a **pnpm monorepo**. Always use `pnpm` instead of `npm`.
+
+## 🔗 Links
+
+- **Repository**: https://github.com/meywd/AlUmmahNow
+- **Project Board**: https://github.com/users/meywd/projects/1
+- **Issues**: https://github.com/meywd/AlUmmahNow/issues
+
+## 📝 License
+
+MIT
+
+## 👥 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run `pnpm type-check` and `pnpm lint`
+5. Submit a pull request
 
 ---
 
-Built with ❤️ for the Muslim community worldwide.
-4. **Open your browser:**
-Navigate to [http://localhost:3000](http://localhost:3000)
-
-### Production Deployment
-
-```bash
-# Build and deploy to Cloudflare Workers
-npm run deploy
-
-# Or preview before deployment
-npm run preview
-```
-
-## 📁 Project Structure
-
-```
-src/
-├── app/                    # Next.js App Router pages
-│   ├── en/                # English language routes
-│   ├── ar/                # Arabic language routes (RTL)
-│   └── api/               # API routes
-├── components/            # React components
-│   ├── Header/            # Navigation header
-│   ├── videoPlayer/       # Video playback component
-│   ├── AuthProvider/      # Authentication context
-│   └── ...
-├── lib/                   # Utility libraries
-│   ├── api/               # OpenAPI client implementation
-│   ├── auth.ts            # Authentication utilities
-│   └── actions.ts         # Server actions
-└── interfaces/            # TypeScript type definitions
-```
-
-## 🔌 API Integration
-
-The frontend integrates with the Al Ummah Now API ecosystem:
-
-```typescript
-// Example API usage
-import { VideosAPI, ChannelsAPI } from '@/lib/api';
-
-// Get videos with pagination
-const videos = await VideosAPI.list({ limit: 20, cursor: 'next_page' });
-
-// Get channel details
-const channel = await ChannelsAPI.getById('channel-id');
-
-// Create authenticated requests
-const headers = { channelId: 'user-channel', userId: 'user-id' };
-await VideosAPI.create(videoData, headers);
-```
-
-## 🌍 Internationalization
-
-Built-in support for English and Arabic:
-
-- **English**: `/en/` routes with LTR layout
-- **Arabic**: `/ar/` routes with RTL layout
-- **Components**: Dual implementations for proper text direction
-- **Navigation**: Language-aware routing and UI
-
-## 🎨 Customization
-
-### Themes
-- Light and dark mode support
-- Configurable via `src/components/themeProvider.tsx`
-- Tailwind CSS classes for consistent styling
-
-### Video Player
-- Customizable Video.js configuration
-- Support for multiple video qualities
-- Adaptive bitrate streaming ready
-
-## 🔒 Authentication
-
-Integrated with OpenAuth for secure authentication:
-- JWT token management with refresh rotation
-- OAuth provider support (Google, Apple)
-- Protected routes and middleware
-- Session management
-
-## 🤝 Contributing
-
-We welcome contributions to the Al Ummah Now platform:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes** and test thoroughly
-4. **Commit changes**: `git commit -m 'Add amazing feature'`
-5. **Push to branch**: `git push origin feature/amazing-feature`
-6. **Open a Pull Request**
-
-### Development Guidelines
-- Follow TypeScript best practices
-- Maintain component modularity
-- Test both English and Arabic layouts
-- Ensure mobile responsiveness
-- Add JSDoc comments for complex functions
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
-
-## 📊 Analytics & Monitoring
-
-The platform includes built-in analytics:
-- User engagement tracking
-- Video performance metrics
-- API usage monitoring
-- Error reporting and logging
-
-## 🔮 Upcoming Features
-
-See [ROADMAP.md](./ROADMAP.md) for detailed development plans:
-
-- **Phase 1**: Video upload, live streaming, advanced search
-- **Phase 2**: Mobile apps, AI recommendations, moderation tools
-- **Phase 3**: Academy platform, news integration, community features
-- **Phase 4**: AI chat, messaging, advanced analytics
-
-## 📄 License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-For support and questions:
-- **Documentation**: Check the [FEATURES.md](./FEATURES.md) and [ARCHITECTURE.md](./ARCHITECTURE.md)
-- **Issues**: Open an issue on GitHub
-- **Community**: Join our discussions for feature requests and feedback
-
----
-
-Built with ❤️ for the Muslim community worldwide.
+Built with ❤️ using Turborepo, Next.js, Hono, and Cloudflare Workers.
