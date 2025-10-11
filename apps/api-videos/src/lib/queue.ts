@@ -38,6 +38,11 @@ export enum MessageType {
     LiveStreamStart,
     LiveStreamEnd,
     LiveStreamView,
+    // Video upload events
+    VideoUploadStarted,
+    VideoUploadCompleted,
+    VideoProcessingCompleted,
+    VideoUploadFailed,
 }
 
 export type Message<T> = {
