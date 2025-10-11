@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
@@ -20,6 +21,7 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   subscribersCount = 0,
   className = ''
 }) => {
+  const router = useRouter();
   const { user } = useAuth();
   const { profile } = useProfile(user);
   const isAuthenticated = !!user;
@@ -34,8 +36,9 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
 
   const handleSubscriptionToggle = async () => {
     if (!isAuthenticated || !user || !profile) {
-      // Redirect to login or show login modal
-      console.log('User must be logged in to subscribe');
+      // Redirect to login page
+      alert('Please log in to subscribe to channels');
+      router.push('/en');
       return;
     }
 
@@ -75,11 +78,14 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
 
   if (!isAuthenticated) {
     return (
-      <Button 
-        variant="outline" 
-        size="sm" 
+      <Button
+        variant="outline"
+        size="sm"
         className={className}
-        onClick={() => console.log('Please log in to subscribe')}
+        onClick={() => {
+          alert('Please log in to subscribe to channels');
+          router.push('/en');
+        }}
       >
         Subscribe
       </Button>

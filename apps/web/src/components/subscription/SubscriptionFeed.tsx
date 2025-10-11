@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
 import VideoCard from '@/components/videoCard';
@@ -97,6 +98,7 @@ const mockSubscriptionVideos: VideoObject[] = [
 export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
   className = ''
 }) => {
+  const router = useRouter();
   const { user } = useAuth();
   const isAuthenticated = !!user;
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -183,7 +185,7 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             Subscribe to channels to see their latest videos here.
           </p>
-          <Button variant="outline" onClick={() => window.location.href = '/en'}>
+          <Button variant="outline" onClick={() => router.push('/en')}>
             Discover Channels
           </Button>
         </div>
@@ -197,8 +199,8 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
 
           {/* Load More Button */}
           <div className="flex justify-center mt-8">
-            <Button variant="outline" onClick={() => console.log('Load more videos')}>
-              Load More Videos
+            <Button variant="outline" disabled>
+              Load More Videos (Coming Soon)
             </Button>
           </div>
         </>
