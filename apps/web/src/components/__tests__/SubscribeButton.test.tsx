@@ -76,7 +76,7 @@ describe('SubscribeButton', () => {
 
   it('should handle subscribe action', async () => {
     const mockSubscribe = jest.fn().mockResolvedValue({ success: true });
-    (ChannelsAPI.subscribe as jest.Mock) = mockSubscribe;
+    (ChannelsAPI.subscribe as jest.Mock).mockImplementation(mockSubscribe);
 
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
@@ -115,7 +115,7 @@ describe('SubscribeButton', () => {
 
   it('should handle unsubscribe action', async () => {
     const mockUnsubscribe = jest.fn().mockResolvedValue({ success: true });
-    (ChannelsAPI.unsubscribe as jest.Mock) = mockUnsubscribe;
+    (ChannelsAPI.unsubscribe as jest.Mock).mockImplementation(mockUnsubscribe);
 
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
@@ -156,7 +156,7 @@ describe('SubscribeButton', () => {
     const mockSubscribe = jest.fn().mockImplementation(
       () => new Promise(resolve => setTimeout(() => resolve({ success: true }), 100))
     );
-    (ChannelsAPI.subscribe as jest.Mock) = mockSubscribe;
+    (ChannelsAPI.subscribe as jest.Mock).mockImplementation(mockSubscribe);
 
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
@@ -183,7 +183,7 @@ describe('SubscribeButton', () => {
 
   it('should not update count below zero when unsubscribing', async () => {
     const mockUnsubscribe = jest.fn().mockResolvedValue({ success: true });
-    (ChannelsAPI.unsubscribe as jest.Mock) = mockUnsubscribe;
+    (ChannelsAPI.unsubscribe as jest.Mock).mockImplementation(mockUnsubscribe);
 
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
