@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useRef, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
-import { VideosAPI } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle } from "lucide-react";
@@ -255,15 +254,21 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       const videoData: VideoObject = {
         id: videoId,
         title: metadata.title,
-        description: metadata.description || '',
+        description: metadata.description || null,
         thumbnailUrl: '',
         videoUrl: `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
         userId: auth.user.id,
+        channel: auth.user.id, // Using user ID as channel for now
         channelId: auth.user.id,
+        channelAvatarUrl: '',
+        channelName: auth.user.email || 'Unknown',
         dateCreated: new Date().toISOString(),
         dateModified: new Date().toISOString(),
         views: 0,
         availableResolutions: [],
+        likesCount: 0,
+        dislikesCount: 0,
+        commentsCount: 0,
         comments: [],
         likes: [],
         dislikes: [],
