@@ -36,8 +36,7 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
 
   const handleSubscriptionToggle = async () => {
     if (!isAuthenticated || !user || !profile) {
-      // Redirect to login page
-      alert('Please log in to subscribe to channels');
+      // Redirect to login page - user context makes it clear why they're being redirected
       router.push('/en');
       return;
     }
@@ -82,10 +81,7 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
         variant="outline"
         size="sm"
         className={className}
-        onClick={() => {
-          alert('Please log in to subscribe to channels');
-          router.push('/en');
-        }}
+        onClick={() => router.push('/en')}
       >
         Subscribe
       </Button>
