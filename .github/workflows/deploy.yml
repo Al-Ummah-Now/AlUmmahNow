@@ -38,6 +38,11 @@ jobs:
         run: pnpm lint
         timeout-minutes: 3
 
+      - name: Run tests (all packages)
+        run: pnpm test
+        continue-on-error: true
+        timeout-minutes: 5
+
   # Build shared types first (dependency for other apps)
   build-shared-types:
     needs: test
