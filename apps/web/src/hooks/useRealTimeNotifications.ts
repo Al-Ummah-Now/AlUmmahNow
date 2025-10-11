@@ -35,7 +35,14 @@ export function useRealTimeNotifications(
 ): UseRealTimeNotificationsReturn {
   const { userId, maxNotifications = 50, autoRemoveAfter } = options;
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  
+
+  // Remove specific notification
+  const removeNotification = useCallback((notificationId: string) => {
+    setNotifications(prevNotifications =>
+      prevNotifications.filter(notification => notification.id !== notificationId)
+    );
+  }, []);
+
   // Handle real-time notification updates
   const handleNotificationUpdate = useCallback((eventData: NotificationEvent) => {
     console.log('📥 Real-time notification:', eventData);
@@ -80,7 +87,7 @@ export function useRealTimeNotifications(
         });
       }
     }
-  }, [maxNotifications, autoRemoveAfter]);
+  }, [maxNotifications, autoRemoveAfter, removeNotification]);
   
   // Subscribe to real-time notifications
   const isConnected = useWebSocketSubscription(
@@ -117,18 +124,11 @@ export function useRealTimeNotifications(
   
   // Mark all notifications as read
   const markAllAsRead = useCallback(() => {
-    setNotifications(prevNotifications => 
+    setNotifications(prevNotifications =>
       prevNotifications.map(notification => ({ ...notification, read: true }))
     );
   }, []);
-  
-  // Remove specific notification
-  const removeNotification = useCallback((notificationId: string) => {
-    setNotifications(prevNotifications => 
-      prevNotifications.filter(notification => notification.id !== notificationId)
-    );
-  }, []);
-  
+
   // Clear all notifications
   const clearAll = useCallback(() => {
     setNotifications([]);

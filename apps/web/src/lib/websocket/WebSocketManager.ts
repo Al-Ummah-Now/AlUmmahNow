@@ -19,9 +19,9 @@ export class WebSocketManager {
   constructor(config: WebSocketConfig) {
     this.config = {
       ...config,
-      reconnectInterval: config.reconnectInterval || 1000,
-      maxReconnectAttempts: config.maxReconnectAttempts || 5,
-      heartbeatInterval: config.heartbeatInterval || 30000
+      reconnectInterval: config.reconnectInterval ?? 1000,
+      maxReconnectAttempts: config.maxReconnectAttempts ?? 5,
+      heartbeatInterval: config.heartbeatInterval ?? 30000
     };
 
     this.state = {

@@ -13,7 +13,6 @@ interface NotificationToastProps {
 }
 
 function NotificationToast({ notification, onClose, onAction }: NotificationToastProps) {
-  const [_isVisible, _setIsVisible] = useState(true);
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
@@ -110,7 +109,6 @@ export function NotificationCenter({ user }: NotificationCenterProps) {
     notifications,
     unreadCount,
     markAsRead,
-    removeNotification: _removeNotification,
     isConnected
   } = useRealTimeNotifications({
     userId: user?.id,
