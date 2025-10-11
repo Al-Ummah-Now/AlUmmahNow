@@ -137,7 +137,7 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
           <Users className="w-16 h-16 text-gray-400" />
           <h2 className="text-2xl font-bold">Subscription Feed</h2>
           <p className="text-gray-600 dark:text-gray-400 max-w-md">
-            Log in to see the latest videos from channels you've subscribed to.
+            {"Log in to see the latest videos from channels you've subscribed to."}
           </p>
         </div>
       </div>
