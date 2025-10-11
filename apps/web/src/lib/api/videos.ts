@@ -896,4 +896,140 @@ export class VideosAPI {
       return null;
     }
   }
+
+  /**
+   * Initiate video upload - Create video record and get upload URL
+   * POST /api/videos/upload/initiate
+   */
+  static async initiateUpload(
+    metadata: {
+      title: string;
+      description?: string;
+      isPublic?: boolean;
+      tags?: string;
+    },
+    authToken: string
+  ): Promise<{
+    success: boolean;
+    result?: {
+      videoId: string;
+      uploadUrl: string;
+      libraryId: number;
+      status: string;
+      message: string;
+    };
+    error?: string;
+  } | null> {
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/videos/upload/initiate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(metadata),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        return { success: false, error: errorData.error || 'Failed to initiate upload' };
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('VideosAPI.initiateUpload error:', error);
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  /**
+   * Complete video upload after file has been uploaded to Bunny.net
+   * POST /api/videos/upload/complete
+   */
+  static async completeUpload(
+    videoId: string,
+    fileSize?: number,
+    duration?: number,
+    authToken?: string
+  ): Promise<{
+    success: boolean;
+    result?: {
+      videoId: string;
+      status: string;
+      message: string;
+    };
+    error?: string;
+  } | null> {
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/videos/upload/complete`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+          },
+          body: JSON.stringify({ videoId, fileSize, duration }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        return { success: false, error: errorData.error || 'Failed to complete upload' };
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('VideosAPI.completeUpload error:', error);
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  /**
+   * Get video upload status
+   * GET /api/videos/{id}/upload-status
+   */
+  static async getUploadStatus(
+    videoId: string,
+    authToken: string
+  ): Promise<{
+    success: boolean;
+    result?: {
+      videoId: string;
+      status: 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
+      progress: number;
+      message?: string;
+      encodingStatus?: {
+        isProcessing: boolean;
+        encodingProgress: number;
+        availableResolutions: string[];
+      };
+    };
+    error?: string;
+  } | null> {
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/videos/${videoId}/upload-status`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        return { success: false, error: errorData.error || 'Failed to get upload status' };
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('VideosAPI.getUploadStatus error:', error);
+      return { success: false, error: 'Network error' };
+    }
+  }
 }
