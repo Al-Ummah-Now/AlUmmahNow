@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Al Ummah Now** is an Islamic content platform monorepo with three Cloudflare Workers applications:
+**Al Ummah Now** is an Islamic content platform monorepo with four Cloudflare Workers applications:
 
 1. **web** - Next.js 15 frontend with bilingual support (English/Arabic, RTL)
 2. **api-videos** - Hono API backend with OpenAPI 3.1 (chanfana)
 3. **processor** - Queue consumer for message processing and analytics
+4. **websocket-server** - Real-time WebSocket server with Durable Objects
 
 All apps share TypeScript types via `@al-ummah/shared-types` workspace package.
 
@@ -21,7 +22,8 @@ al-ummah-now/
 ├── apps/
 │   ├── web/              Next.js frontend (Cloudflare Workers + OpenNext)
 │   ├── api-videos/       Hono API backend (Cloudflare Workers + R2)
-│   └── processor/        Queue consumer (Cloudflare Workers + R2)
+│   ├── processor/        Queue consumer (Cloudflare Workers + R2)
+│   └── websocket-server/ WebSocket server (Cloudflare Durable Objects + KV)
 ├── packages/
 │   └── shared-types/     Shared TypeScript types
 ├── package.json          Root workspace config
@@ -46,6 +48,7 @@ pnpm dev                 # Run all apps in parallel
 pnpm web:dev             # Web app: http://localhost:3000
 pnpm api:dev             # API: http://127.0.0.1:8686
 pnpm processor:dev       # Processor: http://localhost:8787
+pnpm websocket:dev       # WebSocket server: http://localhost:8787
 ```
 
 ### Build & Validation
@@ -60,7 +63,7 @@ pnpm lint                # Lint all packages
 pnpm web:deploy:production      # Deploy web to production
 pnpm api:deploy                 # Deploy API to production
 pnpm processor:deploy           # Deploy processor to production
-pnpm processor:deploy:staging   # Deploy processor to staging
+pnpm websocket:deploy           # Deploy WebSocket server to production
 ```
 
 ### Per-App Commands
@@ -85,10 +88,11 @@ cd apps/processor && pnpm lint:fix
 | **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS |
 | **API Backend** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
 | **Processor** | TypeScript, Cloudflare Queue Consumer |
+| **WebSocket Server** | Cloudflare Durable Objects, WebSocket API |
 | **Authentication** | OpenAuth (JWT/OAuth2) via auth.alummahnow.net |
 | **Storage** | Cloudflare R2 (object storage), KV (key-value) |
 | **CDN** | Bunny.net (video streaming + image storage) |
-| **Deployment** | Cloudflare Workers (all 3 apps) |
+| **Deployment** | Cloudflare Workers (all 4 apps) |
 | **Package Manager** | pnpm v9.15.4 with workspaces |
 | **Build System** | Turborepo v2 with caching |
 
@@ -118,6 +122,15 @@ cd apps/processor && pnpm lint:fix
 - Retry logic (max 3 retries) + dead letter queue support
 - Health checks and monitoring endpoints
 - See: `apps/processor/README.md`
+
+**apps/websocket-server** - Real-time communication server
+- WebSocket server built on Cloudflare Durable Objects
+- JWT authentication with OpenAuth integration
+- Channel subscriptions (user, video, channel, live streams)
+- Presence tracking via Cloudflare KV
+- Rate limiting (100 messages/minute per connection)
+- Message broadcasting and real-time notifications
+- See: `apps/websocket-server/README.md`
 
 **packages/shared-types** - Shared TypeScript types
 - Video, Channel, Playlist, User, Comment, Analytics types
@@ -259,6 +272,14 @@ Each app has its own detailed documentation:
 - **Testing**: Jest tests in `src/__tests__/`
 - **R2 Buckets**: `watch-history` (production), `watch-history-preview` (preview/dev)
 
+### WebSocket Server (`apps/websocket-server/`)
+- **Overview**: `apps/websocket-server/README.md`
+- **Architecture**: Cloudflare Durable Objects + WebSocket API
+- **Authentication**: JWT with OpenAuth
+- **Features**: Channel subscriptions, presence tracking, rate limiting, broadcasting
+- **KV Namespaces**: `al-ummah-now-analytics-kv` (presence state)
+- **Deployment**: `wss://ws.alummahnow.net` (production)
+
 ## Common Tasks
 
 ### Adding a New Shared Type
@@ -291,6 +312,7 @@ Each app has its own detailed documentation:
 pnpm web:deploy:production
 pnpm api:deploy
 pnpm processor:deploy
+pnpm websocket:deploy
 
 # Or push to main branch → GitHub Actions handles it
 git push origin main
