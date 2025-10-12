@@ -4,7 +4,7 @@
  * Records a video view in the user's watch history
  */
 
-import { OpenAPIRoute, Query } from "chanfana";
+import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -98,7 +98,7 @@ export class RecordWatchHistory extends OpenAPIRoute {
       );
 
       // Fetch video details
-      const video = await videoRepo.getObject(videoId);
+      const video = await videoRepo.getObject(videoId) as any;
       if (!video) {
         return c.json({ error: "Video not found" }, 404);
       }
@@ -136,7 +136,7 @@ export class RecordWatchHistory extends OpenAPIRoute {
           userId,
           videoId,
           videoTitle: video.title || "Untitled",
-          videoThumbnail: video.thumbnail,
+          videoThumbnail: video.thumbnailUrl || video.thumbnail,
           videoDuration: duration,
           channelId: video.channelId || "",
           channelName: video.channelName || "Unknown Channel",

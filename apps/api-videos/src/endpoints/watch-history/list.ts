@@ -4,7 +4,7 @@
  * Returns the authenticated user's watch history
  */
 
-import { OpenAPIRoute, Query } from "chanfana";
+import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -100,8 +100,11 @@ export class ListWatchHistory extends OpenAPIRoute {
     const userId = auth.userId;
 
     // Parse and validate query parameters
-    const query = c.req.valid("query") as WatchHistoryListRequest;
-    const { limit = 20, cursor, completed, sort = "newest" } = query;
+    const query = c.req.query();
+    const limit = parseInt(query.limit || "20", 10);
+    const cursor = query.cursor;
+    const completed = query.completed !== undefined ? query.completed === "true" : undefined;
+    const sort = (query.sort || "newest") as "newest" | "oldest" | "alphabetical";
 
     try {
       const watchHistoryRepo = new R2Repository<WatchHistoryEntry>(
@@ -110,10 +113,10 @@ export class ListWatchHistory extends OpenAPIRoute {
 
       // List all watch history entries for this user
       // Entries are stored with key pattern: userId:videoId
-      const allEntries = await watchHistoryRepo.listObjects(1000); // Fetch up to 1000 entries
+      const allEntriesResponse = await watchHistoryRepo.listObjects(1000); // Fetch up to 1000 entries
 
       // Filter entries for this user only
-      let userEntries = allEntries.filter(
+      let userEntries = allEntriesResponse.items.filter(
         (entry) => entry.userId === userId
       );
 

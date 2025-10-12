@@ -53,10 +53,10 @@ export class ClearWatchHistory extends OpenAPIRoute {
       );
 
       // List all watch history entries
-      const allEntries = await watchHistoryRepo.listObjects(1000);
+      const allEntriesResponse = await watchHistoryRepo.listObjects(1000);
 
       // Filter entries for this user
-      const userEntries = allEntries.filter(
+      const userEntries = allEntriesResponse.items.filter(
         (entry) => entry.userId === userId
       );
 

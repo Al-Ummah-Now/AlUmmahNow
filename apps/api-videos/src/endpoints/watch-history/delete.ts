@@ -4,7 +4,7 @@
  * Removes a specific video from the user's watch history
  */
 
-import { OpenAPIRoute, Path } from "chanfana";
+import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -13,7 +13,7 @@ import type { WatchHistoryEntry } from "@al-ummah/shared-types";
 
 // Path parameter schema
 const DeleteWatchHistoryParams = z.object({
-  videoId: z.string().min(1).describe("ID of the video to remove from watch history"),
+  videoId: Str({ description: "ID of the video to remove from watch history" }),
 });
 
 export class DeleteWatchHistory extends OpenAPIRoute {
