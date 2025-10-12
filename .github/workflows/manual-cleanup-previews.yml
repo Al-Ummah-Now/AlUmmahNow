@@ -13,143 +13,105 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.inputs.confirm == 'DELETE'
 
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Delete PR #72 workers
-        continue-on-error: true
+      - name: Delete workers using Cloudflare API
         run: |
-          echo "Deleting PR #72 workers..."
-          cd apps/processor
-          pnpm wrangler delete al-ummah-processor-pr-72 --force || echo "al-ummah-processor-pr-72 already deleted"
-          cd ../websocket-server
-          pnpm wrangler delete al-ummah-comms-pr-72 --force || echo "al-ummah-comms-pr-72 already deleted"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # Function to delete a worker
+          delete_worker() {
+            local worker_name=$1
+            echo "Deleting $worker_name..."
 
-      - name: Delete PR #48 auth workers
-        continue-on-error: true
-        run: |
-          echo "Deleting PR #48 auth workers (may fail - different repo)..."
-          echo "Note: These workers are from al-ummah-now-auth repo, not this monorepo"
-          echo "- al-ummah-now-auth-admin-pr-48"
-          echo "- al-ummah-now-profile-pr-48"
-          echo "- al-ummah-now-auth-pr-48"
-          echo "Manual deletion required from auth repo or Cloudflare dashboard"
+            response=$(curl -s -w "\n%{http_code}" -X DELETE \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json")
 
-      - name: Delete PR #44 workers
-        continue-on-error: true
-        run: |
-          echo "Deleting PR #44 workers..."
-          cd apps/web
-          pnpm wrangler delete al-ummah-web-pr-44 --force || echo "al-ummah-web-pr-44 already deleted"
-          cd ../api-videos
-          pnpm wrangler delete al-ummah-api-pr-44 --force || echo "al-ummah-api-pr-44 already deleted"
-          cd ../processor
-          pnpm wrangler delete al-ummah-processor-pr-44 --force || echo "al-ummah-processor-pr-44 already deleted"
-          cd ../websocket-server
-          pnpm wrangler delete al-ummah-comms-pr-44 --force || echo "al-ummah-comms-pr-44 already deleted"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+            http_code=$(echo "$response" | tail -n1)
+            body=$(echo "$response" | sed '$d')
 
-      - name: Delete PR #43 workers
-        continue-on-error: true
-        run: |
-          echo "Deleting PR #43 workers..."
-          cd apps/web
-          pnpm wrangler delete al-ummah-web-pr-43 --force || echo "al-ummah-web-pr-43 already deleted"
-          cd ../api-videos
-          pnpm wrangler delete al-ummah-api-pr-43 --force || echo "al-ummah-api-pr-43 already deleted"
-          cd ../processor
-          pnpm wrangler delete al-ummah-processor-pr-43 --force || echo "al-ummah-processor-pr-43 already deleted"
-          cd ../websocket-server
-          pnpm wrangler delete al-ummah-comms-pr-43 --force || echo "al-ummah-comms-pr-43 already deleted"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+            if [ "$http_code" = "200" ]; then
+              echo "✓ Successfully deleted $worker_name"
+              return 0
+            elif echo "$body" | grep -q "10007"; then
+              echo "⊘ $worker_name does not exist (already deleted)"
+              return 0
+            elif echo "$body" | grep -q "10064"; then
+              echo "✗ $worker_name is bound to a queue - requires unbinding first"
+              return 1
+            else
+              echo "✗ Failed to delete $worker_name (HTTP $http_code)"
+              echo "Response: $body"
+              return 1
+            fi
+          }
 
-      - name: Delete PR #42 workers
-        continue-on-error: true
-        run: |
-          echo "Deleting PR #42 workers..."
-          cd apps/web
-          pnpm wrangler delete al-ummah-web-pr-42 --force || echo "al-ummah-web-pr-42 already deleted"
-          cd ../api-videos
-          pnpm wrangler delete al-ummah-api-pr-42 --force || echo "al-ummah-api-pr-42 already deleted"
-          cd ../processor
-          pnpm wrangler delete al-ummah-processor-pr-42 --force || echo "al-ummah-processor-pr-42 already deleted"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Delete PR #28 auth workers
-        continue-on-error: true
-        run: |
-          echo "Deleting PR #28 auth workers (may fail - different repo)..."
-          echo "Note: These workers are from al-ummah-now-auth repo, not this monorepo"
-          echo "- al-ummah-now-auth-admin-pr-28"
-          echo "- al-ummah-now-auth-pr-28"
-          echo "- al-ummah-now-profile-pr-28"
-          echo "Manual deletion required from auth repo or Cloudflare dashboard"
-
-      - name: Delete PR #27 auth workers
-        continue-on-error: true
-        run: |
-          echo "Deleting PR #27 auth workers (may fail - different repo)..."
-          echo "Note: These workers are from al-ummah-now-auth repo, not this monorepo"
-          echo "- al-ummah-now-auth-admin-pr-27"
-          echo "- al-ummah-now-auth-pr-27"
-          echo "- al-ummah-now-profile-pr-27"
-          echo "Manual deletion required from auth repo or Cloudflare dashboard"
-
-      - name: Delete PR #26 auth workers
-        continue-on-error: true
-        run: |
-          echo "Deleting PR #26 auth workers (may fail - different repo)..."
-          echo "Note: These workers are from al-ummah-now-auth repo, not this monorepo"
-          echo "- al-ummah-now-auth-admin-pr-26"
-          echo "- al-ummah-now-auth-pr-26"
-          echo "- al-ummah-now-profile-pr-26"
-          echo "Manual deletion required from auth repo or Cloudflare dashboard"
-
-      - name: Summary
-        run: |
           echo "========================================"
-          echo "Cleanup Summary"
+          echo "Deleting Orphaned Preview Workers"
           echo "========================================"
           echo ""
-          echo "Attempted to delete:"
-          echo "  - 2 workers from PR #72"
-          echo "  - 4 workers from PR #44"
-          echo "  - 4 workers from PR #43"
-          echo "  - 3 workers from PR #42"
+
+          # PR #72 workers
+          echo "--- PR #72 Workers ---"
+          delete_worker "al-ummah-processor-pr-72"
+          delete_worker "al-ummah-comms-pr-72"
           echo ""
-          echo "Auth workers (require manual cleanup):"
-          echo "  - 3 workers from PR #48"
-          echo "  - 3 workers from PR #28"
-          echo "  - 3 workers from PR #27"
-          echo "  - 3 workers from PR #26"
+
+          # PR #44 workers
+          echo "--- PR #44 Workers ---"
+          delete_worker "al-ummah-web-pr-44"
+          delete_worker "al-ummah-api-pr-44"
+          delete_worker "al-ummah-processor-pr-44"
+          delete_worker "al-ummah-comms-pr-44"
           echo ""
-          echo "Auth workers belong to a different repository and must be deleted:"
-          echo "  1. From the al-ummah-now-auth repo using wrangler"
-          echo "  2. Manually via Cloudflare dashboard:"
-          echo "     https://dash.cloudflare.com/0e4b6e7f9faf280c3c9bf95995edc64f/workers-and-pages"
+
+          # PR #43 workers
+          echo "--- PR #43 Workers ---"
+          delete_worker "al-ummah-web-pr-43"
+          delete_worker "al-ummah-api-pr-43"
+          delete_worker "al-ummah-processor-pr-43"
+          delete_worker "al-ummah-comms-pr-43"
           echo ""
-          echo "Check logs above for any errors."
+
+          # PR #42 workers
+          echo "--- PR #42 Workers ---"
+          delete_worker "al-ummah-web-pr-42"
+          delete_worker "al-ummah-api-pr-42"
+          delete_worker "al-ummah-processor-pr-42"
+          echo ""
+
+          # Auth workers (different repo)
+          echo "--- Auth Workers (Different Repo) ---"
+          echo "The following auth workers belong to al-ummah-now-auth repo:"
+          echo ""
+          echo "PR #48:"
+          delete_worker "al-ummah-now-auth-admin-pr-48"
+          delete_worker "al-ummah-now-profile-pr-48"
+          delete_worker "al-ummah-now-auth-pr-48"
+          echo ""
+          echo "PR #28:"
+          delete_worker "al-ummah-now-auth-admin-pr-28"
+          delete_worker "al-ummah-now-auth-pr-28"
+          delete_worker "al-ummah-now-profile-pr-28"
+          echo ""
+          echo "PR #27:"
+          delete_worker "al-ummah-now-auth-admin-pr-27"
+          delete_worker "al-ummah-now-auth-pr-27"
+          delete_worker "al-ummah-now-profile-pr-27"
+          echo ""
+          echo "PR #26:"
+          delete_worker "al-ummah-now-auth-admin-pr-26"
+          delete_worker "al-ummah-now-auth-pr-26"
+          delete_worker "al-ummah-now-profile-pr-26"
+          echo ""
+
+          echo "========================================"
+          echo "Cleanup Complete!"
+          echo "========================================"
+          echo ""
+          echo "If any workers failed due to queue bindings,"
+          echo "they must be unbound first via the Cloudflare dashboard:"
+          echo "https://dash.cloudflare.com/$CLOUDFLARE_ACCOUNT_ID/workers-and-pages"
