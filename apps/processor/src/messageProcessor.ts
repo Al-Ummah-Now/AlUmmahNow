@@ -111,6 +111,11 @@ export class MessageProcessor {
         await this.processPlaylistMessage(message);
         break;
 
+      // Watch history messages
+      case MessageType.WatchHistory:
+        await this.processWatchHistoryMessage(message);
+        break;
+
       default:
         throw new Error(`Unknown message type: ${message.type}`);
     }
@@ -317,6 +322,39 @@ export class MessageProcessor {
       this.logger.error(`Failed to save message ${message.id} to R2 bucket`, error);
       // Re-throw the error so it can be handled by the main processing logic
       throw new Error(`R2 save failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async processWatchHistoryMessage(message: AlUmmahMessage): Promise<void> {
+    this.logger.debug(`Processing watch history message`, message.data);
+
+    const { type, userId, videoId, progress, duration } = message.data as {
+      type: string;
+      userId: string;
+      videoId: string;
+      progress: number;
+      duration: number;
+      timestamp: string;
+    };
+
+    if (!type || !userId || !videoId) {
+      throw new Error('Watch history message missing required fields: type, userId, videoId');
+    }
+
+    // Log watch history events for analytics
+    switch (type) {
+      case 'watch_started':
+        this.logger.info(`User ${userId} started watching video ${videoId}`);
+        break;
+      case 'watch_progress':
+        const percentage = Math.round((progress / duration) * 100);
+        this.logger.info(`User ${userId} progress on video ${videoId}: ${percentage}% (${progress}s/${duration}s)`);
+        break;
+      case 'watch_completed':
+        this.logger.info(`User ${userId} completed watching video ${videoId}`);
+        break;
+      default:
+        this.logger.warn(`Unknown watch history event type: ${type}`);
     }
   }
 
