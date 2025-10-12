@@ -54,6 +54,12 @@ const nextConfig = {
           },
         ],
       },
+    transpilePackages: [
+      'video.js',
+      '@videojs/http-streaming',
+      'videojs-contrib-quality-levels',
+      'videojs-hls-quality-selector'
+    ],
 };
 
 export default nextConfig;

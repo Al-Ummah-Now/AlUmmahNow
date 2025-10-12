@@ -1,0 +1,24 @@
+@import 'video.js/dist/video-js.css';
+
+.video-js {
+  font-family: var(--font-family);
+}
+
+.video-js .vjs-big-play-button {
+  border-radius: 50%;
+  border: none;
+  background-color: rgba(43, 51, 63, 0.9);
+}
+
+.video-js .vjs-control-bar {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.8),
+    transparent
+  );
+}
+
+/* RTL support */
+[dir="rtl"] .video-js .vjs-control-bar {
+  direction: rtl;
+}
