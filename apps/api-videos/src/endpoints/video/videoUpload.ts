@@ -159,7 +159,7 @@ isLive,
 tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
 fileSize: file.size,
 originalFormat: file.type,
-uploadStatus: 'uploading',
+uploadStatus: 'uploading' as const,
 };
 
 // Save metadata to R2

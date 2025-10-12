@@ -11,6 +11,8 @@ import { VideoSearch } from "./endpoints/video/videoSearch";
 import { VideoView } from "./endpoints/video/videoView";
 import { VideoUploadStatus } from "./endpoints/video/videoUploadStatus";
 import { VideoUpload } from "./endpoints/video/videoUpload";
+import { UploadInitiateEndpoint } from "./endpoints/video/uploadInitiate";
+import { UploadCompleteEndpoint } from "./endpoints/video/uploadComplete";
 import { ProfileCreate } from "./endpoints/profile/profileCreate";
 import { ProfileDelete } from "./endpoints/profile/profileDelete";
 import { ProfileFetch } from "./endpoints/profile/profileFetch";
@@ -203,6 +205,8 @@ app.use('/api/moderation/*', authMiddleware);
 // AUTHENTICATED endpoints (require valid JWT token)
 openapi.post("/api/videos", VideoCreate);
 openapi.post("/api/videos/upload", VideoUpload);
+openapi.post("/api/videos/upload/initiate", UploadInitiateEndpoint);
+openapi.post("/api/videos/upload/complete", UploadCompleteEndpoint);
 openapi.put("/api/videos/:id", VideoUpdate);
 openapi.delete("/api/videos/:id", VideoDelete);
 openapi.get("/api/videos/:id/upload-status", VideoUploadStatus);
@@ -316,6 +320,8 @@ app.get("/openapi.json", async (c) => {
 		'/auth-test', // GET (for testing)
 		// Video management
 		'/api/videos', // POST
+		'/api/videos/upload/initiate', // POST
+		'/api/videos/upload/complete', // POST
 		'/api/videos/{id}', // PUT, DELETE
 		'/api/videos/{id}/likes', // POST, DELETE
 		'/api/videos/{id}/dislikes', // POST, DELETE

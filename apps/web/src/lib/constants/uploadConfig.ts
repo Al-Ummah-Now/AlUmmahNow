@@ -17,6 +17,17 @@ export const VIDEO_UPLOAD_CONFIG = {
   
   // Human readable duration limit
   MAX_DURATION_DISPLAY: '2 hours',
+
+  // Bunny.net CDN base URL - configurable via environment variable
+  BUNNY_CDN_BASE_URL: process.env.NEXT_PUBLIC_BUNNY_CDN_URL || 'https://video.bunnycdn.com',
+
+  // Upload polling configuration
+  POLLING: {
+    // Maximum number of status checks (6 polls * 5 seconds = 30 seconds)
+    MAX_POLLS: 6,
+    // Interval between polls in milliseconds
+    INTERVAL_MS: 5000,
+  },
 } as const;
 
 // Error messages
