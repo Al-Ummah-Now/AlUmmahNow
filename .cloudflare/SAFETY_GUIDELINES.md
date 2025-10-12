@@ -328,10 +328,14 @@ pnpm wrangler delete {worker-name}
 cleanup-previews:
   if: github.event_name == 'pull_request' && github.event.action == 'closed'
   steps:
-    - Delete: al-ummah-web-pr-{number}
-    - Delete: al-ummah-api-pr-{number}
-    - Delete: al-ummah-processor-pr-{number}
-    - Delete: al-ummah-comms-pr-{number}
+    - name: Delete web preview
+      run: cd apps/web && pnpm wrangler delete al-ummah-web-pr-{number}
+    - name: Delete API preview
+      run: cd apps/api-videos && pnpm wrangler delete al-ummah-api-pr-{number}
+    - name: Delete processor preview
+      run: cd apps/processor && pnpm wrangler delete al-ummah-processor-pr-{number}
+    - name: Delete websocket preview
+      run: cd apps/websocket-server && pnpm wrangler delete al-ummah-comms-pr-{number}
 ```
 
 **Manual Override:**

@@ -13,7 +13,6 @@
     "web:dev": "turbo run dev --filter=@al-ummah/web",
     "web:build": "turbo run build --filter=@al-ummah/web",
     "web:deploy": "turbo run deploy --filter=@al-ummah/web",
-    "web:deploy:staging": "turbo run deploy:staging --filter=@al-ummah/web",
     "web:deploy:production": "turbo run deploy:production --filter=@al-ummah/web",
     "api:dev": "turbo run dev --filter=@al-ummah/api-videos",
     "api:build": "turbo run build --filter=@al-ummah/api-videos",
@@ -21,7 +20,6 @@
     "processor:dev": "turbo run dev --filter=@al-ummah/processor",
     "processor:build": "turbo run build --filter=@al-ummah/processor",
     "processor:deploy": "turbo run deploy --filter=@al-ummah/processor",
-    "processor:deploy:staging": "turbo run deploy:staging --filter=@al-ummah/processor",
     "websocket:dev": "turbo run dev --filter=@al-ummah/websocket-server",
     "websocket:build": "turbo run build --filter=@al-ummah/websocket-server",
     "websocket:deploy": "turbo run deploy --filter=@al-ummah/websocket-server"

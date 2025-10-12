@@ -20,7 +20,7 @@ Account: Al Ummah Now Production
 ### 1. **al-ummah-web** (Web Application)
 - **Purpose:** Main Next.js 15 frontend application
 - **Config:** `apps/web/wrangler.production.jsonc`
-- **URL:** https://alummahnow.net
+- **URL:** https://alummahnow.net (production domain)
 - **Tech:** Next.js 15 + OpenNext + Cloudflare Workers
 - **Bindings:**
   - R2: `web-assets` (static files)
