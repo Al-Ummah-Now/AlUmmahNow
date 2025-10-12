@@ -1,0 +1,154 @@
+name: Cleanup PR Preview Deployments
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_numbers:
+        description: 'Comma-separated PR numbers to clean up (leave empty for all merged PRs)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run - only list workers without deleting'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Get PR numbers to clean up
+        id: get-prs
+        run: |
+          if [ -n "${{ inputs.pr_numbers }}" ]; then
+            echo "pr_list=${{ inputs.pr_numbers }}" >> $GITHUB_OUTPUT
+          else
+            # Get all merged PRs from the last 30 days
+            PR_LIST=$(gh pr list --state merged --limit 50 --json number --jq '.[].number' | tr '\n' ',' | sed 's/,$//')
+            echo "pr_list=$PR_LIST" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Cleanup preview deployments
+        run: |
+          IFS=',' read -ra PRS <<< "${{ steps.get-prs.outputs.pr_list }}"
+
+          echo "🧹 Cleaning up preview deployments..."
+          echo "Dry run: ${{ inputs.dry_run }}"
+          echo "PRs to process: ${#PRS[@]}"
+          echo ""
+
+          DELETED=0
+          FAILED=0
+          SKIPPED=0
+
+          for pr_num in "${PRS[@]}"; do
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Processing PR #${pr_num}"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            # Web preview
+            WEB_NAME="al-ummah-web-pr-${pr_num}"
+            echo "  Checking: $WEB_NAME"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "  [DRY RUN] Would delete: $WEB_NAME"
+              ((SKIPPED++))
+            else
+              cd apps/web
+              if pnpm wrangler delete "$WEB_NAME" --force 2>&1 | tee /tmp/delete.log | grep -q "successfully deleted\|not found\|does not exist"; then
+                if grep -q "successfully deleted" /tmp/delete.log; then
+                  echo "  ✅ Deleted: $WEB_NAME"
+                  ((DELETED++))
+                else
+                  echo "  ⚪ Already removed: $WEB_NAME"
+                  ((SKIPPED++))
+                fi
+              else
+                echo "  ❌ Failed: $WEB_NAME"
+                ((FAILED++))
+              fi
+              cd - > /dev/null
+            fi
+
+            # API preview
+            API_NAME="al-ummah-api-pr-${pr_num}"
+            echo "  Checking: $API_NAME"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "  [DRY RUN] Would delete: $API_NAME"
+              ((SKIPPED++))
+            else
+              cd apps/api-videos
+              if pnpm wrangler delete "$API_NAME" --force 2>&1 | tee /tmp/delete.log | grep -q "successfully deleted\|not found\|does not exist"; then
+                if grep -q "successfully deleted" /tmp/delete.log; then
+                  echo "  ✅ Deleted: $API_NAME"
+                  ((DELETED++))
+                else
+                  echo "  ⚪ Already removed: $API_NAME"
+                  ((SKIPPED++))
+                fi
+              else
+                echo "  ❌ Failed: $API_NAME"
+                ((FAILED++))
+              fi
+              cd - > /dev/null
+            fi
+
+            # Processor preview
+            PROCESSOR_NAME="al-ummah-processor-pr-${pr_num}"
+            echo "  Checking: $PROCESSOR_NAME"
+            if [ "${{ inputs.dry_run}}" = "true" ]; then
+              echo "  [DRY RUN] Would delete: $PROCESSOR_NAME"
+              ((SKIPPED++))
+            else
+              cd apps/processor
+              if pnpm wrangler delete "$PROCESSOR_NAME" --force 2>&1 | tee /tmp/delete.log | grep -q "successfully deleted\|not found\|does not exist"; then
+                if grep -q "successfully deleted" /tmp/delete.log; then
+                  echo "  ✅ Deleted: $PROCESSOR_NAME"
+                  ((DELETED++))
+                else
+                  echo "  ⚪ Already removed: $PROCESSOR_NAME"
+                  ((SKIPPED++))
+                fi
+              else
+                echo "  ❌ Failed: $PROCESSOR_NAME"
+                ((FAILED++))
+              fi
+              cd - > /dev/null
+            fi
+
+            echo ""
+          done
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Cleanup Summary"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Deleted: $DELETED workers"
+          echo "  Already removed: $SKIPPED workers"
+          if [ $FAILED -gt 0 ]; then
+            echo "  Failed: $FAILED workers"
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
