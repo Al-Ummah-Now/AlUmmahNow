@@ -42,8 +42,8 @@
 	"kv_namespaces": [
 		{
 			"binding": "PRESENCE_KV",
-			"id": "websocket_presence",
-			"preview_id": "websocket_presence_preview"
+			"id": "al-ummah-now-analytics-kv",
+			"preview_id": "al-ummah-now-analytics-kv-preview"
 		}
 	],
 	/**
