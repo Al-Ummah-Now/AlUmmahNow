@@ -51,6 +51,7 @@ jobs:
 
       - name: Cleanup preview deployments
         run: |
+          set +e  # Disable errexit for arithmetic operations
           IFS=',' read -ra PRS <<< "${{ steps.get-prs.outputs.pr_list }}"
 
           echo "🧹 Cleaning up preview deployments..."
