@@ -9,17 +9,20 @@
     "deploy": "wrangler deploy",
     "cf-typegen": "wrangler types",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf .wrangler"
+    "clean": "rm -rf .wrangler",
+    "verify": "node verify.js"
   },
   "dependencies": {
     "@openauthjs/openauth": "^0.4.3",
     "hono": "^4.4.7",
+    "ws": "^8.18.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240909.0",
     "@types/node": "20.8.3",
     "typescript": "5.7.2",
-    "wrangler": "^4.11.1"
+    "wrangler": "^4.11.1",
+    "ws": "^8.18.0"
   }
 }
