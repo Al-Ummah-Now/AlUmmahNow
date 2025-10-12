@@ -22,18 +22,22 @@ if [ -z "$CLOSED_PRS" ]; then
     exit 0
 fi
 
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR"
+
 # Store original directory
 ORIGINAL_DIR=$(pwd)
 
 # Function to delete a worker
 delete_worker() {
     local worker_name=$1
-    local app_dir=$2
+    local app_subdir=$2
 
     echo -e "  Attempting to delete: ${worker_name}"
 
-    cd "$app_dir" || {
-        echo -e "  ${RED}✗${NC} Failed to change to directory: $app_dir"
+    cd "$PROJECT_ROOT/$app_subdir" || {
+        echo -e "  ${RED}✗${NC} Failed to change to directory: $PROJECT_ROOT/$app_subdir"
         cd "$ORIGINAL_DIR"
         return 1
     }
@@ -59,7 +63,7 @@ for pr_num in $CLOSED_PRS; do
 
     # Web preview
     WEB_NAME="al-ummah-web-pr-${pr_num}"
-    if delete_worker "$WEB_NAME" "/home/meywd/AlUmmahNow/apps/web"; then
+    if delete_worker "$WEB_NAME" "apps/web"; then
         DELETED=$((DELETED + 1))
     else
         FAILED=$((FAILED + 1))
@@ -67,7 +71,7 @@ for pr_num in $CLOSED_PRS; do
 
     # API preview
     API_NAME="al-ummah-api-pr-${pr_num}"
-    if delete_worker "$API_NAME" "/home/meywd/AlUmmahNow/apps/api-videos"; then
+    if delete_worker "$API_NAME" "apps/api-videos"; then
         DELETED=$((DELETED + 1))
     else
         FAILED=$((FAILED + 1))
@@ -75,7 +79,7 @@ for pr_num in $CLOSED_PRS; do
 
     # Processor preview
     PROCESSOR_NAME="al-ummah-processor-pr-${pr_num}"
-    if delete_worker "$PROCESSOR_NAME" "/home/meywd/AlUmmahNow/apps/processor"; then
+    if delete_worker "$PROCESSOR_NAME" "apps/processor"; then
         DELETED=$((DELETED + 1))
     else
         FAILED=$((FAILED + 1))
