@@ -13,6 +13,7 @@ declare namespace Cloudflare {
 		channels: R2Bucket;
 		playlists: R2Bucket;
 		reports: R2Bucket;
+		watch_history: R2Bucket;
 		image_storage_key: SecretsStoreSecret;
 		"bunny-stream-key": SecretsStoreSecret;
 		bunny_stream_library_id: SecretsStoreSecret;

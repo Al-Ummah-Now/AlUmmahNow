@@ -6,3 +6,4 @@ export * from './playlist';
 export * from './comment';
 export * from './analytics';
 export * from './common';
+export * from './watch-history';
