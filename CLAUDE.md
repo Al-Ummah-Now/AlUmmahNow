@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Al Ummah Now** is an Islamic content platform monorepo with three Cloudflare Workers applications:
+**Al Ummah Now** is an Islamic content platform monorepo with four Cloudflare Workers applications:
 
 1. **web** - Next.js 15 frontend with bilingual support (English/Arabic, RTL)
 2. **api-videos** - Hono API backend with OpenAPI 3.1 (chanfana)
 3. **processor** - Queue consumer for message processing and analytics
+4. **websocket-server** - Real-time WebSocket server with Durable Objects
 
 All apps share TypeScript types via `@al-ummah/shared-types` workspace package.
 
@@ -21,7 +22,8 @@ al-ummah-now/
 ├── apps/
 │   ├── web/              Next.js frontend (Cloudflare Workers + OpenNext)
 │   ├── api-videos/       Hono API backend (Cloudflare Workers + R2)
-│   └── processor/        Queue consumer (Cloudflare Workers + R2)
+│   ├── processor/        Queue consumer (Cloudflare Workers + R2)
+│   └── websocket-server/ WebSocket server (Cloudflare Durable Objects + KV)
 ├── packages/
 │   └── shared-types/     Shared TypeScript types
 ├── package.json          Root workspace config
@@ -46,6 +48,7 @@ pnpm dev                 # Run all apps in parallel
 pnpm web:dev             # Web app: http://localhost:3000
 pnpm api:dev             # API: http://127.0.0.1:8686
 pnpm processor:dev       # Processor: http://localhost:8787
+pnpm websocket:dev       # WebSocket server: http://localhost:8787
 ```
 
 ### Build & Validation
@@ -60,7 +63,7 @@ pnpm lint                # Lint all packages
 pnpm web:deploy:production      # Deploy web to production
 pnpm api:deploy                 # Deploy API to production
 pnpm processor:deploy           # Deploy processor to production
-pnpm processor:deploy:staging   # Deploy processor to staging
+pnpm websocket:deploy           # Deploy WebSocket server to production
 ```
 
 ### Per-App Commands
@@ -85,10 +88,11 @@ cd apps/processor && pnpm lint:fix
 | **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS |
 | **API Backend** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
 | **Processor** | TypeScript, Cloudflare Queue Consumer |
+| **WebSocket Server** | Cloudflare Durable Objects, WebSocket API |
 | **Authentication** | OpenAuth (JWT/OAuth2) via auth.alummahnow.net |
 | **Storage** | Cloudflare R2 (object storage), KV (key-value) |
 | **CDN** | Bunny.net (video streaming + image storage) |
-| **Deployment** | Cloudflare Workers (all 3 apps) |
+| **Deployment** | Cloudflare Workers (all 4 apps) |
 | **Package Manager** | pnpm v9.15.4 with workspaces |
 | **Build System** | Turborepo v2 with caching |
 
@@ -112,11 +116,21 @@ cd apps/processor && pnpm lint:fix
 
 **apps/processor** - Event queue processor
 - Consumes messages from Cloudflare Queue `al-ummah-now-videos`
-- Processes video views, likes, comments, subscriptions, channel/playlist events
+- Processes video views, likes, comments, subscriptions, channel/playlist events, watch history
 - Saves all messages to R2 bucket `al-ummah-now-messages` as JSON
+- Tracks watch history and progress in R2 buckets (`watch-history`, `watch-history-preview`)
 - Retry logic (max 3 retries) + dead letter queue support
 - Health checks and monitoring endpoints
 - See: `apps/processor/README.md`
+
+**apps/websocket-server** - Real-time communication server
+- WebSocket server built on Cloudflare Durable Objects
+- JWT authentication with OpenAuth integration
+- Channel subscriptions (user, video, channel, live streams)
+- Presence tracking via Cloudflare KV
+- Rate limiting (100 messages/minute per connection)
+- Message broadcasting and real-time notifications
+- See: `apps/websocket-server/README.md`
 
 **packages/shared-types** - Shared TypeScript types
 - Video, Channel, Playlist, User, Comment, Analytics types
@@ -195,12 +209,86 @@ cd apps/processor && pnpm lint:fix
    pnpm --filter @al-ummah/web build  # Test web build
    ```
 
-6. **Commit**:
+6. **Commit and Push**:
    ```bash
    git add .
    git commit -m "feat(web): add video upload feature"
    git push
    ```
+
+### GitHub Issues Workflow
+
+**CRITICAL RULES FOR CLOSING ISSUES:**
+
+1. **NEVER close an issue until ALL of the following are complete**:
+   - ✅ All code is committed to git
+   - ✅ All commits are pushed to GitHub
+   - ✅ Code is merged to the target branch (main or feature branch)
+   - ✅ All acceptance criteria in the issue are met
+   - ✅ All tests pass (if applicable)
+
+2. **Code in git stash does NOT count as complete**:
+   - Stashed code is NOT committed
+   - Stashed code is NOT pushed
+   - Stashed code can be lost
+   - **Never close issues for stashed work**
+
+3. **Verification before closing**:
+   ```bash
+   # Always verify before closing an issue:
+   git status                    # Should be clean (nothing uncommitted)
+   git log --oneline -5          # Verify commits exist
+   git push --dry-run            # Verify everything is pushed
+   gh issue view <number>        # Review acceptance criteria
+   ```
+
+4. **When to close an issue**:
+   - ✅ Run `git status` - should show "nothing to commit, working tree clean"
+   - ✅ Run `git log` - verify your commits are there
+   - ✅ Run `git push --dry-run` - should say "Everything up-to-date"
+   - ✅ All acceptance criteria checked off
+   - ✅ Only then: `gh issue close <number>`
+
+5. **If work is incomplete**:
+   - Add a comment explaining what's done and what remains
+   - Update issue labels (e.g., add "in-progress" or "blocked")
+   - Do NOT close the issue
+   - Do NOT mark as completed
+
+**Example of INCORRECT workflow** (DO NOT DO THIS):
+```bash
+# ❌ WRONG - Code is only in stash
+git stash push -m "Work on issue #45"
+gh issue close 45 --comment "Completed"  # WRONG!
+```
+
+**Example of CORRECT workflow**:
+```bash
+# ✅ CORRECT - Code is committed and pushed
+git add .
+git commit -m "feat: implement feature from issue #45"
+git push
+# Verify everything is pushed
+git status  # Should be clean
+git log --oneline -1  # Should show your commit
+# Now it's safe to close
+gh issue close 45 --comment "Completed and pushed in commit abc123"
+```
+
+### Working with Stashes
+
+**IMPORTANT**: Git stash is for **temporary** storage only, NOT for completed work.
+
+- ✅ Use stash to: Switch branches temporarily, save work in progress
+- ❌ Never use stash for: Completed features, finished issues, long-term storage
+- ❌ Never close issues for stashed work
+
+**If you have stashed work**:
+1. Apply the stash: `git stash pop`
+2. Review and test the changes
+3. Commit the changes: `git add . && git commit -m "..."`
+4. Push the changes: `git push`
+5. Only then close the related issue
 
 ### Adding Dependencies
 
@@ -253,9 +341,18 @@ Each app has its own detailed documentation:
 
 ### Processor (`apps/processor/`)
 - **Overview**: `apps/processor/README.md`
-- **Message Types**: 13+ types (Video, Profile, Channel, Playlist, Comment, Subscription)
+- **Message Types**: 13+ types (Video, Profile, Channel, Playlist, Comment, Subscription, Watch History)
 - **Config**: `apps/processor/wrangler.toml` with multi-environment support
 - **Testing**: Jest tests in `src/__tests__/`
+- **R2 Buckets**: `watch-history` (production), `watch-history-preview` (preview/dev)
+
+### WebSocket Server (`apps/websocket-server/`)
+- **Overview**: `apps/websocket-server/README.md`
+- **Architecture**: Cloudflare Durable Objects + WebSocket API
+- **Authentication**: JWT with OpenAuth
+- **Features**: Channel subscriptions, presence tracking, rate limiting, broadcasting
+- **KV Namespaces**: `al-ummah-now-analytics-kv` (presence state)
+- **Deployment**: `wss://ws.alummahnow.net` (production)
 
 ## Common Tasks
 
@@ -289,6 +386,7 @@ Each app has its own detailed documentation:
 pnpm web:deploy:production
 pnpm api:deploy
 pnpm processor:deploy
+pnpm websocket:deploy
 
 # Or push to main branch → GitHub Actions handles it
 git push origin main

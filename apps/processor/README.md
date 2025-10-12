@@ -9,7 +9,8 @@ This Cloudflare Worker is designed to consume and process messages from Cloudfla
 
 - **Queue Message Processing**: Consumes messages from Cloudflare Queues with configurable batch processing
 - **R2 Storage Integration**: Automatically saves all processed messages as JSON to Cloudflare R2 bucket
-- **Multiple Message Types**: Supports profile, channel, video, comment, playlist, and subscription message types
+- **Multiple Message Types**: Supports profile, channel, video, comment, playlist, subscription, and watch history message types
+- **Watch History Tracking**: Dedicated R2 buckets for production (`watch-history`) and preview/development (`watch-history-preview`)
 - **Error Handling**: Comprehensive error handling with retry logic and dead letter queue support
 - **Monitoring**: Built-in health checks and queue status endpoints
 - **Environment Support**: Configurable for development, staging, and production environments
@@ -76,6 +77,10 @@ The worker supports processing various types of video platform messages:
 - `PlaylistAdd` - Add video to playlist
 - `PlaylistRemove` - Remove video from playlist
 - `PlaylistClone` - Clone existing playlist
+
+### Watch History Messages
+- `WatchHistoryUpdate` - Update watch progress and history
+- `WatchHistoryDelete` - Delete watch history entry
 
 ### Example Messages
 
@@ -144,7 +149,10 @@ npx wrangler login
 
 3. Create the required resources in your Cloudflare dashboard:
    - **Queues**: `alummah-messages` (main queue), `alummah-dlq` (dead letter queue)
-   - **R2 Bucket**: `al-ummah-now-messages` (for message storage)
+   - **R2 Buckets**:
+     - `al-ummah-now-messages` (for message storage)
+     - `watch-history` (production watch history)
+     - `watch-history-preview` (preview/development watch history)
 
 ### Development
 
