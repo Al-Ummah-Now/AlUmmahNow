@@ -21,7 +21,10 @@
     "processor:dev": "turbo run dev --filter=@al-ummah/processor",
     "processor:build": "turbo run build --filter=@al-ummah/processor",
     "processor:deploy": "turbo run deploy --filter=@al-ummah/processor",
-    "processor:deploy:staging": "turbo run deploy:staging --filter=@al-ummah/processor"
+    "processor:deploy:staging": "turbo run deploy:staging --filter=@al-ummah/processor",
+    "websocket:dev": "turbo run dev --filter=@al-ummah/websocket-server",
+    "websocket:build": "turbo run build --filter=@al-ummah/websocket-server",
+    "websocket:deploy": "turbo run deploy --filter=@al-ummah/websocket-server"
   },
   "devDependencies": {
     "turbo": "^2.3.3",
