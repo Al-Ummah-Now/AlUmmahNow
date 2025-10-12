@@ -112,8 +112,9 @@ cd apps/processor && pnpm lint:fix
 
 **apps/processor** - Event queue processor
 - Consumes messages from Cloudflare Queue `al-ummah-now-videos`
-- Processes video views, likes, comments, subscriptions, channel/playlist events
+- Processes video views, likes, comments, subscriptions, channel/playlist events, watch history
 - Saves all messages to R2 bucket `al-ummah-now-messages` as JSON
+- Tracks watch history and progress in R2 buckets (`watch-history`, `watch-history-preview`)
 - Retry logic (max 3 retries) + dead letter queue support
 - Health checks and monitoring endpoints
 - See: `apps/processor/README.md`
@@ -253,9 +254,10 @@ Each app has its own detailed documentation:
 
 ### Processor (`apps/processor/`)
 - **Overview**: `apps/processor/README.md`
-- **Message Types**: 13+ types (Video, Profile, Channel, Playlist, Comment, Subscription)
+- **Message Types**: 13+ types (Video, Profile, Channel, Playlist, Comment, Subscription, Watch History)
 - **Config**: `apps/processor/wrangler.toml` with multi-environment support
 - **Testing**: Jest tests in `src/__tests__/`
+- **R2 Buckets**: `watch-history` (production), `watch-history-preview` (preview/dev)
 
 ## Common Tasks
 
