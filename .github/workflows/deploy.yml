@@ -591,104 +591,56 @@ jobs:
           echo "websocket=al-ummah-comms-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
 
       - name: Delete web preview
+        continue-on-error: true
         run: |
           cd apps/web
-          pnpm wrangler delete ${{ steps.preview-names.outputs.web }} || echo "Web preview already deleted"
+          pnpm wrangler delete ${{ steps.preview-names.outputs.web }} || echo "Web preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Delete API preview
+        continue-on-error: true
         run: |
           cd apps/api-videos
-          pnpm wrangler delete ${{ steps.preview-names.outputs.api }} || echo "API preview already deleted"
+          pnpm wrangler delete ${{ steps.preview-names.outputs.api }} || echo "API preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Delete processor preview
+        continue-on-error: true
         run: |
           cd apps/processor
-          pnpm wrangler delete ${{ steps.preview-names.outputs.processor }} || echo "Processor preview already deleted"
+          pnpm wrangler delete ${{ steps.preview-names.outputs.processor }} || echo "Processor preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Delete websocket preview
+        continue-on-error: true
         run: |
           cd apps/websocket-server
-          pnpm wrangler delete ${{ steps.preview-names.outputs.websocket }} || echo "WebSocket preview already deleted"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-  # Deploy to Staging (main branch only)
-  deploy-staging:
-    needs: [build-web, validate-api, validate-processor, validate-websocket]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Download web build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: web-build-artifacts
-          path: apps/web/
-
-      - name: Deploy Web to Staging
-        run: |
-          cd apps/web
-          pnpm wrangler deploy --config wrangler.staging.jsonc
+          pnpm wrangler delete ${{ steps.preview-names.outputs.websocket }} || echo "WebSocket preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Deploy API to Staging
+      - name: Cleanup summary
         run: |
-          cd apps/api-videos
-          pnpm wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          echo "🧹 Preview cleanup completed for PR #${{ github.event.number }}"
+          echo ""
+          echo "Attempted to delete:"
+          echo "  • ${{ steps.preview-names.outputs.web }}"
+          echo "  • ${{ steps.preview-names.outputs.api }}"
+          echo "  • ${{ steps.preview-names.outputs.processor }}"
+          echo "  • ${{ steps.preview-names.outputs.websocket }}"
+          echo ""
+          echo "Note: Some workers may not exist if deployment failed earlier."
 
-      - name: Deploy Processor to Staging
-        run: |
-          cd apps/processor
-          pnpm wrangler deploy --env staging
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy WebSocket Server to Staging
-        run: |
-          cd apps/websocket-server
-          pnpm wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Notify staging deployment
-        run: |
-          echo "✅ Staging deployment completed successfully!"
-          echo "- Web app deployed"
-          echo "- API deployed"
-          echo "- Processor deployed"
-          echo "- WebSocket server deployed"
-
-  # Deploy to Production (main branch only, after staging)
+  # Deploy to Production (main branch only)
   deploy-production:
-    needs: deploy-staging
+    needs: [build-web, validate-api, validate-processor, validate-websocket]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
@@ -750,10 +702,14 @@ jobs:
         if: success()
         run: |
           echo "🚀 Production deployment successful!"
-          echo "- Web app: Deployed with Cloudflare Workers"
-          echo "- API: Deployed with Hono + OpenAPI"
-          echo "- Processor: Deployed with queue consumer"
-          echo "- WebSocket server: Deployed with Durable Objects"
+          echo ""
+          echo "Workers deployed:"
+          echo "  • al-ummah-web (Next.js frontend)"
+          echo "  • videos (Hono API backend)"
+          echo "  • al-ummah-now-processor (Queue consumer)"
+          echo "  • al-ummah-now-comms (WebSocket server)"
+          echo ""
+          echo "All 4 production workers are live!"
 
       - name: Notify production deployment failure
         if: failure()

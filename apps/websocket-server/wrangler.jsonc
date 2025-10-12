@@ -21,8 +21,7 @@
 		"bindings": [
 			{
 				"name": "WEBSOCKET_DO",
-				"class_name": "WebSocketDurableObject",
-				"script_name": "al-ummah-now-comms"
+				"class_name": "WebSocketDurableObject"
 			}
 		]
 	},
