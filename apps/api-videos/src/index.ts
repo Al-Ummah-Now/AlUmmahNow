@@ -21,6 +21,13 @@ import { ProfileUpdate } from "./endpoints/profile/profileUpdate";
 import { WatchHistoryAdd } from "./endpoints/profile/watchHistoryAdd";
 import { WatchHistoryList } from "./endpoints/profile/watchHistoryList";
 import handleAvatarUpdate from "./endpoints/profile/profileAvatarUpdate";
+// Watch History endpoints (new system)
+import { RecordWatchHistory } from "./endpoints/watch-history/record";
+import { ListWatchHistory } from "./endpoints/watch-history/list";
+import { DeleteWatchHistory } from "./endpoints/watch-history/delete";
+import { ClearWatchHistory } from "./endpoints/watch-history/clear";
+import { UpdateWatchProgress } from "./endpoints/watch-history/update-progress";
+import { GetWatchProgress } from "./endpoints/watch-history/get-progress";
 import handleCoverUpdate from "./endpoints/profile/profileCoverUpdate";
 import { PlaylistCreate } from "./endpoints/playlist/playlistCreate";
 import { PlaylistFetch } from "./endpoints/playlist/playlistFetch";
@@ -201,6 +208,8 @@ app.use('/api/live-streams', (c, next) => {
 
 app.use('/api/analytics', authMiddleware);
 app.use('/api/moderation/*', authMiddleware);
+app.use('/api/watch-history/*', authMiddleware);
+app.use('/api/watch-history', authMiddleware);
 
 // AUTHENTICATED endpoints (require valid JWT token)
 openapi.post("/api/videos", VideoCreate);
@@ -218,6 +227,14 @@ openapi.delete("/api/profiles/:id", ProfileDelete);
 // Watch history management (require auth)
 openapi.post("/api/profiles/watch-history", WatchHistoryAdd);
 openapi.get("/api/profiles/watch-history", WatchHistoryList);
+
+// New Watch History System (require auth)
+openapi.post("/api/watch-history", RecordWatchHistory);
+openapi.get("/api/watch-history", ListWatchHistory);
+openapi.delete("/api/watch-history", ClearWatchHistory);
+openapi.delete("/api/watch-history/:videoId", DeleteWatchHistory);
+openapi.post("/api/watch-history/:videoId/progress", UpdateWatchProgress);
+openapi.get("/api/watch-history/:videoId/progress", GetWatchProgress);
 
 // Profile photo/cover routes (also require auth)
 app.put("/api/profiles/:id/avatar", authMiddleware, handleAvatarUpdate);
@@ -344,6 +361,10 @@ app.get("/openapi.json", async (c) => {
 		'/api/playlists', // POST
 		'/api/playlists/{id}', // PUT, DELETE
 		'/api/playlists/{id}/videos', // POST, DELETE
+		// Watch History (new system)
+		'/api/watch-history', // POST, GET, DELETE
+		'/api/watch-history/{videoId}', // DELETE
+		'/api/watch-history/{videoId}/progress', // POST, GET
 		// Phase 2: Live Streaming management
 		'/api/live-streams', // POST
 		'/api/live-streams/{id}', // PATCH

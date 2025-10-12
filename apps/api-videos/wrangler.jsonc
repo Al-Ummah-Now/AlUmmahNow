@@ -49,6 +49,11 @@
 			"binding": "reports",
 			"bucket_name": "reports",
 			"preview_bucket_name": "reports-preview"
+		},
+		{
+			"binding": "watch_history",
+			"bucket_name": "watch-history",
+			"preview_bucket_name": "watch-history-preview"
 		}
 	],
 	"kv_namespaces": [
