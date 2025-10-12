@@ -209,10 +209,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       setUploadProgress({ percentage: 85, stage: 'processing' });
       onProgress(85);
 
-      // Poll status until ready or timeout (30 seconds max for initial check)
+      // Poll status until ready or timeout
       let pollCount = 0;
-      const maxPolls = 6; // 6 polls * 5 seconds = 30 seconds
-      
+      const maxPolls = VIDEO_UPLOAD_CONFIG.POLLING.MAX_POLLS;
+
       while (pollCount < maxPolls) {
         const statusResult = await getVideoUploadStatus(videoId);
         
@@ -231,8 +231,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           }
         }
 
-        // Wait 5 seconds before next poll
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, VIDEO_UPLOAD_CONFIG.POLLING.INTERVAL_MS));
         pollCount++;
       }
 
@@ -256,7 +256,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         title: metadata.title,
         description: metadata.description || null,
         thumbnailUrl: '',
-        videoUrl: `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
+        videoUrl: `${VIDEO_UPLOAD_CONFIG.BUNNY_CDN_BASE_URL}/library/${libraryId}/videos/${videoId}`,
         userId: auth.user.id,
         channel: auth.user.id, // Using user ID as channel for now
         channelId: auth.user.id,

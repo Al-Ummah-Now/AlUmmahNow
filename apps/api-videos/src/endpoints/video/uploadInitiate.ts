@@ -94,8 +94,16 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 				}, 500);
 			}
 
+			const libraryIdRaw = await env.bunny_stream_library_id.get();
+			const libraryId = parseInt(libraryIdRaw, 10);
+			if (!libraryIdRaw || isNaN(libraryId)) {
+				return c.json({
+					success: false,
+					error: "Bunny Stream library ID is not configured or is invalid"
+				}, 500);
+			}
+
 			const bunnyStream = new stream(bunnyKey);
-			const libraryId = parseInt(await env.bunny_stream_library_id.get());
 
 			// Create video in Bunny Stream
 			const bunnyVideo = await bunnyStream.createVideo(libraryId, {

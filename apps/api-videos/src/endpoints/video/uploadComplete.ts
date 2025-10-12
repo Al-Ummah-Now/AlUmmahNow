@@ -88,10 +88,13 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 			}, 401);
 		}
 
+		let videoId: string | undefined;
+
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { videoId, fileSize, duration } = request.body;
+			videoId = request.body.videoId;
+			const { fileSize, duration } = request.body;
 
 			// Get video from storage to verify ownership
 			const bucket = env.videos;
@@ -148,35 +151,34 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 
 		} catch (error) {
 			console.error("Upload complete error:", error);
-			
-			// Try to update video status to failed if we have the videoId
-			try {
-				const request = await this.getValidatedData<typeof this.schema>();
-				const { videoId } = request.body;
-				
-				const bucket = env.videos;
-				type VideoType = z.infer<typeof BusinessVideo>;
-				const repository = new R2Repository<VideoType>(bucket);
-				const video = await repository.getObject(videoId);
-				
-				if (video && video.userId === userId) {
-					await repository.putObject(videoId, {
-						...video,
-						uploadStatus: 'failed' as const,
-						dateModified: new Date().toISOString(),
-					});
 
-					// Send failure event
-					const queue = new Queue();
-					await queue.send(MessageType.VideoUploadFailed, {
-						videoId,
-						userId,
-						error: error.message || 'Unknown error',
-						timestamp: new Date().toISOString(),
-					});
+			// Try to update video status to failed if we have the videoId
+			if (videoId) {
+				try {
+					const bucket = env.videos;
+					type VideoType = z.infer<typeof BusinessVideo>;
+					const repository = new R2Repository<VideoType>(bucket);
+					const video = await repository.getObject(videoId);
+
+					if (video && video.userId === userId) {
+						await repository.putObject(videoId, {
+							...video,
+							uploadStatus: 'failed' as const,
+							dateModified: new Date().toISOString(),
+						});
+
+						// Send failure event
+						const queue = new Queue();
+						await queue.send(MessageType.VideoUploadFailed, {
+							videoId,
+							userId,
+							error: error.message || 'Unknown error',
+							timestamp: new Date().toISOString(),
+						});
+					}
+				} catch (updateError) {
+					console.error("Failed to update video status:", updateError);
 				}
-			} catch (updateError) {
-				console.error("Failed to update video status:", updateError);
 			}
 
 			return c.json({
