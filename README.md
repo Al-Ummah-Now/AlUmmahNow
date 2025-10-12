@@ -9,6 +9,7 @@ A comprehensive Islamic content platform built as a Turborepo monorepo with thre
 - **Bilingual Support**: Full English/Arabic with RTL layout
 - **Video Platform**: Upload, stream, and manage Islamic video content
 - **Authentication**: Secure OpenAuth integration with JWT tokens
+- **Real-time Features**: WebSocket server for notifications and live updates
 - **Real-time Processing**: Queue-based event processing and analytics
 - **Modern Stack**: Next.js 15, Hono, Cloudflare Workers, Bunny.net CDN
 - **Type-Safe**: Shared TypeScript types across all applications
@@ -20,7 +21,8 @@ al-ummah-now/
 ├── apps/
 │   ├── web/                Next.js 15 frontend
 │   ├── api-videos/         Hono API backend with OpenAPI
-│   └── processor/          Queue consumer for events
+│   ├── processor/          Queue consumer for events
+│   └── websocket-server/   WebSocket server (Durable Objects)
 ├── packages/
 │   └── shared-types/       Shared TypeScript types
 ├── pnpm-workspace.yaml     Workspace configuration
@@ -35,6 +37,7 @@ al-ummah-now/
 | **web** | Next.js frontend with bilingual support | 3000 | [README](apps/web/README.md) |
 | **api-videos** | Hono API backend with OpenAPI/Swagger | 8686 | [CLAUDE.md](apps/api-videos/CLAUDE.md) |
 | **processor** | Cloudflare Queue consumer | 8787 | [README](apps/processor/README.md) |
+| **websocket-server** | Real-time WebSocket server (Durable Objects) | 8787 | [DOCUMENTATION.md](apps/websocket-server/DOCUMENTATION.md) |
 | **shared-types** | Shared TypeScript types | - | Built package |
 
 ## 🚀 Quick Start
@@ -69,6 +72,7 @@ pnpm dev
 pnpm web:dev          # Frontend: http://localhost:3000
 pnpm api:dev          # API: http://127.0.0.1:8686 (Swagger UI at root)
 pnpm processor:dev    # Processor: http://localhost:8787
+pnpm websocket:dev    # WebSocket: http://localhost:8787
 ```
 
 ### Build & Test
@@ -92,6 +96,7 @@ pnpm lint
 | **API** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
 | **Processing** | Cloudflare Queue Consumer, TypeScript |
 | **Authentication** | OpenAuth (JWT/OAuth2) |
+| **Real-time** | Cloudflare Durable Objects (WebSocket) |
 | **Storage** | Cloudflare R2 (object storage), KV (key-value) |
 | **CDN** | Bunny.net (video streaming + images) |
 | **Deployment** | Cloudflare Workers (all apps) |
@@ -123,6 +128,14 @@ pnpm lint
 - 🔄 Retry logic with dead letter queue
 - 🏥 Health check and monitoring endpoints
 
+### WebSocket Server (`apps/websocket-server`)
+- 🔌 Real-time WebSocket connections via Durable Objects
+- 🔐 JWT authentication with OpenAuth
+- 📢 Channel-based pub/sub messaging
+- 👥 User presence tracking (online/offline)
+- 🚦 Rate limiting (100 messages/minute per connection)
+- 📊 Server statistics and monitoring
+
 ## 🚢 Deployment
 
 ### Environments
@@ -146,6 +159,9 @@ pnpm api:deploy
 
 # Deploy processor
 pnpm processor:deploy
+
+# Deploy WebSocket server
+pnpm websocket:deploy
 ```
 
 ### CI/CD Pipeline
@@ -171,6 +187,7 @@ GitHub Actions workflow automatically:
 - **[API Videos](./apps/api-videos/CLAUDE.md)** - API architecture and development
 - **[API Authentication](./apps/api-videos/AUTHENTICATION.md)** - API authentication guide
 - **[Processor](./apps/processor/README.md)** - Queue processor documentation
+- **[WebSocket Server](./apps/websocket-server/DOCUMENTATION.md)** - Real-time WebSocket infrastructure
 
 ### Legacy Docs
 - **[MONOREPO_MIGRATION.md](./MONOREPO_MIGRATION.md)** - Migration history
