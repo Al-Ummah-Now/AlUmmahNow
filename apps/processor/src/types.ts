@@ -31,6 +31,7 @@ export enum MessageType {
   PlaylistRemove,
   PlaylistCreate,
   PlaylistClone,
+  WatchHistory,
 }
 
 // Types for our queue messages
