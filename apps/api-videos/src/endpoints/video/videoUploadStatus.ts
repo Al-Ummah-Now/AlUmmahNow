@@ -147,20 +147,21 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		
 		if (bunnyStreamStatus) {
 			// Map Bunny Stream status to our status
+			// Status: 0=Queued, 1=Processing, 2=Encoding, 3=Finished, 4=Error, 5=Deleted
 			switch (bunnyStreamStatus.status) {
 				case 0: // Queued
 					status = "uploading";
-					progress = 10;
+					progress = Math.max(10, bunnyStreamStatus.encodeProgress || 0);
 					message = "Video upload queued";
 					break;
 				case 1: // Processing
 					status = "processing";
-					progress = 50;
+					progress = Math.max(25, bunnyStreamStatus.encodeProgress || 25);
 					message = "Video is being processed";
 					break;
 				case 2: // Encoding
 					status = "processing";
-					progress = 75;
+					progress = Math.max(50, bunnyStreamStatus.encodeProgress || 50);
 					message = "Video is being encoded";
 					break;
 				case 3: // Finished
@@ -179,6 +180,18 @@ export class VideoUploadStatus extends OpenAPIRoute {
 					message = "Video has been deleted";
 					break;
 			}
+		} else if (video.uploadStatus === 'initiated' || video.uploadStatus === 'uploading') {
+			status = "uploading";
+			progress = 10;
+			message = "Waiting for video upload";
+		} else if (video.uploadStatus === 'processing') {
+			status = "processing";
+			progress = 50;
+			message = "Video is being processed";
+		} else if (video.uploadStatus === 'failed') {
+			status = "failed";
+			progress = 0;
+			message = "Upload or processing failed";
 		}
 
 		// Build response
@@ -189,14 +202,16 @@ export class VideoUploadStatus extends OpenAPIRoute {
 			message,
 			encodingStatus: bunnyStreamStatus ? {
 				isProcessing: bunnyStreamStatus.status === 1 || bunnyStreamStatus.status === 2,
-				encodingProgress: progress,
-				availableResolutions: video.availableResolutions || [],
+				encodingProgress: bunnyStreamStatus.encodeProgress || progress,
+				availableResolutions: bunnyStreamStatus.availableResolutions 
+					? bunnyStreamStatus.availableResolutions.split(',').map(r => r.trim()) 
+					: [],
 			} : undefined,
 			metadata: {
 				title: video.title,
-				duration: bunnyStreamStatus?.length || undefined,
-				fileSize: bunnyStreamStatus?.storageSize || undefined,
-				originalFormat: undefined, // Could be extracted from Bunny Stream data
+				duration: bunnyStreamStatus?.length || video.duration || undefined,
+				fileSize: bunnyStreamStatus?.storageSize || video.fileSize || undefined,
+				originalFormat: video.originalFormat || undefined,
 			},
 			timestamps: {
 				uploadStarted: video.dateCreated,

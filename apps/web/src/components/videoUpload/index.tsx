@@ -1,10 +1,10 @@
 "use client";
 import React, { useState, useRef, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
-import { VideosAPI } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle } from "lucide-react";
+import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus, getBunnyAccessKey } from "@/lib/actions/upload";
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -118,32 +118,123 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     abortControllerRef.current = controller;
 
     try {
-      setUploadProgress({ percentage: 0, stage: 'preparing' });
-      
-      setUploadProgress({ percentage: 10, stage: 'uploading' });
-      onProgress(10);
+      // Step 1: Initiate upload
+      setUploadProgress({ percentage: 5, stage: 'preparing' });
+      onProgress(5);
 
-      // Use the VideosAPI to upload to the external backend (AlUmmahNowVideos repository)
-      const uploadData = {
+      const tagsString = metadata.tags?.join(',') || '';
+      const initiateResult = await initiateVideoUpload({
         title: metadata.title,
         description: metadata.description,
         isPublic: metadata.isPublic,
-        tags: metadata.tags,
-      };
+        tags: tagsString,
+      });
 
-      const headers = {
-        channelId: auth.user.id, // Using user ID as channel ID for now
-        userId: auth.user.id,
-      };
-
-      const result = await VideosAPI.upload(selectedFile, uploadData, headers);
-
-      if (!result) {
-        throw new Error(VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
+      if (!initiateResult.success || !initiateResult.result) {
+        throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
       }
 
-      setUploadProgress({ percentage: 80, stage: 'processing' });
-      onProgress(80);
+      const { videoId, uploadUrl, libraryId } = initiateResult.result;
+
+      // Step 2: Upload file directly to Bunny.net
+      setUploadProgress({ percentage: 10, stage: 'uploading' });
+      onProgress(10);
+
+      // Get Bunny.net access key from server
+      const keyResult = await getBunnyAccessKey();
+      
+      if (!keyResult.success || !keyResult.accessKey) {
+        throw new Error(keyResult.error || "Failed to get Bunny access key");
+      }
+
+      const bunnyKey = keyResult.accessKey;
+
+      // Upload directly to Bunny.net with progress tracking
+      const xhr = new XMLHttpRequest();
+      
+      const uploadPromise = new Promise<void>((resolve, reject) => {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentComplete = Math.round((e.loaded / e.total) * 100);
+            const adjustedPercent = 10 + (percentComplete * 0.6); // Map to 10-70%
+            setUploadProgress({ percentage: adjustedPercent, stage: 'uploading' });
+            onProgress(adjustedPercent);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Network error during upload'));
+        });
+
+        xhr.addEventListener('abort', () => {
+          reject(new Error('Upload cancelled'));
+        });
+
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('AccessKey', bunnyKey);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.send(selectedFile);
+      });
+
+      // Handle abort
+      controller.signal.addEventListener('abort', () => {
+        xhr.abort();
+      });
+
+      await uploadPromise;
+
+      // Step 3: Complete upload
+      setUploadProgress({ percentage: 75, stage: 'processing' });
+      onProgress(75);
+
+      const completeResult = await completeVideoUpload(
+        videoId,
+        selectedFile.size,
+        undefined // Duration will be detected by Bunny.net
+      );
+
+      if (!completeResult.success) {
+        throw new Error(completeResult.error || 'Failed to complete upload');
+      }
+
+      // Step 4: Poll for processing status
+      setUploadProgress({ percentage: 85, stage: 'processing' });
+      onProgress(85);
+
+      // Poll status until ready or timeout
+      let pollCount = 0;
+      const maxPolls = VIDEO_UPLOAD_CONFIG.POLLING.MAX_POLLS;
+
+      while (pollCount < maxPolls) {
+        const statusResult = await getVideoUploadStatus(videoId);
+        
+        if (statusResult.success && statusResult.result) {
+          const { status, progress: encodingProgress } = statusResult.result;
+          
+          // Update progress based on encoding status
+          const overallProgress = 85 + (encodingProgress * 0.15);
+          setUploadProgress({ percentage: overallProgress, stage: 'processing' });
+          onProgress(overallProgress);
+
+          if (status === 'ready') {
+            break;
+          } else if (status === 'failed') {
+            throw new Error('Video processing failed');
+          }
+        }
+
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, VIDEO_UPLOAD_CONFIG.POLLING.INTERVAL_MS));
+        pollCount++;
+      }
 
       setUploadProgress({ percentage: 100, stage: 'complete' });
       onProgress(100);
@@ -159,16 +250,35 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         isPublic: true
       });
 
-      // Type-safe handling of the API response
-      const videoData = result.result?.video;
-      if (videoData) {
-        onUploadComplete(videoData);
-      } else {
-        // Fallback with proper error handling instead of 'as any'
-        throw new Error('Invalid API response: missing video data');
-      }
+      // Create a video object for the callback
+      const videoData: VideoObject = {
+        id: videoId,
+        title: metadata.title,
+        description: metadata.description || null,
+        thumbnailUrl: '',
+        videoUrl: `${VIDEO_UPLOAD_CONFIG.BUNNY_CDN_BASE_URL}/library/${libraryId}/videos/${videoId}`,
+        userId: auth.user.id,
+        channel: auth.user.id, // Using user ID as channel for now
+        channelId: auth.user.id,
+        channelAvatarUrl: '',
+        channelName: auth.user.email || 'Unknown',
+        dateCreated: new Date().toISOString(),
+        dateModified: new Date().toISOString(),
+        views: 0,
+        availableResolutions: [],
+        likesCount: 0,
+        dislikesCount: 0,
+        commentsCount: 0,
+        comments: [],
+        likes: [],
+        dislikes: [],
+        isPublic: metadata.isPublic,
+        isLive: false,
+      };
+
+      onUploadComplete(videoData);
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (error.name === 'AbortError' || error.message === 'Upload cancelled') {
         setUploadProgress(null);
         return;
       }
