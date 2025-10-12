@@ -7,7 +7,7 @@ import { DurableObject } from "cloudflare:workers";
 import { validateJWT, validateJWTBasic, AuthPayload } from './auth';
 import { ChannelManager } from './channels';
 import { PresenceManager } from './presence';
-import { ClientMessage, ServerMessage, RateLimitInfo } from './messages';
+import { ClientMessageSchema, ServerMessage, RateLimitInfo } from './messages';
 
 interface WebSocketConnection {
   webSocket: WebSocket;
@@ -19,6 +19,7 @@ interface WebSocketConnection {
 
 export class WebSocketDurableObject extends DurableObject {
   private connections: Map<WebSocket, WebSocketConnection> = new Map();
+  private sessionToWebSocket: Map<string, WebSocket> = new Map();
   private channelManager: ChannelManager = new ChannelManager();
   private presenceManager: PresenceManager;
   private rateLimits: Map<string, RateLimitInfo> = new Map();
@@ -50,6 +51,13 @@ export class WebSocketDurableObject extends DurableObject {
       return new Response('Expected WebSocket upgrade', { status: 426 });
     }
 
+    // Check connection limit
+    const env = this.env as Env;
+    const maxConnections = env.MAX_CONNECTIONS_PER_DO || 1000;
+    if (this.connections.size >= maxConnections) {
+      return new Response('Connection limit reached', { status: 503 });
+    }
+
     // Parse URL for authentication parameters
     const token = url.searchParams.get('token');
     const userId = url.searchParams.get('userId');
@@ -74,6 +82,9 @@ export class WebSocketDurableObject extends DurableObject {
     };
 
     this.connections.set(server, connection);
+    
+    // Store reverse lookup for efficient broadcasting
+    this.sessionToWebSocket.set(sessionId, server);
 
     // Send connection acknowledgment
     this.sendMessage(server, {
@@ -113,9 +124,33 @@ export class WebSocketDurableObject extends DurableObject {
         return;
       }
 
-      // Parse message
+      // Parse and validate message
       const data = typeof message === 'string' ? message : new TextDecoder().decode(message);
-      const clientMessage = JSON.parse(data) as ClientMessage;
+      
+      // Check message size limit (100KB)
+      if (data.length > 100000) {
+        this.sendMessage(ws, {
+          type: 'error',
+          error: 'Message too large',
+          code: 'PAYLOAD_TOO_LARGE',
+        });
+        return;
+      }
+      
+      const parsedData = JSON.parse(data);
+      
+      // Validate with Zod schema
+      const validationResult = ClientMessageSchema.safeParse(parsedData);
+      if (!validationResult.success) {
+        this.sendMessage(ws, {
+          type: 'error',
+          error: 'Invalid message format',
+          code: 'INVALID_MESSAGE',
+        });
+        return;
+      }
+      
+      const clientMessage = validationResult.data;
 
       // Handle different message types
       switch (clientMessage.type) {
@@ -171,6 +206,12 @@ export class WebSocketDurableObject extends DurableObject {
         await this.presenceManager.setOffline(connection.userId, connection.sessionId);
       }
 
+      // Clean up rate limits to prevent memory leak
+      this.rateLimits.delete(connection.sessionId);
+
+      // Remove from reverse lookup map
+      this.sessionToWebSocket.delete(connection.sessionId);
+
       // Remove connection
       this.connections.delete(ws);
 
@@ -204,8 +245,8 @@ export class WebSocketDurableObject extends DurableObject {
       let authPayload: AuthPayload | null = null;
 
       // Try full validation first (requires env vars to be set)
-      const env = this.env as any;
-      if (env.Issuer && env.ClientId) {
+      const env = this.env as Env;
+      if ('Issuer' in env && 'ClientId' in env && env.Issuer && env.ClientId) {
         authPayload = await validateJWT(token, env);
       } else {
         // Fallback to basic validation for development
@@ -330,14 +371,19 @@ export class WebSocketDurableObject extends DurableObject {
     // Get all subscribers to this channel
     const subscribers = this.channelManager.getChannelSubscribers(channel);
 
-    // Broadcast to all subscribers
+    // Broadcast message in proper format to all subscribers
+    const message: ServerMessage = {
+      type: 'message',
+      channel,
+      data,
+      from: connection.userId,
+      timestamp: Date.now(),
+    };
+
     for (const sessionId of subscribers) {
-      // Find the WebSocket for this session
-      for (const [socket, conn] of this.connections.entries()) {
-        if (conn.sessionId === sessionId) {
-          this.sendMessage(socket, data);
-          break;
-        }
+      const socket = this.sessionToWebSocket.get(sessionId);
+      if (socket) {
+        this.sendMessage(socket, message);
       }
     }
   }
@@ -373,9 +419,10 @@ export class WebSocketDurableObject extends DurableObject {
     const now = Date.now();
     const limit = this.rateLimits.get(sessionId);
 
-    // Rate limit: 100 messages per minute
-    const maxMessages = 100;
-    const windowMs = 60000; // 1 minute
+    // Rate limit: configurable via environment variables
+    const env = this.env as Env;
+    const maxMessages = env.RATE_LIMIT_MESSAGES || 100;
+    const windowMs = env.RATE_LIMIT_WINDOW_MS || 60000; // Default 1 minute
 
     if (!limit || now > limit.resetAt) {
       // Reset or create new limit
@@ -408,16 +455,15 @@ export class WebSocketDurableObject extends DurableObject {
 
   /**
    * Broadcast message to a channel
+   * Optimized with reverse lookup map for O(n) performance
    */
   async broadcast(channel: string, message: ServerMessage): Promise<void> {
     const subscribers = this.channelManager.getChannelSubscribers(channel);
 
     for (const sessionId of subscribers) {
-      for (const [ws, conn] of this.connections.entries()) {
-        if (conn.sessionId === sessionId) {
-          this.sendMessage(ws, message);
-          break;
-        }
+      const ws = this.sessionToWebSocket.get(sessionId);
+      if (ws) {
+        this.sendMessage(ws, message);
       }
     }
   }

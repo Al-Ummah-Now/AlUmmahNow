@@ -7,4 +7,14 @@ interface Env {
 	Issuer?: string;
 	Audience?: string;
 	ClientId?: string;
+	
+	// Internal API key for server-to-server communication
+	INTERNAL_API_KEY?: string;
+	
+	// Rate limiting configuration
+	RATE_LIMIT_MESSAGES?: number;
+	RATE_LIMIT_WINDOW_MS?: number;
+	
+	// Connection limits
+	MAX_CONNECTIONS_PER_DO?: number;
 }

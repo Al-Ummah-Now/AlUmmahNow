@@ -3,6 +3,8 @@
  * Defines all message types exchanged between client and server
  */
 
+import { z } from 'zod';
+
 // Client → Server Messages
 export type ClientMessage =
   | { type: 'authenticate'; token: string }
@@ -11,6 +13,35 @@ export type ClientMessage =
   | { type: 'message'; channel: string; data: any }
   | { type: 'ping'; timestamp: number }
   | { type: 'heartbeat'; timestamp: number };
+
+// Zod schema for validating client messages
+export const ClientMessageSchema = z.discriminatedUnion('type', [
+  z.object({ 
+    type: z.literal('authenticate'), 
+    token: z.string().min(1) 
+  }),
+  z.object({ 
+    type: z.literal('subscribe'), 
+    channel: z.string().min(1).max(100) 
+  }),
+  z.object({ 
+    type: z.literal('unsubscribe'), 
+    channel: z.string().min(1).max(100) 
+  }),
+  z.object({ 
+    type: z.literal('message'), 
+    channel: z.string().min(1).max(100),
+    data: z.any()
+  }),
+  z.object({ 
+    type: z.literal('ping'), 
+    timestamp: z.number() 
+  }),
+  z.object({ 
+    type: z.literal('heartbeat'), 
+    timestamp: z.number() 
+  }),
+]);
 
 // Server → Client Messages
 export type ServerMessage =
@@ -24,7 +55,8 @@ export type ServerMessage =
   | { type: 'pong'; timestamp: number }
   | { type: 'connection_acknowledged'; sessionId: string }
   | { type: 'subscribed'; channel: string }
-  | { type: 'unsubscribed'; channel: string };
+  | { type: 'unsubscribed'; channel: string }
+  | { type: 'message'; channel: string; data: any; from?: string; timestamp: number };
 
 // Data structures
 export interface NotificationData {

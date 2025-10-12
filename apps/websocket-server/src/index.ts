@@ -54,9 +54,18 @@ app.get('/ws', async (c) => {
 /**
  * Broadcast endpoint (for server-to-server communication)
  * Allows other services to send messages to connected clients
+ * Requires INTERNAL_API_KEY for authentication
  */
 app.post('/broadcast', async (c) => {
   try {
+    // Authenticate server-to-server request
+    const apiKey = c.req.header('X-API-Key');
+    if (!apiKey || apiKey !== c.env.INTERNAL_API_KEY) {
+      return c.json({
+        error: 'Unauthorized - Invalid or missing API key',
+      }, 401);
+    }
+
     const { channel, message } = await c.req.json();
 
     if (!channel || !message) {

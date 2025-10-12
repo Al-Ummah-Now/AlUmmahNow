@@ -13,7 +13,7 @@ export class PresenceManager {
   /**
    * Mark a user as online
    */
-  async setOnline(userId: string, sessionId: string): Promise<void> {
+  async setOnline(userId: string, sessionId: string): Promise<boolean> {
     try {
       const key = `presence:${userId}`;
       const sessions = await this.getUserSessions(userId);
@@ -25,15 +25,17 @@ export class PresenceManager {
       await this.kv.put(key, JSON.stringify(Array.from(sessions)), {
         expirationTtl: 300, // 5 minutes
       });
+      return true;
     } catch (error) {
       console.error('Error setting user online:', error);
+      return false;
     }
   }
 
   /**
    * Mark a user session as offline
    */
-  async setOffline(userId: string, sessionId: string): Promise<void> {
+  async setOffline(userId: string, sessionId: string): Promise<boolean> {
     try {
       const key = `presence:${userId}`;
       const sessions = await this.getUserSessions(userId);
@@ -50,8 +52,10 @@ export class PresenceManager {
           expirationTtl: 300,
         });
       }
+      return true;
     } catch (error) {
       console.error('Error setting user offline:', error);
+      return false;
     }
   }
 
@@ -92,7 +96,7 @@ export class PresenceManager {
   /**
    * Refresh user presence (called on heartbeat)
    */
-  async refresh(userId: string, sessionId: string): Promise<void> {
+  async refresh(userId: string, sessionId: string): Promise<boolean> {
     try {
       const key = `presence:${userId}`;
       const sessions = await this.getUserSessions(userId);
@@ -102,9 +106,12 @@ export class PresenceManager {
         await this.kv.put(key, JSON.stringify(Array.from(sessions)), {
           expirationTtl: 300,
         });
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('Error refreshing presence:', error);
+      return false;
     }
   }
 
