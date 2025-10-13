@@ -28,6 +28,8 @@ export function CustomVideoPlayer({
   videoId,
   bunnyVideoId,
   title,
+  channelId, // Now documented: Will be used for analytics tracking
+  userId,    // Now documented: Will be used for watch history
   autoplay = false,
   startTime = 0,
   onPlay,
@@ -42,6 +44,14 @@ export function CustomVideoPlayer({
   const playerRef = useRef<Player | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Store callbacks in refs to avoid re-initialization on callback changes
+  const callbacksRef = useRef({ onPlay, onPause, onEnded, onTimeUpdate, onError });
+
+  // Update callbacks ref when they change
+  useEffect(() => {
+    callbacksRef.current = { onPlay, onPause, onEnded, onTimeUpdate, onError };
+  }, [onPlay, onPause, onEnded, onTimeUpdate, onError]);
 
   useEffect(() => {
     // Ensure we're in browser environment
@@ -60,11 +70,19 @@ export function CustomVideoPlayer({
     const videoElement = document.createElement('video-js');
     videoElement.classList.add('vjs-big-play-centered');
     videoElement.setAttribute('playsinline', '');
-    
+
     // Add accessibility attributes
     videoElement.setAttribute('aria-label', title);
     videoElement.setAttribute('role', 'region');
-    
+
+    // TODO: Add data attributes for analytics tracking
+    if (channelId) {
+      videoElement.setAttribute('data-channel-id', channelId);
+    }
+    if (userId) {
+      videoElement.setAttribute('data-user-id', userId);
+    }
+
     videoRef.current.appendChild(videoElement);
 
     // Get HLS URL from BunnyStreamService
@@ -76,19 +94,20 @@ export function CustomVideoPlayer({
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize video service';
       console.error('BunnyStreamService error:', err);
       setError(errorMessage);
-      if (onError) {
-        onError(err);
+      if (callbacksRef.current.onError) {
+        callbacksRef.current.onError(err);
       }
       return;
     }
 
-    // Initialize Video.js player
+    // Initialize Video.js player with all required features
     const player = videojs(videoElement, {
       autoplay,
       controls: true,
       responsive: true,
       fluid: true,
       preload: 'metadata',
+      playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
       html5: {
         vhs: {
           overrideNative: true,
@@ -103,6 +122,9 @@ export function CustomVideoPlayer({
       }],
       controlBar: {
         pictureInPictureToggle: true,
+        volumePanel: {
+          inline: false
+        }
       },
     });
 
@@ -128,46 +150,46 @@ export function CustomVideoPlayer({
       }
     });
 
-    // Event handlers
+    // Event handlers using refs to avoid re-initialization
     player.on('play', () => {
-      if (onPlay) {
-        onPlay();
+      if (callbacksRef.current.onPlay) {
+        callbacksRef.current.onPlay();
       }
     });
 
     player.on('pause', () => {
-      if (onPause) {
-        onPause();
+      if (callbacksRef.current.onPause) {
+        callbacksRef.current.onPause();
       }
     });
 
     player.on('ended', () => {
-      if (onEnded) {
-        onEnded();
+      if (callbacksRef.current.onEnded) {
+        callbacksRef.current.onEnded();
       }
     });
 
     player.on('timeupdate', () => {
-      if (onTimeUpdate) {
+      if (callbacksRef.current.onTimeUpdate) {
         const currentTime = player.currentTime();
         const duration = player.duration();
         if (!isNaN(currentTime) && !isNaN(duration)) {
-          onTimeUpdate(currentTime, duration);
+          callbacksRef.current.onTimeUpdate(currentTime, duration);
         }
       }
     });
 
     player.on('error', () => {
       const playerError = player.error();
-      const errorMessage = playerError 
-        ? `Video error: ${playerError.message || 'Unknown error'}` 
+      const errorMessage = playerError
+        ? `Video error: ${playerError.message || 'Unknown error'}`
         : 'Video playback error';
-      
+
       console.error('Video.js error:', playerError);
       setError(errorMessage);
-      
-      if (onError) {
-        onError(playerError);
+
+      if (callbacksRef.current.onError) {
+        callbacksRef.current.onError(playerError);
       }
     });
 
@@ -183,7 +205,7 @@ export function CustomVideoPlayer({
         playerRef.current = null;
       }
     };
-  }, [videoId, bunnyVideoId, title, autoplay, startTime, onPlay, onPause, onEnded, onTimeUpdate, onError, rtl]);
+  }, [videoId, bunnyVideoId, title, autoplay, startTime, rtl]); // Removed callback dependencies
 
   // Error state
   if (error) {
