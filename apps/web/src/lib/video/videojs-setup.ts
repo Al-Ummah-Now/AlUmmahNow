@@ -12,6 +12,38 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
       enableLowInitialPlaylist: true,
       smoothQualityChange: true,
       overrideNative: true
+    },
+    nativeTextTracks: true, // Enable native text track rendering for better accessibility
+    nativeAudioTracks: true,
+    nativeVideoTracks: true
+  },
+  // Accessibility: Enable keyboard controls
+  controlBar: {
+    remainingTimeDisplay: true,
+    pictureInPictureToggle: true
+  },
+  // Accessibility: Better UX for screen readers
+  language: 'en',
+  languages: {
+    en: {
+      'Play': 'Play Video',
+      'Pause': 'Pause Video',
+      'Mute': 'Mute Audio',
+      'Unmute': 'Unmute Audio',
+      'Fullscreen': 'Enter Fullscreen',
+      'Exit Fullscreen': 'Exit Fullscreen',
+      'Captions': 'Show Captions',
+      'Subtitles': 'Show Subtitles'
+    },
+    ar: {
+      'Play': 'تشغيل الفيديو',
+      'Pause': 'إيقاف الفيديو',
+      'Mute': 'كتم الصوت',
+      'Unmute': 'إلغاء كتم الصوت',
+      'Fullscreen': 'ملء الشاشة',
+      'Exit Fullscreen': 'الخروج من ملء الشاشة',
+      'Captions': 'إظهار التسميات التوضيحية',
+      'Subtitles': 'إظهار الترجمة'
     }
   }
 };
