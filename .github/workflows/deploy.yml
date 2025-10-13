@@ -205,11 +205,11 @@ jobs:
           pnpm wrangler deploy --dry-run
         timeout-minutes: 2
 
-  # Deploy Web App Preview (PRs only)
+  # Deploy Web App Preview (PRs only, when requested via label)
   deploy-web-preview:
     needs: build-web
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     environment: preview
     steps:
       - uses: actions/checkout@v4
@@ -306,11 +306,11 @@ jobs:
               });
             }
 
-  # Deploy API Videos Preview (PRs only)
+  # Deploy API Videos Preview (PRs only, when requested via label)
   deploy-api-preview:
     needs: validate-api
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     environment: preview
     steps:
       - uses: actions/checkout@v4
@@ -392,11 +392,11 @@ jobs:
               });
             }
 
-  # Deploy Processor Preview (PRs only)
+  # Deploy Processor Preview (PRs only, when requested via label)
   deploy-processor-preview:
     needs: validate-processor
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     environment: preview
     steps:
       - uses: actions/checkout@v4
@@ -476,11 +476,11 @@ jobs:
               });
             }
 
-  # Deploy WebSocket Server Preview (PRs only)
+  # Deploy WebSocket Server Preview (PRs only, when requested via label)
   deploy-websocket-preview:
     needs: validate-websocket
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     environment: preview
     steps:
       - uses: actions/checkout@v4
