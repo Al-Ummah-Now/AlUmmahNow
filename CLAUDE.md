@@ -152,17 +152,22 @@ cd apps/processor && pnpm lint:fix
    - `validate-api`: Type check + dry-run deployment
    - `validate-processor`: Type check + run tests
 
-**Pull Request Previews**:
-- **Web**: `al-ummah-web-pr-{number}.workers.dev`
-- **API**: `al-ummah-api-pr-{number}.workers.dev` (with Swagger UI)
-- **Processor**: `al-ummah-processor-pr-{number}` (development env)
+**Pull Request Previews** (opt-in only):
+- **Disabled by default** - preview deployments only run when requested
+- **To deploy previews**: Add `deploy-preview` label to your PR
+- **Workers deployed** (when label is present):
+  - **Web**: `al-ummah-web-pr-{number}.workers.dev`
+  - **API**: `al-ummah-api-pr-{number}.workers.dev` (with Swagger UI)
+  - **Processor**: `al-ummah-processor-pr-{number}` (development env)
+  - **WebSocket**: `al-ummah-comms-pr-{number}.workers.dev`
 - Each app posts separate PR comment with deployment info
 - Auto-cleanup when PR closes
+- **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
 **Staging Deployment** (main branch):
-- All 3 apps deployed in parallel after validation
+- All 4 apps deployed in parallel after validation
 - Web uses `wrangler.staging.jsonc`
-- API and Processor use `--env staging`
+- API, Processor, and WebSocket use `--env staging`
 
 **Production Deployment** (after staging):
 - All 3 apps deployed to production
