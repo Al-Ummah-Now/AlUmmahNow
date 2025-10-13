@@ -201,7 +201,7 @@ function MyVideoPage() {
           ℹ️ To use this example with real videos:
         </h3>
         <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800 dark:text-blue-200">
-          <li>Replace 'your-bunny-video-guid' with an actual Bunny.net video GUID</li>
+          <li>Replace &apos;your-bunny-video-guid&apos; with an actual Bunny.net video GUID</li>
           <li>Ensure environment variables are set (see .env.example)</li>
           <li>Open browser console to see event logs</li>
           <li>Test resume functionality by refreshing the page while playing</li>
