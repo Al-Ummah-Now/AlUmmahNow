@@ -99,13 +99,7 @@ Control icons have text-shadow for better visibility:
 ### 4. Captions and Subtitles
 
 #### Native Text Track Support
-```typescript
-html5: {
-  nativeTextTracks: true,
-  nativeAudioTracks: true,
-  nativeVideoTracks: true
-}
-```
+Video.js uses native browser text track rendering by default, providing optimal accessibility and performance for captions and subtitles.
 
 #### Adding Captions
 Captions can be added using WebVTT format:

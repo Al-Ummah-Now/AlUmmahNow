@@ -12,10 +12,7 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
       enableLowInitialPlaylist: true,
       smoothQualityChange: true,
       overrideNative: true
-    },
-    nativeTextTracks: true, // Enable native text track rendering for better accessibility
-    nativeAudioTracks: true,
-    nativeVideoTracks: true
+    }
   },
   // Accessibility: Enable keyboard controls
   controlBar: {
