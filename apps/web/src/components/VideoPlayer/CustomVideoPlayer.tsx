@@ -173,7 +173,9 @@ export function CustomVideoPlayer({
       if (callbacksRef.current.onTimeUpdate) {
         const currentTime = player.currentTime();
         const duration = player.duration();
-        if (!isNaN(currentTime) && !isNaN(duration)) {
+        // Add explicit type guards for number | undefined
+        if (typeof currentTime === 'number' && typeof duration === 'number' &&
+            !isNaN(currentTime) && !isNaN(duration)) {
           callbacksRef.current.onTimeUpdate(currentTime, duration);
         }
       }
