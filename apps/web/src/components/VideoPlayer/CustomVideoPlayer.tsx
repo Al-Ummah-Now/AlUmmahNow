@@ -82,7 +82,7 @@ export function CustomVideoPlayer({
     videoElement.setAttribute('aria-label', title);
     videoElement.setAttribute('role', 'region');
 
-    // TODO: Add data attributes for analytics tracking
+    // Add data attributes for analytics tracking (ready for consumption by analytics service)
     if (channelId) {
       videoElement.setAttribute('data-channel-id', channelId);
     }
