@@ -77,10 +77,12 @@ export class VideoFallbackStrategy {
     // Add MP4 sources in preferred quality order
     if (mp4Urls) {
       for (const quality of this.config.qualityFallbackOrder) {
-        if (mp4Urls[quality]) {
+        const url = mp4Urls[quality];
+        // Validate URL is a non-empty string
+        if (url && typeof url === 'string' && url.trim().length > 0) {
           this.availableSources.push({
             type: 'mp4',
-            url: mp4Urls[quality],
+            url: url,
             quality,
             label: quality.toUpperCase(),
           });
@@ -165,14 +167,16 @@ export class VideoFallbackStrategy {
    */
   getPreferredMp4Url(mp4Urls: Record<VideoQuality, string>): string | null {
     // Try preferred quality first
-    if (mp4Urls[this.config.preferredQuality]) {
-      return mp4Urls[this.config.preferredQuality];
+    const preferredUrl = mp4Urls[this.config.preferredQuality];
+    if (preferredUrl && typeof preferredUrl === 'string' && preferredUrl.trim().length > 0) {
+      return preferredUrl;
     }
 
     // Try quality fallback order
     for (const quality of this.config.qualityFallbackOrder) {
-      if (mp4Urls[quality]) {
-        return mp4Urls[quality];
+      const url = mp4Urls[quality];
+      if (url && typeof url === 'string' && url.trim().length > 0) {
+        return url;
       }
     }
 

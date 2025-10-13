@@ -239,8 +239,9 @@ export default function CustomVideoPlayer({
         });
 
         player.on('error', () => {
-          // Get error from player - using any to bypass type issues with Video.js types
-          const playerError = (player as any).error();
+          // Get error from player - Video.js Player has error() method
+          // Type assertion needed as Video.js types don't fully expose this
+          const playerError = (player as Player & { error: () => MediaError | null }).error();
           if (playerError) {
             handleVideoError(playerError);
           }

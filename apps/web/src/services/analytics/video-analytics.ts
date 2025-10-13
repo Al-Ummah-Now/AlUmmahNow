@@ -192,7 +192,17 @@ export class VideoAnalytics {
   private storeEventsLocally(events: AnalyticsEvent[]): void {
     try {
       const stored = localStorage.getItem('pendingVideoAnalytics') || '[]';
-      const pending = JSON.parse(stored) as AnalyticsEvent[];
+
+      // Safely parse JSON with validation
+      let pending: AnalyticsEvent[];
+      try {
+        const parsed = JSON.parse(stored);
+        pending = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        // If parsing fails or result isn't an array, start fresh
+        pending = [];
+      }
+
       localStorage.setItem(
         'pendingVideoAnalytics',
         JSON.stringify([...pending, ...events])
@@ -238,10 +248,24 @@ export class VideoAnalytics {
   }
 
   /**
-   * Generate unique session ID
+   * Generate unique session ID using crypto.getRandomValues()
+   * for better entropy than Math.random()
    */
   private generateSessionId(): string {
     const timestamp = Date.now();
+
+    // Use crypto.getRandomValues for better randomness
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+      const randomBytes = new Uint8Array(6);
+      window.crypto.getRandomValues(randomBytes);
+      const random = Array.from(randomBytes)
+        .map(byte => byte.toString(36))
+        .join('')
+        .substring(0, 9);
+      return `${timestamp}-${random}`;
+    }
+
+    // Fallback to Math.random for environments without crypto API
     const random = Math.random().toString(36).substring(2, 11);
     return `${timestamp}-${random}`;
   }
