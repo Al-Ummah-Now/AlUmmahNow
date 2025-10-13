@@ -1,0 +1,106 @@
+/* Custom Video.js Theme for Al Ummah Now */
+
+/* Extend base video-player.css with component-specific styles */
+
+.video-player-container {
+  position: relative;
+  width: 100%;
+}
+
+.video-player-container .video-js {
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading state */
+.video-player-container .vjs-loading-spinner {
+  border-color: oklch(var(--primary) / 0.3);
+  border-top-color: oklch(var(--primary));
+}
+
+/* Ensure proper aspect ratio */
+.video-player-container .aspect-video {
+  aspect-ratio: 16 / 9;
+}
+
+/* Error display styling */
+.video-player-container .vjs-error-display {
+  background-color: oklch(var(--destructive) / 0.1);
+  border: 1px solid oklch(var(--destructive) / 0.3);
+  border-radius: 0.5rem;
+}
+
+.video-player-container .vjs-error-display .vjs-modal-dialog-content {
+  color: oklch(var(--destructive-foreground));
+  font-size: 0.875rem;
+}
+
+/* Progress bar customization */
+.video-player-container .vjs-play-progress {
+  background-color: oklch(var(--primary));
+}
+
+.video-player-container .vjs-load-progress {
+  background-color: oklch(var(--primary) / 0.3);
+}
+
+/* Volume slider */
+.video-player-container .vjs-volume-level {
+  background-color: oklch(var(--primary));
+}
+
+/* Fullscreen button focus */
+.video-player-container .vjs-fullscreen-control:focus-visible {
+  outline: 2px solid oklch(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Time display */
+.video-player-container .vjs-time-control {
+  font-variant-numeric: tabular-nums;
+  min-width: 4rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .video-player-container .vjs-time-control {
+    min-width: 3rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* RTL-specific adjustments */
+[dir="rtl"] .video-player-container .vjs-control-bar {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .video-player-container .vjs-progress-control {
+  order: 0;
+}
+
+/* Accessibility: Screen reader only class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Shimmer animation for skeleton */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
