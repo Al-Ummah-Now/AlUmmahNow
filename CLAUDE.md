@@ -15,6 +15,63 @@ All apps share TypeScript types via `@al-ummah/shared-types` workspace package.
 
 **Repository**: https://github.com/meywd/AlUmmahNow
 
+## Code Quality Standards
+
+### TODO Comments Policy
+
+**PROHIBITED**: Never add TODO comments to code. Either implement it immediately or don't do it.
+
+**Rationale**: TODO comments accumulate technical debt, become stale, and are often forgotten. They create ambiguity about whether functionality is complete.
+
+**Instead of TODO comments**:
+1. ✅ **Implement it now** - If it's needed, do it immediately
+2. ✅ **Create a GitHub issue** - For future work that's out of scope
+3. ✅ **Document design decisions** - Use clear comments explaining "why", not "what's missing"
+4. ✅ **Use feature flags** - For incomplete features that need to ship
+
+**Examples**:
+
+❌ **WRONG - Never do this:**
+```typescript
+// TODO: Add input validation
+function processData(data: any) {
+  return data;
+}
+
+// TODO: Implement caching
+function fetchData() {
+  return fetch('/api/data');
+}
+```
+
+✅ **CORRECT - Do this instead:**
+```typescript
+// Option 1: Implement it now
+function processData(data: DataType) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Invalid data');
+  }
+  return data;
+}
+
+// Option 2: Create an issue and document the decision
+// Note: Caching will be implemented in Phase 2 (see issue #123)
+// Current implementation prioritizes correctness over performance
+function fetchData() {
+  return fetch('/api/data');
+}
+
+// Option 3: Use a feature flag for incomplete work
+function fetchData() {
+  if (FEATURE_FLAGS.enableCaching) {
+    return getCachedData();
+  }
+  return fetch('/api/data');
+}
+```
+
+**Enforcement**: Code reviews will reject PRs containing TODO comments.
+
 ## Monorepo Structure
 
 ```
