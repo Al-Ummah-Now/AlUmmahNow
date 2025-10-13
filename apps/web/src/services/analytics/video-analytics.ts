@@ -1,0 +1,334 @@
+/**
+ * Video Analytics Service
+ *
+ * Tracks video playback events with:
+ * - Event queueing and batch sending
+ * - Automatic flush on timer and page unload
+ * - LocalStorage backup for offline scenarios
+ * - Non-blocking implementation (never blocks video playback)
+ *
+ * Phase 1.5: Basic events (ready, play, pause, ended, error)
+ * Phase 3: Advanced events (seek, timeupdate, quality changes, etc.)
+ */
+
+import {
+  AnalyticsEvent,
+  AnalyticsConfig,
+  AnalyticsBatch,
+  VideoEventType,
+  VideoError
+} from './types';
+
+/**
+ * Main VideoAnalytics class for tracking video events
+ */
+export class VideoAnalytics {
+  private videoId: string;
+  private userId?: string;
+  private sessionId: string;
+  private startTime: number;
+  private eventQueue: AnalyticsEvent[] = [];
+  private flushInterval?: ReturnType<typeof setInterval>;
+  private config: AnalyticsConfig;
+  private unloadHandler?: () => void;
+  private visibilityHandler?: () => void;
+
+  constructor(
+    videoId: string,
+    userId?: string,
+    config?: Partial<AnalyticsConfig>
+  ) {
+    this.videoId = videoId;
+    this.userId = userId;
+    this.sessionId = this.generateSessionId();
+    this.startTime = Date.now();
+
+    this.config = {
+      endpoint: '/api/analytics/video',
+      batchSize: 20,
+      flushInterval: 30000, // 30 seconds
+      enableDebugLogging: process.env.NODE_ENV === 'development',
+      ...config
+    };
+
+    this.startFlushTimer();
+    this.setupUnloadHandler();
+  }
+
+  /**
+   * Track video player ready event
+   */
+  trackReady(): void {
+    this.addEvent({
+      eventType: VideoEventType.READY,
+      relativeTime: Date.now() - this.startTime
+    });
+  }
+
+  /**
+   * Track play event
+   */
+  trackPlay(): void {
+    this.addEvent({
+      eventType: VideoEventType.PLAY,
+      relativeTime: Date.now() - this.startTime
+    });
+  }
+
+  /**
+   * Track pause event
+   */
+  trackPause(): void {
+    this.addEvent({
+      eventType: VideoEventType.PAUSE,
+      relativeTime: Date.now() - this.startTime
+    });
+  }
+
+  /**
+   * Track video ended event
+   */
+  trackComplete(): void {
+    this.addEvent({
+      eventType: VideoEventType.ENDED,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        totalWatchTime: Date.now() - this.startTime
+      }
+    });
+
+    // Flush immediately on completion
+    void this.flush();
+  }
+
+  /**
+   * Track error event
+   */
+  trackError(error: VideoError): void {
+    this.addEvent({
+      eventType: VideoEventType.ERROR,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        code: error?.code,
+        message: error?.message,
+        type: error?.type
+      }
+    });
+
+    // Flush errors immediately
+    void this.flush();
+  }
+
+  /**
+   * Add event to queue
+   */
+  private addEvent(event: Partial<AnalyticsEvent>): void {
+    const fullEvent: AnalyticsEvent = {
+      videoId: this.videoId,
+      userId: this.userId,
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      relativeTime: Date.now() - this.startTime,
+      eventType: event.eventType as VideoEventType,
+      ...event
+    };
+
+    this.eventQueue.push(fullEvent);
+
+    if (this.config.enableDebugLogging) {
+      console.log('[VideoAnalytics]', fullEvent.eventType, fullEvent);
+    }
+
+    // Flush if queue is full
+    if (this.eventQueue.length >= this.config.batchSize) {
+      void this.flush();
+    }
+  }
+
+  /**
+   * Flush events to server
+   */
+  private async flush(): Promise<void> {
+    if (this.eventQueue.length === 0) {
+      return;
+    }
+
+    const events = [...this.eventQueue];
+    this.eventQueue = [];
+
+    try {
+      const batch: AnalyticsBatch = { events };
+
+      const response = await fetch(this.config.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(batch),
+        keepalive: true  // Important for beforeunload
+      });
+
+      if (!response.ok) {
+        throw new Error(`Analytics flush failed: ${response.status}`);
+      }
+
+      if (this.config.enableDebugLogging) {
+        console.log('[VideoAnalytics] Flushed', events.length, 'events');
+      }
+    } catch (error) {
+      console.error('[VideoAnalytics] Failed to send events:', error);
+
+      // Re-add events to queue on failure
+      this.eventQueue.unshift(...events);
+
+      // Store in localStorage as backup
+      this.storeEventsLocally(events);
+    }
+  }
+
+  /**
+   * Store events in localStorage as backup
+   */
+  private storeEventsLocally(events: AnalyticsEvent[]): void {
+    try {
+      const stored = localStorage.getItem('pendingVideoAnalytics') || '[]';
+      const pending = JSON.parse(stored) as AnalyticsEvent[];
+      localStorage.setItem(
+        'pendingVideoAnalytics',
+        JSON.stringify([...pending, ...events])
+      );
+
+      if (this.config.enableDebugLogging) {
+        console.log('[VideoAnalytics] Stored', events.length, 'events locally');
+      }
+    } catch (error) {
+      console.error('[VideoAnalytics] Failed to store events locally:', error);
+    }
+  }
+
+  /**
+   * Start automatic flush timer
+   */
+  private startFlushTimer(): void {
+    this.flushInterval = setInterval(() => {
+      void this.flush();
+    }, this.config.flushInterval);
+  }
+
+  /**
+   * Setup handler to flush on page unload and visibility change
+   */
+  private setupUnloadHandler(): void {
+    // Flush on page unload
+    this.unloadHandler = () => {
+      void this.flush();
+    };
+
+    // Flush on visibility change (tab hidden)
+    this.visibilityHandler = () => {
+      if (document.hidden) {
+        void this.flush();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.unloadHandler);
+      document.addEventListener('visibilitychange', this.visibilityHandler);
+    }
+  }
+
+  /**
+   * Generate unique session ID
+   */
+  private generateSessionId(): string {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 11);
+    return `${timestamp}-${random}`;
+  }
+
+  /**
+   * Clean up resources
+   */
+  destroy(): void {
+    // Flush remaining events
+    void this.flush();
+
+    // Clear flush timer
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval);
+      this.flushInterval = undefined;
+    }
+
+    // Remove event handlers
+    if (typeof window !== 'undefined') {
+      if (this.unloadHandler) {
+        window.removeEventListener('beforeunload', this.unloadHandler);
+        this.unloadHandler = undefined;
+      }
+      if (this.visibilityHandler) {
+        document.removeEventListener('visibilitychange', this.visibilityHandler);
+        this.visibilityHandler = undefined;
+      }
+    }
+  }
+
+  /**
+   * Get current session ID (for testing/debugging)
+   */
+  getSessionId(): string {
+    return this.sessionId;
+  }
+
+  /**
+   * Get current queue length (for testing/debugging)
+   */
+  getQueueLength(): number {
+    return this.eventQueue.length;
+  }
+}
+
+/**
+ * Singleton factory for managing multiple analytics instances
+ */
+const activeAnalytics = new Map<string, VideoAnalytics>();
+
+/**
+ * Get or create VideoAnalytics instance
+ */
+export function getVideoAnalytics(
+  videoId: string,
+  userId?: string
+): VideoAnalytics {
+  const key = `${videoId}-${userId || 'anonymous'}`;
+
+  if (!activeAnalytics.has(key)) {
+    const analytics = new VideoAnalytics(videoId, userId);
+    activeAnalytics.set(key, analytics);
+  }
+
+  return activeAnalytics.get(key)!;
+}
+
+/**
+ * Destroy and remove analytics instance
+ */
+export function destroyVideoAnalytics(
+  videoId: string,
+  userId?: string
+): void {
+  const key = `${videoId}-${userId || 'anonymous'}`;
+
+  if (activeAnalytics.has(key)) {
+    const analytics = activeAnalytics.get(key)!;
+    analytics.destroy();
+    activeAnalytics.delete(key);
+  }
+}
+
+/**
+ * Clear all analytics instances
+ */
+export function clearAllAnalytics(): void {
+  activeAnalytics.forEach(analytics => analytics.destroy());
+  activeAnalytics.clear();
+}
