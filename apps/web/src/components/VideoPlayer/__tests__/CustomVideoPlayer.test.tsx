@@ -50,7 +50,7 @@ describe('CustomVideoPlayer', () => {
     } as any);
   });
 
-  it('should render without errors', () => {
+  it('should render without errors', async () => {
     render(
       <CustomVideoPlayer
         videoId="test-video-1"
@@ -59,7 +59,10 @@ describe('CustomVideoPlayer', () => {
       />
     );
 
-    expect(screen.getByText('Loading video player...')).toBeInTheDocument();
+    // The player initializes quickly in tests, so check for ready state
+    await waitFor(() => {
+      expect(screen.getByText('Test Video - Video player ready')).toBeInTheDocument();
+    });
   });
 
   it('should initialize Video.js player with correct configuration', async () => {

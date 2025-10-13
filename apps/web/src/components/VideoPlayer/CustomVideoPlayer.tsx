@@ -68,6 +68,13 @@ export function CustomVideoPlayer({
 
     // Create video element
     const videoElement = document.createElement('video-js');
+
+    // Guard against null element (can happen in test environments)
+    if (!videoElement) {
+      console.error('Failed to create video element');
+      return;
+    }
+
     videoElement.classList.add('vjs-big-play-centered');
     videoElement.setAttribute('playsinline', '');
 
@@ -207,7 +214,7 @@ export function CustomVideoPlayer({
         playerRef.current = null;
       }
     };
-  }, [videoId, bunnyVideoId, title, autoplay, startTime, rtl]); // Removed callback dependencies
+  }, [videoId, bunnyVideoId, title, channelId, userId, autoplay, startTime, rtl]); // Removed callback dependencies
 
   // Error state
   if (error) {
