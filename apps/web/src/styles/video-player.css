@@ -7,13 +7,35 @@
 .video-js .vjs-big-play-button {
   border-radius: 50%;
   border: none;
-  background-color: rgba(43, 51, 63, 0.9);
+  background-color: oklch(var(--primary) / 0.9);
+  transition: background-color 0.2s ease;
+}
+
+.video-js .vjs-big-play-button:hover {
+  background-color: oklch(var(--primary) / 1);
 }
 
 .video-js .vjs-control-bar {
   background: linear-gradient(
     to top,
-    rgba(0, 0, 0, 0.8),
+    oklch(var(--background) / 0.8),
+    transparent
+  );
+}
+
+/* Dark mode specific adjustments */
+.dark .video-js .vjs-big-play-button {
+  background-color: oklch(var(--primary) / 0.85);
+}
+
+.dark .video-js .vjs-big-play-button:hover {
+  background-color: oklch(var(--primary) / 1);
+}
+
+.dark .video-js .vjs-control-bar {
+  background: linear-gradient(
+    to top,
+    oklch(var(--card) / 0.9),
     transparent
   );
 }
