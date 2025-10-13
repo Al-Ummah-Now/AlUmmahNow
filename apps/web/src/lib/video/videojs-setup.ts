@@ -34,13 +34,25 @@ export function createVideoPlayer(
   options: PlayerOptions
 ): Player {
   try {
-    return videojs(element, {
+    const player = videojs(element, {
       ...VIDEO_JS_OPTIONS,
       ...options
     });
+
+    // Initialize quality selector plugin when player is ready
+    player.ready(() => {
+      if (player.hlsQualitySelector) {
+        player.hlsQualitySelector({
+          displayCurrentQuality: true
+        });
+      }
+    });
+
+    return player;
   } catch (error) {
     console.error('Failed to create video player:', error);
-    throw new Error('Video player initialization failed');
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Video player initialization failed: ${errorMessage}`);
   }
 }
 

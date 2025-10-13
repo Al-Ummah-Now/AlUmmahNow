@@ -12,6 +12,9 @@ export default function VideoPlayerTest() {
   useEffect(() => {
     if (!videoRef.current) return;
 
+    // Prevent double initialization in React Strict Mode
+    if (playerRef.current) return;
+
     // Initialize Video.js player
     playerRef.current = createVideoPlayer(videoRef.current, {
       controls: true,
