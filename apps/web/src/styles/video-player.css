@@ -1,0 +1,98 @@
+@import 'video.js/dist/video-js.css';
+
+.video-js {
+  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/* Big play button styling */
+.video-js .vjs-big-play-button {
+  border-radius: 50%;
+  border: none;
+  background-color: oklch(var(--primary) / 0.9);
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.video-js .vjs-big-play-button:hover {
+  background-color: oklch(var(--primary) / 1);
+  transform: scale(1.05);
+}
+
+/* Accessibility: Visible focus indicator for keyboard navigation */
+.video-js .vjs-big-play-button:focus-visible {
+  outline: 3px solid oklch(var(--ring));
+  outline-offset: 4px;
+  background-color: oklch(var(--primary) / 1);
+}
+
+/* Control bar styling */
+.video-js .vjs-control-bar {
+  background: linear-gradient(
+    to top,
+    oklch(var(--background) / 0.8),
+    transparent
+  );
+}
+
+/* Accessibility: Focus indicators for control buttons */
+.video-js .vjs-control-bar button:focus-visible {
+  outline: 2px solid oklch(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Accessibility: Enhanced contrast for control icons */
+.video-js .vjs-control-bar .vjs-icon-placeholder::before {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Dark mode specific adjustments */
+.dark .video-js .vjs-big-play-button {
+  background-color: oklch(var(--primary) / 0.85);
+}
+
+.dark .video-js .vjs-big-play-button:hover {
+  background-color: oklch(var(--primary) / 1);
+  transform: scale(1.05);
+}
+
+.dark .video-js .vjs-big-play-button:focus-visible {
+  outline-color: oklch(var(--ring));
+}
+
+.dark .video-js .vjs-control-bar {
+  background: linear-gradient(
+    to top,
+    oklch(var(--card) / 0.9),
+    transparent
+  );
+}
+
+.dark .video-js .vjs-control-bar button:focus-visible {
+  outline-color: oklch(var(--ring));
+}
+
+/* RTL support */
+[dir="rtl"] .video-js .vjs-control-bar {
+  direction: rtl;
+}
+
+/* Accessibility: High contrast mode support */
+@media (prefers-contrast: high) {
+  .video-js .vjs-big-play-button {
+    border: 3px solid currentColor;
+  }
+
+  .video-js .vjs-control-bar {
+    background: oklch(var(--background));
+  }
+}
+
+/* Accessibility: Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .video-js .vjs-big-play-button {
+    transition: none;
+  }
+
+  .video-js .vjs-big-play-button:hover {
+    transform: none;
+  }
+}
