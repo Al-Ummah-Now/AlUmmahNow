@@ -1,8 +1,15 @@
 import videojs from 'video.js';
 
 declare module 'video.js' {
+  export interface HlsQualitySelectorOptions {
+    displayCurrentQuality?: boolean;
+    vjsIconClass?: string;
+  }
+
+  export type VideoJsEventCallback = (event?: Event) => void;
+
   export interface Player {
-    hlsQualitySelector?: (options?: any) => void;
+    hlsQualitySelector?: (options?: HlsQualitySelectorOptions) => void;
     pictureInPictureEnabled?: boolean;
     requestPictureInPicture?: () => Promise<void>;
     isDisposed(): boolean;
@@ -19,9 +26,9 @@ declare module 'video.js' {
     muted(muted: boolean): void;
     src(source: string | Array<{ src: string; type: string }>): void;
     poster(url: string): void;
-    on(event: string, callback: (...args: any[]) => void): void;
-    off(event: string, callback?: (...args: any[]) => void): void;
-    one(event: string, callback: (...args: any[]) => void): void;
+    on(event: string, callback: VideoJsEventCallback): void;
+    off(event: string, callback?: VideoJsEventCallback): void;
+    one(event: string, callback: VideoJsEventCallback): void;
     ready(callback: () => void): void;
   }
 

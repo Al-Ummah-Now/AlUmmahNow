@@ -17,16 +17,40 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
   }
 };
 
+/**
+ * Creates a Video.js player instance with HLS streaming support
+ * @param element - The HTML video element to initialize
+ * @param options - Video.js player options (merged with defaults)
+ * @returns Initialized Video.js player instance
+ * @throws Error if player initialization fails
+ * @example
+ * const player = createVideoPlayer(videoElement, {
+ *   controls: true,
+ *   sources: [{ src: 'video.m3u8', type: 'application/x-mpegURL' }]
+ * });
+ */
 export function createVideoPlayer(
   element: HTMLVideoElement,
   options: PlayerOptions
 ): Player {
-  return videojs(element, {
-    ...VIDEO_JS_OPTIONS,
-    ...options
-  });
+  try {
+    return videojs(element, {
+      ...VIDEO_JS_OPTIONS,
+      ...options
+    });
+  } catch (error) {
+    console.error('Failed to create video player:', error);
+    throw new Error('Video player initialization failed');
+  }
 }
 
+/**
+ * Safely disposes a Video.js player instance
+ * @param player - The Video.js player to dispose, or null
+ * @example
+ * disposeVideoPlayer(playerRef.current);
+ * playerRef.current = null;
+ */
 export function disposeVideoPlayer(player: Player | null) {
   if (player && !player.isDisposed()) {
     player.dispose();

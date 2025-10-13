@@ -42,7 +42,7 @@ export default function VideoPlayerTest() {
       <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded">
         <h2 className="font-semibold mb-2">Test Info:</h2>
         <ul className="list-disc list-inside text-sm">
-          <li>Video.js version: 8.12.0</li>
+          <li>Video.js version: 8.23.4</li>
           <li>HLS streaming enabled</li>
           <li>Quality selector plugin loaded</li>
           <li>Custom theme applied</li>
