@@ -64,16 +64,16 @@ const hlsUrl = service.getHlsUrl('video-guid-123');
 ```typescript
 // Single quality level
 const mp4Url = service.getMp4Url('video-guid-123', '720p');
-// Returns: https://vz-xxxxx.b-cdn.net/video-guid-123/play_720p.mp4
+// Returns: https://vz-xxxxx.b-cdn.net/video-guid-123/play_720.mp4
 
 // All quality levels
 const mp4Urls = service.getAllMp4Urls('video-guid-123');
 // Returns: {
-//   '240p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_240p.mp4',
-//   '360p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_360p.mp4',
-//   '480p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_480p.mp4',
-//   '720p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_720p.mp4',
-//   '1080p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_1080p.mp4',
+//   '240p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_240.mp4',
+//   '360p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_360.mp4',
+//   '480p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_480.mp4',
+//   '720p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_720.mp4',
+//   '1080p': 'https://vz-xxxxx.b-cdn.net/video-guid-123/play_1080.mp4',
 // }
 ```
 

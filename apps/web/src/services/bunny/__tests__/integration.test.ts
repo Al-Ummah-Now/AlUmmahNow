@@ -145,7 +145,7 @@ describe('BunnyStreamService Integration', () => {
     const baseUrl = `https://${config.pullZoneUrl}/${videoId}`;
 
     expect(service.getHlsUrl(videoId)).toBe(`${baseUrl}/playlist.m3u8`);
-    expect(service.getMp4Url(videoId, '720p')).toBe(`${baseUrl}/play_720p.mp4`);
+    expect(service.getMp4Url(videoId, '720p')).toBe(`${baseUrl}/play_720.mp4`);
     expect(service.getThumbnailUrl(videoId)).toBe(`${baseUrl}/thumbnail.jpg`);
     expect(service.getPreviewUrl(videoId)).toBe(`${baseUrl}/preview.webp`);
     expect(service.getCaptionUrl(videoId, 'en')).toBe(`${baseUrl}/captions/en.vtt`);

@@ -103,17 +103,17 @@ export class BunnyStreamService {
    * @example
    * ```typescript
    * const mp4Url = service.getMp4Url('abc123-def456', '720p');
-   * // Returns: https://vz-xxxxx.b-cdn.net/abc123-def456/play_720p.mp4
+   * // Returns: https://vz-xxxxx.b-cdn.net/abc123-def456/play_720.mp4
    * ```
    */
   getMp4Url(videoId: string, quality: VideoQuality, tokenOptions?: TokenOptions): string {
     const baseUrl = this.getBaseUrl(videoId);
-    const url = `${baseUrl}/play_${QualityResolutionMap[quality]}p.mp4`;
-    
+    const url = `${baseUrl}/play_${QualityResolutionMap[quality]}.mp4`;
+
     if (this.tokenAuthEnabled && tokenOptions) {
       return this.addTokenAuth(url, tokenOptions);
     }
-    
+
     return url;
   }
 
@@ -128,8 +128,8 @@ export class BunnyStreamService {
    * ```typescript
    * const mp4Urls = service.getAllMp4Urls('abc123-def456');
    * // Returns: {
-   * //   '240p': 'https://vz-xxxxx.b-cdn.net/abc123-def456/play_240p.mp4',
-   * //   '360p': 'https://vz-xxxxx.b-cdn.net/abc123-def456/play_360p.mp4',
+   * //   '240p': 'https://vz-xxxxx.b-cdn.net/abc123-def456/play_240.mp4',
+   * //   '360p': 'https://vz-xxxxx.b-cdn.net/abc123-def456/play_360.mp4',
    * //   ...
    * // }
    * ```

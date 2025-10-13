@@ -65,38 +65,38 @@ describe('BunnyStreamService', () => {
     it('should generate correct MP4 URL for 240p', () => {
       const service = new BunnyStreamService(mockConfig);
       const url = service.getMp4Url(testVideoId, '240p');
-      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_240p.mp4`);
+      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_240.mp4`);
     });
 
     it('should generate correct MP4 URL for 360p', () => {
       const service = new BunnyStreamService(mockConfig);
       const url = service.getMp4Url(testVideoId, '360p');
-      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_360p.mp4`);
+      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_360.mp4`);
     });
 
     it('should generate correct MP4 URL for 480p', () => {
       const service = new BunnyStreamService(mockConfig);
       const url = service.getMp4Url(testVideoId, '480p');
-      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_480p.mp4`);
+      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_480.mp4`);
     });
 
     it('should generate correct MP4 URL for 720p', () => {
       const service = new BunnyStreamService(mockConfig);
       const url = service.getMp4Url(testVideoId, '720p');
-      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_720p.mp4`);
+      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_720.mp4`);
     });
 
     it('should generate correct MP4 URL for 1080p', () => {
       const service = new BunnyStreamService(mockConfig);
       const url = service.getMp4Url(testVideoId, '1080p');
-      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_1080p.mp4`);
+      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_1080.mp4`);
     });
 
     it('should handle token options (placeholder)', () => {
       const service = new BunnyStreamService({ ...mockConfig, tokenAuthEnabled: true });
       const url = service.getMp4Url(testVideoId, '720p', { expiresIn: 3600 });
       // Token auth is placeholder, should return base URL
-      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_720p.mp4`);
+      expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_720.mp4`);
     });
   });
 
@@ -105,11 +105,11 @@ describe('BunnyStreamService', () => {
       const service = new BunnyStreamService(mockConfig);
       const urls = service.getAllMp4Urls(testVideoId);
 
-      expect(urls['240p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_240p.mp4`);
-      expect(urls['360p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_360p.mp4`);
-      expect(urls['480p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_480p.mp4`);
-      expect(urls['720p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_720p.mp4`);
-      expect(urls['1080p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_1080p.mp4`);
+      expect(urls['240p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_240.mp4`);
+      expect(urls['360p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_360.mp4`);
+      expect(urls['480p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_480.mp4`);
+      expect(urls['720p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_720.mp4`);
+      expect(urls['1080p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_1080.mp4`);
     });
 
     it('should have all quality levels', () => {
@@ -240,7 +240,7 @@ describe('BunnyStreamService', () => {
       const urls = service.getAllUrls(testVideoId);
 
       expect(urls.hls).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/playlist.m3u8`);
-      expect(urls.mp4['720p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_720p.mp4`);
+      expect(urls.mp4['720p']).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/play_720.mp4`);
       expect(urls.thumbnail).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/thumbnail.jpg`);
       expect(urls.preview).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/preview.webp`);
       expect(urls.captions).toBeUndefined();
