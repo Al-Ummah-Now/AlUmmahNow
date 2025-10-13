@@ -13,6 +13,123 @@ describe('BunnyStreamService', () => {
 
   const testVideoId = 'abc123-def456-ghi789';
 
+  describe('Input Validation', () => {
+    describe('videoId validation', () => {
+      it('should throw error for empty videoId', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getHlsUrl('')).toThrow('BunnyStreamService: videoId cannot be empty');
+      });
+
+      it('should throw error for null videoId', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getHlsUrl(null as any)).toThrow('BunnyStreamService: videoId is required and must be a string');
+      });
+
+      it('should throw error for undefined videoId', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getHlsUrl(undefined as any)).toThrow('BunnyStreamService: videoId is required and must be a string');
+      });
+
+      it('should throw error for whitespace-only videoId', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getHlsUrl('   ')).toThrow('BunnyStreamService: videoId cannot be empty');
+      });
+
+      it('should throw error for non-string videoId', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getHlsUrl(123 as any)).toThrow('BunnyStreamService: videoId is required and must be a string');
+      });
+    });
+
+    describe('languageCode validation', () => {
+      it('should throw error for empty languageCode', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getCaptionUrl(testVideoId, '')).toThrow('BunnyStreamService: languageCode cannot be empty');
+      });
+
+      it('should throw error for null languageCode', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getCaptionUrl(testVideoId, null as any)).toThrow('BunnyStreamService: languageCode is required and must be a string');
+      });
+
+      it('should throw error for undefined languageCode', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getCaptionUrl(testVideoId, undefined as any)).toThrow('BunnyStreamService: languageCode is required and must be a string');
+      });
+
+      it('should throw error for whitespace-only languageCode', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getCaptionUrl(testVideoId, '   ')).toThrow('BunnyStreamService: languageCode cannot be empty');
+      });
+    });
+
+    describe('thumbnail options validation', () => {
+      it('should throw error for invalid width (too small)', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getThumbnailUrl(testVideoId, { width: 0 })).toThrow('BunnyStreamService: thumbnail width must be between 1 and 7680 pixels');
+      });
+
+      it('should throw error for invalid width (too large)', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getThumbnailUrl(testVideoId, { width: 10000 })).toThrow('BunnyStreamService: thumbnail width must be between 1 and 7680 pixels');
+      });
+
+      it('should throw error for invalid height (too small)', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getThumbnailUrl(testVideoId, { height: 0 })).toThrow('BunnyStreamService: thumbnail height must be between 1 and 4320 pixels');
+      });
+
+      it('should throw error for invalid height (too large)', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getThumbnailUrl(testVideoId, { height: 5000 })).toThrow('BunnyStreamService: thumbnail height must be between 1 and 4320 pixels');
+      });
+
+      it('should throw error for negative timestamp', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getThumbnailUrl(testVideoId, { timestamp: -1 })).toThrow('BunnyStreamService: timestamp must be a non-negative number');
+      });
+
+      it('should throw error for non-number width', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getThumbnailUrl(testVideoId, { width: '640' as any })).toThrow('BunnyStreamService: thumbnail width must be between 1 and 7680 pixels');
+      });
+
+      it('should throw error for non-number height', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getThumbnailUrl(testVideoId, { height: '360' as any })).toThrow('BunnyStreamService: thumbnail height must be between 1 and 4320 pixels');
+      });
+
+      it('should throw error for non-number timestamp', () => {
+        const service = new BunnyStreamService(mockConfig);
+        expect(() => service.getThumbnailUrl(testVideoId, { timestamp: '30' as any })).toThrow('BunnyStreamService: timestamp must be a non-negative number');
+      });
+
+      it('should accept valid width', () => {
+        const service = new BunnyStreamService(mockConfig);
+        const url = service.getThumbnailUrl(testVideoId, { width: 640 });
+        expect(url).toContain('width=640');
+      });
+
+      it('should accept valid height', () => {
+        const service = new BunnyStreamService(mockConfig);
+        const url = service.getThumbnailUrl(testVideoId, { height: 360 });
+        expect(url).toContain('height=360');
+      });
+
+      it('should accept timestamp of 0', () => {
+        const service = new BunnyStreamService(mockConfig);
+        const url = service.getThumbnailUrl(testVideoId, { timestamp: 0 });
+        expect(url).toContain('thumbnail_0s.jpg');
+      });
+
+      it('should accept undefined options', () => {
+        const service = new BunnyStreamService(mockConfig);
+        const url = service.getThumbnailUrl(testVideoId);
+        expect(url).toBe(`https://${mockConfig.pullZoneUrl}/${testVideoId}/thumbnail.jpg`);
+      });
+    });
+  });
+
   describe('Constructor', () => {
     it('should create instance with valid config', () => {
       const service = new BunnyStreamService(mockConfig);
@@ -336,6 +453,24 @@ describe('createBunnyStreamService', () => {
   it('should throw error if NEXT_PUBLIC_BUNNY_LIBRARY_ID is missing', () => {
     process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL = 'vz-env-test.b-cdn.net';
     delete process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID;
+
+    expect(() => createBunnyStreamService()).toThrow(
+      'NEXT_PUBLIC_BUNNY_LIBRARY_ID environment variable is required'
+    );
+  });
+
+  it('should throw error if NEXT_PUBLIC_BUNNY_PULL_ZONE_URL is empty', () => {
+    process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL = '   ';
+    process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID = '67890';
+
+    expect(() => createBunnyStreamService()).toThrow(
+      'NEXT_PUBLIC_BUNNY_PULL_ZONE_URL environment variable is required'
+    );
+  });
+
+  it('should throw error if NEXT_PUBLIC_BUNNY_LIBRARY_ID is empty', () => {
+    process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL = 'vz-env-test.b-cdn.net';
+    process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID = '   ';
 
     expect(() => createBunnyStreamService()).toThrow(
       'NEXT_PUBLIC_BUNNY_LIBRARY_ID environment variable is required'

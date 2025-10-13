@@ -53,12 +53,74 @@ export class BunnyStreamService {
   }
 
   /**
+   * Validate video ID parameter
+   *
+   * @param videoId - The video GUID to validate
+   * @throws {Error} If videoId is invalid
+   * @private
+   */
+  private validateVideoId(videoId: string): void {
+    if (videoId === undefined || videoId === null || typeof videoId !== 'string') {
+      throw new Error('BunnyStreamService: videoId is required and must be a string');
+    }
+    if (videoId.trim() === '') {
+      throw new Error('BunnyStreamService: videoId cannot be empty');
+    }
+  }
+
+  /**
+   * Validate language code parameter
+   *
+   * @param languageCode - The language code to validate
+   * @throws {Error} If languageCode is invalid
+   * @private
+   */
+  private validateLanguageCode(languageCode: string): void {
+    if (languageCode === undefined || languageCode === null || typeof languageCode !== 'string') {
+      throw new Error('BunnyStreamService: languageCode is required and must be a string');
+    }
+    if (languageCode.trim() === '') {
+      throw new Error('BunnyStreamService: languageCode cannot be empty');
+    }
+  }
+
+  /**
+   * Validate thumbnail options parameters
+   *
+   * @param options - The thumbnail options to validate
+   * @throws {Error} If options are invalid
+   * @private
+   */
+  private validateThumbnailOptions(options?: ThumbnailOptions): void {
+    if (!options) return;
+
+    if (options.width !== undefined) {
+      if (typeof options.width !== 'number' || options.width < 1 || options.width > 7680) {
+        throw new Error('BunnyStreamService: thumbnail width must be between 1 and 7680 pixels');
+      }
+    }
+
+    if (options.height !== undefined) {
+      if (typeof options.height !== 'number' || options.height < 1 || options.height > 4320) {
+        throw new Error('BunnyStreamService: thumbnail height must be between 1 and 4320 pixels');
+      }
+    }
+
+    if (options.timestamp !== undefined) {
+      if (typeof options.timestamp !== 'number' || options.timestamp < 0) {
+        throw new Error('BunnyStreamService: timestamp must be a non-negative number');
+      }
+    }
+  }
+
+  /**
    * Get the base URL for video streaming
-   * 
+   *
    * @param videoId - The video GUID
    * @returns The base URL for the video
    */
   private getBaseUrl(videoId: string): string {
+    this.validateVideoId(videoId);
     return `https://${this.pullZoneUrl}/${videoId}`;
   }
 
@@ -171,6 +233,7 @@ export class BunnyStreamService {
    * ```
    */
   getThumbnailUrl(videoId: string, options?: ThumbnailOptions): string {
+    this.validateThumbnailOptions(options);
     const baseUrl = this.getBaseUrl(videoId);
     let url: string;
 
@@ -233,6 +296,7 @@ export class BunnyStreamService {
    * ```
    */
   getCaptionUrl(videoId: string, languageCode: string): string {
+    this.validateLanguageCode(languageCode);
     const baseUrl = this.getBaseUrl(videoId);
     return `${baseUrl}/captions/${languageCode}.vtt`;
   }
@@ -358,11 +422,17 @@ export function createBunnyStreamService(): BunnyStreamService {
   const pullZoneUrl = process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL;
   const libraryId = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID;
 
-  if (!pullZoneUrl) {
-    throw new Error('NEXT_PUBLIC_BUNNY_PULL_ZONE_URL environment variable is required');
+  if (!pullZoneUrl || pullZoneUrl.trim() === '') {
+    throw new Error(
+      'NEXT_PUBLIC_BUNNY_PULL_ZONE_URL environment variable is required. ' +
+      'Please add it to your .env.local file. See .env.example for reference.'
+    );
   }
-  if (!libraryId) {
-    throw new Error('NEXT_PUBLIC_BUNNY_LIBRARY_ID environment variable is required');
+  if (!libraryId || libraryId.trim() === '') {
+    throw new Error(
+      'NEXT_PUBLIC_BUNNY_LIBRARY_ID environment variable is required. ' +
+      'Please add it to your .env.local file. See .env.example for reference.'
+    );
   }
 
   return new BunnyStreamService({
