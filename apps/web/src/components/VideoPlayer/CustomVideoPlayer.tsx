@@ -76,6 +76,7 @@ export default function CustomVideoPlayer({
   const analyticsRef = useRef<VideoAnalytics | null>(null);
   const errorHandlerRef = useRef<VideoErrorHandler | null>(null);
   const fallbackStrategyRef = useRef<VideoFallbackStrategy | null>(null);
+  const handleVideoErrorRef = useRef<((error: unknown) => void) | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -104,6 +105,10 @@ export default function CustomVideoPlayer({
 
   /**
    * Handle video errors with retry and fallback logic
+   *
+   * Note: This callback is stored in a ref to prevent useEffect from
+   * re-running when the onError prop changes, avoiding race conditions
+   * and unnecessary player reinitialization.
    */
   const handleVideoError = useCallback((error: unknown) => {
     if (!errorHandlerRef.current || !fallbackStrategyRef.current) return;
@@ -137,6 +142,11 @@ export default function CustomVideoPlayer({
       }
     }
   }, [onError, handleSourceChange]);
+
+  // Store handleVideoError in ref to avoid useEffect re-runs
+  useEffect(() => {
+    handleVideoErrorRef.current = handleVideoError;
+  }, [handleVideoError]);
 
   /**
    * Handle retry button click
@@ -242,8 +252,8 @@ export default function CustomVideoPlayer({
           // Get error from player - Video.js Player has error() method
           // Type assertion needed as Video.js types don't fully expose this
           const playerError = (player as Player & { error: () => MediaError | null }).error();
-          if (playerError) {
-            handleVideoError(playerError);
+          if (playerError && handleVideoErrorRef.current) {
+            handleVideoErrorRef.current(playerError);
           }
         });
 
@@ -255,7 +265,9 @@ export default function CustomVideoPlayer({
         // player.on('canplay', () => { ... }); // buffer end
       });
     } catch (err) {
-      handleVideoError(err);
+      if (handleVideoErrorRef.current) {
+        handleVideoErrorRef.current(err);
+      }
     }
 
     // Cleanup on unmount
@@ -273,7 +285,8 @@ export default function CustomVideoPlayer({
       playerRef.current = null;
       setPlayerReady(false);
     };
-  }, [videoId, userId, sources, poster, controls, autoplay, enableAnalytics, handleVideoError]);
+    // Note: handleVideoError is NOT in deps - we use handleVideoErrorRef.current to avoid re-initialization
+  }, [videoId, userId, sources, poster, controls, autoplay, enableAnalytics]);
 
   /**
    * Render error display if there's an error

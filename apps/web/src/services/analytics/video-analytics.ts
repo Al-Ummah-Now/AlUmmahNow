@@ -157,6 +157,10 @@ export class VideoAnalytics {
     const events = [...this.eventQueue];
     this.eventQueue = [];
 
+    // Create a holder object to store the promise reference
+    // This allows the finally block to reference the promise for cleanup
+    const promiseHolder: { promise?: Promise<void> } = {};
+
     const flushPromise = (async () => {
       try {
         const batch: AnalyticsBatch = { events };
@@ -187,13 +191,16 @@ export class VideoAnalytics {
         this.storeEventsLocally(events);
       } finally {
         // Remove by reference instead of index to avoid race conditions
-        const index = this.pendingFlushes.indexOf(flushPromise);
-        if (index > -1) {
-          this.pendingFlushes.splice(index, 1);
+        if (promiseHolder.promise) {
+          const index = this.pendingFlushes.indexOf(promiseHolder.promise);
+          if (index > -1) {
+            this.pendingFlushes.splice(index, 1);
+          }
         }
       }
     })();
 
+    promiseHolder.promise = flushPromise;
     this.pendingFlushes.push(flushPromise);
     return flushPromise;
   }
