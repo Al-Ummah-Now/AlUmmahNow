@@ -164,12 +164,20 @@ export class VideoErrorHandler {
    *
    * @param error - The error to handle
    * @param retryCallback - Callback function to retry the operation
+   * @param depth - Internal recursion depth counter to prevent infinite loops
    * @returns Promise that resolves when retry succeeds or rejects when max retries reached
    */
   async handleWithRetry(
     error: VideoError,
-    retryCallback: () => Promise<void>
+    retryCallback: () => Promise<void>,
+    depth: number = 0
   ): Promise<void> {
+    // Safety guard: prevent infinite recursion from buggy error categorization
+    if (depth > 10) {
+      console.error('[VideoErrorHandler] Max retry recursion depth exceeded');
+      throw new Error('Max retry recursion depth exceeded');
+    }
+
     this.lastError = error;
     await this.reportError(error);
 
@@ -188,7 +196,7 @@ export class VideoErrorHandler {
       this.retryCount = 0;
     } catch (retryError) {
       const categorizedError = this.categorizeError(retryError);
-      return this.handleWithRetry(categorizedError, retryCallback);
+      return this.handleWithRetry(categorizedError, retryCallback, depth + 1);
     }
   }
 

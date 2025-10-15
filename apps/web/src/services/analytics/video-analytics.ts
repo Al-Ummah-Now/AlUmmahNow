@@ -157,9 +157,6 @@ export class VideoAnalytics {
     const events = [...this.eventQueue];
     this.eventQueue = [];
 
-    // Track the index where this promise will be stored
-    const promiseIndex = this.pendingFlushes.length;
-
     const flushPromise = (async () => {
       try {
         const batch: AnalyticsBatch = { events };
@@ -189,8 +186,11 @@ export class VideoAnalytics {
         // Store in localStorage as backup
         this.storeEventsLocally(events);
       } finally {
-        // Remove this promise from pending list using the tracked index
-        this.pendingFlushes.splice(promiseIndex, 1);
+        // Remove by reference instead of index to avoid race conditions
+        const index = this.pendingFlushes.indexOf(flushPromise);
+        if (index > -1) {
+          this.pendingFlushes.splice(index, 1);
+        }
       }
     })();
 
@@ -215,13 +215,38 @@ export class VideoAnalytics {
         pending = [];
       }
 
-      localStorage.setItem(
-        'pendingVideoAnalytics',
-        JSON.stringify([...pending, ...events])
-      );
+      // Limit stored events to prevent quota exhaustion (5-10MB typical limit)
+      const MAX_STORED_EVENTS = 1000; // ~100-200KB depending on event size
+      const combined = [...pending, ...events];
+      const limited = combined.slice(-MAX_STORED_EVENTS); // Keep only most recent
 
-      if (this.config.enableDebugLogging) {
-        console.log('[VideoAnalytics] Stored', events.length, 'events locally');
+      try {
+        localStorage.setItem(
+          'pendingVideoAnalytics',
+          JSON.stringify(limited)
+        );
+
+        if (this.config.enableDebugLogging) {
+          console.log('[VideoAnalytics] Stored', events.length, 'events locally');
+          if (combined.length > MAX_STORED_EVENTS) {
+            console.warn('[VideoAnalytics] Dropped', combined.length - MAX_STORED_EVENTS, 'old events');
+          }
+        }
+      } catch (storageError) {
+        // Handle quota exceeded error gracefully
+        if (storageError instanceof DOMException && storageError.name === 'QuotaExceededError') {
+          console.warn('[VideoAnalytics] localStorage quota exceeded, clearing old events');
+          localStorage.removeItem('pendingVideoAnalytics');
+          // Try storing just the new events
+          try {
+            localStorage.setItem('pendingVideoAnalytics', JSON.stringify(events));
+          } catch {
+            // If still fails, give up gracefully
+            console.error('[VideoAnalytics] Cannot store events, quota exceeded');
+          }
+        } else {
+          throw storageError; // Re-throw other storage errors
+        }
       }
     } catch (error) {
       console.error('[VideoAnalytics] Failed to store events locally:', error);
