@@ -33,6 +33,7 @@ import {
   VideoSource,
 } from '@/lib/video/fallback-strategy';
 import { ErrorDisplay } from './ErrorDisplay';
+import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import '@/styles/video-player.css';
 import type { Player } from 'video.js';
 
@@ -66,11 +67,12 @@ export default function CustomVideoPlayer({
   autoplay = false,
   enableAnalytics = true,
   className = '',
-  ariaLabel = 'Video player',
+  ariaLabel,
   lang = 'en',
   onError,
   onSourceChange,
 }: CustomVideoPlayerProps) {
+  const { t, dir } = useVideoPlayerI18n(lang);
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<Player | null>(null);
   const analyticsRef = useRef<VideoAnalytics | null>(null);
@@ -307,7 +309,7 @@ export default function CustomVideoPlayer({
   }
 
   return (
-    <div className={`custom-video-player ${className}`}>
+    <div className={`custom-video-player ${className}`} dir={dir}>
       {/* Accessibility: Hidden live region for screen reader announcements */}
       <div
         role="status"
@@ -315,10 +317,7 @@ export default function CustomVideoPlayer({
         aria-atomic="true"
         className="sr-only"
       >
-        {playerReady
-          ? 'Video player loaded and ready'
-          : 'Loading video player...'
-        }
+        {playerReady ? t.player.ready : t.player.loading}
       </div>
 
       {/* Video player container */}
@@ -327,7 +326,7 @@ export default function CustomVideoPlayer({
           ref={videoRef}
           className="video-js vjs-big-play-centered"
           playsInline
-          aria-label={ariaLabel}
+          aria-label={ariaLabel || t.accessibility.videoPlayer}
           tabIndex={0}
         />
       </div>

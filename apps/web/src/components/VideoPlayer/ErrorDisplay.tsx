@@ -9,7 +9,7 @@
 
 import React, { useState } from 'react';
 import { VideoError } from '@/lib/video/error-handler';
-import { getErrorMessage } from '@/lib/video/error-messages';
+import { useVideoPlayerI18n, mapErrorTypeToI18n } from '@/lib/video/i18n';
 
 export interface ErrorDisplayProps {
   error: VideoError;
@@ -34,8 +34,8 @@ export function ErrorDisplay({
   className = '',
 }: ErrorDisplayProps): JSX.Element {
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
-  const messages = getErrorMessage(error.type, lang);
-  const isRTL = lang === 'ar';
+  const { t, isRTL, dir } = useVideoPlayerI18n(lang);
+  const errorTypeKey = mapErrorTypeToI18n(error.type);
 
   const baseClasses = `
     flex flex-col items-center justify-center
@@ -63,15 +63,15 @@ export function ErrorDisplay({
   );
 
   return (
-    <div className={`${baseClasses} ${className}`} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className={`${baseClasses} ${className}`} dir={dir}>
       {errorIcon}
 
       <h2 className="text-2xl font-bold mb-2 text-center">
-        {messages.title}
+        {t.errors.title[errorTypeKey]}
       </h2>
 
       <p className="text-gray-300 mb-6 text-center max-w-md">
-        {messages.description}
+        {t.errors.description[errorTypeKey]}
       </p>
 
       <div className="flex gap-4 mb-4 flex-wrap justify-center">
@@ -86,7 +86,7 @@ export function ErrorDisplay({
               transition-colors duration-200
               flex items-center gap-2
             "
-            aria-label={messages.retryButton}
+            aria-label={t.errors.retryButton}
           >
             <svg
               className="w-5 h-5"
@@ -101,7 +101,7 @@ export function ErrorDisplay({
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            {messages.retryButton}
+            {t.errors.retryButton}
           </button>
         )}
 
@@ -116,7 +116,7 @@ export function ErrorDisplay({
               transition-colors duration-200
               flex items-center gap-2
             "
-            aria-label={messages.fallbackButton}
+            aria-label={t.errors.fallbackButton[errorTypeKey]}
           >
             <svg
               className="w-5 h-5"
@@ -131,7 +131,7 @@ export function ErrorDisplay({
                 d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
               />
             </svg>
-            {messages.fallbackButton}
+            {t.errors.fallbackButton[errorTypeKey]}
           </button>
         )}
       </div>
@@ -163,7 +163,7 @@ export function ErrorDisplay({
                 d="M19 9l-7 7-7-7"
               />
             </svg>
-            {lang === 'ar' ? 'تفاصيل الخطأ' : 'Error Details'}
+            {t.errors.detailLabels.detailsTitle}
           </button>
 
           {isDetailsExpanded && (
@@ -174,14 +174,14 @@ export function ErrorDisplay({
             ">
               <div className="mb-2">
                 <span className="font-semibold text-gray-200">
-                  {lang === 'ar' ? 'النوع:' : 'Type:'}
+                  {t.errors.detailLabels.type}
                 </span>{' '}
                 {error.type}
               </div>
 
               <div className="mb-2">
                 <span className="font-semibold text-gray-200">
-                  {lang === 'ar' ? 'الرسالة:' : 'Message:'}
+                  {t.errors.detailLabels.message}
                 </span>{' '}
                 {error.message}
               </div>
@@ -189,7 +189,7 @@ export function ErrorDisplay({
               {error.code && (
                 <div className="mb-2">
                   <span className="font-semibold text-gray-200">
-                    {lang === 'ar' ? 'الكود:' : 'Code:'}
+                    {t.errors.detailLabels.code}
                   </span>{' '}
                   {error.code}
                 </div>
@@ -197,13 +197,13 @@ export function ErrorDisplay({
 
               <div className="mb-2">
                 <span className="font-semibold text-gray-200">
-                  {lang === 'ar' ? 'الوقت:' : 'Time:'}
+                  {t.errors.detailLabels.time}
                 </span>{' '}
                 {new Date(error.timestamp).toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US')}
               </div>
 
               <div className="pt-2 mt-2 border-t border-gray-700">
-                {messages.details}
+                {t.errors.details[errorTypeKey]}
               </div>
             </div>
           )}
@@ -222,8 +222,8 @@ export function CompactErrorDisplay({
   onRetry,
   className = '',
 }: Omit<ErrorDisplayProps, 'onFallback' | 'showDetails'>): JSX.Element {
-  const messages = getErrorMessage(error.type, lang);
-  const isRTL = lang === 'ar';
+  const { t, isRTL, dir } = useVideoPlayerI18n(lang);
+  const errorTypeKey = mapErrorTypeToI18n(error.type);
 
   return (
     <div
@@ -236,7 +236,7 @@ export function CompactErrorDisplay({
         ${isRTL ? 'text-right' : 'text-left'}
         ${className}
       `}
-      dir={isRTL ? 'rtl' : 'ltr'}
+      dir={dir}
     >
       <div className="flex items-center gap-3">
         <svg
@@ -254,10 +254,10 @@ export function CompactErrorDisplay({
         </svg>
         <div>
           <p className="text-sm font-semibold text-white">
-            {messages.title}
+            {t.errors.title[errorTypeKey]}
           </p>
           <p className="text-xs text-gray-300">
-            {messages.description}
+            {t.errors.description[errorTypeKey]}
           </p>
         </div>
       </div>
@@ -273,9 +273,9 @@ export function CompactErrorDisplay({
             transition-colors duration-200
             flex-shrink-0
           "
-          aria-label={messages.retryButton}
+          aria-label={t.errors.retryButton}
         >
-          {messages.retryButton}
+          {t.errors.retryButton}
         </button>
       )}
     </div>
