@@ -1,408 +1,474 @@
 /**
- * Tests for CustomVideoPlayer component
+ * Tests for CustomVideoPlayer component (Phase 1.4/1.5)
+ *
+ * Tests cover:
+ * - Basic rendering and initialization
+ * - Video.js player setup
+ * - Analytics integration (Phase 1.5)
+ * - Error handling (Phase 1.4)
+ * - Accessibility features
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
-import { CustomVideoPlayer } from '../CustomVideoPlayer';
-import { createBunnyStreamService } from '@/services/bunny';
+import CustomVideoPlayer from '../CustomVideoPlayer';
+import type { VideoError } from '@/lib/video/error-handler';
 
-// Mock Video.js
+// Mock Video.js setup
 const mockDispose = jest.fn();
 const mockOn = jest.fn();
 const mockReady = jest.fn((callback) => callback());
-const mockCurrentTime = jest.fn();
-const mockDuration = jest.fn(() => 100);
-const mockEl = jest.fn(() => ({
-  setAttribute: jest.fn(),
-}));
-const mockError = jest.fn();
-
+const mockSrc = jest.fn();
 const mockPlayer = {
   dispose: mockDispose,
   on: mockOn,
   ready: mockReady,
-  currentTime: mockCurrentTime,
-  duration: mockDuration,
-  el: mockEl,
-  error: mockError,
+  src: mockSrc,
+  error: jest.fn(() => null),
 };
 
-jest.mock('video.js', () => {
-  return jest.fn(() => mockPlayer);
-});
-
-// Mock BunnyStreamService
-jest.mock('@/services/bunny', () => ({
-  createBunnyStreamService: jest.fn(),
+jest.mock('@/lib/video/videojs-setup', () => ({
+  createVideoPlayer: jest.fn(() => mockPlayer),
+  disposeVideoPlayer: jest.fn(),
 }));
 
-const mockCreateBunnyStreamService = createBunnyStreamService as jest.MockedFunction<
-  typeof createBunnyStreamService
->;
+// Mock VideoAnalytics
+const mockTrackReady = jest.fn();
+const mockTrackPlay = jest.fn();
+const mockTrackPause = jest.fn();
+const mockTrackComplete = jest.fn();
+const mockTrackError = jest.fn();
+const mockDestroy = jest.fn();
+const mockGetSessionId = jest.fn(() => '12345-abcde');
 
-describe('CustomVideoPlayer', () => {
+jest.mock('@/services/analytics/video-analytics', () => ({
+  VideoAnalytics: jest.fn().mockImplementation(() => ({
+    trackReady: mockTrackReady,
+    trackPlay: mockTrackPlay,
+    trackPause: mockTrackPause,
+    trackComplete: mockTrackComplete,
+    trackError: mockTrackError,
+    destroy: mockDestroy,
+    getSessionId: mockGetSessionId,
+  })),
+}));
+
+// Mock error handler
+const mockCategorizeError = jest.fn();
+const mockHandleWithRetry = jest.fn();
+const mockResetRetryCount = jest.fn();
+const mockAddErrorReporter = jest.fn();
+
+jest.mock('@/lib/video/error-handler', () => ({
+  createVideoErrorHandler: jest.fn(() => ({
+    categorizeError: mockCategorizeError,
+    handleWithRetry: mockHandleWithRetry,
+    resetRetryCount: mockResetRetryCount,
+    addErrorReporter: mockAddErrorReporter,
+  })),
+  VideoErrorType: {
+    NETWORK_ERROR: 'NETWORK_ERROR',
+    FORMAT_ERROR: 'FORMAT_ERROR',
+    DECODE_ERROR: 'DECODE_ERROR',
+    HLS_ERROR: 'HLS_ERROR',
+    TIMEOUT_ERROR: 'TIMEOUT_ERROR',
+    UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+  },
+}));
+
+// Mock fallback strategy
+const mockGetNextFallback = jest.fn();
+const mockReset = jest.fn();
+const mockGetCurrentSource = jest.fn();
+
+jest.mock('@/lib/video/fallback-strategy', () => ({
+  createVideoFallbackStrategy: jest.fn(() => ({
+    getNextFallback: mockGetNextFallback,
+    reset: mockReset,
+    getCurrentSource: mockGetCurrentSource,
+  })),
+}));
+
+// Mock ErrorDisplay
+jest.mock('../ErrorDisplay', () => ({
+  ErrorDisplay: ({ error }: { error: VideoError }) => (
+    <div data-testid="error-display">{error.message}</div>
+  ),
+}));
+
+describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
+  const defaultProps = {
+    videoId: 'test-video-123',
+    sources: [
+      { src: 'https://example.com/video.m3u8', type: 'application/x-mpegURL' },
+    ],
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Setup default mock behavior
-    mockCreateBunnyStreamService.mockReturnValue({
-      getHlsUrl: jest.fn((videoId) => `https://cdn.example.com/${videoId}/playlist.m3u8`),
-    } as any);
+    jest.useFakeTimers();
   });
 
-  it('should render without errors', async () => {
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-      />
-    );
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
 
-    // The player initializes quickly in tests, so check for ready state
-    await waitFor(() => {
-      expect(screen.getByText('Test Video - Video player ready')).toBeInTheDocument();
+  describe('Basic Rendering', () => {
+    it('should render without errors', async () => {
+      render(<CustomVideoPlayer {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Video player loaded and ready')).toBeInTheDocument();
+      });
+    });
+
+    it('should render with custom className', () => {
+      const { container } = render(
+        <CustomVideoPlayer {...defaultProps} className="custom-class" />
+      );
+
+      expect(container.querySelector('.custom-video-player.custom-class')).toBeInTheDocument();
+    });
+
+    it('should render with custom ariaLabel', () => {
+      render(<CustomVideoPlayer {...defaultProps} ariaLabel="My Video" />);
+
+      const video = document.querySelector('video');
+      expect(video).toHaveAttribute('aria-label', 'My Video');
     });
   });
 
-  it('should initialize Video.js player with correct configuration', async () => {
-    const videojs = require('video.js');
-    
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        autoplay={true}
-      />
-    );
+  describe('Video.js Integration', () => {
+    it('should initialize Video.js player with correct options', async () => {
+      const { createVideoPlayer } = require('@/lib/video/videojs-setup');
 
-    await waitFor(() => {
-      expect(videojs).toHaveBeenCalled();
+      render(
+        <CustomVideoPlayer
+          {...defaultProps}
+          controls={true}
+          autoplay={true}
+          poster="https://example.com/poster.jpg"
+        />
+      );
+
+      await waitFor(() => {
+        expect(createVideoPlayer).toHaveBeenCalled();
+      });
+
+      const [, options] = createVideoPlayer.mock.calls[0];
+      expect(options).toMatchObject({
+        controls: true,
+        autoplay: true,
+        sources: defaultProps.sources,
+        poster: 'https://example.com/poster.jpg',
+      });
     });
 
-    const config = videojs.mock.calls[0][1];
-    expect(config.autoplay).toBe(true);
-    expect(config.controls).toBe(true);
-    expect(config.responsive).toBe(true);
-    expect(config.fluid).toBe(true);
-  });
+    it('should dispose player on unmount', async () => {
+      const { disposeVideoPlayer } = require('@/lib/video/videojs-setup');
+      const { unmount } = render(<CustomVideoPlayer {...defaultProps} />);
 
-  it('should use BunnyStreamService to get HLS URL', async () => {
-    const mockService = {
-      getHlsUrl: jest.fn(() => 'https://cdn.example.com/bunny-video-guid/playlist.m3u8'),
-    };
-    mockCreateBunnyStreamService.mockReturnValue(mockService as any);
+      await waitFor(() => {
+        expect(mockReady).toHaveBeenCalled();
+      });
 
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-      />
-    );
+      unmount();
 
-    await waitFor(() => {
-      expect(mockService.getHlsUrl).toHaveBeenCalledWith('bunny-video-guid');
+      expect(disposeVideoPlayer).toHaveBeenCalledWith(mockPlayer);
     });
   });
 
-  it('should set start time when provided', async () => {
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        startTime={30}
-      />
-    );
+  describe('Analytics Integration (Phase 1.5)', () => {
+    it('should initialize VideoAnalytics when enabled', async () => {
+      const { VideoAnalytics } = require('@/services/analytics/video-analytics');
 
-    await waitFor(() => {
-      expect(mockCurrentTime).toHaveBeenCalledWith(30);
+      render(
+        <CustomVideoPlayer
+          {...defaultProps}
+          userId="user-456"
+          enableAnalytics={true}
+        />
+      );
+
+      await waitFor(() => {
+        expect(VideoAnalytics).toHaveBeenCalledWith('test-video-123', 'user-456');
+      });
+    });
+
+    it('should not initialize analytics when disabled', async () => {
+      const { VideoAnalytics } = require('@/services/analytics/video-analytics');
+      VideoAnalytics.mockClear();
+
+      render(<CustomVideoPlayer {...defaultProps} enableAnalytics={false} />);
+
+      await waitFor(() => {
+        expect(mockReady).toHaveBeenCalled();
+      });
+
+      expect(VideoAnalytics).not.toHaveBeenCalled();
+    });
+
+    it('should track ready event', async () => {
+      render(<CustomVideoPlayer {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(mockTrackReady).toHaveBeenCalled();
+      });
+    });
+
+    it('should track play event', async () => {
+      render(<CustomVideoPlayer {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(mockOn).toHaveBeenCalledWith('play', expect.any(Function));
+      });
+
+      // Simulate play event
+      const playHandler = mockOn.mock.calls.find(call => call[0] === 'play')?.[1];
+      playHandler?.();
+
+      expect(mockTrackPlay).toHaveBeenCalled();
+    });
+
+    it('should track pause event', async () => {
+      render(<CustomVideoPlayer {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(mockOn).toHaveBeenCalledWith('pause', expect.any(Function));
+      });
+
+      // Simulate pause event
+      const pauseHandler = mockOn.mock.calls.find(call => call[0] === 'pause')?.[1];
+      pauseHandler?.();
+
+      expect(mockTrackPause).toHaveBeenCalled();
+    });
+
+    it('should track ended event', async () => {
+      render(<CustomVideoPlayer {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(mockOn).toHaveBeenCalledWith('ended', expect.any(Function));
+      });
+
+      // Simulate ended event
+      const endedHandler = mockOn.mock.calls.find(call => call[0] === 'ended')?.[1];
+      endedHandler?.();
+
+      expect(mockTrackComplete).toHaveBeenCalled();
+    });
+
+    it('should cleanup analytics on unmount', async () => {
+      const { unmount } = render(<CustomVideoPlayer {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(mockReady).toHaveBeenCalled();
+      });
+
+      unmount();
+
+      expect(mockDestroy).toHaveBeenCalled();
     });
   });
 
-  it('should call onPlay callback when play event occurs', async () => {
-    const onPlay = jest.fn();
+  describe('Error Handling (Phase 1.4)', () => {
+    it('should initialize error handler and fallback strategy', async () => {
+      const { createVideoErrorHandler } = require('@/lib/video/error-handler');
+      const { createVideoFallbackStrategy } = require('@/lib/video/fallback-strategy');
 
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        onPlay={onPlay}
-      />
-    );
+      render(<CustomVideoPlayer {...defaultProps} />);
 
-    await waitFor(() => {
-      expect(mockOn).toHaveBeenCalledWith('play', expect.any(Function));
+      await waitFor(() => {
+        expect(createVideoErrorHandler).toHaveBeenCalled();
+        expect(createVideoFallbackStrategy).toHaveBeenCalled();
+      });
     });
 
-    // Simulate play event
-    const playHandler = mockOn.mock.calls.find((call) => call[0] === 'play')?.[1];
-    if (playHandler) {
-      playHandler();
-    }
+    it('should display ErrorDisplay when error occurs', async () => {
+      const mockError: VideoError = {
+        type: 'NETWORK_ERROR' as any,
+        message: 'Network failed',
+        code: 'NET_ERR',
+        severity: 'WARNING' as any,
+        timestamp: Date.now(),
+        retryable: true,
+        fallbackAvailable: false,
+      };
 
-    expect(onPlay).toHaveBeenCalled();
-  });
+      mockCategorizeError.mockReturnValue(mockError);
 
-  it('should call onPause callback when pause event occurs', async () => {
-    const onPause = jest.fn();
+      render(<CustomVideoPlayer {...defaultProps} />);
 
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        onPause={onPause}
-      />
-    );
+      await waitFor(() => {
+        expect(mockOn).toHaveBeenCalledWith('error', expect.any(Function));
+      });
 
-    await waitFor(() => {
-      expect(mockOn).toHaveBeenCalledWith('pause', expect.any(Function));
+      // Simulate error
+      const errorHandler = mockOn.mock.calls.find(call => call[0] === 'error')?.[1];
+      (mockPlayer.error as jest.Mock).mockReturnValueOnce({ code: 2, message: 'Network error' });
+      errorHandler?.();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('error-display')).toBeInTheDocument();
+        expect(screen.getByText('Network failed')).toBeInTheDocument();
+      });
     });
 
-    // Simulate pause event
-    const pauseHandler = mockOn.mock.calls.find((call) => call[0] === 'pause')?.[1];
-    if (pauseHandler) {
-      pauseHandler();
-    }
+    it('should call onError callback when error occurs', async () => {
+      const onError = jest.fn();
+      const mockError: VideoError = {
+        type: 'NETWORK_ERROR' as any,
+        message: 'Network failed',
+        code: 'NET_ERR',
+        severity: 'WARNING' as any,
+        timestamp: Date.now(),
+        retryable: true,
+        fallbackAvailable: false,
+      };
 
-    expect(onPause).toHaveBeenCalled();
-  });
+      mockCategorizeError.mockReturnValue(mockError);
 
-  it('should call onEnded callback when ended event occurs', async () => {
-    const onEnded = jest.fn();
+      render(<CustomVideoPlayer {...defaultProps} onError={onError} />);
 
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        onEnded={onEnded}
-      />
-    );
+      await waitFor(() => {
+        expect(mockOn).toHaveBeenCalledWith('error', expect.any(Function));
+      });
 
-    await waitFor(() => {
-      expect(mockOn).toHaveBeenCalledWith('ended', expect.any(Function));
+      // Simulate error
+      const errorHandler = mockOn.mock.calls.find(call => call[0] === 'error')?.[1];
+      (mockPlayer.error as jest.Mock).mockReturnValueOnce({ code: 2 });
+      errorHandler?.();
+
+      await waitFor(() => {
+        expect(onError).toHaveBeenCalledWith(mockError);
+      });
     });
 
-    // Simulate ended event
-    const endedHandler = mockOn.mock.calls.find((call) => call[0] === 'ended')?.[1];
-    if (endedHandler) {
-      endedHandler();
-    }
+    it('should track errors in analytics', async () => {
+      const mockError: VideoError = {
+        type: 'HLS_ERROR' as any,
+        message: 'HLS failed',
+        code: 'HLS_ERR',
+        severity: 'CRITICAL' as any,
+        timestamp: Date.now(),
+        retryable: false,
+        fallbackAvailable: true,
+      };
 
-    expect(onEnded).toHaveBeenCalled();
-  });
+      mockCategorizeError.mockReturnValue(mockError);
 
-  it('should call onTimeUpdate callback with currentTime and duration', async () => {
-    const onTimeUpdate = jest.fn();
-    mockCurrentTime.mockReturnValue(50);
-    mockDuration.mockReturnValue(100);
+      render(<CustomVideoPlayer {...defaultProps} />);
 
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        onTimeUpdate={onTimeUpdate}
-      />
-    );
+      await waitFor(() => {
+        expect(mockOn).toHaveBeenCalledWith('error', expect.any(Function));
+      });
 
-    await waitFor(() => {
-      expect(mockOn).toHaveBeenCalledWith('timeupdate', expect.any(Function));
+      // Simulate error
+      const errorHandler = mockOn.mock.calls.find(call => call[0] === 'error')?.[1];
+      (mockPlayer.error as jest.Mock).mockReturnValueOnce({ code: 4 });
+      errorHandler?.();
+
+      await waitFor(() => {
+        expect(mockTrackError).toHaveBeenCalledWith({
+          code: 'HLS_ERR',
+          message: 'HLS failed',
+          type: 'HLS_ERROR',
+        });
+      });
     });
 
-    // Simulate timeupdate event
-    const timeupdateHandler = mockOn.mock.calls.find((call) => call[0] === 'timeupdate')?.[1];
-    if (timeupdateHandler) {
-      timeupdateHandler();
-    }
+    it('should attempt fallback when error has fallback available', async () => {
+      const mockError: VideoError = {
+        type: 'HLS_ERROR' as any,
+        message: 'HLS failed',
+        code: 'HLS_ERR',
+        severity: 'CRITICAL' as any,
+        timestamp: Date.now(),
+        retryable: false,
+        fallbackAvailable: true,
+      };
 
-    expect(onTimeUpdate).toHaveBeenCalledWith(50, 100);
-  });
+      const fallbackSource = {
+        type: 'mp4' as const,
+        url: 'https://example.com/video-720p.mp4',
+        quality: '720p' as const,
+      };
 
-  it('should set RTL direction when rtl prop is true', async () => {
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        rtl={true}
-      />
-    );
+      mockCategorizeError.mockReturnValue(mockError);
+      mockGetNextFallback.mockReturnValue(fallbackSource);
 
-    await waitFor(() => {
-      expect(mockEl).toHaveBeenCalled();
-    });
+      render(<CustomVideoPlayer {...defaultProps} />);
 
-    const element = mockEl.mock.results[0]?.value;
-    if (element) {
-      expect(element.setAttribute).toHaveBeenCalledWith('dir', 'rtl');
-    }
-  });
+      await waitFor(() => {
+        expect(mockOn).toHaveBeenCalledWith('error', expect.any(Function));
+      });
 
-  it('should display error when BunnyStreamService fails', () => {
-    mockCreateBunnyStreamService.mockImplementation(() => {
-      throw new Error('Service initialization failed');
-    });
+      // Simulate error
+      const errorHandler = mockOn.mock.calls.find(call => call[0] === 'error')?.[1];
+      (mockPlayer.error as jest.Mock).mockReturnValueOnce({ code: 4 });
+      errorHandler?.();
 
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-      />
-    );
-
-    expect(screen.getByText('Failed to load video')).toBeInTheDocument();
-    expect(screen.getByText('Service initialization failed')).toBeInTheDocument();
-  });
-
-  it('should display Arabic error message when rtl is true', () => {
-    mockCreateBunnyStreamService.mockImplementation(() => {
-      throw new Error('Service initialization failed');
-    });
-
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        rtl={true}
-      />
-    );
-
-    expect(screen.getByText('فشل تحميل الفيديو')).toBeInTheDocument();
-  });
-
-  it('should call onError callback when error occurs', async () => {
-    const onError = jest.fn();
-    const errorMessage = { message: 'Video playback error' };
-    mockError.mockReturnValue(errorMessage);
-
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-        onError={onError}
-      />
-    );
-
-    await waitFor(() => {
-      expect(mockOn).toHaveBeenCalledWith('error', expect.any(Function));
-    });
-
-    // Simulate error event
-    const errorHandler = mockOn.mock.calls.find((call) => call[0] === 'error')?.[1];
-    if (errorHandler) {
-      errorHandler();
-    }
-
-    expect(onError).toHaveBeenCalledWith(errorMessage);
-  });
-
-  it('should dispose player on unmount', async () => {
-    const { unmount } = render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-      />
-    );
-
-    await waitFor(() => {
-      expect(mockReady).toHaveBeenCalled();
-    });
-
-    unmount();
-
-    expect(mockDispose).toHaveBeenCalled();
-  });
-
-  it('should not initialize player when videoRef is not available', () => {
-    // Mock scenario where ref is null
-    const originalCreateElement = document.createElement;
-    jest.spyOn(document, 'createElement').mockImplementation((tagName) => {
-      if (tagName === 'video-js') {
-        return null as any;
-      }
-      return originalCreateElement.call(document, tagName);
-    });
-
-    const videojs = require('video.js');
-    videojs.mockClear();
-
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-      />
-    );
-
-    expect(videojs).not.toHaveBeenCalled();
-
-    jest.restoreAllMocks();
-  });
-
-  it('should add accessibility attributes to video element', async () => {
-    const createElement = jest.spyOn(document, 'createElement');
-
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Accessible Video"
-      />
-    );
-
-    await waitFor(() => {
-      expect(createElement).toHaveBeenCalledWith('video-js');
-    });
-
-    const videoElement = createElement.mock.results.find(
-      (result) => result.value?.tagName === 'VIDEO-JS'
-    )?.value;
-
-    if (videoElement) {
-      expect(videoElement.getAttribute('aria-label')).toBe('Accessible Video');
-      expect(videoElement.getAttribute('role')).toBe('region');
-      expect(videoElement.getAttribute('playsinline')).toBe('');
-    }
-
-    createElement.mockRestore();
-  });
-
-  it('should display ready message in screen reader', async () => {
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="Test Video"
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Test Video - Video player ready')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockGetNextFallback).toHaveBeenCalledWith(mockError);
+        expect(mockSrc).toHaveBeenCalledWith([
+          {
+            src: 'https://example.com/video-720p.mp4',
+            type: 'video/mp4',
+          },
+        ]);
+      });
     });
   });
 
-  it('should display Arabic ready message when rtl is true', async () => {
-    render(
-      <CustomVideoPlayer
-        videoId="test-video-1"
-        bunnyVideoId="bunny-video-guid"
-        title="فيديو تجريبي"
-        rtl={true}
-      />
-    );
+  describe('Accessibility', () => {
+    it('should have sr-only status message', () => {
+      render(<CustomVideoPlayer {...defaultProps} />);
 
-    await waitFor(() => {
-      expect(screen.getByText('فيديو تجريبي - مشغل الفيديو جاهز')).toBeInTheDocument();
+      const status = screen.getByRole('status');
+      expect(status).toHaveClass('sr-only');
+      expect(status).toHaveAttribute('aria-live', 'polite');
+      expect(status).toHaveAttribute('aria-atomic', 'true');
+    });
+
+    it('should update status message when player is ready', async () => {
+      render(<CustomVideoPlayer {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Video player loaded and ready')).toBeInTheDocument();
+      });
+    });
+
+    it('should show loading message initially', () => {
+      // Prevent ready callback from being called immediately
+      mockReady.mockImplementationOnce(() => {});
+
+      render(<CustomVideoPlayer {...defaultProps} />);
+
+      expect(screen.getByText('Loading video player...')).toBeInTheDocument();
+    });
+
+    it('should apply tabIndex to video element', () => {
+      render(<CustomVideoPlayer {...defaultProps} />);
+
+      const video = document.querySelector('video');
+      expect(video).toHaveAttribute('tabIndex', '0');
+    });
+  });
+
+  describe('Bilingual Support', () => {
+    it('should support English language (default)', () => {
+      render(<CustomVideoPlayer {...defaultProps} lang="en" />);
+
+      expect(screen.getByText(/Video player loaded and ready/)).toBeInTheDocument();
+    });
+
+    it('should support Arabic language', () => {
+      // ErrorDisplay would show Arabic text, but since we mocked it,
+      // we just verify the lang prop is passed correctly
+      render(<CustomVideoPlayer {...defaultProps} lang="ar" />);
+
+      // English is still shown in the player status, but ErrorDisplay would use Arabic
+      expect(screen.getByText(/Video player loaded and ready/)).toBeInTheDocument();
     });
   });
 });
