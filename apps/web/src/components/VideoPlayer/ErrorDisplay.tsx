@@ -199,6 +199,7 @@ export function ErrorDisplay({
                 <span className="font-semibold text-gray-200">
                   {t.errors.detailLabels.time}
                 </span>{' '}
+                {/* Phase 1: Basic locale mapping. Phase 2: Accept optional locale prop for regional variants (ar-EG, ar-MA, en-GB, etc.) */}
                 {new Date(error.timestamp).toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US')}
               </div>
 
