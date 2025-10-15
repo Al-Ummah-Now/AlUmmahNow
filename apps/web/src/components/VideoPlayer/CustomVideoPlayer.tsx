@@ -37,6 +37,7 @@ import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import '@/styles/video-player.css';
 import type { Player } from 'video.js';
 import type { ExtendedPlayer } from '@/lib/video/videojs.d';
+import { hasErrorMethod } from '@/lib/video/videojs.d';
 
 export interface CustomVideoPlayerProps {
   videoId: string;
@@ -252,10 +253,12 @@ export default function CustomVideoPlayer({
         });
 
         player.on('error', () => {
-          // Get error from player using ExtendedPlayer type definition
-          const playerError = (player as ExtendedPlayer).error();
-          if (playerError && handleVideoErrorRef.current) {
-            handleVideoErrorRef.current(playerError);
+          // Get error from player using type guard for safety
+          if (hasErrorMethod(player)) {
+            const playerError = player.error();
+            if (playerError && handleVideoErrorRef.current) {
+              handleVideoErrorRef.current(playerError);
+            }
           }
         });
 

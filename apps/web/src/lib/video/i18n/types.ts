@@ -14,9 +14,8 @@
  * **Rationale**:
  * 1. **Separation of Concerns**: error-handler.ts defines error categorization
  *    for the video playback system, while i18n defines user-facing labels.
- * 2. **Flexibility**: i18n can have more granular error types (e.g., 'drm', 'buffer')
- *    that don't exist in error-handler, or collapse multiple technical errors
- *    into a single user-facing message.
+ * 2. **Flexibility**: i18n can collapse multiple technical errors into a single
+ *    user-facing message (e.g., DECODE_ERROR and HLS_ERROR both map to 'playback').
  * 3. **Naming Conventions**: i18n uses lowercase string literals for consistency
  *    with translation keys, while error-handler uses UPPER_CASE enum values
  *    for TypeScript constants.
@@ -24,20 +23,23 @@
  * **Integration**: Use `mapErrorTypeToI18n()` utility to convert between
  * error-handler enum types and i18n string literals.
  *
+ * **Mapping**: error-handler.ts has 6 types that map to these 5 i18n categories:
+ * - NETWORK_ERROR → 'network'
+ * - FORMAT_ERROR → 'format'
+ * - DECODE_ERROR → 'playback'
+ * - HLS_ERROR → 'format' (treated as format/codec issue for user messaging)
+ * - TIMEOUT_ERROR → 'timeout'
+ * - UNKNOWN_ERROR → 'unknown'
+ *
  * @see {@link ../../error-handler.ts} for VideoErrorHandler enum
  * @see {@link ../utils/mapErrorType.ts} for mapping utility
  */
 export type VideoErrorType =
   | 'network'
   | 'format'
-  | 'permission'
-  | 'unknown'
-  | 'timeout'
-  | 'quota'
-  | 'initialization'
-  | 'drm'
   | 'playback'
-  | 'buffer';
+  | 'timeout'
+  | 'unknown';
 
 /**
  * Supported languages for video player UI
