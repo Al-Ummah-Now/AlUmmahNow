@@ -199,7 +199,19 @@ export function ErrorDisplay({
                 <span className="font-semibold text-gray-200">
                   {t.errors.detailLabels.time}
                 </span>{' '}
-                {/* Phase 1: Basic locale mapping. Phase 2: Accept optional locale prop for regional variants (ar-EG, ar-MA, en-GB, etc.) */}
+                {/*
+                  Design Decision: Using ar-SA for Arabic and en-US for English as representative locales.
+                  This provides consistent date/time formatting across the platform.
+
+                  Rationale:
+                  - ar-SA chosen as the most widely recognized Arabic locale format
+                  - en-US provides 12-hour format familiar to English speakers
+                  - Keeps component interface simple (only 'en' | 'ar' instead of full locale strings)
+                  - Browser's toLocaleString() handles proper formatting for each locale
+
+                  Note: For apps requiring regional variants (ar-EG, ar-MA, en-GB, etc.),
+                  consider adding an optional `locale` prop to ErrorDisplayProps.
+                */}
                 {new Date(error.timestamp).toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US')}
               </div>
 
