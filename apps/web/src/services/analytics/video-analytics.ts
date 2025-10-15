@@ -32,6 +32,7 @@ export class VideoAnalytics {
   private config: AnalyticsConfig;
   private unloadHandler?: () => void;
   private visibilityHandler?: () => void;
+  private pendingFlushes: Promise<void>[] = [];
 
   constructor(
     videoId: string,
@@ -156,34 +157,45 @@ export class VideoAnalytics {
     const events = [...this.eventQueue];
     this.eventQueue = [];
 
-    try {
-      const batch: AnalyticsBatch = { events };
+    // Track the index where this promise will be stored
+    const promiseIndex = this.pendingFlushes.length;
 
-      const response = await fetch(this.config.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(batch),
-        keepalive: true  // Important for beforeunload
-      });
+    const flushPromise = (async () => {
+      try {
+        const batch: AnalyticsBatch = { events };
 
-      if (!response.ok) {
-        throw new Error(`Analytics flush failed: ${response.status}`);
+        const response = await fetch(this.config.endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(batch),
+          keepalive: true  // Important for beforeunload
+        });
+
+        if (!response.ok) {
+          throw new Error(`Analytics flush failed: ${response.status}`);
+        }
+
+        if (this.config.enableDebugLogging) {
+          console.log('[VideoAnalytics] Flushed', events.length, 'events');
+        }
+      } catch (error) {
+        console.error('[VideoAnalytics] Failed to send events:', error);
+
+        // Re-add events to queue on failure
+        this.eventQueue.unshift(...events);
+
+        // Store in localStorage as backup
+        this.storeEventsLocally(events);
+      } finally {
+        // Remove this promise from pending list using the tracked index
+        this.pendingFlushes.splice(promiseIndex, 1);
       }
+    })();
 
-      if (this.config.enableDebugLogging) {
-        console.log('[VideoAnalytics] Flushed', events.length, 'events');
-      }
-    } catch (error) {
-      console.error('[VideoAnalytics] Failed to send events:', error);
-
-      // Re-add events to queue on failure
-      this.eventQueue.unshift(...events);
-
-      // Store in localStorage as backup
-      this.storeEventsLocally(events);
-    }
+    this.pendingFlushes.push(flushPromise);
+    return flushPromise;
   }
 
   /**
@@ -308,6 +320,13 @@ export class VideoAnalytics {
    */
   getQueueLength(): number {
     return this.eventQueue.length;
+  }
+
+  /**
+   * Wait for all pending flushes to complete (for testing)
+   */
+  async waitForPendingFlushes(): Promise<void> {
+    await Promise.all(this.pendingFlushes);
   }
 }
 

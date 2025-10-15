@@ -120,7 +120,7 @@ describe('VideoAnalytics', () => {
       analytics.trackComplete();
 
       // Complete should flush immediately
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       expect(global.fetch).toHaveBeenCalledWith(
         expect.any(String),
@@ -143,7 +143,7 @@ describe('VideoAnalytics', () => {
       });
 
       // Error should flush immediately
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       expect(global.fetch).toHaveBeenCalled();
       analytics.destroy();
@@ -191,7 +191,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackPlay(); // 3rd event triggers flush
 
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(analytics.getQueueLength()).toBe(0);
@@ -207,7 +207,7 @@ describe('VideoAnalytics', () => {
       analytics.trackPlay();
       analytics.trackPause(); // Triggers flush
 
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       expect(global.fetch).toHaveBeenCalledWith(
         '/api/analytics/video',
@@ -234,7 +234,7 @@ describe('VideoAnalytics', () => {
       expect(global.fetch).not.toHaveBeenCalled();
 
       jest.advanceTimersByTime(1000);
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       expect(global.fetch).toHaveBeenCalled();
       analytics.destroy();
@@ -248,11 +248,11 @@ describe('VideoAnalytics', () => {
 
       analytics.trackPlay();
       jest.advanceTimersByTime(1000);
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       analytics.trackPause();
       jest.advanceTimersByTime(1000);
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       expect(global.fetch).toHaveBeenCalledTimes(2);
       analytics.destroy();
@@ -269,7 +269,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackPlay(); // Triggers flush
 
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       // Events should be re-added to queue
       expect(analytics.getQueueLength()).toBeGreaterThan(0);
@@ -289,7 +289,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackPlay(); // Triggers flush
 
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       // Events should be re-added to queue
       expect(analytics.getQueueLength()).toBeGreaterThan(0);
@@ -308,7 +308,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackPlay(); // Triggers flush
 
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       const stored = localStorageMock.getItem('pendingVideoAnalytics');
       expect(stored).toBeTruthy();
@@ -334,7 +334,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackPlay(); // Triggers flush
 
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       const stored = localStorageMock.getItem('pendingVideoAnalytics');
       const events = JSON.parse(stored!);
@@ -358,7 +358,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackPlay(); // Triggers flush
 
-      await jest.runAllTimersAsync();
+      await analytics.waitForPendingFlushes();
 
       // Should not throw, just log error
       expect(true).toBe(true);

@@ -289,6 +289,8 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
         type: 'NETWORK_ERROR' as any,
         message: 'Network failed',
         code: 'NET_ERR',
+        severity: 'WARNING' as any,
+        timestamp: Date.now(),
         retryable: true,
         fallbackAvailable: false,
       };
@@ -303,7 +305,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
       // Simulate error
       const errorHandler = mockOn.mock.calls.find(call => call[0] === 'error')?.[1];
-      mockPlayer.error = jest.fn(() => ({ code: 2, message: 'Network error' }));
+      (mockPlayer.error as jest.Mock).mockReturnValueOnce({ code: 2, message: 'Network error' });
       errorHandler?.();
 
       await waitFor(() => {
@@ -318,6 +320,8 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
         type: 'NETWORK_ERROR' as any,
         message: 'Network failed',
         code: 'NET_ERR',
+        severity: 'WARNING' as any,
+        timestamp: Date.now(),
         retryable: true,
         fallbackAvailable: false,
       };
@@ -332,7 +336,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
       // Simulate error
       const errorHandler = mockOn.mock.calls.find(call => call[0] === 'error')?.[1];
-      mockPlayer.error = jest.fn(() => ({ code: 2 }));
+      (mockPlayer.error as jest.Mock).mockReturnValueOnce({ code: 2 });
       errorHandler?.();
 
       await waitFor(() => {
@@ -345,6 +349,8 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
         type: 'HLS_ERROR' as any,
         message: 'HLS failed',
         code: 'HLS_ERR',
+        severity: 'CRITICAL' as any,
+        timestamp: Date.now(),
         retryable: false,
         fallbackAvailable: true,
       };
@@ -359,7 +365,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
       // Simulate error
       const errorHandler = mockOn.mock.calls.find(call => call[0] === 'error')?.[1];
-      mockPlayer.error = jest.fn(() => ({ code: 4 }));
+      (mockPlayer.error as jest.Mock).mockReturnValueOnce({ code: 4 });
       errorHandler?.();
 
       await waitFor(() => {
@@ -376,6 +382,8 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
         type: 'HLS_ERROR' as any,
         message: 'HLS failed',
         code: 'HLS_ERR',
+        severity: 'CRITICAL' as any,
+        timestamp: Date.now(),
         retryable: false,
         fallbackAvailable: true,
       };
@@ -397,7 +405,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
       // Simulate error
       const errorHandler = mockOn.mock.calls.find(call => call[0] === 'error')?.[1];
-      mockPlayer.error = jest.fn(() => ({ code: 4 }));
+      (mockPlayer.error as jest.Mock).mockReturnValueOnce({ code: 4 });
       errorHandler?.();
 
       await waitFor(() => {
