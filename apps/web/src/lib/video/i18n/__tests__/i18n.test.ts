@@ -50,17 +50,20 @@ describe('Video Player i18n', () => {
 
     it('should have all error types defined', () => {
       const translations = getTranslations('en');
+      // Only 5 error types aligned with error-handler.ts
+      // error-handler has 6 types that map to these 5 i18n categories:
+      // NETWORK_ERROR → 'network'
+      // FORMAT_ERROR → 'format'
+      // DECODE_ERROR → 'playback'
+      // HLS_ERROR → 'format' (treated as format/codec issue)
+      // TIMEOUT_ERROR → 'timeout'
+      // UNKNOWN_ERROR → 'unknown'
       const errorTypes = [
         'network',
         'format',
-        'permission',
-        'unknown',
-        'timeout',
-        'quota',
-        'initialization',
-        'drm',
         'playback',
-        'buffer',
+        'timeout',
+        'unknown',
       ];
 
       errorTypes.forEach((type) => {
