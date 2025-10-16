@@ -11,7 +11,6 @@
  * - Performance optimized
  */
 
-import type { Player } from 'video.js';
 import type { ExtendedPlayer } from './videojs.d';
 
 /**

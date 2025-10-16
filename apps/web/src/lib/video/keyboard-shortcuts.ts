@@ -27,7 +27,7 @@
  * ```
  */
 
-import type { Player } from 'video.js';
+import type { ExtendedPlayer } from './videojs.d';
 import { getTranslations, type SupportedLanguage } from './i18n';
 
 /**
@@ -110,12 +110,12 @@ interface PlayerState {
   feedbackTimeout: NodeJS.Timeout | null;
 }
 
-const playerStates = new WeakMap<Player, PlayerState>();
+const playerStates = new WeakMap<ExtendedPlayer, PlayerState>();
 
 /**
  * Get or create player state
  */
-function getPlayerState(player: Player): PlayerState {
+function getPlayerState(player: ExtendedPlayer): PlayerState {
   let state = playerStates.get(player);
   if (!state) {
     state = {
@@ -148,7 +148,7 @@ function isInputElement(element: Element | null): boolean {
 /**
  * Show visual feedback overlay with message
  */
-function showFeedback(message: string, player: Player): void {
+function showFeedback(message: string, player: ExtendedPlayer): void {
   const state = getPlayerState(player);
 
   // Get or create feedback overlay for this player
@@ -209,7 +209,7 @@ function formatTime(seconds: number): string {
  * @returns Cleanup function to remove event listeners
  */
 export function setupKeyboardShortcuts(
-  player: Player,
+  player: ExtendedPlayer,
   options: KeyboardShortcutsOptions = {}
 ): () => void {
   const {
