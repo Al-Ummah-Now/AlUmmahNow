@@ -103,10 +103,29 @@ const DEFAULT_KEY_BINDINGS: KeyBindings = {
 };
 
 /**
- * Visual feedback overlay element
+ * Per-player state management to avoid race conditions with multiple players
  */
-let feedbackOverlay: HTMLDivElement | null = null;
-let feedbackTimeout: NodeJS.Timeout | null = null;
+interface PlayerState {
+  feedbackOverlay: HTMLDivElement | null;
+  feedbackTimeout: NodeJS.Timeout | null;
+}
+
+const playerStates = new WeakMap<Player, PlayerState>();
+
+/**
+ * Get or create player state
+ */
+function getPlayerState(player: Player): PlayerState {
+  let state = playerStates.get(player);
+  if (!state) {
+    state = {
+      feedbackOverlay: null,
+      feedbackTimeout: null,
+    };
+    playerStates.set(player, state);
+  }
+  return state;
+}
 
 /**
  * Check if the current focused element is an input field
@@ -130,38 +149,40 @@ function isInputElement(element: Element | null): boolean {
  * Show visual feedback overlay with message
  */
 function showFeedback(message: string, player: Player): void {
-  // Get or create feedback overlay
-  if (!feedbackOverlay) {
-    feedbackOverlay = document.createElement('div');
-    feedbackOverlay.className = 'vjs-keyboard-feedback';
-    feedbackOverlay.setAttribute('role', 'status');
-    feedbackOverlay.setAttribute('aria-live', 'polite');
+  const state = getPlayerState(player);
+
+  // Get or create feedback overlay for this player
+  if (!state.feedbackOverlay) {
+    state.feedbackOverlay = document.createElement('div');
+    state.feedbackOverlay.className = 'vjs-keyboard-feedback';
+    state.feedbackOverlay.setAttribute('role', 'status');
+    state.feedbackOverlay.setAttribute('aria-live', 'polite');
   }
 
   // Find player container
   const playerContainer = player.el();
   if (!playerContainer) return;
 
-  // Clear existing timeout
-  if (feedbackTimeout) {
-    clearTimeout(feedbackTimeout);
+  // Clear existing timeout for this player
+  if (state.feedbackTimeout) {
+    clearTimeout(state.feedbackTimeout);
   }
 
   // Update message and show
-  feedbackOverlay.textContent = message;
-  feedbackOverlay.classList.remove('vjs-keyboard-feedback-hide');
-  feedbackOverlay.classList.add('vjs-keyboard-feedback-show');
+  state.feedbackOverlay.textContent = message;
+  state.feedbackOverlay.classList.remove('vjs-keyboard-feedback-hide');
+  state.feedbackOverlay.classList.add('vjs-keyboard-feedback-show');
 
   // Append to player if not already there
-  if (!playerContainer.contains(feedbackOverlay)) {
-    playerContainer.appendChild(feedbackOverlay);
+  if (!playerContainer.contains(state.feedbackOverlay)) {
+    playerContainer.appendChild(state.feedbackOverlay);
   }
 
   // Auto-hide after 1 second
-  feedbackTimeout = setTimeout(() => {
-    if (feedbackOverlay) {
-      feedbackOverlay.classList.remove('vjs-keyboard-feedback-show');
-      feedbackOverlay.classList.add('vjs-keyboard-feedback-hide');
+  state.feedbackTimeout = setTimeout(() => {
+    if (state.feedbackOverlay) {
+      state.feedbackOverlay.classList.remove('vjs-keyboard-feedback-show');
+      state.feedbackOverlay.classList.add('vjs-keyboard-feedback-hide');
     }
   }, 1000);
 }
@@ -371,15 +392,17 @@ export function setupKeyboardShortcuts(
   return () => {
     document.removeEventListener('keydown', handleKeyDown);
 
-    // Cleanup feedback overlay
-    if (feedbackTimeout) {
-      clearTimeout(feedbackTimeout);
-      feedbackTimeout = null;
+    // Cleanup feedback overlay for this player
+    const state = getPlayerState(player);
+    if (state.feedbackTimeout) {
+      clearTimeout(state.feedbackTimeout);
+      state.feedbackTimeout = null;
     }
-    if (feedbackOverlay && feedbackOverlay.parentNode) {
-      feedbackOverlay.parentNode.removeChild(feedbackOverlay);
-      feedbackOverlay = null;
+    if (state.feedbackOverlay && state.feedbackOverlay.parentNode) {
+      state.feedbackOverlay.parentNode.removeChild(state.feedbackOverlay);
+      state.feedbackOverlay = null;
     }
+    // Note: WeakMap automatically cleans up when player is garbage collected
   };
 }
 

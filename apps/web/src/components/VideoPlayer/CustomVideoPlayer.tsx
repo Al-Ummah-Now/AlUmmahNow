@@ -256,7 +256,9 @@ export default function CustomVideoPlayer({
           const isFullscreen = extPlayer.isFullscreen();
           console.log('[CustomVideoPlayer] Fullscreen change:', isFullscreen);
           analyticsRef.current?.trackFullscreenChange(isFullscreen);
-          void lockOrientationLandscape(isFullscreen);
+          lockOrientationLandscape(isFullscreen).catch((err) => {
+            console.error('[CustomVideoPlayer] Orientation lock failed:', err);
+          });
         });
 
         // Phase 2.6: Track PiP changes

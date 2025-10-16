@@ -55,7 +55,7 @@ export function getBunnyPreviewUrl(bunnyVideoId: string, libraryId: number = 239
   // Bunny.net preview sprite format
   // Format: https://vz-{library-hex}.b-cdn.net/{video-guid}/preview.webp
   const libraryHex = libraryId.toString(16).padStart(8, '0');
-  const cdnDomain = `vz-${libraryHex.slice(0, 8)}-${libraryHex.slice(8)}.b-cdn.net`;
+  const cdnDomain = `vz-${libraryHex}.b-cdn.net`;
 
   return `https://${cdnDomain}/${bunnyVideoId}/preview.webp`;
 }

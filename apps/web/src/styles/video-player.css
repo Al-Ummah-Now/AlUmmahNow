@@ -95,10 +95,6 @@
   .video-js .vjs-big-play-button:hover {
     transform: none;
   }
-
-  .vjs-volume-indicator {
-    transition: none !important;
-  }
 }
 
 /* Volume Indicator Overlay */
