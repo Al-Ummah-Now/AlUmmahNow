@@ -497,6 +497,154 @@ Network-restricted environments may block Google Fonts. See `.github/CLAUDE.md` 
 6. **API validation** - Use Swagger UI to test API endpoints
 7. **Auth service is separate** - Not part of this monorepo
 
+## Recommended Claude Code Agents
+
+This repository uses both **custom agents** (defined in `.claude/agents/`) and **system agents** (built into Claude Code). Below are the recommended system agents for Al Ummah Now's tech stack.
+
+### Custom Agents (`.claude/agents/`)
+
+See `.claude/AGENTS_SUMMARY.md` for complete documentation of 11 custom agents:
+
+**Architecture & Design:**
+- `architect` - System architecture, ADRs, data models
+- `api-designer` - RESTful API design, OpenAPI specs
+- `ux-designer` - UX/UI design, WCAG accessibility
+
+**Development:**
+- `developer` - Code implementation, zero linting
+- `ui-engineer` - Frontend (Next.js/React/Tailwind), bilingual RTL
+
+**Quality & Testing:**
+- `debugger` - Systematic bug investigation
+- `quality-reviewer` - Critical issues review
+- `test-engineer` - Test suite generation
+
+**Security & Performance:**
+- `security-auditor` - Security vulnerabilities, compliance
+- `performance-optimizer` - Performance analysis, optimization
+
+**Documentation:**
+- `technical-writer` - Documentation creation, API docs
+
+### Recommended System Agents ⭐
+
+These system agents are optimized for Al Ummah Now's specific tech stack and should be used proactively:
+
+#### Frontend Development
+- **frontend-mobile-development:frontend-developer** ⭐
+  - Next.js 15, React 19, Tailwind CSS
+  - Bilingual support (EN/AR with RTL)
+  - OpenNext on Cloudflare Workers
+  - Use for: Component development, routing, state management
+
+#### Backend Development
+- **backend-development:backend-architect** ⭐
+  - Hono API design, microservices patterns
+  - Cloudflare Workers architecture
+  - R2 storage patterns, repository design
+  - Use for: API design, data modeling, architecture decisions
+
+#### CI/CD & Deployment
+- **full-stack-orchestration:deployment-engineer** ⭐
+  - GitHub Actions workflows
+  - Cloudflare Workers deployment (wrangler)
+  - Multi-environment configuration
+  - Use for: CI/CD pipeline, deployment automation, PR previews
+
+#### Security
+- **full-stack-orchestration:security-auditor** ⭐
+  - JWT/OAuth2 authentication audits
+  - OpenAuth integration security
+  - OWASP Top 10 vulnerabilities
+  - Use for: Security audits, authentication reviews, compliance
+
+#### Performance
+- **full-stack-orchestration:performance-engineer** ⭐
+  - Cloudflare Workers optimization
+  - R2 query performance
+  - Video streaming optimization
+  - Use for: Performance profiling, bottleneck identification
+
+#### Documentation
+- **documentation-generation:api-documenter** ⭐
+  - OpenAPI 3.1 specifications
+  - chanfana integration
+  - Interactive Swagger UI
+  - Use for: API documentation, endpoint specs
+
+#### Testing
+- **full-stack-orchestration:test-automator** ⭐
+  - Jest test automation
+  - E2E testing strategies
+  - CI/CD test integration
+  - Use for: Test automation, coverage improvement
+
+#### Code Review
+- **code-documentation:code-reviewer** ⭐
+  - TypeScript best practices
+  - Cloudflare Workers patterns
+  - Security vulnerability detection
+  - Use for: PR reviews, code quality assurance
+
+#### Debugging
+- **debugging-toolkit:debugger** ⭐
+  - Complex debugging workflows
+  - Cloudflare Workers debugging
+  - R2/KV troubleshooting
+  - Use for: Systematic bug investigation
+
+#### Technical Documentation
+- **documentation-generation:docs-architect** ⭐
+  - System architecture documentation
+  - Technical deep-dives
+  - Migration guides
+  - Use for: Architecture docs, technical specifications
+
+### Usage Examples
+
+```bash
+# Frontend development
+# Use system agent for component development
+Task: "Build mobile-first video player controls with RTL support"
+Agent: frontend-mobile-development:frontend-developer
+
+# Backend API design
+# Use system agent for endpoint architecture
+Task: "Design RESTful API for video comments with pagination"
+Agent: backend-development:backend-architect
+
+# CI/CD improvements
+# Use system agent for deployment optimization
+Task: "Optimize GitHub Actions workflow for faster builds"
+Agent: full-stack-orchestration:deployment-engineer
+
+# Security audit
+# Use system agent for authentication review
+Task: "Audit JWT token validation in WebSocket server"
+Agent: full-stack-orchestration:security-auditor
+
+# API documentation
+# Use system agent for OpenAPI specs
+Task: "Generate OpenAPI documentation for video endpoints"
+Agent: documentation-generation:api-documenter
+```
+
+### Agent Selection Guide
+
+**Use Custom Agents when:**
+- You need Al Ummah Now-specific context
+- Working within established patterns
+- Following project conventions
+- Quick implementations with minimal setup
+
+**Use System Agents when:**
+- You need deep expertise in specific technologies
+- Implementing complex features
+- Performing specialized tasks (security audits, performance optimization)
+- Working with cutting-edge frameworks (Next.js 15, React 19)
+
+**Best Practice:** Combine both! Use custom agents for project-specific tasks and system agents for specialized deep work.
+
 ## Additional Resources
 
 - **Root README**: `README.md` - Quick start and overview

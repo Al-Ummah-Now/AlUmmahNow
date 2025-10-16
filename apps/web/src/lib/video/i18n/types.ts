@@ -110,6 +110,10 @@ export interface VideoPlayerTranslations {
     unmute: string;
     fullscreen: string;
     exitFullscreen: string;
+    pictureInPicture: string;
+    exitPictureInPicture: string;
+    pipNotAvailable: string;
+    pipNotSupported: string;
     settings: string;
     captions: string;
     quality: string;
@@ -162,6 +166,37 @@ export interface VideoPlayerTranslations {
     live: string;
     elapsed: string;
     remaining: string;
+  };
+
+  /**
+   * Keyboard shortcuts
+   */
+  keyboard: {
+    title: string;
+    description: string;
+    sections: {
+      playback: string;
+      seeking: string;
+      volume: string;
+      display: string;
+      speed: string;
+    };
+    shortcuts: {
+      playPause: { keys: string; description: string };
+      rewind5: { keys: string; description: string };
+      rewind10: { keys: string; description: string };
+      forward5: { keys: string; description: string };
+      forward10: { keys: string; description: string };
+      volumeUp: { keys: string; description: string };
+      volumeDown: { keys: string; description: string };
+      mute: { keys: string; description: string };
+      fullscreen: { keys: string; description: string };
+      pip: { keys: string; description: string };
+      speedDecrease: { keys: string; description: string };
+      speedIncrease: { keys: string; description: string };
+      seekPercent: { keys: string; description: string };
+    };
+    closeButton: string;
   };
 }
 
