@@ -96,3 +96,359 @@
     transform: none;
   }
 }
+
+/* Volume Indicator Overlay */
+.vjs-volume-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: oklch(var(--background) / 0.9);
+  color: oklch(var(--foreground));
+  padding: 1rem 1.5rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.vjs-volume-indicator-show {
+  opacity: 1;
+}
+
+.vjs-volume-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.vjs-volume-text {
+  min-width: 3rem;
+  text-align: center;
+}
+
+/* Dark mode volume indicator */
+.dark .vjs-volume-indicator {
+  background: oklch(var(--card) / 0.95);
+  color: oklch(var(--card-foreground));
+}
+
+/* Mobile-optimized volume control */
+@media (max-width: 640px) {
+  .vjs-volume-indicator {
+    padding: 0.875rem 1.25rem;
+    font-size: 1rem;
+    gap: 0.625rem;
+  }
+
+  .vjs-volume-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .vjs-volume-text {
+    min-width: 2.5rem;
+  }
+
+  /* Larger touch target for volume button on mobile */
+  .video-js .vjs-volume-panel {
+    min-width: 3rem;
+  }
+
+  .video-js .vjs-volume-panel .vjs-mute-control {
+    width: 3rem;
+    height: 3rem;
+  }
+}
+
+/* Enhanced volume slider styling */
+.video-js .vjs-volume-panel {
+  transition: width 0.2s ease;
+}
+
+.video-js .vjs-volume-panel:hover .vjs-volume-control {
+  opacity: 1;
+  visibility: visible;
+}
+
+.video-js .vjs-volume-bar {
+  background: oklch(var(--muted) / 0.4);
+  border-radius: 0.25rem;
+}
+
+.video-js .vjs-volume-level {
+  background: oklch(var(--primary));
+  border-radius: 0.25rem;
+}
+
+/* Volume control focus states */
+.video-js .vjs-volume-panel:focus-within .vjs-volume-control {
+  opacity: 1;
+  visibility: visible;
+}
+
+.video-js .vjs-volume-bar:focus-visible {
+  outline: 2px solid oklch(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Smooth volume transitions */
+.video-js .vjs-volume-level {
+  transition: width 0.1s ease-out;
+}
+
+/* RTL support for volume indicator */
+[dir="rtl"] .vjs-volume-indicator {
+  flex-direction: row-reverse;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .vjs-volume-indicator {
+    background: oklch(var(--background));
+    border: 2px solid oklch(var(--foreground));
+  }
+
+  .video-js .vjs-volume-bar {
+    border: 1px solid currentColor;
+  }
+}
+
+/* ========================================
+   Phase 2.4: Progress Bar Hover Preview
+   ======================================== */
+
+/* Thumbnail preview container */
+.vjs-thumbnail-holder {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  transform: translateX(-50%);
+  background: oklch(var(--background) / 0.95);
+  border: 2px solid oklch(var(--border));
+  border-radius: 0.5rem;
+  padding: 0.375rem;
+  pointer-events: none;
+  z-index: 100;
+  display: none;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.15s ease-in-out;
+}
+
+/* Show thumbnail on hover */
+.vjs-progress-control:hover .vjs-thumbnail-holder {
+  display: block;
+  opacity: 1;
+}
+
+/* Thumbnail image container */
+.vjs-thumbnail-holder img {
+  display: block;
+  border-radius: 0.25rem;
+  max-width: 160px;
+  max-height: 90px;
+}
+
+/* Timestamp tooltip */
+.vjs-thumbnail-time {
+  text-align: center;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: oklch(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: nowrap;
+}
+
+/* Watched segments visualization */
+.vjs-watched-segment {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: oklch(var(--primary) / 0.3);
+  pointer-events: none;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+/* Enhanced progress bar styling */
+.video-js .vjs-progress-control {
+  cursor: pointer;
+  touch-action: none;
+}
+
+.video-js .vjs-progress-holder {
+  position: relative;
+  height: 0.375rem;
+  border-radius: 0.25rem;
+  background: oklch(var(--muted) / 0.4);
+  transition: height 0.15s ease;
+}
+
+.video-js .vjs-progress-control:hover .vjs-progress-holder {
+  height: 0.5rem;
+}
+
+/* Play progress (current position) */
+.video-js .vjs-play-progress {
+  background: oklch(var(--primary));
+  border-radius: 0.25rem;
+}
+
+/* Load progress (buffered) */
+.video-js .vjs-load-progress {
+  background: oklch(var(--primary) / 0.2);
+  border-radius: 0.25rem;
+}
+
+/* Buffered ranges */
+.video-js .vjs-load-progress div {
+  background: oklch(var(--primary) / 0.3);
+  border-radius: 0.25rem;
+}
+
+/* Progress bar handle */
+.video-js .vjs-play-progress .vjs-time-tooltip,
+.video-js .vjs-play-progress::before {
+  display: block;
+}
+
+/* Dark mode adjustments */
+.dark .vjs-thumbnail-holder {
+  background: oklch(var(--card) / 0.95);
+  border-color: oklch(var(--border));
+}
+
+.dark .vjs-thumbnail-time {
+  color: oklch(var(--card-foreground));
+}
+
+.dark .vjs-watched-segment {
+  background: oklch(var(--primary) / 0.25);
+}
+
+/* RTL support for thumbnail positioning */
+[dir="rtl"] .vjs-thumbnail-holder {
+  transform: translateX(50%);
+}
+
+[dir="rtl"] .vjs-progress-control .vjs-time-tooltip {
+  direction: rtl;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .vjs-thumbnail-holder {
+    max-width: 120px;
+  }
+
+  .vjs-thumbnail-holder img {
+    max-width: 120px;
+    max-height: 67.5px;
+  }
+
+  .vjs-thumbnail-time {
+    font-size: 0.6875rem;
+  }
+
+  /* Larger touch target for progress bar */
+  .video-js .vjs-progress-control {
+    height: 2.5rem;
+    padding: 0.75rem 0;
+  }
+
+  .video-js .vjs-progress-holder {
+    height: 0.5rem;
+  }
+
+  /* Touch-hold support for preview */
+  .vjs-progress-control:active .vjs-thumbnail-holder {
+    display: block;
+    opacity: 1;
+  }
+}
+
+/* Performance optimization: GPU acceleration */
+.vjs-thumbnail-holder,
+.vjs-watched-segment {
+  will-change: opacity, transform;
+}
+
+/* Accessibility: High contrast mode */
+@media (prefers-contrast: high) {
+  .vjs-thumbnail-holder {
+    background: oklch(var(--background));
+    border: 3px solid oklch(var(--foreground));
+  }
+
+  .vjs-watched-segment {
+    background: oklch(var(--primary) / 0.5);
+    border-top: 1px solid oklch(var(--primary));
+  }
+
+  .video-js .vjs-progress-holder {
+    border: 1px solid oklch(var(--border));
+  }
+}
+
+/* Accessibility: Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .vjs-thumbnail-holder,
+  .vjs-watched-segment,
+  .video-js .vjs-progress-holder {
+    transition: none;
+  }
+
+  .video-js .vjs-progress-control:hover .vjs-progress-holder {
+    height: 0.375rem;
+  }
+}
+
+/* Precise seeking visual feedback */
+.video-js .vjs-progress-control:hover .vjs-play-progress::before {
+  content: '';
+  position: absolute;
+  right: -0.375rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.75rem;
+  height: 0.75rem;
+  background: oklch(var(--primary));
+  border: 2px solid oklch(var(--background));
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.dark .video-js .vjs-play-progress::before {
+  border-color: oklch(var(--card));
+}
+
+/* Smooth transitions */
+.video-js .vjs-play-progress,
+.video-js .vjs-load-progress {
+  transition: width 0.1s linear;
+}
+
+/* Focus states for accessibility */
+.video-js .vjs-progress-control:focus-visible {
+  outline: 2px solid oklch(var(--ring));
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+.video-js .vjs-progress-holder:focus-visible {
+  outline: 2px solid oklch(var(--ring));
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}

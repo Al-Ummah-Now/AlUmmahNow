@@ -121,6 +121,50 @@ export class VideoAnalytics {
   }
 
   /**
+   * Track playback speed change event
+   * Phase 2.2: Playback Speed Control
+   */
+  trackSpeedChange(rate: number, previousRate: number): void {
+    this.addEvent({
+      eventType: VideoEventType.SPEED_CHANGE,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        rate,
+        previousRate,
+        change: rate - previousRate
+      }
+    });
+  }
+
+  /**
+   * Track fullscreen change event
+   * Phase 2.6: Fullscreen and Picture-in-Picture
+   */
+  trackFullscreenChange(isFullscreen: boolean): void {
+    this.addEvent({
+      eventType: isFullscreen ? VideoEventType.FULLSCREEN_ENTER : VideoEventType.FULLSCREEN_EXIT,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        isFullscreen
+      }
+    });
+  }
+
+  /**
+   * Track Picture-in-Picture change event
+   * Phase 2.6: Fullscreen and Picture-in-Picture
+   */
+  trackPictureInPicture(isActive: boolean): void {
+    this.addEvent({
+      eventType: isActive ? VideoEventType.PIP_ENTER : VideoEventType.PIP_EXIT,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        isActive
+      }
+    });
+  }
+
+  /**
    * Add event to queue
    */
   private addEvent(event: Partial<AnalyticsEvent>): void {
@@ -300,7 +344,9 @@ export class VideoAnalytics {
     const timestamp = Date.now();
 
     // Use crypto.getRandomValues for better randomness
-    // Using hex encoding (base16) for consistent 12-character output with full 48 bits entropy
+    // Generate 6 random bytes (6 × 8 = 48 bits of entropy)
+    // Convert to hex: each byte becomes 2 hex characters (6 × 2 = 12 chars total)
+    // This provides 48 bits of entropy with a consistent 12-character hex string format
     if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
       const randomBytes = new Uint8Array(6);
       window.crypto.getRandomValues(randomBytes);

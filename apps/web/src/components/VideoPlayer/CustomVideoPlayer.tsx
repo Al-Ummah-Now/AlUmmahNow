@@ -11,9 +11,15 @@
  * - Accessibility support
  * - Responsive design
  * - Bilingual error messages
+ * - YouTube-style keyboard shortcuts (Phase 2.3)
+ * - Volume control with persistence and scroll wheel (Phase 2.5)
+ * - Fullscreen and Picture-in-Picture modes (Phase 2.6)
  *
  * Phase 1.4: Error handling with fallback
  * Phase 1.5: Basic analytics (ready, play, pause, ended, error)
+ * Phase 2.3: Keyboard shortcuts with visual feedback
+ * Phase 2.5: Volume persistence and enhanced controls
+ * Phase 2.6: Fullscreen and Picture-in-Picture modes
  * Phase 3: Advanced analytics (seek, quality change, buffering, etc.)
  */
 
@@ -32,11 +38,17 @@ import {
   VideoFallbackStrategy,
   VideoSource,
 } from '@/lib/video/fallback-strategy';
+import {
+  setupFullscreenPiP,
+  lockOrientationLandscape
+} from '@/lib/video/fullscreen-pip';
+import { initializeVolumeControls } from '@/lib/video/volume-control';
+import { setupKeyboardShortcuts } from '@/lib/video/keyboard-shortcuts';
 import { ErrorDisplay } from './ErrorDisplay';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import '@/styles/video-player.css';
 import type { Player } from 'video.js';
-import { hasErrorMethod } from '@/lib/video/videojs.d';
+import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs.d';
 
 export interface CustomVideoPlayerProps {
   videoId: string;
@@ -80,6 +92,8 @@ export default function CustomVideoPlayer({
   const errorHandlerRef = useRef<VideoErrorHandler | null>(null);
   const fallbackStrategyRef = useRef<VideoFallbackStrategy | null>(null);
   const handleVideoErrorRef = useRef<((error: unknown) => void) | null>(null);
+  const volumeControlsCleanupRef = useRef<(() => void) | null>(null);
+  const keyboardShortcutsCleanupRef = useRef<(() => void) | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -140,7 +154,6 @@ export default function CustomVideoPlayer({
     if (categorizedError.fallbackAvailable) {
       const fallbackSource = fallbackStrategyRef.current.getNextFallback(categorizedError);
       if (fallbackSource) {
-        console.log('[CustomVideoPlayer] Trying fallback:', fallbackSource);
         handleSourceChange(fallbackSource);
       }
     }
@@ -205,8 +218,8 @@ export default function CustomVideoPlayer({
 
       // Add error reporter for analytics
       if (enableAnalytics) {
-        errorHandlerRef.current.addErrorReporter((error: VideoError) => {
-          console.log('[CustomVideoPlayer] Error reported:', error);
+        errorHandlerRef.current.addErrorReporter(() => {
+          // Error reported to analytics
         });
       }
 
@@ -234,20 +247,48 @@ export default function CustomVideoPlayer({
         setPlayerReady(true);
         analyticsRef.current?.trackReady();
 
+        // Phase 2.5: Initialize volume controls
+        volumeControlsCleanupRef.current = initializeVolumeControls(player);
+
+        // Phase 2.6: Setup fullscreen and PiP
+        setupFullscreenPiP(player as ExtendedPlayer);
+
+        // Phase 2.3: Setup keyboard shortcuts
+        keyboardShortcutsCleanupRef.current = setupKeyboardShortcuts(player as ExtendedPlayer, {
+          lang,
+          showFeedback: true,
+        });
+
+        // Phase 2.6: Track fullscreen changes
+        player.on('fullscreenchange', () => {
+          const extPlayer = player as ExtendedPlayer;
+          const isFullscreen = extPlayer.isFullscreen();
+          analyticsRef.current?.trackFullscreenChange(isFullscreen);
+          lockOrientationLandscape(isFullscreen).catch((err) => {
+            console.error('[CustomVideoPlayer] Orientation lock failed:', err);
+          });
+        });
+
+        // Phase 2.6: Track PiP changes
+        player.on('enterpictureinpicture', () => {
+          analyticsRef.current?.trackPictureInPicture(true);
+        });
+
+        player.on('leavepictureinpicture', () => {
+          analyticsRef.current?.trackPictureInPicture(false);
+        });
+
         // Phase 1.5: Basic event tracking
         player.on('play', () => {
-          console.log('[CustomVideoPlayer] Play event');
           analyticsRef.current?.trackPlay();
           setCurrentError(null); // Clear error on successful play
         });
 
         player.on('pause', () => {
-          console.log('[CustomVideoPlayer] Pause event');
           analyticsRef.current?.trackPause();
         });
 
         player.on('ended', () => {
-          console.log('[CustomVideoPlayer] Ended event');
           analyticsRef.current?.trackComplete();
         });
 
@@ -283,6 +324,18 @@ export default function CustomVideoPlayer({
       // Cleanup error handler
       errorHandlerRef.current = null;
       fallbackStrategyRef.current = null;
+
+      // Cleanup volume controls
+      if (volumeControlsCleanupRef.current) {
+        volumeControlsCleanupRef.current();
+        volumeControlsCleanupRef.current = null;
+      }
+
+      // Cleanup keyboard shortcuts
+      if (keyboardShortcutsCleanupRef.current) {
+        keyboardShortcutsCleanupRef.current();
+        keyboardShortcutsCleanupRef.current = null;
+      }
 
       // Cleanup player
       disposeVideoPlayer(playerRef.current);

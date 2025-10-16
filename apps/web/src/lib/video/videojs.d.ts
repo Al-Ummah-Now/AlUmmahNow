@@ -5,13 +5,13 @@
  * but are not fully exposed in the official type definitions.
  */
 
-import type { Player as VideoJsPlayer } from 'video.js';
+import type { Player as VideoJsPlayer, Component } from 'video.js';
 
 /**
  * Extended Player interface with additional methods
  *
- * Video.js Player has an error() method that returns MediaError | null,
- * but it's not fully exposed in the TypeScript definitions.
+ * Video.js Player has methods that exist at runtime but are not fully
+ * exposed in the TypeScript definitions.
  */
 export interface ExtendedPlayer extends VideoJsPlayer {
   /**
@@ -19,6 +19,72 @@ export interface ExtendedPlayer extends VideoJsPlayer {
    * @returns The current MediaError or null if no error
    */
   error(): MediaError | null;
+
+  /**
+   * Get or set the playback rate
+   * @param rate - Optional playback rate to set (0.25 to 2.0)
+   * @returns Current playback rate if no parameter, or the player instance if setting
+   */
+  playbackRate(): number;
+  playbackRate(rate: number): this;
+
+  /**
+   * Get the player's root DOM element
+   * @returns The player's root HTMLElement
+   */
+  el(): HTMLElement;
+
+  /**
+   * Check if player is in fullscreen mode
+   * @returns True if player is fullscreen
+   */
+  isFullscreen(): boolean;
+
+  /**
+   * Request fullscreen mode
+   * @returns Promise that resolves when fullscreen is entered
+   */
+  requestFullscreen(): Promise<void>;
+
+  /**
+   * Exit fullscreen mode
+   * @returns Promise that resolves when fullscreen is exited
+   */
+  exitFullscreen(): Promise<void>;
+
+  /**
+   * Trigger a custom event on the player
+   * @param event - Event name or event object
+   */
+  trigger(event: string | Event): void;
+
+  /**
+   * Get the control bar component
+   * @returns Control bar component
+   */
+  controlBar: Component;
+
+  /**
+   * Get or set the player volume
+   * @param volume - Optional volume level (0 to 1)
+   * @returns Current volume if no parameter, or the player instance if setting
+   */
+  volume(): number;
+  volume(volume: number): this;
+
+  /**
+   * Get or set the muted state
+   * @param muted - Optional muted state
+   * @returns Current muted state if no parameter, or the player instance if setting
+   */
+  muted(): boolean;
+  muted(muted: boolean): this;
+
+  /**
+   * Get the ready state of the media element
+   * @returns Current ready state (0-4)
+   */
+  readyState(): number;
 }
 
 /**
