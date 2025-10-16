@@ -12,7 +12,7 @@
  * - Exit fullscreen on video end
  */
 
-import type { Player } from 'video.js';
+import type { ExtendedPlayer } from './videojs.d';
 
 /**
  * Check if Picture-in-Picture is supported by the browser
@@ -40,7 +40,7 @@ export function isOrientationLockSupported(): boolean {
  *
  * @param player - Video.js player instance
  */
-export function setupDoubleClickFullscreen(player: Player): void {
+export function setupDoubleClickFullscreen(player: ExtendedPlayer): void {
   player.on('dblclick', () => {
     if (player.isFullscreen()) {
       player.exitFullscreen();
@@ -82,7 +82,7 @@ export async function lockOrientationLandscape(isFullscreen: boolean): Promise<v
  *
  * @param player - Video.js player instance
  */
-export function setupIOSFullscreen(player: Player): void {
+export function setupIOSFullscreen(player: ExtendedPlayer): void {
   if (!isIOS()) {
     return;
   }
@@ -111,7 +111,7 @@ export function setupIOSFullscreen(player: Player): void {
  *
  * @param player - Video.js player instance
  */
-export function hidePiPButtonIfUnsupported(player: Player): void {
+export function hidePiPButtonIfUnsupported(player: ExtendedPlayer): void {
   if (!isPictureInPictureSupported()) {
     const pipButton = player.controlBar.pictureInPictureToggle;
     if (pipButton) {
@@ -125,7 +125,7 @@ export function hidePiPButtonIfUnsupported(player: Player): void {
  *
  * @param player - Video.js player instance
  */
-export function setupExitFullscreenOnEnd(player: Player): void {
+export function setupExitFullscreenOnEnd(player: ExtendedPlayer): void {
   player.on('ended', () => {
     if (player.isFullscreen()) {
       player.exitFullscreen();

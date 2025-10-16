@@ -11,9 +11,13 @@
  * - Accessibility support
  * - Responsive design
  * - Bilingual error messages
+ * - Volume control with persistence and scroll wheel (Phase 2.5)
+ * - Fullscreen and Picture-in-Picture modes (Phase 2.6)
  *
  * Phase 1.4: Error handling with fallback
  * Phase 1.5: Basic analytics (ready, play, pause, ended, error)
+ * Phase 2.5: Volume persistence and enhanced controls
+ * Phase 2.6: Fullscreen and Picture-in-Picture modes
  * Phase 3: Advanced analytics (seek, quality change, buffering, etc.)
  */
 
@@ -36,11 +40,12 @@ import {
   setupFullscreenPiP,
   lockOrientationLandscape
 } from '@/lib/video/fullscreen-pip';
+import { initializeVolumeControls } from '@/lib/video/volume-control';
 import { ErrorDisplay } from './ErrorDisplay';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import '@/styles/video-player.css';
 import type { Player } from 'video.js';
-import { hasErrorMethod } from '@/lib/video/videojs.d';
+import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs.d';
 
 export interface CustomVideoPlayerProps {
   videoId: string;
@@ -84,6 +89,7 @@ export default function CustomVideoPlayer({
   const errorHandlerRef = useRef<VideoErrorHandler | null>(null);
   const fallbackStrategyRef = useRef<VideoFallbackStrategy | null>(null);
   const handleVideoErrorRef = useRef<((error: unknown) => void) | null>(null);
+  const volumeControlsCleanupRef = useRef<(() => void) | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -238,6 +244,32 @@ export default function CustomVideoPlayer({
         setPlayerReady(true);
         analyticsRef.current?.trackReady();
 
+        // Phase 2.5: Initialize volume controls
+        volumeControlsCleanupRef.current = initializeVolumeControls(player);
+
+        // Phase 2.6: Setup fullscreen and PiP
+        setupFullscreenPiP(player);
+
+        // Phase 2.6: Track fullscreen changes
+        player.on('fullscreenchange', () => {
+          const extPlayer = player as ExtendedPlayer;
+          const isFullscreen = extPlayer.isFullscreen();
+          console.log('[CustomVideoPlayer] Fullscreen change:', isFullscreen);
+          analyticsRef.current?.trackFullscreenChange(isFullscreen);
+          void lockOrientationLandscape(isFullscreen);
+        });
+
+        // Phase 2.6: Track PiP changes
+        player.on('enterpictureinpicture', () => {
+          console.log('[CustomVideoPlayer] PiP entered');
+          analyticsRef.current?.trackPictureInPicture(true);
+        });
+
+        player.on('leavepictureinpicture', () => {
+          console.log('[CustomVideoPlayer] PiP left');
+          analyticsRef.current?.trackPictureInPicture(false);
+        });
+
         // Phase 1.5: Basic event tracking
         player.on('play', () => {
           console.log('[CustomVideoPlayer] Play event');
@@ -287,6 +319,12 @@ export default function CustomVideoPlayer({
       // Cleanup error handler
       errorHandlerRef.current = null;
       fallbackStrategyRef.current = null;
+
+      // Cleanup volume controls
+      if (volumeControlsCleanupRef.current) {
+        volumeControlsCleanupRef.current();
+        volumeControlsCleanupRef.current = null;
+      }
 
       // Cleanup player
       disposeVideoPlayer(playerRef.current);
