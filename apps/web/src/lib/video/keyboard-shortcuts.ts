@@ -31,6 +31,20 @@ import type { ExtendedPlayer } from './videojs.d';
 import { getTranslations, type SupportedLanguage } from './i18n';
 
 /**
+ * Constants for keyboard shortcuts behavior
+ */
+const FEEDBACK_DURATION_MS = 1000;
+const ARROW_REWIND_SECONDS = 5;
+const J_REWIND_SECONDS = 10;
+const ARROW_FORWARD_SECONDS = 5;
+const L_FORWARD_SECONDS = 10;
+const VOLUME_STEP = 0.1;
+const MIN_PLAYBACK_RATE = 0.25;
+const MAX_PLAYBACK_RATE = 2;
+const PLAYBACK_RATE_STEP = 0.25;
+const PERCENT_MULTIPLIER = 100;
+
+/**
  * Configuration options for keyboard shortcuts
  */
 export interface KeyboardShortcutsOptions {
@@ -178,13 +192,13 @@ function showFeedback(message: string, player: ExtendedPlayer): void {
     playerContainer.appendChild(state.feedbackOverlay);
   }
 
-  // Auto-hide after 1 second
+  // Auto-hide after configured duration
   state.feedbackTimeout = setTimeout(() => {
     if (state.feedbackOverlay) {
       state.feedbackOverlay.classList.remove('vjs-keyboard-feedback-show');
       state.feedbackOverlay.classList.add('vjs-keyboard-feedback-hide');
     }
-  }, 1000);
+  }, FEEDBACK_DURATION_MS);
 }
 
 /**
@@ -248,10 +262,10 @@ export function setupKeyboardShortcuts(
       handled = true;
     }
 
-    // Rewind (Arrow Left, J) - 5 seconds for arrow, 10 for J
+    // Rewind (Arrow Left, J)
     else if (bindings.rewind.includes(key)) {
       event.preventDefault();
-      const rewindAmount = key === 'ArrowLeft' ? 5 : 10;
+      const rewindAmount = key === 'ArrowLeft' ? ARROW_REWIND_SECONDS : J_REWIND_SECONDS;
       const currentTime = player.currentTime() || 0;
       const newTime = Math.max(0, currentTime - rewindAmount);
       player.currentTime(newTime);
@@ -259,10 +273,10 @@ export function setupKeyboardShortcuts(
       handled = true;
     }
 
-    // Forward (Arrow Right, L) - 5 seconds for arrow, 10 for L
+    // Forward (Arrow Right, L)
     else if (bindings.forward.includes(key)) {
       event.preventDefault();
-      const forwardAmount = key === 'ArrowRight' ? 5 : 10;
+      const forwardAmount = key === 'ArrowRight' ? ARROW_FORWARD_SECONDS : L_FORWARD_SECONDS;
       const currentTime = player.currentTime() || 0;
       const duration = player.duration() || 0;
       const newTime = Math.min(duration, currentTime + forwardAmount);
@@ -275,9 +289,9 @@ export function setupKeyboardShortcuts(
     else if (bindings.volumeUp.includes(key)) {
       event.preventDefault();
       const currentVolume = player.volume();
-      const newVolume = Math.min(1, currentVolume + 0.1);
+      const newVolume = Math.min(1, currentVolume + VOLUME_STEP);
       player.volume(newVolume);
-      feedbackMessage = `${translations.controls.volume}: ${Math.round(newVolume * 100)}%`;
+      feedbackMessage = `${translations.controls.volume}: ${Math.round(newVolume * PERCENT_MULTIPLIER)}%`;
       handled = true;
     }
 
@@ -285,9 +299,9 @@ export function setupKeyboardShortcuts(
     else if (bindings.volumeDown.includes(key)) {
       event.preventDefault();
       const currentVolume = player.volume();
-      const newVolume = Math.max(0, currentVolume - 0.1);
+      const newVolume = Math.max(0, currentVolume - VOLUME_STEP);
       player.volume(newVolume);
-      feedbackMessage = `${translations.controls.volume}: ${Math.round(newVolume * 100)}%`;
+      feedbackMessage = `${translations.controls.volume}: ${Math.round(newVolume * PERCENT_MULTIPLIER)}%`;
       handled = true;
     }
 
@@ -343,7 +357,7 @@ export function setupKeyboardShortcuts(
     else if (bindings.speedDecrease.includes(key)) {
       event.preventDefault();
       const currentRate = player.playbackRate();
-      const newRate = Math.max(0.25, currentRate - 0.25);
+      const newRate = Math.max(MIN_PLAYBACK_RATE, currentRate - PLAYBACK_RATE_STEP);
       player.playbackRate(newRate);
       feedbackMessage = `${translations.controls.speed}: ${newRate}x`;
       handled = true;
@@ -353,7 +367,7 @@ export function setupKeyboardShortcuts(
     else if (bindings.speedIncrease.includes(key)) {
       event.preventDefault();
       const currentRate = player.playbackRate();
-      const newRate = Math.min(2, currentRate + 0.25);
+      const newRate = Math.min(MAX_PLAYBACK_RATE, currentRate + PLAYBACK_RATE_STEP);
       player.playbackRate(newRate);
       feedbackMessage = `${translations.controls.speed}: ${newRate}x`;
       handled = true;
@@ -373,7 +387,7 @@ export function setupKeyboardShortcuts(
       event.preventDefault();
       const percentage = bindings.seek[key];
       const duration = player.duration() || 0;
-      const newTime = (duration * percentage) / 100;
+      const newTime = (duration * percentage) / PERCENT_MULTIPLIER;
       player.currentTime(newTime);
       feedbackMessage = `${percentage}% (${formatTime(newTime)})`;
       handled = true;

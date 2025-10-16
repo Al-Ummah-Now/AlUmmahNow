@@ -14,18 +14,30 @@
 import type { ExtendedPlayer } from './videojs.d';
 
 /**
+ * Constants for progress preview behavior
+ */
+const DEFAULT_BUNNY_LIBRARY_ID = 239863;
+const DEFAULT_THUMBNAIL_INTERVAL_SECONDS = 5;
+const DEFAULT_THUMBNAIL_WIDTH = 160;
+const DEFAULT_THUMBNAIL_HEIGHT = 90;
+const SEGMENT_MERGE_TOLERANCE_SECONDS = 1;
+const SEEK_THRESHOLD_SECONDS = 2;
+const PERCENT_MULTIPLIER = 100;
+const READY_STATE_HAVE_METADATA = 1;
+
+/**
  * Sprite thumbnail configuration
  */
 export interface SpriteThumbnailConfig {
   /** Bunny.net video ID (GUID) */
   bunnyVideoId: string;
-  /** CDN library ID (defaults to 239863) */
+  /** CDN library ID */
   libraryId?: number;
-  /** Thumbnail interval in seconds (defaults to 5) */
+  /** Thumbnail interval in seconds */
   interval?: number;
-  /** Thumbnail width in pixels (defaults to 160) */
+  /** Thumbnail width in pixels */
   width?: number;
-  /** Thumbnail height in pixels (defaults to 90) */
+  /** Thumbnail height in pixels */
   height?: number;
   /** Enable RTL layout (defaults to false) */
   rtl?: boolean;
@@ -43,14 +55,14 @@ export interface WatchedSegment {
  * Get Bunny.net preview URL for sprite thumbnails
  *
  * @param bunnyVideoId - Bunny.net video GUID
- * @param libraryId - CDN library ID (defaults to 239863)
+ * @param libraryId - CDN library ID
  * @returns Preview sprite sheet URL
  *
  * @example
- * const previewUrl = getBunnyPreviewUrl('abc-def-123', 239863);
+ * const previewUrl = getBunnyPreviewUrl('abc-def-123');
  * // Returns: https://vz-d3f23d76-a73.b-cdn.net/abc-def-123/preview.webp
  */
-export function getBunnyPreviewUrl(bunnyVideoId: string, libraryId: number = 239863): string {
+export function getBunnyPreviewUrl(bunnyVideoId: string, libraryId: number = DEFAULT_BUNNY_LIBRARY_ID): string {
   // Bunny.net preview sprite format
   // Format: https://vz-{library-hex}.b-cdn.net/{video-guid}/preview.webp
   const libraryHex = libraryId.toString(16).padStart(8, '0');
@@ -88,10 +100,10 @@ export function initializeSpriteThumbnails(
 
   const {
     bunnyVideoId,
-    libraryId = 239863,
-    interval = 5,
-    width = 160,
-    height = 90,
+    libraryId = DEFAULT_BUNNY_LIBRARY_ID,
+    interval = DEFAULT_THUMBNAIL_INTERVAL_SECONDS,
+    width = DEFAULT_THUMBNAIL_WIDTH,
+    height = DEFAULT_THUMBNAIL_HEIGHT,
     rtl = false
   } = config;
 
@@ -169,7 +181,7 @@ export function setupWatchedSegments(
       const last = merged[merged.length - 1];
 
       // If segments overlap or are adjacent, merge them
-      if (current.start <= last.end + 1) {
+      if (current.start <= last.end + SEGMENT_MERGE_TOLERANCE_SECONDS) {
         last.end = Math.max(last.end, current.end);
       } else {
         merged.push(current);
@@ -214,8 +226,8 @@ export function setupWatchedSegments(
 
     // Add segment overlays
     segments.forEach(segment => {
-      const startPercent = (segment.start / duration) * 100;
-      const widthPercent = ((segment.end - segment.start) / duration) * 100;
+      const startPercent = (segment.start / duration) * PERCENT_MULTIPLIER;
+      const widthPercent = ((segment.end - segment.start) / duration) * PERCENT_MULTIPLIER;
 
       const overlay = document.createElement('div');
       overlay.className = 'vjs-watched-segment';
@@ -239,7 +251,7 @@ export function setupWatchedSegments(
 
     // Check for seek (discontinuity)
     const timeDiff = Math.abs(currentTime - lastTime);
-    if (timeDiff > 2) {
+    if (timeDiff > SEEK_THRESHOLD_SECONDS) {
       // User seeked - save previous segment if exists
       if (currentSegmentStart !== null && lastTime > currentSegmentStart) {
         addSegment(currentSegmentStart, lastTime);
@@ -284,7 +296,7 @@ export function setupWatchedSegments(
   player.on('loadedmetadata', handleLoadedMetadata);
 
   // Initial visualization
-  if (player.readyState() >= 1) {
+  if (player.readyState() >= READY_STATE_HAVE_METADATA) {
     updateProgressBarSegments();
   }
 
