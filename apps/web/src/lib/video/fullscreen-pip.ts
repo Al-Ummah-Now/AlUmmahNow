@@ -15,6 +15,18 @@
 import type { ExtendedPlayer } from './videojs.d';
 
 /**
+ * Screen Orientation Lock type
+ */
+type OrientationLockType = 'portrait' | 'landscape' | 'portrait-primary' | 'portrait-secondary' | 'landscape-primary' | 'landscape-secondary';
+
+/**
+ * Extended ScreenOrientation interface with lock method
+ */
+interface ScreenOrientationWithLock extends ScreenOrientation {
+  lock(orientation: OrientationLockType): Promise<void>;
+}
+
+/**
  * Check if Picture-in-Picture is supported by the browser
  */
 export function isPictureInPictureSupported(): boolean {
@@ -63,7 +75,7 @@ export async function lockOrientationLandscape(isFullscreen: boolean): Promise<v
 
   try {
     // Lock to landscape mode when entering fullscreen
-    await screen.orientation.lock('landscape');
+    await (screen.orientation as ScreenOrientationWithLock).lock('landscape');
   } catch (error) {
     // Orientation lock may fail due to:
     // - Browser policy (user gesture required)
@@ -147,7 +159,7 @@ export function setupExitFullscreenOnEnd(player: ExtendedPlayer): void {
  *
  * @param player - Video.js player instance
  */
-export function setupFullscreenPiP(player: Player): void {
+export function setupFullscreenPiP(player: ExtendedPlayer): void {
   // Setup double-click fullscreen
   setupDoubleClickFullscreen(player);
 

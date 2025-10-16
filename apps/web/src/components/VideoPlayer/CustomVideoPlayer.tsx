@@ -248,7 +248,7 @@ export default function CustomVideoPlayer({
         volumeControlsCleanupRef.current = initializeVolumeControls(player);
 
         // Phase 2.6: Setup fullscreen and PiP
-        setupFullscreenPiP(player);
+        setupFullscreenPiP(player as ExtendedPlayer);
 
         // Phase 2.6: Track fullscreen changes
         player.on('fullscreenchange', () => {
