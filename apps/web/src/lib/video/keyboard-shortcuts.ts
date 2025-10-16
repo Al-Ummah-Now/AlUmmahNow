@@ -344,10 +344,21 @@ export function setupKeyboardShortcuts(
         } else {
           (videoElement as HTMLVideoElement)
             .requestPictureInPicture()
+            .then(() => {
+              // Show success feedback only if PiP request succeeds
+              if (enableFeedback) {
+                showFeedback(translations.controls.pictureInPicture, player);
+              }
+            })
             .catch(() => {
-              feedbackMessage = translations.controls.pipNotAvailable;
+              // Show error feedback if PiP request fails
+              if (enableFeedback) {
+                showFeedback(translations.controls.pipNotAvailable, player);
+              }
             });
-          feedbackMessage = translations.controls.pictureInPicture;
+          // Don't set feedbackMessage here - it's handled in promise callbacks
+          handled = true;
+          return; // Early return to skip feedback below
         }
       } else {
         feedbackMessage = translations.controls.pipNotSupported;
