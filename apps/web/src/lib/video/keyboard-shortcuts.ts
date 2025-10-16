@@ -238,18 +238,20 @@ export function setupKeyboardShortcuts(
 
   /**
    * Handle keyboard events
+   * Wrapped in try-catch to prevent errors from propagating to global scope
    */
   function handleKeyDown(event: KeyboardEvent): void {
-    // Don't handle if focus is on an input element
-    if (isInputElement(document.activeElement)) {
-      return;
-    }
+    try {
+      // Don't handle if focus is on an input element
+      if (isInputElement(document.activeElement)) {
+        return;
+      }
 
-    const key = event.key;
-    let handled = false;
-    let feedbackMessage = '';
+      const key = event.key;
+      let handled = false;
+      let feedbackMessage = '';
 
-    // Play/Pause (Space, K)
+      // Play/Pause (Space, K)
     if (bindings.playPause.includes(key)) {
       event.preventDefault();
       if (player.paused()) {
@@ -393,9 +395,15 @@ export function setupKeyboardShortcuts(
       handled = true;
     }
 
-    // Show visual feedback if enabled and action was handled
-    if (handled && enableFeedback && feedbackMessage) {
-      showFeedback(feedbackMessage, player);
+      // Show visual feedback if enabled and action was handled
+      if (handled && enableFeedback && feedbackMessage) {
+        showFeedback(feedbackMessage, player);
+      }
+    } catch (error) {
+      // Log error but prevent propagation to global scope
+      console.error('[KeyboardShortcuts] Error handling keyboard event:', error);
+      // Optionally notify user of error (silent failure for better UX)
+      // Could show error feedback here if desired
     }
   }
 
