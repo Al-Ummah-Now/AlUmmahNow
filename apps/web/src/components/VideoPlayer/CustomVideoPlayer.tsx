@@ -6,7 +6,7 @@
  * - Comprehensive error handling (Phase 1.4)
  * - Automatic fallback from HLS to MP4
  * - Retry logic with exponential backoff
- * - Analytics event tracking (Phase 1.5)
+ * - Analytics event tracking (Phase 1.5, Phase 3)
  * - Quality selector
  * - Accessibility support
  * - Responsive design
@@ -20,7 +20,12 @@
  * Phase 2.3: Keyboard shortcuts with visual feedback
  * Phase 2.5: Volume persistence and enhanced controls
  * Phase 2.6: Fullscreen and Picture-in-Picture modes
- * Phase 3: Advanced analytics (seek, quality change, buffering, etc.)
+ * Phase 3: Advanced analytics - IMPLEMENTED
+ *   - Seek tracking (seeking/seeked events)
+ *   - Progress tracking (timeupdate, throttled to 10s intervals)
+ *   - Quartile milestones (25%, 50%, 75%)
+ *   - Buffering metrics (waiting/canplay events)
+ *   - Quality change tracking (if quality selector available)
  */
 
 'use client';
@@ -97,6 +102,11 @@ export default function CustomVideoPlayer({
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // Phase 3: Advanced analytics state tracking
+  const seekStartTimeRef = useRef<number>(0);
+  const lastProgressTrackRef = useRef<number>(0);
+  const quartilesFiredRef = useRef<Set<25 | 50 | 75>>(new Set());
 
   /**
    * Handle source changes (for fallback)
@@ -302,12 +312,103 @@ export default function CustomVideoPlayer({
           }
         });
 
-        // Phase 3: Advanced event tracking (not implemented yet)
-        // player.on('seeking', () => { ... });
-        // player.on('timeupdate', () => { ... });
-        // player.on('qualitychange', () => { ... });
-        // player.on('waiting', () => { ... }); // buffer start
-        // player.on('canplay', () => { ... }); // buffer end
+        // ==================== Phase 3: Advanced Analytics ====================
+
+        // Seeking events - track when user seeks to different position
+        player.on('seeking', () => {
+          // Store the current time when seek starts
+          seekStartTimeRef.current = player.currentTime();
+        });
+
+        player.on('seeked', () => {
+          // Track the seek event with from/to times
+          const fromTime = seekStartTimeRef.current;
+          const toTime = player.currentTime();
+          analyticsRef.current?.trackSeek(fromTime, toTime);
+        });
+
+        // Progress tracking - throttled to once per 10 seconds
+        // Also handles quartile tracking (25%, 50%, 75%)
+        player.on('timeupdate', () => {
+          const currentTime = player.currentTime();
+          const duration = player.duration();
+
+          // Skip if duration not available yet
+          if (!duration || isNaN(duration) || duration === 0) {
+            return;
+          }
+
+          const now = Date.now();
+          const percentage = (currentTime / duration) * 100;
+
+          // Throttle progress tracking to once per 10 seconds
+          // This prevents spamming analytics with ~4 events per second
+          const PROGRESS_INTERVAL = 10000; // 10 seconds
+          if (now - lastProgressTrackRef.current >= PROGRESS_INTERVAL) {
+            analyticsRef.current?.trackProgress(currentTime, duration, percentage);
+            lastProgressTrackRef.current = now;
+          }
+
+          // Track quartiles - only fire once per quartile per session
+          // Quartiles are checked on every timeupdate, but trackQuartile()
+          // internally ensures each quartile is only tracked once
+          if (percentage >= 25 && percentage < 50 && !quartilesFiredRef.current.has(25)) {
+            analyticsRef.current?.trackQuartile(25);
+            quartilesFiredRef.current.add(25);
+          } else if (percentage >= 50 && percentage < 75 && !quartilesFiredRef.current.has(50)) {
+            analyticsRef.current?.trackQuartile(50);
+            quartilesFiredRef.current.add(50);
+          } else if (percentage >= 75 && percentage < 100 && !quartilesFiredRef.current.has(75)) {
+            analyticsRef.current?.trackQuartile(75);
+            quartilesFiredRef.current.add(75);
+          }
+        });
+
+        // Buffering events - track buffer start and end times
+        player.on('waiting', () => {
+          // Video is buffering (waiting for data)
+          analyticsRef.current?.trackBufferStart();
+        });
+
+        player.on('canplay', () => {
+          // Video can resume playback after buffering
+          // trackBufferEnd() automatically calculates duration since trackBufferStart()
+          analyticsRef.current?.trackBufferEnd();
+        });
+
+        // Quality change tracking (if quality selector is available)
+        // Note: This requires Video.js quality selector plugin
+        // The event name might vary depending on the quality plugin used
+        // Common event names: 'qualitychange', 'qualitySelected', 'resolutionchange'
+
+        // Try to access quality levels API if available
+        const extPlayer = player as ExtendedPlayer;
+        if (typeof extPlayer.qualityLevels === 'function') {
+          try {
+            const qualityLevels = extPlayer.qualityLevels();
+            let previousQuality = 'auto'; // Default to auto
+
+            qualityLevels.on('change', () => {
+              // Find the currently selected quality level
+              const selectedIndex = qualityLevels.selectedIndex;
+              if (selectedIndex >= 0 && selectedIndex < qualityLevels.length) {
+                const currentLevel = qualityLevels[selectedIndex];
+                const currentQuality = currentLevel.height ? `${currentLevel.height}p` : 'auto';
+
+                // Track the quality change
+                analyticsRef.current?.trackQualityChange(previousQuality, currentQuality);
+
+                // Update previous quality for next change
+                previousQuality = currentQuality;
+              }
+            });
+          } catch (err) {
+            // Quality levels API not available, skip quality tracking
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[CustomVideoPlayer] Quality levels API not available:', err);
+            }
+          }
+        }
       });
     } catch (err) {
       if (handleVideoErrorRef.current) {
@@ -343,7 +444,8 @@ export default function CustomVideoPlayer({
       setPlayerReady(false);
     };
     // Note: handleVideoError is NOT in deps - we use handleVideoErrorRef.current to avoid re-initialization
-  }, [videoId, userId, sources, poster, controls, autoplay, enableAnalytics]);
+    // lang is included because it's used in setupKeyboardShortcuts() and changes should re-initialize the player
+  }, [videoId, userId, sources, poster, controls, autoplay, enableAnalytics, lang]);
 
   /**
    * Render error display if there's an error

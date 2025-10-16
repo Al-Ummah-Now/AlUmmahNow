@@ -34,6 +34,12 @@ export class VideoAnalytics {
   private visibilityHandler?: () => void;
   private pendingFlushes: Promise<void>[] = [];
 
+  // Phase 3: Quartile tracking state (prevent duplicate events)
+  private quartilesFired = new Set<25 | 50 | 75>();
+
+  // Phase 3: Buffering state tracking
+  private bufferStartTime?: number;
+
   constructor(
     videoId: string,
     userId?: string,
@@ -162,6 +168,261 @@ export class VideoAnalytics {
         isActive
       }
     });
+  }
+
+  // ==================== Phase 3: Advanced Analytics ====================
+
+  /**
+   * Track seek event when user jumps to different position
+   * Phase 3: Advanced Analytics
+   *
+   * @param fromTime - Previous playback position in seconds
+   * @param toTime - New playback position in seconds
+   *
+   * @example
+   * ```typescript
+   * player.on('seeked', () => {
+   *   analytics.trackSeek(previousTime, currentTime);
+   * });
+   * ```
+   */
+  trackSeek(fromTime: number, toTime: number): void {
+    this.addEvent({
+      eventType: VideoEventType.SEEK,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        fromTime,
+        toTime,
+        seekDistance: toTime - fromTime,
+        isForward: toTime > fromTime
+      }
+    });
+  }
+
+  /**
+   * Track playback progress at intervals
+   * Phase 3: Advanced Analytics
+   *
+   * IMPORTANT: This method should be called from a throttled/debounced handler
+   * to avoid tracking every single timeupdate event (which fires ~4x per second).
+   *
+   * Recommended throttle interval: 5-10 seconds for progress tracking
+   *
+   * @param currentTime - Current playback position in seconds
+   * @param duration - Total video duration in seconds
+   * @param percentage - Playback progress as percentage (0-100)
+   *
+   * @example
+   * ```typescript
+   * // Option 1: Using lodash throttle (recommended)
+   * import { throttle } from 'lodash';
+   *
+   * const throttledTrackProgress = throttle(
+   *   (time, duration) => {
+   *     const percentage = (time / duration) * 100;
+   *     analytics.trackProgress(time, duration, percentage);
+   *   },
+   *   5000  // Track every 5 seconds
+   * );
+   *
+   * player.on('timeupdate', () => {
+   *   throttledTrackProgress(player.currentTime(), player.duration());
+   * });
+   *
+   * // Option 2: Manual throttling with timestamp check
+   * let lastProgressTrack = 0;
+   * const PROGRESS_INTERVAL = 5000; // 5 seconds
+   *
+   * player.on('timeupdate', () => {
+   *   const now = Date.now();
+   *   if (now - lastProgressTrack >= PROGRESS_INTERVAL) {
+   *     const time = player.currentTime();
+   *     const duration = player.duration();
+   *     analytics.trackProgress(time, duration, (time / duration) * 100);
+   *     lastProgressTrack = now;
+   *   }
+   * });
+   * ```
+   */
+  trackProgress(currentTime: number, duration: number, percentage: number): void {
+    this.addEvent({
+      eventType: VideoEventType.TIMEUPDATE,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        currentTime,
+        duration,
+        percentage: Math.min(100, Math.max(0, percentage)), // Clamp 0-100
+        remainingTime: duration - currentTime
+      }
+    });
+  }
+
+  /**
+   * Track video quality change event
+   * Phase 3: Advanced Analytics
+   *
+   * @param fromQuality - Previous quality level (e.g., "720p", "auto")
+   * @param toQuality - New quality level (e.g., "1080p", "auto")
+   *
+   * @example
+   * ```typescript
+   * player.qualityLevels().on('change', () => {
+   *   const currentQuality = player.qualityLevels()[player.qualityLevels().selectedIndex];
+   *   analytics.trackQualityChange(previousQuality, currentQuality.height + 'p');
+   * });
+   * ```
+   */
+  trackQualityChange(fromQuality: string, toQuality: string): void {
+    this.addEvent({
+      eventType: VideoEventType.QUALITY_CHANGE,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        fromQuality,
+        toQuality,
+        isUpgrade: this.compareQuality(fromQuality, toQuality) > 0,
+        isAutomatic: toQuality === 'auto' || fromQuality === 'auto'
+      }
+    });
+  }
+
+  /**
+   * Track buffering start event
+   * Phase 3: Advanced Analytics
+   *
+   * Call this when the player starts buffering (waiting for data).
+   * Must be paired with trackBufferEnd() to measure buffering duration.
+   *
+   * @example
+   * ```typescript
+   * player.on('waiting', () => {
+   *   analytics.trackBufferStart();
+   * });
+   * ```
+   */
+  trackBufferStart(): void {
+    this.bufferStartTime = Date.now();
+
+    this.addEvent({
+      eventType: VideoEventType.BUFFER_START,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        timestamp: this.bufferStartTime
+      }
+    });
+  }
+
+  /**
+   * Track buffering end event
+   * Phase 3: Advanced Analytics
+   *
+   * Call this when the player finishes buffering and resumes playback.
+   * Automatically calculates buffering duration if trackBufferStart() was called.
+   *
+   * @param duration - Optional buffering duration in milliseconds (if not using trackBufferStart)
+   *
+   * @example
+   * ```typescript
+   * // Option 1: Automatic duration calculation (recommended)
+   * player.on('waiting', () => analytics.trackBufferStart());
+   * player.on('canplay', () => analytics.trackBufferEnd());
+   *
+   * // Option 2: Manual duration tracking
+   * player.on('canplay', () => {
+   *   const duration = Date.now() - bufferStartTime;
+   *   analytics.trackBufferEnd(duration);
+   * });
+   * ```
+   */
+  trackBufferEnd(duration?: number): void {
+    const bufferDuration = duration ?? (
+      this.bufferStartTime
+        ? Date.now() - this.bufferStartTime
+        : 0
+    );
+
+    this.addEvent({
+      eventType: VideoEventType.BUFFER_END,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        duration: bufferDuration,
+        durationSeconds: bufferDuration / 1000
+      }
+    });
+
+    // Reset buffer tracking
+    this.bufferStartTime = undefined;
+  }
+
+  /**
+   * Track quartile milestone (25%, 50%, 75% completion)
+   * Phase 3: Advanced Analytics
+   *
+   * This method ensures each quartile is only tracked once per session.
+   * Quartiles are commonly used for video engagement metrics and advertising.
+   *
+   * @param quartile - Which quartile was reached (25, 50, or 75)
+   *
+   * @example
+   * ```typescript
+   * player.on('timeupdate', () => {
+   *   const percentage = (player.currentTime() / player.duration()) * 100;
+   *
+   *   if (percentage >= 25 && percentage < 50) {
+   *     analytics.trackQuartile(25);
+   *   } else if (percentage >= 50 && percentage < 75) {
+   *     analytics.trackQuartile(50);
+   *   } else if (percentage >= 75 && percentage < 100) {
+   *     analytics.trackQuartile(75);
+   *   }
+   * });
+   * ```
+   */
+  trackQuartile(quartile: 25 | 50 | 75): void {
+    // Only fire each quartile once per session
+    if (this.quartilesFired.has(quartile)) {
+      if (this.config.enableDebugLogging) {
+        console.log(`[VideoAnalytics] Quartile ${quartile}% already tracked, skipping`);
+      }
+      return;
+    }
+
+    this.quartilesFired.add(quartile);
+
+    // Map quartile to specific event type
+    const eventTypeMap = {
+      25: VideoEventType.QUARTILE_25,
+      50: VideoEventType.QUARTILE_50,
+      75: VideoEventType.QUARTILE_75
+    };
+
+    this.addEvent({
+      eventType: eventTypeMap[quartile],
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        quartile,
+        percentage: quartile
+      }
+    });
+  }
+
+  /**
+   * Helper method to compare quality levels
+   * Returns positive if toQuality > fromQuality (upgrade)
+   * Returns negative if toQuality < fromQuality (downgrade)
+   * Returns 0 if equal or incomparable
+   */
+  private compareQuality(fromQuality: string, toQuality: string): number {
+    // Extract numeric resolution from quality strings (e.g., "1080p" -> 1080)
+    const extractResolution = (quality: string): number => {
+      if (quality === 'auto') return -1; // Special handling for auto
+      const match = quality.match(/(\d+)p?/);
+      return match ? parseInt(match[1], 10) : 0;
+    };
+
+    const fromRes = extractResolution(fromQuality);
+    const toRes = extractResolution(toQuality);
+
+    return toRes - fromRes;
   }
 
   /**
@@ -385,6 +646,10 @@ export class VideoAnalytics {
         this.visibilityHandler = undefined;
       }
     }
+
+    // Phase 3: Reset tracking state
+    this.quartilesFired.clear();
+    this.bufferStartTime = undefined;
   }
 
   /**
