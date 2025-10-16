@@ -604,10 +604,7 @@ export class VideoAnalytics {
   private generateSessionId(): string {
     const timestamp = Date.now();
 
-    // Use crypto.getRandomValues for better randomness
-    // Generate 6 random bytes (6 × 8 = 48 bits of entropy)
-    // Convert to hex: each byte becomes 2 hex characters (6 × 2 = 12 chars total)
-    // This provides 48 bits of entropy with a consistent 12-character hex string format
+    // Hex encoding (base16): 6 bytes → 12 hex chars
     if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
       const randomBytes = new Uint8Array(6);
       window.crypto.getRandomValues(randomBytes);

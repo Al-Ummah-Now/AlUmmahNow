@@ -350,17 +350,17 @@ export default function CustomVideoPlayer({
           }
 
           // Track quartiles - only fire once per quartile per session
-          // Quartiles are checked on every timeupdate, but trackQuartile()
-          // internally ensures each quartile is only tracked once
-          if (percentage >= 25 && percentage < 50 && !quartilesFiredRef.current.has(25)) {
-            analyticsRef.current?.trackQuartile(25);
-            quartilesFiredRef.current.add(25);
-          } else if (percentage >= 50 && percentage < 75 && !quartilesFiredRef.current.has(50)) {
-            analyticsRef.current?.trackQuartile(50);
-            quartilesFiredRef.current.add(50);
-          } else if (percentage >= 75 && percentage < 100 && !quartilesFiredRef.current.has(75)) {
-            analyticsRef.current?.trackQuartile(75);
-            quartilesFiredRef.current.add(75);
+          // Use loop to check quartiles instead of nested if-else for better maintainability
+          const quartiles: Array<25 | 50 | 75> = [25, 50, 75];
+          for (let i = 0; i < quartiles.length; i++) {
+            const q = quartiles[i];
+            const lower = q;
+            const upper = i < quartiles.length - 1 ? quartiles[i + 1] : 100;
+            if (percentage >= lower && percentage < upper && !quartilesFiredRef.current.has(q)) {
+              analyticsRef.current?.trackQuartile(q);
+              quartilesFiredRef.current.add(q);
+              break; // Only track one quartile per timeupdate
+            }
           }
         });
 
