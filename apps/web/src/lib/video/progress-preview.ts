@@ -74,9 +74,11 @@ export function getBunnyPreviewUrl(bunnyVideoId: string, libraryId: number = DEF
 /**
  * Initialize sprite thumbnails plugin on Video.js player
  *
+ * Gracefully degrades if player is unavailable or plugin is not loaded.
+ * Logs warnings but does not throw errors to ensure playback continues.
+ *
  * @param player - Video.js player instance
  * @param config - Sprite thumbnail configuration
- * @throws Error if player is not ready or plugin is not available
  *
  * @example
  * initializeSpriteThumbnails(player, {
@@ -90,12 +92,14 @@ export function initializeSpriteThumbnails(
   config: SpriteThumbnailConfig
 ): void {
   if (!player || player.isDisposed()) {
-    throw new Error('Player instance is not available or disposed');
+    console.warn('[ProgressPreview] Player instance is not available or disposed. Sprite thumbnails will not be initialized.');
+    return;
   }
 
   // Check if plugin is available
   if (typeof (player as any).spriteThumbnails !== 'function') {
-    throw new Error('videojs-sprite-thumbnails plugin is not loaded');
+    console.warn('[ProgressPreview] videojs-sprite-thumbnails plugin is not loaded. Sprite thumbnails will not be available.');
+    return;
   }
 
   const {
@@ -129,8 +133,8 @@ export function initializeSpriteThumbnails(
       rtl
     });
   } catch (error) {
-    console.error('[ProgressPreview] Failed to initialize sprite thumbnails:', error);
-    throw error;
+    console.warn('[ProgressPreview] Failed to initialize sprite thumbnails:', error);
+    // Graceful degradation: sprite thumbnails unavailable but playback continues
   }
 }
 
@@ -158,7 +162,9 @@ export function setupWatchedSegments(
   onSegmentUpdate?: (segments: WatchedSegment[]) => void
 ): () => void {
   if (!player || player.isDisposed()) {
-    throw new Error('Player instance is not available or disposed');
+    console.warn('[ProgressPreview] Player instance is not available or disposed. Watched segments tracking will not be initialized.');
+    // Return no-op cleanup function for graceful degradation
+    return () => {};
   }
 
   // Store watched segments
