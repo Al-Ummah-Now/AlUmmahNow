@@ -121,6 +121,50 @@ export class VideoAnalytics {
   }
 
   /**
+   * Track playback speed change event
+   * Phase 2.2: Playback Speed Control
+   */
+  trackSpeedChange(rate: number, previousRate: number): void {
+    this.addEvent({
+      eventType: VideoEventType.SPEED_CHANGE,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        rate,
+        previousRate,
+        change: rate - previousRate
+      }
+    });
+  }
+
+  /**
+   * Track fullscreen change event
+   * Phase 2.6: Fullscreen and Picture-in-Picture
+   */
+  trackFullscreenChange(isFullscreen: boolean): void {
+    this.addEvent({
+      eventType: isFullscreen ? VideoEventType.FULLSCREEN_ENTER : VideoEventType.FULLSCREEN_EXIT,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        isFullscreen
+      }
+    });
+  }
+
+  /**
+   * Track Picture-in-Picture change event
+   * Phase 2.6: Fullscreen and Picture-in-Picture
+   */
+  trackPictureInPicture(isActive: boolean): void {
+    this.addEvent({
+      eventType: isActive ? VideoEventType.PIP_ENTER : VideoEventType.PIP_EXIT,
+      relativeTime: Date.now() - this.startTime,
+      data: {
+        isActive
+      }
+    });
+  }
+
+  /**
    * Add event to queue
    */
   private addEvent(event: Partial<AnalyticsEvent>): void {

@@ -32,6 +32,10 @@ import {
   VideoFallbackStrategy,
   VideoSource,
 } from '@/lib/video/fallback-strategy';
+import {
+  setupFullscreenPiP,
+  lockOrientationLandscape
+} from '@/lib/video/fullscreen-pip';
 import { ErrorDisplay } from './ErrorDisplay';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import '@/styles/video-player.css';

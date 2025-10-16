@@ -160,6 +160,9 @@ importers:
       videojs-hls-quality-selector:
         specifier: ^2.0.0
         version: 2.0.0
+      videojs-sprite-thumbnails:
+        specifier: ^2.2.4
+        version: 2.2.4
     devDependencies:
       '@opennextjs/aws':
         specifier: ^3.5.7
@@ -5524,6 +5527,10 @@ packages:
 
   videojs-hls-quality-selector@2.0.0:
     resolution: {integrity: sha512-x0AQKGwryDdD94s1it+Jolb6j1mg4Q+c7g1PlCIG6dXBdipVPaZmg71fxaFZJgx1k326DFnRaWrLxQ72/TKd2A==}
+    engines: {node: '>=14', npm: '>=6'}
+
+  videojs-sprite-thumbnails@2.2.4:
+    resolution: {integrity: sha512-L0o/XhmY+SXK13YTDVA/OnEEF9Q1Fh1XIcMGqtB/E7FwSd+u0AvJS3Ry9tS2+zECr9RooBNSplXwDkGyJyMJ9w==}
     engines: {node: '>=14', npm: '>=6'}
 
   videojs-vtt.js@0.15.5:
@@ -12391,6 +12398,11 @@ snapshots:
   videojs-font@4.2.0: {}
 
   videojs-hls-quality-selector@2.0.0:
+    dependencies:
+      global: 4.4.0
+      video.js: 8.23.4
+
+  videojs-sprite-thumbnails@2.2.4:
     dependencies:
       global: 4.4.0
       video.js: 8.23.4

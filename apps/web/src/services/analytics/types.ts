@@ -16,6 +16,15 @@ export enum VideoEventType {
   ENDED = 'ended',
   ERROR = 'error',
 
+  // Phase 2.2: Playback speed control (implemented)
+  SPEED_CHANGE = 'speed_change',
+
+  // Phase 2.6: Fullscreen and Picture-in-Picture (implemented)
+  FULLSCREEN_ENTER = 'fullscreen_enter',
+  FULLSCREEN_EXIT = 'fullscreen_exit',
+  PIP_ENTER = 'pip_enter',
+  PIP_EXIT = 'pip_exit',
+
   // Phase 3: Advanced events (defined now, implemented later)
   SEEK = 'seek',
   TIMEUPDATE = 'timeupdate',

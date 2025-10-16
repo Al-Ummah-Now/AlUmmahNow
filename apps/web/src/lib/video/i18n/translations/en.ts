@@ -133,4 +133,71 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     elapsed: 'Elapsed',
     remaining: 'Remaining',
   },
+
+  keyboard: {
+    title: 'Keyboard Shortcuts',
+    description: 'Control the video player with your keyboard',
+    sections: {
+      playback: 'Playback',
+      seeking: 'Seeking',
+      volume: 'Volume',
+      display: 'Display',
+      speed: 'Speed',
+    },
+    shortcuts: {
+      playPause: {
+        keys: 'Space, K',
+        description: 'Play/Pause',
+      },
+      rewind5: {
+        keys: '←',
+        description: 'Rewind 5 seconds',
+      },
+      rewind10: {
+        keys: 'J',
+        description: 'Rewind 10 seconds',
+      },
+      forward5: {
+        keys: '→',
+        description: 'Forward 5 seconds',
+      },
+      forward10: {
+        keys: 'L',
+        description: 'Forward 10 seconds',
+      },
+      volumeUp: {
+        keys: '↑',
+        description: 'Increase volume',
+      },
+      volumeDown: {
+        keys: '↓',
+        description: 'Decrease volume',
+      },
+      mute: {
+        keys: 'M',
+        description: 'Mute/Unmute',
+      },
+      fullscreen: {
+        keys: 'F',
+        description: 'Toggle fullscreen',
+      },
+      pip: {
+        keys: 'P',
+        description: 'Picture-in-Picture',
+      },
+      speedDecrease: {
+        keys: '<',
+        description: 'Decrease speed',
+      },
+      speedIncrease: {
+        keys: '>',
+        description: 'Increase speed',
+      },
+      seekPercent: {
+        keys: '0-9',
+        description: 'Jump to 0%-90%',
+      },
+    },
+    closeButton: 'Close',
+  },
 };

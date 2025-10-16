@@ -134,4 +134,71 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     elapsed: 'منقضي',
     remaining: 'متبقي',
   },
+
+  keyboard: {
+    title: 'اختصارات لوحة المفاتيح',
+    description: 'تحكم في مشغل الفيديو باستخدام لوحة المفاتيح',
+    sections: {
+      playback: 'التشغيل',
+      seeking: 'التنقل',
+      volume: 'الصوت',
+      display: 'العرض',
+      speed: 'السرعة',
+    },
+    shortcuts: {
+      playPause: {
+        keys: 'مسافة، K',
+        description: 'تشغيل/إيقاف مؤقت',
+      },
+      rewind5: {
+        keys: '←',
+        description: 'الرجوع ٥ ثوانٍ',
+      },
+      rewind10: {
+        keys: 'J',
+        description: 'الرجوع ١٠ ثوانٍ',
+      },
+      forward5: {
+        keys: '→',
+        description: 'التقديم ٥ ثوانٍ',
+      },
+      forward10: {
+        keys: 'L',
+        description: 'التقديم ١٠ ثوانٍ',
+      },
+      volumeUp: {
+        keys: '↑',
+        description: 'زيادة الصوت',
+      },
+      volumeDown: {
+        keys: '↓',
+        description: 'خفض الصوت',
+      },
+      mute: {
+        keys: 'M',
+        description: 'كتم/إلغاء الكتم',
+      },
+      fullscreen: {
+        keys: 'F',
+        description: 'تبديل ملء الشاشة',
+      },
+      pip: {
+        keys: 'P',
+        description: 'صورة داخل صورة',
+      },
+      speedDecrease: {
+        keys: '<',
+        description: 'تقليل السرعة',
+      },
+      speedIncrease: {
+        keys: '>',
+        description: 'زيادة السرعة',
+      },
+      seekPercent: {
+        keys: '٠-٩',
+        description: 'الانتقال إلى ٠٪-٩٠٪',
+      },
+    },
+    closeButton: 'إغلاق',
+  },
 };
