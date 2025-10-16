@@ -110,6 +110,10 @@ export interface VideoPlayerTranslations {
     unmute: string;
     fullscreen: string;
     exitFullscreen: string;
+    pictureInPicture: string;
+    exitPictureInPicture: string;
+    pipNotAvailable: string;
+    pipNotSupported: string;
     settings: string;
     captions: string;
     quality: string;

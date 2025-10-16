@@ -324,17 +324,17 @@ export function setupKeyboardShortcuts(
       if (videoElement && 'requestPictureInPicture' in videoElement) {
         if (document.pictureInPictureElement) {
           document.exitPictureInPicture();
-          feedbackMessage = 'Exit Picture-in-Picture';
+          feedbackMessage = translations.controls.exitPictureInPicture;
         } else {
           (videoElement as HTMLVideoElement)
             .requestPictureInPicture()
             .catch(() => {
-              feedbackMessage = 'Picture-in-Picture not available';
+              feedbackMessage = translations.controls.pipNotAvailable;
             });
-          feedbackMessage = 'Picture-in-Picture';
+          feedbackMessage = translations.controls.pictureInPicture;
         }
       } else {
-        feedbackMessage = 'Picture-in-Picture not supported';
+        feedbackMessage = translations.controls.pipNotSupported;
       }
       handled = true;
     }
