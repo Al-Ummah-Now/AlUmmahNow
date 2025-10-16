@@ -455,20 +455,58 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
     });
   });
 
-  describe('Bilingual Support', () => {
-    it('should support English language (default)', () => {
+  describe('Bilingual Support (i18n)', () => {
+    it('should support English language (default)', async () => {
       render(<CustomVideoPlayer {...defaultProps} lang="en" />);
 
-      expect(screen.getByText(/Video player loaded and ready/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Video player loaded and ready')).toBeInTheDocument();
+      });
     });
 
-    it('should support Arabic language', () => {
-      // ErrorDisplay would show Arabic text, but since we mocked it,
-      // we just verify the lang prop is passed correctly
+    it('should support Arabic language with i18n', async () => {
       render(<CustomVideoPlayer {...defaultProps} lang="ar" />);
 
-      // English is still shown in the player status, but ErrorDisplay would use Arabic
-      expect(screen.getByText(/Video player loaded and ready/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('تم تحميل مشغل الفيديو وهو جاهز')).toBeInTheDocument();
+      });
+    });
+
+    it('should show Arabic loading message', () => {
+      // Prevent ready callback from being called immediately
+      mockReady.mockImplementationOnce(() => {});
+
+      render(<CustomVideoPlayer {...defaultProps} lang="ar" />);
+
+      expect(screen.getByText('جاري تحميل مشغل الفيديو...')).toBeInTheDocument();
+    });
+
+    it('should apply RTL direction for Arabic', () => {
+      const { container } = render(<CustomVideoPlayer {...defaultProps} lang="ar" />);
+
+      const player = container.querySelector('.custom-video-player');
+      expect(player).toHaveAttribute('dir', 'rtl');
+    });
+
+    it('should apply LTR direction for English', () => {
+      const { container } = render(<CustomVideoPlayer {...defaultProps} lang="en" />);
+
+      const player = container.querySelector('.custom-video-player');
+      expect(player).toHaveAttribute('dir', 'ltr');
+    });
+
+    it('should use translated accessibility label', () => {
+      render(<CustomVideoPlayer {...defaultProps} lang="ar" />);
+
+      const video = document.querySelector('video');
+      expect(video).toHaveAttribute('aria-label', 'مشغل الفيديو');
+    });
+
+    it('should use custom ariaLabel over translated default', () => {
+      render(<CustomVideoPlayer {...defaultProps} lang="ar" ariaLabel="My Custom Label" />);
+
+      const video = document.querySelector('video');
+      expect(video).toHaveAttribute('aria-label', 'My Custom Label');
     });
   });
 });

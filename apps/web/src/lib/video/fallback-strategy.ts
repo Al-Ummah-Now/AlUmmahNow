@@ -78,8 +78,7 @@ export class VideoFallbackStrategy {
     if (mp4Urls) {
       for (const quality of this.config.qualityFallbackOrder) {
         const url = mp4Urls[quality];
-        // Validate URL is a non-empty string
-        if (url && typeof url === 'string' && url.trim().length > 0) {
+        if (this.isValidUrl(url)) {
           this.availableSources.push({
             type: 'mp4',
             url: url,
@@ -168,14 +167,14 @@ export class VideoFallbackStrategy {
   getPreferredMp4Url(mp4Urls: Record<VideoQuality, string>): string | null {
     // Try preferred quality first
     const preferredUrl = mp4Urls[this.config.preferredQuality];
-    if (preferredUrl && typeof preferredUrl === 'string' && preferredUrl.trim().length > 0) {
+    if (this.isValidUrl(preferredUrl)) {
       return preferredUrl;
     }
 
     // Try quality fallback order
     for (const quality of this.config.qualityFallbackOrder) {
       const url = mp4Urls[quality];
-      if (url && typeof url === 'string' && url.trim().length > 0) {
+      if (this.isValidUrl(url)) {
         return url;
       }
     }
@@ -278,6 +277,16 @@ export class VideoFallbackStrategy {
     }
 
     return null;
+  }
+
+  /**
+   * Validate that a URL is a non-empty string
+   *
+   * @param url - URL to validate
+   * @returns True if URL is a valid non-empty string
+   */
+  private isValidUrl(url: string | undefined): url is string {
+    return url !== undefined && typeof url === 'string' && url.trim().length > 0;
   }
 }
 

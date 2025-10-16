@@ -217,8 +217,9 @@ export class VideoAnalytics {
       try {
         const parsed = JSON.parse(stored);
         pending = Array.isArray(parsed) ? parsed : [];
-      } catch {
+      } catch (parseError) {
         // If parsing fails or result isn't an array, start fresh
+        console.warn('[VideoAnalytics] Failed to parse pendingVideoAnalytics from localStorage. Data may be corrupted and will be reset.', parseError);
         pending = [];
       }
 
@@ -299,13 +300,13 @@ export class VideoAnalytics {
     const timestamp = Date.now();
 
     // Use crypto.getRandomValues for better randomness
+    // Using hex encoding (base16) for consistent 12-character output with full 48 bits entropy
     if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
       const randomBytes = new Uint8Array(6);
       window.crypto.getRandomValues(randomBytes);
       const random = Array.from(randomBytes)
-        .map(byte => byte.toString(36))
-        .join('')
-        .substring(0, 9);
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
       return `${timestamp}-${random}`;
     }
 
