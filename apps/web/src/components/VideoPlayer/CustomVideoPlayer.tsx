@@ -36,7 +36,6 @@ import { ErrorDisplay } from './ErrorDisplay';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import '@/styles/video-player.css';
 import type { Player } from 'video.js';
-import type { ExtendedPlayer } from '@/lib/video/videojs.d';
 import { hasErrorMethod } from '@/lib/video/videojs.d';
 
 export interface CustomVideoPlayerProps {
