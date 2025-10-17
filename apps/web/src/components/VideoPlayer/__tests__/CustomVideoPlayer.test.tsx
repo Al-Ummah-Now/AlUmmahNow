@@ -95,6 +95,22 @@ jest.mock('../ErrorDisplay', () => ({
   ),
 }));
 
+// Mock Phase 2.5: Volume controls
+jest.mock('@/lib/video/volume-control', () => ({
+  initializeVolumeControls: jest.fn(() => jest.fn()), // Returns cleanup function
+}));
+
+// Mock Phase 2.6: Fullscreen and PiP
+jest.mock('@/lib/video/fullscreen-pip', () => ({
+  setupFullscreenPiP: jest.fn(),
+  lockOrientationLandscape: jest.fn(() => Promise.resolve()),
+}));
+
+// Mock Phase 2.3: Keyboard shortcuts
+jest.mock('@/lib/video/keyboard-shortcuts', () => ({
+  setupKeyboardShortcuts: jest.fn(() => jest.fn()), // Returns cleanup function
+}));
+
 describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
   const defaultProps = {
     videoId: 'test-video-123',
@@ -106,6 +122,16 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+
+    // Set up default mock return value for categorizeError to prevent undefined errors
+    mockCategorizeError.mockReturnValue({
+      type: 'UNKNOWN_ERROR',
+      severity: 'INFO',
+      message: 'Test error',
+      timestamp: Date.now(),
+      retryable: false,
+      fallbackAvailable: false,
+    });
   });
 
   afterEach(() => {
