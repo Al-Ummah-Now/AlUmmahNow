@@ -1061,7 +1061,7 @@
 }
 
 /* Accessibility: Screen reader only text */
-.vjs-viewer-count-overlay [role="status"] {
+.vjs-viewer-count-overlay[role="status"] {
   position: absolute;
   width: 1px;
   height: 1px;

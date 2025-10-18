@@ -95,7 +95,7 @@ export function ViewerCount({
 
   return (
     <div
-      className={`vjs-viewer-count ${className}`}
+      className={`vjs-viewer-count-overlay vjs-viewer-count${className ? ` ${className}` : ''}`}
       role="status"
       aria-live="polite"
       aria-label={ariaLabel}
