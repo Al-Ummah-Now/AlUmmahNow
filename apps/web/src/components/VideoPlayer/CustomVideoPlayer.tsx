@@ -57,6 +57,7 @@ import {
 import { initializeVolumeControls } from '@/lib/video/volume-control';
 import { setupKeyboardShortcuts } from '@/lib/video/keyboard-shortcuts';
 import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-touch';
+import { setupAccessibility } from '@/lib/video/accessibility';
 import { ErrorDisplay } from './ErrorDisplay';
 import { BufferingIndicator } from './LoadingStates';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
@@ -109,6 +110,7 @@ export default function CustomVideoPlayer({
   const volumeControlsCleanupRef = useRef<(() => void) | null>(null);
   const keyboardShortcutsCleanupRef = useRef<(() => void) | null>(null);
   const mobileControlsCleanupRef = useRef<(() => void) | null>(null);
+  const accessibilityCleanupRef = useRef<(() => void) | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -289,6 +291,12 @@ export default function CustomVideoPlayer({
             enableLongPress: true,
           });
         }
+
+        // Phase 4.21: Setup accessibility enhancements
+        accessibilityCleanupRef.current = setupAccessibility(player as ExtendedPlayer, {
+          lang,
+          announcements: true,
+        });
 
         // Phase 2.6: Track fullscreen changes
         player.on('fullscreenchange', () => {
@@ -485,6 +493,12 @@ export default function CustomVideoPlayer({
       if (mobileControlsCleanupRef.current) {
         mobileControlsCleanupRef.current();
         mobileControlsCleanupRef.current = null;
+      }
+
+      // Cleanup accessibility
+      if (accessibilityCleanupRef.current) {
+        accessibilityCleanupRef.current();
+        accessibilityCleanupRef.current = null;
       }
 
       // Cleanup player
