@@ -530,3 +530,103 @@
 .video-player-container .aspect-video {
   aspect-ratio: 16 / 9;
 }
+
+/* ========================================================================
+   Mobile Touch Controls - Feedback Animations
+   ======================================================================== */
+
+.vjs-mobile-touch-feedback {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1000;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.vjs-mobile-touch-feedback-left {
+  left: 2rem;
+}
+
+.vjs-mobile-touch-feedback-center {
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.vjs-mobile-touch-feedback-right {
+  right: 2rem;
+}
+
+.vjs-mobile-touch-feedback-show {
+  opacity: 1;
+  animation: touchFeedbackPulse 0.3s ease;
+}
+
+.vjs-mobile-touch-feedback-hide {
+  opacity: 0;
+}
+
+@keyframes touchFeedbackPulse {
+  0% {
+    transform: translateY(-50%) scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: translateY(-50%) scale(1.1);
+  }
+  100% {
+    transform: translateY(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Center feedback specific animation */
+.vjs-mobile-touch-feedback-center.vjs-mobile-touch-feedback-show {
+  animation: touchFeedbackPulseCenter 0.3s ease;
+}
+
+@keyframes touchFeedbackPulseCenter {
+  0% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Mobile touch targets - ensure minimum 48x48px */
+@media (max-width: 768px) {
+  .video-js .vjs-button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .video-js .vjs-play-control,
+  .video-js .vjs-volume-panel,
+  .video-js .vjs-fullscreen-control {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  /* Larger touch area for progress bar on mobile */
+  .video-js .vjs-progress-control {
+    height: 12px;
+  }
+
+  .video-js .vjs-progress-control:active {
+    height: 16px;
+  }
+}

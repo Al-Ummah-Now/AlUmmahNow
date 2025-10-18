@@ -14,6 +14,7 @@
  * - YouTube-style keyboard shortcuts (Phase 2.3)
  * - Volume control with persistence and scroll wheel (Phase 2.5)
  * - Fullscreen and Picture-in-Picture modes (Phase 2.6)
+ * - Mobile touch controls and gestures (Phase 4.19)
  *
  * Phase 1.4: Error handling with fallback
  * Phase 1.5: Basic analytics (ready, play, pause, ended, error)
@@ -26,6 +27,12 @@
  *   - Quartile milestones (25%, 50%, 75%)
  *   - Buffering metrics (waiting/canplay events)
  *   - Quality change tracking (if quality selector available)
+ * Phase 4.19: Mobile touch controls - IMPLEMENTED
+ *   - Double-tap left/right for seek (±10s)
+ *   - Swipe up/down for volume control
+ *   - Long press for playback speed
+ *   - Visual feedback animations
+ *   - 48x48px minimum touch targets
  */
 
 'use client';
@@ -49,6 +56,7 @@ import {
 } from '@/lib/video/fullscreen-pip';
 import { initializeVolumeControls } from '@/lib/video/volume-control';
 import { setupKeyboardShortcuts } from '@/lib/video/keyboard-shortcuts';
+import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-touch';
 import { ErrorDisplay } from './ErrorDisplay';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import '@/styles/video-player.css';
@@ -99,6 +107,7 @@ export default function CustomVideoPlayer({
   const handleVideoErrorRef = useRef<((error: unknown) => void) | null>(null);
   const volumeControlsCleanupRef = useRef<(() => void) | null>(null);
   const keyboardShortcutsCleanupRef = useRef<(() => void) | null>(null);
+  const mobileControlsCleanupRef = useRef<(() => void) | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -269,6 +278,15 @@ export default function CustomVideoPlayer({
           showFeedback: true,
         });
 
+        // Phase 4.19: Setup mobile touch controls on mobile devices
+        if (isMobileDevice()) {
+          mobileControlsCleanupRef.current = setupMobileTouchControls(player as ExtendedPlayer, {
+            enableDoubleTap: true,
+            enableSwipeVolume: true,
+            enableLongPress: true,
+          });
+        }
+
         // Phase 2.6: Track fullscreen changes
         player.on('fullscreenchange', () => {
           const extPlayer = player as ExtendedPlayer;
@@ -436,6 +454,12 @@ export default function CustomVideoPlayer({
       if (keyboardShortcutsCleanupRef.current) {
         keyboardShortcutsCleanupRef.current();
         keyboardShortcutsCleanupRef.current = null;
+      }
+
+      // Cleanup mobile touch controls
+      if (mobileControlsCleanupRef.current) {
+        mobileControlsCleanupRef.current();
+        mobileControlsCleanupRef.current = null;
       }
 
       // Cleanup player
