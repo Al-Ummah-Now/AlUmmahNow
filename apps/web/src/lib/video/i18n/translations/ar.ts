@@ -205,4 +205,13 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     },
     closeButton: 'إغلاق',
   },
+
+  resume: {
+    title: 'هل تريد متابعة المشاهدة؟',
+    description: 'شاهدت هذا الفيديو سابقاً',
+    resumeButton: 'استئناف من',
+    startOverButton: 'البدء من البداية',
+    autoResumeMessage: 'سيتم الاستئناف تلقائياً خلال',
+    dismissHint: 'اضغط ESC أو انقر خارج الإطار للإلغاء',
+  },
 };
