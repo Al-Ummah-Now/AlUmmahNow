@@ -6,9 +6,9 @@ export interface WebSocketMessage {
   data: any;
 }
 
-export type WebSocketEventType = 
+export type WebSocketEventType =
   | 'comment_added'
-  | 'comment_updated' 
+  | 'comment_updated'
   | 'comment_deleted'
   | 'video_liked'
   | 'video_unliked'
@@ -20,7 +20,9 @@ export type WebSocketEventType =
   | 'connection_acknowledged'
   | 'heartbeat'
   | 'subscribe'
-  | 'unsubscribe';
+  | 'unsubscribe'
+  | 'viewing'
+  | 'viewer_count';
 
 export interface CommentEvent {
   type: 'comment_added' | 'comment_updated' | 'comment_deleted';
