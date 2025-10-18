@@ -12,7 +12,7 @@
  * - Exit fullscreen on video end
  */
 
-import type { ExtendedPlayer } from './videojs.d';
+import type { ExtendedPlayer } from './videojs';
 
 /**
  * Screen Orientation Lock type

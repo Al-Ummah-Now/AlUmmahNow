@@ -5,7 +5,10 @@
  * but are not fully exposed in the official type definitions.
  */
 
-import type { Player as VideoJsPlayer, Component } from 'video.js';
+import type { Player as VideoJsPlayer } from 'video.js';
+
+// Component type from video.js - using any for now as Component is not exported properly
+type Component = any;
 
 /**
  * Quality Level interface for Video.js quality selector plugin

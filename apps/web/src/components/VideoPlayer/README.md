@@ -89,7 +89,7 @@ function VideoPage() {
       onTimeUpdate={handleTimeUpdate}
       onError={handleError}
       className="my-custom-class"
-      rtl={false}
+      lang="en"
     />
   );
 }
@@ -106,7 +106,7 @@ function VideoPageArabic() {
       videoId="my-video-123"
       bunnyVideoId="bunny-guid-abc-def"
       title="مقدمة إلى الإسلام"
-      rtl={true}
+      lang="ar"
     />
   );
 }
@@ -150,7 +150,7 @@ function VideoPage() {
 | `onTimeUpdate` | `(currentTime: number, duration: number) => void` | ❌ | - | Callback on time update |
 | `onError` | `(error: any) => void` | ❌ | - | Callback on error |
 | `className` | `string` | ❌ | `''` | Additional CSS classes |
-| `rtl` | `boolean` | ❌ | `false` | Enable RTL layout |
+| `lang` | `'en' \| 'ar'` | ❌ | `'en'` | Language (auto-enables RTL for Arabic) |
 
 ### VideoPlayerSkeleton Props
 

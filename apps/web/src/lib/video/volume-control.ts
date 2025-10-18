@@ -11,7 +11,7 @@
  */
 
 import type { Player } from 'video.js';
-import type { ExtendedPlayer } from './videojs.d';
+import type { ExtendedPlayer } from './videojs';
 
 const STORAGE_KEY = 'videoPlayerVolume';
 const VOLUME_STEP = 0.1; // 10% steps
