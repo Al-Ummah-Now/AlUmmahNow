@@ -5,7 +5,10 @@
  * but are not fully exposed in the official type definitions.
  */
 
-import type { Player as VideoJsPlayer, Component } from 'video.js';
+import type { Player as VideoJsPlayer } from 'video.js';
+
+// Component type from video.js - using any for now as Component is not exported properly
+type Component = any;
 
 /**
  * Quality Level interface for Video.js quality selector plugin
@@ -113,6 +116,12 @@ export interface ExtendedPlayer extends VideoJsPlayer {
    * @returns Quality levels list or undefined if plugin not available
    */
   qualityLevels?(): QualityLevelList;
+
+  /**
+   * Get the TimeRanges object representing buffered portions of the media
+   * @returns TimeRanges object with buffered time ranges
+   */
+  buffered(): TimeRanges;
 }
 
 /**

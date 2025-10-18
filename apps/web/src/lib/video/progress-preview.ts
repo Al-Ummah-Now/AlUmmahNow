@@ -11,7 +11,7 @@
  * - Performance optimized
  */
 
-import type { ExtendedPlayer } from './videojs.d';
+import type { ExtendedPlayer } from './videojs';
 
 /**
  * Constants for progress preview behavior
