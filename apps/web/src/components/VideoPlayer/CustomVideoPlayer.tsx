@@ -111,6 +111,7 @@ export default function CustomVideoPlayer({
   const keyboardShortcutsCleanupRef = useRef<(() => void) | null>(null);
   const mobileControlsCleanupRef = useRef<(() => void) | null>(null);
   const accessibilityCleanupRef = useRef<(() => void) | null>(null);
+  const qualityLevelsCleanupRef = useRef<(() => void) | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -453,7 +454,7 @@ export default function CustomVideoPlayer({
             const qualityLevels = extPlayer.qualityLevels();
             let previousQuality = 'auto'; // Default to auto
 
-            qualityLevels.on('change', () => {
+            const qualityChangeHandler = () => {
               // Find the currently selected quality level
               const selectedIndex = qualityLevels.selectedIndex;
               if (selectedIndex >= 0 && selectedIndex < qualityLevels.length) {
@@ -466,7 +467,14 @@ export default function CustomVideoPlayer({
                 // Update previous quality for next change
                 previousQuality = currentQuality;
               }
-            });
+            };
+
+            qualityLevels.on('change', qualityChangeHandler);
+
+            // Store cleanup function
+            qualityLevelsCleanupRef.current = () => {
+              qualityLevels.off('change', qualityChangeHandler);
+            };
           } catch (err) {
             // Quality levels API not available, skip quality tracking
             if (process.env.NODE_ENV === 'development') {
@@ -513,6 +521,12 @@ export default function CustomVideoPlayer({
       if (accessibilityCleanupRef.current) {
         accessibilityCleanupRef.current();
         accessibilityCleanupRef.current = null;
+      }
+
+      // Cleanup quality levels
+      if (qualityLevelsCleanupRef.current) {
+        qualityLevelsCleanupRef.current();
+        qualityLevelsCleanupRef.current = null;
       }
 
       // Cleanup player
