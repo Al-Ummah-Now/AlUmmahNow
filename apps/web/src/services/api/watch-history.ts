@@ -8,9 +8,12 @@
  * - localStorage fallback for unauthenticated users
  * - Sync localStorage to API on authentication
  * - Efficient throttling to prevent API spam
+ * - Automatic quota management with StorageManager
  *
  * API Endpoint: POST /api/profile/watch-history
  */
+
+import { StorageManager } from '@/lib/utils/storage';
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
 
@@ -122,6 +125,7 @@ export class WatchHistoryService {
 
   /**
    * Save watch progress to localStorage (fallback for unauthenticated users)
+   * Uses StorageManager for safe storage with quota management
    *
    * @param progress - Watch progress data
    */
@@ -130,9 +134,35 @@ export class WatchHistoryService {
       const stored = this.getStoredProgress();
       stored[progress.videoId] = progress;
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+      const jsonStr = JSON.stringify(stored);
+      const success = StorageManager.safeSetItem(STORAGE_KEY, jsonStr);
 
-      if (process.env.NODE_ENV === 'development') {
+      if (!success) {
+        console.warn('[WatchHistoryService] Failed to save watch progress to localStorage (quota exceeded)');
+
+        // Try to save just this video's progress by removing oldest entries
+        const entries = Object.entries(stored);
+        if (entries.length > 10) {
+          // Sort by timestamp, keep only 10 most recent including current
+          entries.sort((a, b) => {
+            const timeA = new Date(a[1].timestamp).getTime();
+            const timeB = new Date(b[1].timestamp).getTime();
+            return timeB - timeA;
+          });
+
+          const recentEntries = entries.slice(0, 9); // Keep 9, add current
+          const reducedStored = Object.fromEntries(recentEntries);
+          reducedStored[progress.videoId] = progress;
+
+          // Try again with reduced data
+          const reducedJson = JSON.stringify(reducedStored);
+          const retrySuccess = StorageManager.safeSetItem(STORAGE_KEY, reducedJson);
+
+          if (retrySuccess && process.env.NODE_ENV === 'development') {
+            console.log('[WatchHistoryService] Saved progress with reduced storage');
+          }
+        }
+      } else if (process.env.NODE_ENV === 'development') {
         console.log('[WatchHistoryService] Saved progress locally:', progress);
       }
     } catch (error) {

@@ -12,8 +12,8 @@
 
 'use client';
 
-import { ResumePrompt as LTRResumePrompt } from '../..';
-import type { ResumePromptProps } from '../..';
+import { ResumePrompt as LTRResumePrompt } from '../../ResumePrompt';
+import type { ResumePromptProps } from '../../ResumePrompt';
 
 /**
  * RTL Resume Prompt Component

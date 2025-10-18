@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export interface ResumePromptProps {
   /**
@@ -101,9 +102,11 @@ export function ResumePrompt({
 }: ResumePromptProps): JSX.Element {
   const { t, isRTL, dir } = useVideoPlayerI18n(lang);
   const [countdown, setCountdown] = useState(autoResumeSeconds);
-  const modalRef = useRef<HTMLDivElement>(null);
-  const resumeButtonRef = useRef<HTMLButtonElement>(null);
+  const [isVisible, setIsVisible] = useState(true);
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Focus trap for accessibility
+  const modalRef = useFocusTrap(isVisible);
 
   // Format saved time for display
   const formattedTime = formatTime(savedTime);
@@ -115,10 +118,7 @@ export function ResumePrompt({
    * Auto-resume countdown
    */
   useEffect(() => {
-    // Focus resume button on mount for accessibility
-    if (resumeButtonRef.current) {
-      resumeButtonRef.current.focus();
-    }
+    if (!isVisible) return;
 
     // Start countdown timer
     countdownTimerRef.current = setInterval(() => {
@@ -138,7 +138,7 @@ export function ResumePrompt({
         countdownTimerRef.current = null;
       }
     };
-  }, [onResume]);
+  }, [isVisible, onResume]);
 
   /**
    * Handle ESC key press
@@ -147,6 +147,7 @@ export function ResumePrompt({
     (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        setIsVisible(false);
         onDismiss();
       }
     },
@@ -159,6 +160,7 @@ export function ResumePrompt({
   const handleBackdropClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (event.target === event.currentTarget) {
+        setIsVisible(false);
         onDismiss();
       }
     },
@@ -184,6 +186,7 @@ export function ResumePrompt({
       clearInterval(countdownTimerRef.current);
       countdownTimerRef.current = null;
     }
+    setIsVisible(false);
     onResume();
   }, [onResume]);
 
@@ -196,26 +199,35 @@ export function ResumePrompt({
       clearInterval(countdownTimerRef.current);
       countdownTimerRef.current = null;
     }
+    setIsVisible(false);
     onStartFromBeginning();
   }, [onStartFromBeginning]);
+
+  /**
+   * Handle close button click
+   */
+  const handleClose = useCallback(() => {
+    setIsVisible(false);
+    onDismiss();
+  }, [onDismiss]);
 
   return (
     <div
       className="vjs-resume-prompt-backdrop"
       onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="resume-prompt-title"
-      aria-describedby="resume-prompt-description"
       dir={dir}
     >
       <div
         ref={modalRef}
         className="vjs-resume-prompt-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resume-prompt-title"
+        aria-describedby="resume-prompt-description"
       >
         {/* Close button */}
         <button
-          onClick={onDismiss}
+          onClick={handleClose}
           className="vjs-resume-prompt-close"
           aria-label={t.keyboard.closeButton}
           type="button"
@@ -293,10 +305,10 @@ export function ResumePrompt({
           {/* Action buttons */}
           <div className="vjs-resume-prompt-actions">
             <button
-              ref={resumeButtonRef}
               onClick={handleResume}
               className="vjs-resume-prompt-button vjs-resume-prompt-button-primary"
               type="button"
+              autoFocus
             >
               <svg
                 className="w-5 h-5"
