@@ -8,6 +8,28 @@
 import type { Player as VideoJsPlayer, Component } from 'video.js';
 
 /**
+ * Quality Level interface for Video.js quality selector plugin
+ */
+export interface QualityLevel {
+  id: string;
+  height: number;
+  width: number;
+  bitrate: number;
+  enabled: boolean;
+}
+
+/**
+ * Quality Levels interface for Video.js quality selector plugin
+ */
+export interface QualityLevelList {
+  length: number;
+  selectedIndex: number;
+  [index: number]: QualityLevel;
+  on(event: string, callback: () => void): void;
+  off(event: string, callback: () => void): void;
+}
+
+/**
  * Extended Player interface with additional methods
  *
  * Video.js Player has methods that exist at runtime but are not fully
@@ -85,6 +107,12 @@ export interface ExtendedPlayer extends VideoJsPlayer {
    * @returns Current ready state (0-4)
    */
   readyState(): number;
+
+  /**
+   * Get the quality levels for HLS streams (if quality selector plugin is available)
+   * @returns Quality levels list or undefined if plugin not available
+   */
+  qualityLevels?(): QualityLevelList;
 }
 
 /**

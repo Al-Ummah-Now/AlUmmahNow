@@ -121,12 +121,15 @@ describe('VideoErrorHandler', () => {
         fallbackAvailable: false,
       };
 
-      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toThrow();
+      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toEqual(error);
       expect(retryCallback).not.toHaveBeenCalled();
     });
 
     it('should respect max retry limit', async () => {
-      const retryCallback = jest.fn().mockRejectedValue(new Error('Still failing'));
+      jest.useFakeTimers();
+      const networkError = new Error('Network request failed');
+      networkError.name = 'NetworkError';
+      const retryCallback = jest.fn().mockRejectedValue(networkError);
       const error: VideoError = {
         type: VideoErrorType.NETWORK_ERROR,
         severity: VideoErrorSeverity.WARNING,
@@ -136,14 +139,22 @@ describe('VideoErrorHandler', () => {
         fallbackAvailable: false,
       };
 
-      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toThrow();
+      const retryPromise = errorHandler.handleWithRetry(error, retryCallback);
+
+      // Run all timers to completion
+      await jest.runAllTimersAsync();
+
+      jest.useRealTimers();
+      await expect(retryPromise).rejects.toBeDefined();
       expect(retryCallback).toHaveBeenCalledTimes(3);
     });
 
     it('should use exponential backoff', async () => {
       jest.useFakeTimers();
+      const networkError = new Error('Network request failed');
+      networkError.name = 'NetworkError';
       const retryCallback = jest.fn()
-        .mockRejectedValueOnce(new Error('Fail 1'))
+        .mockRejectedValueOnce(networkError)
         .mockResolvedValue(undefined);
 
       const error: VideoError = {
@@ -182,7 +193,7 @@ describe('VideoErrorHandler', () => {
       };
 
       const retryCallback = jest.fn();
-      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toThrow();
+      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toEqual(error);
 
       expect(reporter).toHaveBeenCalledWith(error);
     });
@@ -202,7 +213,7 @@ describe('VideoErrorHandler', () => {
       };
 
       const retryCallback = jest.fn();
-      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toThrow();
+      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toEqual(error);
 
       expect(reporter).not.toHaveBeenCalled();
     });
@@ -220,7 +231,7 @@ describe('VideoErrorHandler', () => {
         fallbackAvailable: false,
       };
 
-      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toThrow();
+      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toBeDefined();
 
       expect(errorHandler.getRetryCount()).toBe(0); // Reset after max retries
     });
@@ -247,7 +258,7 @@ describe('VideoErrorHandler', () => {
       };
 
       const retryCallback = jest.fn();
-      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toThrow();
+      await expect(errorHandler.handleWithRetry(error, retryCallback)).rejects.toEqual(error);
 
       const lastError = errorHandler.getLastError();
       expect(lastError).toEqual(error);

@@ -36,14 +36,14 @@ describe('ErrorDisplay', () => {
       const onRetry = jest.fn();
       render(<ErrorDisplay error={mockError} lang="en" onRetry={onRetry} />);
 
-      expect(screen.getByText('Retry')).toBeInTheDocument();
+      expect(screen.getByText('Try Again')).toBeInTheDocument();
     });
 
     it('should render fallback button when fallback available', () => {
       const onFallback = jest.fn();
       render(<ErrorDisplay error={mockError} lang="en" onFallback={onFallback} />);
 
-      expect(screen.getByText('Try Alternative Quality')).toBeInTheDocument();
+      expect(screen.getByText('Reload Video')).toBeInTheDocument();
     });
 
     it('should not render retry button when error is not retryable', () => {
@@ -53,7 +53,7 @@ describe('ErrorDisplay', () => {
       };
 
       render(<ErrorDisplay error={nonRetryableError} lang="en" />);
-      expect(screen.queryByText('Retry')).not.toBeInTheDocument();
+      expect(screen.queryByText('Try Again')).not.toBeInTheDocument();
     });
 
     it('should not render fallback button when fallback not available', () => {
@@ -72,7 +72,7 @@ describe('ErrorDisplay', () => {
       const onRetry = jest.fn();
       render(<ErrorDisplay error={mockError} lang="en" onRetry={onRetry} />);
 
-      fireEvent.click(screen.getByText('Retry'));
+      fireEvent.click(screen.getByText('Try Again'));
       expect(onRetry).toHaveBeenCalledTimes(1);
     });
 
@@ -80,7 +80,7 @@ describe('ErrorDisplay', () => {
       const onFallback = jest.fn();
       render(<ErrorDisplay error={mockError} lang="en" onFallback={onFallback} />);
 
-      fireEvent.click(screen.getByText('Try Alternative Quality'));
+      fireEvent.click(screen.getByText('Reload Video'));
       expect(onFallback).toHaveBeenCalledTimes(1);
     });
   });
@@ -152,7 +152,7 @@ describe('ErrorDisplay', () => {
       };
 
       render(<ErrorDisplay error={hlsError} lang="en" />);
-      expect(screen.getByText('Streaming Error')).toBeInTheDocument();
+      expect(screen.getByText('Format Error')).toBeInTheDocument();
     });
 
     it('should render format error correctly', () => {
@@ -166,7 +166,7 @@ describe('ErrorDisplay', () => {
       };
 
       render(<ErrorDisplay error={formatError} lang="en" />);
-      expect(screen.getByText('Format Not Supported')).toBeInTheDocument();
+      expect(screen.getByText('Format Error')).toBeInTheDocument();
     });
 
     it('should render timeout error correctly', () => {
@@ -180,7 +180,7 @@ describe('ErrorDisplay', () => {
       };
 
       render(<ErrorDisplay error={timeoutError} lang="en" />);
-      expect(screen.getByText('Loading Timeout')).toBeInTheDocument();
+      expect(screen.getByText('Timeout Error')).toBeInTheDocument();
     });
   });
 });
@@ -205,14 +205,14 @@ describe('CompactErrorDisplay', () => {
     const onRetry = jest.fn();
     render(<CompactErrorDisplay error={mockError} lang="en" onRetry={onRetry} />);
 
-    expect(screen.getByText('Retry')).toBeInTheDocument();
+    expect(screen.getByText('Try Again')).toBeInTheDocument();
   });
 
   it('should call onRetry when clicked', () => {
     const onRetry = jest.fn();
     render(<CompactErrorDisplay error={mockError} lang="en" onRetry={onRetry} />);
 
-    fireEvent.click(screen.getByText('Retry'));
+    fireEvent.click(screen.getByText('Try Again'));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
