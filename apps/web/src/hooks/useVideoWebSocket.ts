@@ -105,7 +105,9 @@ export function useVideoWebSocket({
         isPlaying: isPlayingRef.current
       });
       lastHeartbeatRef.current = now;
-      console.log('[useVideoWebSocket] Sent viewing heartbeat');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[useVideoWebSocket] Sent viewing heartbeat');
+      }
     } catch (error) {
       console.error('[useVideoWebSocket] Error sending heartbeat:', error);
       if (onError) {
@@ -118,13 +120,17 @@ export function useVideoWebSocket({
    * Handle incoming messages from video channel
    */
   const handleVideoUpdate = useCallback((data: PresenceEvent) => {
-    console.log('[useVideoWebSocket] Received update:', data);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[useVideoWebSocket] Received update:', data);
+    }
 
     if (data.type === 'presence_update' && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
     } else if (data.type === 'user_joined' && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
     } else if (data.type === 'user_left' && typeof data.viewerCount === 'number') {
+      setViewerCount(data.viewerCount);
+    } else if (data.type === 'viewer_count' && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
     }
   }, []);
@@ -167,7 +173,9 @@ export function useVideoWebSocket({
     // Get auth token if not provided
     const token = authToken || getAuthTokenFromCookies();
 
-    console.log('[useVideoWebSocket] Initializing WebSocket for video:', videoId);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[useVideoWebSocket] Initializing WebSocket for video:', videoId);
+    }
 
     try {
       // Initialize WebSocketManager
@@ -182,7 +190,9 @@ export function useVideoWebSocket({
 
       // Listen for connection state changes
       const unsubscribeState = wsManager.current.onStateChange((state) => {
-        console.log('[useVideoWebSocket] State changed:', state.status);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[useVideoWebSocket] State changed:', state.status);
+        }
         setIsConnected(state.status === 'connected');
 
         if (state.status === 'error' && onError) {
@@ -204,19 +214,11 @@ export function useVideoWebSocket({
         handleVideoUpdate
       );
 
-      // Setup heartbeat interval (30s)
-      heartbeatInterval.current = setInterval(() => {
-        sendViewingHeartbeat();
-      }, 30000);
-
-      // Send initial heartbeat after a short delay
-      initialHeartbeatTimeout.current = setTimeout(() => {
-        sendViewingHeartbeat();
-      }, 1000);
-
       // Cleanup on unmount
       return () => {
-        console.log('[useVideoWebSocket] Cleaning up');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[useVideoWebSocket] Cleaning up');
+        }
 
         // Clear heartbeat interval
         if (heartbeatInterval.current) {
@@ -252,11 +254,41 @@ export function useVideoWebSocket({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, userId, authToken, autoConnect, onError]);
 
-  // Update heartbeat when playing state changes
+  // Manage heartbeat interval - only run when playing and connected
   useEffect(() => {
-    if (isPlaying && isConnected) {
-      sendViewingHeartbeat();
+    // Clear any existing interval
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
     }
+
+    // Clear any existing initial timeout
+    if (initialHeartbeatTimeout.current) {
+      clearTimeout(initialHeartbeatTimeout.current);
+      initialHeartbeatTimeout.current = null;
+    }
+
+    if (isPlaying && isConnected) {
+      // Send initial heartbeat immediately
+      sendViewingHeartbeat();
+
+      // Start interval for subsequent heartbeats (30s)
+      heartbeatInterval.current = setInterval(() => {
+        sendViewingHeartbeat();
+      }, 30000);
+    }
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current);
+        heartbeatInterval.current = null;
+      }
+      if (initialHeartbeatTimeout.current) {
+        clearTimeout(initialHeartbeatTimeout.current);
+        initialHeartbeatTimeout.current = null;
+      }
+    };
   }, [isPlaying, isConnected, sendViewingHeartbeat]);
 
   return {

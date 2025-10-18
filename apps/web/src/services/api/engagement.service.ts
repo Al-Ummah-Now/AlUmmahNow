@@ -15,7 +15,6 @@
  */
 
 import { VideosAPI } from '@/lib/api/videos';
-import { VideoEventType } from '../analytics/types';
 import { StorageManager } from '@/lib/utils/storage';
 
 /**

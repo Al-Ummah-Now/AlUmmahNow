@@ -223,12 +223,12 @@ export class WatchHistoryService {
   ): Promise<{ synced: number; failed: number }> {
     try {
       const stored = this.getStoredProgress();
-      const progressArray = Object.values(stored);
+      const remainingProgress: Record<string, WatchProgress> = { ...stored };
 
       let synced = 0;
       let failed = 0;
 
-      for (const progress of progressArray) {
+      for (const [videoId, progress] of Object.entries(stored)) {
         const result = await this.saveProgress(
           { ...progress, userId },
           authToken
@@ -236,8 +236,11 @@ export class WatchHistoryService {
 
         if (result.success) {
           synced++;
+          // Remove successfully synced item from remaining progress
+          delete remainingProgress[videoId];
         } else {
           failed++;
+          // Keep failed item in localStorage for retry
         }
       }
 
@@ -245,8 +248,11 @@ export class WatchHistoryService {
         console.log(`[WatchHistoryService] Synced ${synced} items from localStorage to API`);
       }
 
-      if (failed === 0) {
+      // Update localStorage with only the items that failed to sync
+      if (Object.keys(remainingProgress).length === 0) {
         localStorage.removeItem(STORAGE_KEY);
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(remainingProgress));
       }
 
       return { synced, failed };
