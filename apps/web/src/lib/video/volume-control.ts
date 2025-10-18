@@ -149,7 +149,17 @@ export function setupScrollWheelControl(player: Player | ExtendedPlayer): () => 
     event.stopPropagation();
 
     // Determine scroll direction (normalize for different browsers)
-    const delta = event.deltaY || event.detail || (event as any).wheelDelta;
+    // Use proper type guards instead of any casting for better type safety
+    let delta: number;
+    if (typeof event.deltaY === 'number' && event.deltaY !== 0) {
+      delta = event.deltaY;
+    } else if (typeof event.detail === 'number' && event.detail !== 0) {
+      delta = event.detail;
+    } else if ('wheelDelta' in event && typeof (event as any).wheelDelta === 'number') {
+      delta = -(event as any).wheelDelta; // wheelDelta has inverted sign
+    } else {
+      delta = 0;
+    }
     const direction = delta > 0 ? -1 : 1;
 
     // Calculate new volume

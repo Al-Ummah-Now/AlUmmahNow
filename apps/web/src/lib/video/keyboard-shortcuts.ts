@@ -216,6 +216,66 @@ function formatTime(seconds: number): string {
 }
 
 /**
+ * Result of handling Picture-in-Picture toggle
+ */
+interface PiPToggleResult {
+  handled: boolean;
+  feedbackMessage: string;
+  shouldReturn: boolean;
+}
+
+/**
+ * Handle Picture-in-Picture toggle
+ * Extracted from keyboard shortcut handler for improved readability and testability
+ */
+function handlePictureInPictureToggle(
+  player: ExtendedPlayer,
+  translations: ReturnType<typeof getTranslations>,
+  enableFeedback: boolean
+): PiPToggleResult {
+  const videoElement = player.el().querySelector('video');
+
+  if (videoElement && 'requestPictureInPicture' in videoElement) {
+    if (document.pictureInPictureElement) {
+      // Exit PiP mode
+      document.exitPictureInPicture();
+      return {
+        handled: true,
+        feedbackMessage: translations.controls.exitPictureInPicture,
+        shouldReturn: false
+      };
+    } else {
+      // Enter PiP mode (async operation)
+      (videoElement as HTMLVideoElement)
+        .requestPictureInPicture()
+        .then(() => {
+          if (enableFeedback) {
+            showFeedback(translations.controls.pictureInPicture, player);
+          }
+        })
+        .catch(() => {
+          if (enableFeedback) {
+            showFeedback(translations.controls.pipNotAvailable, player);
+          }
+        });
+      // Feedback handled in promise callbacks - early return
+      return {
+        handled: true,
+        feedbackMessage: '',
+        shouldReturn: true
+      };
+    }
+  } else {
+    // PiP not supported
+    return {
+      handled: true,
+      feedbackMessage: translations.controls.pipNotSupported,
+      shouldReturn: false
+    };
+  }
+}
+
+/**
  * Setup keyboard shortcuts for video player
  *
  * @param player - Video.js player instance
@@ -336,34 +396,12 @@ export function setupKeyboardShortcuts(
     // Picture-in-Picture (P)
     else if (bindings.pip.includes(key)) {
       event.preventDefault();
-      const videoElement = player.el().querySelector('video');
-      if (videoElement && 'requestPictureInPicture' in videoElement) {
-        if (document.pictureInPictureElement) {
-          document.exitPictureInPicture();
-          feedbackMessage = translations.controls.exitPictureInPicture;
-        } else {
-          (videoElement as HTMLVideoElement)
-            .requestPictureInPicture()
-            .then(() => {
-              // Show success feedback only if PiP request succeeds
-              if (enableFeedback) {
-                showFeedback(translations.controls.pictureInPicture, player);
-              }
-            })
-            .catch(() => {
-              // Show error feedback if PiP request fails
-              if (enableFeedback) {
-                showFeedback(translations.controls.pipNotAvailable, player);
-              }
-            });
-          // Don't set feedbackMessage here - it's handled in promise callbacks
-          handled = true;
-          return; // Early return to skip feedback below
-        }
-      } else {
-        feedbackMessage = translations.controls.pipNotSupported;
+      const pipResult = handlePictureInPictureToggle(player, translations, enableFeedback);
+      handled = pipResult.handled;
+      feedbackMessage = pipResult.feedbackMessage;
+      if (pipResult.shouldReturn) {
+        return; // Early return for async PiP entry
       }
-      handled = true;
     }
 
     // Speed Decrease (<, ,)
