@@ -1,6 +1,25 @@
-/* Custom Video.js Theme for Al Ummah Now */
+/* Custom Video.js Theme for Al Ummah Now - YouTube-like Design */
 
-/* Extend base video-player.css with component-specific styles */
+/* ========================================================================
+   Phase 4.17: Custom Control Skin (YouTube-like)
+
+   Features:
+   - Modern gradient control bar
+   - Animated play button
+   - Custom progress bar with hover effects
+   - Styled menus and tooltips
+   - Dark/light theme support
+   - Smooth transitions and animations
+   ======================================================================== */
+
+:root {
+  --vjs-primary-color: #3b82f6;
+  --vjs-control-bg: rgba(0, 0, 0, 0.8);
+  --vjs-control-text: #ffffff;
+  --vjs-progress-bg: rgba(255, 255, 255, 0.3);
+  --vjs-progress-filled: var(--vjs-primary-color);
+  --vjs-hover-bg: rgba(255, 255, 255, 0.1);
+}
 
 .video-player-container {
   position: relative;
@@ -10,75 +29,428 @@
 .video-player-container .video-js {
   width: 100%;
   height: 100%;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
 }
 
-/* Loading state */
-.video-player-container .vjs-loading-spinner {
-  border-color: oklch(var(--primary) / 0.3);
-  border-top-color: oklch(var(--primary));
+/* ========================================================================
+   Big Play Button - Modern Animated Design
+   ======================================================================== */
+
+.video-js .vjs-big-play-button {
+  /* Positioning */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  /* Sizing */
+  width: 88px;
+  height: 88px;
+  line-height: 88px;
+
+  /* Styling */
+  background: rgba(59, 130, 246, 0.9);
+  border: none;
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+
+  /* Animation */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Icon */
+  font-size: 36px;
 }
 
-/* Ensure proper aspect ratio */
-.video-player-container .aspect-video {
-  aspect-ratio: 16 / 9;
+.video-js .vjs-big-play-button:hover {
+  background: rgba(59, 130, 246, 1);
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.5);
 }
 
-/* Error display styling */
+.video-js .vjs-big-play-button:focus {
+  outline: 3px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 4px;
+}
+
+.video-js .vjs-big-play-button .vjs-icon-placeholder:before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ========================================================================
+   Control Bar - Gradient Background
+   ======================================================================== */
+
+.video-js .vjs-control-bar {
+  /* Positioning */
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.7) 50%,
+    transparent 100%
+  );
+
+  /* Sizing */
+  height: 4.5rem;
+  padding: 0 1rem;
+
+  /* Animation */
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.video-js.vjs-user-inactive.vjs-playing .vjs-control-bar {
+  opacity: 0;
+  transform: translateY(100%);
+}
+
+.video-js.vjs-user-active .vjs-control-bar,
+.video-js.vjs-paused .vjs-control-bar {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Animation on control bar appearance */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.video-js .vjs-control-bar {
+  animation: fadeIn 0.3s;
+}
+
+/* ========================================================================
+   Progress Bar - Hover Effects
+   ======================================================================== */
+
+.video-js .vjs-progress-control {
+  /* Positioning */
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  width: 100%;
+
+  /* Sizing */
+  height: 8px;
+
+  /* Animation */
+  transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.video-js .vjs-progress-control:hover,
+.video-js .vjs-progress-control:focus-within {
+  height: 12px;
+}
+
+.video-js .vjs-progress-holder {
+  height: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--vjs-progress-bg);
+}
+
+/* Play progress (filled portion) */
+.video-js .vjs-play-progress {
+  background: var(--vjs-progress-filled);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+}
+
+/* Play progress indicator (scrubber) */
+.video-js .vjs-play-progress:before {
+  font-size: 0;
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%) scale(0);
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+
+.video-js .vjs-progress-control:hover .vjs-play-progress:before,
+.video-js .vjs-progress-control:focus-within .vjs-play-progress:before {
+  transform: translateY(-50%) scale(1);
+}
+
+/* Load progress (buffered portion) */
+.video-js .vjs-load-progress {
+  background: var(--vjs-progress-bg);
+}
+
+.video-js .vjs-load-progress div {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ========================================================================
+   Control Buttons - Hover & Focus States
+   ======================================================================== */
+
+.video-js .vjs-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.video-js .vjs-button:hover {
+  transform: scale(1.1);
+  background: var(--vjs-hover-bg);
+}
+
+.video-js .vjs-button:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.video-js .vjs-button:active {
+  transform: scale(0.95);
+}
+
+/* Play/Pause button specific styling */
+.video-js .vjs-play-control {
+  order: 1;
+}
+
+/* Volume panel */
+.video-js .vjs-volume-panel {
+  order: 2;
+}
+
+/* Time display */
+.video-js .vjs-time-control {
+  order: 3;
+  font-variant-numeric: tabular-nums;
+  min-width: 4rem;
+  padding: 0 0.5rem;
+}
+
+/* Quality selector */
+.video-js .vjs-quality-selector {
+  order: 4;
+}
+
+/* Settings button */
+.video-js .vjs-settings-button {
+  order: 5;
+}
+
+/* Fullscreen button */
+.video-js .vjs-fullscreen-control {
+  order: 6;
+}
+
+/* ========================================================================
+   Volume Control - Styled Slider
+   ======================================================================== */
+
+.video-js .vjs-volume-panel {
+  transition: width 0.3s;
+}
+
+.video-js .vjs-volume-panel:hover .vjs-volume-control,
+.video-js .vjs-volume-panel.vjs-hover .vjs-volume-control {
+  width: 5rem;
+  transition: width 0.3s;
+}
+
+.video-js .vjs-volume-level {
+  background-color: var(--vjs-progress-filled);
+}
+
+.video-js .vjs-volume-bar {
+  background: var(--vjs-progress-bg);
+  border-radius: 2px;
+}
+
+/* Volume slider thumb */
+.video-js .vjs-volume-level:before {
+  font-size: 0;
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ========================================================================
+   Menus - Dropdown Styling
+   ======================================================================== */
+
+.video-js .vjs-menu {
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  padding: 0.5rem 0;
+}
+
+.video-js .vjs-menu-content {
+  background: transparent;
+}
+
+.video-js .vjs-menu-item,
+.video-js .vjs-menu-title {
+  padding: 0.75rem 1rem;
+  transition: background 0.2s;
+  font-size: 0.875rem;
+}
+
+.video-js .vjs-menu-item:hover,
+.video-js .vjs-menu-item:focus {
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.video-js .vjs-menu-item.vjs-selected,
+.video-js .vjs-menu-item.vjs-selected:hover {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--vjs-primary-color);
+}
+
+.video-js .vjs-menu-item.vjs-selected:before {
+  content: '✓ ';
+  margin-right: 0.5rem;
+}
+
+/* ========================================================================
+   Loading Spinner
+   ======================================================================== */
+
+.video-js .vjs-loading-spinner {
+  border-color: rgba(59, 130, 246, 0.3);
+  border-top-color: rgb(59, 130, 246);
+  border-width: 4px;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+}
+
+/* ========================================================================
+   Error Display
+   ======================================================================== */
+
 .video-player-container .vjs-error-display {
-  background-color: oklch(var(--destructive) / 0.1);
-  border: 1px solid oklch(var(--destructive) / 0.3);
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 0.5rem;
 }
 
 .video-player-container .vjs-error-display .vjs-modal-dialog-content {
-  color: oklch(var(--destructive-foreground));
+  color: #fecaca;
   font-size: 0.875rem;
 }
 
-/* Progress bar customization */
-.video-player-container .vjs-play-progress {
-  background-color: oklch(var(--primary));
-}
+/* ========================================================================
+   Responsive Design - Mobile Optimizations
+   ======================================================================== */
 
-.video-player-container .vjs-load-progress {
-  background-color: oklch(var(--primary) / 0.3);
-}
-
-/* Volume slider */
-.video-player-container .vjs-volume-level {
-  background-color: oklch(var(--primary));
-}
-
-/* Fullscreen button focus */
-.video-player-container .vjs-fullscreen-control:focus-visible {
-  outline: 2px solid oklch(var(--ring));
-  outline-offset: 2px;
-}
-
-/* Time display */
-.video-player-container .vjs-time-control {
-  font-variant-numeric: tabular-nums;
-  min-width: 4rem;
-}
-
-/* Responsive adjustments */
 @media (max-width: 640px) {
-  .video-player-container .vjs-time-control {
+  .video-js .vjs-big-play-button {
+    width: 64px;
+    height: 64px;
+    line-height: 64px;
+    font-size: 28px;
+  }
+
+  .video-js .vjs-control-bar {
+    height: 3.5rem;
+    padding: 0 0.5rem;
+  }
+
+  .video-js .vjs-time-control {
     min-width: 3rem;
     font-size: 0.75rem;
+    padding: 0 0.25rem;
+  }
+
+  .video-js .vjs-button {
+    padding: 0;
+  }
+
+  /* Hide some controls on very small screens */
+  .video-js .vjs-remaining-time {
+    display: none;
   }
 }
 
-/* RTL-specific adjustments */
+/* ========================================================================
+   RTL Support - Mirrored Layout
+   ======================================================================== */
+
 [dir="rtl"] .video-player-container .vjs-control-bar {
   flex-direction: row-reverse;
 }
 
-[dir="rtl"] .video-player-container .vjs-progress-control {
-  order: 0;
+[dir="rtl"] .video-js .vjs-progress-control {
+  direction: rtl;
 }
 
-/* Accessibility: Screen reader only class */
+[dir="rtl"] .video-js .vjs-play-progress:before {
+  right: auto;
+  left: -6px;
+}
+
+[dir="rtl"] .video-js .vjs-volume-level:before {
+  right: auto;
+  left: -6px;
+}
+
+[dir="rtl"] .video-js .vjs-menu {
+  left: auto;
+  right: 0;
+}
+
+/* Keep time displays LTR even in RTL */
+[dir="rtl"] .video-js .vjs-time-control {
+  direction: ltr;
+}
+
+/* ========================================================================
+   Dark/Light Theme Support
+   ======================================================================== */
+
+/* Light theme overrides */
+.light .video-js .vjs-control-bar {
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.8) 50%,
+    transparent 100%
+  );
+  color: #1f2937;
+}
+
+.light .video-js .vjs-menu {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #1f2937;
+}
+
+.light .video-js .vjs-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.light .video-js .vjs-progress-bg {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* ========================================================================
+   Accessibility - Screen Reader & Focus States
+   ======================================================================== */
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -91,7 +463,37 @@
   border-width: 0;
 }
 
-/* Shimmer animation for skeleton */
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .video-js .vjs-control-bar {
+    background: #000;
+    border-top: 2px solid #fff;
+  }
+
+  .video-js .vjs-button {
+    border: 1px solid #fff;
+  }
+
+  .video-js .vjs-play-progress {
+    box-shadow: none;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .video-js *,
+  .video-js *:before,
+  .video-js *:after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================================================
+   Shimmer Animation for Skeleton Loader
+   ======================================================================== */
+
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);
@@ -103,4 +505,318 @@
 
 .animate-shimmer {
   animation: shimmer 2s infinite;
+}
+
+/* ========================================================================
+   Additional Polish - Tooltips
+   ======================================================================== */
+
+.video-js .vjs-menu .vjs-menu-title {
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 0.25rem;
+}
+
+/* Smooth pointer interactions */
+.video-js .vjs-control-bar * {
+  cursor: pointer;
+}
+
+.video-js .vjs-progress-holder {
+  cursor: pointer;
+}
+
+/* Ensure proper aspect ratio */
+.video-player-container .aspect-video {
+  aspect-ratio: 16 / 9;
+}
+
+/* ========================================================================
+   Mobile Touch Controls - Feedback Animations
+   ======================================================================== */
+
+.vjs-mobile-touch-feedback {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1000;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.vjs-mobile-touch-feedback-left {
+  left: 2rem;
+}
+
+.vjs-mobile-touch-feedback-center {
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.vjs-mobile-touch-feedback-right {
+  right: 2rem;
+}
+
+.vjs-mobile-touch-feedback-show {
+  opacity: 1;
+  animation: touchFeedbackPulse 0.3s ease;
+}
+
+.vjs-mobile-touch-feedback-hide {
+  opacity: 0;
+}
+
+@keyframes touchFeedbackPulse {
+  0% {
+    transform: translateY(-50%) scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: translateY(-50%) scale(1.1);
+  }
+  100% {
+    transform: translateY(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Center feedback specific animation */
+.vjs-mobile-touch-feedback-center.vjs-mobile-touch-feedback-show {
+  animation: touchFeedbackPulseCenter 0.3s ease;
+}
+
+@keyframes touchFeedbackPulseCenter {
+  0% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Mobile touch targets - ensure minimum 48x48px */
+@media (max-width: 768px) {
+  .video-js .vjs-button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .video-js .vjs-play-control,
+  .video-js .vjs-volume-panel,
+  .video-js .vjs-fullscreen-control {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  /* Larger touch area for progress bar on mobile */
+  .video-js .vjs-progress-control {
+    height: 12px;
+  }
+
+  .video-js .vjs-progress-control:active {
+    height: 16px;
+  }
+}
+
+/* ========================================================================
+   Loading States - Buffering & Quality Change Indicators
+   ======================================================================== */
+
+/* Buffering Overlay */
+.vjs-buffering-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Buffering Spinner Container */
+.vjs-buffering-spinner {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 1rem;
+}
+
+/* Indeterminate Spinner (when no progress available) */
+.vjs-buffering-spinner-indeterminate {
+  width: 100%;
+  height: 100%;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(59, 130, 246, 1);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Progress Ring (when progress is available) */
+.vjs-buffering-progress-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.vjs-buffering-progress-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 8;
+}
+
+.vjs-buffering-progress-fill {
+  fill: none;
+  stroke: rgba(59, 130, 246, 1);
+  stroke-width: 8;
+  stroke-dasharray: 283;
+  stroke-dashoffset: 283;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+/* Buffering Text */
+.vjs-buffering-text {
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.vjs-buffering-message {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Quality Change Indicator */
+.vjs-quality-change-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  z-index: 100;
+  animation: qualityChangeFadeIn 0.3s ease;
+}
+
+@keyframes qualityChangeFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.vjs-quality-change-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.vjs-quality-change-icon {
+  font-size: 2rem;
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vjs-quality-change-text {
+  text-align: left;
+}
+
+.vjs-quality-change-label {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.25rem;
+}
+
+.vjs-quality-change-values {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgba(59, 130, 246, 1);
+}
+
+/* Loading Error State */
+.vjs-loading-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fecaca;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  text-align: center;
+  z-index: 100;
+  animation: fadeIn 0.3s ease;
+}
+
+.vjs-loading-error-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.vjs-loading-error-message {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.vjs-loading-error-code {
+  font-size: 0.75rem;
+  color: rgba(254, 202, 202, 0.7);
+  font-family: monospace;
+}
+
+/* RTL Support for Loading States */
+[dir="rtl"] .vjs-quality-change-text {
+  text-align: right;
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .vjs-buffering-spinner-indeterminate,
+  .vjs-quality-change-icon {
+    animation: none;
+  }
+
+  .vjs-buffering-progress-fill {
+    transition: none;
+  }
 }

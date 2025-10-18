@@ -15,6 +15,15 @@
  * - Visual feedback for actions
  * - Form input detection to prevent conflicts
  * - Works in fullscreen mode
+ * - RTL support (arrow keys swap for Arabic)
+ *
+ * RTL Behavior:
+ * - In RTL mode (Arabic), horizontal arrow keys are swapped:
+ *   - ArrowLeft → seeks forward (10s)
+ *   - ArrowRight → seeks backward (10s)
+ * - This matches natural RTL reading direction
+ * - J/L keys remain unchanged (letter keys don't swap)
+ * - Vertical arrows (volume) and other keys unaffected
  *
  * @example
  * ```typescript
@@ -27,8 +36,8 @@
  * ```
  */
 
-import type { ExtendedPlayer } from './videojs.d';
-import { getTranslations, type SupportedLanguage } from './i18n';
+import type { ExtendedPlayer } from './videojs';
+import { getTranslations, isRTL, type SupportedLanguage } from './i18n';
 
 /**
  * Constants for keyboard shortcuts behavior
@@ -294,7 +303,18 @@ export function setupKeyboardShortcuts(
   } = options;
 
   const translations = getTranslations(lang);
-  const bindings = { ...DEFAULT_KEY_BINDINGS, ...customBindings };
+  const rtl = isRTL(lang);
+
+  // Swap arrow keys for RTL mode
+  // In RTL, left arrow should go forward and right arrow should go backward
+  const bindings: KeyBindings = rtl
+    ? {
+        ...DEFAULT_KEY_BINDINGS,
+        rewind: ['ArrowRight', 'j', 'J'], // Swap: right arrow rewinds in RTL
+        forward: ['ArrowLeft', 'l', 'L'], // Swap: left arrow forwards in RTL
+        ...customBindings,
+      }
+    : { ...DEFAULT_KEY_BINDINGS, ...customBindings };
 
   /**
    * Handle keyboard events
