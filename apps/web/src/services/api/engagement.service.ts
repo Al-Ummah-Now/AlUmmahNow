@@ -9,11 +9,14 @@
  * - Automatic API synchronization
  * - Error handling with rollback
  * - Session-based view tracking (one view per session)
- * - LocalStorage for session persistence
+ * - LocalStorage for session persistence with quota management
+ * - XSS protection with input validation and sanitization
+ * - Automatic quota management with StorageManager
  */
 
 import { VideosAPI } from '@/lib/api/videos';
 import { VideoEventType } from '../analytics/types';
+import { StorageManager } from '@/lib/utils/storage';
 
 /**
  * Share platform types
@@ -31,6 +34,69 @@ export type EngagementAction = 'like' | 'unlike' | 'dislike' | 'remove_dislike' 
 export interface EngagementResult {
   success: boolean;
   error?: string;
+}
+
+/**
+ * Security: Validate video ID format
+ * Prevents XSS attacks by ensuring videoId matches expected patterns
+ *
+ * @param videoId - The video ID to validate
+ * @returns True if valid, false otherwise
+ */
+function isValidVideoId(videoId: string): boolean {
+  // Null/undefined check
+  if (!videoId || typeof videoId !== 'string') {
+    return false;
+  }
+
+  // Length check - prevent excessive input
+  if (videoId.length === 0 || videoId.length > 100) {
+    return false;
+  }
+
+  // Pattern check - only allow alphanumeric, hyphens, and underscores
+  // Common patterns: abc123, video-123, video_123, uuid format
+  const videoIdRegex = /^[a-zA-Z0-9_-]+$/;
+  return videoIdRegex.test(videoId);
+}
+
+/**
+ * Security: Sanitize video ID for safe URL usage
+ * Encodes special characters to prevent XSS attacks
+ *
+ * @param videoId - The video ID to sanitize
+ * @returns Sanitized video ID safe for URL construction
+ */
+function sanitizeVideoId(videoId: string): string {
+  // First validate the format
+  if (!isValidVideoId(videoId)) {
+    throw new Error('Invalid video ID format');
+  }
+
+  // Trim whitespace and encode for URL safety
+  // encodeURIComponent escapes all potentially dangerous characters
+  return encodeURIComponent(videoId.trim());
+}
+
+/**
+ * Security: Validate user/channel ID format
+ *
+ * @param id - The ID to validate
+ * @returns True if valid, false otherwise
+ */
+function isValidUserId(id: string | undefined): boolean {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+
+  // Length check
+  if (id.length === 0 || id.length > 100) {
+    return false;
+  }
+
+  // Pattern check - alphanumeric, hyphens, underscores (typical for user/channel IDs)
+  const idRegex = /^[a-zA-Z0-9_-]+$/;
+  return idRegex.test(id);
 }
 
 /**
@@ -73,7 +139,7 @@ export class VideoEngagementService {
   }
 
   /**
-   * Save tracked views to localStorage
+   * Save tracked views to localStorage with quota management
    */
   private saveTrackedViews(): void {
     if (typeof window === 'undefined') return;
@@ -94,14 +160,37 @@ export class VideoEngagementService {
         }
       });
 
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+      const jsonStr = JSON.stringify(data);
+      const success = StorageManager.safeSetItem(this.STORAGE_KEY, jsonStr);
+
+      if (!success) {
+        console.warn('[VideoEngagementService] Failed to save tracked views (quota exceeded)');
+
+        // Try to save with reduced data - keep only last 24 hours
+        const oneDayAgo = now - (24 * 60 * 60 * 1000);
+        const reduced: Record<string, number> = {};
+
+        Object.entries(data).forEach(([videoId, timestamp]) => {
+          if (timestamp > oneDayAgo) {
+            reduced[videoId] = timestamp;
+          }
+        });
+
+        // Try again with reduced data
+        const reducedJson = JSON.stringify(reduced);
+        const retrySuccess = StorageManager.safeSetItem(this.STORAGE_KEY, reducedJson);
+
+        if (retrySuccess) {
+          console.log('[VideoEngagementService] Saved tracked views with reduced data');
+        }
+      }
     } catch (error) {
       console.error('[VideoEngagementService] Failed to save tracked views:', error);
     }
   }
 
   /**
-   * Clean up expired views from localStorage
+   * Clean up expired views from localStorage with StorageManager
    */
   private cleanupExpiredViews(): void {
     if (typeof window === 'undefined') return;
@@ -120,7 +209,8 @@ export class VideoEngagementService {
         }
       });
 
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cleaned));
+      const jsonStr = JSON.stringify(cleaned);
+      StorageManager.safeSetItem(this.STORAGE_KEY, jsonStr);
     } catch (error) {
       console.error('[VideoEngagementService] Failed to cleanup expired views:', error);
     }
@@ -130,6 +220,11 @@ export class VideoEngagementService {
    * Check if a video view has already been tracked in this session
    */
   isViewTracked(videoId: string): boolean {
+    // Security: Validate video ID
+    if (!isValidVideoId(videoId)) {
+      console.error('[VideoEngagementService] Invalid video ID format');
+      return false;
+    }
     return this.viewTracked.has(videoId);
   }
 
@@ -141,6 +236,21 @@ export class VideoEngagementService {
    * @returns Promise resolving to success status
    */
   async trackView(videoId: string, userId?: string): Promise<EngagementResult> {
+    // Security: Validate input parameters
+    if (!isValidVideoId(videoId)) {
+      return {
+        success: false,
+        error: 'Invalid video ID format'
+      };
+    }
+
+    if (userId && !isValidUserId(userId)) {
+      return {
+        success: false,
+        error: 'Invalid user ID format'
+      };
+    }
+
     // Skip if already tracked in this session
     if (this.isViewTracked(videoId)) {
       return { success: true };
@@ -183,6 +293,21 @@ export class VideoEngagementService {
     channelId: string,
     userId: string
   ): Promise<EngagementResult> {
+    // Security: Validate all input parameters
+    if (!isValidVideoId(videoId)) {
+      return {
+        success: false,
+        error: 'Invalid video ID format'
+      };
+    }
+
+    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
+      return {
+        success: false,
+        error: 'Invalid user or channel ID format'
+      };
+    }
+
     try {
       const result = await VideosAPI.like(videoId, { channelId, userId });
 
@@ -213,6 +338,21 @@ export class VideoEngagementService {
     channelId: string,
     userId: string
   ): Promise<EngagementResult> {
+    // Security: Validate all input parameters
+    if (!isValidVideoId(videoId)) {
+      return {
+        success: false,
+        error: 'Invalid video ID format'
+      };
+    }
+
+    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
+      return {
+        success: false,
+        error: 'Invalid user or channel ID format'
+      };
+    }
+
     try {
       const result = await VideosAPI.unlike(videoId, { channelId, userId });
 
@@ -243,6 +383,21 @@ export class VideoEngagementService {
     channelId: string,
     userId: string
   ): Promise<EngagementResult> {
+    // Security: Validate all input parameters
+    if (!isValidVideoId(videoId)) {
+      return {
+        success: false,
+        error: 'Invalid video ID format'
+      };
+    }
+
+    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
+      return {
+        success: false,
+        error: 'Invalid user or channel ID format'
+      };
+    }
+
     try {
       const result = await VideosAPI.dislike(videoId, { channelId, userId });
 
@@ -273,6 +428,21 @@ export class VideoEngagementService {
     channelId: string,
     userId: string
   ): Promise<EngagementResult> {
+    // Security: Validate all input parameters
+    if (!isValidVideoId(videoId)) {
+      return {
+        success: false,
+        error: 'Invalid video ID format'
+      };
+    }
+
+    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
+      return {
+        success: false,
+        error: 'Invalid user or channel ID format'
+      };
+    }
+
     try {
       const result = await VideosAPI.removeDislike(videoId, { channelId, userId });
 
@@ -298,6 +468,14 @@ export class VideoEngagementService {
    * @returns Promise resolving to success status
    */
   async trackShare(videoId: string, platform: SharePlatform): Promise<EngagementResult> {
+    // Security: Validate video ID before tracking
+    if (!isValidVideoId(videoId)) {
+      return {
+        success: false,
+        error: 'Invalid video ID format'
+      };
+    }
+
     try {
       // Track share event in analytics
       // This will be sent to the analytics endpoint
@@ -317,29 +495,43 @@ export class VideoEngagementService {
   }
 
   /**
-   * Get share URL for a video
+   * Get share URL for a video with XSS protection
    *
    * @param videoId - The video ID
    * @param platform - The platform to share on
-   * @returns Share URL or null if platform not supported
+   * @returns Share URL or null if platform not supported or invalid input
    */
   getShareUrl(videoId: string, platform: SharePlatform): string | null {
     if (typeof window === 'undefined') return null;
 
+    // Security: Validate and sanitize video ID to prevent XSS attacks
+    if (!isValidVideoId(videoId)) {
+      console.error('[VideoEngagementService] Invalid video ID format - potential XSS attempt');
+      return null;
+    }
+
+    // Sanitize video ID for safe URL construction
+    const safeVideoId = sanitizeVideoId(videoId);
     const baseUrl = window.location.origin;
-    const videoUrl = `${baseUrl}/watch/${videoId}`;
+
+    // Construct safe video URL with sanitized ID
+    const videoUrl = `${baseUrl}/watch/${safeVideoId}`;
 
     switch (platform) {
       case 'twitter':
+        // URL is already double-encoded (once by us, once by encodeURIComponent)
         return `https://twitter.com/intent/tweet?url=${encodeURIComponent(videoUrl)}`;
 
       case 'facebook':
+        // URL is already double-encoded for safety
         return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(videoUrl)}`;
 
       case 'email':
+        // Email body is safely encoded
         return `mailto:?subject=Check out this video&body=${encodeURIComponent(videoUrl)}`;
 
       case 'copy':
+        // Return the sanitized URL for copying
         return videoUrl;
 
       default:
@@ -348,12 +540,20 @@ export class VideoEngagementService {
   }
 
   /**
-   * Copy video URL to clipboard
+   * Copy video URL to clipboard with XSS protection
    *
    * @param videoId - The video ID
    * @returns Promise resolving to success status
    */
   async copyShareUrl(videoId: string): Promise<EngagementResult> {
+    // Security: Validate video ID first
+    if (!isValidVideoId(videoId)) {
+      return {
+        success: false,
+        error: 'Invalid video ID format'
+      };
+    }
+
     try {
       const url = this.getShareUrl(videoId, 'copy');
       if (!url) {

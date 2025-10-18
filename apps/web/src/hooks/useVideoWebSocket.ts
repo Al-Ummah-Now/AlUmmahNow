@@ -71,15 +71,22 @@ export function useVideoWebSocket({
   const [viewerCount, setViewerCount] = useState<number>(0);
   const [isConnected, setIsConnected] = useState(false);
   const wsManager = useRef<WebSocketManager | null>(null);
-  const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const initialHeartbeatTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHeartbeatRef = useRef<number>(0);
+  const isPlayingRef = useRef<boolean>(isPlaying);
+
+  // Keep ref in sync with prop
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
   /**
    * Send viewing heartbeat to report active viewing
    * Only sends if connected and playing
    */
   const sendViewingHeartbeat = useCallback(() => {
-    if (!wsManager.current?.isConnected() || !isPlaying) {
+    if (!wsManager.current?.isConnected() || !isPlayingRef.current) {
       return;
     }
 
@@ -95,7 +102,7 @@ export function useVideoWebSocket({
         videoId,
         userId,
         timestamp: now,
-        isPlaying
+        isPlaying: isPlayingRef.current
       });
       lastHeartbeatRef.current = now;
       console.log('[useVideoWebSocket] Sent viewing heartbeat');
@@ -105,7 +112,7 @@ export function useVideoWebSocket({
         onError(error instanceof Error ? error : new Error('Failed to send heartbeat'));
       }
     }
-  }, [videoId, userId, isPlaying, onError]);
+  }, [videoId, userId, onError]);
 
   /**
    * Handle incoming messages from video channel
@@ -123,12 +130,17 @@ export function useVideoWebSocket({
   }, []);
 
   /**
-   * Disconnect WebSocket
+   * Disconnect WebSocket and cleanup all timers
    */
   const disconnect = useCallback(() => {
     if (heartbeatInterval.current) {
       clearInterval(heartbeatInterval.current);
       heartbeatInterval.current = null;
+    }
+
+    if (initialHeartbeatTimeout.current) {
+      clearTimeout(initialHeartbeatTimeout.current);
+      initialHeartbeatTimeout.current = null;
     }
 
     if (wsManager.current) {
@@ -198,16 +210,37 @@ export function useVideoWebSocket({
       }, 30000);
 
       // Send initial heartbeat after a short delay
-      setTimeout(() => {
+      initialHeartbeatTimeout.current = setTimeout(() => {
         sendViewingHeartbeat();
       }, 1000);
 
       // Cleanup on unmount
       return () => {
         console.log('[useVideoWebSocket] Cleaning up');
+
+        // Clear heartbeat interval
+        if (heartbeatInterval.current) {
+          clearInterval(heartbeatInterval.current);
+          heartbeatInterval.current = null;
+        }
+
+        // Clear initial heartbeat timeout
+        if (initialHeartbeatTimeout.current) {
+          clearTimeout(initialHeartbeatTimeout.current);
+          initialHeartbeatTimeout.current = null;
+        }
+
+        // Unsubscribe from channels
         unsubscribe();
         unsubscribeState();
-        disconnect();
+
+        // Disconnect WebSocket
+        if (wsManager.current) {
+          wsManager.current.disconnect();
+          wsManager.current = null;
+        }
+
+        setIsConnected(false);
       };
     } catch (error) {
       console.error('[useVideoWebSocket] Initialization error:', error);
@@ -216,7 +249,8 @@ export function useVideoWebSocket({
       }
       return undefined;
     }
-  }, [videoId, userId, authToken, autoConnect, handleVideoUpdate, sendViewingHeartbeat, disconnect, onError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId, userId, authToken, autoConnect, onError]);
 
   // Update heartbeat when playing state changes
   useEffect(() => {

@@ -72,6 +72,10 @@ export function useWatchProgress(
   const lastSavedPositionRef = useRef<number>(0);
   const isMountedRef = useRef(true);
 
+  // Mutex pattern to prevent race conditions
+  const saveMutexRef = useRef<boolean>(false);
+  const pendingSaveRef = useRef<{ progress: WatchProgress; force: boolean } | null>(null);
+
   /**
    * Log debug message if debug logging is enabled
    */
@@ -82,7 +86,42 @@ export function useWatchProgress(
   }, [enableDebugLogging]);
 
   /**
-   * Save watch progress to API or localStorage
+   * Process the actual save operation (internal)
+   * This should only be called when the mutex is acquired
+   */
+  const processSave = useCallback(async (progress: WatchProgress): Promise<void> => {
+    if (!isMountedRef.current) return;
+
+    try {
+      if (userId && authToken) {
+        const result = await WatchHistoryService.saveProgress(progress, authToken);
+        if (result.success) {
+          debugLog('Progress saved to API:', progress.currentTime, '/', progress.duration);
+        } else {
+          debugLog('Failed to save to API, falling back to localStorage:', result.error);
+          WatchHistoryService.saveLocal(progress);
+        }
+      } else {
+        WatchHistoryService.saveLocal(progress);
+        debugLog('Progress saved to localStorage:', progress.currentTime, '/', progress.duration);
+      }
+
+      if (isMountedRef.current) {
+        setSavedProgress(progress);
+      }
+    } catch (error) {
+      debugLog('Error saving progress:', error);
+      // Save to localStorage as fallback
+      WatchHistoryService.saveLocal(progress);
+      if (isMountedRef.current) {
+        setSavedProgress(progress);
+      }
+    }
+  }, [userId, authToken, debugLog]);
+
+  /**
+   * Save watch progress to API or localStorage with mutex protection
+   * This prevents race conditions when multiple save calls happen simultaneously
    */
   const saveProgress = useCallback(async (force = false) => {
     if (!player || !videoId) return;
@@ -120,24 +159,45 @@ export function useWatchProgress(
       timestamp: new Date().toISOString(),
     };
 
+    // If a save is already in progress, queue this one
+    if (saveMutexRef.current) {
+      debugLog('Save in progress, queueing current progress:', currentTime);
+      pendingSaveRef.current = { progress, force };
+      return;
+    }
+
+    // Acquire mutex
+    saveMutexRef.current = true;
+    debugLog('Acquired mutex for save:', currentTime);
+
+    // Update last save tracking
     lastSaveTimeRef.current = now;
     lastSavedPositionRef.current = currentTime;
 
-    if (userId && authToken) {
-      const result = await WatchHistoryService.saveProgress(progress, authToken);
-      if (result.success) {
-        debugLog('Progress saved to API:', currentTime, '/', duration);
-      } else {
-        debugLog('Failed to save to API, falling back to localStorage:', result.error);
-        WatchHistoryService.saveLocal(progress);
-      }
-    } else {
-      WatchHistoryService.saveLocal(progress);
-      debugLog('Progress saved to localStorage:', currentTime, '/', duration);
-    }
+    try {
+      // Process the current save
+      await processSave(progress);
 
-    setSavedProgress(progress);
-  }, [player, videoId, userId, authToken, saveInterval, minTimeChange, debugLog]);
+      // Process any pending save that accumulated while we were saving
+      // This ensures we always save the latest position
+      while (pendingSaveRef.current && isMountedRef.current) {
+        const pending = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+
+        debugLog('Processing pending save:', pending.progress.currentTime);
+
+        // Update tracking for the pending save
+        lastSaveTimeRef.current = Date.now();
+        lastSavedPositionRef.current = pending.progress.currentTime;
+
+        await processSave(pending.progress);
+      }
+    } finally {
+      // Release mutex
+      saveMutexRef.current = false;
+      debugLog('Released mutex');
+    }
+  }, [player, videoId, userId, saveInterval, minTimeChange, debugLog, processSave]);
 
   /**
    * Clear saved progress for this video
@@ -234,7 +294,10 @@ export function useWatchProgress(
       player.off('ended', handleEnded);
       player.off('seeked', handleSeeked);
 
-      void saveProgress(true);
+      // Save final progress on cleanup, but only if not already saving
+      if (!saveMutexRef.current) {
+        void saveProgress(true);
+      }
     };
   }, [player, saveProgress, saveInterval, debugLog]);
 
@@ -250,7 +313,7 @@ export function useWatchProgress(
 
   return {
     savedProgress,
-    saveProgress: () => saveProgress(true),
+    saveProgress: (force = true) => saveProgress(force),
     clearProgress,
   };
 }
