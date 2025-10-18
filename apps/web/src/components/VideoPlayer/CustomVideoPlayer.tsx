@@ -58,6 +58,7 @@ import { initializeVolumeControls } from '@/lib/video/volume-control';
 import { setupKeyboardShortcuts } from '@/lib/video/keyboard-shortcuts';
 import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-touch';
 import { ErrorDisplay } from './ErrorDisplay';
+import { BufferingIndicator } from './LoadingStates';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import '@/styles/video-player.css';
 import type { Player } from 'video.js';
@@ -111,6 +112,8 @@ export default function CustomVideoPlayer({
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [bufferProgress, setBufferProgress] = useState<number>(0);
 
   // Phase 3: Advanced analytics state tracking
   const seekStartTimeRef = useRef<number>(0);
@@ -382,16 +385,38 @@ export default function CustomVideoPlayer({
           }
         });
 
-        // Buffering events - track buffer start and end times
+        // Phase 4.20: Buffering events - track buffer start and end times
         player.on('waiting', () => {
           // Video is buffering (waiting for data)
+          setIsBuffering(true);
           analyticsRef.current?.trackBufferStart();
         });
 
         player.on('canplay', () => {
           // Video can resume playback after buffering
+          setIsBuffering(false);
           // trackBufferEnd() automatically calculates duration since trackBufferStart()
           analyticsRef.current?.trackBufferEnd();
+        });
+
+        player.on('playing', () => {
+          // Video is playing - clear buffering state
+          setIsBuffering(false);
+        });
+
+        // Phase 4.20: Track buffer progress
+        player.on('progress', () => {
+          const extPlayer = player as ExtendedPlayer;
+          // buffered() returns TimeRanges - cast player to access it
+          const buffered = (player as any).buffered();
+          const duration = extPlayer.duration ? extPlayer.duration() : 0;
+
+          if (buffered.length > 0 && duration > 0) {
+            // Calculate percentage of video buffered
+            const bufferedEnd = buffered.end(buffered.length - 1);
+            const percentage = (bufferedEnd / duration) * 100;
+            setBufferProgress(Math.min(100, percentage));
+          }
         });
 
         // Quality change tracking (if quality selector is available)
@@ -502,7 +527,7 @@ export default function CustomVideoPlayer({
       </div>
 
       {/* Video player container */}
-      <div data-vjs-player>
+      <div data-vjs-player className="relative">
         <video
           ref={videoRef}
           className="video-js vjs-big-play-centered"
@@ -510,6 +535,11 @@ export default function CustomVideoPlayer({
           aria-label={ariaLabel || t.accessibility.videoPlayer}
           tabIndex={0}
         />
+
+        {/* Phase 4.20: Buffering indicator */}
+        {isBuffering && playerReady && (
+          <BufferingIndicator progress={bufferProgress} lang={lang} />
+        )}
       </div>
     </div>
   );
