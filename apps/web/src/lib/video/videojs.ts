@@ -116,6 +116,12 @@ export interface ExtendedPlayer extends VideoJsPlayer {
    * @returns Quality levels list or undefined if plugin not available
    */
   qualityLevels?(): QualityLevelList;
+
+  /**
+   * Get the TimeRanges object representing buffered portions of the media
+   * @returns TimeRanges object with buffered time ranges
+   */
+  buffered(): TimeRanges;
 }
 
 /**

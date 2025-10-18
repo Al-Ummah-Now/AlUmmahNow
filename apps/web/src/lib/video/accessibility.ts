@@ -103,24 +103,27 @@ const AR_LABELS: AriaLabels = {
 /**
  * Screen reader announcement manager
  * Uses throttling to prevent announcement spam
+ * Singleton pattern with reference counting to prevent memory leaks
  */
 class AnnouncementManager {
-  private announcer: HTMLElement | null = null;
+  private static globalAnnouncer: HTMLElement | null = null;
+  private static instanceCount = 0;
   private lastAnnouncement = '';
   private lastAnnouncementTime = 0;
   private readonly throttleDelay = 1000; // 1 second
 
   /**
-   * Create or get announcer element
+   * Get or create singleton announcer element
    */
   private getAnnouncer(): HTMLElement {
-    if (!this.announcer) {
-      this.announcer = document.getElementById('vjs-sr-announcer');
-      if (!this.announcer) {
-        this.announcer = this.createAnnouncer();
+    if (!AnnouncementManager.globalAnnouncer) {
+      AnnouncementManager.globalAnnouncer = document.getElementById('vjs-sr-announcer');
+      if (!AnnouncementManager.globalAnnouncer) {
+        AnnouncementManager.globalAnnouncer = this.createAnnouncer();
       }
     }
-    return this.announcer;
+    AnnouncementManager.instanceCount++;
+    return AnnouncementManager.globalAnnouncer;
   }
 
   /**
@@ -158,12 +161,14 @@ class AnnouncementManager {
   }
 
   /**
-   * Cleanup announcer element
+   * Cleanup announcer element with reference counting
+   * Only removes DOM element when all instances are cleaned up
    */
   cleanup(): void {
-    if (this.announcer && this.announcer.parentNode) {
-      this.announcer.parentNode.removeChild(this.announcer);
-      this.announcer = null;
+    AnnouncementManager.instanceCount--;
+    if (AnnouncementManager.instanceCount === 0 && AnnouncementManager.globalAnnouncer) {
+      AnnouncementManager.globalAnnouncer.remove();
+      AnnouncementManager.globalAnnouncer = null;
     }
   }
 }
@@ -194,6 +199,9 @@ export function setupAccessibility(
   // Create announcement manager
   const announcementManager = new AnnouncementManager();
 
+  // Track all event handlers for cleanup
+  const eventHandlers: Array<{ event: string; handler: (...args: any[]) => void }> = [];
+
   // Get player element
   const playerEl = player.el();
   if (!playerEl) {
@@ -217,6 +225,9 @@ export function setupAccessibility(
         playButton.setAttribute('aria-label', label);
       };
       updatePlayButtonLabel();
+
+      eventHandlers.push({ event: 'play', handler: updatePlayButtonLabel });
+      eventHandlers.push({ event: 'pause', handler: updatePlayButtonLabel });
       player.on('play', updatePlayButtonLabel);
       player.on('pause', updatePlayButtonLabel);
     }
@@ -234,6 +245,8 @@ export function setupAccessibility(
         volumePanel.setAttribute('aria-label', label);
       };
       updateVolumeLabel();
+
+      eventHandlers.push({ event: 'volumechange', handler: updateVolumeLabel });
       player.on('volumechange', updateVolumeLabel);
     }
 
@@ -245,6 +258,8 @@ export function setupAccessibility(
         muteButton.setAttribute('aria-label', label);
       };
       updateMuteLabel();
+
+      eventHandlers.push({ event: 'volumechange', handler: updateMuteLabel });
       player.on('volumechange', updateMuteLabel);
     }
 
@@ -258,6 +273,8 @@ export function setupAccessibility(
         fullscreenButton.setAttribute('aria-label', label);
       };
       updateFullscreenLabel();
+
+      eventHandlers.push({ event: 'fullscreenchange', handler: updateFullscreenLabel });
       player.on('fullscreenchange', updateFullscreenLabel);
     }
 
@@ -279,6 +296,8 @@ export function setupAccessibility(
         }
       };
       updateSeekBarValue();
+
+      eventHandlers.push({ event: 'timeupdate', handler: updateSeekBarValue });
       player.on('timeupdate', updateSeekBarValue);
     }
 
@@ -293,56 +312,71 @@ export function setupAccessibility(
     if (durationDisplay) {
       durationDisplay.setAttribute('aria-label', labels.duration);
     }
+
+    // === Screen Reader Announcements ===
+    // Moved inside ready() to avoid race conditions
+
+    if (announcements) {
+      // Play/Pause announcements
+      const playHandler = () => {
+        const message = lang === 'ar' ? 'يتم التشغيل' : 'Playing';
+        announcementManager.announce(message);
+      };
+      eventHandlers.push({ event: 'play', handler: playHandler });
+      player.on('play', playHandler);
+
+      const pauseHandler = () => {
+        const message = lang === 'ar' ? 'موقف مؤقتاً' : 'Paused';
+        announcementManager.announce(message);
+      };
+      eventHandlers.push({ event: 'pause', handler: pauseHandler });
+      player.on('pause', pauseHandler);
+
+      // Volume change announcements
+      const volumeHandler = () => {
+        const volume = Math.round(player.volume() * 100);
+        const message = player.muted()
+          ? (lang === 'ar' ? 'الصوت مكتوم' : 'Muted')
+          : (lang === 'ar' ? `مستوى الصوت ${volume}%` : `Volume ${volume}%`);
+        announcementManager.announce(message);
+      };
+      eventHandlers.push({ event: 'volumechange', handler: volumeHandler });
+      player.on('volumechange', volumeHandler);
+
+      // Fullscreen announcements
+      const fullscreenHandler = () => {
+        const message = player.isFullscreen()
+          ? (lang === 'ar' ? 'وضع ملء الشاشة' : 'Fullscreen mode')
+          : (lang === 'ar' ? 'خروج من ملء الشاشة' : 'Exited fullscreen');
+        announcementManager.announce(message);
+      };
+      eventHandlers.push({ event: 'fullscreenchange', handler: fullscreenHandler });
+      player.on('fullscreenchange', fullscreenHandler);
+
+      // Error announcements
+      const errorHandler = () => {
+        const message = lang === 'ar' ? 'حدث خطأ في تشغيل الفيديو' : 'Video playback error';
+        announcementManager.announce(message, true); // Force announcement
+      };
+      eventHandlers.push({ event: 'error', handler: errorHandler });
+      player.on('error', errorHandler);
+
+      // Buffering announcements
+      const waitingHandler = () => {
+        const message = lang === 'ar' ? 'جارٍ التحميل...' : 'Buffering...';
+        announcementManager.announce(message);
+      };
+      eventHandlers.push({ event: 'waiting', handler: waitingHandler });
+      player.on('waiting', waitingHandler);
+
+      const canplayHandler = () => {
+        const message = lang === 'ar' ? 'جاهز للتشغيل' : 'Ready to play';
+        announcementManager.announce(message);
+      };
+      eventHandlers.push({ event: 'canplay', handler: canplayHandler });
+      player.on('canplay', canplayHandler);
+    }
   });
-
-  // === Screen Reader Announcements ===
-
-  if (announcements) {
-    // Play/Pause announcements
-    player.on('play', () => {
-      const message = lang === 'ar' ? 'يتم التشغيل' : 'Playing';
-      announcementManager.announce(message);
-    });
-
-    player.on('pause', () => {
-      const message = lang === 'ar' ? 'موقف مؤقتاً' : 'Paused';
-      announcementManager.announce(message);
-    });
-
-    // Volume change announcements
-    player.on('volumechange', () => {
-      const volume = Math.round(player.volume() * 100);
-      const message = player.muted()
-        ? (lang === 'ar' ? 'الصوت مكتوم' : 'Muted')
-        : (lang === 'ar' ? `مستوى الصوت ${volume}%` : `Volume ${volume}%`);
-      announcementManager.announce(message);
-    });
-
-    // Fullscreen announcements
-    player.on('fullscreenchange', () => {
-      const message = player.isFullscreen()
-        ? (lang === 'ar' ? 'وضع ملء الشاشة' : 'Fullscreen mode')
-        : (lang === 'ar' ? 'خروج من ملء الشاشة' : 'Exited fullscreen');
-      announcementManager.announce(message);
-    });
-
-    // Error announcements
-    player.on('error', () => {
-      const message = lang === 'ar' ? 'حدث خطأ في تشغيل الفيديو' : 'Video playback error';
-      announcementManager.announce(message, true); // Force announcement
-    });
-
-    // Buffering announcements
-    player.on('waiting', () => {
-      const message = lang === 'ar' ? 'جارٍ التحميل...' : 'Buffering...';
-      announcementManager.announce(message);
-    });
-
-    player.on('canplay', () => {
-      const message = lang === 'ar' ? 'جاهز للتشغيل' : 'Ready to play';
-      announcementManager.announce(message);
-    });
-  }
 
   // === High Contrast Mode Detection ===
 
@@ -366,8 +400,13 @@ export function setupAccessibility(
     playerEl.setAttribute('tabindex', '0');
   }
 
-  // Return cleanup function
+  // Return comprehensive cleanup function
   return () => {
+    // Remove all player event listeners
+    eventHandlers.forEach(({ event, handler }) => {
+      player.off(event, handler);
+    });
+
     // Remove high contrast listener
     highContrastQuery.removeEventListener('change', updateHighContrastMode);
 

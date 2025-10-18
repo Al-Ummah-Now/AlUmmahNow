@@ -80,7 +80,7 @@ interface TouchState {
   lastTapX: number;
   touchStartY: number;
   touchStartVolume: number;
-  longPressTimer: NodeJS.Timeout | null;
+  longPressTimer: ReturnType<typeof setTimeout> | null;
   isLongPress: boolean;
 }
 
@@ -112,6 +112,10 @@ export function setupMobileTouchControls(
     isLongPress: false,
   };
 
+  // Track active feedback elements and timers for cleanup
+  const activeFeedbackElements: HTMLElement[] = [];
+  const activeTimers: ReturnType<typeof setTimeout>[] = [];
+
   // Get player element
   const playerElement = player.el();
   if (!playerElement) {
@@ -132,6 +136,7 @@ export function setupMobileTouchControls(
 
     // Append to player
     playerElement.appendChild(feedback);
+    activeFeedbackElements.push(feedback);
 
     // Trigger animation
     requestAnimationFrame(() => {
@@ -139,11 +144,20 @@ export function setupMobileTouchControls(
     });
 
     // Remove after animation
-    setTimeout(() => {
+    const timer1 = setTimeout(() => {
       feedback.classList.remove('vjs-mobile-touch-feedback-show');
       feedback.classList.add('vjs-mobile-touch-feedback-hide');
-      setTimeout(() => feedback.remove(), 300);
+
+      const timer2 = setTimeout(() => {
+        feedback.remove();
+        const index = activeFeedbackElements.indexOf(feedback);
+        if (index > -1) {
+          activeFeedbackElements.splice(index, 1);
+        }
+      }, 300);
+      activeTimers.push(timer2);
     }, 1000);
+    activeTimers.push(timer1);
   }
 
   /**
@@ -306,15 +320,26 @@ export function setupMobileTouchControls(
 
   // Return cleanup function
   return () => {
+    // Remove event listeners
     playerElement.removeEventListener('touchstart', onTouchStart);
     playerElement.removeEventListener('touchmove', onTouchMove);
     playerElement.removeEventListener('touchend', onTouchEnd);
     playerElement.removeEventListener('contextmenu', onContextMenu);
 
-    // Clear any pending timers
+    // Clear long press timer
     if (state.longPressTimer) {
       clearTimeout(state.longPressTimer);
     }
+
+    // Clear all active feedback timers
+    activeTimers.forEach(timer => clearTimeout(timer));
+
+    // Remove all active feedback elements
+    activeFeedbackElements.forEach(element => {
+      if (element.parentNode) {
+        element.remove();
+      }
+    });
   };
 }
 

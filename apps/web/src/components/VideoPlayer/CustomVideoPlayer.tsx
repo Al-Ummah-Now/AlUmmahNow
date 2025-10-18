@@ -271,6 +271,9 @@ export default function CustomVideoPlayer({
         setPlayerReady(true);
         analyticsRef.current?.trackReady();
 
+        // Reset quartiles when video loads
+        quartilesFiredRef.current.clear();
+
         // Phase 2.5: Initialize volume controls
         volumeControlsCleanupRef.current = initializeVolumeControls(player);
 
@@ -412,18 +415,29 @@ export default function CustomVideoPlayer({
           setIsBuffering(false);
         });
 
-        // Phase 4.20: Track buffer progress
-        player.on('progress', () => {
-          const extPlayer = player as ExtendedPlayer;
-          // buffered() returns TimeRanges - cast player to access it
-          const buffered = (player as any).buffered();
-          const duration = extPlayer.duration ? extPlayer.duration() : 0;
+        // Phase 4.20: Track buffer progress (throttled to 500ms)
+        let lastBufferUpdate = 0;
+        const BUFFER_UPDATE_INTERVAL = 500; // 500ms
 
-          if (buffered.length > 0 && duration > 0) {
-            // Calculate percentage of video buffered
-            const bufferedEnd = buffered.end(buffered.length - 1);
-            const percentage = (bufferedEnd / duration) * 100;
-            setBufferProgress(Math.min(100, percentage));
+        player.on('progress', () => {
+          const now = Date.now();
+          if (now - lastBufferUpdate < BUFFER_UPDATE_INTERVAL) {
+            return;
+          }
+          lastBufferUpdate = now;
+
+          const extPlayer = player as ExtendedPlayer;
+          // Use proper type-safe buffered() method
+          if (typeof extPlayer.buffered === 'function') {
+            const buffered = extPlayer.buffered();
+            const duration = extPlayer.duration ? extPlayer.duration() : 0;
+
+            if (buffered.length > 0 && duration > 0) {
+              // Calculate percentage of video buffered
+              const bufferedEnd = buffered.end(buffered.length - 1);
+              const percentage = (bufferedEnd / duration) * 100;
+              setBufferProgress(Math.min(100, percentage));
+            }
           }
         });
 
