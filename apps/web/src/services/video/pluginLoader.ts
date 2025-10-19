@@ -93,10 +93,31 @@ export async function loadPlugins(
   return results;
 }
 
+/**
+ * Schedules a callback to run when the runtime is idle.
+ * Falls back to setTimeout in environments without requestIdleCallback (Node.js, Cloudflare Workers).
+ *
+ * @param callback - Function to execute when idle
+ * @param timeout - Fallback timeout in milliseconds (default: 100ms)
+ */
+function scheduleIdleCallback(callback: () => void | Promise<void>, timeout = 100): void {
+  if (typeof requestIdleCallback !== 'undefined') {
+    // Browser environment with requestIdleCallback support
+    requestIdleCallback(() => {
+      void callback();
+    });
+  } else {
+    // Cloudflare Workers, Node.js, or other environments without requestIdleCallback
+    setTimeout(() => {
+      void callback();
+    }, timeout);
+  }
+}
+
 export async function preloadPlugins(
   pluginNames: (keyof typeof pluginRegistry)[]
 ): Promise<void> {
-  requestIdleCallback(async () => {
+  scheduleIdleCallback(async () => {
     await loadPlugins(pluginNames, { timeout: 10000, retries: 1 });
   });
 }
