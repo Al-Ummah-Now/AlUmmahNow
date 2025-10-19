@@ -204,4 +204,13 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     },
     closeButton: 'Close',
   },
+
+  resume: {
+    title: 'Continue watching?',
+    description: 'You previously watched this video',
+    resumeButton: 'Resume from',
+    startOverButton: 'Start from beginning',
+    autoResumeMessage: 'Auto-resuming in',
+    dismissHint: 'Press ESC or click outside to dismiss',
+  },
 };
