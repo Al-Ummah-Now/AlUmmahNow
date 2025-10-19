@@ -3,34 +3,41 @@ import React from "react";
 import Image from "next/image";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "./interface";
+import CustomVideoPlayer from "@/components/VideoPlayer/CustomVideoPlayer";
+import { useAuth } from "@/components/AuthProvider/authContext";
 
 const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
-  const aspectRatio = (options.width ?? 1920) / (options.height ?? 1080);
+  const { user } = useAuth();
+
+  // Convert PlayerOptions to CustomVideoPlayer props
+  const videoSources = [
+    {
+      src: `https://vz-3f3e8ae1-5c9.b-cdn.net/${options.id}/playlist.m3u8`,
+      type: 'application/x-mpegURL'
+    }
+  ];
+
+  const posterUrl = `https://vz-3f3e8ae1-5c9.b-cdn.net/${options.id}/thumbnail.jpg`;
+
   return (
     <>
       <div className="flex w-full mt-0 relative dark:bg-gray-900">
-        <div className={`w-full rounded-lg overflow-hidden 2xl:max-w-[1920px] 2xl:max-h-[1080px]`}
-          style={{
-            aspectRatio: `${aspectRatio}`, // Dynamically set the aspect ratio
-            margin: 0,
-            padding: 0,
-            lineHeight: 0,
-          }}>
-          {/* Video Player */}
-          <iframe
-            src={`https://iframe.mediadelivery.net/embed/400189/${options.id}?autoplay=false`}
-            loading="lazy"
-            style={{
-              border: "none",
-              position: "absolute",
-              top: 0,
-              height: "100%",
-              width: "100%",
-            }}
-            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-            allowFullScreen={true}
-            referrerPolicy="origin"
-          ></iframe>
+        <div className="w-full rounded-lg overflow-hidden 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
+          {/* New Custom Video.js Player */}
+          <CustomVideoPlayer
+            videoId={options.id}
+            userId={user?.id}
+            sources={videoSources}
+            poster={posterUrl}
+            controls={true}
+            autoplay={false}
+            enableAnalytics={true}
+            enableWebSocket={true}
+            isLive={false}
+            lang="en"
+            className="w-full"
+            ariaLabel={`Video: ${removeUnwantedChars(options.title)}`}
+          />
         </div>
       </div>
 
