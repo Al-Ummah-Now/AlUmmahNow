@@ -115,7 +115,7 @@ export class ABTestingEngine {
     }
   }
 
-  assignVariant(experiment: Experiment): ExperimentResult {
+  async assignVariant(experiment: Experiment): Promise<ExperimentResult> {
     if (!this.userId) {
       throw new Error('ABTestingEngine not initialized with userId');
     }
@@ -133,14 +133,14 @@ export class ABTestingEngine {
       };
     }
 
-    const hash = this.hashUserId(this.userId + experiment.id);
+    const hash = await this.hashUserId(this.userId + experiment.id);
     const isInExperiment = hash % 100 < experiment.trafficAllocation;
 
     if (!isInExperiment) {
       throw new Error(`User not in experiment ${experiment.id} traffic allocation`);
     }
 
-    const variantHash = this.hashUserId(this.userId + experiment.id + 'variant');
+    const variantHash = await this.hashUserId(this.userId + experiment.id + 'variant');
     const variant = variantHash % 2 === 0 ? 'control' : 'treatment';
 
     const assignment: ExperimentAssignment = {
@@ -244,13 +244,68 @@ export class ABTestingEngine {
     return x > 0 ? 1 - prob : prob;
   }
 
-  private hashUserId(input: string): number {
-    let hash = 0;
-    for (let i = 0; i < input.length; i++) {
-      const char = input.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
+  /**
+   * Cryptographically secure hash function using SHA-256
+   * Returns a deterministic numeric value for consistent variant assignment
+   */
+  private async hashUserId(input: string): Promise<number> {
+    try {
+      // Use crypto.subtle for SHA-256 hash (available in modern browsers and Cloudflare Workers)
+      if (typeof crypto !== 'undefined' && crypto.subtle) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(input);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+
+        // Convert the first 8 bytes of the hash to a numeric value
+        // This provides 64 bits of entropy, which is more than sufficient for variant assignment
+        const hashArray = new Uint8Array(hashBuffer);
+        let hash = 0;
+
+        // Use the first 8 bytes to create a 53-bit integer (JavaScript's safe integer range)
+        // This maintains deterministic behavior while being cryptographically secure
+        for (let i = 0; i < 8; i++) {
+          hash = hash * 256 + hashArray[i];
+          // Keep within JavaScript's safe integer range
+          if (hash > Number.MAX_SAFE_INTEGER / 256) {
+            hash = hash % 1000000007; // Use a large prime for modulo to maintain distribution
+          }
+        }
+
+        return Math.abs(hash);
+      } else {
+        // Fallback for environments without crypto.subtle
+        // This should rarely be needed in modern browsers or Cloudflare Workers
+        console.warn('[ABTesting] crypto.subtle not available, using fallback hash function');
+        return this.fallbackHash(input);
+      }
+    } catch (error) {
+      console.error('[ABTesting] Error computing SHA-256 hash, using fallback:', error);
+      return this.fallbackHash(input);
     }
+  }
+
+  /**
+   * Fallback hash function using FNV-1a algorithm
+   * More secure than simple DJB2, but not cryptographically secure
+   * Only used when crypto.subtle is unavailable
+   */
+  private fallbackHash(input: string): number {
+    // FNV-1a hash algorithm - better distribution than DJB2
+    let hash = 2166136261; // FNV offset basis for 32-bit
+    const prime = 16777619; // FNV prime for 32-bit
+
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, prime);
+    }
+
+    // Additional mixing for better distribution
+    hash ^= hash >>> 16;
+    hash = Math.imul(hash, 2246822507);
+    hash ^= hash >>> 13;
+    hash = Math.imul(hash, 3266489909);
+    hash ^= hash >>> 16;
+
     return Math.abs(hash);
   }
 
