@@ -198,6 +198,18 @@ export interface VideoPlayerTranslations {
     };
     closeButton: string;
   };
+
+  /**
+   * Resume playback modal
+   */
+  resume: {
+    title: string;
+    description: string;
+    resumeButton: string;
+    startOverButton: string;
+    autoResumeMessage: string;
+    dismissHint: string;
+  };
 }
 
 /**

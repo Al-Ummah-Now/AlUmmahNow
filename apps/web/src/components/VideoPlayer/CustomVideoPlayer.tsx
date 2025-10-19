@@ -33,6 +33,11 @@
  *   - Long press for playback speed
  *   - Visual feedback animations
  *   - 48x48px minimum touch targets
+ * Issue #57: Watch progress tracking - IMPLEMENTED
+ *   - Save watch progress every 10 seconds (throttled)
+ *   - Save on pause, seek, and video end
+ *   - localStorage fallback for unauthenticated users
+ *   - Load saved progress on player mount for resume functionality
  */
 
 'use client';
@@ -60,7 +65,10 @@ import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-tou
 import { setupAccessibility } from '@/lib/video/accessibility';
 import { ErrorDisplay } from './ErrorDisplay';
 import { BufferingIndicator } from './LoadingStates';
+import { ViewerCount } from './ViewerCount';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
+import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
+import { useWatchProgress } from '@/hooks/useWatchProgress';
 import '@/styles/video-player.css';
 import type { Player } from 'video.js';
 import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
@@ -68,6 +76,7 @@ import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
 export interface CustomVideoPlayerProps {
   videoId: string;
   userId?: string;
+  authToken?: string;
   sources: Array<{
     src: string;
     type: string;
@@ -76,6 +85,8 @@ export interface CustomVideoPlayerProps {
   controls?: boolean;
   autoplay?: boolean;
   enableAnalytics?: boolean;
+  enableWebSocket?: boolean;
+  isLive?: boolean;
   className?: string;
   ariaLabel?: string;
   lang?: 'en' | 'ar';
@@ -89,11 +100,14 @@ export interface CustomVideoPlayerProps {
 export default function CustomVideoPlayer({
   videoId,
   userId,
+  authToken,
   sources,
   poster,
   controls = true,
   autoplay = false,
   enableAnalytics = true,
+  enableWebSocket = true,
+  isLive = false,
   className = '',
   ariaLabel,
   lang = 'en',
@@ -117,11 +131,43 @@ export default function CustomVideoPlayer({
   const [isRetrying, setIsRetrying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [bufferProgress, setBufferProgress] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   // Phase 3: Advanced analytics state tracking
   const seekStartTimeRef = useRef<number>(0);
   const lastProgressTrackRef = useRef<number>(0);
   const quartilesFiredRef = useRef<Set<25 | 50 | 75>>(new Set());
+
+  // WebSocket integration for real-time metrics
+  const { viewerCount, isConnected: wsConnected } = useVideoWebSocket({
+    videoId,
+    userId,
+    autoConnect: enableWebSocket,
+    isPlaying,
+    onError: (error) => {
+      console.error('[CustomVideoPlayer] WebSocket error:', error);
+    }
+  });
+
+  // Issue #57: Watch progress tracking integration
+  // Automatically saves watch progress every 10 seconds and on pause/seek/end events
+  // Falls back to localStorage for unauthenticated users
+  const { savedProgress } = useWatchProgress(
+    videoId,
+    playerRef.current as ExtendedPlayer | null,
+    userId,
+    authToken,
+    {
+      enableDebugLogging: process.env.NODE_ENV === 'development',
+    }
+  );
+
+  // Log saved progress for debugging (will be used in Issue #58 for resume UI)
+  useEffect(() => {
+    if (savedProgress && process.env.NODE_ENV === 'development') {
+      console.log('[CustomVideoPlayer] Saved watch progress:', savedProgress);
+    }
+  }, [savedProgress]);
 
   /**
    * Handle source changes (for fallback)
@@ -325,14 +371,17 @@ export default function CustomVideoPlayer({
         player.on('play', () => {
           analyticsRef.current?.trackPlay();
           setCurrentError(null); // Clear error on successful play
+          setIsPlaying(true);
         });
 
         player.on('pause', () => {
           analyticsRef.current?.trackPause();
+          setIsPlaying(false);
         });
 
         player.on('ended', () => {
           analyticsRef.current?.trackComplete();
+          setIsPlaying(false);
         });
 
         player.on('error', () => {
@@ -581,6 +630,18 @@ export default function CustomVideoPlayer({
         {/* Phase 4.20: Buffering indicator */}
         {isBuffering && playerReady && (
           <BufferingIndicator progress={bufferProgress} lang={lang} />
+        )}
+
+        {/* Real-time viewer count (WebSocket) */}
+        {enableWebSocket && playerReady && (
+          <ViewerCount
+            count={viewerCount}
+            isLive={isLive}
+            isConnected={wsConnected}
+            lang={lang}
+            showWhenDisconnected={false}
+            className="vjs-viewer-count-overlay"
+          />
         )}
       </div>
     </div>
