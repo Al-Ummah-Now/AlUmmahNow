@@ -97,7 +97,7 @@ export function useExperiment(
           experimentId
         };
       } else {
-        result = abTestingEngine.assignVariant(experiment);
+        result = await abTestingEngine.assignVariant(experiment);
       }
 
       setState({
