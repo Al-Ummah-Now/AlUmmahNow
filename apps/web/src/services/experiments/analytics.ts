@@ -67,10 +67,15 @@ class ExperimentAnalytics {
       referrer: typeof document !== 'undefined' ? document.referrer : undefined
     };
 
+    // Get auth token from cookies (client-side)
+    const { getAuthHeaders } = await import('@/lib/auth/client-token');
+    const authHeaders = getAuthHeaders();
+
     const options: RequestInit = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(payload)
     };
@@ -103,7 +108,15 @@ class ExperimentAnalytics {
 
   async getExperimentResults(experimentId: string): Promise<any> {
     try {
-      const response = await fetch(`/api/analytics/ab-test?experimentId=${experimentId}`);
+      // Get auth token from cookies (client-side)
+      const { getAuthHeaders } = await import('@/lib/auth/client-token');
+      const authHeaders = getAuthHeaders();
+
+      const response = await fetch(`/api/analytics/ab-test?experimentId=${experimentId}`, {
+        headers: {
+          ...authHeaders,
+        },
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -119,7 +132,15 @@ class ExperimentAnalytics {
 
   async getExperimentStatistics(experimentId: string): Promise<any> {
     try {
-      const response = await fetch(`/api/analytics/ab-test/stats?experimentId=${experimentId}`);
+      // Get auth token from cookies (client-side)
+      const { getAuthHeaders } = await import('@/lib/auth/client-token');
+      const authHeaders = getAuthHeaders();
+
+      const response = await fetch(`/api/analytics/ab-test/stats?experimentId=${experimentId}`, {
+        headers: {
+          ...authHeaders,
+        },
+      });
       const data = await response.json();
 
       if (!response.ok) {

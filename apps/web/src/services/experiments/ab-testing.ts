@@ -1,5 +1,6 @@
-import { Experiment, VariantConfig, ExperimentAssignment } from './feature-flags';
+import { Experiment, ExperimentAssignment } from './feature-flags';
 import { trackExperimentEvent } from './analytics';
+import { quotaManager } from '@/lib/storage/quota-manager';
 
 export interface ExperimentResult {
   variant: 'control' | 'treatment';
@@ -39,21 +40,34 @@ export class ABTestingEngine {
   initialize(userId: string): void {
     this.userId = userId;
     this.loadPersistedAssignments();
+
+    // Perform maintenance on initialization
+    this.performMaintenance();
   }
 
   private loadPersistedAssignments(): void {
     try {
       if (typeof window === 'undefined') return;
 
-      const persisted = localStorage.getItem(STORAGE_KEY_AB_ASSIGNMENTS);
+      const persisted = quotaManager.safeGetItem(STORAGE_KEY_AB_ASSIGNMENTS);
       if (persisted && this.userId) {
         const userAssignments = JSON.parse(persisted);
         if (userAssignments[this.userId]) {
           this.assignments = new Map(Object.entries(userAssignments[this.userId]));
+
+          // Update last accessed time for all loaded assignments
+          for (const experimentId of this.assignments.keys()) {
+            quotaManager.updateLastAccessed(
+              STORAGE_KEY_AB_ASSIGNMENTS,
+              this.userId,
+              experimentId
+            );
+          }
         }
       }
     } catch (error) {
-      console.warn('Failed to load persisted A/B test assignments:', error);
+      console.warn('[ABTesting] Failed to load persisted assignments:', error);
+      // Graceful degradation: continue without persisted data
     }
   }
 
@@ -61,13 +75,43 @@ export class ABTestingEngine {
     try {
       if (typeof window === 'undefined' || !this.userId) return;
 
-      const persisted = localStorage.getItem(STORAGE_KEY_AB_ASSIGNMENTS) || '{}';
+      const persisted = quotaManager.safeGetItem(STORAGE_KEY_AB_ASSIGNMENTS) || '{}';
       const allAssignments = JSON.parse(persisted);
       allAssignments[this.userId] = Object.fromEntries(this.assignments);
 
-      localStorage.setItem(STORAGE_KEY_AB_ASSIGNMENTS, JSON.stringify(allAssignments));
+      const serialized = JSON.stringify(allAssignments);
+      const result = quotaManager.safeSetItem(
+        STORAGE_KEY_AB_ASSIGNMENTS,
+        serialized,
+        {
+          userId: this.userId,
+          maxUserItems: 100, // Max 100 experiments per user
+          enableCleanup: true
+        }
+      );
+
+      if (!result.success) {
+        console.error('[ABTesting] Failed to persist assignments:', result.error, result.message);
+
+        // Attempt recovery by removing old assignments for this user
+        if (result.error === 'QUOTA_EXCEEDED') {
+          this.performEmergencyCleanup();
+
+          // Retry once after cleanup
+          const retryResult = quotaManager.safeSetItem(
+            STORAGE_KEY_AB_ASSIGNMENTS,
+            serialized,
+            { userId: this.userId }
+          );
+
+          if (!retryResult.success) {
+            console.error('[ABTesting] Retry failed after emergency cleanup');
+          }
+        }
+      }
     } catch (error) {
-      console.warn('Failed to persist A/B test assignments:', error);
+      console.error('[ABTesting] Error persisting assignments:', error);
+      // Graceful degradation: assignments remain in memory
     }
   }
 
@@ -125,6 +169,16 @@ export class ABTestingEngine {
 
   getVariant(experimentId: string): 'control' | 'treatment' | null {
     const assignment = this.assignments.get(experimentId);
+
+    // Update last accessed time for LRU tracking
+    if (assignment && this.userId) {
+      quotaManager.updateLastAccessed(
+        STORAGE_KEY_AB_ASSIGNMENTS,
+        this.userId,
+        experimentId
+      );
+    }
+
     return assignment ? assignment.variant : null;
   }
 
@@ -212,6 +266,74 @@ export class ABTestingEngine {
   resetAllExperiments(): void {
     this.assignments.clear();
     this.persistAssignments();
+  }
+
+  /**
+   * Perform routine maintenance: cleanup old assignments and check quota
+   */
+  private performMaintenance(): void {
+    try {
+      const result = quotaManager.performMaintenance(STORAGE_KEY_AB_ASSIGNMENTS);
+
+      if (result.cleanedItems > 0) {
+        console.log(`[ABTesting] Cleaned up ${result.cleanedItems} old assignments`);
+        // Reload assignments after cleanup
+        this.loadPersistedAssignments();
+      }
+
+      if (!result.quotaAvailable) {
+        console.warn('[ABTesting] localStorage quota is running low');
+      }
+    } catch (error) {
+      console.error('[ABTesting] Error during maintenance:', error);
+    }
+  }
+
+  /**
+   * Emergency cleanup when quota is exceeded
+   */
+  private performEmergencyCleanup(): void {
+    try {
+      console.warn('[ABTesting] Performing emergency cleanup due to quota exceeded');
+
+      // More aggressive cleanup: remove assignments older than 30 days
+      const cleanedOld = quotaManager.cleanupOldItems(STORAGE_KEY_AB_ASSIGNMENTS, 30);
+      console.log(`[ABTesting] Emergency cleanup removed ${cleanedOld} old assignments`);
+
+      // Keep only the most recent 50 assignments for this user
+      if (this.userId) {
+        const assignments = Array.from(this.assignments.entries())
+          .map(([id, assignment]) => ({ id, ...assignment }))
+          .sort((a, b) => b.assignmentTime - a.assignmentTime)
+          .slice(0, 50);
+
+        this.assignments.clear();
+        assignments.forEach(({ id, ...assignment }) => {
+          this.assignments.set(id, assignment);
+        });
+
+        console.log(`[ABTesting] Reduced user assignments to ${this.assignments.size} most recent`);
+      }
+    } catch (error) {
+      console.error('[ABTesting] Error during emergency cleanup:', error);
+    }
+  }
+
+  /**
+   * Get storage statistics for monitoring
+   */
+  getStorageStats(): {
+    totalSize: number;
+    itemCount: number;
+    percentUsed: number;
+    available: boolean;
+    userAssignments: number;
+  } {
+    const stats = quotaManager.getStorageStats();
+    return {
+      ...stats,
+      userAssignments: this.assignments.size
+    };
   }
 }
 
