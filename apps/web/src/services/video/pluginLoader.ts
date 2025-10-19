@@ -1,0 +1,110 @@
+import videojs from 'video.js';
+
+interface VideoJSPlugin {
+  (player: any, options?: any): void;
+}
+
+interface PluginLoaderOptions {
+  timeout?: number;
+  retries?: number;
+}
+
+const pluginRegistry = {
+  'http-streaming': () => import('@videojs/http-streaming'),
+  'quality-levels': () => import('videojs-contrib-quality-levels'),
+  'hls-quality-selector': () => import('videojs-hls-quality-selector'),
+  'sprite-thumbnails': () => import('videojs-sprite-thumbnails')
+};
+
+const loadedPlugins = new Map<string, any>();
+
+export async function loadPlugin(
+  pluginName: keyof typeof pluginRegistry,
+  options: PluginLoaderOptions = {}
+): Promise<VideoJSPlugin | null> {
+  const { timeout = 5000, retries = 2 } = options;
+
+  if (loadedPlugins.has(pluginName)) {
+    return loadedPlugins.get(pluginName);
+  }
+
+  if (videojs.getPlugin?.(pluginName)) {
+    const plugin = videojs.getPlugin(pluginName);
+    loadedPlugins.set(pluginName, plugin);
+    return plugin;
+  }
+
+  const pluginLoader = pluginRegistry[pluginName];
+  if (!pluginLoader) {
+    console.warn(`Plugin ${pluginName} not found in registry`);
+    return null;
+  }
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`Plugin load timeout: ${pluginName}`)), timeout);
+      });
+
+      const pluginPromise = pluginLoader();
+      const module = await Promise.race([pluginPromise, timeoutPromise]) as any;
+
+      let plugin: VideoJSPlugin;
+      if (module.default?.default) {
+        plugin = module.default.default;
+      } else if (module.default) {
+        plugin = module.default;
+      } else {
+        plugin = module;
+      }
+
+      loadedPlugins.set(pluginName, plugin);
+      return plugin;
+
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`Attempt ${attempt + 1} failed to load plugin ${pluginName}:`, error);
+
+      if (attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+
+  console.error(`Failed to load plugin ${pluginName} after ${retries + 1} attempts:`, lastError);
+  return null;
+}
+
+export async function loadPlugins(
+  pluginNames: (keyof typeof pluginRegistry)[],
+  options: PluginLoaderOptions = {}
+): Promise<Map<string, VideoJSPlugin | null>> {
+  const results = new Map<string, VideoJSPlugin | null>();
+
+  const loadPromises = pluginNames.map(async (pluginName) => {
+    const plugin = await loadPlugin(pluginName, options);
+    results.set(pluginName, plugin);
+    return { pluginName, plugin };
+  });
+
+  await Promise.allSettled(loadPromises);
+  return results;
+}
+
+export async function preloadPlugins(
+  pluginNames: (keyof typeof pluginRegistry)[]
+): Promise<void> {
+  requestIdleCallback(async () => {
+    await loadPlugins(pluginNames, { timeout: 10000, retries: 1 });
+  });
+}
+
+export function isPluginLoaded(pluginName: string): boolean {
+  return loadedPlugins.has(pluginName) || Boolean(videojs.getPlugin?.(pluginName));
+}
+
+export function getLoadedPlugin(pluginName: string): VideoJSPlugin | null {
+  return loadedPlugins.get(pluginName) || videojs.getPlugin?.(pluginName) || null;
+}

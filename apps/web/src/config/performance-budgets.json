@@ -1,0 +1,61 @@
+{
+  "video": {
+    "timeToFirstFrame": {
+      "target": 500,
+      "max": 1000,
+      "unit": "ms"
+    },
+    "rebufferCount": {
+      "target": 0,
+      "max": 3,
+      "unit": "count"
+    },
+    "totalRebufferDuration": {
+      "target": 0,
+      "max": 2000,
+      "unit": "ms"
+    },
+    "averageBitrate": {
+      "target": 2500,
+      "min": 500,
+      "unit": "kbps"
+    },
+    "qualityChanges": {
+      "target": 0,
+      "max": 5,
+      "unit": "count"
+    },
+    "errorRate": {
+      "target": 0,
+      "max": 0.01,
+      "unit": "ratio"
+    }
+  },
+  "webVitals": {
+    "LCP": {
+      "target": 2500,
+      "max": 4000,
+      "unit": "ms"
+    },
+    "FID": {
+      "target": 100,
+      "max": 300,
+      "unit": "ms"
+    },
+    "CLS": {
+      "target": 0.1,
+      "max": 0.25,
+      "unit": "score"
+    },
+    "FCP": {
+      "target": 1800,
+      "max": 3000,
+      "unit": "ms"
+    },
+    "TTFB": {
+      "target": 800,
+      "max": 1800,
+      "unit": "ms"
+    }
+  }
+}
