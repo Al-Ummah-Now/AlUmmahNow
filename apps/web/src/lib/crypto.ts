@@ -104,9 +104,14 @@ function getKeyMaterial(): string {
   // In a real implementation, this should include user-specific data
   // For now, we use domain and a secret key
   const domain = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  const secretKey = process.env.NEXT_PUBLIC_ENCRYPTION_SECRET || 'default-secret-key-change-in-production';
+  const secretKey = process.env.NEXT_PUBLIC_ENCRYPTION_SECRET;
   
-  return `${domain}:${secretKey}`;
+  // Security: Require encryption secret in production
+  if (process.env.NODE_ENV === 'production' && !secretKey) {
+    throw new EncryptionError('NEXT_PUBLIC_ENCRYPTION_SECRET environment variable is required in production');
+  }
+  
+  return `${domain}:${secretKey || 'default-secret-key-change-in-production'}`;
 }
 
 /**

@@ -98,15 +98,44 @@ export async function loadVolumeState(): Promise<VolumeState | null> {
 }
 
 /**
- * Apply saved volume state to player
+ * Apply saved volume state to player with fallback
  */
 export async function applySavedVolume(player: Player | ExtendedPlayer): Promise<void> {
-  const savedState = await loadVolumeState();
-  if (savedState) {
-    const extPlayer = player as ExtendedPlayer;
-    extPlayer.volume(savedState.volume);
-    extPlayer.muted(savedState.muted);
-    console.log('[VolumeControl] Restored volume:', savedState);
+  const extPlayer = player as ExtendedPlayer;
+  
+  try {
+    const savedState = await loadVolumeState();
+    if (savedState) {
+      extPlayer.volume(savedState.volume);
+      extPlayer.muted(savedState.muted);
+      console.log('[VolumeControl] Restored volume:', savedState);
+    } else {
+      // Fallback: Set reasonable defaults if no saved state
+      const fallbackVolume = 0.7; // 70% volume as reasonable default
+      const fallbackMuted = false;
+      
+      extPlayer.volume(fallbackVolume);
+      extPlayer.muted(fallbackMuted);
+      
+      console.log('[VolumeControl] Applied fallback volume:', { volume: fallbackVolume, muted: fallbackMuted });
+      
+      // Save the fallback state for future use
+      try {
+        await saveVolumeState(fallbackVolume, fallbackMuted);
+      } catch (saveError) {
+        console.warn('[VolumeControl] Could not save fallback state:', saveError);
+      }
+    }
+  } catch (error) {
+    console.error('[VolumeControl] Failed to apply saved volume, using fallback:', error);
+    
+    // Emergency fallback: Set safe defaults even if everything fails
+    try {
+      extPlayer.volume(0.5); // 50% volume as safe default
+      extPlayer.muted(false);
+    } catch (fallbackError) {
+      console.error('[VolumeControl] Even fallback failed:', fallbackError);
+    }
   }
 }
 

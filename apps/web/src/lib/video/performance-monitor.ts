@@ -38,15 +38,15 @@ export class VideoPerformanceMonitor {
   private frameTimes: number[] = [];
   private warnings: PerformanceWarning[] = [];
   private observers: PerformanceObserver[] = [];
+  private player: ExtendedPlayer;
   
   // Performance thresholds
   private readonly FPS_THRESHOLD = 30;
   private readonly MEMORY_THRESHOLD = 100 * 1024 * 1024; // 100MB
   private readonly INTERACTION_THRESHOLD = 100; // 100ms
   
-  constructor(_player: ExtendedPlayer) {
-    // Player reference available for future enhancements
-    // Currently unused to avoid TypeScript warning
+  constructor(player: ExtendedPlayer) {
+    this.player = player;
   }
 
   /**
@@ -88,8 +88,15 @@ export class VideoPerformanceMonitor {
   }
 
   /**
-   * Get current performance metrics
-   */
+    * Get the associated player instance
+    */
+  getPlayer(): ExtendedPlayer {
+    return this.player;
+  }
+
+  /**
+    * Get current performance metrics
+    */
   getMetrics(): PerformanceMetrics {
     const now = performance.now();
     const totalTime = now - this.lastFrameTime;
