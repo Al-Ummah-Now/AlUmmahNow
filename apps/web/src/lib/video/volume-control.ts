@@ -62,15 +62,23 @@ export async function loadVolumeState(): Promise<VolumeState | null> {
   try {
     // Try encrypted storage first
     if (typeof window !== 'undefined' && window.crypto?.subtle) {
-      const { secureGetItem } = await import('../crypto');
-      const state = await secureGetItem<VolumeState>(STORAGE_KEY);
-      
-      if (state && 
-          typeof state.volume === 'number' &&
-          typeof state.muted === 'boolean' &&
-          state.volume >= 0 &&
-          state.volume <= 1) {
-        return state;
+      try {
+        const { secureGetItem } = await import('../crypto');
+        const state = await secureGetItem<VolumeState>(STORAGE_KEY);
+
+        if (state &&
+            typeof state.volume === 'number' &&
+            typeof state.muted === 'boolean' &&
+            state.volume >= 0 &&
+            state.volume <= 1) {
+          return state;
+        }
+      } catch (decryptError) {
+        // Decryption failed - likely due to key change or corrupted data
+        console.warn('[VolumeControl] Decryption failed, clearing corrupted data:', decryptError);
+        // Clear the corrupted encrypted data
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
       }
     }
 
@@ -78,21 +86,33 @@ export async function loadVolumeState(): Promise<VolumeState | null> {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return null;
 
-    const state = JSON.parse(saved) as VolumeState;
+    try {
+      const state = JSON.parse(saved) as VolumeState;
 
-    // Validate loaded state
-    if (
-      typeof state.volume === 'number' &&
-      typeof state.muted === 'boolean' &&
-      state.volume >= 0 &&
-      state.volume <= 1
-    ) {
-      return state;
+      // Validate loaded state
+      if (
+        typeof state.volume === 'number' &&
+        typeof state.muted === 'boolean' &&
+        state.volume >= 0 &&
+        state.volume <= 1
+      ) {
+        return state;
+      }
+    } catch (parseError) {
+      // JSON parse failed - corrupted unencrypted data
+      console.warn('[VolumeControl] Failed to parse unencrypted data, clearing:', parseError);
+      localStorage.removeItem(STORAGE_KEY);
     }
 
     return null;
   } catch (error) {
-    console.error('[VolumeControl] Failed to load volume state:', error);
+    console.error('[VolumeControl] Unexpected error loading volume state:', error);
+    // Clear potentially corrupted data
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (clearError) {
+      // Ignore errors when clearing
+    }
     return null;
   }
 }
