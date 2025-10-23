@@ -23,25 +23,58 @@ export interface VolumeState {
 }
 
 /**
- * Save volume and mute state to localStorage
+ * Save volume and mute state to localStorage with encryption
  */
-export function saveVolumeState(volume: number, muted: boolean): void {
+export async function saveVolumeState(volume: number, muted: boolean): Promise<void> {
   try {
     const state: VolumeState = {
       volume: Math.max(0, Math.min(1, volume)),
       muted,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    
+    // Use encrypted storage for GDPR compliance
+    if (typeof window !== 'undefined' && window.crypto?.subtle) {
+      const { secureSetItem } = await import('../crypto');
+      await secureSetItem(STORAGE_KEY, state);
+    } else {
+      // Fallback to unencrypted storage for older browsers
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
   } catch (error) {
     console.error('[VolumeControl] Failed to save volume state:', error);
+    // Fallback to unencrypted storage on error
+    try {
+      const state: VolumeState = {
+        volume: Math.max(0, Math.min(1, volume)),
+        muted,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (fallbackError) {
+      console.error('[VolumeControl] Fallback storage also failed:', fallbackError);
+    }
   }
 }
 
 /**
- * Load volume and mute state from localStorage
+ * Load volume and mute state from localStorage with decryption
  */
-export function loadVolumeState(): VolumeState | null {
+export async function loadVolumeState(): Promise<VolumeState | null> {
   try {
+    // Try encrypted storage first
+    if (typeof window !== 'undefined' && window.crypto?.subtle) {
+      const { secureGetItem } = await import('../crypto');
+      const state = await secureGetItem<VolumeState>(STORAGE_KEY);
+      
+      if (state && 
+          typeof state.volume === 'number' &&
+          typeof state.muted === 'boolean' &&
+          state.volume >= 0 &&
+          state.volume <= 1) {
+        return state;
+      }
+    }
+
+    // Fallback to unencrypted storage (for migration or older browsers)
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return null;
 
@@ -67,8 +100,8 @@ export function loadVolumeState(): VolumeState | null {
 /**
  * Apply saved volume state to player
  */
-export function applySavedVolume(player: Player | ExtendedPlayer): void {
-  const savedState = loadVolumeState();
+export async function applySavedVolume(player: Player | ExtendedPlayer): Promise<void> {
+  const savedState = await loadVolumeState();
   if (savedState) {
     const extPlayer = player as ExtendedPlayer;
     extPlayer.volume(savedState.volume);
@@ -187,17 +220,153 @@ export function setupScrollWheelControl(player: Player | ExtendedPlayer): () => 
 }
 
 /**
+ * Setup keyboard accessibility for volume control
+ */
+export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () => void {
+  const extPlayer = player as ExtendedPlayer;
+  const playerElement = extPlayer.el();
+  if (!playerElement) return () => {};
+
+  // Find volume panel and mute button
+  const volumePanel = playerElement.querySelector('.vjs-volume-panel') as HTMLElement;
+  const muteButton = playerElement.querySelector('.vjs-mute-control') as HTMLElement;
+  const volumeBar = playerElement.querySelector('.vjs-volume-bar') as HTMLElement;
+
+  if (!volumePanel || !muteButton || !volumeBar) {
+    console.warn('[VolumeControl] Volume control elements not found');
+    return () => {};
+  }
+
+  // Ensure volume bar is keyboard accessible
+  volumeBar.setAttribute('tabindex', '0');
+  volumeBar.setAttribute('role', 'slider');
+  volumeBar.setAttribute('aria-label', 'Volume control');
+  volumeBar.setAttribute('aria-valuemin', '0');
+  volumeBar.setAttribute('aria-valuemax', '100');
+  volumeBar.setAttribute('aria-orientation', 'vertical');
+
+  // Update ARIA values when volume changes
+  const updateAriaValues = (): void => {
+    const volume = extPlayer.volume();
+    const muted = extPlayer.muted();
+    const percentage = Math.round(volume * 100);
+    
+    volumeBar.setAttribute('aria-valuenow', muted ? '0' : percentage.toString());
+    volumeBar.setAttribute('aria-valuetext', muted ? 'Muted' : `${percentage}% volume`);
+  };
+
+  // Initial ARIA setup
+  updateAriaValues();
+
+  // Handle keyboard events on volume bar
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    // Only handle arrow keys, space, and enter
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const currentVolume = extPlayer.volume();
+    const currentMuted = extPlayer.muted();
+    let newVolume = currentVolume;
+    let newMuted = currentMuted;
+
+    switch (event.key) {
+      case 'ArrowUp':
+      case 'ArrowRight':
+        // Increase volume by 10%
+        newVolume = Math.min(1, currentVolume + VOLUME_STEP);
+        if (newVolume > 0 && currentMuted) {
+          newMuted = false;
+        }
+        break;
+
+      case 'ArrowDown':
+      case 'ArrowLeft':
+        // Decrease volume by 10%
+        newVolume = Math.max(0, currentVolume - VOLUME_STEP);
+        if (newVolume === 0 && !currentMuted) {
+          newMuted = true;
+        }
+        break;
+
+      case ' ':
+      case 'Enter':
+        // Toggle mute
+        newMuted = !currentMuted;
+        break;
+    }
+
+    // Apply changes
+    if (newVolume !== currentVolume) {
+      extPlayer.volume(newVolume);
+    }
+    if (newMuted !== currentMuted) {
+      extPlayer.muted(newMuted);
+    }
+
+    // Update ARIA values
+    updateAriaValues();
+
+    console.log('[VolumeControl] Keyboard control:', { 
+      key: event.key, 
+      newVolume, 
+      newMuted 
+    });
+  };
+
+  // Update ARIA values on volume changes
+  const handleVolumeChange = (): void => {
+    updateAriaValues();
+  };
+
+  // Add event listeners
+  volumeBar.addEventListener('keydown', handleKeyDown);
+  player.on('volumechange', handleVolumeChange);
+
+  // Ensure volume panel shows slider when focused
+  const handleFocus = (): void => {
+    volumePanel.classList.add('vjs-volume-panel-hover');
+  };
+
+  const handleBlur = (event: FocusEvent): void => {
+    // Check if focus is still within volume panel
+    const relatedTarget = event.relatedTarget as HTMLElement;
+    if (!volumePanel.contains(relatedTarget)) {
+      volumePanel.classList.remove('vjs-volume-panel-hover');
+    }
+  };
+
+  volumeBar.addEventListener('focus', handleFocus);
+  volumeBar.addEventListener('blur', handleBlur);
+
+  // Return cleanup function
+  return () => {
+    volumeBar.removeEventListener('keydown', handleKeyDown);
+    volumeBar.removeEventListener('focus', handleFocus);
+    volumeBar.removeEventListener('blur', handleBlur);
+    player.off('volumechange', handleVolumeChange);
+  };
+}
+
+/**
  * Setup volume change listener for persistence and feedback
  */
 export function setupVolumeChangeListener(player: Player | ExtendedPlayer): () => void {
   const extPlayer = player as ExtendedPlayer;
 
-  const handleVolumeChange = (): void => {
+  const handleVolumeChange = async (): Promise<void> => {
     const volume = extPlayer.volume();
     const muted = extPlayer.muted();
 
-    // Save to localStorage
-    saveVolumeState(volume, muted);
+    // Save to localStorage (async)
+    try {
+      await saveVolumeState(volume, muted);
+    } catch (error) {
+      console.error('[VolumeControl] Failed to save volume state:', error);
+    }
 
     // Show visual feedback
     showVolumeIndicator(player, volume, muted);
@@ -219,8 +388,10 @@ export function setupVolumeChangeListener(player: Player | ExtendedPlayer): () =
 export function initializeVolumeControls(player: Player | ExtendedPlayer): () => void {
   const cleanupFunctions: Array<() => void> = [];
 
-  // Apply saved volume state
-  applySavedVolume(player);
+  // Apply saved volume state (async but fire-and-forget for initialization)
+  applySavedVolume(player).catch(error => {
+    console.error('[VolumeControl] Failed to apply saved volume:', error);
+  });
 
   // Setup scroll wheel control
   const cleanupScrollWheel = setupScrollWheelControl(player);
@@ -229,6 +400,10 @@ export function initializeVolumeControls(player: Player | ExtendedPlayer): () =>
   // Setup volume change listener
   const cleanupVolumeChange = setupVolumeChangeListener(player);
   cleanupFunctions.push(cleanupVolumeChange);
+
+  // Setup keyboard accessibility
+  const cleanupKeyboard = setupKeyboardAccessibility(player);
+  cleanupFunctions.push(cleanupKeyboard);
 
   // Return combined cleanup function
   return () => {
