@@ -39,10 +39,15 @@ export class VideoPerformanceMonitor {
   private warnings: PerformanceWarning[] = [];
   private observers: PerformanceObserver[] = [];
   private player: ExtendedPlayer;
+  private lastWarningTime: Map<string, number> = new Map();
+  private readonly WARNING_THROTTLE_MS = 60000; // 1 minute between same warnings
   
   // Performance thresholds
   private readonly FPS_THRESHOLD = 30;
-  private readonly MEMORY_THRESHOLD = 100 * 1024 * 1024; // 100MB
+  // Memory threshold: 200MB for video player + React dev mode
+  // Typical usage: 140-160MB (player + HLS + WebSocket + React DevTools)
+  // Warning at 200MB allows headroom while catching real leaks
+  private readonly MEMORY_THRESHOLD = 200 * 1024 * 1024; // 200MB
   private readonly INTERACTION_THRESHOLD = 100; // 100ms
   
   constructor(player: ExtendedPlayer) {
@@ -77,13 +82,16 @@ export class VideoPerformanceMonitor {
    */
   stop(): void {
     if (!this.isMonitoring) return;
-    
+
     this.isMonitoring = false;
-    
+
     // Clean up observers
     this.observers.forEach(observer => observer.disconnect());
     this.observers = [];
-    
+
+    // Clear warning throttle state
+    this.lastWarningTime.clear();
+
     console.log('[VideoPerformance] Stopped monitoring');
   }
 
@@ -229,18 +237,27 @@ export class VideoPerformanceMonitor {
   }
 
   /**
-   * Add a performance warning
+   * Add a performance warning with throttling to prevent spam
    */
   private addWarning(type: PerformanceWarning['type'], message: string, value: number): void {
+    const now = Date.now();
+    const lastTime = this.lastWarningTime.get(type);
+
+    // Throttle warnings of the same type
+    if (lastTime && (now - lastTime) < this.WARNING_THROTTLE_MS) {
+      return; // Skip this warning, too soon since last one
+    }
+
     const warning: PerformanceWarning = {
       type,
       message,
-      timestamp: Date.now(),
+      timestamp: now,
       value
     };
 
     this.warnings.push(warning);
-    
+    this.lastWarningTime.set(type, now);
+
     // Keep only last 10 warnings
     if (this.warnings.length > 10) {
       this.warnings.shift();
