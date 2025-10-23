@@ -44,10 +44,11 @@ export class VideoPerformanceMonitor {
   
   // Performance thresholds
   private readonly FPS_THRESHOLD = 30;
-  // Memory threshold: 200MB for video player + React dev mode
-  // Typical usage: 140-160MB (player + HLS + WebSocket + React DevTools)
-  // Warning at 200MB allows headroom while catching real leaks
-  private readonly MEMORY_THRESHOLD = 200 * 1024 * 1024; // 200MB
+  // Memory threshold: 80MB for properly streaming video player
+  // With optimized HLS buffering (10MB max), typical usage should be 50-70MB
+  // This includes: React dev mode (~30MB) + Video.js (~10MB) + HLS buffer (~10MB) + overhead (~20MB)
+  // Warning at 80MB catches excessive buffering or memory leaks
+  private readonly MEMORY_THRESHOLD = 80 * 1024 * 1024; // 80MB
   private readonly INTERACTION_THRESHOLD = 100; // 100ms
   
   constructor(player: ExtendedPlayer) {

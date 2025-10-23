@@ -1,19 +1,41 @@
+/**
+ * HLS.js Configuration for optimized streaming
+ *
+ * Key settings for memory efficiency:
+ * - maxBufferLength: 30s ahead buffer (standard for streaming)
+ * - maxMaxBufferLength: 60s max buffer (was 600s/10min - excessive!)
+ * - maxBufferSize: 10MB max buffer (was 60MB - way too high!)
+ *
+ * This configuration balances smooth playback with memory efficiency.
+ * Video should stream, not load entirely into memory.
+ */
 export const hlsConfig = {
-  maxBufferLength: 30,
-  maxMaxBufferLength: 600,
-  maxBufferSize: 60 * 1000 * 1000,
-  maxBufferHole: 0.5,
+  // Buffer management - keep memory usage low
+  maxBufferLength: 30,              // Buffer 30s ahead (standard)
+  maxMaxBufferLength: 60,           // Max 60s buffer (reduced from 600s)
+  maxBufferSize: 10 * 1000 * 1000,  // 10MB max buffer (reduced from 60MB)
+  maxBufferHole: 0.5,               // 0.5s tolerance for buffer gaps
+
+  // Live stream settings
   liveSyncDurationCount: 3,
-  enableWorker: true,
-  maxFragLookUpTolerance: 0.25,
   lowLatencyMode: true,
-  fragLoadingTimeOut: 20000,
+
+  // Performance optimization
+  enableWorker: true,               // Use web workers for parallel processing
+  maxFragLookUpTolerance: 0.25,
+  capLevelToPlayerSize: true,       // Don't buffer higher quality than display size
+
+  // Loading behavior
+  autoStartLoad: true,
+
+  // Network resilience
+  fragLoadingTimeOut: 20000,        // 20s timeout
   fragLoadingMaxRetry: 6,
   fragLoadingRetryDelay: 1000,
   manifestLoadingTimeOut: 10000,
   manifestLoadingMaxRetry: 6,
-  capLevelToPlayerSize: true,
-  autoStartLoad: true,
+
+  // Debug logging (development only)
   debug: process.env.NODE_ENV === 'development'
 };
 
