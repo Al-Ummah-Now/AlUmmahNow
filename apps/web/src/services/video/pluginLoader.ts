@@ -49,15 +49,15 @@ export async function loadPlugin(
       });
 
       const pluginPromise = pluginLoader();
-      const moduleImport = await Promise.race([pluginPromise, timeoutPromise]) as any;
+      const module = await Promise.race([pluginPromise, timeoutPromise]) as any;
 
       let plugin: VideoJSPlugin;
-      if (moduleImport.default?.default) {
-        plugin = moduleImport.default.default;
-      } else if (moduleImport.default) {
-        plugin = moduleImport.default;
+      if (module.default?.default) {
+        plugin = module.default.default;
+      } else if (module.default) {
+        plugin = module.default;
       } else {
-        plugin = moduleImport;
+        plugin = module;
       }
 
       loadedPlugins.set(pluginName, plugin);
