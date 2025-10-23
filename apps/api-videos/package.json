@@ -4,7 +4,7 @@
   "private": true,
   "description": "Al Ummah Now - Video API Backend with Cloudflare Workers",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --inspector-port=9230",
     "dev:node": "tsx watch --inspect --env-file=.env.dev src/index.ts",
     "build": "tsc --noEmit",
     "start": "wrangler dev",
@@ -13,9 +13,9 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .wrangler",
     "test": "npm run test:api",
-    "test:api": "curl -s http://127.0.0.1:8686/test | jq .",
-    "test:health": "curl -s http://127.0.0.1:8686/health | jq .",
-    "test:metrics": "curl -s http://127.0.0.1:8686/metrics | jq ."
+    "test:api": "curl -s http://127.0.0.1:3086/test | jq .",
+    "test:health": "curl -s http://127.0.0.1:3086/health | jq .",
+    "test:metrics": "curl -s http://127.0.0.1:3086/metrics | jq ."
   },
   "dependencies": {
     "@al-ummah/shared-types": "workspace:*",

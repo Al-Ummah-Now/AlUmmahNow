@@ -13,12 +13,22 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Log analytics event in development
+    // Log analytics event in development with detailed error information
     if (process.env.NODE_ENV === 'development') {
+      const events = body.events || [];
+      const errorEvents = events.filter((e: { eventType: string }) => e.eventType === 'error');
+
       console.log('[Analytics] Video event:', {
         timestamp: new Date().toISOString(),
         ...body
       });
+
+      // Log detailed error information
+      if (errorEvents.length > 0) {
+        errorEvents.forEach((event: { data?: unknown }) => {
+          console.error('[Analytics] ERROR DETAILS:', JSON.stringify(event.data, null, 2));
+        });
+      }
     }
 
     // In production, this should:

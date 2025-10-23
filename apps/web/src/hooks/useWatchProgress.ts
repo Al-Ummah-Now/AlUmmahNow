@@ -126,8 +126,29 @@ export function useWatchProgress(
   const saveProgress = useCallback(async (force = false) => {
     if (!player || !videoId) return;
 
+    // Check if player is ready before accessing currentTime/duration
+    // Wrap in try-catch to handle case where tech is disposed
+    let readyState: number;
+    try {
+      readyState = player.readyState();
+      if (readyState < 1) {
+        debugLog('Player not ready yet, skipping save');
+        return;
+      }
+    } catch (error) {
+      // Player tech is null or disposed, skip save
+      debugLog('Player tech not available, skipping save:', error);
+      return;
+    }
+
     const currentTime = player.currentTime();
     const duration = player.duration();
+
+    // Validate currentTime and duration
+    if (currentTime === null || currentTime === undefined || isNaN(currentTime)) {
+      debugLog('Invalid currentTime, skipping save');
+      return;
+    }
 
     if (!duration || isNaN(duration) || duration === 0) {
       return;
@@ -274,9 +295,16 @@ export function useWatchProgress(
       void saveProgress(true);
     };
 
-    if (player.readyState() >= 1) {
-      handleReady();
-    } else {
+    // Check if player is already ready, with safety check for disposed tech
+    try {
+      if (player.readyState() >= 1) {
+        handleReady();
+      } else {
+        player.one('ready', handleReady);
+      }
+    } catch (error) {
+      // Player tech not available, wait for ready event
+      debugLog('Player tech not available, waiting for ready event:', error);
       player.one('ready', handleReady);
     }
 

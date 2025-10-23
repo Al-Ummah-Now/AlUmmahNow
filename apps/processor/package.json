@@ -5,7 +5,7 @@
   "description": "Cloudflare Worker for processing AlUmmah queue messages",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --inspector-port=9231",
     "deploy": "wrangler deploy",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:development": "wrangler deploy --env development",

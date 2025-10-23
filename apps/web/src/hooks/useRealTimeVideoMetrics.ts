@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { LikeEvent, ViewCountEvent, PresenceEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
 
@@ -28,7 +28,7 @@ export function useRealTimeVideoMetrics(
   options: UseRealTimeVideoMetricsOptions
 ): UseRealTimeVideoMetricsReturn {
   const { videoId, initialMetrics = {}, onMetricsUpdate } = options;
-  
+
   const [metrics, setMetrics] = useState<VideoMetrics>({
     videoId,
     viewCount: 0,
@@ -39,7 +39,14 @@ export function useRealTimeVideoMetrics(
     lastUpdated: new Date(),
     ...initialMetrics
   });
-  
+
+  // Store callback in ref to prevent re-subscription on every render
+  const onMetricsUpdateRef = useRef(onMetricsUpdate);
+
+  useEffect(() => {
+    onMetricsUpdateRef.current = onMetricsUpdate;
+  }, [onMetricsUpdate]);
+
   // Handle real-time metrics updates
   const handleMetricsUpdate = useCallback((eventData: LikeEvent | ViewCountEvent | PresenceEvent) => {
     console.log('📥 Real-time metrics update:', eventData);
@@ -83,19 +90,19 @@ export function useRealTimeVideoMetrics(
       }
       
       // Notify parent component of metrics update
-      if (onMetricsUpdate) {
-        onMetricsUpdate(updatedMetrics);
+      if (onMetricsUpdateRef.current) {
+        onMetricsUpdateRef.current(updatedMetrics);
       }
-      
+
       return updatedMetrics;
     });
-  }, [onMetricsUpdate]);
+  }, []); // Empty deps - all values accessed via refs
   
   // Subscribe to real-time updates for this video
   const isConnected = useWebSocketSubscription(
-    `video:${videoId}`, 
-    handleMetricsUpdate, 
-    [videoId, handleMetricsUpdate]
+    `video:${videoId}`,
+    handleMetricsUpdate,
+    [videoId]
   );
   
   // Update metrics manually (optimistic updates)
@@ -106,16 +113,23 @@ export function useRealTimeVideoMetrics(
       lastUpdated: new Date()
     }));
   }, []);
-  
-  // Update metrics when initial metrics change
+
+  // Store initial metrics in ref to avoid infinite loops from object reference changes
+  const initialMetricsRef = useRef(initialMetrics);
+
+  useEffect(() => {
+    initialMetricsRef.current = initialMetrics;
+  }, [initialMetrics]);
+
+  // Update metrics when videoId changes (but not when initialMetrics reference changes)
   useEffect(() => {
     setMetrics(prevMetrics => ({
       ...prevMetrics,
-      ...initialMetrics,
+      ...initialMetricsRef.current,
       videoId,
       lastUpdated: new Date()
     }));
-  }, [videoId, initialMetrics]);
+  }, [videoId]); // Only re-run when videoId changes, not initialMetrics
   
   return {
     metrics,
@@ -160,9 +174,9 @@ export function useRealTimePresence(channelId: string) {
   }, []);
   
   const isConnected = useWebSocketSubscription(
-    `channel:${channelId}`, 
-    handlePresenceUpdate, 
-    [channelId, handlePresenceUpdate]
+    `channel:${channelId}`,
+    handlePresenceUpdate,
+    [channelId]
   );
   
   return {

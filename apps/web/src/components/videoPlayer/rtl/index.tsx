@@ -12,12 +12,12 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   // Convert PlayerOptions to CustomVideoPlayer props
   const videoSources = [
     {
-      src: `https://vz-3f3e8ae1-5c9.b-cdn.net/${options.id}/playlist.m3u8`,
+      src: `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
       type: 'application/x-mpegURL'
     }
   ];
 
-  const posterUrl = `https://vz-3f3e8ae1-5c9.b-cdn.net/${options.id}/thumbnail.jpg`;
+  const posterUrl = `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
 
   return (
     <>
@@ -45,7 +45,7 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
       <div className="flex space-x-4 mt-4 justify-start items-center w-full">
         <div className="w-10 h-10 rounded-full overflow-hidden relative">
           <Image
-            src={options.channelAvatar}
+            src={options.channelAvatar || '/avatar.png'}
             alt="User"
             sizes="10vw"
             className="bg-gray-500"

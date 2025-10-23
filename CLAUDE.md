@@ -15,6 +15,25 @@ All apps share TypeScript types via `@al-ummah/shared-types` workspace package.
 
 **Repository**: https://github.com/meywd/AlUmmahNow
 
+## Development Process
+
+**CRITICAL**: Before writing ANY code, read and follow the development process in `BEFORE YOU CODE.MD`.
+
+This file contains the mandatory 10-step development workflow that MUST be followed for all development work:
+
+1. **LOG EVERYTHING** - Comprehensive logging with structured prefixes
+2. **TDD (Test-Driven Development)** - Write tests before implementation
+3. **BUILD** - Catch TypeScript errors early
+4. **RUN TESTS** - Ensure nothing is broken
+5. **DEBUG ISSUES SYSTEMATICALLY** - Check logs, add more if needed, fix until all tests pass
+6. **RESEARCH** - Search codebase before writing new code
+7. **CHECK CODEBASE & DOCUMENTATION** - Prefer editing over creating
+8. **PULL, COMMIT, PUSH** - Proper git workflow with conventional commits
+9. **REVIEW CODE** - Self-review before opening PRs
+10. **OPEN PRs** - With proper descriptions and all checks passing
+
+**See `BEFORE YOU CODE.MD` for complete details, checklists, and code examples.**
+
 ## Code Quality Standards
 
 ### TODO Comments Policy

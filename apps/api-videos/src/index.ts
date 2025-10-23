@@ -55,6 +55,7 @@ import { HealthCheck } from "./endpoints/monitoring/healthCheck";
 import { TestRunner } from "./endpoints/monitoring/testRunner";
 import { Metrics } from "./endpoints/monitoring/metrics";
 import { StatusPage } from "./endpoints/monitoring/statusPage";
+import { SyncR2Buckets } from "./endpoints/monitoring/sync-r2";
 // Phase 2: Live Streaming imports
 import { LiveStreamCreate } from "./endpoints/live/liveStreamCreate";
 import { LiveStreamsList } from "./endpoints/live/liveStreamsList";
@@ -122,7 +123,7 @@ const openapi = fromHono(app, {
 				description: "Production server"
 			},
 			{
-				url: "http://127.0.0.1:8686",
+				url: "http://127.0.0.1:3086",
 				description: "Development server"
 			}
 		],
@@ -161,6 +162,9 @@ openapi.get("/health", HealthCheck);
 openapi.get("/metrics", Metrics);
 openapi.get("/test", TestRunner);
 openapi.get("/status", StatusPage);
+
+// Internal sync endpoint (dev only)
+openapi.get("/internal/sync-r2", SyncR2Buckets);
 
 // Authentication test endpoint (requires auth)
 openapi.get("/auth-test", AuthTest);

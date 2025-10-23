@@ -6,8 +6,8 @@
 
 const WebSocket = require('ws');
 
-const WS_URL = 'ws://127.0.0.1:8787/ws';
-const HTTP_URL = 'http://127.0.0.1:8787';
+const WS_URL = 'ws://127.0.0.1:3087/ws';
+const HTTP_URL = 'http://127.0.0.1:3087';
 
 console.log('🧪 WebSocket Server Verification');
 console.log('='.repeat(50));
