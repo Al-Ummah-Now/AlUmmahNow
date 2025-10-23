@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { NotificationEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
 
@@ -44,9 +44,20 @@ export function useRealTimeNotifications(
   }, []);
 
   // Handle real-time notification updates
+  // Uses refs for callbacks to avoid re-subscription on every render
+  const removeNotificationRef = useRef(removeNotification);
+  const maxNotificationsRef = useRef(maxNotifications);
+  const autoRemoveAfterRef = useRef(autoRemoveAfter);
+
+  useEffect(() => {
+    removeNotificationRef.current = removeNotification;
+    maxNotificationsRef.current = maxNotifications;
+    autoRemoveAfterRef.current = autoRemoveAfter;
+  }, [removeNotification, maxNotifications, autoRemoveAfter]);
+
   const handleNotificationUpdate = useCallback((eventData: NotificationEvent) => {
     console.log('📥 Real-time notification:', eventData);
-    
+
     if (eventData.type === 'notification') {
       const notification: Notification = {
         id: eventData.notificationId,
@@ -58,26 +69,26 @@ export function useRealTimeNotifications(
         read: false,
         userId: eventData.userId
       };
-      
+
       setNotifications(prevNotifications => {
         // Avoid duplicates
         if (prevNotifications.some(n => n.id === notification.id)) {
           return prevNotifications;
         }
-        
+
         const newNotifications = [notification, ...prevNotifications];
-        
+
         // Limit the number of notifications
-        return newNotifications.slice(0, maxNotifications);
+        return newNotifications.slice(0, maxNotificationsRef.current);
       });
-      
+
       // Auto-remove notification after specified time
-      if (autoRemoveAfter) {
+      if (autoRemoveAfterRef.current) {
         setTimeout(() => {
-          removeNotification(notification.id);
-        }, autoRemoveAfter);
+          removeNotificationRef.current(notification.id);
+        }, autoRemoveAfterRef.current);
       }
-      
+
       // Show browser notification if supported and permission granted
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification(notification.title, {
@@ -87,13 +98,14 @@ export function useRealTimeNotifications(
         });
       }
     }
-  }, [maxNotifications, autoRemoveAfter, removeNotification]);
+  }, []); // Empty deps - all values accessed via refs
   
   // Subscribe to real-time notifications
+  // Note: handleNotificationUpdate should NOT be in dependencies as it would cause re-subscriptions
   const isConnected = useWebSocketSubscription(
-    userId ? `user:${userId}:notifications` : 'notifications', 
-    handleNotificationUpdate, 
-    [userId, handleNotificationUpdate]
+    userId ? `user:${userId}:notifications` : 'notifications',
+    handleNotificationUpdate,
+    [userId]
   );
   
   // Add notification manually (for testing or local notifications)

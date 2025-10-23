@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Comments } from '@/interfaces';
 import { CommentEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
@@ -23,11 +23,22 @@ export interface UseRealTimeCommentsReturn {
 export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRealTimeCommentsReturn {
   const { videoId, initialComments = [], onCommentAdded, onCommentUpdated, onCommentDeleted } = options;
   const [comments, setComments] = useState<Comments[]>(initialComments);
-  
+
+  // Store callbacks in refs to prevent re-subscription on every render
+  const onCommentAddedRef = useRef(onCommentAdded);
+  const onCommentUpdatedRef = useRef(onCommentUpdated);
+  const onCommentDeletedRef = useRef(onCommentDeleted);
+
+  useEffect(() => {
+    onCommentAddedRef.current = onCommentAdded;
+    onCommentUpdatedRef.current = onCommentUpdated;
+    onCommentDeletedRef.current = onCommentDeleted;
+  }, [onCommentAdded, onCommentUpdated, onCommentDeleted]);
+
   // Handle real-time comment updates
   const handleCommentUpdate = useCallback((eventData: CommentEvent) => {
     console.log('📥 Real-time comment update:', eventData);
-    
+
     switch (eventData.type) {
       case 'comment_added':
         if (eventData.comment) {
@@ -37,39 +48,39 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
               return prevComments;
             }
             const newComments = [eventData.comment!, ...prevComments];
-            onCommentAdded?.(eventData.comment!);
+            onCommentAddedRef.current?.(eventData.comment!);
             return newComments;
           });
         }
         break;
-        
+
       case 'comment_updated':
         if (eventData.comment) {
-          setComments(prevComments => 
-            prevComments.map(comment => 
-              comment.id === eventData.comment!.id 
+          setComments(prevComments =>
+            prevComments.map(comment =>
+              comment.id === eventData.comment!.id
                 ? { ...comment, ...eventData.comment! }
                 : comment
             )
           );
-          onCommentUpdated?.(eventData.comment!);
+          onCommentUpdatedRef.current?.(eventData.comment!);
         }
         break;
-        
+
       case 'comment_deleted':
-        setComments(prevComments => 
+        setComments(prevComments =>
           prevComments.filter(comment => comment.id !== eventData.commentId)
         );
-        onCommentDeleted?.(eventData.commentId);
+        onCommentDeletedRef.current?.(eventData.commentId);
         break;
     }
-  }, [onCommentAdded, onCommentUpdated, onCommentDeleted]);
-  
+  }, []);
+
   // Subscribe to real-time updates for this video
   const isConnected = useWebSocketSubscription(
-    `video:${videoId}`, 
-    handleCommentUpdate, 
-    [videoId, handleCommentUpdate]
+    `video:${videoId}`,
+    handleCommentUpdate,
+    [videoId]
   );
   
   // Update comments when initial comments change

@@ -6,28 +6,34 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
     if (!vid) return undefined;
 
     try {
+        console.log('[fetchVideoById] Fetching video:', vid);
         const video = await VideosAPI.getById(vid);
+        console.log('[fetchVideoById] API response:', video);
+
         if (!video) {
             throw new Error('Video not found');
         }
 
-        return {
+        const playerOptions = {
             id: video.id,
             title: video.title,
             description: video.description || '',
             channel: video.channel,
             url: video.videoUrl,
-            views: `${video.views || 0}`,
+            views: '0', // API doesn't return views field yet
             dateCreated: new Date(video.dateCreated),
             autoplay: false,
             type: "video/mp4",
             width: video.width,
             height: video.height,
             availableResolutions: video.availableResolutions,
-            channelAvatar: video.channelAvatarUrl, // Updated field name
+            channelAvatar: video.channelThumbnailUrl, // Fixed: API returns channelThumbnailUrl
         };
+
+        console.log('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
+        return playerOptions;
     } catch (error) {
-        console.error(error);
+        console.error('[fetchVideoById] Error:', error);
         return undefined;
     }
 };

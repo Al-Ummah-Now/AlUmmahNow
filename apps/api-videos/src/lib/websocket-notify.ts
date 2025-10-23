@@ -112,7 +112,7 @@ export async function notifyComment(
  *   // ... existing like logic ...
  *   
  *   // Notify video owner
- *   const websocketUrl = c.env.WEBSOCKET_URL || 'http://localhost:8787';
+ *   const websocketUrl = c.env.WEBSOCKET_URL || 'http://localhost:3087';
  *   await notifyUser(
  *     websocketUrl,
  *     video.userId,

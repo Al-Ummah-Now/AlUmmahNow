@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { WebSocketConnectionState, WebSocketConfig } from '@/interfaces/websocket';
 import { User } from '@/interfaces';
@@ -35,9 +35,9 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   useEffect(() => {
     // Default WebSocket configuration
     const defaultConfig: WebSocketConfig = {
-      url: process.env.NODE_ENV === 'production' 
-        ? 'wss://realtime.alummahnow.net/ws' 
-        : 'ws://localhost:8787/ws',
+      url: process.env.NODE_ENV === 'production'
+        ? 'wss://realtime.alummahnow.net/ws'
+        : 'ws://localhost:3087/ws',
       reconnectInterval: 1000,
       maxReconnectAttempts: 5,
       heartbeatInterval: 30000,
@@ -72,7 +72,9 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
         wsManagerRef.current = null;
       }
     };
-  }, [user?.id, config]);
+    // Fixed: Removed config from dependencies to prevent reconnection loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Reconnect when user changes
   useEffect(() => {
@@ -87,26 +89,26 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     }
   }, [user?.id]);
 
-  const subscribe = (channel: string, callback: (data: any) => void): (() => void) | null => {
+  const subscribe = useCallback((channel: string, callback: (data: any) => void): (() => void) | null => {
     if (wsManagerRef.current) {
       return wsManagerRef.current.subscribe(channel, callback);
     }
     return null;
-  };
+  }, []);
 
-  const sendMessage = (type: any, data: any): void => {
+  const sendMessage = useCallback((type: any, data: any): void => {
     if (wsManagerRef.current) {
       wsManagerRef.current.sendMessage(type, data);
     }
-  };
+  }, []);
 
-  const contextValue: WebSocketContextType = {
+  const contextValue: WebSocketContextType = useMemo(() => ({
     wsManager: wsManagerRef.current,
     connectionState,
     subscribe,
     sendMessage,
     isConnected
-  };
+  }), [connectionState, subscribe, sendMessage, isConnected]);
 
   return (
     <WebSocketContext.Provider value={contextValue}>
@@ -124,23 +126,36 @@ export function useWebSocket(): WebSocketContextType {
 }
 
 export function useWebSocketSubscription(
-  channel: string, 
-  callback: (data: any) => void, 
+  channel: string,
+  callback: (data: any) => void,
   deps: React.DependencyList = []
 ): boolean {
   const { subscribe, isConnected } = useWebSocket();
-  
+
+  // Store callback in ref to prevent re-subscription when callback changes
+  const callbackRef = useRef(callback);
+
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+
   useEffect(() => {
     if (!channel) return;
-    
-    const unsubscribe = subscribe(channel, callback);
-    
+
+    // Use stable callback from ref
+    const unsubscribe = subscribe(channel, (data: any) => {
+      callbackRef.current(data);
+    });
+
     return () => {
       if (unsubscribe) {
         unsubscribe();
       }
     };
+    // Only re-subscribe when channel or subscribe changes, NOT when callback changes
+    // The deps array is only used for external dependencies (like userId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel, subscribe, ...deps]);
-  
+
   return isConnected;
 }

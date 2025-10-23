@@ -75,11 +75,13 @@ export function useVideoWebSocket({
   const initialHeartbeatTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHeartbeatRef = useRef<number>(0);
   const isPlayingRef = useRef<boolean>(isPlaying);
+  const onErrorRef = useRef(onError);
 
-  // Keep ref in sync with prop
+  // Keep refs in sync with props
   useEffect(() => {
     isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
+    onErrorRef.current = onError;
+  }, [isPlaying, onError]);
 
   /**
    * Send viewing heartbeat to report active viewing
@@ -110,14 +112,15 @@ export function useVideoWebSocket({
       }
     } catch (error) {
       console.error('[useVideoWebSocket] Error sending heartbeat:', error);
-      if (onError) {
-        onError(error instanceof Error ? error : new Error('Failed to send heartbeat'));
+      if (onErrorRef.current) {
+        onErrorRef.current(error instanceof Error ? error : new Error('Failed to send heartbeat'));
       }
     }
-  }, [videoId, userId, onError]);
+  }, [videoId, userId]);
 
   /**
    * Handle incoming messages from video channel
+   * Wrapped in useCallback with no dependencies to prevent re-creation
    */
   const handleVideoUpdate = useCallback((data: PresenceEvent) => {
     if (process.env.NODE_ENV !== 'production') {
@@ -133,7 +136,7 @@ export function useVideoWebSocket({
     } else if (data.type === 'viewer_count' && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
     }
-  }, []);
+  }, []); // Empty deps - setViewerCount is stable
 
   /**
    * Disconnect WebSocket and cleanup all timers
@@ -189,22 +192,30 @@ export function useVideoWebSocket({
       });
 
       // Listen for connection state changes
+      // Use a ref to track the last status to prevent unnecessary state updates
+      let lastStatus: string | null = null;
       const unsubscribeState = wsManager.current.onStateChange((state) => {
         if (process.env.NODE_ENV !== 'production') {
           console.log('[useVideoWebSocket] State changed:', state.status);
         }
-        setIsConnected(state.status === 'connected');
 
-        if (state.status === 'error' && onError) {
-          onError(new Error('WebSocket connection error'));
+        // Only update state if status actually changed
+        const isNowConnected = state.status === 'connected';
+        if (state.status !== lastStatus) {
+          lastStatus = state.status;
+          setIsConnected(isNowConnected);
+        }
+
+        if (state.status === 'error' && onErrorRef.current) {
+          onErrorRef.current(new Error('WebSocket connection error'));
         }
       });
 
       // Connect to WebSocket
       wsManager.current.connect(userId).catch((error) => {
         console.error('[useVideoWebSocket] Connection failed:', error);
-        if (onError) {
-          onError(error instanceof Error ? error : new Error('Failed to connect to WebSocket'));
+        if (onErrorRef.current) {
+          onErrorRef.current(error instanceof Error ? error : new Error('Failed to connect to WebSocket'));
         }
       });
 
@@ -246,13 +257,13 @@ export function useVideoWebSocket({
       };
     } catch (error) {
       console.error('[useVideoWebSocket] Initialization error:', error);
-      if (onError) {
-        onError(error instanceof Error ? error : new Error('Failed to initialize WebSocket'));
+      if (onErrorRef.current) {
+        onErrorRef.current(error instanceof Error ? error : new Error('Failed to initialize WebSocket'));
       }
       return undefined;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId, userId, authToken, autoConnect, onError]);
+  }, [videoId, userId, authToken, autoConnect]);
 
   // Manage heartbeat interval - only run when playing and connected
   useEffect(() => {

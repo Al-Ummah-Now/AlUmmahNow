@@ -36,4 +36,10 @@ LOG_LEVEL = "info"
 [observability.logs]
 enabled = true
 
+# Development server configuration
+[dev]
+ip = "127.0.0.1"
+port = 3088
+local_protocol = "http"
+
 

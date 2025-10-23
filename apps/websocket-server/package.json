@@ -4,7 +4,7 @@
   "private": true,
   "description": "Al Ummah Now - WebSocket Server with Cloudflare Durable Objects",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --inspector-port=9232",
     "build": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "cf-typegen": "wrangler types",

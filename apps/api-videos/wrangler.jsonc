@@ -28,32 +28,38 @@
 		{
 			"binding": "videos",
 			"bucket_name": "videos",
-			"preview_bucket_name": "videos-preview"
+			"preview_bucket_name": "videos-preview",
+			"remote": true
 		},
 		{
 			"binding": "profiles",
 			"bucket_name": "profiles",
-			"preview_bucket_name": "profiles-preview"
+			"preview_bucket_name": "profiles-preview",
+			"remote": true
 		},
 		{
 			"binding": "channels",
 			"bucket_name": "channels",
-			"preview_bucket_name": "channels-preview"
+			"preview_bucket_name": "channels-preview",
+			"remote": true
 		},
 		{
 			"binding": "playlists",
 			"bucket_name": "playlists",
-			"preview_bucket_name": "playlists-preview"
+			"preview_bucket_name": "playlists-preview",
+			"remote": true
 		},
 		{
 			"binding": "reports",
 			"bucket_name": "reports",
-			"preview_bucket_name": "reports-preview"
+			"preview_bucket_name": "reports-preview",
+			"remote": true
 		},
 		{
 			"binding": "watch_history",
 			"bucket_name": "watch-history",
-			"preview_bucket_name": "watch-history-preview"
+			"preview_bucket_name": "watch-history-preview",
+			"remote": true
 		}
 	],
 	"kv_namespaces": [
@@ -113,7 +119,7 @@
 	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
 	"dev": {
 		"ip": "127.0.0.1",
-		"port": 8686,
+		"port": 3086,
 		"local_protocol": "http"
 	}
 }

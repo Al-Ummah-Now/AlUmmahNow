@@ -2,7 +2,6 @@ import { Num, OpenAPIRoute, Str } from "chanfana";
 import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 
 export class VideosList extends OpenAPIRoute {
@@ -69,7 +68,7 @@ export class VideosList extends OpenAPIRoute {
 		const filterChannelId = queryChannelId || channelId;
 
 		// Implement your own object list here
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		

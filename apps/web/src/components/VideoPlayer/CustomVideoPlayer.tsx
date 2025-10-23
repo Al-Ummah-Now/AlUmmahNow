@@ -126,6 +126,8 @@ export default function CustomVideoPlayer({
   const mobileControlsCleanupRef = useRef<(() => void) | null>(null);
   const accessibilityCleanupRef = useRef<(() => void) | null>(null);
   const qualityLevelsCleanupRef = useRef<(() => void) | null>(null);
+  const isInitializingRef = useRef(false);
+  const hasMountedRef = useRef(false); // Track if component has mounted before (for Strict Mode)
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -139,14 +141,17 @@ export default function CustomVideoPlayer({
   const quartilesFiredRef = useRef<Set<25 | 50 | 75>>(new Set());
 
   // WebSocket integration for real-time metrics
+  // Memoize onError to prevent re-creating on every render
+  const handleWebSocketError = useCallback((error: Error) => {
+    console.error('[CustomVideoPlayer] WebSocket error:', error);
+  }, []);
+
   const { viewerCount, isConnected: wsConnected } = useVideoWebSocket({
     videoId,
     userId,
     autoConnect: enableWebSocket,
     isPlaying,
-    onError: (error) => {
-      console.error('[CustomVideoPlayer] WebSocket error:', error);
-    }
+    onError: handleWebSocketError
   });
 
   // Issue #57: Watch progress tracking integration
@@ -208,6 +213,7 @@ export default function CustomVideoPlayer({
 
     setCurrentError(categorizedError);
     console.error('[CustomVideoPlayer] Error:', categorizedError);
+    console.error('[CustomVideoPlayer] Error Details (JSON):', JSON.stringify(categorizedError, null, 2));
 
     // Track error in analytics
     analyticsRef.current?.trackError({
@@ -275,7 +281,23 @@ export default function CustomVideoPlayer({
     if (!videoRef.current) return;
 
     // Prevent double initialization in React Strict Mode
-    if (playerRef.current) return;
+    if (playerRef.current || isInitializingRef.current) {
+      console.log('[CustomVideoPlayer] Player already initialized or initializing, skipping');
+      return;
+    }
+
+    // React Strict Mode fix: Skip first mount in development
+    // In Strict Mode, React intentionally double-mounts components to detect side effects
+    // The first mount gets immediately unmounted/cleaned up, causing issues with Video.js
+    // We skip initialization on the first mount and only initialize on the second mount
+    if (process.env.NODE_ENV === 'development' && !hasMountedRef.current) {
+      hasMountedRef.current = true;
+      console.log('[CustomVideoPlayer] Skipping first mount (React Strict Mode), will initialize on second mount');
+      return;
+    }
+
+    isInitializingRef.current = true;
+    console.log('[CustomVideoPlayer] Initializing player...');
 
     try {
       // Initialize error handler (Phase 1.4)
@@ -315,6 +337,7 @@ export default function CustomVideoPlayer({
 
       // Setup event handlers
       player.ready(() => {
+        isInitializingRef.current = false;
         setPlayerReady(true);
         analyticsRef.current?.trackReady();
 
@@ -533,6 +556,7 @@ export default function CustomVideoPlayer({
         }
       });
     } catch (err) {
+      isInitializingRef.current = false;
       if (handleVideoErrorRef.current) {
         handleVideoErrorRef.current(err);
       }
@@ -540,6 +564,9 @@ export default function CustomVideoPlayer({
 
     // Cleanup on unmount
     return () => {
+      console.log('[CustomVideoPlayer] Cleaning up player...');
+      isInitializingRef.current = false;
+
       // Cleanup analytics
       analyticsRef.current?.destroy();
       analyticsRef.current = null;

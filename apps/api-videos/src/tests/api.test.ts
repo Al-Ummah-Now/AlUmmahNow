@@ -6,7 +6,7 @@ duration: number;
 }
 
 class APITester {
-private baseUrl = "http://127.0.0.1:8686";
+private baseUrl = "http://127.0.0.1:3086";
 private testResults: TestResult[] = [];
 
 async runAllTests(): Promise<TestResult[]> {

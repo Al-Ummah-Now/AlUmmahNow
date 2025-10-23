@@ -94,7 +94,7 @@ export async function notifyVideoProcessing(
  * async queue(batch: MessageBatch<VideoQueueMessage>): Promise<void> {
  *   for (const message of batch.messages) {
  *     const { videoId, userId } = message.body;
- *     const websocketUrl = env.WEBSOCKET_URL || 'http://localhost:8787';
+ *     const websocketUrl = env.WEBSOCKET_URL || 'http://localhost:3087';
  *     
  *     // Notify processing started
  *     await notifyVideoProcessing(websocketUrl, videoId, userId, 'processing');

@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useMemo } from "react";
 import Image from "next/image";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "./interface";
@@ -10,14 +10,15 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { user } = useAuth();
 
   // Convert PlayerOptions to CustomVideoPlayer props
-  const videoSources = [
+  // Memoize to prevent new array reference on every render
+  const videoSources = useMemo(() => [
     {
-      src: `https://vz-3f3e8ae1-5c9.b-cdn.net/${options.id}/playlist.m3u8`,
+      src: `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
       type: 'application/x-mpegURL'
     }
-  ];
+  ], [options.id]);
 
-  const posterUrl = `https://vz-3f3e8ae1-5c9.b-cdn.net/${options.id}/thumbnail.jpg`;
+  const posterUrl = `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
 
   return (
     <>
@@ -45,7 +46,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
       <div className="flex space-x-4 mt-4 justify-start items-center w-full">
         <div className="w-10 h-10 rounded-full overflow-hidden relative">
           <Image
-            src={options.channelAvatar}
+            src={options.channelAvatar || '/avatar.png'}
             alt="User"
             sizes="10vw"
             className="bg-gray-500"
