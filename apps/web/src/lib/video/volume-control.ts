@@ -23,91 +23,51 @@ export interface VolumeState {
 }
 
 /**
- * Save volume and mute state to localStorage with encryption
+ * Save volume and mute state to localStorage
+ *
+ * Note: Volume preferences are stored unencrypted as they are not sensitive data.
+ * User privacy is not compromised by knowing someone prefers 70% volume.
  */
-export async function saveVolumeState(volume: number, muted: boolean): Promise<void> {
+export function saveVolumeState(volume: number, muted: boolean): void {
   try {
     const state: VolumeState = {
       volume: Math.max(0, Math.min(1, volume)),
       muted,
     };
-    
-    // Use encrypted storage for GDPR compliance
-    if (typeof window !== 'undefined' && window.crypto?.subtle) {
-      const { secureSetItem } = await import('../crypto');
-      await secureSetItem(STORAGE_KEY, state);
-    } else {
-      // Fallback to unencrypted storage for older browsers
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
     console.error('[VolumeControl] Failed to save volume state:', error);
-    // Fallback to unencrypted storage on error
-    try {
-      const state: VolumeState = {
-        volume: Math.max(0, Math.min(1, volume)),
-        muted,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (fallbackError) {
-      console.error('[VolumeControl] Fallback storage also failed:', fallbackError);
-    }
   }
 }
 
 /**
- * Load volume and mute state from localStorage with decryption
+ * Load volume and mute state from localStorage
  */
-export async function loadVolumeState(): Promise<VolumeState | null> {
+export function loadVolumeState(): VolumeState | null {
   try {
-    // Try encrypted storage first
-    if (typeof window !== 'undefined' && window.crypto?.subtle) {
-      try {
-        const { secureGetItem } = await import('../crypto');
-        const state = await secureGetItem<VolumeState>(STORAGE_KEY);
-
-        if (state &&
-            typeof state.volume === 'number' &&
-            typeof state.muted === 'boolean' &&
-            state.volume >= 0 &&
-            state.volume <= 1) {
-          return state;
-        }
-      } catch (decryptError) {
-        // Decryption failed - likely due to key change or corrupted data
-        console.warn('[VolumeControl] Decryption failed, clearing corrupted data:', decryptError);
-        // Clear the corrupted encrypted data
-        localStorage.removeItem(STORAGE_KEY);
-        return null;
-      }
-    }
-
-    // Fallback to unencrypted storage (for migration or older browsers)
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return null;
 
-    try {
-      const state = JSON.parse(saved) as VolumeState;
+    const state = JSON.parse(saved) as VolumeState;
 
-      // Validate loaded state
-      if (
-        typeof state.volume === 'number' &&
-        typeof state.muted === 'boolean' &&
-        state.volume >= 0 &&
-        state.volume <= 1
-      ) {
-        return state;
-      }
-    } catch (parseError) {
-      // JSON parse failed - corrupted unencrypted data
-      console.warn('[VolumeControl] Failed to parse unencrypted data, clearing:', parseError);
-      localStorage.removeItem(STORAGE_KEY);
+    // Validate loaded state
+    if (
+      typeof state.volume === 'number' &&
+      typeof state.muted === 'boolean' &&
+      state.volume >= 0 &&
+      state.volume <= 1
+    ) {
+      return state;
     }
 
+    // Invalid data format
+    console.warn('[VolumeControl] Invalid volume state format, clearing');
+    localStorage.removeItem(STORAGE_KEY);
     return null;
   } catch (error) {
-    console.error('[VolumeControl] Unexpected error loading volume state:', error);
-    // Clear potentially corrupted data
+    console.error('[VolumeControl] Failed to load volume state:', error);
+    // Clear corrupted data
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (clearError) {
@@ -120,11 +80,11 @@ export async function loadVolumeState(): Promise<VolumeState | null> {
 /**
  * Apply saved volume state to player with fallback
  */
-export async function applySavedVolume(player: Player | ExtendedPlayer): Promise<void> {
+export function applySavedVolume(player: Player | ExtendedPlayer): void {
   const extPlayer = player as ExtendedPlayer;
-  
+
   try {
-    const savedState = await loadVolumeState();
+    const savedState = loadVolumeState();
     if (savedState) {
       extPlayer.volume(savedState.volume);
       extPlayer.muted(savedState.muted);
@@ -133,22 +93,18 @@ export async function applySavedVolume(player: Player | ExtendedPlayer): Promise
       // Fallback: Set reasonable defaults if no saved state
       const fallbackVolume = 0.7; // 70% volume as reasonable default
       const fallbackMuted = false;
-      
+
       extPlayer.volume(fallbackVolume);
       extPlayer.muted(fallbackMuted);
-      
+
       console.log('[VolumeControl] Applied fallback volume:', { volume: fallbackVolume, muted: fallbackMuted });
-      
+
       // Save the fallback state for future use
-      try {
-        await saveVolumeState(fallbackVolume, fallbackMuted);
-      } catch (saveError) {
-        console.warn('[VolumeControl] Could not save fallback state:', saveError);
-      }
+      saveVolumeState(fallbackVolume, fallbackMuted);
     }
   } catch (error) {
     console.error('[VolumeControl] Failed to apply saved volume, using fallback:', error);
-    
+
     // Emergency fallback: Set safe defaults even if everything fails
     try {
       extPlayer.volume(0.5); // 50% volume as safe default
@@ -406,13 +362,13 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
 export function setupVolumeChangeListener(player: Player | ExtendedPlayer): () => void {
   const extPlayer = player as ExtendedPlayer;
 
-  const handleVolumeChange = async (): Promise<void> => {
+  const handleVolumeChange = (): void => {
     const volume = extPlayer.volume();
     const muted = extPlayer.muted();
 
-    // Save to localStorage (async)
+    // Save to localStorage (synchronous now)
     try {
-      await saveVolumeState(volume, muted);
+      saveVolumeState(volume, muted);
     } catch (error) {
       console.error('[VolumeControl] Failed to save volume state:', error);
     }
@@ -437,10 +393,12 @@ export function setupVolumeChangeListener(player: Player | ExtendedPlayer): () =
 export function initializeVolumeControls(player: Player | ExtendedPlayer): () => void {
   const cleanupFunctions: Array<() => void> = [];
 
-  // Apply saved volume state (async but fire-and-forget for initialization)
-  applySavedVolume(player).catch(error => {
+  // Apply saved volume state (synchronous now)
+  try {
+    applySavedVolume(player);
+  } catch (error) {
     console.error('[VolumeControl] Failed to apply saved volume:', error);
-  });
+  }
 
   // Setup scroll wheel control
   const cleanupScrollWheel = setupScrollWheelControl(player);
