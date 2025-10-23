@@ -1,5 +1,38 @@
 @import 'video.js/dist/video-js.css';
 
+/* Force 16:9 aspect ratio on video player container */
+.custom-video-player.aspect-video {
+  aspect-ratio: 16 / 9 !important;
+  width: 100% !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+/* Override Video.js's paddingTop hack for fluid mode */
+.custom-video-player.aspect-video .video-js.vjs-fluid,
+.custom-video-player.aspect-video .video-js.vjs-16-9,
+.custom-video-player.aspect-video .video-js.vjs-4-3 {
+  padding-top: 0 !important;
+}
+
+/* Ensure Video.js player respects the aspect ratio container */
+.custom-video-player.aspect-video [data-vjs-player],
+.custom-video-player.aspect-video .video-js {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Force the actual video element to be contained properly */
+.custom-video-player.aspect-video video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
 /* CSS Custom Properties for Video Player */
 :root {
   --video-control-height: 0.5rem;
