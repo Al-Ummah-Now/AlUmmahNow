@@ -1,23 +1,5 @@
 @import 'video.js/dist/video-js.css';
 
-/* CSS Custom Properties for Video Player */
-:root {
-  --video-control-height: 0.5rem;
-  --video-touch-target-size: 3rem;
-  --video-border-radius: 0.5rem;
-  --video-border-radius-small: 0.25rem;
-  --video-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  --video-shadow-subtle: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --video-shadow-inner: inset 0 1px 2px rgba(0, 0, 0, 0.15);
-  --video-z-control-bar: 10;
-  --video-z-modal: 1000;
-  --video-white: #ffffff;
-  --video-blur-amount: 8px;
-  --video-transition-fast: 0.15s ease;
-  --video-transition-base: 0.2s ease;
-  --video-transition-slow: 0.3s ease;
-}
-
 .video-js {
   font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
@@ -27,41 +9,38 @@
   border-radius: 50%;
   border: none;
   background-color: oklch(var(--primary) / 0.9);
-  transition: background-color var(--video-transition-base), transform var(--video-transition-fast);
+  transition: background-color 0.2s ease, transform 0.1s ease;
 }
 
-/* Consolidated hover states */
-.video-js .vjs-big-play-button:hover,
-.dark .video-js .vjs-big-play-button:hover {
+.video-js .vjs-big-play-button:hover {
   background-color: oklch(var(--primary) / 1);
   transform: scale(1.05);
 }
 
-/* Consolidated focus states */
+/* Accessibility: Visible focus indicator for keyboard navigation */
 .video-js .vjs-big-play-button:focus-visible {
   outline: 3px solid oklch(var(--ring));
   outline-offset: 4px;
   background-color: oklch(var(--primary) / 1);
 }
 
-/* Control bar styling - WCAG 2.1 AA compliant contrast */
+/* Control bar styling */
 .video-js .vjs-control-bar {
   background: linear-gradient(
     to top,
-    oklch(var(--background) / 0.98),
-    oklch(var(--background) / 0.75)
+    oklch(var(--background) / 0.95), /* Increased from 0.8 for better contrast */
+    oklch(var(--background) / 0.3) /* Changed from transparent for better visibility */
   );
-  backdrop-filter: blur(var(--video-blur-amount));
-  -webkit-backdrop-filter: blur(var(--video-blur-amount));
-  padding: 0.625rem 1rem;
-  gap: 0.5rem;
+  backdrop-filter: blur(8px); /* Added blur for modern glass effect */
+  -webkit-backdrop-filter: blur(8px);
+  padding: 0.625rem 1rem; /* Increased padding for better spacing and control separation */
+  gap: 0.5rem; /* Add space between controls to prevent overlap */
   display: flex;
   align-items: center;
 }
 
-/* Consolidated focus indicators for control buttons */
-.video-js .vjs-control-bar button:focus-visible,
-.dark .video-js .vjs-control-bar button:focus-visible {
+/* Accessibility: Focus indicators for control buttons */
+.video-js .vjs-control-bar button:focus-visible {
   outline: 2px solid oklch(var(--ring));
   outline-offset: 2px;
 }
@@ -71,67 +50,35 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-/* Flip directional icons in RTL */
-[dir="rtl"] .video-js .vjs-play-control::before,
-[dir="rtl"] .video-js .vjs-previous-button::before,
-[dir="rtl"] .video-js .vjs-next-button::before {
-  transform: scaleX(-1);
-}
-
-/* Ensure non-directional icons remain unchanged */
-[dir="rtl"] .video-js .vjs-mute-control::before,
-[dir="rtl"] .video-js .vjs-fullscreen-control::before,
-[dir="rtl"] .video-js .vjs-picture-in-picture-control::before {
-  transform: none;
-}
-
 /* Dark mode specific adjustments */
 .dark .video-js .vjs-big-play-button {
   background-color: oklch(var(--primary) / 0.85);
+}
+
+.dark .video-js .vjs-big-play-button:hover {
+  background-color: oklch(var(--primary) / 1);
+  transform: scale(1.05);
 }
 
 .dark .video-js .vjs-big-play-button:focus-visible {
   outline-color: oklch(var(--ring));
 }
 
-/* RTL big play button support */
-[dir="rtl"] .video-js .vjs-big-play-button::before {
-  transform: scaleX(-1);
-}
-
 .dark .video-js .vjs-control-bar {
   background: linear-gradient(
     to top,
     oklch(var(--card) / 0.98), /* Increased from 0.9 for better contrast in dark mode */
-    oklch(var(--card) / 0.75) /* Increased from 0.4 to meet 4.5:1 ratio in dark mode */
+    oklch(var(--card) / 0.4) /* Changed from transparent for better visibility */
   );
 }
 
+.dark .video-js .vjs-control-bar button:focus-visible {
+  outline-color: oklch(var(--ring));
+}
 
-
-/* Enhanced RTL support */
+/* RTL support */
 [dir="rtl"] .video-js .vjs-control-bar {
   direction: rtl;
-  flex-direction: row-reverse;
-}
-
-/* Adjust control spacing for RTL */
-[dir="rtl"] .video-js .vjs-control-bar > * {
-  margin-left: 0;
-  margin-right: 0.5rem;
-}
-
-[dir="rtl"] .video-js .vjs-control-bar > *:last-child {
-  margin-right: 0;
-}
-
-/* Adjust time display positioning in RTL */
-[dir="rtl"] .video-js .vjs-time-control {
-  text-align: right;
-}
-
-[dir="rtl"] .video-js .vjs-remaining-time {
-  order: -1; /* Move remaining time to the right in RTL */
 }
 
 /* Accessibility: High contrast mode support */
@@ -141,13 +88,7 @@
   }
 
   .video-js .vjs-control-bar {
-    background: oklch(var(--background)); /* Solid background for maximum contrast */
-    border-top: 2px solid oklch(var(--foreground)); /* Add border for definition */
-  }
-  
-  .dark .video-js .vjs-control-bar {
-    background: oklch(var(--card)); /* Solid background in dark mode */
-    border-top: 2px solid oklch(var(--card-foreground)); /* Border for definition */
+    background: oklch(var(--background));
   }
 }
 
@@ -178,12 +119,12 @@
   font-size: 1.125rem;
   font-weight: 600;
   pointer-events: none;
-  z-index: var(--video-z-control-bar);
+  z-index: 10;
   opacity: 0;
-  transition: opacity var(--video-transition-slow);
-  box-shadow: var(--video-shadow);
-  backdrop-filter: blur(var(--video-blur-amount));
-  -webkit-backdrop-filter: blur(var(--video-blur-amount));
+  transition: opacity 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .vjs-volume-indicator-show {
@@ -207,7 +148,33 @@
   color: oklch(var(--card-foreground));
 }
 
+/* Mobile-optimized volume control */
+@media (max-width: 640px) {
+  .vjs-volume-indicator {
+    padding: 0.875rem 1.25rem;
+    font-size: 1rem;
+    gap: 0.625rem;
+  }
 
+  .vjs-volume-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .vjs-volume-text {
+    min-width: 2.5rem;
+  }
+
+  /* Larger touch target for volume button on mobile */
+  .video-js .vjs-volume-panel {
+    min-width: 3rem;
+  }
+
+  .video-js .vjs-volume-panel .vjs-mute-control {
+    width: 3rem;
+    height: 3rem;
+  }
+}
 
 /* Enhanced volume slider styling - force vertical popup display */
 .video-js .vjs-volume-panel {
@@ -269,42 +236,27 @@
 }
 
 .video-js .vjs-volume-bar {
-  background: oklch(var(--muted) / 0.6);
-  border-radius: var(--video-border-radius-small);
-  box-shadow: var(--video-shadow-inner);
-  height: 0.375rem;
+  background: oklch(var(--muted) / 0.6); /* Increased from 0.4 for better visibility */
+  border-radius: 0.25rem;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15); /* Added subtle inner shadow */
+  height: 0.375rem; /* Explicit height for consistency */
 }
 
 .video-js .vjs-volume-level {
-  background: var(--video-white);
-  border-radius: var(--video-border-radius-small);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  background: #ffffff; /* White for maximum visibility */
+  border-radius: 0.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); /* Added shadow for better visibility */
 }
 
-/* Consolidated volume control focus states */
-.video-js .vjs-volume-panel:focus-within .vjs-volume-control,
-.video-js .vjs-volume-bar:focus ~ .vjs-volume-control,
-.video-js .vjs-volume-bar:focus-visible ~ .vjs-volume-control {
+/* Volume control focus states */
+.video-js .vjs-volume-panel:focus-within .vjs-volume-control {
   opacity: 1 !important;
   visibility: visible !important;
 }
 
-.video-js .vjs-volume-bar:focus,
 .video-js .vjs-volume-bar:focus-visible {
   outline: 2px solid oklch(var(--ring));
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px oklch(var(--ring) / 0.2);
-}
-
-/* Ensure volume panel is accessible via keyboard */
-.video-js .vjs-volume-panel .vjs-mute-control {
-  position: relative;
-  z-index: calc(var(--video-z-control-bar) + 2);
-}
-
-.video-js .vjs-volume-panel .vjs-volume-bar {
-  position: relative;
-  z-index: calc(var(--video-z-control-bar) + 1);
 }
 
 /* Smooth volume transitions */
@@ -312,21 +264,9 @@
   transition: width 0.1s ease-out;
 }
 
-/* Enhanced RTL volume slider positioning */
+/* RTL support for volume indicator */
 [dir="rtl"] .vjs-volume-indicator {
   flex-direction: row-reverse;
-}
-
-/* Fix volume popup positioning in RTL */
-[dir="rtl"] .video-js .vjs-volume-control {
-  left: auto !important;
-  right: 50% !important;
-  transform: translateX(50%) !important;
-}
-
-/* Ensure volume panel width is consistent in RTL */
-[dir="rtl"] .video-js .vjs-volume-panel {
-  width: 40px !important;
 }
 
 /* High contrast mode support */
@@ -408,34 +348,34 @@
 
 .video-js .vjs-progress-holder {
   position: relative;
-  height: var(--video-control-height);
-  border-radius: var(--video-border-radius-small);
-  background: oklch(var(--muted) / 0.6);
-  transition: height var(--video-transition-fast);
-  box-shadow: var(--video-shadow-inner);
+  height: 0.5rem; /* Increased from 0.375rem for better visibility */
+  border-radius: 0.25rem;
+  background: oklch(var(--muted) / 0.6); /* Increased from 0.4 for better contrast */
+  transition: height 0.15s ease;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15); /* Added subtle inner shadow for depth */
 }
 
 .video-js .vjs-progress-control:hover .vjs-progress-holder {
-  height: 0.625rem;
+  height: 0.625rem; /* Increased from 0.5rem for better hover feedback */
 }
 
 /* Play progress (current position) */
 .video-js .vjs-play-progress {
-  background: var(--video-white);
-  border-radius: var(--video-border-radius-small);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  background: #ffffff; /* White for maximum visibility */
+  border-radius: 0.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); /* Added shadow for better visibility */
 }
 
 /* Load progress (buffered) */
 .video-js .vjs-load-progress {
-  background: oklch(var(--primary) / 0.3);
-  border-radius: var(--video-border-radius-small);
+  background: oklch(var(--primary) / 0.3); /* Increased from 0.2 for better visibility */
+  border-radius: 0.25rem;
 }
 
 /* Buffered ranges */
 .video-js .vjs-load-progress div {
-  background: oklch(var(--primary) / 0.4);
-  border-radius: var(--video-border-radius-small);
+  background: oklch(var(--primary) / 0.4); /* Increased from 0.3 for better contrast */
+  border-radius: 0.25rem;
 }
 
 /* Progress bar handle */
@@ -458,7 +398,7 @@
   background: oklch(var(--primary) / 0.25);
 }
 
-/* Enhanced RTL progress bar support */
+/* RTL support for thumbnail positioning */
 [dir="rtl"] .vjs-thumbnail-holder {
   transform: translateX(50%);
 }
@@ -467,85 +407,42 @@
   direction: rtl;
 }
 
-/* Fix progress bar handle positioning in RTL */
-[dir="rtl"] .video-js .vjs-play-progress::before {
-  right: auto;
-  left: -0.5rem;
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .vjs-thumbnail-holder {
+    max-width: 120px;
+  }
+
+  .vjs-thumbnail-holder img {
+    max-width: 120px;
+    max-height: 67.5px;
+  }
+
+  .vjs-thumbnail-time {
+    font-size: 0.6875rem;
+  }
+
+  /* Larger touch target for progress bar */
+  .video-js .vjs-progress-control {
+    height: 3rem; /* Increased from 2.5rem for better touch target */
+    padding: 1rem 0; /* Increased from 0.75rem for better touch area */
+  }
+
+  .video-js .vjs-progress-holder {
+    height: 0.625rem; /* Increased from 0.5rem for better visibility on mobile */
+  }
+
+  /* Touch-hold support for preview */
+  .vjs-progress-control:active .vjs-thumbnail-holder {
+    display: block;
+    opacity: 1;
+  }
 }
 
-/* Ensure proper seeking direction in RTL */
-[dir="rtl"] .video-js .vjs-progress-holder {
-  direction: ltr; /* Keep progress direction LTR for intuitive seeking */
-}
-
-[dir="rtl"] .video-js .vjs-progress-control {
-  direction: rtl; /* But keep control layout RTL */
-}
-
-
-
-/* Optimized performance: Targeted GPU acceleration */
-.vjs-thumbnail-holder:hover,
-.vjs-watched-segment.animating {
-  will-change: opacity, transform;
-}
-
-.vjs-volume-indicator.vjs-volume-indicator-show {
-  will-change: opacity;
-}
-
-.vjs-resume-prompt-modal,
-.vjs-keyboard-help-modal {
-  will-change: transform, opacity;
-}
-
-/* Optimize animations for better performance */
-.video-js .vjs-big-play-button,
-.video-js .vjs-control-bar button,
-.vjs-resume-prompt-modal,
-.vjs-keyboard-help-modal {
-  backface-visibility: hidden;
-  transform: translateZ(0); /* Force hardware acceleration */
-}
-
-/* Reduce repaints with containment */
-.video-js .vjs-control-bar {
-  contain: layout style paint;
-}
-
-.video-js .vjs-progress-holder {
-  contain: layout style paint;
-}
-
-/* Optimize backdrop-filter usage */
-.video-js .vjs-control-bar,
+/* Performance optimization: GPU acceleration */
 .vjs-thumbnail-holder,
-.vjs-keyboard-help-backdrop {
-  /* Reduce blur amount for better performance */
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-
-/* Keep higher blur for volume indicator (smaller element) */
-.vjs-volume-indicator {
-  backdrop-filter: blur(var(--video-blur-amount));
-  -webkit-backdrop-filter: blur(var(--video-blur-amount));
-}
-
-/* Additional containment optimizations */
-.vjs-resume-prompt-content,
-.vjs-keyboard-help-content {
-  contain: layout style paint;
-}
-
-/* Prevent layout thrashing during animations */
-.vjs-viewer-count-overlay.vjs-viewer-count-animating {
-  contain: layout style paint;
-}
-
-/* Optimize volume slider rendering */
-.video-js .vjs-volume-control {
-  contain: layout style paint;
+.vjs-watched-segment {
+  will-change: opacity, transform;
 }
 
 /* Accessibility: High contrast mode */
@@ -604,12 +501,17 @@
   transition: width 0.1s linear;
 }
 
-/* Consolidated focus states for progress control */
-.video-js .vjs-progress-control:focus-visible,
+/* Focus states for accessibility */
+.video-js .vjs-progress-control:focus-visible {
+  outline: 2px solid oklch(var(--ring));
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
 .video-js .vjs-progress-holder:focus-visible {
   outline: 2px solid oklch(var(--ring));
   outline-offset: 2px;
-  border-radius: var(--video-border-radius-small);
+  border-radius: 0.25rem;
 }
 
 /* ========================================
@@ -886,7 +788,7 @@
   margin: 0;
 }
 
-/* Enhanced RTL resume prompt support */
+/* RTL support */
 [dir="rtl"] .vjs-resume-prompt-close {
   right: auto;
   left: 1rem;
@@ -900,24 +802,45 @@
   flex-direction: row-reverse;
 }
 
-/* Fix text alignment in RTL */
-[dir="rtl"] .vjs-resume-prompt-title,
-[dir="rtl"] .vjs-resume-prompt-subtitle,
-[dir="rtl"] .vjs-resume-prompt-video-title {
-  text-align: right;
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .vjs-resume-prompt-modal {
+    max-width: 100%;
+    width: 95%;
+    margin: 1rem;
+  }
+
+  .vjs-resume-prompt-content {
+    padding: 1rem;
+  }
+
+  .vjs-resume-prompt-header {
+    flex-direction: column;
+  }
+
+  .vjs-resume-prompt-thumbnail {
+    width: 100%;
+  }
+
+  .vjs-resume-prompt-title {
+    font-size: 1.125rem;
+  }
+
+  .vjs-resume-prompt-time-text {
+    font-size: 1.25rem;
+  }
+
+  .vjs-resume-prompt-button {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9375rem;
+    min-height: 2.75rem;
+  }
+
+  /* RTL mobile adjustments */
+  [dir="rtl"] .vjs-resume-prompt-header {
+    flex-direction: column;
+  }
 }
-
-[dir="rtl"] .vjs-resume-prompt-time-text {
-  direction: ltr; /* Keep time display LTR for readability */
-  text-align: center;
-}
-
-/* Ensure buttons display properly in RTL */
-[dir="rtl"] .vjs-resume-prompt-actions {
-  direction: rtl;
-}
-
-
 
 /* Dark mode adjustments */
 .dark .vjs-resume-prompt-backdrop {
@@ -1099,7 +1022,7 @@
   line-height: 1;
 }
 
-/* Enhanced RTL viewer count support */
+/* RTL support */
 [dir="rtl"] .vjs-viewer-count-overlay {
   right: auto;
   left: 1rem;
@@ -1108,14 +1031,6 @@
 [dir="rtl"] .vjs-live-indicator,
 [dir="rtl"] .vjs-viewer-count-text {
   flex-direction: row-reverse;
-}
-
-[dir="rtl"] .vjs-viewer-count-text {
-  text-align: right;
-}
-
-[dir="rtl"] .vjs-live-text {
-  direction: ltr; /* Keep "LIVE" text LTR */
 }
 
 [dir="rtl"] .vjs-viewer-count-disconnected {
@@ -1127,180 +1042,8 @@
   border-right: 1px solid oklch(var(--border));
 }
 
-
-
-/* Hide during fullscreen loading or buffering to avoid clutter */
-.video-js.vjs-waiting .vjs-viewer-count-overlay {
-  opacity: 0.5;
-}
-
-/* High contrast mode */
-@media (prefers-contrast: high) {
-  .vjs-viewer-count-overlay {
-    background: oklch(var(--background));
-    border: 2px solid oklch(var(--foreground));
-  }
-
-  .vjs-live-indicator {
-    border: 2px solid oklch(var(--destructive));
-  }
-}
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .vjs-live-dot {
-    animation: none;
-  }
-
-  .vjs-viewer-count-animating {
-    animation: none;
-  }
-
-  .vjs-viewer-count-overlay {
-    transition: none;
-  }
-}
-
-/* ========================================
-   Enhanced Mobile Optimizations & Touch Interactions
-   ======================================== */
-
+/* Mobile optimizations */
 @media (max-width: 640px) {
-  /* Enhanced touch targets for all controls */
-  .video-js .vjs-control-bar {
-    padding: 0.75rem 0.5rem;
-    gap: 0.25rem;
-  }
-
-  .video-js .vjs-control-bar button {
-    min-width: 2.5rem;
-    min-height: 2.5rem;
-    padding: 0.5rem;
-  }
-
-  /* Volume indicator mobile optimizations */
-  .vjs-volume-indicator {
-    padding: 0.875rem 1.25rem;
-    font-size: 1rem;
-    gap: 0.625rem;
-  }
-
-  .vjs-volume-icon {
-    width: 1.25rem;
-    height: 1.25rem;
-  }
-
-  .vjs-volume-text {
-    min-width: 2.5rem;
-  }
-
-  /* Enhanced touch target for volume button */
-  .video-js .vjs-volume-panel {
-    min-width: var(--video-touch-target-size);
-  }
-
-  .video-js .vjs-volume-panel .vjs-mute-control {
-    width: var(--video-touch-target-size);
-    height: var(--video-touch-target-size);
-  }
-
-  /* Larger volume slider for touch */
-  .video-js .vjs-volume-bar {
-    height: 0.5rem;
-    width: 2rem;
-  }
-
-  /* Progress bar mobile optimizations */
-  .vjs-thumbnail-holder {
-    max-width: 120px;
-  }
-
-  .vjs-thumbnail-holder img {
-    max-width: 120px;
-    max-height: 67.5px;
-  }
-
-  .vjs-thumbnail-time {
-    font-size: 0.6875rem;
-  }
-
-  /* Enhanced touch target for progress bar */
-  .video-js .vjs-progress-control {
-    height: var(--video-touch-target-size);
-    padding: 1rem 0;
-    touch-action: manipulation; /* Improve touch responsiveness */
-  }
-
-  .video-js .vjs-progress-holder {
-    height: 0.75rem; /* Increased for better touch visibility */
-  }
-
-  /* Enhanced touch feedback for progress bar */
-  .video-js .vjs-progress-holder:active {
-    transform: scaleY(1.2);
-    transition: transform var(--video-transition-fast);
-  }
-
-  /* Touch-hold support for preview */
-  .vjs-progress-control:active .vjs-thumbnail-holder {
-    display: block;
-    opacity: 1;
-  }
-
-  /* Enhanced big play button for mobile */
-  .video-js .vjs-big-play-button {
-    width: 5rem;
-    height: 5rem;
-    font-size: 2rem;
-    border-width: 3px;
-  }
-
-  /* Resume prompt mobile optimizations */
-  .vjs-resume-prompt-modal {
-    max-width: 100%;
-    width: 95%;
-    margin: 1rem;
-  }
-
-  .vjs-resume-prompt-content {
-    padding: 1rem;
-  }
-
-  .vjs-resume-prompt-header {
-    flex-direction: column;
-  }
-
-  .vjs-resume-prompt-thumbnail {
-    width: 100%;
-  }
-
-  .vjs-resume-prompt-title {
-    font-size: 1.125rem;
-  }
-
-  .vjs-resume-prompt-time-text {
-    font-size: 1.25rem;
-  }
-
-  .vjs-resume-prompt-button {
-    padding: 0.75rem 1.25rem;
-    font-size: 0.9375rem;
-    min-height: 2.75rem;
-    touch-action: manipulation; /* Prevent double-tap zoom */
-  }
-
-  /* RTL mobile adjustments */
-  [dir="rtl"] .vjs-resume-prompt-header {
-    flex-direction: column;
-    text-align: right;
-  }
-
-  /* Enhanced mobile RTL control bar */
-  [dir="rtl"] .video-js .vjs-control-bar {
-    padding: 0.75rem 0.5rem;
-  }
-
-  /* Viewer count mobile optimizations */
   .vjs-viewer-count-overlay {
     top: 0.5rem;
     right: 0.5rem;
@@ -1336,26 +1079,6 @@
     right: auto;
     left: 0.5rem;
   }
-
-  /* Enhanced mobile touch interactions */
-  .video-js .vjs-control-bar button:active {
-    transform: scale(0.95);
-    transition: transform var(--video-transition-fast);
-  }
-
-  /* Prevent accidental zoom on double-tap for controls */
-  .video-js .vjs-control-bar,
-  .video-js .vjs-big-play-button,
-  .vjs-resume-prompt-button {
-    touch-action: manipulation;
-  }
-
-  /* Improved tap feedback */
-  .video-js .vjs-control-bar button:hover,
-  .video-js .vjs-control-bar button:focus {
-    background-color: oklch(var(--muted) / 0.3);
-    border-radius: var(--video-border-radius-small);
-  }
 }
 
 /* Tablet optimizations */
@@ -1364,356 +1087,37 @@
     padding: 0.4375rem 0.75rem;
     gap: 0.5625rem;
   }
-
-  /* Tablet touch targets */
-  .video-js .vjs-control-bar button {
-    min-width: 2.25rem;
-    min-height: 2.25rem;
-  }
-
-  .video-js .vjs-big-play-button {
-    width: 4.5rem;
-    height: 4.5rem;
-    font-size: 1.75rem;
-  }
 }
 
-/* Touch device specific optimizations */
-@media (hover: none) and (pointer: coarse) {
-  /* Show controls by default on touch devices */
-  .video-js .vjs-control-bar {
-    opacity: 1;
-  }
-
-  /* Enhanced touch feedback */
-  .video-js .vjs-control-bar button:active {
-    background-color: oklch(var(--muted) / 0.4);
-    transform: scale(0.95);
-  }
-
-  /* Larger progress bar for touch accuracy */
-  .video-js .vjs-progress-holder {
-    height: 0.625rem;
-  }
-
-  /* Always show volume slider on touch devices when volume panel is hovered */
-  .video-js .vjs-volume-panel:hover .vjs-volume-control {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  /* Enhanced big play button visibility */
-  .video-js .vjs-big-play-button {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-}
-
-/* ========================================
-   Keyboard Help Overlay (Phase 3.1)
-   ======================================== */
-
-/* Help button in control bar */
-.vjs-keyboard-help-button {
-  position: relative;
-  background: none;
-  border: none;
-  color: oklch(var(--foreground));
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: var(--video-border-radius-small);
-  transition: background-color var(--video-transition-base);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.vjs-keyboard-help-button:hover {
-  background-color: oklch(var(--muted) / 0.3);
-}
-
-.vjs-keyboard-help-button:focus-visible {
-  outline: 2px solid oklch(var(--ring));
-  outline-offset: 2px;
-}
-
-.vjs-keyboard-help-button::before {
-  content: "?";
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 600;
-  font-size: 0.875rem;
-}
-
-/* Help overlay backdrop */
-.vjs-keyboard-help-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: calc(var(--video-z-modal) + 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  animation: vjs-help-fade-in var(--video-transition-base) ease-out;
-}
-
-@keyframes vjs-help-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* Help modal container */
-.vjs-keyboard-help-modal {
-  position: relative;
-  max-width: 48rem;
-  width: 90%;
-  max-height: 80vh;
-  background: oklch(var(--card));
-  border: 1px solid oklch(var(--border));
-  border-radius: var(--video-border-radius);
-  box-shadow: var(--video-shadow);
-  animation: vjs-help-scale-in var(--video-transition-base) ease-out;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-@keyframes vjs-help-scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Help modal header */
-.vjs-keyboard-help-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.5rem;
-  border-bottom: 1px solid oklch(var(--border));
-}
-
-.vjs-keyboard-help-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: oklch(var(--card-foreground));
-  margin: 0;
-}
-
-.vjs-keyboard-help-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  color: oklch(var(--primary));
-  flex-shrink: 0;
-}
-
-.vjs-keyboard-help-close {
-  padding: 0.5rem;
-  background: oklch(var(--muted) / 0.5);
-  border: 1px solid oklch(var(--border));
-  border-radius: var(--video-border-radius-small);
-  color: oklch(var(--foreground));
-  cursor: pointer;
-  transition: all var(--video-transition-base);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.vjs-keyboard-help-close:hover {
-  background: oklch(var(--muted) / 0.8);
-  transform: scale(1.05);
-}
-
-.vjs-keyboard-help-close:focus-visible {
-  outline: 2px solid oklch(var(--ring));
-  outline-offset: 2px;
-}
-
-/* Help modal content */
-.vjs-keyboard-help-content {
-  padding: 1.5rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.vjs-keyboard-help-category {
-  margin-bottom: 1.5rem;
-}
-
-.vjs-keyboard-help-category:last-child {
-  margin-bottom: 0;
-}
-
-.vjs-keyboard-help-category-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-  color: oklch(var(--card-foreground));
-  margin: 0 0 0.75rem 0;
-}
-
-.vjs-keyboard-help-shortcuts {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.vjs-keyboard-help-shortcut {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: oklch(var(--muted) / 0.5);
-  border-radius: var(--video-border-radius-small);
-}
-
-.vjs-keyboard-help-shortcut-icon {
-  width: 1rem;
-  height: 1rem;
-  color: oklch(var(--muted-foreground));
-  flex-shrink: 0;
-}
-
-.vjs-keyboard-help-keys {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.vjs-keyboard-help-key {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  background: oklch(var(--background));
-  border: 1px solid oklch(var(--border));
-  border-radius: 0.25rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.vjs-keyboard-help-key-separator {
-  color: oklch(var(--muted-foreground));
-  font-size: 0.75rem;
-}
-
-.vjs-keyboard-help-description {
-  flex: 1;
-  font-size: 0.875rem;
-  color: oklch(var(--muted-foreground));
-  line-height: 1.4;
-}
-
-/* Help modal footer */
-.vjs-keyboard-help-footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid oklch(var(--border));
-  background: oklch(var(--muted) / 0.25);
-}
-
-.vjs-keyboard-help-footer-text {
-  font-size: 0.875rem;
-  color: oklch(var(--muted-foreground));
-  text-align: center;
-  margin: 0;
-}
-
-/* Enhanced RTL help overlay support */
-[dir="rtl"] .vjs-keyboard-help-modal {
-  direction: rtl;
-}
-
-[dir="rtl"] .vjs-keyboard-help-shortcut {
-  flex-direction: row-reverse;
-}
-
-[dir="rtl"] .vjs-keyboard-help-description {
-  text-align: right;
-}
-
-/* Fix help button positioning in RTL */
-[dir="rtl"] .vjs-keyboard-help-header {
-  flex-direction: row-reverse;
-}
-
-/* Ensure keyboard shortcuts display properly in RTL */
-[dir="rtl"] .vjs-keyboard-help-keys {
-  justify-content: flex-end;
-}
-
-[dir="rtl"] .vjs-keyboard-help-key {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  direction: ltr; /* Keep keyboard shortcuts LTR for readability */
-}
-
-/* Mobile optimizations */
-@media (max-width: 640px) {
-  .vjs-keyboard-help-modal {
-    width: 95%;
-    max-height: 90vh;
-  }
-
-  .vjs-keyboard-help-header,
-  .vjs-keyboard-help-content {
-    padding: 1rem;
-  }
-
-  .vjs-keyboard-help-shortcut {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-
-  .vjs-keyboard-help-keys {
-    align-self: stretch;
-  }
-
-  [dir="rtl"] .vjs-keyboard-help-shortcut {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+/* Hide during fullscreen loading or buffering to avoid clutter */
+.video-js.vjs-waiting .vjs-viewer-count-overlay {
+  opacity: 0.5;
 }
 
 /* High contrast mode */
 @media (prefers-contrast: high) {
-  .vjs-keyboard-help-modal {
+  .vjs-viewer-count-overlay {
+    background: oklch(var(--background));
     border: 2px solid oklch(var(--foreground));
   }
 
-  .vjs-keyboard-help-close {
-    border: 2px solid oklch(var(--border));
-  }
-
-  .vjs-keyboard-help-key {
-    border: 2px solid oklch(var(--foreground));
+  .vjs-live-indicator {
+    border: 2px solid oklch(var(--destructive));
   }
 }
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .vjs-keyboard-help-backdrop,
-  .vjs-keyboard-help-modal,
-  .vjs-keyboard-help-close {
+  .vjs-live-dot {
     animation: none;
-    transition: none;
   }
 
-  .vjs-keyboard-help-close:hover {
-    transform: none;
+  .vjs-viewer-count-animating {
+    animation: none;
+  }
+
+  .vjs-viewer-count-overlay {
+    transition: none;
   }
 }
 

@@ -63,7 +63,6 @@ import { initializeVolumeControls } from '@/lib/video/volume-control';
 import { setupKeyboardShortcuts } from '@/lib/video/keyboard-shortcuts';
 import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-touch';
 import { setupAccessibility } from '@/lib/video/accessibility';
-import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
 import { BufferingIndicator } from './LoadingStates';
 import { ViewerCount } from './ViewerCount';
@@ -121,7 +120,6 @@ export default function CustomVideoPlayer({
   const analyticsRef = useRef<VideoAnalytics | null>(null);
   const errorHandlerRef = useRef<VideoErrorHandler | null>(null);
   const fallbackStrategyRef = useRef<VideoFallbackStrategy | null>(null);
-  const performanceMonitorRef = useRef<ReturnType<typeof createPerformanceMonitor> | null>(null);
   const handleVideoErrorRef = useRef<((error: unknown) => void) | null>(null);
   const volumeControlsCleanupRef = useRef<(() => void) | null>(null);
   const keyboardShortcutsCleanupRef = useRef<(() => void) | null>(null);
@@ -373,9 +371,6 @@ export default function CustomVideoPlayer({
           announcements: true,
         });
 
-        // Phase 4.2: Initialize performance monitoring
-        performanceMonitorRef.current = createPerformanceMonitor(player as ExtendedPlayer);
-
         // Phase 2.6: Track fullscreen changes
         player.on('fullscreenchange', () => {
           const extPlayer = player as ExtendedPlayer;
@@ -608,12 +603,6 @@ export default function CustomVideoPlayer({
       if (qualityLevelsCleanupRef.current) {
         qualityLevelsCleanupRef.current();
         qualityLevelsCleanupRef.current = null;
-      }
-
-      // Cleanup performance monitoring
-      if (performanceMonitorRef.current) {
-        performanceMonitorRef.current.stop();
-        performanceMonitorRef.current = null;
       }
 
       // Cleanup player

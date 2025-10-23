@@ -54,12 +54,6 @@ const PLAYBACK_RATE_STEP = 0.25;
 const PERCENT_MULTIPLIER = 100;
 
 /**
- * Security constants for event validation
- */
-const EVENT_RATE_LIMIT_MS = 50; // Maximum 20 events per second
-const MAX_EVENT_QUEUE_SIZE = 100;
-
-/**
  * Configuration options for keyboard shortcuts
  */
 export interface KeyboardShortcutsOptions {
@@ -137,8 +131,6 @@ const DEFAULT_KEY_BINDINGS: KeyBindings = {
 interface PlayerState {
   feedbackOverlay: HTMLDivElement | null;
   feedbackTimeout: NodeJS.Timeout | null;
-  lastEventTime: number;
-  eventQueue: Map<string, number>;
 }
 
 const playerStates = new WeakMap<ExtendedPlayer, PlayerState>();
@@ -152,8 +144,6 @@ function getPlayerState(player: ExtendedPlayer): PlayerState {
     state = {
       feedbackOverlay: null,
       feedbackTimeout: null,
-      lastEventTime: 0,
-      eventQueue: new Map(),
     };
     playerStates.set(player, state);
   }
@@ -295,57 +285,7 @@ function handlePictureInPictureToggle(
 }
 
 /**
- * Add help button to video player control bar
- */
-export function addHelpButton(
-  player: ExtendedPlayer,
-  onShowHelp: () => void,
-  lang: SupportedLanguage = 'en'
-): () => void {
-  const playerElement = player.el();
-  if (!playerElement) return () => {};
-
-  // Find control bar
-  const controlBar = playerElement.querySelector('.vjs-control-bar') as HTMLElement;
-  if (!controlBar) {
-    console.warn('[KeyboardShortcuts] Control bar not found, cannot add help button');
-    return () => {};
-  }
-
-  // Create help button
-  const helpButton = document.createElement('button');
-  helpButton.className = 'vjs-keyboard-help-button vjs-control vjs-button';
-  helpButton.setAttribute('type', 'button');
-  helpButton.setAttribute('aria-label', lang === 'ar' ? 'عرض اختصارات لوحة المفاتيح' : 'Show keyboard shortcuts');
-  helpButton.setAttribute('title', lang === 'ar' ? 'اختصارات لوحة المفاتيح (?)' : 'Keyboard shortcuts (?)');
-
-  // Add click handler
-  helpButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onShowHelp();
-  });
-
-  // Insert button before fullscreen button (if exists) or at the end
-  const fullscreenButton = controlBar.querySelector('.vjs-fullscreen-control');
-  if (fullscreenButton) {
-    controlBar.insertBefore(helpButton, fullscreenButton);
-  } else {
-    controlBar.appendChild(helpButton);
-  }
-
-  console.log('[KeyboardShortcuts] Help button added to control bar');
-
-  // Return cleanup function
-  return () => {
-    if (helpButton.parentNode) {
-      helpButton.parentNode.removeChild(helpButton);
-    }
-  };
-}
-
-/**
- * Setup keyboard shortcuts for a video player
+ * Setup keyboard shortcuts for video player
  *
  * @param player - Video.js player instance
  * @param options - Configuration options
@@ -377,32 +317,11 @@ export function setupKeyboardShortcuts(
     : { ...DEFAULT_KEY_BINDINGS, ...customBindings };
 
   /**
-   * Handle keyboard events with security validation
+   * Handle keyboard events
    * Wrapped in try-catch to prevent errors from propagating to global scope
    */
   function handleKeyDown(event: KeyboardEvent): void {
     try {
-      const state = getPlayerState(player);
-      const now = Date.now();
-
-      // Security: Validate event is trusted (prevents event injection)
-      if (!event.isTrusted) {
-        console.warn('[KeyboardShortcuts] Ignoring untrusted event');
-        return;
-      }
-
-      // Security: Rate limiting to prevent event flooding attacks
-      if (now - state.lastEventTime < EVENT_RATE_LIMIT_MS) {
-        return; // Rate limited
-      }
-      state.lastEventTime = now;
-
-      // Security: Prevent event queue overflow
-      if (state.eventQueue.size >= MAX_EVENT_QUEUE_SIZE) {
-        state.eventQueue.clear();
-      }
-      state.eventQueue.set(event.key, now);
-
       // Don't handle if focus is on an input element
       if (isInputElement(document.activeElement)) {
         return;
@@ -557,35 +476,12 @@ export function setupKeyboardShortcuts(
     }
   }
 
-  // Get player element for scoped event listening
-  const playerElement = player.el();
-  if (!playerElement) {
-    console.error('[KeyboardShortcuts] Player element not found');
-    return () => {}; // Return no-op cleanup
-  }
-
-  // Add help button if callback provided
-  let helpButtonCleanup: (() => void) | undefined;
-  if (onShowHelp) {
-    helpButtonCleanup = addHelpButton(player, onShowHelp, lang);
-  }
-
-  // Add scoped event listener to player element (not global document)
-  playerElement.addEventListener('keydown', handleKeyDown);
-
-  // Also add to document for when player is in fullscreen but maintain security validation
+  // Add event listener
   document.addEventListener('keydown', handleKeyDown);
 
   // Return cleanup function
   return () => {
-    // Remove scoped event listeners
-    playerElement.removeEventListener('keydown', handleKeyDown);
     document.removeEventListener('keydown', handleKeyDown);
-
-    // Cleanup help button
-    if (helpButtonCleanup) {
-      helpButtonCleanup();
-    }
 
     // Cleanup feedback overlay for this player
     const state = getPlayerState(player);
@@ -597,10 +493,6 @@ export function setupKeyboardShortcuts(
       state.feedbackOverlay.parentNode.removeChild(state.feedbackOverlay);
       state.feedbackOverlay = null;
     }
-    
-    // Cleanup event queue
-    state.eventQueue.clear();
-    
     // Note: WeakMap automatically cleans up when player is garbage collected
   };
 }
