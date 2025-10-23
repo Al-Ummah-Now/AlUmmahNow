@@ -33,7 +33,10 @@
   );
   backdrop-filter: blur(8px); /* Added blur for modern glass effect */
   -webkit-backdrop-filter: blur(8px);
-  padding: 0.5rem 0.75rem; /* Added padding for better spacing */
+  padding: 0.625rem 1rem; /* Increased padding for better spacing and control separation */
+  gap: 0.5rem; /* Add space between controls to prevent overlap */
+  display: flex;
+  align-items: center;
 }
 
 /* Accessibility: Focus indicators for control buttons */
@@ -175,7 +178,31 @@
 
 /* Enhanced volume slider styling */
 .video-js .vjs-volume-panel {
-  transition: width 0.2s ease;
+  /* Fixed width to prevent layout shift - volume control will overlay */
+  width: auto;
+  position: relative;
+}
+
+/* Volume control slider container */
+.video-js .vjs-volume-control {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  background: oklch(var(--background) / 0.95);
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dark .video-js .vjs-volume-control {
+  background: oklch(var(--card) / 0.95);
 }
 
 .video-js .vjs-volume-panel:hover .vjs-volume-control {
