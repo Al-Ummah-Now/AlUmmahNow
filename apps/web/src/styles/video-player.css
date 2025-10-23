@@ -176,29 +176,54 @@
   }
 }
 
-/* Enhanced volume slider styling */
+/* Enhanced volume slider styling - force vertical popup display */
 .video-js .vjs-volume-panel {
-  /* Fixed width to prevent layout shift - volume control will overlay */
-  width: auto;
-  position: relative;
+  /* Fixed width to prevent layout shift - only show mute button */
+  width: 40px !important;
+  position: relative !important;
 }
 
-/* Volume control slider container */
-.video-js .vjs-volume-control {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-  background: oklch(var(--background) / 0.95);
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  margin-bottom: 0.5rem;
+/* Force volume panel to vertical mode by overriding Video.js horizontal classes */
+.video-js .vjs-volume-panel.vjs-volume-panel-horizontal .vjs-volume-control,
+.video-js .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal,
+.video-js .vjs-volume-panel .vjs-volume-control {
+  /* Force absolute positioning above the control bar */
+  position: absolute !important;
+  bottom: 100% !important;
+  left: 50% !important;
+  right: auto !important;
+  top: auto !important;
+  transform: translateX(-50%) !important;
+
+  /* Hide by default */
+  opacity: 0 !important;
+  visibility: hidden !important;
+  display: flex !important; /* Override any display: none */
+
+  /* Visual styling */
+  transition: opacity 0.2s ease, visibility 0.2s ease !important;
+  background: oklch(var(--background) / 0.95) !important;
+  padding: 0.5rem !important;
+  border-radius: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+
+  /* Allow interaction with the slider when visible */
+  pointer-events: auto !important;
+
+  /* Force vertical orientation */
+  flex-direction: column !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+/* Ensure slider is interactive */
+.video-js .vjs-volume-control .vjs-volume-bar {
+  pointer-events: auto;
 }
 
 .dark .video-js .vjs-volume-control {
@@ -206,8 +231,8 @@
 }
 
 .video-js .vjs-volume-panel:hover .vjs-volume-control {
-  opacity: 1;
-  visibility: visible;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 .video-js .vjs-volume-bar {
@@ -225,8 +250,8 @@
 
 /* Volume control focus states */
 .video-js .vjs-volume-panel:focus-within .vjs-volume-control {
-  opacity: 1;
-  visibility: visible;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 .video-js .vjs-volume-bar:focus-visible {
