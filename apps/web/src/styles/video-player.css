@@ -28,9 +28,12 @@
 .video-js .vjs-control-bar {
   background: linear-gradient(
     to top,
-    oklch(var(--background) / 0.8),
-    transparent
+    oklch(var(--background) / 0.95), /* Increased from 0.8 for better contrast */
+    oklch(var(--background) / 0.3) /* Changed from transparent for better visibility */
   );
+  backdrop-filter: blur(8px); /* Added blur for modern glass effect */
+  -webkit-backdrop-filter: blur(8px);
+  padding: 0.5rem 0.75rem; /* Added padding for better spacing */
 }
 
 /* Accessibility: Focus indicators for control buttons */
@@ -61,8 +64,8 @@
 .dark .video-js .vjs-control-bar {
   background: linear-gradient(
     to top,
-    oklch(var(--card) / 0.9),
-    transparent
+    oklch(var(--card) / 0.98), /* Increased from 0.9 for better contrast in dark mode */
+    oklch(var(--card) / 0.4) /* Changed from transparent for better visibility */
   );
 }
 
@@ -181,13 +184,16 @@
 }
 
 .video-js .vjs-volume-bar {
-  background: oklch(var(--muted) / 0.4);
+  background: oklch(var(--muted) / 0.6); /* Increased from 0.4 for better visibility */
   border-radius: 0.25rem;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15); /* Added subtle inner shadow */
+  height: 0.375rem; /* Explicit height for consistency */
 }
 
 .video-js .vjs-volume-level {
-  background: oklch(var(--primary));
+  background: #ffffff; /* White for maximum visibility */
   border-radius: 0.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); /* Added shadow for better visibility */
 }
 
 /* Volume control focus states */
@@ -290,31 +296,33 @@
 
 .video-js .vjs-progress-holder {
   position: relative;
-  height: 0.375rem;
+  height: 0.5rem; /* Increased from 0.375rem for better visibility */
   border-radius: 0.25rem;
-  background: oklch(var(--muted) / 0.4);
+  background: oklch(var(--muted) / 0.6); /* Increased from 0.4 for better contrast */
   transition: height 0.15s ease;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15); /* Added subtle inner shadow for depth */
 }
 
 .video-js .vjs-progress-control:hover .vjs-progress-holder {
-  height: 0.5rem;
+  height: 0.625rem; /* Increased from 0.5rem for better hover feedback */
 }
 
 /* Play progress (current position) */
 .video-js .vjs-play-progress {
-  background: oklch(var(--primary));
+  background: #ffffff; /* White for maximum visibility */
   border-radius: 0.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); /* Added shadow for better visibility */
 }
 
 /* Load progress (buffered) */
 .video-js .vjs-load-progress {
-  background: oklch(var(--primary) / 0.2);
+  background: oklch(var(--primary) / 0.3); /* Increased from 0.2 for better visibility */
   border-radius: 0.25rem;
 }
 
 /* Buffered ranges */
 .video-js .vjs-load-progress div {
-  background: oklch(var(--primary) / 0.3);
+  background: oklch(var(--primary) / 0.4); /* Increased from 0.3 for better contrast */
   border-radius: 0.25rem;
 }
 
@@ -364,12 +372,12 @@
 
   /* Larger touch target for progress bar */
   .video-js .vjs-progress-control {
-    height: 2.5rem;
-    padding: 0.75rem 0;
+    height: 3rem; /* Increased from 2.5rem for better touch target */
+    padding: 1rem 0; /* Increased from 0.75rem for better touch area */
   }
 
   .video-js .vjs-progress-holder {
-    height: 0.5rem;
+    height: 0.625rem; /* Increased from 0.5rem for better visibility on mobile */
   }
 
   /* Touch-hold support for preview */
@@ -419,19 +427,20 @@
 .video-js .vjs-progress-control:hover .vjs-play-progress::before {
   content: '';
   position: absolute;
-  right: -0.375rem;
+  right: -0.5rem; /* Increased from -0.375rem for larger handle */
   top: 50%;
   transform: translateY(-50%);
-  width: 0.75rem;
-  height: 0.75rem;
-  background: oklch(var(--primary));
-  border: 2px solid oklch(var(--background));
+  width: 1rem; /* Increased from 0.75rem for better visibility */
+  height: 1rem; /* Increased from 0.75rem for better visibility */
+  background: #ffffff; /* White for maximum visibility */
+  border: 3px solid rgba(0, 0, 0, 0.3); /* Dark border for contrast against any background */
   border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); /* Enhanced shadow for better depth */
 }
 
 .dark .video-js .vjs-play-progress::before {
-  border-color: oklch(var(--card));
+  border-color: rgba(0, 0, 0, 0.5); /* Darker border in dark mode */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); /* Stronger shadow in dark mode */
 }
 
 /* Smooth transitions */
