@@ -55,6 +55,20 @@ const PERCENT_MULTIPLIER = 100;
 
 /**
  * Security constants for event validation
+ * 
+ * EVENT_RATE_LIMIT_MS: 50ms (20 events/second maximum)
+ * - Prevents keyboard event flooding attacks that could:
+ *   - Overwhelm the event loop causing UI freezing
+ *   - Exhaust memory through rapid event queue accumulation
+ *   - Trigger performance degradation in video playback
+ * - 50ms balance: Responsive for legitimate rapid typing while blocking abuse
+ * - Human typing typically 100-200ms between keystrokes
+ * - Bot/script attacks often attempt <10ms intervals
+ * 
+ * MAX_EVENT_QUEUE_SIZE: 100 events
+ * - Prevents memory exhaustion from accumulated event timestamps
+ * - Allows tracking of recent key patterns for anomaly detection
+ * - Auto-clears when limit reached, maintaining performance
  */
 const EVENT_RATE_LIMIT_MS = 50; // Maximum 20 events per second
 const MAX_EVENT_QUEUE_SIZE = 100;

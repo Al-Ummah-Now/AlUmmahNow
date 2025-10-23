@@ -22,7 +22,7 @@ import type { NextRequest } from 'next/server';
 const CSP_POLICIES = {
   development: [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vjs.zencdn.net",
+    "script-src 'self' https://vjs.zencdn.net",
     "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net",
     "media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net blob:",
     "connect-src 'self' https://ws.alummahnow.net wss://ws.alummahnow.net",

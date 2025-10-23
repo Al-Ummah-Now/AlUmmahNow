@@ -13,6 +13,7 @@
   --video-z-modal: 1000;
   --video-white: #ffffff;
   --video-blur-amount: 8px;
+  --video-blur-amount-reduced: 4px; /* Optimized for performance */
   --video-transition-fast: 0.15s ease;
   --video-transition-base: 0.2s ease;
   --video-transition-slow: 0.3s ease;
@@ -522,8 +523,8 @@
 .vjs-thumbnail-holder,
 .vjs-keyboard-help-backdrop {
   /* Reduce blur amount for better performance */
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--video-blur-amount-reduced));
+  -webkit-backdrop-filter: blur(var(--video-blur-amount-reduced));
 }
 
 /* Keep higher blur for volume indicator (smaller element) */
