@@ -15,9 +15,22 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
     }
   },
   // Accessibility: Enable keyboard controls
+  // V3 Design: Standard control bar layout (YouTube/Netflix/Video.js/Plyr research)
+  // Order: Play → Volume (inline slider) → Progress → Time → Quality → Fullscreen
   controlBar: {
+    children: [
+      'playToggle',           // 1. Play/Pause button (leftmost)
+      'volumePanel',          // 2. Volume button with inline slider
+      'progressControl',      // 3. Progress bar (center, large - 700px width)
+      'remainingTimeDisplay', // 4. Time remaining display
+      'hlsQualitySelector',   // 5. Quality/Settings button
+      'fullscreenToggle'      // 6. Fullscreen button (rightmost)
+    ],
     remainingTimeDisplay: true,
-    pictureInPictureToggle: true
+    pictureInPictureToggle: false, // Removed from V3 design
+    volumePanel: {
+      inline: true // Show volume slider inline with control bar
+    }
   },
   // Accessibility: Better UX for screen readers
   language: 'en',
@@ -64,6 +77,9 @@ export function createVideoPlayer(
   let player: Player | null = null;
 
   try {
+    console.log('[createVideoPlayer] Options received:', options);
+    console.log('[createVideoPlayer] Poster URL:', options.poster);
+
     player = videojs(element, {
       ...VIDEO_JS_OPTIONS,
       ...options
