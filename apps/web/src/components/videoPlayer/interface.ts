@@ -8,6 +8,7 @@ export interface PlayerOptions {
   description: string;
   views: string;
   url: string;
+  poster?: string; // Video thumbnail/poster image URL
   autoplay: boolean;
   type: string;
   width?: number;

@@ -20,6 +20,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             description: video.description || '',
             channel: video.channel,
             url: video.videoUrl,
+            poster: video.thumbnailUrl, // Video thumbnail from API
             views: '0', // API doesn't return views field yet
             dateCreated: new Date(video.dateCreated),
             autoplay: false,

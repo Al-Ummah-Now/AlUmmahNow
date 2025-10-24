@@ -116,8 +116,8 @@ export default function CustomVideoPlayer({
   onSourceChange,
 }: CustomVideoPlayerProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<Player | null>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const analyticsRef = useRef<VideoAnalytics | null>(null);
   const errorHandlerRef = useRef<VideoErrorHandler | null>(null);
   const fallbackStrategyRef = useRef<VideoFallbackStrategy | null>(null);
@@ -129,7 +129,6 @@ export default function CustomVideoPlayer({
   const accessibilityCleanupRef = useRef<(() => void) | null>(null);
   const qualityLevelsCleanupRef = useRef<(() => void) | null>(null);
   const isInitializingRef = useRef(false);
-  const hasMountedRef = useRef(false); // Track if component has mounted before (for Strict Mode)
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -210,7 +209,7 @@ export default function CustomVideoPlayer({
 
     const categorizedError = errorHandlerRef.current.categorizeError(
       error,
-      videoRef.current || undefined
+      videoElementRef.current || undefined
     );
 
     setCurrentError(categorizedError);
@@ -279,22 +278,26 @@ export default function CustomVideoPlayer({
     }
   }, [currentError, handleSourceChange]);
 
-  useEffect(() => {
-    if (!videoRef.current) return;
+  /**
+   * Ref callback for video element - called when element is mounted to DOM
+   * This is the proper React pattern for integrating with third-party DOM libraries
+   * See: https://react.dev/learn/manipulating-the-dom-with-refs#how-to-manage-a-list-of-refs-using-a-ref-callback
+   */
+  const videoRefCallback = useCallback((videoElement: HTMLVideoElement | null) => {
+    // Store the element reference
+    videoElementRef.current = videoElement;
 
-    // Prevent double initialization in React Strict Mode
-    if (playerRef.current || isInitializingRef.current) {
-      console.log('[CustomVideoPlayer] Player already initialized or initializing, skipping');
+    // If element is being removed (null), just store the ref
+    // DON'T dispose the player here - let the cleanup useEffect handle it
+    // This prevents issues with React Strict Mode's double-mount cycle
+    if (!videoElement) {
+      console.log('[CustomVideoPlayer] Ref callback called with null (likely Strict Mode), skipping disposal');
       return;
     }
 
-    // React Strict Mode fix: Skip first mount in development
-    // In Strict Mode, React intentionally double-mounts components to detect side effects
-    // The first mount gets immediately unmounted/cleaned up, causing issues with Video.js
-    // We skip initialization on the first mount and only initialize on the second mount
-    if (process.env.NODE_ENV === 'development' && !hasMountedRef.current) {
-      hasMountedRef.current = true;
-      console.log('[CustomVideoPlayer] Skipping first mount (React Strict Mode), will initialize on second mount');
+    // Prevent double initialization
+    if (playerRef.current || isInitializingRef.current) {
+      console.log('[CustomVideoPlayer] Player already initialized or initializing, skipping');
       return;
     }
 
@@ -323,8 +326,8 @@ export default function CustomVideoPlayer({
         analyticsRef.current = new VideoAnalytics(videoId, userId);
       }
 
-      // Initialize Video.js player
-      playerRef.current = createVideoPlayer(videoRef.current, {
+      // Initialize Video.js player with the DOM element
+      playerRef.current = createVideoPlayer(videoElement, {
         controls,
         autoplay,
         sources,
@@ -566,10 +569,37 @@ export default function CustomVideoPlayer({
         handleVideoErrorRef.current(err);
       }
     }
+    // CRITICAL: No dependencies! Ref callback should only run when element mounts/unmounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // Cleanup on unmount
+  /**
+   * Cleanup effect - runs when component unmounts
+   *
+   * React Strict Mode Note:
+   * This cleanup runs during Strict Mode's simulated unmount, but we guard against
+   * disposing the player if it was never initialized (playerRef.current is null).
+   * This prevents the "element not in DOM" error during the double-mount cycle.
+   */
+  useEffect(() => {
     return () => {
-      console.log('[CustomVideoPlayer] Cleaning up player...');
+      // React Strict Mode Guard:
+      // During Strict Mode's simulated unmount, the ref callback is called with null,
+      // which sets videoElementRef.current to null. In this case, we should NOT dispose
+      // the player because the element will be re-attached during the second mount.
+      // Only dispose when this is a TRUE unmount (component being removed from tree).
+      if (!videoElementRef.current) {
+        console.log('[CustomVideoPlayer] Cleanup skipped - video element ref is null (likely Strict Mode simulated unmount)');
+        return;
+      }
+
+      // Only cleanup if player was actually initialized
+      if (!playerRef.current) {
+        console.log('[CustomVideoPlayer] Cleanup skipped - player not initialized');
+        return;
+      }
+
+      console.log('[CustomVideoPlayer] Component unmounting, cleaning up...');
       isInitializingRef.current = false;
 
       // Cleanup analytics
@@ -621,9 +651,7 @@ export default function CustomVideoPlayer({
       playerRef.current = null;
       setPlayerReady(false);
     };
-    // Note: handleVideoError is NOT in deps - we use handleVideoErrorRef.current to avoid re-initialization
-    // lang is included because it's used in setupKeyboardShortcuts() and changes should re-initialize the player
-  }, [videoId, userId, sources, poster, controls, autoplay, enableAnalytics, lang]);
+  }, []);
 
   /**
    * Render error display if there's an error
@@ -658,7 +686,7 @@ export default function CustomVideoPlayer({
       {/* Video player container */}
       <div data-vjs-player className="relative">
         <video
-          ref={videoRef}
+          ref={videoRefCallback}
           className="video-js vjs-big-play-centered"
           playsInline
           aria-label={ariaLabel || t.accessibility.videoPlayer}

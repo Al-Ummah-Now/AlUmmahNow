@@ -18,7 +18,8 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
     }
   ], [options.id]);
 
-  const posterUrl = `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
+  // Use poster from options (API-provided thumbnail URL) or fallback to default pattern
+  const posterUrl = options.poster || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
 
   return (
     <>
@@ -33,7 +34,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             controls={true}
             autoplay={false}
             enableAnalytics={true}
-            enableWebSocket={true}
+            enableWebSocket={false}
             isLive={false}
             lang="en"
             className="w-full"
