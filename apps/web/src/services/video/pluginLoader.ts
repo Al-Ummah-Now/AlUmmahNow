@@ -30,8 +30,10 @@ export async function loadPlugin(
 
   if (videojs.getPlugin?.(pluginName)) {
     const plugin = videojs.getPlugin(pluginName);
-    loadedPlugins.set(pluginName, plugin);
-    return plugin;
+    if (plugin && typeof plugin === 'function') {
+      loadedPlugins.set(pluginName, plugin as VideoJSPlugin);
+      return plugin as VideoJSPlugin;
+    }
   }
 
   const pluginLoader = pluginRegistry[pluginName];

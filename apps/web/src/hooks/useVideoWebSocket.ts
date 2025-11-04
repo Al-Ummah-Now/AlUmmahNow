@@ -122,7 +122,7 @@ export function useVideoWebSocket({
    * Handle incoming messages from video channel
    * Wrapped in useCallback with no dependencies to prevent re-creation
    */
-  const handleVideoUpdate = useCallback((data: PresenceEvent) => {
+  const handleVideoUpdate = useCallback((data: PresenceEvent | { type: 'viewer_count'; viewerCount: number }) => {
     if (process.env.NODE_ENV !== 'production') {
       console.log('[useVideoWebSocket] Received update:', data);
     }

@@ -47,7 +47,7 @@ export class MessageProcessor {
   private validateMessage(message: AlUmmahMessage): boolean {
     return !!(
       message.id &&
-      message.type &&
+      message.type !== undefined && message.type !== null &&
       message.timestamp &&
       message.data &&
       typeof message.data === 'object'
@@ -365,7 +365,7 @@ export class MessageProcessor {
     }
 
     // Don't retry validation errors
-    if (error instanceof Error && error.message.includes('missing required fields')) {
+    if (error instanceof Error && (error.message.includes('missing required fields') || error.message.includes('missing required field'))) {
       return false;
     }
 

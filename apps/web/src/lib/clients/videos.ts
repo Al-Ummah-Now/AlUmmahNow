@@ -28,7 +28,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             width: video.width,
             height: video.height,
             availableResolutions: video.availableResolutions,
-            channelAvatar: video.channelThumbnailUrl, // Fixed: API returns channelThumbnailUrl
+            channelAvatar: video.channelAvatarUrl,
         };
 
         console.log('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);

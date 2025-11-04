@@ -60,4 +60,10 @@ logs/
 *.log
 
 # Claude Code local settings
-.claude/settings.local.json
+.claude/
+.cursor/
+.gemini/
+.opencode/
+.github/chatmodes/
+.playwright-mcp/
+bmad/

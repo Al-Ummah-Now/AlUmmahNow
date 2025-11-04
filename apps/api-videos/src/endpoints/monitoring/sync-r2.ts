@@ -8,7 +8,7 @@
  * to prevent accidental production use.
  */
 
-import { OpenAPIRoute, Query } from "chanfana";
+import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 
 export class SyncR2Buckets extends OpenAPIRoute {

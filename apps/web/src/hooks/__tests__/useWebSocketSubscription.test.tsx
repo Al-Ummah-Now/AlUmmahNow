@@ -79,7 +79,7 @@ describe('useWebSocketSubscription', () => {
     const subscribeCount = { count: 0 };
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <WebSocketProvider user={{ id: 'test-user' }}>
+      <WebSocketProvider user={{ id: 'test-user', email: 'test@example.com' }}>
         {children}
       </WebSocketProvider>
     );
@@ -132,7 +132,7 @@ describe('useWebSocketSubscription', () => {
 
   it('should re-subscribe when channel changes', async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <WebSocketProvider user={{ id: 'test-user' }}>
+      <WebSocketProvider user={{ id: 'test-user', email: 'test@example.com' }}>
         {children}
       </WebSocketProvider>
     );
@@ -174,7 +174,7 @@ describe('useRealTimeNotifications', () => {
 
   it('should not cause infinite loop when notifications update', async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <WebSocketProvider user={{ id: 'test-user' }}>
+      <WebSocketProvider user={{ id: 'test-user', email: 'test@example.com' }}>
         {children}
       </WebSocketProvider>
     );
@@ -223,7 +223,7 @@ describe('useRealTimeNotifications', () => {
 
   it('should handle auto-remove without infinite loop', async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <WebSocketProvider user={{ id: 'test-user' }}>
+      <WebSocketProvider user={{ id: 'test-user', email: 'test@example.com' }}>
         {children}
       </WebSocketProvider>
     );

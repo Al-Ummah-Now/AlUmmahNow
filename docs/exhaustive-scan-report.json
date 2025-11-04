@@ -1,0 +1,589 @@
+{
+  "scan_summary": {
+    "total_files_read": 1450,
+    "parts_scanned": ["shared-types", "websocket-server", "processor", "api-videos", "web"],
+    "scan_duration": "exhaustive analysis completed"
+  },
+  "parts": {
+    "shared-types": {
+      "project_type": "library",
+      "api_endpoints": [],
+      "data_models": [
+        {
+          "name": "VideoObject",
+          "file": "packages/shared-types/src/video.ts",
+          "properties": ["id", "title", "description", "thumbnailUrl", "videoUrl", "userId", "channelId", "channel", "channelName", "channelAvatarUrl", "duration", "width", "height", "availableResolutions", "format", "fileSize", "views", "likesCount", "dislikesCount", "commentsCount", "sharesCount", "isPublic", "isLive", "isFeatured", "processingStatus", "tags", "category", "language", "dateCreated", "dateModified", "publishedAt"],
+          "enums": ["VideoProcessingStatus"]
+        },
+        {
+          "name": "Channel",
+          "file": "packages/shared-types/src/channel.ts",
+          "properties": ["id", "userId", "email", "name", "description", "avatarUrl", "coverUrl", "isMain", "isVerified", "subscribersCount", "videosCount", "totalViews", "category", "tags", "websiteUrl", "socialLinks", "dateCreated", "dateModified"],
+          "nested_types": ["SocialLinks", "Subscription"]
+        },
+        {
+          "name": "User",
+          "file": "packages/shared-types/src/user.ts",
+          "properties": ["id", "email", "displayName", "avatarUrl", "isEmailVerified", "isActive", "role"],
+          "enums": ["UserRole"],
+          "nested_types": ["Profile", "AuthSubject", "AuthHeaders", "AuthTokens"]
+        },
+        {
+          "name": "Playlist",
+          "file": "packages/shared-types/src/playlist.ts",
+          "properties": ["id", "name", "description", "userId", "channelId", "thumbnailUrl", "videosCount", "totalDuration", "viewsCount", "isPublic", "dateCreated", "dateModified"],
+          "nested_types": ["PlaylistVideo"]
+        },
+        {
+          "name": "Comment",
+          "file": "packages/shared-types/src/comment.ts",
+          "properties": ["id", "videoId", "userId", "channelId", "parentCommentId", "content", "userDisplayName", "userAvatarUrl", "likesCount", "dislikesCount", "repliesCount", "isPinned", "isEdited", "dateCreated", "dateModified"],
+          "extends": ["Timestamps", "SoftDelete"]
+        },
+        {
+          "name": "Analytics",
+          "file": "packages/shared-types/src/analytics.ts",
+          "properties": ["totalViews", "totalLikes", "totalComments", "totalSubscribers", "totalVideos", "averageViewDuration", "watchTimeMinutes"],
+          "nested_types": ["ChannelAnalytics", "VideoAnalytics", "MetricDataPoint", "AudienceDemographics", "TrafficSource"],
+          "enums": ["AnalyticsPeriod"]
+        },
+        {
+          "name": "WatchHistory",
+          "file": "packages/shared-types/src/watch-history.ts",
+          "properties": ["id", "userId", "videoId", "videoTitle", "videoThumbnail", "videoDuration", "channelId", "channelName", "firstWatchedAt", "lastWatchedAt", "watchCount", "progress", "completed", "percentageWatched"],
+          "nested_types": ["WatchProgressUpdate", "RecordWatchRequest", "WatchHistoryResponse", "ContinueWatchingItem", "WatchHistoryStats", "WatchHistoryPrivacySettings", "WatchHistoryEvent"]
+        },
+        {
+          "name": "Common",
+          "file": "packages/shared-types/src/common.ts",
+          "properties": ["PaginationParams", "PaginatedResponse", "ApiResponse", "ApiError", "Timestamps", "SoftDelete"],
+          "enums": ["Locale", "SortOrder"],
+          "utility_types": ["SearchParams"]
+        }
+      ],
+      "ui_components": [],
+      "state_management": {},
+      "auth_approach": {
+        "type": "TypeScript type definitions",
+        "patterns": ["AuthSubject", "AuthHeaders", "AuthTokens"],
+        "integration": "Shared across all apps for consistent authentication"
+      },
+      "config_patterns": [
+        {
+          "file": "packages/shared-types/package.json",
+          "type": "workspace package",
+          "exports": ["./dist/index.js", "./dist/index.d.ts"],
+          "scripts": ["build", "dev", "clean", "type-check"]
+        }
+      ],
+      "integration_points": [
+        "Used by all 4 apps as workspace dependency",
+        "Provides shared TypeScript interfaces",
+        "Ensures type safety across the monorepo"
+      ],
+      "testing_strategy": {
+        "framework": "TypeScript compilation",
+        "validation": "tsc --noEmit"
+      },
+      "deployment_config": {
+        "build_tool": "TypeScript compiler",
+        "output": "dist/",
+        "package_manager": "pnpm workspace"
+      }
+    },
+    "websocket-server": {
+      "project_type": "backend",
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check endpoint",
+          "auth": "none"
+        },
+        {
+          "method": "GET",
+          "path": "/ws",
+          "description": "WebSocket upgrade endpoint",
+          "auth": "optional (token in query params)"
+        },
+        {
+          "method": "POST",
+          "path": "/broadcast",
+          "description": "Server-to-server broadcast",
+          "auth": "INTERNAL_API_KEY required"
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "description": "WebSocket server statistics",
+          "auth": "internal"
+        },
+        {
+          "method": "GET",
+          "path": "/",
+          "description": "Service information",
+          "auth": "none"
+        }
+      ],
+      "data_models": [
+        {
+          "name": "WebSocketConnection",
+          "properties": ["webSocket", "sessionId", "userId", "authenticated", "connectedAt"]
+        },
+        {
+          "name": "ClientMessage",
+          "types": ["authenticate", "subscribe", "unsubscribe", "message", "ping", "heartbeat"],
+          "validation": "Zod schema"
+        },
+        {
+          "name": "ServerMessage",
+          "types": ["authenticated", "error", "notification", "presence", "video_update", "comment", "live_chat", "pong", "connection_acknowledged", "subscribed", "unsubscribed", "message"]
+        },
+        {
+          "name": "SessionData",
+          "properties": ["userId", "sessionId", "connectedAt", "lastActivity", "channels"]
+        }
+      ],
+      "ui_components": [],
+      "state_management": {
+        "pattern": "Durable Objects state management",
+        "storage": "Cloudflare KV for presence",
+        "classes": ["WebSocketDurableObject", "ChannelManager", "PresenceManager"]
+      },
+      "auth_approach": {
+        "type": "JWT authentication with OpenAuth",
+        "validation": ["Full signature verification", "Basic payload validation fallback"],
+        "middleware": "validateJWT, validateJWTBasic",
+        "subjects": "User subjects with id and email"
+      },
+      "config_patterns": [
+        {
+          "file": "apps/websocket-server/wrangler.jsonc",
+          "type": "Cloudflare Workers configuration",
+          "features": ["Durable Objects", "KV namespaces", "Node.js compatibility"],
+          "environments": ["development", "staging", "production"]
+        }
+      ],
+      "integration_points": [
+        "OpenAuth integration for JWT validation",
+        "Cloudflare Durable Objects for WebSocket state",
+        "KV storage for presence tracking",
+        "Internal API for server-to-server communication"
+      ],
+      "testing_strategy": {
+        "framework": "None specified",
+        "validation": "TypeScript compilation"
+      },
+      "deployment_config": {
+        "platform": "Cloudflare Workers",
+        "durable_objects": ["WEBSOCKET_DO"],
+        "kv_namespaces": ["PRESENCE_KV"],
+        "compatibility_date": "2025-04-12",
+        "nodejs_compat": true
+      }
+    },
+    "processor": {
+      "project_type": "backend",
+      "api_endpoints": [
+        {
+          "method": "queue",
+          "path": "al-ummah-now-videos",
+          "description": "Queue consumer for processing messages"
+        },
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check endpoint",
+          "auth": "none"
+        },
+        {
+          "method": "GET",
+          "path": "/queue/status",
+          "description": "Queue metrics and status",
+          "auth": "none"
+        }
+      ],
+      "data_models": [
+        {
+          "name": "AlUmmahMessage",
+          "properties": ["id", "type", "timestamp", "data", "priority", "retryCount", "failureReason", "failedAt"],
+          "enums": ["MessageType (35+ types)"]
+        },
+        {
+          "name": "ProcessingResult",
+          "properties": ["success", "error", "shouldRetry", "processedAt"]
+        },
+        {
+          "name": "QueueEnvironment",
+          "bindings": ["MESSAGE_QUEUE", "DLQ", "MESSAGES_BUCKET", "ENVIRONMENT", "LOG_LEVEL"]
+        }
+      ],
+      "ui_components": [],
+      "state_management": {
+        "pattern": "Queue consumer pattern",
+        "processing": "Parallel message processing",
+        "retry_logic": "Max 3 retries with DLQ",
+        "storage": "R2 bucket for message persistence"
+      },
+      "auth_approach": {
+        "type": "No authentication required",
+        "pattern": "Internal service",
+        "access": "Cloudflare Workers environment"
+      },
+      "config_patterns": [
+        {
+          "file": "apps/processor/wrangler.toml",
+          "type": "Cloudflare Workers configuration",
+          "features": ["R2 buckets", "Queue consumers", "Multi-environment support"],
+          "environments": ["development", "staging", "production"]
+        }
+      ],
+      "integration_points": [
+        "Consumes messages from Cloudflare Queue",
+        "Stores messages in R2 bucket",
+        "Sends notifications to WebSocket server",
+        "Dead Letter Queue for failed messages"
+      ],
+      "testing_strategy": {
+        "framework": "Jest",
+        "test_files": ["src/__tests__/messageProcessor.test.ts"],
+        "coverage": "Unit tests for message processing"
+      },
+      "deployment_config": {
+        "platform": "Cloudflare Workers",
+        "r2_buckets": ["MESSAGES_BUCKET"],
+        "queues": ["al-ummah-now-videos"],
+        "dlq": "al-ummah-now-dlq",
+        "compatibility_date": "2024-09-01"
+      }
+    },
+    "api-videos": {
+      "project_type": "backend",
+      "api_endpoints": [
+        {
+          "category": "Videos",
+          "endpoints": [
+            {"method": "GET", "path": "/api/videos", "auth": "optional", "description": "List videos with pagination"},
+            {"method": "GET", "path": "/api/videos/search", "auth": "optional", "description": "Search videos"},
+            {"method": "GET", "path": "/api/videos/:id", "auth": "optional", "description": "Get video by ID"},
+            {"method": "POST", "path": "/api/videos", "auth": "required", "description": "Create new video"},
+            {"method": "PUT", "path": "/api/videos/:id", "auth": "required", "description": "Update video"},
+            {"method": "DELETE", "path": "/api/videos/:id", "auth": "required", "description": "Delete video"},
+            {"method": "POST", "path": "/api/videos/:id/view", "auth": "optional", "description": "Track video view"},
+            {"method": "POST", "path": "/api/videos/upload", "auth": "required", "description": "Upload video"},
+            {"method": "POST", "path": "/api/videos/upload/initiate", "auth": "required", "description": "Initiate upload"},
+            {"method": "POST", "path": "/api/videos/upload/complete", "auth": "required", "description": "Complete upload"},
+            {"method": "GET", "path": "/api/videos/:id/upload-status", "auth": "required", "description": "Get upload status"},
+            {"method": "POST", "path": "/api/videos/:id/likes", "auth": "required", "description": "Like video"},
+            {"method": "DELETE", "path": "/api/videos/:id/likes", "auth": "required", "description": "Unlike video"},
+            {"method": "POST", "path": "/api/videos/:id/dislikes", "auth": "required", "description": "Dislike video"},
+            {"method": "DELETE", "path": "/api/videos/:id/dislikes", "auth": "required", "description": "Remove dislike"},
+            {"method": "POST", "path": "/api/videos/:id/comments", "auth": "required", "description": "Create comment"},
+            {"method": "PUT", "path": "/api/videos/:id/comments/:cid", "auth": "required", "description": "Update comment"},
+            {"method": "DELETE", "path": "/api/videos/:id/comments/:cid", "auth": "required", "description": "Delete comment"},
+            {"method": "POST", "path": "/api/videos/:id/comments/:cid/likes", "auth": "required", "description": "Like comment"},
+            {"method": "DELETE", "path": "/api/videos/:id/comments/:cid/likes", "auth": "required", "description": "Unlike comment"},
+            {"method": "POST", "path": "/api/videos/:id/comments/:cid/dislikes", "auth": "required", "description": "Dislike comment"},
+            {"method": "DELETE", "path": "/api/videos/:id/comments/:cid/dislikes", "auth": "required", "description": "Remove dislike comment"}
+          ]
+        },
+        {
+          "category": "Profiles",
+          "endpoints": [
+            {"method": "GET", "path": "/api/profiles", "auth": "optional", "description": "List profiles"},
+            {"method": "GET", "path": "/api/profiles/:id", "auth": "optional", "description": "Get profile by ID"},
+            {"method": "POST", "path": "/api/profiles", "auth": "required", "description": "Create profile"},
+            {"method": "PUT", "path": "/api/profiles/:id", "auth": "required", "description": "Update profile"},
+            {"method": "DELETE", "path": "/api/profiles/:id", "auth": "required", "description": "Delete profile"},
+            {"method": "PUT", "path": "/api/profiles/:id/avatar", "auth": "required", "description": "Update profile avatar"},
+            {"method": "PUT", "path": "/api/profiles/:id/cover", "auth": "required", "description": "Update profile cover"},
+            {"method": "POST", "path": "/api/profiles/watch-history", "auth": "required", "description": "Add to watch history"},
+            {"method": "GET", "path": "/api/profiles/watch-history", "auth": "required", "description": "Get watch history"}
+          ]
+        },
+        {
+          "category": "Watch History (New System)",
+          "endpoints": [
+            {"method": "POST", "path": "/api/watch-history", "auth": "required", "description": "Record watch history"},
+            {"method": "GET", "path": "/api/watch-history", "auth": "required", "description": "List watch history"},
+            {"method": "DELETE", "path": "/api/watch-history", "auth": "required", "description": "Clear watch history"},
+            {"method": "DELETE", "path": "/api/watch-history/:videoId", "auth": "required", "description": "Delete specific watch history"},
+            {"method": "POST", "path": "/api/watch-history/:videoId/progress", "auth": "required", "description": "Update watch progress"},
+            {"method": "GET", "path": "/api/watch-history/:videoId/progress", "auth": "required", "description": "Get watch progress"}
+          ]
+        },
+        {
+          "category": "Channels",
+          "endpoints": [
+            {"method": "GET", "path": "/api/channels", "auth": "optional", "description": "List channels"},
+            {"method": "GET", "path": "/api/channels/:id", "auth": "optional", "description": "Get channel by ID"},
+            {"method": "POST", "path": "/api/channels", "auth": "required", "description": "Create channel"},
+            {"method": "PUT", "path": "/api/channels/:id", "auth": "required", "description": "Update channel"},
+            {"method": "DELETE", "path": "/api/channels/:id", "auth": "required", "description": "Delete channel"},
+            {"method": "POST", "path": "/api/channels/:id/subscriptions", "auth": "required", "description": "Subscribe to channel"},
+            {"method": "DELETE", "path": "/api/channels/:id/subscriptions", "auth": "required", "description": "Unsubscribe from channel"}
+          ]
+        },
+        {
+          "category": "Playlists",
+          "endpoints": [
+            {"method": "GET", "path": "/api/playlists", "auth": "optional", "description": "List playlists"},
+            {"method": "GET", "path": "/api/playlists/:id", "auth": "optional", "description": "Get playlist by ID"},
+            {"method": "POST", "path": "/api/playlists", "auth": "required", "description": "Create playlist"},
+            {"method": "PATCH", "path": "/api/playlists/:id", "auth": "required", "description": "Update playlist"},
+            {"method": "DELETE", "path": "/api/playlists/:id", "auth": "required", "description": "Delete playlist"},
+            {"method": "POST", "path": "/api/playlists/:id/videos", "auth": "required", "description": "Add video to playlist"},
+            {"method": "DELETE", "path": "/api/playlists/:id/videos/:videoId", "auth": "required", "description": "Remove video from playlist"}
+          ]
+        },
+        {
+          "category": "Live Streaming",
+          "endpoints": [
+            {"method": "GET", "path": "/api/live-streams", "auth": "optional", "description": "List live streams"},
+            {"method": "POST", "path": "/api/live-streams", "auth": "required", "description": "Create live stream"},
+            {"method": "PATCH", "path": "/api/live-streams/:id", "auth": "required", "description": "Update live stream"}
+          ]
+        },
+        {
+          "category": "Analytics",
+          "endpoints": [
+            {"method": "GET", "path": "/api/analytics", "auth": "required", "description": "Get analytics data"}
+          ]
+        },
+        {
+          "category": "Content Moderation",
+          "endpoints": [
+            {"method": "POST", "path": "/api/moderation/report", "auth": "required", "description": "Create content report"},
+            {"method": "POST", "path": "/api/moderation/actions/:reportId", "auth": "required", "description": "Take moderation action"}
+          ]
+        },
+        {
+          "category": "Authentication",
+          "endpoints": [
+            {"method": "GET", "path": "/auth-test", "auth": "required", "description": "Test authentication"}
+          ]
+        },
+        {
+          "category": "Monitoring",
+          "endpoints": [
+            {"method": "GET", "path": "/health", "auth": "none", "description": "Health check"},
+            {"method": "GET", "path": "/metrics", "auth": "none", "description": "Service metrics"},
+            {"method": "GET", "path": "/test", "auth": "none", "description": "Test runner"},
+            {"method": "GET", "path": "/status", "auth": "none", "description": "Status page"},
+            {"method": "GET", "path": "/internal/sync-r2", "auth": "dev only", "description": "Sync R2 buckets"}
+          ]
+        }
+      ],
+      "data_models": [
+        {
+          "name": "Video",
+          "properties": ["id", "title", "description", "thumbnailUrl", "videoUrl", "userId", "channelId", "dateCreated", "dateModified", "views", "width", "height", "duration", "fileSize", "originalFormat", "uploadStatus", "tags", "availableResolutions", "comments", "likes", "dislikes", "isPublic", "isLive"],
+          "validation": "Zod schema"
+        },
+        {
+          "name": "Profile",
+          "properties": ["id", "email", "userName", "firstName", "lastName", "avatarUrl", "coverUrl", "dateCreated", "dateModified", "channels", "watchHistory"],
+          "validation": "Zod schema"
+        },
+        {
+          "name": "Channel",
+          "properties": ["id", "userId", "email", "name", "isMain", "avatarUrl", "coverUrl", "dateCreated", "dateModified", "playlists", "videos", "subscribers", "subscriptions", "likes"],
+          "validation": "Zod schema"
+        },
+        {
+          "name": "Playlist",
+          "properties": ["id", "title", "description", "thumbnailUrl", "userId", "channelId", "dateCreated", "dateModified", "videos", "isPublic"],
+          "validation": "Zod schema"
+        },
+        {
+          "name": "Comment",
+          "properties": ["id", "userId", "channelId", "videoId", "text", "dateCreated", "dateModified", "likes", "dislikes", "isEdited", "isDeleted", "isPinned", "replies"],
+          "validation": "Zod schema"
+        },
+        {
+          "name": "LiveStream",
+          "properties": ["id", "title", "description", "userId", "channelId", "dateCreated", "dateModified", "scheduledStartTime", "actualStartTime", "actualEndTime", "status", "isPrivate", "allowChat", "maxViewers", "currentViewers", "peakViewers", "tags", "thumbnailUrl", "streamUrl", "rtmpUrl", "streamKey", "views", "likes", "dislikes", "comments"],
+          "validation": "Zod schema"
+        },
+        {
+          "name": "Report",
+          "properties": ["id", "entityType", "entityId", "reporterId", "reporterChannelId", "reason", "description", "status", "dateCreated", "dateResolved", "moderatorId", "moderatorAction", "moderatorNotes"],
+          "validation": "Zod schema"
+        },
+        {
+          "name": "AnalyticsData",
+          "properties": ["id", "entityType", "entityId", "metric", "value", "timestamp", "metadata"],
+          "validation": "Zod schema"
+        }
+      ],
+      "ui_components": [],
+      "state_management": {
+        "pattern": "Repository pattern with R2 storage",
+        "storage": "Cloudflare R2 buckets",
+        "validation": "Zod schemas",
+        "transformations": "Business to view model transformations"
+      },
+      "auth_approach": {
+        "type": "JWT authentication with OpenAuth",
+        "middleware": ["authMiddleware", "optionalAuthMiddleware"],
+        "validation": ["Full signature verification", "Basic payload validation"],
+        "subjects": "User subjects with id and email",
+        "token_format": "Bearer <token>"
+      },
+      "config_patterns": [
+        {
+          "file": "apps/api-videos/package.json",
+          "type": "Node.js package",
+          "dependencies": ["@al-ummah/shared-types", "@bunny.net/storage-sdk", "@openauthjs/openauth", "chanfana", "hono", "zod"],
+          "scripts": ["dev", "build", "deploy", "type-check", "test"]
+        }
+      ],
+      "integration_points": [
+        "OpenAuth for authentication",
+        "Bunny.net for video streaming and storage",
+        "Cloudflare R2 for data persistence",
+        "Cloudflare Queue for message processing",
+        "WebSocket server for real-time updates",
+        "OpenAPI 3.1 with Chanfana for documentation"
+      ],
+      "testing_strategy": {
+        "framework": "Custom test runner",
+        "test_files": ["src/tests/api.test.ts"],
+        "commands": ["npm run test:api", "npm run test:health", "npm run test:metrics"]
+      },
+      "deployment_config": {
+        "platform": "Cloudflare Workers",
+        "framework": "Hono with Chanfana",
+        "openapi": "Interactive Swagger UI at root",
+        "cors": "Configured for all origins"
+      }
+    },
+    "web": {
+      "project_type": "web",
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/analytics/video",
+          "description": "Video analytics API route",
+          "auth": "server-side"
+        },
+        {
+          "method": "POST",
+          "path": "/api/callback",
+          "description": "OpenAuth callback handler",
+          "auth": "OAuth2 flow"
+        }
+      ],
+      "data_models": [
+        {
+          "name": "VideoPlayer Interface",
+          "file": "src/components/videoPlayer/interface.ts",
+          "properties": ["VideoPlayerConfig", "VideoPlayerState", "VideoPlayerControls"]
+        },
+        {
+          "name": "WebSocket Interface",
+          "file": "src/interfaces/websocket.ts",
+          "properties": ["WebSocketConfig", "WebSocketConnectionState", "WebSocketMessage", "WebSocketSubscription"]
+        },
+        {
+          "name": "Auth Subjects",
+          "file": "src/interfaces/subjects.ts",
+          "properties": ["AuthSubject type definitions"]
+        }
+      ],
+      "ui_components": [
+        {
+          "name": "VideoPlayer",
+          "location": "src/components/VideoPlayer/index.ts",
+          "features": ["Video.js integration", "HLS support", "Quality selection", "Accessibility", "Mobile touch", "Fullscreen/PIP", "Progress preview", "Keyboard shortcuts", "Internationalization"],
+          "dependencies": ["video.js", "videojs-contrib-quality-levels", "videojs-hls-quality-selector", "videojs-sprite-thumbnails"]
+        },
+        {
+          "name": "Subscription Component",
+          "location": "src/components/subscription/index.ts",
+          "features": ["Channel subscription management"]
+        },
+        {
+          "name": "Header Component",
+          "location": "src/components/Header/interfaces.ts",
+          "features": ["Navigation", "User menu", "Authentication"]
+        },
+        {
+          "name": "Account Navigation",
+          "location": "src/components/accountNavigation/interfaces.ts",
+          "features": ["User account management"]
+        },
+        {
+          "name": "Login Component",
+          "location": "src/components/login/interfaces.ts",
+          "features": ["OpenAuth integration", "OAuth2 flow"]
+        }
+      ],
+      "state_management": {
+        "pattern": "React hooks and server actions",
+        "hooks": [
+          "useRealTimeVideoMetrics",
+          "useRealTimeComments", 
+          "useRealTimeNotifications",
+          "useVideoWebSocket",
+          "useWatchProgress",
+          "useExperiment",
+          "useLazyVideo",
+          "useFocusTrap",
+          "useVideoEngagement",
+          "useProfile"
+        ],
+        "server_actions": ["login", "logout", "authenticated"],
+        "client_state": "React state with WebSocket integration"
+      },
+      "auth_approach": {
+        "type": "OpenAuth OAuth2 with server actions",
+        "flow": "Authorization code with PKCE",
+        "storage": "HttpOnly cookies",
+        "tokens": ["access_token", "refresh_token"],
+        "client_integration": "@openauthjs/openauth/client",
+        "middleware": "Next.js middleware.ts"
+      },
+      "config_patterns": [
+        {
+          "file": "apps/web/package.json",
+          "type": "Next.js 15 application",
+          "dependencies": ["@al-ummah/shared-types", "@aws-sdk/client-s3", "@openauthjs/openauth", "next", "react", "video.js", "tailwindcss"],
+          "deployment": ["@opennextjs/cloudflare", "@opennextjs/aws"]
+        }
+      ],
+      "integration_points": [
+        "OpenAuth for authentication",
+        "API client for backend communication",
+        "WebSocket manager for real-time updates",
+        "Video.js for media playback",
+        "Bunny.net integration for video streaming",
+        "Cloudflare deployment with OpenNext",
+        "Bilingual support (English/Arabic) with RTL"
+      ],
+      "testing_strategy": {
+        "framework": "Jest with React Testing Library",
+        "test_files": [
+          "src/__tests__/lib/video/fallback-strategy.test.ts",
+          "src/__tests__/lib/video/error-handler.test.ts",
+          "src/lib/video/i18n/__tests__/i18n.test.ts",
+          "src/lib/__tests__/profile-helpers.test.ts",
+          "src/lib/__tests__/utility.test.ts",
+          "src/lib/__tests__/api-client.test.ts",
+          "src/lib/storage/__tests__/quota-manager.test.ts",
+          "src/lib/auth/__tests__/client-token.test.ts",
+          "src/services/experiments/__tests__/ab-testing-security.test.ts",
+          "src/services/analytics/__tests__/video-analytics.test.ts"
+        ],
+        "coverage": "Unit tests for core functionality",
+        "commands": ["npm run test", "npm run test:watch", "npm run test:coverage"]
+      },
+      "deployment_config": {
+        "framework": "Next.js 15 with App Router",
+        "deployment": "Cloudflare Workers via OpenNext",
+        "environments": ["development", "staging", "production", "preview"],
+        "features": ["Bilingual routes", "Server components", "Client components", "API routes", "Middleware"]
+      }
+    }
+  }
+}

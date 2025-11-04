@@ -5,7 +5,7 @@
   aspect-ratio: 16 / 9 !important;
   width: 100% !important;
   position: relative !important;
-  overflow: hidden !important;
+  overflow: visible !important; /* Allow quality menu to extend outside container */
 }
 
 /* Override Video.js's paddingTop hack for fluid mode */
@@ -31,6 +31,7 @@
   width: 100% !important;
   height: 100% !important;
   object-fit: contain !important;
+  overflow: hidden !important; /* Clip video content to maintain aspect ratio */
 }
 
 /* CSS Custom Properties for Video Player */
@@ -78,6 +79,20 @@
   background-color: oklch(var(--primary) / 1);
 }
 
+/* Enable pointer events for click-to-play functionality */
+.video-js {
+  cursor: pointer; /* Show that video is clickable */
+}
+
+/* Ensure all interactive children have pointer events */
+.video-js .vjs-control-bar,
+.video-js .vjs-big-play-button,
+.video-js .vjs-quality-selector,
+.video-js .vjs-menu-button-popup,
+.video-js .vjs-menu {
+  pointer-events: auto !important;
+}
+
 /* Control bar styling - WCAG 2.1 AA compliant contrast */
 /* V3 Design: 64px height with vertically centered controls */
 .video-js .vjs-control-bar {
@@ -94,6 +109,12 @@
   align-items: center; /* Vertically center all controls */
   height: 4rem; /* 64px - matches V3 design */
   min-height: 4rem; /* Ensure adequate height for controls */
+  position: absolute !important; /* Position at bottom of video */
+  bottom: 0 !important; /* Stick to bottom */
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 1000 !important; /* Very high z-index to be above everything */
+  overflow: visible !important; /* Allow quality menu to extend outside control bar */
 }
 
 /* Consolidated focus indicators for control buttons */
@@ -218,6 +239,58 @@
   font-size: 0.9375rem !important;
   font-weight: 600;
   color: oklch(var(--foreground));
+}
+
+/* Quality selector and menu button - allow overflow for menu */
+.video-js .vjs-quality-selector,
+.video-js .vjs-menu-button-popup {
+  overflow: visible !important; /* Allow menu to extend outside */
+  position: relative !important; /* Establish positioning context for absolute menu */
+}
+
+/* Quality selector menu - Position ABOVE button to prevent clipping */
+.video-js .vjs-quality-selector .vjs-menu,
+.video-js .vjs-menu-button-popup .vjs-menu {
+  /* Position menu above the button - use transform to move it up */
+  position: absolute !important;
+  bottom: 100% !important; /* Start above button */
+  top: auto !important; /* Override any top positioning */
+  left: 50% !important; /* Center horizontally */
+  transform: translateX(-50%) translateY(-0.5rem) !important; /* Center + gap */
+
+  /* Ensure menu appears above everything */
+  z-index: 9999 !important;
+
+  /* Visual styling */
+  background: oklch(var(--card)) !important;
+  border: 1px solid oklch(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
+              0 4px 6px -4px rgba(0, 0, 0, 0.2) !important;
+  min-width: 8rem !important; /* 128px minimum width */
+  max-width: 12rem !important; /* Maximum width */
+
+  /* Constrain menu height and enable scrolling */
+  max-height: 20rem !important; /* 320px maximum */
+  overflow-y: auto !important; /* Scroll if content exceeds max-height */
+  overflow-x: hidden !important;
+}
+
+/* Menu content - let it size naturally within scrollable parent */
+.video-js .vjs-quality-selector .vjs-menu .vjs-menu-content,
+.video-js .vjs-menu-button-popup .vjs-menu .vjs-menu-content {
+  /* Remove constraints - let parent handle scrolling */
+  max-height: none !important;
+  overflow: visible !important;
+  position: static !important; /* Normal flow to give parent height */
+}
+
+/* RTL support for quality selector menu */
+[dir="rtl"] .video-js .vjs-quality-selector .vjs-menu,
+[dir="rtl"] .video-js .vjs-menu-button-popup .vjs-menu {
+  left: 50% !important; /* Keep centered in RTL */
+  right: auto !important;
+  transform: translateX(-50%) translateY(-0.5rem) !important; /* Keep centered + gap in RTL */
 }
 
 /* Enhanced RTL support */

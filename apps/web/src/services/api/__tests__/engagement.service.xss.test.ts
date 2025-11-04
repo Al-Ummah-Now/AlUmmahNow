@@ -5,7 +5,7 @@
  * to ensure all user input is properly validated and sanitized.
  */
 
-import { VideoEngagementService, getEngagementService } from '../engagement.service';
+import { VideoEngagementService } from '../engagement.service';
 
 describe('VideoEngagementService - XSS Protection', () => {
   let service: VideoEngagementService;

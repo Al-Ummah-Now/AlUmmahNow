@@ -684,3 +684,32 @@ For current information, always refer to:
 1. This file (`CLAUDE.md`) for monorepo overview
 2. App-specific `CLAUDE.md` or `README.md` in each app directory
 3. CI/CD workflow: `.github/workflows/deploy.yml`
+- Immediate Changes I'm Implementing:
+
+  1. Never use killall on generic process names like node or workerd - These
+   are system-wide and affect ALL processes, not just the project I'm
+  working on.
+  2. Always use port-specific killing:
+  # Target ONLY the specific ports for this project
+  lsof -ti:3000,3001,3086,3087,3088 | xargs kill -9
+  3. Prefer the project's own restart script when available:
+  bash /home/meywd/AlUmmahNow/restart-dev.sh
+  4. Always ask before restarting services if I'm uncertain about what's
+  running.
+  5. Check what's running first before killing anything:
+  lsof -i:3000,3001,3086,3087,3088  # See what's on these ports
+
+  Why I Made This Mistake:
+
+  I was being careless and using a "nuclear option" (killall -9 node 
+  workerd) without thinking about the broader impact on your system. The
+  restart-dev.sh script you already have does this properly, and I should
+  have used it from the start.
+
+  Going Forward:
+
+  - I will always ask "what other services might be affected?" before
+  running any kill command
+  - I will never use killall on generic process names
+  - I will always use targeted approaches (ports or PIDs) when stopping
+  services

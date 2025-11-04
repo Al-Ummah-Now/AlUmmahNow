@@ -204,14 +204,15 @@ describe('ABTestingEngine Security Tests', () => {
       const experiment = {
         id: 'security-test',
         name: 'Security Test',
+        description: 'Security test experiment',
         enabled: true,
         trafficAllocation: 100,
         targetAudience: {},
-        startDate: new Date(Date.now() - 86400000).toISOString(),
-        endDate: new Date(Date.now() + 86400000).toISOString(),
+        startDate: Date.now() - 86400000,
+        endDate: Date.now() + 86400000,
         variants: {
-          control: { name: 'Control', config: {} },
-          treatment: { name: 'Treatment', config: {} }
+          control: { id: 'control', name: 'Control', description: 'Control variant', config: {} },
+          treatment: { id: 'treatment', name: 'Treatment', description: 'Treatment variant', config: {} }
         }
       };
 
@@ -231,14 +232,15 @@ describe('ABTestingEngine Security Tests', () => {
       const experiment1 = {
         id: 'exp1',
         name: 'Experiment 1',
+        description: 'Test experiment 1',
         enabled: true,
         trafficAllocation: 100,
         targetAudience: {},
-        startDate: new Date(Date.now() - 86400000).toISOString(),
-        endDate: new Date(Date.now() + 86400000).toISOString(),
+        startDate: Date.now() - 86400000,
+        endDate: Date.now() + 86400000,
         variants: {
-          control: { name: 'Control', config: {} },
-          treatment: { name: 'Treatment', config: {} }
+          control: { id: 'control', name: 'Control', description: 'Control variant', config: {} },
+          treatment: { id: 'treatment', name: 'Treatment', description: 'Treatment variant', config: {} }
         }
       };
 

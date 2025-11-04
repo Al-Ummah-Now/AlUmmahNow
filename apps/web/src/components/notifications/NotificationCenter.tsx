@@ -108,8 +108,7 @@ export function NotificationCenter({ user }: NotificationCenterProps) {
   const {
     notifications,
     unreadCount,
-    markAsRead,
-    isConnected
+    markAsRead
   } = useRealTimeNotifications({
     userId: user?.id,
     maxNotifications: 10,
@@ -145,15 +144,6 @@ export function NotificationCenter({ user }: NotificationCenterProps) {
 
   return (
     <>
-      {/* Connection status indicator */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className={`fixed top-2 right-2 z-40 text-xs px-2 py-1 rounded ${
-          isConnected ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {isConnected ? '🟢 Live' : '🔴 Offline'}
-        </div>
-      )}
-
       {/* Notification badge (for header integration) */}
       {unreadCount > 0 && (
         <div className="fixed top-4 left-4 z-40">

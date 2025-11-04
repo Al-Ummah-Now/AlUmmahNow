@@ -1,4 +1,4 @@
-import { getCLS, getFID, getFCP, getLCP, getTTFB, type Metric } from 'web-vitals';
+import { onCLS, onINP, onFCP, onLCP, onTTFB, type Metric } from 'web-vitals';
 
 interface WebVitalsConfig {
   analyticsEndpoint: string;
@@ -29,11 +29,11 @@ export class WebVitalsMonitor {
   }
 
   private initializeTracking(): void {
-    getCLS(this.handleMetric.bind(this));
-    getFID(this.handleMetric.bind(this));
-    getFCP(this.handleMetric.bind(this));
-    getLCP(this.handleMetric.bind(this));
-    getTTFB(this.handleMetric.bind(this));
+    onCLS(this.handleMetric.bind(this));
+    onINP(this.handleMetric.bind(this));
+    onFCP(this.handleMetric.bind(this));
+    onLCP(this.handleMetric.bind(this));
+    onTTFB(this.handleMetric.bind(this));
   }
 
   private handleMetric(metric: Metric): void {

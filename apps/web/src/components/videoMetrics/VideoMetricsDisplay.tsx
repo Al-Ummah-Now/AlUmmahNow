@@ -102,7 +102,7 @@ interface LiveViewerIndicatorProps {
 }
 
 export function LiveViewerIndicator({ channelId, className = "" }: LiveViewerIndicatorProps) {
-  const { viewers, viewerCount, isConnected } = useRealTimePresence(channelId);
+  const { viewerCount, isConnected } = useRealTimePresence(channelId);
 
   if (!isConnected || viewerCount === 0) {
     return null;
@@ -122,23 +122,10 @@ export function LiveViewerIndicator({ channelId, className = "" }: LiveViewerInd
         </span>
       </div>
 
-      {/* Show some viewer avatars if available */}
-      {viewers.length > 0 && viewers.length <= 3 && (
-        <div className="flex -space-x-2">
-          {viewers.slice(0, 3).map((viewer, _index) => (
-            <div
-              key={viewer.userId}
-              className="w-6 h-6 bg-gray-300 rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center text-xs"
-              title={viewer.displayName || 'Viewer'}
-            >
-              {viewer.displayName ? viewer.displayName[0].toUpperCase() : '👤'}
-            </div>
-          ))}
-          {viewerCount > 3 && (
-            <div className="w-6 h-6 bg-gray-500 rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center text-xs text-white">
-              +{viewerCount - 3}
-            </div>
-          )}
+      {/* Note: Individual viewer tracking disabled for privacy */}
+      {viewerCount > 0 && (
+        <div className="flex items-center gap-1 text-xs text-gray-500">
+          <span>👥</span>
         </div>
       )}
     </div>

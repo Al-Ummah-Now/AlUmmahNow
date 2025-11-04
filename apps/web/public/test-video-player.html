@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Player Test - Quality Selector</title>
+
+  <!-- Video.js CSS -->
+  <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+
+  <!-- Video.js Quality Selector Plugin CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/videojs-hls-quality-selector@1.1.4/dist/videojs-hls-quality-selector.css" rel="stylesheet" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 2rem;
+    }
+
+    h1 {
+      margin-bottom: 1rem;
+      color: #f59e0b;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .player-wrapper {
+      background: #000;
+      border-radius: 0.5rem;
+      overflow: visible;
+      margin-bottom: 2rem;
+    }
+
+    /* Force 16:9 aspect ratio */
+    .custom-video-player {
+      aspect-ratio: 16 / 9;
+      width: 100%;
+      position: relative;
+      overflow: visible !important;
+    }
+
+    .video-js {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Control bar styling */
+    .video-js .vjs-control-bar {
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.4));
+      backdrop-filter: blur(8px);
+      padding: 0 1.25rem;
+      gap: 0.75rem;
+      display: flex;
+      align-items: center;
+      height: 4rem;
+      position: absolute !important;
+      bottom: 0 !important;
+      z-index: 1000 !important;
+      overflow: visible !important;
+    }
+
+    /* Quality selector button styling */
+    .video-js .vjs-quality-selector,
+    .video-js .vjs-menu-button-popup {
+      overflow: visible !important;
+      position: relative;
+    }
+
+    /* THIS IS THE CURRENT IMPLEMENTATION - NO EXPLICIT MENU POSITIONING */
+    .video-js .vjs-quality-selector .vjs-menu,
+    .video-js .vjs-menu-button-popup .vjs-menu {
+      z-index: 9999 !important;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 0.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+
+    .video-js .vjs-quality-selector {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 0.375rem;
+      padding: 0.625rem 0.75rem;
+    }
+
+    .info {
+      background: #2a2a2a;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      border: 1px solid #444;
+    }
+
+    .info h2 {
+      color: #f59e0b;
+      margin-bottom: 1rem;
+    }
+
+    .info p {
+      margin-bottom: 0.5rem;
+      line-height: 1.6;
+    }
+
+    .info code {
+      background: #1a1a1a;
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.25rem;
+      color: #60a5fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Video Player Test - Quality Selector Clipping Issue</h1>
+
+    <div class="player-wrapper">
+      <div class="custom-video-player">
+        <video
+          id="test-video"
+          class="video-js vjs-big-play-centered"
+          controls
+          preload="auto"
+          width="1280"
+          height="720"
+          data-setup='{}'
+        >
+          <source src="https://vz-215a1ffd-a5a.b-cdn.net/0a3a5049-0999-4ca4-9003-d507a13d39b4/playlist.m3u8" type="application/x-mpegURL">
+          <p class="vjs-no-js">
+            To view this video please enable JavaScript
+          </p>
+        </video>
+      </div>
+    </div>
+
+    <div class="info">
+      <h2>Test Instructions:</h2>
+      <p><strong>1.</strong> Hover over the video player to show controls</p>
+      <p><strong>2.</strong> Look for the quality selector button (usually shows resolution like "720p" or "Auto")</p>
+      <p><strong>3.</strong> Click the quality selector button</p>
+      <p><strong>4.</strong> Observe: <code>Does the menu appear ABOVE the button or does it clip at the bottom of the video?</code></p>
+      <p><strong>5.</strong> Take a screenshot for documentation</p>
+
+      <h2 style="margin-top: 1.5rem;">Expected Behavior:</h2>
+      <p>✅ Menu should open UPWARD (above the button) to prevent clipping</p>
+      <p>✅ Menu should be fully visible with all quality options</p>
+      <p>✅ Menu should have proper spacing from the button</p>
+
+      <h2 style="margin-top: 1.5rem;">Current Issue:</h2>
+      <p>❌ Menu likely opens DOWNWARD and gets clipped by container bottom edge</p>
+      <p>❌ Some quality options may not be clickable</p>
+    </div>
+  </div>
+
+  <!-- Video.js -->
+  <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+
+  <!-- Video.js HLS Quality Levels -->
+  <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@2.2.0/dist/videojs-contrib-quality-levels.min.js"></script>
+
+  <!-- Video.js HLS Quality Selector Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/videojs-hls-quality-selector@1.1.4/dist/videojs-hls-quality-selector.min.js"></script>
+
+  <script>
+    // Initialize Video.js player with quality selector
+    const player = videojs('test-video', {
+      controls: true,
+      autoplay: false,
+      preload: 'auto',
+      fluid: false,
+      responsive: false,
+      aspectRatio: '16:9',
+    });
+
+    // Initialize HLS Quality Selector plugin
+    player.hlsQualitySelector({
+      displayCurrentQuality: true,
+    });
+
+    player.ready(function() {
+      console.log('Player is ready! Video.js version:', videojs.VERSION);
+      console.log('Quality selector plugin loaded');
+
+      // Log quality levels when they're available
+      const qualityLevels = player.qualityLevels();
+      qualityLevels.on('addqualitylevel', function(event) {
+        console.log('Quality level added:', event.qualityLevel);
+      });
+    });
+  </script>
+</body>
+</html>

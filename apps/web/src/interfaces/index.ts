@@ -13,7 +13,7 @@ export interface VideoObject {
     userId: string;
     channel: string;
     channelId: string | null;
-    channelThumbnailUrl: string; // Fixed: API returns channelThumbnailUrl, not channelAvatarUrl
+    channelAvatarUrl: string; // Updated to match shared-types interface
     channelName: string;
     dateCreated: string;
     dateModified: string;

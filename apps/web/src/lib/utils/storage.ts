@@ -12,10 +12,7 @@
  * - Configurable data retention policies
  */
 
-interface StorageItem {
-  timestamp?: string | number;
-  [key: string]: any;
-}
+
 
 /**
  * Storage Manager class for safe localStorage operations
@@ -41,9 +38,12 @@ export class StorageManager {
 
     let size = 0;
     try {
-      for (const key in localStorage) {
-        if (localStorage.hasOwnProperty(key)) {
-          const value = localStorage.getItem(key);
+      // Use localStorage.length and key() method to iterate through stored items
+      // This works better with mocks than Object.keys()
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key) {
+          const value = window.localStorage.getItem(key);
           if (value) {
             // UTF-16 encoding: 2 bytes per character
             size += (key.length + value.length) * 2;
@@ -339,7 +339,6 @@ export class StorageManager {
         }
       });
 
-      const newSize = this.getStorageSize();
       const newUsage = this.getStorageUsagePercentage();
       console.log(`[StorageManager] Emergency cleanup complete. New usage: ${newUsage.toFixed(1)}%`);
     } catch (error) {
@@ -370,8 +369,10 @@ export class StorageManager {
     const items: { key: string; size: number }[] = [];
 
     try {
-      for (const key in localStorage) {
-        if (localStorage.hasOwnProperty(key)) {
+      // Use localStorage.length and key() method like getStorageSize()
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
           const value = localStorage.getItem(key);
           if (value) {
             const size = (key.length + value.length) * 2;

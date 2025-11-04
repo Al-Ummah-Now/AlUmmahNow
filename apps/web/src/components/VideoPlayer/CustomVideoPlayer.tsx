@@ -672,7 +672,10 @@ export default function CustomVideoPlayer({
   }
 
   return (
-    <div className={`custom-video-player aspect-video ${className}`} dir={dir}>
+    <div
+      className={`custom-video-player aspect-video ${className}`}
+      dir={dir}
+    >
       {/* Accessibility: Hidden live region for screen reader announcements */}
       <div
         role="status"

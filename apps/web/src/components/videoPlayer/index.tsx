@@ -24,7 +24,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   return (
     <>
       <div className="flex w-full mt-0 relative dark:bg-gray-900">
-        <div className="w-full rounded-lg overflow-hidden 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
+        <div className="w-full rounded-lg overflow-visible 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
           {/* New Custom Video.js Player */}
           <CustomVideoPlayer
             videoId={options.id}
