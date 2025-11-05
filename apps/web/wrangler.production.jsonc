@@ -29,7 +29,8 @@
     "Issuer": "https://auth.alummahnow.net",
     "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
     "NEXTJS_ENV": "production",
-    "API_URL": "https://videos.api.alummahnow.net"
+    "API_URL": "https://videos.api.alummahnow.net",
+    "NEXT_PUBLIC_API_URL": "https://videos.api.alummahnow.net"
   },
   "r2_buckets": [
     {
