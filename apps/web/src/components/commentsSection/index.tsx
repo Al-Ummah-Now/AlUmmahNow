@@ -79,12 +79,15 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
         <h2 className="text-lg font-bold">
           Comments ({commentsCount})
         </h2>
-        <div className="flex items-center gap-2 text-sm">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
-          <span className="text-gray-500">
-            {isConnected ? 'Live' : 'Offline'}
-          </span>
-        </div>
+        {/* Connection status - only show in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="flex items-center gap-2 text-sm">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span className="text-gray-500">
+              {isConnected ? 'Live' : 'Offline'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Add comment form */}

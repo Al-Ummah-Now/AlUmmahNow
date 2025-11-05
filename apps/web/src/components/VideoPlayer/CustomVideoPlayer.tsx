@@ -574,6 +574,45 @@ export default function CustomVideoPlayer({
   }, []);
 
   /**
+   * Effect to handle videoId changes - update player source when video changes
+   * This allows navigation between videos without full player reinitialization
+   */
+  useEffect(() => {
+    if (!playerRef.current || !videoId) return;
+
+    const player = playerRef.current;
+    const currentSrc = player.currentSrc();
+    const newSrc = `https://vz-215a1ffd-a5a.b-cdn.net/${videoId}/playlist.m3u8`;
+
+    // Only update if the source actually changed
+    if (currentSrc && currentSrc !== newSrc) {
+      console.log(`[CustomVideoPlayer] Video ID changed, updating source to ${videoId}`);
+
+      // Reset quartiles for new video
+      quartilesFiredRef.current.clear();
+      lastProgressTrackRef.current = 0;
+
+      // Update player source
+      player.src(sources);
+
+      if (poster) {
+        player.poster(poster);
+      }
+
+      // Reset analytics for new video
+      if (analyticsRef.current) {
+        analyticsRef.current.destroy();
+        if (enableAnalytics) {
+          analyticsRef.current = new VideoAnalytics(videoId, userId);
+        }
+      }
+
+      // Load the new video
+      player.load();
+    }
+  }, [videoId, sources, poster, enableAnalytics, userId]);
+
+  /**
    * Cleanup effect - runs when component unmounts
    *
    * React Strict Mode Note:

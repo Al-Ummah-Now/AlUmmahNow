@@ -58,12 +58,12 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
       setIsConnected(state.status === 'connected');
     });
 
-    // Auto-connect if user is authenticated
-    if (user?.id) {
-      wsManagerRef.current.connect(user.id).catch((error) => {
-        console.error('Failed to connect to WebSocket:', error);
-      });
-    }
+    // Auto-connect for both authenticated and anonymous users
+    // Anonymous users can view real-time updates but cannot post
+    const userId = user?.id || `anonymous_${Date.now()}`;
+    wsManagerRef.current.connect(userId).catch((error) => {
+      console.error('Failed to connect to WebSocket:', error);
+    });
 
     return () => {
       unsubscribeStateChange();
@@ -76,16 +76,15 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Reconnect when user changes
+  // Reconnect when user changes (from anonymous to authenticated or vice versa)
   useEffect(() => {
-    if (wsManagerRef.current && user?.id) {
+    if (wsManagerRef.current) {
       if (!wsManagerRef.current.isConnected()) {
-        wsManagerRef.current.connect(user.id).catch((error) => {
+        const userId = user?.id || `anonymous_${Date.now()}`;
+        wsManagerRef.current.connect(userId).catch((error) => {
           console.error('Failed to reconnect to WebSocket:', error);
         });
       }
-    } else if (wsManagerRef.current && !user?.id) {
-      wsManagerRef.current.disconnect();
     }
   }, [user?.id]);
 

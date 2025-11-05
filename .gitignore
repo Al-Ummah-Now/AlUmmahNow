@@ -67,3 +67,4 @@ logs/
 .github/chatmodes/
 .playwright-mcp/
 bmad/
+*.backup

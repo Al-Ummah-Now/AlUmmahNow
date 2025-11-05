@@ -17,31 +17,50 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * CSP configuration for different environments
+ * Generate CSP policy based on environment variables
  */
-const CSP_POLICIES = {
-  development: [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vjs.zencdn.net https://assets.mediadelivery.net",
-    "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net https://cdnjs.cloudflare.com",
-    "media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net blob:",
-    "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://localhost:* https://ws.alummahnow.net wss://ws.alummahnow.net wss://localhost:* https://*.b-cdn.net",
-    "img-src 'self' data: https: blob:",
-    "font-src 'self' data: https://cdnjs.cloudflare.com",
-    "worker-src 'self' blob:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    "upgrade-insecure-requests"
-  ].join('; '),
+function generateCSP(isDevelopment: boolean): string {
+  // Get URLs from environment variables
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  const websocketUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || '';
+  const bunnyPullZone = process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL || '';
 
-  production: [
+  // Extract domains from URLs
+  const apiDomain = apiUrl ? new URL(apiUrl).origin : '';
+  const wsDomain = websocketUrl ? websocketUrl.replace(/^ws(s)?:\/\/([^\/]+).*$/, 'https://$2') : '';
+  const wssDomain = websocketUrl ? websocketUrl.replace(/^ws:/, 'wss:').replace(/^wss:\/\/([^\/]+).*$/, 'wss://$1') : '';
+
+  const baseConnectSrc = [
+    "'self'",
+    "https://*.b-cdn.net",
+    bunnyPullZone ? `https://${bunnyPullZone}` : '',
+    apiDomain,
+  ].filter(Boolean);
+
+  const devConnectSrc = [
+    ...baseConnectSrc,
+    "http://127.0.0.1:*",
+    "http://localhost:*",
+    "ws://localhost:*",
+    "wss://localhost:*",
+  ];
+
+  const prodConnectSrc = [
+    ...baseConnectSrc,
+    wsDomain,
+    wssDomain,
+  ];
+
+  const connectSrc = isDevelopment ? devConnectSrc : prodConnectSrc;
+
+  const policy = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vjs.zencdn.net https://assets.mediadelivery.net https://static.cloudflareinsights.com",
+    isDevelopment
+      ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vjs.zencdn.net https://assets.mediadelivery.net http://assets.mediadelivery.net"
+      : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vjs.zencdn.net https://assets.mediadelivery.net https://static.cloudflareinsights.com",
     "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net https://cdnjs.cloudflare.com",
     "media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net blob:",
-    "connect-src 'self' https://ws.alummahnow.net wss://ws.alummahnow.net https://*.b-cdn.net https://api.alummahnow.net https://videos.api.alummahnow.net",
+    `connect-src ${connectSrc.filter(Boolean).join(' ')}`,
     "img-src 'self' data: https: blob:",
     "font-src 'self' data: https://cdnjs.cloudflare.com",
     "worker-src 'self' blob:",
@@ -49,9 +68,15 @@ const CSP_POLICIES = {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests"
-  ].join('; ')
-};
+  ];
+
+  // Only add upgrade-insecure-requests in production or when not using localhost
+  if (!isDevelopment) {
+    policy.push("upgrade-insecure-requests");
+  }
+
+  return policy.join('; ');
+}
 
 /**
  * Additional security headers for enhanced protection
@@ -70,25 +95,25 @@ const SECURITY_HEADERS = {
  */
 export function middleware(_request: NextRequest) {
   const response = NextResponse.next();
-  
+
   // Determine environment
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
-  // Add Content Security Policy
-  const csp = isDevelopment ? CSP_POLICIES.development : CSP_POLICIES.production;
+
+  // Generate and add Content Security Policy
+  const csp = generateCSP(isDevelopment);
   response.headers.set('Content-Security-Policy', csp);
-  
+
   // Add additional security headers
   Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
     response.headers.set(header, value);
   });
-  
+
   // Add security-related debug headers in development
   if (isDevelopment) {
     response.headers.set('X-CSP-Debug', 'development-mode');
     response.headers.set('X-Security-Headers', 'enabled');
   }
-  
+
   return response;
 }
 

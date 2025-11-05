@@ -19,7 +19,15 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   ], [options.id]);
 
   // Use poster from options (API-provided thumbnail URL) or fallback to default pattern
-  const posterUrl = options.poster || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
+  // Ensure the poster URL has the protocol (https://) - some API responses return relative URLs
+  const posterUrl = useMemo(() => {
+    const poster = options.poster || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
+    // If the poster URL doesn't start with http:// or https://, prepend https://
+    if (poster && !poster.startsWith('http://') && !poster.startsWith('https://')) {
+      return `https://${poster}`;
+    }
+    return poster;
+  }, [options.poster, options.id]);
 
   return (
     <>
