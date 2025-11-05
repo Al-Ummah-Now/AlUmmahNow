@@ -38,10 +38,10 @@ const CSP_POLICIES = {
 
   production: [
     "default-src 'self'",
-    "script-src 'self' https://vjs.zencdn.net https://assets.mediadelivery.net https://static.cloudflareinsights.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vjs.zencdn.net https://assets.mediadelivery.net https://static.cloudflareinsights.com",
     "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net https://cdnjs.cloudflare.com",
     "media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net blob:",
-    "connect-src 'self' https://ws.alummahnow.net wss://ws.alummahnow.net https://*.b-cdn.net https://api.alummahnow.net",
+    "connect-src 'self' https://ws.alummahnow.net wss://ws.alummahnow.net https://*.b-cdn.net https://api.alummahnow.net https://videos.api.alummahnow.net",
     "img-src 'self' data: https: blob:",
     "font-src 'self' data: https://cdnjs.cloudflare.com",
     "worker-src 'self' blob:",
