@@ -71,11 +71,13 @@ describe('LocalStorageQuotaManager', () => {
     });
 
     it('should detect insufficient quota', () => {
-      const largeValue = 'x'.repeat(50 * 1024); // 50KB of data
+      // Test with a very large additional size that would exceed the 5MB limit
+      const hugeAdditionalSize = 10 * 1024 * 1024; // 10MB additional data
 
-      const quotaInfo = quotaManager.checkQuota(largeValue.length * 2);
+      const quotaInfo = quotaManager.checkQuota(hugeAdditionalSize);
 
       expect(quotaInfo.available).toBe(false);
+      expect(quotaInfo.estimatedUsage).toBeGreaterThan(5 * 1024 * 1024); // Should exceed 5MB
     });
   });
 
