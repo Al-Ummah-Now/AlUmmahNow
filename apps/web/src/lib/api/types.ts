@@ -216,3 +216,35 @@ export interface AnalyticsQueryParams extends ListQueryParams {
   videoId?: string;
   channelId?: string;
 }
+
+// Live Stream Types
+export interface LiveStreamCreateRequest {
+  title: string;
+  description?: string;
+  scheduledStartTime?: string;
+  thumbnailUrl?: string;
+  category?: string;
+  tags?: string[];
+  language?: 'en' | 'ar';
+  isPrivate?: boolean;
+  allowChat?: boolean;
+}
+
+export interface LiveStreamUpdateRequest {
+  title?: string;
+  description?: string;
+  scheduledStartTime?: string;
+  actualStartTime?: string;
+  actualEndTime?: string;
+  status?: 'scheduled' | 'live' | 'ended' | 'cancelled';
+  thumbnailUrl?: string;
+  category?: string;
+  tags?: string[];
+  isPrivate?: boolean;
+  allowChat?: boolean;
+}
+
+export interface LiveStreamQueryParams extends ListQueryParams {
+  status?: 'scheduled' | 'live' | 'ended' | 'cancelled';
+  channelId?: string;
+}
