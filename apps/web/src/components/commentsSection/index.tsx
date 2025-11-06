@@ -91,12 +91,12 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
       </div>
 
       {/* Add comment form */}
-      {user && profile && (
+      {user && profile ? (
         <div className="space-y-3 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
           <div className="flex items-start space-x-3">
-            <img 
-              src={profile.avatarUrl || "/avatar.png"} 
-              alt="Your avatar" 
+            <img
+              src={profile.avatarUrl || "/avatar.png"}
+              alt="Your avatar"
               className="w-8 h-8 rounded-full"
             />
             <div className="flex-1">
@@ -126,6 +126,18 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
               {isSubmitting ? "Commenting..." : "Comment"}
             </Button>
           </div>
+        </div>
+      ) : (
+        <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 text-center">
+          <p className="text-gray-600 dark:text-gray-400 mb-3">
+            Sign in to join the conversation
+          </p>
+          <Button
+            size="sm"
+            onClick={() => window.location.href = '/login'}
+          >
+            Sign In to Comment
+          </Button>
         </div>
       )}
 
