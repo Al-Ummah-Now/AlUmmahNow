@@ -8,11 +8,11 @@ import {
   ApiHeaders,
 } from "./types";
 
-// Validate API URL is configured
+// Get API URL - log error if not configured but don't crash the app
 const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
 if (!baseUrl) {
-  throw new Error(
-    '[LiveStreamsAPI] NEXT_PUBLIC_API_URL or API_URL environment variable is required'
+  console.error(
+    '[LiveStreamsAPI] NEXT_PUBLIC_API_URL or API_URL environment variable is not configured. API calls will fail.'
   );
 }
 
@@ -25,6 +25,11 @@ export class LiveStreamsAPI {
     params?: LiveStreamQueryParams,
     headers?: ApiHeaders
   ): Promise<ApiResponse<PaginationResponse<LiveStream>> | null> {
+    if (!baseUrl) {
+      console.error('[LiveStreamsAPI.list] API URL not configured');
+      return null;
+    }
+
     try {
       const queryParams = new URLSearchParams();
       if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -63,6 +68,11 @@ export class LiveStreamsAPI {
     data: LiveStreamCreateRequest,
     authToken: string
   ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+    if (!baseUrl) {
+      console.error('[LiveStreamsAPI.create] API URL not configured');
+      return null;
+    }
+
     // Input validation
     if (!authToken || authToken.trim() === '') {
       console.error('[LiveStreamsAPI.create] authToken is required');
@@ -107,6 +117,11 @@ export class LiveStreamsAPI {
     data: LiveStreamUpdateRequest,
     authToken: string
   ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+    if (!baseUrl) {
+      console.error('[LiveStreamsAPI.update] API URL not configured');
+      return null;
+    }
+
     // Input validation
     if (!streamId || streamId.trim() === '') {
       console.error('[LiveStreamsAPI.update] streamId is required');
