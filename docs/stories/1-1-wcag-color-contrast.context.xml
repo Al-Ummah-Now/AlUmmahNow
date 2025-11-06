@@ -1,0 +1,102 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1</storyId>
+    <title>Fix Critical WCAG Color Contrast Violations</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-05T16:20:00.000Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-1-wcag-color-contrast.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>visually impaired user</asA>
+    <iWant>sufficient color contrast between text and background elements</iWant>
+    <soThat>I can read and navigate the video player interface without difficulty</soThat>
+    <tasks>- [ ] Audit existing color palette and identify non-compliant contrast ratios (AC: 1)
+  - [ ] Install and configure axe-core for automated contrast testing
+  - [ ] Run comprehensive contrast audit on all video player UI elements
+  - [ ] Document all elements failing WCAG 2.1 AA standards
+- [ ] Update CSS color palette to meet contrast requirements (AC: 1, 2)
+  - [ ] Modify Tailwind CSS custom properties for compliant colors
+  - [ ] Update video player component styles with new color palette
+  - [ ] Ensure both light and dark themes use compliant colors
+- [ ] Implement enhanced contrast indicators for interactive elements (AC: 2)
+  - [ ] Add high-contrast focus states for all interactive elements
+  - [ ] Implement hover and active states with enhanced contrast
+  - [ ] Test contrast indicators across all interactive components
+- [ ] Ensure color is not only method of conveying information (AC: 3)
+  - [ ] Add text labels or icons for color-only indicators
+  - [ ] Implement ARIA attributes for color-coded information
+  - [ ] Test interface with color blindness simulation
+- [ ] Automated accessibility testing implementation (AC: 4)
+  - [ ] Integrate axe-core testing into development workflow
+  - [ ] Set up WAVE API integration for automated testing
+  - [ ] Configure CI/CD pipeline to run accessibility tests
+  - [ ] Ensure zero contrast violations in automated tests
+- [ ] Cross-theme contrast compliance validation (AC: 5)
+  - [ ] Test contrast ratios in both light and dark themes
+  - [ ] Verify theme switching maintains contrast compliance
+  - [ ] Document contrast compliance for all theme variations</tasks>
+  </story>
+
+  <acceptanceCriteria>1. Given video player interface is loaded, when I view any text element, then contrast ratio meets WCAG 2.1 AA standards (4.5:1 for normal text, 3:1 for large text)
+2. Given video player is loaded, when I interact with any UI element, then all interactive elements have enhanced contrast indicators
+3. Given video player is loaded, when I view the interface, then color is not the only method of conveying information
+4. Given automated accessibility testing is run, when axe-core and WAVE tools scan the video player, then zero contrast violations are detected
+5. Given both light and dark themes are active, when I switch themes, then contrast compliance is maintained in both themes</acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Detailed Design - Services and Modules" snippet="Accessibility Layer: WCAG compliance implementation and testing utilities located in apps/web/src/components/accessibility/ with ContrastChecker, KeyboardNavigation, FocusManager, ScreenReaderSupport components"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="System Architecture Alignment" snippet="Frontend Components: Video player components in apps/web/src/components/video-player/, UI component library in src/components/ui/, CSS/Tailwind styling system for theme compliance"/>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Accessibility Level" snippet="WCAG 2.1 AA Compliance: Screen reader compatibility, Keyboard navigation support, Color contrast compliance, Alternative text for all images, Video captions and transcripts"/>
+    </docs>
+    <code>
+      <artifact path="apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx" kind="component" symbol="CustomVideoPlayer" lines="1-41" reason="Main video player component with accessibility support and analytics integration"/>
+      <artifact path="apps/web/src/components/videoPlayer/index.tsx" kind="component" symbol="VideoPlayer" lines="9-30" reason="Video player wrapper component with options handling and memoization"/>
+      <artifact path="apps/web/tailwind.config.ts" kind="config" symbol="colors" lines="20-32" reason="Tailwind color palette definition with ummah theme colors"/>
+    </code>
+    <dependencies>
+      <ecosystem name="Node.js">
+        <package name="@testing-library/jest-dom" version="6.1.5" purpose="Accessibility testing utilities"/>
+        <package name="@testing-library/react" version="14.1.2" purpose="Component testing with accessibility support"/>
+        <package name="@testing-library/user-event" version="14.5.1" purpose="User interaction simulation for accessibility testing"/>
+        <package name="jest" version="29.7.0" purpose="Unit testing framework"/>
+        <package name="playwright" version="1.56.1" purpose="E2E testing with accessibility features"/>
+        <package name="tailwindcss" version="4.0.15" purpose="CSS framework with theme support"/>
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="Bundle Size">Accessibility features must not significantly impact bundle size</constraint>
+    <constraint type="Performance">Color contrast updates must not affect rendering performance</constraint>
+    <constraint type="Browser Support">Maintain compatibility with existing browser matrix</constraint>
+    <constraint type="Mobile Responsiveness">Contrast compliance must work across all device sizes</constraint>
+    <constraint type="Component Structure">Follow existing dual LTR/RTL pattern with index.tsx and rtl/index.tsx</constraint>
+    <constraint type="Styling Approach">Use Tailwind CSS custom properties for theme consistency</constraint>
+  </constraints>
+  <interfaces>
+    <interface name="CustomVideoPlayer" kind="React Component" signature="React.FC<{ options: PlayerOptions }>" path="apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx"/>
+    <interface name="VideoPlayer" kind="React Component" signature="React.FC<{ options: PlayerOptions }>" path="apps/web/src/components/videoPlayer/index.tsx"/>
+    <interface name="PlayerOptions" kind="Type Interface" path="apps/web/src/components/videoPlayer/interface.ts"/>
+  </interfaces>
+  <tests>
+    <standards>Jest for unit tests, Playwright for E2E accessibility testing, axe-core for automated WCAG compliance testing, WAVE API for accessibility validation</standards>
+    <locations>
+      <location path="apps/web/src/components/VideoPlayer/__tests__/" pattern="*.test.tsx"/>
+      <location path="apps/web/src/components/__tests__/" pattern="*.test.tsx"/>
+      <location path="apps/web/" pattern="**/*.test.tsx"/>
+    </locations>
+    <ideas>
+      <test idea="Contrast ratio validation for all text elements" ac="1"/>
+      <test idea="Interactive element contrast indicators testing" ac="2"/>
+      <test idea="Color-only information accessibility testing" ac="3"/>
+      <test idea="Automated axe-core and WAVE integration testing" ac="4"/>
+      <test idea="Cross-theme contrast compliance validation" ac="5"/>
+      <test idea="Screen reader compatibility testing with color contrast changes"/>
+      <test idea="Mobile device contrast testing across different screen sizes"/>
+    </ideas>
+  </tests>
+</story-context>

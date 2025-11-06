@@ -1,0 +1,436 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<storyContext>
+  <metadata>
+    <storyId>1.5</storyId>
+    <title>Mobile Touch Target Compliance</title>
+    <category>accessibility</category>
+    <priority>high</priority>
+    <status>ready-for-dev</status>
+    <createdDate>2025-11-06</createdDate>
+    <lastUpdated>2025-11-06</lastUpdated>
+    <author>claude-code</author>
+    <version>1.0</version>
+  </metadata>
+
+  <requirements>
+    <functional>
+      <requirement id="R1.5.1">
+        <title>Touch Target Size Compliance</title>
+        <description>All interactive elements must meet WCAG 2.1 AA touch target requirements with minimum 44x44px dimensions</description>
+        <acceptanceCriteria>
+          <criteria id="AC1.5.1.1">All buttons, links, and form controls have minimum 44x44px touch targets</criteria>
+          <criteria id="AC1.5.1.2">Small icons (under 44x44px) are wrapped in larger touch areas</criteria>
+          <criteria id="AC1.5.1.3">Touch targets maintain minimum size across all device orientations</criteria>
+          <criteria id="AC1.5.1.4">Custom interactive components comply with touch target requirements</criteria>
+        </acceptanceCriteria>
+      </requirement>
+      
+      <requirement id="R1.5.2">
+        <title>Adjacent Target Spacing</title>
+        <description>Maintain adequate spacing between adjacent touch targets to prevent accidental activation</description>
+        <acceptanceCriteria>
+          <criteria id="AC1.5.2.1">Adjacent touch targets have minimum 8px spacing between edges</criteria>
+          <criteria id="AC1.5.2.2">Navigation items are properly spaced to prevent mis-taps</criteria>
+          <criteria id="AC1.5.2.3">Form controls have adequate spacing to prevent accidental submissions</criteria>
+          <criteria id="AC1.5.2.4">Media player controls are properly spaced for touch accuracy</criteria>
+        </acceptanceCriteria>
+      </requirement>
+      
+      <requirement id="R1.5.3">
+        <title>Mobile Gesture Support</title>
+        <description>Implement standard mobile gestures with proper touch target handling</description>
+        <acceptanceCriteria>
+          <criteria id="AC1.5.3.1">Swipe gestures work with proper touch target areas</criteria>
+          <criteria id="AC1.5.3.2">Pinch-to-zoom gestures are supported where appropriate</criteria>
+          <criteria id="AC1.5.3.3">Long press gestures provide appropriate feedback</criteria>
+          <criteria id="AC1.5.3.4">Touch gestures don't interfere with accessibility features</criteria>
+        </acceptanceCriteria>
+      </requirement>
+      
+      <requirement id="R1.5.4">
+        <title>Touch Feedback and Visual Indicators</title>
+        <description>Provide clear visual and haptic feedback for touch interactions</description>
+        <acceptanceCriteria>
+          <criteria id="AC1.5.4.1">Touch interactions show immediate visual feedback</criteria>
+          <criteria id="AC1.5.4.2">Active states are clearly distinguishable from default states</criteria>
+          <criteria id="AC1.5.4.3">Haptic feedback is provided where appropriate (device-dependent)</criteria>
+          <criteria id="AC1.5.4.4">Loading states are clearly indicated during touch-initiated actions</criteria>
+        </acceptanceCriteria>
+      </requirement>
+      
+      <requirement id="R1.5.5">
+        <title>Cross-Device Compatibility</title>
+        <description>Ensure touch targets work consistently across different mobile devices and screen sizes</description>
+        <acceptanceCriteria>
+          <criteria id="AC1.5.5.1">Touch targets work on iOS devices (iPhone/iPad)</criteria>
+          <criteria id="AC1.5.5.2">Touch targets work on Android devices with various screen densities</criteria>
+          <criteria id="AC1.5.5.3">Touch interactions work on touch-enabled desktop devices</criteria>
+          <criteria id="AC1.5.5.4">Responsive design maintains touch target compliance at all breakpoints</criteria>
+        </acceptanceCriteria>
+      </requirement>
+      
+      <requirement id="R1.5.6">
+        <title>Performance Optimization</title>
+        <description>Optimize touch interactions for smooth performance and minimal latency</description>
+        <acceptanceCriteria>
+          <criteria id="AC1.5.6.1">Touch events respond within 100ms on mobile devices</criteria>
+          <criteria id="AC1.5.6.2">No jank or stuttering during touch interactions</criteria>
+          <criteria id="AC1.5.6.3">Touch event handlers are properly optimized and debounced</criteria>
+          <criteria id="AC1.5.6.4">Memory usage remains stable during extended touch interactions</criteria>
+        </acceptanceCriteria>
+      </requirement>
+    </functional>
+    
+    <nonFunctional>
+      <requirement id="NFR1.5.1">
+        <title>WCAG 2.1 AA Compliance</title>
+        <description>All touch target implementations must comply with WCAG 2.1 AA guidelines</description>
+      </requirement>
+      
+      <requirement id="NFR1.5.2">
+        <title>Browser Compatibility</title>
+        <description>Touch targets must work across all supported mobile browsers</description>
+      </requirement>
+      
+      <requirement id="NFR1.5.3">
+        <title>Accessibility Integration</title>
+        <description>Touch targets must integrate properly with screen readers and other assistive technologies</description>
+      </requirement>
+      
+      <requirement id="NFR1.5.4">
+        <title>RTL Language Support</title>
+        <description>Touch target spacing and behavior must work correctly in RTL layouts</description>
+      </requirement>
+    </nonFunctional>
+  </requirements>
+
+  <technicalContext>
+    <currentImplementation>
+      <component name="VideoPlayerControls">
+        <location>apps/web/src/components/video-player/</location>
+        <touchTargetIssues>
+          <issue>Play/pause button may be smaller than 44x44px on mobile</issue>
+          <issue>Volume and fullscreen controls might be too close together</issue>
+          <issue>Progress bar touch area needs verification</issue>
+        </touchTargetIssues>
+      </component>
+      
+      <component name="Navigation">
+        <location>apps/web/src/components/navigation/</location>
+        <touchTargetIssues>
+          <issue>Mobile menu items need spacing verification</issue>
+          <issue>Hamburger menu touch area size needs audit</issue>
+        </touchTargetIssues>
+      </component>
+      
+      <component name="VideoGrid">
+        <location>apps/web/src/components/video-grid/</location>
+        <touchTargetIssues>
+          <issue>Video thumbnail touch targets need size verification</issue>
+          <issue>Like/comment buttons on thumbnails may be too small</issue>
+        </touchTargetIssues>
+      </component>
+      
+      <component name="Forms">
+        <location>apps/web/src/components/forms/</location>
+        <touchTargetIssues>
+          <issue>Submit buttons and form inputs need touch target audit</issue>
+          <issue>Checkbox and radio button touch areas need expansion</issue>
+        </touchTargetIssues>
+      </component>
+    </currentImplementation>
+    
+    <dependencies>
+      <dependency name="Tailwind CSS">
+        <description>Used for styling and responsive design</description>
+        <touchTargetRelevance>Provides utilities for sizing and spacing</touchTargetRelevance>
+      </dependency>
+      
+      <dependency name="React">
+        <description>Component framework</description>
+        <touchTargetRelevance>Event handling for touch interactions</touchTargetRelevance>
+      </dependency>
+      
+      <dependency name="Video.js">
+        <description>Video player implementation</description>
+        <touchTargetRelevance>Custom control touch target configuration</touchTargetRelevance>
+      </dependency>
+    </dependencies>
+    
+    <constraints>
+      <constraint name="Performance">
+        <description>Touch target improvements must not impact page load performance</description>
+      </constraint>
+      
+      <constraint name="Design System">
+        <description>Must maintain consistency with existing design system</description>
+      </constraint>
+      
+      <constraint name="Cross-Platform">
+        <description>Solutions must work across iOS, Android, and touch-enabled desktops</description>
+      </constraint>
+    </constraints>
+  </technicalContext>
+
+  <implementationPlan>
+    <phase id="phase1" name="Audit and Analysis">
+      <task id="task1.1">
+        <title>Touch Target Audit</title>
+        <description>Comprehensive audit of all interactive elements for touch target compliance</description>
+        <deliverables>
+          <deliverable>Inventory of all interactive components</deliverable>
+          <deliverable>Touch target size analysis report</deliverable>
+          <deliverable>Spacing analysis between adjacent targets</deliverable>
+        </deliverables>
+        <estimatedHours>8</estimatedHours>
+      </task>
+      
+      <task id="task1.2">
+        <title>Device Testing Setup</title>
+        <description>Set up testing environment for cross-device touch target validation</description>
+        <deliverables>
+          <deliverable>Mobile device testing matrix</deliverable>
+          <deliverable>Browser compatibility test plan</deliverable>
+        </deliverables>
+        <estimatedHours>4</estimatedHours>
+      </task>
+    </phase>
+    
+    <phase id="phase2" name="Core Component Updates">
+      <task id="task2.1">
+        <title>Video Player Controls Enhancement</title>
+        <description>Update video player controls to meet touch target requirements</description>
+        <deliverables>
+          <deliverable>Enhanced play/pause button with 44x44px touch target</deliverable>
+          <deliverable>Properly spaced volume and fullscreen controls</deliverable>
+          <deliverable>Expanded progress bar touch area</deliverable>
+        </deliverables>
+        <estimatedHours>12</estimatedHours>
+      </task>
+      
+      <task id="task2.2">
+        <title>Navigation Component Updates</title>
+        <description>Ensure navigation elements meet touch target standards</description>
+        <deliverables>
+          <deliverable>Expanded mobile menu touch targets</deliverable>
+          <deliverable>Properly spaced navigation items</deliverable>
+          <deliverable>Enhanced hamburger menu touch area</deliverable>
+        </deliverables>
+        <estimatedHours>8</estimatedHours>
+      </task>
+      
+      <task id="task2.3">
+        <title>Form Controls Enhancement</title>
+        <description>Update all form controls for proper touch target compliance</description>
+        <deliverables>
+          <deliverable>Expanded button touch targets</deliverable>
+          <deliverable>Larger input field touch areas</deliverable>
+          <deliverable>Enhanced checkbox/radio button touch zones</deliverable>
+        </deliverables>
+        <estimatedHours>10</estimatedHours>
+      </task>
+    </phase>
+    
+    <phase id="phase3" name="Advanced Features">
+      <task id="task3.1">
+        <title>Touch Feedback Implementation</title>
+        <description>Add visual and haptic feedback for touch interactions</description>
+        <deliverables>
+          <deliverable>Touch state CSS classes</deliverable>
+          <deliverable>Haptic feedback integration</deliverable>
+          <deliverable>Loading state indicators</deliverable>
+        </deliverables>
+        <estimatedHours>8</estimatedHours>
+      </task>
+      
+      <task id="task3.2">
+        <title>Gesture Support Implementation</title>
+        <description>Implement mobile gesture support with proper touch handling</description>
+        <deliverables>
+          <deliverable>Swipe gesture handlers</deliverable>
+          <deliverable>Pinch-to-zoom support where appropriate</deliverable>
+          <deliverable>Long press functionality</deliverable>
+        </deliverables>
+        <estimatedHours>12</estimatedHours>
+      </task>
+    </phase>
+    
+    <phase id="phase4" name="Testing and Validation">
+      <task id="task4.1">
+        <title>Cross-Device Testing</title>
+        <description>Comprehensive testing across different mobile devices and browsers</description>
+        <deliverables>
+          <deliverable>Device compatibility test report</deliverable>
+          <deliverable>Browser compatibility matrix</deliverable>
+          <deliverable>Performance impact analysis</deliverable>
+        </deliverables>
+        <estimatedHours>16</estimatedHours>
+      </task>
+      
+      <task id="task4.2">
+        <title>Accessibility Testing</title>
+        <description>Validate touch target compliance with accessibility tools</description>
+        <deliverables>
+          <deliverable>Screen reader compatibility report</deliverable>
+          <deliverable>WCAG 2.1 AA validation results</deliverable>
+          <deliverable>Assistive technology testing report</deliverable>
+        </deliverables>
+        <estimatedHours>8</estimatedHours>
+      </task>
+    </phase>
+    
+    <totalEstimatedHours>84</totalEstimatedHours>
+  </implementationPlan>
+
+  <testingStrategy>
+    <unitTesting>
+      <framework>Jest</framework>
+      <coverage>
+        <component>Touch target size validation utilities</component>
+        <component>Touch event handlers</component>
+        <component>Gesture recognition functions</component>
+      </coverage>
+    </unitTesting>
+    
+    <integrationTesting>
+      <framework>Playwright</framework>
+      <scenarios>
+        <scenario>Touch target size verification on mobile viewports</scenario>
+        <scenario>Adjacent target spacing validation</scenario>
+        <scenario>Touch gesture functionality testing</scenario>
+        <scenario>Cross-device compatibility testing</scenario>
+      </scenarios>
+    </integrationTesting>
+    
+    <accessibilityTesting>
+      <tools>
+        <tool>axe-core for automated accessibility testing</tool>
+        <tool>WAVE for manual accessibility validation</tool>
+        <tool>Screen reader testing (VoiceOver, TalkBack)</tool>
+      </tools>
+      <criteria>
+        <criterion>WCAG 2.1 AA 2.5.5 Target Size compliance</criterion>
+        <criterion>WCAG 2.1 AA 2.5.7 Dragging Movements compliance</criterion>
+        <criterion>Screen reader compatibility validation</criterion>
+      </criteria>
+    </accessibilityTesting>
+    
+    <performanceTesting>
+      <metrics>
+        <metric>Touch response time (&lt;100ms)</metric>
+        <metric>Frame rate during touch interactions (60fps)</metric>
+        <metric>Memory usage stability</metric>
+      </metrics>
+      <tools>
+        <tool>Chrome DevTools Performance tab</tool>
+        <tool>Lighthouse mobile testing</tool>
+      </tools>
+    </performanceTesting>
+  </testingStrategy>
+
+  <acceptanceCriteria>
+    <criteria id="AC1.5.1">
+      <title>All Interactive Elements Meet 44x44px Minimum</title>
+      <description>Every button, link, form control, and custom interactive element has a touch target of at least 44x44px</description>
+      <testMethod>Automated testing + manual device verification</testMethod>
+    </criteria>
+    
+    <criteria id="AC1.5.2">
+      <title>Proper Spacing Between Adjacent Targets</title>
+      <description>Adjacent touch targets maintain minimum 8px spacing to prevent accidental activation</description>
+      <testMethod>Visual inspection + touch accuracy testing</testMethod>
+    </criteria>
+    
+    <criteria id="AC1.5.3">
+      <title>Mobile Gesture Support</title>
+      <description>Standard mobile gestures (swipe, pinch, long press) work correctly with proper touch handling</description>
+      <testMethod>Device testing across iOS/Android platforms</testMethod>
+    </criteria>
+    
+    <criteria id="AC1.5.4">
+      <title>Touch Feedback Implementation</title>
+      <description>Clear visual and haptic feedback is provided for all touch interactions</description>
+      <testMethod>User interaction testing + feedback verification</testMethod>
+    </criteria>
+    
+    <criteria id="AC1.5.5">
+      <title>Cross-Device Compatibility</title>
+      <description>Touch targets work consistently across all supported mobile devices and browsers</description>
+      <testMethod>Device matrix testing + browser compatibility validation</testMethod>
+    </criteria>
+    
+    <criteria id="AC1.5.6">
+      <title>Performance Optimization</title>
+      <description>Touch interactions are responsive with no performance degradation</description>
+      <testMethod>Performance profiling + latency measurement</testMethod>
+    </criteria>
+  </acceptanceCriteria>
+
+  <riskAssessment>
+    <risk id="R1.5.1" level="medium">
+      <title>Design System Impact</title>
+      <description>Touch target requirements may conflict with existing design system specifications</description>
+      <mitigation>Work with design team to update design system guidelines</mitigation>
+    </risk>
+    
+    <risk id="R1.5.2" level="low">
+      <title>Performance Impact</title>
+      <description>Additional touch event handlers may impact performance</description>
+      <mitigation>Optimize event handlers and use efficient delegation patterns</mitigation>
+    </risk>
+    
+    <risk id="R1.5.3" level="medium">
+      <title>Cross-Platform Compatibility</title>
+      <description>Different platforms may handle touch events differently</description>
+      <mitigation>Comprehensive testing across all target platforms</mitigation>
+    </risk>
+  </riskAssessment>
+
+  <successMetrics>
+    <metric name="Touch Target Compliance Rate">
+      <target>100% of interactive elements meet WCAG 2.1 AA requirements</target>
+      <measurement>Automated testing + manual audit</measurement>
+    </metric>
+    
+    <metric name="Touch Accuracy Rate">
+      <target>&lt;2% accidental touches in user testing</target>
+      <measurement>User testing sessions with touch accuracy tracking</measurement>
+    </metric>
+    
+    <metric name="Touch Response Time">
+      <target>&lt;100ms average response time</target>
+      <measurement>Performance profiling tools</measurement>
+    </metric>
+    
+    <metric name="Cross-Device Compatibility">
+      <target>100% compatibility across supported devices</target>
+      <measurement>Device testing matrix results</measurement>
+    </metric>
+  </successMetrics>
+
+  <deliverables>
+    <deliverable id="D1.5.1">
+      <title>Touch Target Compliance Report</title>
+      <description>Comprehensive report documenting all touch target improvements and compliance validation</description>
+      <format>PDF + supporting data files</format>
+    </deliverable>
+    
+    <deliverable id="D1.5.2">
+      <title>Enhanced Component Library</title>
+      <description>Updated components with proper touch target implementation</description>
+      <format>Source code + documentation</format>
+    </deliverable>
+    
+    <deliverable id="D1.5.3">
+      <title>Cross-Device Test Results</title>
+      <description>Complete test results across all supported devices and browsers</description>
+      <format>Test reports + screenshots</format>
+    </deliverable>
+    
+    <deliverable id="D1.5.4">
+      <title>Performance Impact Analysis</title>
+      <description>Analysis of performance impact from touch target improvements</description>
+      <format>Performance report + recommendations</format>
+    </deliverable>
+  </deliverables>
+</storyContext>

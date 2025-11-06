@@ -1,0 +1,115 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>2</storyId>
+    <title>Remove Global Event Listener Security Vulnerabilities</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-06T16:30:00.000Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-2-security-vulnerabilities.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>security-conscious user</asA>
+    <iWant>protection against malicious script injection through event listeners</iWant>
+    <soThat>my data and browsing session remain secure</soThat>
+    <tasks>- [ ] Audit existing global event listeners in video player (AC: 1, 4)
+  - [ ] Scan video player codebase for global event listener usage
+  - [ ] Document all current event listeners and their purposes
+  - [ ] Identify potential security vulnerabilities in current implementation
+  - [ ] Create allowlist of authorized event listeners
+- [ ] Implement event listener validation middleware (AC: 1, 2)
+  - [ ] Create EventListenerValidator utility class
+  - [ ] Implement allowlist checking for new event listeners
+  - [ ] Add blocking mechanism for unauthorized listeners
+  - [ ] Integrate validation into video player initialization
+- [ ] Add security event logging and monitoring (AC: 2)
+  - [ ] Implement SecurityEventLogger for suspicious activities
+  - [ ] Create logging integration with WebSocket server
+  - [ ] Add real-time security event monitoring
+  - [ ] Set up alerting for critical security events
+- [ ] Implement input sanitization for event data (AC: 5)
+  - [ ] Create InputSanitizer utility for event data
+  - [ ] Integrate sanitization into all event handlers
+  - [ ] Add validation for event payload structure
+  - [ ] Test sanitization with various attack vectors
+- [ ] Update Content Security Policy headers (AC: 3, 6)
+  - [ ] Review current CSP configuration
+  - [ ] Add directives to prevent inline script execution
+  - [ ] Configure CSP for event listener restrictions
+  - [ ] Test CSP effectiveness with security tools
+- [ ] Security testing and penetration testing (AC: 3, 6)
+  - [ ] Set up OWASP ZAP for automated security scanning
+  - [ ] Perform manual penetration testing on event handling
+  - [ ] Test XSS prevention mechanisms
+  - [ ] Validate CSP header effectiveness
+  - [ ] Document security test results and remediation</tasks>
+  </story>
+
+  <acceptanceCriteria>1. Given video player is initialized, when scripts attempt to add global event listeners, then only authorized listeners are permitted
+2. Given suspicious event listeners are detected, when validation runs, then suspicious listeners are blocked and logged
+3. Given security testing is performed, when penetration testing is executed, then zero injection vulnerabilities exist in event handling
+4. Given video player is running, when event listeners are processed, then all event listeners are properly scoped
+5. Given user input is received, when input validation occurs, then input sanitization happens before event processing
+6. Given security audit is conducted, when comprehensive testing is performed, then security audit passes penetration testing</acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Detailed Design - Security Manager" snippet="Security Manager: Event listener validation and CSP enforcement located in apps/web/src/lib/security/ with EventListenerValidator, ContentSecurityPolicy, InputSanitizer components"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="System Architecture Alignment" snippet="Frontend Components: Video player components in apps/web/src/components/video-player/, UI component library in src/components/ui/, CSS/Tailwind styling system for theme compliance"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Security" snippet="Event Listener Security: Global event listener allowlist enforcement, Runtime validation of all event handlers, Automatic blocking of suspicious listeners, Event source validation and sanitization, CSP header updates for inline script protection"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Story 1.2: Security Vulnerability Remediation Workflow" snippet="1. Scan for global event listeners in video player, 2. Create allowlist of authorized listeners, 3. Implement event listener validation middleware, 4. Add input sanitization for all event data, 5. Update Content Security Policy headers, 6. Security penetration testing"/>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Security" snippet="Regular security audits and penetration testing, Regular security updates and patching, Two-factor authentication option for security"/>
+    </docs>
+    <code>
+      <artifact path="apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx" kind="component" symbol="CustomVideoPlayer" lines="1-758" reason="Main video player component with extensive event handling and analytics integration - primary target for security validation"/>
+      <artifact path="apps/web/src/components/VideoPlayer/__tests__/CustomVideoPlayer.test.tsx" kind="test" symbol="CustomVideoPlayerTest" lines="1-50" reason="Existing test structure for video player security testing integration"/>
+      <artifact path="apps/web/package.json" kind="config" symbol="dependencies" lines="6-77" reason="Current dependency list for security package additions (crypto-js, dompurify, helmet)"/>
+    </code>
+    <dependencies>
+      <ecosystem name="Node.js">
+        <package name="@testing-library/jest-dom" version="6.1.5" purpose="Security testing utilities"/>
+        <package name="@testing-library/react" version="14.1.2" purpose="Component security testing"/>
+        <package name="@testing-library/user-event" version="14.5.1" purpose="User interaction security testing"/>
+        <package name="jest" version="29.7.0" purpose="Unit testing framework for security functions"/>
+        <package name="playwright" version="1.56.1" purpose="E2E security testing and penetration testing"/>
+        <package name="video.js" version="8.23.4" purpose="Video player with event system requiring security validation"/>
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="Performance">Security validation must not impact video player performance (<10ms per event)</constraint>
+    <constraint type="Compatibility">Must work with existing Video.js event system without breaking functionality</constraint>
+    <constraint type="Bundle Size">Security utilities should not significantly increase bundle size (<200KB additional)</constraint>
+    <constraint type="Browser Support">Security features must work across target browser matrix (Chrome 90+, Safari 14+, Firefox 88+)</constraint>
+    <constraint type="Component Structure">Follow existing module patterns in apps/web/src/lib/ for new security utilities</constraint>
+    <constraint type="Integration">Must integrate with existing WebSocket server for security event logging</constraint>
+  </constraints>
+  <interfaces>
+    <interface name="CustomVideoPlayer" kind="React Component" signature="React.FC<CustomVideoPlayerProps>" path="apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx"/>
+    <interface name="EventListenerValidator" kind="Security Utility" signature="class EventListenerValidator { validate(type: string, handler: Function): boolean; block(type: string): void; log(event: SecurityEvent): void }" path="apps/web/src/lib/security/EventListenerValidator.ts"/>
+    <interface name="InputSanitizer" kind="Security Utility" signature="class InputSanitizer { sanitize(input: string): string; validateStructure(data: any): boolean }" path="apps/web/src/lib/security/InputSanitizer.ts"/>
+    <interface name="SecurityEventLogger" kind="Security Utility" signature="class SecurityEventLogger { log(event: SecurityEvent): void; sendToServer(events: SecurityEvent[]): Promise<void> }" path="apps/web/src/lib/security/SecurityEventLogger.ts"/>
+  </interfaces>
+  <tests>
+    <standards>Jest for unit security tests, Playwright for E2E security testing, OWASP ZAP for penetration testing, Custom security validation utilities for event listener testing</standards>
+    <locations>
+      <location path="apps/web/src/components/VideoPlayer/__tests__/" pattern="*.test.tsx"/>
+      <location path="apps/web/src/lib/security/__tests__/" pattern="*.test.ts"/>
+      <location path="apps/web/" pattern="**/*.security.test.tsx"/>
+    </locations>
+    <ideas>
+      <test idea="Event listener allowlist enforcement testing" ac="1"/>
+      <test idea="Suspicious event listener blocking and logging verification" ac="2"/>
+      <test idea="XSS injection prevention testing with various attack vectors" ac="3, 5"/>
+      <test idea="Event listener scoping validation testing" ac="4"/>
+      <test idea="Input sanitization before event processing verification" ac="5"/>
+      <test idea="OWASP ZAP penetration testing integration" ac="3, 6"/>
+      <test idea="Content Security Policy header effectiveness testing"/>
+      <test idea="Security event logging and WebSocket integration testing"/>
+      <test idea="Performance impact testing of security validation"/>
+      <test idea="Cross-browser security feature compatibility testing"/>
+    </ideas>
+  </tests>
+</story-context>

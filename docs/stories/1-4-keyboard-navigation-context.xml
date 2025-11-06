@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <story-info>
+    <id>1-4-keyboard-navigation</id>
+    <title>Enhance Keyboard Navigation Accessibility</title>
+    <status>ready-for-dev</status>
+    <epic>1</epic>
+    <category>accessibility</category>
+    <priority>high</priority>
+    <last-updated>2025-11-06</last-updated>
+  </story-info>
+
+  <acceptance-criteria>
+    <criteria id="AC-1.4-1">
+      <description>Given video player interface is loaded, when I navigate using only keyboard, then all interactive elements are reachable and operable</description>
+      <type>functional</type>
+      <wcag-reference>2.1.1 Keyboard</wcag-reference>
+      <test-method>manual-automation</test-method>
+    </criteria>
+    <criteria id="AC-1.4-2">
+      <description>Given keyboard navigation is active, when I tab through elements, then focus order is logical and predictable</description>
+      <type>functional</type>
+      <wcag-reference>2.4.3 Focus Order</wcag-reference>
+      <test-method>manual-automation</test-method>
+    </criteria>
+    <criteria id="AC-1.4-3">
+      <description>Given keyboard shortcuts are available, when I access help documentation, then keyboard shortcuts are documented and discoverable</description>
+      <type>functional</type>
+      <wcag-reference>2.4.6 Headings and Labels</wcag-reference>
+      <test-method>manual</test-method>
+    </criteria>
+    <criteria id="AC-1.4-4">
+      <description>Given page content is loaded, when I use keyboard navigation, then skip links are provided for main content areas</description>
+      <type>functional</type>
+      <wcag-reference>2.4.1 Bypass Blocks</wcag-reference>
+      <test-method>manual-automation</test-method>
+    </criteria>
+    <criteria id="AC-1.4-5">
+      <description>Given keyboard navigation is active, when I move between elements, then focus indicators are clearly visible</description>
+      <type>visual</type>
+      <wcag-reference>2.4.7 Focus Visible</wcag-reference>
+      <test-method>visual-testing</test-method>
+    </criteria>
+    <criteria id="AC-1.4-6">
+      <description>Given tab navigation is used, when I navigate interface, then Tab navigation works in consistent patterns</description>
+      <type>functional</type>
+      <wcag-reference>2.1.1 Keyboard</wcag-reference>
+      <test-method>manual-automation</test-method>
+    </criteria>
+  </acceptance-criteria>
+
+  <technical-requirements>
+    <performance>
+      <keyboard-response-time>&lt;16ms (60fps)</keyboard-response-time>
+      <focus-indicator-rendering>&lt;16ms per frame</focus-indicator-rendering>
+      <bundle-size-impact>&lt;500KB additional</bundle-size-impact>
+    </performance>
+    <browser-support>
+      <chrome>full</chrome>
+      <firefox>full</firefox>
+      <safari>full</safari>
+      <edge>full</edge>
+    </browser-support>
+    <accessibility-standards>
+      <wcag-level>2.1 AA</wcag-level>
+      <screen-reader-support>nvda,jaws,voiceover</screen-reader-support>
+      <keyboard-navigation>complete</keyboard-navigation>
+    </accessibility-standards>
+  </technical-requirements>
+
+  <existing-implementation>
+    <keyboard-shortcuts>
+      <file>apps/web/src/lib/video/keyboard-shortcuts.ts</file>
+      <features>
+        <youtube-style-shortcuts>true</youtube-style-shortcuts>
+        <rtl-support>true</rtl-support>
+        <security-validation>true</security-validation>
+        <visual-feedback>true</visual-feedback>
+        <rate-limiting>50ms (20 events/sec)</rate-limiting>
+      </features>
+      <shortcuts>
+        <play-pause>[' ', 'k', 'K']</play-pause>
+        <rewind>['ArrowLeft', 'j', 'J']</rewind>
+        <forward>['ArrowRight', 'l', 'L']</forward>
+        <volume-up>['ArrowUp']</volume-up>
+        <volume-down>['ArrowDown']</volume-down>
+        <mute>['m', 'M']</mute>
+        <fullscreen>['f', 'F']</fullscreen>
+        <pip>['p', 'P']</pip>
+        <speed-decrease>[',', '&lt;']</speed-decrease>
+        <speed-increase>['.', '&gt;']</speed-increase>
+        <help>['?', '/']</help>
+        <seek>{'0': 0, '1': 10, '2': 20, ..., '9': 90}</seek>
+      </shortcuts>
+    </keyboard-shortcuts>
+    
+    <accessibility-layer>
+      <file>apps/web/src/lib/video/accessibility.ts</file>
+      <features>
+        <aria-labels>true</aria-labels>
+        <screen-reader-announcements>true</screen-reader-announcements>
+        <high-contrast-detection>true</high-contrast-detection>
+        <focus-management>true</focus-management>
+        <throttled-announcements>1000ms</throttled-announcements>
+      </features>
+    </accessibility-layer>
+
+    <focus-management>
+      <file>apps/web/src/hooks/useFocusTrap.ts</file>
+      <features>
+        <modal-focus-trap>true</modal-focus-trap>
+        <tab-cycling>true</tab-cycling>
+        <focus-restoration>true</focus-restoration>
+        <wcag-compliance>2.1.1, 2.1.2, 2.4.3, 2.4.7</wcag-compliance>
+      </features>
+      <focusable-selector>
+        <elements>
+          <element>a[href]</element>
+          <element>button:not([disabled])</element>
+          <element>input:not([disabled])</element>
+          <element>select:not([disabled])</element>
+          <element>textarea:not([disabled])</element>
+          <element>[tabindex]:not([tabindex="-1"])</element>
+        </elements>
+      </focusable-selector>
+    </focus-management>
+
+    <video-player-components>
+      <main-component>apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx</main-component>
+      <help-modal>apps/web/src/components/VideoPlayer/KeyboardHelpModal.tsx</help-modal>
+      <controls>apps/web/src/components/videoPlayer/</controls>
+      <rtl-variants>apps/web/src/components/*/rtl/</rtl-variants>
+    </video-player-components>
+  </existing-implementation>
+
+  <development-constraints>
+    <architecture>
+      <pattern>dual-ltr-rtl</pattern>
+      <component-structure>separate-rtl-variants</component-structure>
+      <focus-management>hook-based</focus-management>
+      <keyboard-handling>scoped-event-listeners</keyboard-handling>
+    </architecture>
+    
+    <security>
+      <event-validation>trusted-events-only</event-validation>
+      <rate-limiting>required</rate-limiting>
+      <input-sanitization>required</input-sanitization>
+      <csp-compliance>required</csp-compliance>
+    </security>
+    
+    <performance>
+      <bundle-size>&lt;200KB gzipped impact</bundle-size>
+      <initialization>&lt;200ms player setup</initialization>
+      <keyboard-response>&lt;16ms response time</keyboard-response>
+      <memory-usage>&lt;500KB additional</memory-usage>
+    </performance>
+    
+    <compatibility>
+      <browser-support>modern-browsers</browser-support>
+      <screen-readers>nvda,jaws,voiceover</screen-readers>
+      <mobile-keyboard>external-keyboard-support</mobile-keyboard>
+      <rtl-support>arabic-keyboard-layouts</rtl-support>
+    </compatibility>
+  </development-constraints>
+
+  <testing-requirements>
+    <unit-testing>
+      <framework>jest</framework>
+      <library>@testing-library/react</library>
+      <user-events>@testing-library/user-event</library>
+      <coverage-threshold>95% for accessibility features</coverage-threshold>
+      <focus-management-tests>required</focus-management-tests>
+      <keyboard-navigation-tests>required</keyboard-navigation-tests>
+    </unit-testing>
+    
+    <integration-testing>
+      <framework>playwright</framework>
+      <accessibility-testing>axe-core integration</accessibility-testing>
+      <screen-reader-testing>required</screen-reader-testing>
+      <cross-browser-testing>required</cross-browser-testing>
+      <keyboard-flow-testing>required</keyboard-flow-testing>
+    </integration-testing>
+    
+    <manual-testing>
+      <screen-readers>
+        <reader>NVDA (Windows)</reader>
+        <reader>JAWS (Windows)</reader>
+        <reader>VoiceOver (macOS/iOS)</reader>
+      </screen-readers>
+      <keyboard-only-testing>required</keyboard-only-testing>
+      <focus-indicator-testing>required</focus-indicator-testing>
+      <tab-order-validation>required</tab-order-validation>
+      <skip-link-testing>required</skip-link-testing>
+    </manual-testing>
+    
+    <test-environments>
+      <browsers>chrome,firefox,safari,edge</browsers>
+      <devices>desktop,mobile,tablet</devices>
+      <screen-readers>nvda,jaws,voiceover</screen-readers>
+      <input-methods>keyboard,touch,external-keyboard</input-methods>
+    </test-environments>
+  </testing-requirements>
+
+  <implementation-guidelines>
+    <focus-management>
+      <tab-order>logical-top-to-bottom-left-to-right</tab-order>
+      <rtl-tab-order>right-to-left-top-to-bottom</rtl-tab-order>
+      <focus-indicators>high-contrast-visible</focus-indicators>
+      <focus-trapping>modal-and-overlay-components</focus-trapping>
+      <focus-restoration>return-to-trigger-element</focus-restoration>
+    </focus-management>
+    
+    <keyboard-shortcuts>
+      <documentation>discoverable-help-modal</documentation>
+      <conflict-prevention>form-input-detection</conflict-prevention>
+      <visual-feedback>temporary-overlay-messages</visual-feedback>
+      <rtl-behavior>arrow-key-swapping</rtl-behavior>
+      <customizability>user-preference-storage</customizability>
+    </keyboard-shortcuts>
+    
+    <skip-links>
+      <placement>top-of-page-visible-on-focus</placement>
+      <targets>main-content,video-player,navigation</targets>
+      <styling>visible-only-on-focus</styling>
+      <behavior>jump-to-target-focus</behavior>
+    </skip-links>
+    
+    <aria-implementation>
+      <labels>descriptive-and-contextual</labels>
+      <descriptions>complex-control-explanations</descriptions>
+      <live-regions>dynamic-content-updates</live-regions>
+      <roles>appropriate-semantic-roles</roles>
+      <states>current-state-indication</states>
+    </aria-implementation>
+  </implementation-guidelines>
+
+  <dependencies>
+    <existing-packages>
+      <package name="video.js" version="^8.23.4" usage="video-player-core"/>
+      <package name="@testing-library/user-event" version="^14.5.1" usage="keyboard-testing"/>
+      <package name="@radix-ui/react-dialog" version="^1.1.7" usage="modal-accessibility"/>
+      <package name="next-themes" version="^0.4.6" usage="focus-indicator-theming"/>
+    </existing-packages>
+    
+    <required-new-packages>
+      <package name="axe-core" version="^4.8.2" usage="automated-accessibility-testing"/>
+      <package name="focus-trap-react" version="^10.2.3" usage="enhanced-focus-management"/>
+      <package name="tabbable" version="^6.2.0" usage="focusable-element-detection"/>
+      <package name="wicg-inert" version="^3.1.2" usage="inert-attribute-polyfill"/>
+    </required-new-packages>
+  </dependencies>
+
+  <file-structure>
+    <new-files>
+      <file path="apps/web/src/lib/accessibility/focus-manager.ts" purpose="Enhanced focus management utility"/>
+      <file path="apps/web/src/lib/accessibility/keyboard-shortcut-manager.ts" purpose="Comprehensive shortcut system"/>
+      <file path="apps/web/src/lib/accessibility/skip-links.tsx" purpose="Skip link components"/>
+      <file path="apps/web/src/components/accessibility/FocusIndicator.tsx" purpose="Enhanced focus indicators"/>
+      <file path="apps/web/src/components/accessibility/SkipLink.tsx" purpose="Skip link implementation"/>
+    </new-files>
+    
+    <modified-files>
+      <file path="apps/web/src/lib/video/keyboard-shortcuts.ts" purpose="Enhance with new shortcuts"/>
+      <file path="apps/web/src/lib/video/accessibility.ts" purpose="Add focus management features"/>
+      <file path="apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx" purpose="Integrate new accessibility features"/>
+      <file path="apps/web/src/components/VideoPlayer/KeyboardHelpModal.tsx" purpose="Update with new shortcuts"/>
+      <file path="apps/web/src/hooks/useFocusTrap.ts" purpose="Enhance with skip link support"/>
+    </modified-files>
+    
+    <test-files>
+      <file path="apps/web/src/__tests__/accessibility/focus-manager.test.ts" purpose="Focus management unit tests"/>
+      <file path="apps/web/src/__tests__/accessibility/keyboard-shortcuts.test.ts" purpose="Keyboard shortcut tests"/>
+      <file path="apps/web/src/__tests__/accessibility/skip-links.test.tsx" purpose="Skip link component tests"/>
+      <file path="apps/web/src/__tests__/components/VideoPlayer/keyboard-navigation.test.tsx" purpose="E2E keyboard navigation tests"/>
+    </test-files>
+  </file-structure>
+
+  <integration-points>
+    <video-player>
+      <component>CustomVideoPlayer</component>
+      <integration-point>setupKeyboardShortcuts</integration-point>
+      <integration-point>setupAccessibility</integration-point>
+      <integration-point>focus-management</integration-point>
+    </video-player>
+    
+    <modal-systems>
+      <component>ResumePrompt</component>
+      <component>KeyboardHelpModal</component>
+      <integration-point>useFocusTrap</integration-point>
+      <integration-point>skip-links</integration-point>
+    </modal-systems>
+    
+    <theme-system>
+      <component>next-themes</component>
+      <integration-point>focus-indicator-styling</integration-point>
+      <integration-point>high-contrast-mode</integration-point>
+    </theme-system>
+    
+    <i18n-system>
+      <component>video/i18n</component>
+      <integration-point>keyboard-shortcut-labels</integration-point>
+      <integration-point>aria-label-translations</integration-point>
+      <integration-point>rtl-keyboard-behavior</integration-point>
+    </i18n-system>
+  </integration-points>
+
+  <success-metrics>
+    <accessibility-metrics>
+      <wcag-compliance>100% AA compliance</wcag-compliance>
+      <keyboard-operability>100% interactive elements</keyboard-operability>
+      <screen-reader-compatibility>100% major screen readers</screen-reader-compatibility>
+      <focus-indicator-visibility>100% visible in all themes</focus-indicator-visibility>
+    </accessibility-metrics>
+    
+    <performance-metrics>
+      <keyboard-response>&lt;16ms average</keyboard-response>
+      <bundle-size-increase>&lt;200KB gzipped</bundle-size-increase>
+      <initialization-time>&lt;200ms player setup</initialization-time>
+      <memory-usage>&lt;500KB additional</memory-usage>
+    </performance-metrics>
+    
+    <user-experience-metrics>
+      <task-completion-rate>&gt;95% keyboard-only users</task-completion-rate>
+      <satisfaction-score>&gt;4.5/5 accessibility users</satisfaction-score>
+      <error-rate>&lt;1% keyboard navigation errors</error-rate>
+      <discovery-rate>&gt;80% shortcuts discovered</discovery-rate>
+    </user-experience-metrics>
+  </success-metrics>
+
+  <risk-mitigation>
+    <technical-risks>
+      <risk>
+        <description>Focus management conflicts with existing Video.js controls</description>
+        <mitigation>Test with Video.js focus management, use event delegation</mitigation>
+        <owner>frontend-lead</owner>
+      </risk>
+      <risk>
+        <description>Keyboard shortcut conflicts with browser/system shortcuts</description>
+        <mitigation>Implement modifier key requirements, provide override options</mitigation>
+        <owner>accessibility-specialist</owner>
+      </risk>
+      <risk>
+        <description>Performance impact from extensive focus tracking</description>
+        <mitigation>Use efficient selectors, throttle focus events, lazy loading</mitigation>
+        <owner>performance-engineer</owner>
+      </risk>
+    </technical-risks>
+    
+    <user-experience-risks>
+      <risk>
+        <description>Keyboard navigation changes confuse existing users</description>
+        <mitigation>Gradual rollout, clear documentation, user preferences</mitigation>
+        <owner>product-manager</owner>
+      </risk>
+      <risk>
+        <description>Focus indicators not visible in all themes</description>
+        <mitigation>Theme-specific focus styles, high contrast mode support</mitigation>
+        <owner>ux-designer</owner>
+      </risk>
+    </user-experience-risks>
+  </risk-mitigation>
+
+  <deployment-considerations>
+    <feature-flags>
+      <flag name="enhanced-keyboard-navigation" default="true">
+        <description>Enable enhanced keyboard navigation features</description>
+        <rollout-strategy>gradual-user-rollout</rollout-strategy>
+      </flag>
+      <flag name="keyboard-shortcut-help" default="true">
+        <description>Show keyboard shortcut help button</description>
+        <rollout-strategy>immediate</rollout-strategy>
+      </flag>
+    </feature-flags>
+    
+    <monitoring>
+      <metrics>
+        <metric>keyboard-navigation-usage</metric>
+        <metric>focus-indicator-visibility</metric>
+        <metric>shortcut-discovery-rate</metric>
+        <metric>accessibility-error-rate</metric>
+      </metrics>
+      <alerts>
+        <alert>wcag-compliance-drop-below-95%</alert>
+        <alert>keyboard-navigation-error-rate-gt-2%</alert>
+        <alert>focus-indicator-not-visible</alert>
+      </alerts>
+    </monitoring>
+  </deployment-considerations>
+</story-context>

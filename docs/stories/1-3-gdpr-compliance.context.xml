@@ -1,0 +1,132 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>3</storyId>
+    <title>Implement GDPR-Compliant Data Storage</title>
+    <status>implementation-complete</status>
+    <generatedAt>2025-11-06T16:45:00.000Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-3-gdpr-compliance.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>EU user</asA>
+    <iWant>my personal data stored securely with proper encryption</iWant>
+    <soThat>my privacy rights are protected under GDPR regulations</soThat>
+    <tasks>- [ ] Audit existing data storage practices (AC: 1)
+  - [ ] Identify all localStorage usage in video player
+  - [ ] Document types of data currently stored
+  - [ ] Classify data as sensitive vs non-sensitive
+  - [ ] Assess current encryption implementation
+- [ ] Implement AES-256 encryption for local storage (AC: 1)
+  - [ ] Create EncryptedStorage utility class
+  - [ ] Implement key derivation with PBKDF2
+  - [ ] Add data integrity verification with HMAC
+  - [ ] Replace localStorage calls with encrypted storage
+- [ ] Create consent management system (AC: 2, 3, 4)
+  - [ ] Design consent management UI components
+  - [ ] Implement consent state management
+  - [ ] Add consent recording and audit trail
+  - [ ] Integrate with OpenAuth for user consent
+- [ ] Implement data access, export, deletion functionality (AC: 2)
+  - [ ] Create data export API endpoints
+  - [ ] Implement user data deletion functionality
+  - [ ] Add data access verification mechanisms
+  - [ ] Create data portability features
+- [ ] Implement transparent consent-based processing (AC: 3)
+  - [ ] Add consent tracking for all data processing
+  - [ ] Create processing transparency logs
+  - [ ] Implement consent withdrawal mechanisms
+  - [ ] Add data processing documentation
+- [ ] Implement proper cookie consent implementation (AC: 4)
+  - [ ] Create cookie consent banner component
+  - [ ] Implement granular consent options
+  - [ ] Add consent recording and management
+  - [ ] Integrate with existing authentication system
+- [ ] Implement data retention policies (AC: 5)
+  - [ ] Define data retention periods by data type
+  - [ ] Create automated data cleanup processes
+  - [ ] Add retention policy documentation
+  - [ ] Implement retention policy enforcement
+- [ ] GDPR compliance audit preparation (AC: 6)
+  - [ ] Conduct GDPR compliance assessment
+  - [ ] Document all data processing activities
+  - [ ] Create data protection impact assessment
+  - [ ] Prepare compliance documentation
+  - [ ] Schedule third-party GDPR audit</tasks>
+  </story>
+
+  <acceptanceCriteria>1. Given I am using video player in EU, when my data is stored locally, then all sensitive data is encrypted before storage
+2. Given I am an EU user, when I request my data, then I can access, export, and delete my data
+3. Given data processing occurs, when personal data is handled, then data processing is transparent and consent-based
+4. Given I visit video player, when cookies or tracking are used, then cookie consent is properly implemented
+5. Given user data is stored, when retention policies are checked, then data retention policies are enforced
+6. Given GDPR compliance audit is performed, when comprehensive review is conducted, then GDPR compliance audit passes</acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Detailed Design - Data Storage Manager" snippet="Data Storage Manager: Encrypted local storage and consent management located in apps/web/src/lib/storage/ with EncryptedStorage, ConsentManager, GDPRCompliance components"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Data Models and Contracts" snippet="User Consent Data Model: id, userId, region, analytics, marketing, functional, timestamp, version, ipAddress (encrypted), userAgent (encrypted)"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Data Models and Contracts" snippet="Encrypted Storage Schema: data (AES-256 encrypted payload), iv (initialization vector), salt (encryption salt), timestamp, expiresAt"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="API Contracts" snippet="Consent Management API: updateConsent(consent), getConsent(userId), exportUserData(userId), deleteUserData(userId)"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Story 1.3: GDPR Compliance Implementation Workflow" snippet="1. Audit existing data storage practices, 2. Implement AES-256 encryption for local storage, 3. Create consent management UI components, 4. Integrate with OpenAuth for user consent, 5. Implement data export/deletion endpoints, 6. Update privacy policy and cookie notices"/>
+      <doc path="docs/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Privacy & Compliance" snippet="GDPR Article 25 compliance (data protection by design), Data minimization principles implementation, Right to be forgotten (data deletion) enforcement, Consent recording and audit trails"/>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Security" snippet="Two-factor authentication option for security, Regular security audits and penetration testing, Regular security updates and patching"/>
+    </docs>
+    <code>
+      <artifact path="apps/web/src/lib/utils/storage.ts" kind="utility" symbol="StorageManager" lines="1-438" reason="Existing localStorage management with quota enforcement - foundation for encrypted storage implementation"/>
+      <artifact path="apps/web/src/lib/auth.ts" kind="utility" symbol="setTokens" lines="1-33" reason="Existing authentication token management - integration point for consent management"/>
+      <artifact path="apps/web/src/components/AuthProvider/authContext.tsx" kind="component" symbol="AuthProvider" lines="1-50" reason="Authentication context - integration point for GDPR consent management"/>
+      <artifact path="apps/api-videos/src/index.ts" kind="api" symbol="API Structure" lines="1-50" reason="Hono API structure for implementing consent management endpoints"/>
+      <artifact path="apps/web/package.json" kind="config" symbol="dependencies" lines="6-77" reason="Current dependency list for encryption libraries (crypto-js, Web Crypto API)"/>
+    </code>
+    <dependencies>
+      <ecosystem name="Node.js">
+        <package name="@testing-library/jest-dom" version="6.1.5" purpose="GDPR compliance testing utilities"/>
+        <package name="@testing-library/react" version="14.1.2" purpose="Consent component testing"/>
+        <package name="@testing-library/user-event" version="14.5.1" purpose="User consent interaction testing"/>
+        <package name="jest" version="29.7.0" purpose="Unit testing for encryption and consent management"/>
+        <package name="playwright" version="1.56.1" purpose="E2E GDPR compliance testing"/>
+        <package name="@openauthjs/openauth" version="0.4.3" purpose="Existing authentication integration for consent management"/>
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="Performance">Encryption operations must not impact user experience (<100ms for storage operations)</constraint>
+    <constraint type="Bundle Size">Encryption libraries should be optimized for web (<150KB additional)</constraint>
+    <constraint type="Browser Support">Web Crypto API with fallbacks for older browsers (Chrome 90+, Safari 14+, Firefox 88+)</constraint>
+    <constraint type="Storage Limits">Respect browser storage limitations and implement proper quota management</constraint>
+    <constraint type="Component Structure">Follow existing module patterns in apps/web/src/lib/storage/ for new storage utilities</constraint>
+    <constraint type="Integration">Must integrate with existing OpenAuth system and Hono API structure</constraint>
+    <constraint type="GDPR Compliance">Must meet all GDPR Article 25 requirements for data protection by design</constraint>
+  </constraints>
+  <interfaces>
+    <interface name="StorageManager" kind="Storage Utility" signature="class StorageManager { getStorageSize(): number; safeSetItem(key: string, value: string): boolean; cleanupOldData(): void }" path="apps/web/src/lib/utils/storage.ts"/>
+    <interface name="EncryptedStorage" kind="Storage Utility" signature="class EncryptedStorage { setItem(key: string, value: any, options?: StorageOptions): Promise<void>; getItem(key: string): Promise<any>; removeItem(key: string): Promise<void>; encrypt(data: any): Promise<EncryptedUserData>; decrypt(encryptedData: EncryptedUserData): Promise<any> }" path="apps/web/src/lib/storage/EncryptedStorage.ts"/>
+    <interface name="ConsentManager" kind="Consent Utility" signature="class ConsentManager { updateConsent(consent: Partial<UserConsent>): Promise<UserConsent>; getConsent(userId: string): Promise<UserConsent>; exportUserData(userId: string): Promise<EncryptedUserData>; deleteUserData(userId: string): Promise<void> }" path="apps/web/src/lib/storage/ConsentManager.ts"/>
+    <interface name="GDPRCompliance" kind="Compliance Utility" signature="class GDPRCompliance { isEUUser(): boolean; requiresConsent(): boolean; enforceRetention(data: any, retentionPeriod: number): boolean; auditCompliance(): ComplianceReport }" path="apps/web/src/lib/storage/GDPRCompliance.ts"/>
+  </interfaces>
+  <tests>
+    <standards>Jest for unit encryption and consent tests, Playwright for E2E GDPR compliance testing, Custom GDPR compliance validation utilities, Web Crypto API testing</standards>
+    <locations>
+      <location path="apps/web/src/lib/utils/__tests__/" pattern="*.test.ts"/>
+      <location path="apps/web/src/lib/storage/__tests__/" pattern="*.test.ts"/>
+      <location path="apps/web/src/components/consent/__tests__/" pattern="*.test.tsx"/>
+      <location path="apps/web/" pattern="**/*.gdpr.test.tsx"/>
+    </locations>
+    <ideas>
+      <test idea="AES-256 encryption verification for sensitive data" ac="1"/>
+      <test idea="Data access, export, deletion functionality testing" ac="2"/>
+      <test idea="Transparent consent-based processing verification" ac="3"/>
+      <test idea="Cookie consent implementation testing" ac="4"/>
+      <test idea="Data retention policy enforcement testing" ac="5"/>
+      <test idea="GDPR compliance audit preparation verification" ac="6"/>
+      <test idea="EU user detection and region-based compliance testing"/>
+      <test idea="Consent withdrawal and data deletion testing"/>
+      <test idea="Data portability and export format testing"/>
+      <test idea="Encryption key derivation and security testing"/>
+      <test idea="Web Crypto API fallback testing for older browsers"/>
+    </ideas>
+  </tests>
+</story-context>

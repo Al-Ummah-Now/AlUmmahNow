@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<storyContext>
+  <storyId>1-5</storyId>
+  <title>Mobile Touch Target Compliance</title>
+  <status>ready-for-dev</status>
+  <lastUpdated>2025-11-06T00:00:00Z</lastUpdated>
+  
+  <!-- Epic Technical Specification References -->
+  <epicSpec>
+    <document>docs/tech-spec-epic-1.md</document>
+    <section>Detailed Design - Mobile Touch Handler</section>
+    <component>Mobile Touch Handler</component>
+    <location>apps/web/src/components/mobile/</location>
+    <performanceRequirement>&lt;100ms touch interaction feedback</performanceRequirement>
+    <bundleSizeLimit>&lt;200KB gzipped for epic</bundleSizeLimit>
+  </epicSpec>
+  
+  <!-- Existing Code Analysis -->
+  <existingImplementation>
+    <mobileTouchControls>
+      <file>apps/web/src/lib/video/mobile-touch.ts</file>
+      <status>IMPLEMENTED</status>
+      <features>
+        <doubleTapSeek>Double-tap left/right for seek (±10s)</doubleTapSeek>
+        <swipeVolume>Swipe up/down for volume control</swipeVolume>
+        <longPressSpeed>Long press for playback speed</longPressSpeed>
+        <visualFeedback>Visual feedback animations</visualFeedback>
+        <touchZones>Touch zones: left (rewind), center (play/pause), right (forward)</touchZones>
+      </features>
+      <touchTargetSize>48x48px minimum (exceeds 44x44px requirement)</touchTargetSize>
+      <deviceDetection>isMobileDevice() function available</deviceDetection>
+    </mobileTouchControls>
+    
+    <videoPlayer>
+      <file>apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx</file>
+      <mobileIntegration>Phase 4.19: Mobile touch controls implemented</mobileIntegration>
+      <conditionalSetup>if (isMobileDevice()) { setupMobileTouchControls() }</conditionalSetup>
+    </videoPlayer>
+    
+    <cssStyling>
+      <file>apps/web/src/components/VideoPlayer/custom-theme.css</file>
+      <mobileOptimizations>
+        <mediaQuery>@media (max-width: 768px)</mediaQuery>
+        <touchTargets>Mobile touch targets - ensure minimum 48x48px</touchTargets>
+        <progressBarHeight>Larger touch area for progress bar on mobile (12px active, 16px on active)</progressBarHeight>
+        <controlBarHeight>Reduced control bar height on mobile (3.5rem)</controlBarHeight>
+      </mobileOptimizations>
+    </cssStyling>
+  </existingImplementation>
+  
+  <!-- Testing Infrastructure -->
+  <testingFramework>
+    <unitTesting>
+      <framework>Jest</framework>
+      <config>apps/web/jest.config.js</config>
+      <coverageThreshold>5% global minimum</coverageThreshold>
+      <mockingStrategy>Video.js and analytics mocked</mockingStrategy>
+    </unitTesting>
+    
+    <e2eTesting>
+      <framework>Playwright</framework>
+      <status>NOT_CONFIGURED</status>
+      <needsSetup>Playwright config file missing</needsSetup>
+    </e2eTesting>
+    
+    <accessibilityTesting>
+      <tools>axe-core, WAVE, screen reader testing</tools>
+      <compliance>WCAG 2.1 AA</compliance>
+      <existingDocs>apps/web/src/components/VideoPlayer/ACCESSIBILITY.md</existingDocs>
+    </accessibilityTesting>
+    
+    <mobileTesting>
+      <deviceCoverage>iOS Safari, Android Chrome, various screen sizes</deviceCoverage>
+      <touchGestureTesting>Double-tap, swipe, long press</touchGestureTesting>
+      <accessibilityMobile>VoiceOver, TalkBack compatibility</accessibilityMobile>
+    </mobileTesting>
+  </testingFramework>
+  
+  <!-- Development Constraints -->
+  <constraints>
+    <performance>
+      <touchLatency>&lt;100ms feedback requirement</touchLatency>
+      <bundleImpact>&lt;200KB epic limit</bundleImpact>
+      <animationPerformance>60fps smooth animations required</animationPerformance>
+    </performance>
+    
+    <compatibility>
+      <browsers>Chrome 90+, Safari 14+, Firefox 88+, Edge 90+</browsers>
+      <mobileDevices>iOS 12+, Android 8+</mobileDevices>
+      <touchTechnologies>Capacitive touch screens, multi-touch</touchTechnologies>
+    </compatibility>
+    
+    <accessibility>
+      <wcagLevel>WCAG 2.1 AA compliance</wcagLevel>
+      <screenReaders>VoiceOver, TalkBack, NVDA, JAWS</screenReaders>
+      <motorImpairments>Various finger sizes and grip patterns</motorImpairments>
+    </accessibility>
+    
+    <architecture>
+      <componentPattern>Dual LTR/RTL pattern for mobile</componentPattern>
+      <touchIntegration>Video.js touch event integration</touchIntegration>
+      <responsiveDesign>Mobile-first responsive design</responsiveDesign>
+    </architecture>
+  </constraints>
+  
+  <!-- Technical Requirements -->
+  <requirements>
+    <touchTargets>
+      <minimumSize>44x44px WCAG requirement</minimumSize>
+      <currentSize>48x48px already implemented</currentSize>
+      <spacing>Minimum 8px between targets</spacing>
+      <feedback>Visual and haptic feedback</feedback>
+    </touchTargets>
+    
+    <gestures>
+      <doubleTap>Left/right zones for seek (±10s)</doubleTap>
+      <swipe>Vertical swipe for volume control</swipe>
+      <longPress>Playback speed cycling</longPress>
+      <singleTap>Play/pause in center zone</singleTap>
+    </gestures>
+    
+    <responsive>
+      <breakpoints>Mobile: &lt;768px, Tablet: 768-1024px, Desktop: &gt;1024px</breakpoints>
+      <orientation>Portrait and landscape support</orientation>
+      <density>High DPI screen optimization</density>
+    </responsive>
+  </requirements>
+  
+  <!-- Interface Specifications -->
+  <interfaces>
+    <mobileTouchOptions>
+      <type>MobileTouchOptions</type>
+      <file>apps/web/src/lib/video/mobile-touch.ts</file>
+      <properties>
+        <enableDoubleTap>boolean</enableDoubleTap>
+        <enableSwipeVolume>boolean</enableSwipeVolume>
+        <enableLongPress>boolean</enableLongPress>
+        <doubleTapThreshold>number (ms)</doubleTapThreshold>
+        <longPressDuration>number (ms)</longPressDuration>
+        <swipeSensitivity>number (pixels per volume unit)</swipeSensitivity>
+      </properties>
+    </mobileTouchOptions>
+    
+    <touchState>
+      <type>TouchState</type>
+      <properties>
+        <lastTapTime>number</lastTapTime>
+        <lastTapX>number</lastTapX>
+        <touchStartY>number</touchStartY>
+        <touchStartVolume>number</touchStartVolume>
+        <longPressTimer>ReturnType&lt;typeof setTimeout&gt;</longPressTimer>
+        <isLongPress>boolean</isLongPress>
+      </properties>
+    </touchState>
+  </interfaces>
+  
+  <!-- Dependencies -->
+  <dependencies>
+    <existing>
+      <videojs>video.js v8.23.4</videojs>
+      <tailwind>tailwindcss v4.0.15</tailwind>
+      <testingLibrary>@testing-library/react v14.1.2</testingLibrary>
+      <jest>jest v29.7.0</jest>
+    </existing>
+    
+    <potential>
+      <hammerjs>hammerjs v2.0.8 (advanced gesture recognition)</hammerjs>
+      <reactTouch>react-touch v4.1.0 (React touch components)</reactTouch>
+      <reactGesture>react-gesture v4.2.0 (Touch gesture components)</reactGesture>
+    </potential>
+  </dependencies>
+  
+  <!-- Performance Requirements -->
+  <performanceMetrics>
+    <touchResponse>&lt;100ms from touch to visual feedback</touchResponse>
+    <animationFrame>60fps smooth animations</animationFrame>
+    <memoryUsage>&lt;500KB additional overhead</memoryUsage>
+    <bundleSize>&lt;50KB for mobile touch utilities</bundleSize>
+    <cpuUsage>&lt;5% additional CPU overhead</cpuUsage>
+  </performanceMetrics>
+  
+  <!-- Mobile Device Compatibility -->
+  <deviceCompatibility>
+    <ios>
+      <versions>iOS 12+</versions>
+      <browsers>Safari 14+, Chrome for iOS</browsers>
+      <screenSizes>iPhone SE (375x667) to iPhone Pro Max (428x926)</screenSizes>
+      <touchFeatures>3D Touch, Haptic Feedback</touchFeatures>
+    </ios>
+    
+    <android>
+      <versions>Android 8+</versions>
+      <browsers>Chrome 90+, Samsung Internet 14+</browsers>
+      <screenSizes>Small (360x640) to Large (480x854)</screenSizes>
+      <touchFeatures>Multi-touch, Pressure sensitivity</touchFeatures>
+    </android>
+    
+    <crossPlatform>
+      <touchEvents>touchstart, touchmove, touchend</touchEvents>
+      <gestureEvents>gesturestart, gesturechange, gestureend</gestureEvents>
+      <pointerEvents>pointerdown, pointermove, pointerup</pointerEvents>
+    </crossPlatform>
+  </deviceCompatibility>
+  
+  <!-- Testing Standards -->
+  <testingStandards>
+    <unitTests>
+      <framework>Jest</framework>
+      <coverage>90% for touch-related functions</coverage>
+      <mockStrategy>Video.js player mocking</mockStrategy>
+      <testFiles>apps/web/src/lib/video/__tests__/</testFiles>
+    </unitTests>
+    
+    <integrationTests>
+      <framework>Playwright</framework>
+      <devices>Mobile emulation (iPhone, Android)</devices>
+      <gestures>Tap, double-tap, swipe, long press</gestures>
+      <accessibility>Screen reader testing</accessibility>
+    </integrationTests>
+    
+    <manualTests>
+      <realDevices>Physical iOS and Android devices</realDevices>
+      <fingerSizes>Various finger sizes and grips</fingerSizes>
+      <accessibility>VoiceOver, TalkBack testing</accessibility>
+      <usability>Mobile usability testing sessions</usability>
+    </manualTests>
+  </testingStandards>
+  
+  <!-- Development Workflow -->
+  <developmentWorkflow>
+    <steps>
+      <step1>Audit current touch target sizes using browser dev tools</step1>
+      <step2>Update CSS for minimum 44x44px targets (already 48x48px)</step2>
+      <step3>Add adequate spacing between targets (8px minimum)</step3>
+      <step4>Implement touch feedback animations (already implemented)</step4>
+      <step5>Test with various finger sizes and devices</step5>
+      <step6>Optimize touch interaction responsiveness</step6>
+      <step7>Mobile device usability testing</step7>
+    </steps>
+    
+    <validation>
+      <automated>axe-core accessibility testing</automated>
+      <manual>Real device testing with users</manual>
+      <performance>Touch latency measurement</performance>
+      <compatibility>Cross-device testing</compatibility>
+    </validation>
+  </developmentWorkflow>
+  
+  <!-- Risk Assessment -->
+  <risks>
+    <technical>
+      <risk>Touch event conflicts with Video.js native controls</risk>
+      <mitigation>Proper event handling and cleanup</mitigation>
+      <probability>Low</probability>
+      <impact>Medium</impact>
+    </technical>
+    
+    <performance>
+      <risk>Touch handling overhead affecting video playback</risk>
+      <mitigation>Throttled event handling and efficient animations</mitigation>
+      <probability>Low</probability>
+      <impact>Medium</impact>
+    </performance>
+    
+    <compatibility>
+      <risk>Inconsistent touch behavior across devices</risk>
+      <mitigation>Comprehensive device testing and fallbacks</mitigation>
+      <probability>Medium</probability>
+      <impact>High</impact>
+    </compatibility>
+  </risks>
+  
+  <!-- Success Criteria -->
+  <successCriteria>
+    <functional>
+      <criterion1>All touch targets meet 44x44px minimum</criterion1>
+      <criterion2>Touch spacing adequate (8px minimum)</criterion2>
+      <criterion3>Touch feedback provided for all interactions</criterion3>
+      <criterion4>Various finger sizes accommodated</criterion4>
+      <criterion5>Touch interactions responsive (&lt;100ms)</criterion5>
+      <criterion6>Mobile usability testing passes</criterion6>
+    </functional>
+    
+    <technical>
+      <criterion1>Zero WCAG touch target violations</criterion1>
+      <criterion2>Touch latency &lt;100ms measured</criterion2>
+      <criterion3>60fps animation performance maintained</criterion3>
+      <criterion4>Cross-device compatibility verified</criterion4>
+      <criterion5>Bundle size increase &lt;50KB</criterion5>
+    </technical>
+    
+    <accessibility>
+      <criterion1>Screen reader compatibility verified</criterion1>
+      <criterion2>VoiceOver/TalkBack navigation functional</criterion2>
+      <criterion3>Motor impairment accessibility tested</criterion3>
+      <criterion4>High contrast mode support maintained</criterion4>
+    </accessibility>
+  </successCriteria>
+  
+  <!-- File Structure Impact -->
+  <fileStructure>
+    <newFiles>
+      <file path="apps/web/src/components/mobile/TouchTargetManager.tsx">New mobile touch management component</file>
+      <file path="apps/web/src/components/mobile/MobileControls.tsx">Mobile-specific control components</file>
+      <file path="apps/web/src/components/mobile/TouchFeedback.tsx">Touch feedback animation component</file>
+      <file path="apps/web/src/lib/touch/touchUtils.ts">Touch utility functions</file>
+      <file path="apps/web/src/lib/touch/__tests__/touchUtils.test.ts">Touch utilities tests</file>
+    </newFiles>
+    
+    <modifiedFiles>
+      <file path="apps/web/src/components/VideoPlayer/custom-theme.css">Enhanced mobile touch target styles</file>
+      <file path="apps/web/src/lib/video/mobile-touch.ts">Enhanced touch handling</file>
+      <file path="apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx">Mobile control integration</file>
+      <file path="apps/web/tailwind.config.ts">Mobile touch utilities configuration</file>
+    </modifiedFiles>
+  </fileStructure>
+  
+  <!-- Documentation Requirements -->
+  <documentation>
+    <technical>
+      <file>apps/web/src/components/mobile/README.md">Mobile components documentation</file>
+      <file>apps/web/src/lib/touch/README.md">Touch utilities documentation</file>
+      <file>docs/implementation/mobile-touch-compliance.md">Implementation guide</file>
+    </technical>
+    
+    <testing>
+      <file>apps/web/src/components/mobile/__tests__/README.md">Mobile testing guide</file>
+      <file>docs/testing/mobile-testing-standards.md">Mobile testing procedures</file>
+    </testing>
+    
+    <accessibility>
+      <file>apps/web/src/components/mobile/ACCESSIBILITY.md">Mobile accessibility documentation</file>
+      <file>docs/accessibility/mobile-touch-targets.md">Touch target accessibility guide</file>
+    </accessibility>
+  </documentation>
+  
+  <!-- Monitoring and Analytics -->
+  <monitoring>
+    <performance>
+      <metric>Touch interaction latency</metric>
+      <target>&lt;100ms 95th percentile</target>
+      <tool>Web Vitals + custom metrics</tool>
+    </performance>
+    
+    <usage>
+      <metric>Mobile touch gesture usage</metric>
+      <dimensions>Gesture type, success rate, device type</dimensions>
+      <tool>VideoAnalytics integration</tool>
+    </usage>
+    
+    <errors>
+      <metric>Touch interaction failures</metric>
+      <tracking>Failed gestures, missed touches</tracking>
+      <alerting>Error rate &gt;1% triggers alert</alerting>
+    </errors>
+  </monitoring>
+</storyContext>
