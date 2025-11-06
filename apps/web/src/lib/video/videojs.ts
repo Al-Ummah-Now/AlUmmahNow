@@ -122,6 +122,18 @@ export interface ExtendedPlayer extends VideoJsPlayer {
    * @returns TimeRanges object with buffered time ranges
    */
   buffered(): TimeRanges;
+
+  /**
+   * Get the current source URL
+   * @returns Current source URL or empty string if no source
+   */
+  currentSrc(): string;
+
+  /**
+   * Reset and reload the media element
+   * Useful when changing sources programmatically
+   */
+  load(): void;
 }
 
 /**
