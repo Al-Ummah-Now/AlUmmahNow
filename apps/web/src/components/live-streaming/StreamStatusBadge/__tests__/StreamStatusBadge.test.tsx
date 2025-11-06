@@ -65,21 +65,21 @@ describe('StreamStatusBadge (LTR)', () => {
 
   describe('Size Variants', () => {
     it('applies small size classes', () => {
-      const { container } = render(<StreamStatusBadge status="live" size="sm" />);
+      render(<StreamStatusBadge status="live" size="sm" />);
       const badge = screen.getByRole('status');
 
       expect(badge).toHaveClass('h-5', 'text-[10px]', 'px-1.5');
     });
 
     it('applies medium size classes (default)', () => {
-      const { container } = render(<StreamStatusBadge status="live" />);
+      render(<StreamStatusBadge status="live" />);
       const badge = screen.getByRole('status');
 
       expect(badge).toHaveClass('h-6', 'text-xs', 'px-2');
     });
 
     it('applies large size classes', () => {
-      const { container } = render(<StreamStatusBadge status="live" size="lg" />);
+      render(<StreamStatusBadge status="live" size="lg" />);
       const badge = screen.getByRole('status');
 
       expect(badge).toHaveClass('h-7', 'text-sm', 'px-3');
@@ -109,7 +109,7 @@ describe('StreamStatusBadge (LTR)', () => {
       const scheduledTime = new Date('2024-12-31T20:00:00Z');
       render(<StreamStatusBadge status="scheduled" scheduledTime={scheduledTime} />);
 
-      const srText = screen.getByText((content, element) => {
+      const srText = screen.getByText((_content, element) => {
         return element?.classList.contains('sr-only') || false;
       });
 
@@ -120,7 +120,7 @@ describe('StreamStatusBadge (LTR)', () => {
       const endedTime = new Date('2024-12-31T22:00:00Z');
       render(<StreamStatusBadge status="ended" endedTime={endedTime} />);
 
-      const srText = screen.getByText((content, element) => {
+      const srText = screen.getByText((_content, element) => {
         return element?.classList.contains('sr-only') || false;
       });
 
@@ -173,14 +173,14 @@ describe('StreamStatusBadge (RTL)', () => {
 
   describe('RTL Layout', () => {
     it('applies RTL direction', () => {
-      const { container } = render(<StreamStatusBadgeRTL status="live" />);
+      render(<StreamStatusBadgeRTL status="live" />);
       const badge = screen.getByRole('status');
 
       expect(badge).toHaveAttribute('dir', 'rtl');
     });
 
     it('applies flex-row-reverse for icon placement', () => {
-      const { container } = render(<StreamStatusBadgeRTL status="live" showIcon />);
+      render(<StreamStatusBadgeRTL status="live" showIcon />);
       const badge = screen.getByRole('status');
 
       expect(badge).toHaveClass('flex-row-reverse');
