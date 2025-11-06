@@ -17,6 +17,7 @@ export const badgeVariants = cva(
         live: 'bg-red-500 text-white animate-pulse dark:bg-red-600',
         scheduled: 'bg-amber-500 text-white dark:bg-amber-600',
         ended: 'bg-gray-500 text-white dark:bg-gray-600',
+        cancelled: 'bg-gray-600 text-white dark:bg-gray-700',
         offline: 'bg-gray-400 text-white dark:bg-gray-500',
       },
       size: {

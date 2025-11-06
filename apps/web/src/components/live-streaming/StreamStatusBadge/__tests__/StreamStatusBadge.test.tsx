@@ -37,6 +37,14 @@ describe('StreamStatusBadge (LTR)', () => {
       expect(badge).toHaveClass('bg-gray-500');
     });
 
+    it('renders cancelled status', () => {
+      render(<StreamStatusBadge status="cancelled" />);
+      const badge = screen.getByRole('status');
+
+      expect(screen.getByText('CANCELLED')).toBeInTheDocument();
+      expect(badge).toHaveClass('bg-gray-600');
+    });
+
     it('renders offline status', () => {
       render(<StreamStatusBadge status="offline" />);
       const badge = screen.getByRole('status');
@@ -162,6 +170,12 @@ describe('StreamStatusBadge (RTL)', () => {
       render(<StreamStatusBadgeRTL status="ended" />);
 
       expect(screen.getByText('انتهى')).toBeInTheDocument();
+    });
+
+    it('renders Arabic label for cancelled status', () => {
+      render(<StreamStatusBadgeRTL status="cancelled" />);
+
+      expect(screen.getByText('ملغى')).toBeInTheDocument();
     });
 
     it('renders Arabic label for offline status', () => {

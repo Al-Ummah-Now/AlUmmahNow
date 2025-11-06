@@ -8,7 +8,7 @@
 'use client';
 
 import React from 'react';
-import { Circle, Clock, CheckCircle, CircleOff, type LucideIcon } from 'lucide-react';
+import { Circle, Clock, CheckCircle, CircleOff, XCircle, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { badgeVariants, iconSizeClasses } from '../variants';
 import type { StreamStatusBadgeProps, StreamStatus } from '../types';
@@ -20,6 +20,7 @@ const STATUS_ICONS: Record<StreamStatus, LucideIcon> = {
   live: Circle,
   scheduled: Clock,
   ended: CheckCircle,
+  cancelled: XCircle,
   offline: CircleOff,
 };
 
@@ -30,6 +31,7 @@ const STATUS_LABELS: Record<StreamStatus, string> = {
   live: 'مباشر',
   scheduled: 'مجدول',
   ended: 'انتهى',
+  cancelled: 'ملغى',
   offline: 'غير متصل',
 };
 
@@ -40,6 +42,7 @@ const STATUS_ARIA_LABELS: Record<StreamStatus, string> = {
   live: 'البث مباشر حاليًا',
   scheduled: 'البث مجدول',
   ended: 'انتهى البث',
+  cancelled: 'تم إلغاء البث',
   offline: 'البث غير متصل',
 };
 
@@ -64,7 +67,7 @@ export const StreamStatusBadgeRTL = React.memo<StreamStatusBadgeProps>(
     endedTime,
   }) => {
     // Ensure status is valid
-    const safeStatus: StreamStatus = ['live', 'scheduled', 'ended', 'offline'].includes(
+    const safeStatus: StreamStatus = ['live', 'scheduled', 'ended', 'cancelled', 'offline'].includes(
       status as string
     )
       ? (status as StreamStatus)

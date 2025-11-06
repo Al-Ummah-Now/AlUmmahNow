@@ -9,7 +9,7 @@
 'use client';
 
 import React from 'react';
-import { Circle, Clock, CheckCircle, CircleOff, type LucideIcon } from 'lucide-react';
+import { Circle, Clock, CheckCircle, CircleOff, XCircle, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { badgeVariants, iconSizeClasses } from './variants';
 import type { StreamStatusBadgeProps, StreamStatus } from './types';
@@ -21,6 +21,7 @@ const STATUS_ICONS: Record<StreamStatus, LucideIcon> = {
   live: Circle,
   scheduled: Clock,
   ended: CheckCircle,
+  cancelled: XCircle,
   offline: CircleOff,
 };
 
@@ -31,6 +32,7 @@ const STATUS_LABELS: Record<StreamStatus, string> = {
   live: 'LIVE',
   scheduled: 'SCHEDULED',
   ended: 'ENDED',
+  cancelled: 'CANCELLED',
   offline: 'OFFLINE',
 };
 
@@ -41,6 +43,7 @@ const STATUS_ARIA_LABELS: Record<StreamStatus, string> = {
   live: 'Stream is currently live',
   scheduled: 'Stream is scheduled',
   ended: 'Stream has ended',
+  cancelled: 'Stream has been cancelled',
   offline: 'Stream is offline',
 };
 
@@ -66,7 +69,7 @@ export const StreamStatusBadge = React.memo<StreamStatusBadgeProps>(
     endedTime,
   }) => {
     // Ensure status is valid
-    const safeStatus: StreamStatus = ['live', 'scheduled', 'ended', 'offline'].includes(
+    const safeStatus: StreamStatus = ['live', 'scheduled', 'ended', 'cancelled', 'offline'].includes(
       status as string
     )
       ? (status as StreamStatus)
@@ -88,10 +91,10 @@ export const StreamStatusBadge = React.memo<StreamStatusBadgeProps>(
         {/* Screen reader only - additional context */}
         <span className="sr-only">
           {safeStatus === 'scheduled' && scheduledTime && (
-            ` - Scheduled for ${scheduledTime.toLocaleString()}`
+            ` - Scheduled for ${scheduledTime.toLocaleString('en-US')}`
           )}
           {safeStatus === 'ended' && endedTime && (
-            ` - Ended at ${endedTime.toLocaleString()}`
+            ` - Ended at ${endedTime.toLocaleString('en-US')}`
           )}
         </span>
       </div>

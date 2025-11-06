@@ -8,7 +8,13 @@ import {
   ApiHeaders,
 } from "./types";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
+// Validate API URL is configured
+const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+if (!baseUrl) {
+  throw new Error(
+    '[LiveStreamsAPI] NEXT_PUBLIC_API_URL or API_URL environment variable is required'
+  );
+}
 
 export class LiveStreamsAPI {
   /**
@@ -44,7 +50,7 @@ export class LiveStreamsAPI {
 
       return await response.json();
     } catch (error) {
-      console.error('LiveStreamsAPI.list error:', error);
+      console.error('[LiveStreamsAPI.list]', error);
       return null;
     }
   }
@@ -57,6 +63,16 @@ export class LiveStreamsAPI {
     data: LiveStreamCreateRequest,
     authToken: string
   ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+    // Input validation
+    if (!authToken || authToken.trim() === '') {
+      console.error('[LiveStreamsAPI.create] authToken is required');
+      return null;
+    }
+    if (!data || typeof data !== 'object') {
+      console.error('[LiveStreamsAPI.create] data is required and must be an object');
+      return null;
+    }
+
     try {
       const response = await fetch(
         `${baseUrl}/api/live-streams`,
@@ -77,7 +93,7 @@ export class LiveStreamsAPI {
 
       return await response.json();
     } catch (error) {
-      console.error('LiveStreamsAPI.create error:', error);
+      console.error('[LiveStreamsAPI.create]', error);
       return null;
     }
   }
@@ -91,6 +107,20 @@ export class LiveStreamsAPI {
     data: LiveStreamUpdateRequest,
     authToken: string
   ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+    // Input validation
+    if (!streamId || streamId.trim() === '') {
+      console.error('[LiveStreamsAPI.update] streamId is required');
+      return null;
+    }
+    if (!authToken || authToken.trim() === '') {
+      console.error('[LiveStreamsAPI.update] authToken is required');
+      return null;
+    }
+    if (!data || typeof data !== 'object') {
+      console.error('[LiveStreamsAPI.update] data is required and must be an object');
+      return null;
+    }
+
     try {
       const response = await fetch(
         `${baseUrl}/api/live-streams/${streamId}`,
@@ -111,7 +141,7 @@ export class LiveStreamsAPI {
 
       return await response.json();
     } catch (error) {
-      console.error('LiveStreamsAPI.update error:', error);
+      console.error('[LiveStreamsAPI.update]', error);
       return null;
     }
   }
@@ -176,7 +206,7 @@ export class LiveStreamsAPI {
 
       return response.result.data || [];
     } catch (error) {
-      console.error('LiveStreamsAPI.getLiveNow error:', error);
+      console.error('[LiveStreamsAPI.getLiveNow]', error);
       return [];
     }
   }
@@ -199,7 +229,7 @@ export class LiveStreamsAPI {
 
       return response.result.data || [];
     } catch (error) {
-      console.error('LiveStreamsAPI.getScheduled error:', error);
+      console.error('[LiveStreamsAPI.getScheduled]', error);
       return [];
     }
   }
@@ -212,6 +242,12 @@ export class LiveStreamsAPI {
     status?: 'scheduled' | 'live' | 'ended' | 'cancelled',
     limit: number = 20
   ): Promise<LiveStream[]> {
+    // Input validation
+    if (!channelId || channelId.trim() === '') {
+      console.error('[LiveStreamsAPI.getByChannel] channelId is required');
+      return [];
+    }
+
     try {
       const response = await this.list({
         channelId,
@@ -225,7 +261,7 @@ export class LiveStreamsAPI {
 
       return response.result.data || [];
     } catch (error) {
-      console.error('LiveStreamsAPI.getByChannel error:', error);
+      console.error('[LiveStreamsAPI.getByChannel]', error);
       return [];
     }
   }
