@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@opennextjs/aws": "^3.5.7",
-    "@opennextjs/cloudflare": "^1.0.0-beta.3",
+    "@opennextjs/cloudflare": "^1.11.1",
     "@tailwindcss/postcss": "^4.0.15",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
