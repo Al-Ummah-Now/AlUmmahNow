@@ -27,7 +27,7 @@
     "@al-ummah/shared-types": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240909.0",
+    "@cloudflare/workers-types": "^4.20251106.1",
     "@types/jest": "^29.5.12",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
