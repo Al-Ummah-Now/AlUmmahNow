@@ -25,9 +25,9 @@
     "websocket:deploy": "turbo run deploy --filter=@al-ummah/websocket-server"
   },
   "devDependencies": {
-    "turbo": "^2.3.3",
-    "typescript": "5.7.2",
-    "wrangler": "^4.42.2"
+    "turbo": "^2.6.0",
+    "typescript": "5.9.3",
+    "wrangler": "^4.46.0"
   },
   "packageManager": "pnpm@9.15.4",
   "engines": {
