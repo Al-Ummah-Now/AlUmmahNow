@@ -55,15 +55,3 @@ export interface StreamStatusBadgeProps
    */
   endedTime?: Date;
 }
-
-/**
- * Internal variant configuration
- */
-export interface StreamStatusVariant {
-  bgColor: string;
-  textColor: string;
-  icon?: React.ComponentType<{ className?: string }>;
-  animation?: string;
-  label: string;
-  ariaLabel: string;
-}
