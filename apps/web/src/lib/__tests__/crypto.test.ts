@@ -363,12 +363,14 @@ describe('crypto utilities', () => {
       global.crypto = mockCrypto as any;
 
       // Save original env
-      const originalEnv = process.env.NODE_ENV;
-      const originalSecret = process.env.NEXT_PUBLIC_ENCRYPTION_SECRET;
+      const originalEnv = { ...process.env };
 
-      // Set production mode without secret
-      process.env.NODE_ENV = 'production';
-      delete process.env.NEXT_PUBLIC_ENCRYPTION_SECRET;
+      // Mock process.env with production mode without secret
+      Object.defineProperty(process, 'env', {
+        value: { ...originalEnv, NODE_ENV: 'production', NEXT_PUBLIC_ENCRYPTION_SECRET: undefined },
+        writable: true,
+        configurable: true,
+      });
 
       // Clear cache to force re-derivation
       clearEncryptionCache();
@@ -382,18 +384,22 @@ describe('crypto utilities', () => {
       await expect(encryptData('test')).rejects.toThrow('NEXT_PUBLIC_ENCRYPTION_SECRET');
 
       // Restore env
-      process.env.NODE_ENV = originalEnv;
-      if (originalSecret) {
-        process.env.NEXT_PUBLIC_ENCRYPTION_SECRET = originalSecret;
-      }
+      Object.defineProperty(process, 'env', {
+        value: originalEnv,
+        writable: true,
+        configurable: true,
+      });
     });
 
     it('should use default secret in development', async () => {
-      const originalEnv = process.env.NODE_ENV;
-      const originalSecret = process.env.NEXT_PUBLIC_ENCRYPTION_SECRET;
+      const originalEnv = { ...process.env };
 
-      process.env.NODE_ENV = 'development';
-      delete process.env.NEXT_PUBLIC_ENCRYPTION_SECRET;
+      // Mock process.env with development mode
+      Object.defineProperty(process, 'env', {
+        value: { ...originalEnv, NODE_ENV: 'development', NEXT_PUBLIC_ENCRYPTION_SECRET: undefined },
+        writable: true,
+        configurable: true,
+      });
 
       mockCrypto.subtle.importKey.mockResolvedValue({} as CryptoKey);
       mockCrypto.subtle.deriveKey.mockResolvedValue({} as CryptoKey);
@@ -403,10 +409,11 @@ describe('crypto utilities', () => {
       await expect(encryptData('test')).resolves.toBeDefined();
 
       // Restore env
-      process.env.NODE_ENV = originalEnv;
-      if (originalSecret) {
-        process.env.NEXT_PUBLIC_ENCRYPTION_SECRET = originalSecret;
-      }
+      Object.defineProperty(process, 'env', {
+        value: originalEnv,
+        writable: true,
+        configurable: true,
+      });
     });
   });
 });

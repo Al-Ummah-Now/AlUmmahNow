@@ -580,7 +580,7 @@ export default function CustomVideoPlayer({
   useEffect(() => {
     if (!playerRef.current || !videoId) return;
 
-    const player = playerRef.current;
+    const player = playerRef.current as ExtendedPlayer;
     const currentSrc = player.currentSrc();
     const newSrc = `https://vz-215a1ffd-a5a.b-cdn.net/${videoId}/playlist.m3u8`;
 

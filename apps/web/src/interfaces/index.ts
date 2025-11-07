@@ -146,6 +146,39 @@ export interface Dislikes {
     dateCreated?: string;
 }
 
+// Live Stream Types
+export interface LiveStream {
+    id: string;
+    title: string;
+    description?: string;
+    userId: string;
+    channelId: string;
+    channelName?: string;
+    channelAvatarUrl?: string;
+    dateCreated: string;
+    dateModified: string;
+    scheduledStartTime?: string;
+    actualStartTime?: string;
+    actualEndTime?: string;
+    status: 'scheduled' | 'live' | 'ended' | 'cancelled';
+    streamUrl?: string;
+    rtmpUrl?: string;
+    streamKey?: string;
+    thumbnailUrl?: string;
+    currentViewers: number;
+    peakViewers: number;
+    views: number;
+    likesCount: number;
+    dislikesCount: number;
+    commentsCount: number;
+    isPrivate: boolean;
+    allowChat: boolean;
+    tags?: string[];
+    category?: string;
+    language?: 'en' | 'ar';
+    duration?: number;
+}
+
 // Re-export WebSocket types
 export * from './websocket';
 
