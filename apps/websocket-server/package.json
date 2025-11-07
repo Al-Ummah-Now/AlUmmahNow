@@ -16,7 +16,7 @@
     "@openauthjs/openauth": "^0.4.3",
     "hono": "^4.4.7",
     "ws": "^8.18.3",
-    "zod": "^3.23.8"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240909.0",
