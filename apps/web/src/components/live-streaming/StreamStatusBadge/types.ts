@@ -8,9 +8,9 @@ import { badgeVariants } from './variants';
 
 /**
  * Valid stream status values
- * Matches the LiveStream.status type from interfaces/index.ts
+ * As per Task 1.1 specification
  */
-export type StreamStatus = 'live' | 'scheduled' | 'ended' | 'cancelled' | 'offline';
+export type StreamStatus = 'live' | 'scheduled' | 'ended' | 'offline';
 
 /**
  * Badge size variants
