@@ -10,7 +10,7 @@ A reusable badge component that displays the current status of a live stream wit
 
 ## Features
 
-- ✅ 4 status variants: `live`, `scheduled`, `ended`, `offline`
+- ✅ 5 status variants: `live`, `scheduled`, `ended`, `cancelled`, `offline`
 - ✅ 3 size variants: `sm`, `md`, `lg`
 - ✅ Status-specific icons from `lucide-react`
 - ✅ Pulse animation for live status
@@ -61,7 +61,7 @@ import { StreamStatusBadgeRTL } from '@/components/live-streaming/StreamStatusBa
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `status` | `'live' \| 'scheduled' \| 'ended' \| 'offline'` | `'offline'` | Current stream status |
+| `status` | `'live' \| 'scheduled' \| 'ended' \| 'cancelled' \| 'offline'` | `'offline'` | Current stream status |
 | `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | Badge size variant |
 | `showIcon` | `boolean` | `true` | Whether to display status icon |
 | `className` | `string` | `undefined` | Additional CSS classes |
@@ -86,8 +86,13 @@ import { StreamStatusBadgeRTL } from '@/components/live-streaming/StreamStatusBa
 - **Icon**: CheckCircle
 - **Label**: "ENDED" / "انتهى"
 
+### Cancelled
+- **Color**: Dark Gray (`bg-gray-600`)
+- **Icon**: XCircle
+- **Label**: "CANCELLED" / "ملغى"
+
 ### Offline
-- **Color**: Gray (`bg-gray-400`)
+- **Color**: Light Gray (`bg-gray-400`)
 - **Icon**: CircleOff
 - **Label**: "OFFLINE" / "غير متصل"
 
