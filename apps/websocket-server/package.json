@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@openauthjs/openauth": "^0.4.3",
-    "hono": "^4.4.7",
+    "hono": "^4.10.4",
     "ws": "^8.18.3",
     "zod": "^4.1.12"
   },

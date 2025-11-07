@@ -22,7 +22,7 @@
     "@bunny.net/storage-sdk": "0.3.0",
     "@openauthjs/openauth": "^0.4.3",
     "chanfana": "^2.8.0",
-    "hono": "^4.4.7",
+    "hono": "^4.10.4",
     "zod": "^4.1.12"
   },
   "devDependencies": {
