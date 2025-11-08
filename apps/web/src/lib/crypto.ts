@@ -82,7 +82,7 @@ async function deriveEncryptionKey(salt: Uint8Array): Promise<CryptoKey> {
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as BufferSource,
       iterations: ENCRYPTION_CONFIG.iterations,
       hash: 'SHA-256',
     },

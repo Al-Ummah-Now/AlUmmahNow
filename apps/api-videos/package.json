@@ -23,14 +23,14 @@
     "@openauthjs/openauth": "^0.4.3",
     "chanfana": "^2.8.0",
     "hono": "^4.10.4",
-    "zod": "^4.1.12"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240909.0",
+    "@cloudflare/workers-types": "^4.20251106.1",
     "@types/node": "24.10.0",
     "@types/service-worker-mock": "^2.0.1",
     "tsx": "^4.19.2",
-    "typescript": "5.7.2",
+    "typescript": "5.9.3",
     "wrangler": "^4.46.0"
   }
 }
