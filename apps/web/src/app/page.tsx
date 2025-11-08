@@ -7,7 +7,7 @@ const HomePage= () => {
 
   useEffect(() => {
      push('/en/');
-  }, []);
+  }, [push]);
   return <p></p>;
 };
 
