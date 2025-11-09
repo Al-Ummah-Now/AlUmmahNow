@@ -1,6 +1,7 @@
 import { Playlist, User, PaginationResponse } from "@/interfaces";
+import { getApiUrl } from "@/lib/runtime-config";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
+const baseUrl = getApiUrl();
 
 export const fetchPlaylist = async (user: User, setPlaylist: (playlist: Playlist) => void) => {
     if (!user) return;

@@ -30,7 +30,7 @@
     "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
     "NEXTJS_ENV": "production",
     "API_URL": "https://videos.api.alummahnow.net",
-    "NEXT_PUBLIC_API_URL": "https://videos.api.alummahnow.net"
+    "WEBSOCKET_URL": "wss://realtime.alummahnow.net/ws"
   },
   "r2_buckets": [
     {

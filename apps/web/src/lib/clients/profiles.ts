@@ -1,7 +1,8 @@
 import { Profile, User } from "@/interfaces";
 import { ProfilesAPI } from "@/lib/api";
+import { getApiUrl } from "@/lib/runtime-config";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
+const baseUrl = getApiUrl();
 
 export const fetchProfile = async (user: User | null | undefined, setProfile: (profile: Profile) => void): Promise<boolean> => {
     // Early return for any invalid input
@@ -129,7 +130,7 @@ export const updateProfilePhoto = async (profile: Profile, file: File, setProfil
         formData.append("photo", file);
 
         const response = await fetch(
-            `https://videos.api.alummahnow.net/api/profiles/${profile.id}/avatar`,
+            `${baseUrl}/api/profiles/${profile.id}/avatar`,
             {
                 method: "PUT",
                 body: formData,
@@ -154,7 +155,7 @@ export const updateCoverPhoto = async (profile: Profile, file: File, setProfile:
         formData.append("photo", file);
 
         const response = await fetch(
-            `https://videos.api.alummahnow.net/api/profiles/${profile.id}/cover`,
+            `${baseUrl}/api/profiles/${profile.id}/cover`,
             {
                 method: "PUT",
                 body: formData,

@@ -33,11 +33,15 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
   // Initialize WebSocket manager
   useEffect(() => {
+    // Get WebSocket URL from runtime config or environment variable
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wsUrl = (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__?.WEBSOCKET_URL)
+      || process.env.NEXT_PUBLIC_WEBSOCKET_URL
+      || '';
+
     // Default WebSocket configuration
     const defaultConfig: WebSocketConfig = {
-      url: process.env.NODE_ENV === 'production'
-        ? 'wss://realtime.alummahnow.net/ws'
-        : 'ws://localhost:3087/ws',
+      url: wsUrl,
       reconnectInterval: 1000,
       maxReconnectAttempts: 5,
       heartbeatInterval: 30000,

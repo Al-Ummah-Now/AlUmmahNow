@@ -3,8 +3,9 @@ import {
   ApiHeaders,
   ListQueryParams
 } from "./types";
+import { getApiUrl } from "@/lib/runtime-config";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://videos.api.alummahnow.net";
+const baseUrl = getApiUrl();
 
 // Moderation Types
 export interface ContentReport {

@@ -22,7 +22,8 @@
     "processor:deploy": "turbo run deploy --filter=@al-ummah/processor",
     "websocket:dev": "turbo run dev --filter=@al-ummah/websocket-server",
     "websocket:build": "turbo run build --filter=@al-ummah/websocket-server",
-    "websocket:deploy": "turbo run deploy --filter=@al-ummah/websocket-server"
+    "websocket:deploy": "turbo run deploy --filter=@al-ummah/websocket-server",
+    "deploy:all": "pnpm run web:deploy:production && pnpm run api:deploy && pnpm run processor:deploy && pnpm run websocket:deploy"
   },
   "devDependencies": {
     "turbo": "^2.6.0",

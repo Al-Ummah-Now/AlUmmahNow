@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const readyEvents = events.filter((e: { eventType: string }) => e.eventType === 'ready');
 
     if (readyEvents.length > 0) {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3086';
+      const apiUrl = process.env.API_URL || '';
 
       // Process each ready event (though there should typically be only one per batch)
       for (const event of readyEvents) {

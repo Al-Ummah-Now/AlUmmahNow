@@ -20,9 +20,9 @@ import type { NextRequest } from 'next/server';
  * Generate CSP policy based on environment variables
  */
 function generateCSP(isDevelopment: boolean): string {
-  // Get URLs from environment variables
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-  const websocketUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || '';
+  // Get URLs from environment variables (runtime - no hardcoded fallbacks)
+  const apiUrl = process.env.API_URL || '';
+  const websocketUrl = process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '';
   const bunnyPullZone = process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL || '';
 
   // Extract domains from URLs

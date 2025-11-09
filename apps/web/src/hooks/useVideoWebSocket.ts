@@ -22,6 +22,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { PresenceEvent } from '@/interfaces/websocket';
+import { getWebSocketUrl } from '@/lib/runtime-config';
 
 export interface VideoWebSocketOptions {
   videoId: string;
@@ -165,11 +166,11 @@ export function useVideoWebSocket({
       return undefined;
     }
 
-    // Get WebSocket URL from environment
-    const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
+    // Get WebSocket URL from runtime config
+    const wsUrl = getWebSocketUrl();
 
     if (!wsUrl) {
-      console.warn('[useVideoWebSocket] NEXT_PUBLIC_WEBSOCKET_URL not configured, WebSocket disabled');
+      console.warn('[useVideoWebSocket] WEBSOCKET_URL not configured, WebSocket disabled');
       return undefined;
     }
 

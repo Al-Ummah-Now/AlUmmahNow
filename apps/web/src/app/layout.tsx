@@ -48,6 +48,15 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
         />
+        {/* Runtime configuration injected from server */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__RUNTIME_CONFIG__ = ${JSON.stringify({
+              API_URL: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '',
+              WEBSOCKET_URL: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '',
+            })};`,
+          }}
+        />
       </head>
       <body className="font-inter">
         <Suspense>

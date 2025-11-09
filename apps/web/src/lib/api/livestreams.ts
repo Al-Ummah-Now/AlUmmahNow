@@ -9,10 +9,10 @@ import {
 } from "./types";
 
 // Get API URL - log error if not configured but don't crash the app
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+const baseUrl = process.env.API_URL;
 if (!baseUrl) {
   console.error(
-    '[LiveStreamsAPI] NEXT_PUBLIC_API_URL or API_URL environment variable is not configured. API calls will fail.'
+    '[LiveStreamsAPI] API_URL environment variable is not configured. API calls will fail.'
   );
 }
 

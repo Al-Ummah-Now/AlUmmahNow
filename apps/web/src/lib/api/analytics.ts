@@ -6,8 +6,9 @@ import {
   AnalyticsSummary,
   AnalyticsMetrics
 } from "./types";
+import { getApiUrl } from "@/lib/runtime-config";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://videos.api.alummahnow.net";
+const baseUrl = getApiUrl();
 
 export class AnalyticsAPI {
   /**

@@ -2,10 +2,10 @@
 
 import { cookies } from "next/headers";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+const baseUrl = process.env.API_URL;
 
 if (!baseUrl) {
-  throw new Error("API base URL is not configured. Please set NEXT_PUBLIC_API_URL or API_URL in your environment.");
+  throw new Error("API base URL is not configured. Please set API_URL in your environment.");
 }
 
 /**
