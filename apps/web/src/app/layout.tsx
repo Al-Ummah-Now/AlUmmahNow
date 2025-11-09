@@ -8,6 +8,7 @@ import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
 import { WebSocketProvider } from "@/lib/websocket/WebSocketProvider";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { QueryProvider } from "@/components/QueryProvider";
 
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
   const subject = await authenticated()
@@ -61,24 +62,26 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
       <body className="font-inter">
         <Suspense>
           <NuqsAdapter>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange>
-              <AuthProvider>
-                <WebSocketProvider user={user}>
-                  <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
-                    {/* Header */}
-                    <Navigation></Navigation>
-                    {children}
-                    
-                    {/* Real-time notification center */}
-                    <NotificationCenter user={user} />
-                  </div>
-                </WebSocketProvider>
-              </AuthProvider>
-            </ThemeProvider>
+            <QueryProvider>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="system"
+                enableSystem
+                disableTransitionOnChange>
+                <AuthProvider>
+                  <WebSocketProvider user={user}>
+                    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                      {/* Header */}
+                      <Navigation></Navigation>
+                      {children}
+
+                      {/* Real-time notification center */}
+                      <NotificationCenter user={user} />
+                    </div>
+                  </WebSocketProvider>
+                </AuthProvider>
+              </ThemeProvider>
+            </QueryProvider>
           </NuqsAdapter>
         </Suspense>
       </body>

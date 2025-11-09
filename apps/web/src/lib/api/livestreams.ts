@@ -1,4 +1,4 @@
-import { LiveStream } from "@/interfaces";
+import { LiveStream } from "@al-ummah/shared-types";
 import {
   ApiResponse,
   PaginationResponse,

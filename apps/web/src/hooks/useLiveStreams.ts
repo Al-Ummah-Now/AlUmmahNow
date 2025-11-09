@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { LiveStream } from '@/interfaces';
+import { LiveStream } from '@al-ummah/shared-types';
 import { LiveStreamsAPI } from '@/lib/api/livestreams';
 import { PaginationResponse } from '@/lib/api/types';
 
