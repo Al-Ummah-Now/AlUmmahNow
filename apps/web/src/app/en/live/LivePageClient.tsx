@@ -18,6 +18,7 @@ import { useLiveStreams } from '@/hooks/useLiveStreams';
 import { LiveStreamCard, LiveStreamCardSkeleton } from '@/components/live-streaming/LiveStreamCard';
 import { AlertCircle, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * Grid layout component for live stream cards
@@ -137,12 +138,12 @@ export function LivePageClient() {
 
   // Log stream count for debugging
   useEffect(() => {
-    console.log(`[LivePage] Loaded ${streams.length} live streams`);
+    logger.debug('[LivePage] Loaded live streams', { count: streams.length });
   }, [streams.length]);
 
   // Handle card click - navigate to stream page
   const handleStreamClick = (streamId: string) => {
-    console.log(`[LivePage] Navigating to stream: ${streamId}`);
+    logger.debug('[LivePage] Navigating to stream', { streamId });
     router.push(`/en/live/${streamId}`);
   };
 

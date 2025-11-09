@@ -3,6 +3,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { LiveStream } from '@al-ummah/shared-types';
 import { LiveStreamsAPI } from '@/lib/api/livestreams';
 import { PaginationResponse } from '@/lib/api/types';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * Options for configuring the useLiveStreams hook
@@ -173,7 +174,7 @@ export function useLiveStreams({
   } = useInfiniteQuery({
     queryKey,
     queryFn: async ({ pageParam }) => {
-      console.log(`[useLiveStreams] Fetching streams - status: ${status}, cursor: ${pageParam || 'initial'}, limit: ${limit}`);
+      logger.debug('[useLiveStreams] Fetching streams', { status, cursor: pageParam || 'initial', limit });
 
       const response = await LiveStreamsAPI.list({
         status,
@@ -196,7 +197,7 @@ export function useLiveStreams({
         throw new Error('Failed to fetch live streams: Invalid response format');
       }
 
-      console.log(`[useLiveStreams] Fetched ${response.result.data.length} streams`);
+      logger.debug('[useLiveStreams] Fetched streams', { count: response.result.data.length });
       return response.result;
     },
     getNextPageParam: (lastPage: PaginationResponse<LiveStream>) => {
@@ -223,14 +224,14 @@ export function useLiveStreams({
   // Wrap fetchNextPage to handle promise properly
   const fetchNextPage = async (): Promise<void> => {
     if (hasNextPage && !isFetchingNextPage) {
-      console.log('[useLiveStreams] Fetching next page');
+      logger.debug('[useLiveStreams] Fetching next page');
       await fetchNextPageFn();
     }
   };
 
   // Wrap refetch to handle promise properly
   const refetch = async (): Promise<void> => {
-    console.log('[useLiveStreams] Manual refetch triggered');
+    logger.debug('[useLiveStreams] Manual refetch triggered');
     await refetchFn();
   };
 

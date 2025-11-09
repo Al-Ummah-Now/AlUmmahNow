@@ -21,6 +21,7 @@ import { LiveStreamCardRTL } from '@/components/live-streaming/LiveStreamCard/rt
 import { LiveStreamCardSkeleton } from '@/components/live-streaming/LiveStreamCard/Skeleton';
 import { AlertCircle, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * Grid layout component for live stream cards (RTL)
@@ -160,12 +161,12 @@ export function LivePageClientRTL() {
 
   // Log stream count for debugging
   useEffect(() => {
-    console.log(`[LivePageRTL] تحميل ${streams.length} بث مباشر`);
+    logger.debug('[LivePageRTL] Loaded live streams', { count: streams.length });
   }, [streams.length]);
 
   // Handle card click - navigate to stream page (Arabic route)
   const handleStreamClick = (streamId: string) => {
-    console.log(`[LivePageRTL] الانتقال إلى البث: ${streamId}`);
+    logger.debug('[LivePageRTL] Navigating to stream', { streamId });
     router.push(`/ar/live/${streamId}`);
   };
 
