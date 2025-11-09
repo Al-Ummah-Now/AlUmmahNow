@@ -15,4 +15,7 @@ export interface PlayerOptions {
   height?: number;
   availableResolutions?: string[];
   dateCreated: Date;
+  likesCount?: number;
+  dislikesCount?: number;
+  commentsCount?: number;
 }

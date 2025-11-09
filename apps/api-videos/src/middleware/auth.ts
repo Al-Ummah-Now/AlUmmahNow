@@ -170,30 +170,30 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
 export async function optionalAuthMiddleware(c: Context, next: Next) {
   try {
     const authHeader = c.req.header('Authorization');
-    
+
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const payload = AUTH_CONFIG.VERIFY_JWT_SIGNATURE 
-        ? await validateJWTWithSignature(token, c.env) 
+      const payload = AUTH_CONFIG.VERIFY_JWT_SIGNATURE
+        ? await validateJWTWithSignature(token, c.env)
         : await validateJWTBasic(token);
-      
+
       if (payload) {
         c.set('auth', {
           userId: payload.sub,
           email: payload.email,
           payload
         } as AuthContext);
-        
+
         // Set userId in context for backward compatibility
         c.set('userId', payload.sub);
       }
     }
 
-    await next();
+    return await next();
   } catch (error) {
     // Log error but don't fail the request for optional auth
     console.error('Optional auth middleware error:', error);
-    await next();
+    return await next();
   }
 }
 

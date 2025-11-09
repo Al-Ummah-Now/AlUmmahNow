@@ -38,8 +38,8 @@ export enum MessageType {
 export interface AlUmmahMessage {
   id: string;
   type: MessageType;
-  timestamp: string;
-  data: Record<string, unknown>;
+  timestamp: number | string; // API sends number (Date.now()), allow both
+  payload: Record<string, unknown>; // API sends 'payload', not 'data'
   priority?: 'low' | 'normal' | 'high' | 'critical';
   retryCount?: number;
   failureReason?: string;
@@ -53,15 +53,26 @@ export interface ProcessingResult {
   processedAt: string;
 }
 
+export interface R2PutOptions {
+  httpMetadata?: {
+    contentType?: string;
+    contentLanguage?: string;
+    contentDisposition?: string;
+    contentEncoding?: string;
+    cacheControl?: string;
+  };
+  customMetadata?: Record<string, string>;
+}
+
 export interface QueueEnvironment {
   MESSAGE_QUEUE: {
     send: (message: AlUmmahMessage) => Promise<void>;
   };
-  DLQ: {
+  DLQ?: { // Optional - might not be configured in all environments
     send: (message: AlUmmahMessage) => Promise<void>;
   };
   MESSAGES_BUCKET: {
-    put: (key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream) => Promise<void>;
+    put: (key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: R2PutOptions) => Promise<void>;
   };
   ENVIRONMENT: string;
   LOG_LEVEL: string;

@@ -21,7 +21,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             channel: video.channel,
             url: video.videoUrl,
             poster: video.thumbnailUrl, // Video thumbnail from API
-            views: '0', // API doesn't return views field yet
+            views: `${video.views || 0}`, // Get views from API response
             dateCreated: new Date(video.dateCreated),
             autoplay: false,
             type: "video/mp4",
@@ -29,6 +29,9 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             height: video.height,
             availableResolutions: video.availableResolutions,
             channelAvatar: video.channelAvatarUrl,
+            likesCount: video.likesCount,
+            dislikesCount: video.dislikesCount,
+            commentsCount: video.commentsCount,
         };
 
         console.log('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
@@ -40,12 +43,12 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
 };
 
 
-export async function fetchVideos(cursor: string | null = null): Promise<VideoInfo[] | undefined> {
+export async function fetchVideos(cursor: string | null = null, userId?: string): Promise<VideoInfo[] | undefined> {
     try {
         const result = await VideosAPI.list({
             limit: 15,
             cursor: cursor || undefined
-        });
+        }, userId ? { userId } : undefined);
 
         if (!result) {
             throw new Error('Failed to fetch videos');
@@ -77,12 +80,12 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
     }
 };
 
-export async function fetchVideosWithPagination(cursor: string | null = null): Promise<PaginationResponse<VideoObject> | null> {
+export async function fetchVideosWithPagination(cursor: string | null = null, userId?: string): Promise<PaginationResponse<VideoObject> | null> {
     try {
-        const result = await VideosAPI.list({ 
-            limit: 15, 
-            cursor: cursor || undefined 
-        });
+        const result = await VideosAPI.list({
+            limit: 15,
+            cursor: cursor || undefined
+        }, userId ? { userId } : undefined);
         return result;
     } catch (error) {
         console.error(error);

@@ -73,14 +73,18 @@ export default {
               logger.warn(`Retrying message ${message.body.id}`);
               message.retry();
             } else {
-              // Send to dead letter queue
+              // Send to dead letter queue (if available)
               logger.error(`Sending message ${message.body.id} to DLQ`);
-              await env.DLQ.send({
-                ...message.body,
-                retryCount: (message.body.retryCount || 0) + 1,
-                failureReason: result.error || 'Unknown error',
-                failedAt: result.processedAt,
-              });
+              if (env.DLQ && typeof env.DLQ.send === 'function') {
+                await env.DLQ.send({
+                  ...message.body,
+                  retryCount: (message.body.retryCount || 0) + 1,
+                  failureReason: result.error || 'Unknown error',
+                  failedAt: result.processedAt,
+                });
+              } else {
+                logger.warn(`DLQ not configured - acknowledging message ${message.body.id} without DLQ`);
+              }
               message.ack();
             }
           } else {

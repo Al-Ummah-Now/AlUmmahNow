@@ -41,12 +41,12 @@ export default function Home() {
   // Fetch related videos from the API
   useEffect(() => {
     const fetchRelatedVideos = async () => {
-      const videos = await fetchVideos();
+      const videos = await fetchVideos(null, user?.id);
       setRelatedVideos(videos || []);
     };
 
     fetchRelatedVideos();
-  }, []);
+  }, [user?.id]);
 
   // Demo function to test notifications
   const testNotification = () => {
@@ -100,8 +100,8 @@ export default function Home() {
                   videoId={vid}
                   channelId={videoDetails.channel}
                   initialViewCount={parseInt(videoDetails.views?.replace(/[^\d]/g, '') || '0')}
-                  initialLikesCount={0}
-                  initialCommentsCount={0}
+                  initialLikesCount={videoDetails.likesCount || 0}
+                  initialCommentsCount={videoDetails.commentsCount || 0}
                   onMetricsUpdate={(metrics) => {
                     console.log('📊 Video metrics updated:', metrics);
                   }}

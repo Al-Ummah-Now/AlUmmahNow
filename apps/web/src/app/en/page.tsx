@@ -4,21 +4,23 @@ import { VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
 import { useQueryState } from "nuqs";
 import { fetchVideosWithPagination } from "@/lib/clients/videos";
+import { useAuth } from "@/components/AuthProvider/authContext";
 
 const VideosPage: React.FC = () => {
+  const { user } = useAuth();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
-  const [nextCursor, setNextCursor] = useState<string | null>(null); 
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isCollapsed, _setIsCollapsed] = useState(true);
-  
+
   // Prevent duplicate initial fetch
   const hasInitialFetch = useRef(false);
 
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
     try {
-      const data = await fetchVideosWithPagination(cursor);
+      const data = await fetchVideosWithPagination(cursor, user?.id);
       
       if (!data) {
         console.error("Failed to fetch videos");

@@ -5,23 +5,25 @@ import VideoCard from "@/components/videoCard/rtl/index";
 import { useQueryState } from "nuqs";
 import { usePathname } from "next/navigation";
 import { fetchVideosWithPagination } from "@/lib/clients/videos";
+import { useAuth } from "@/components/AuthProvider/authContext";
 
 const VideosPage: React.FC = () => {
+  const { user } = useAuth();
   const [videos, setVideos] = useState<VideoObject[]>([]);
-  const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
+  const [_cursor, setCursor] = useQueryState("cursor", { shallow: true});
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isCollapsed, _setIsCollapsed] = useState(true);
   const [loading, setLoading] = useState(false);
   const path = usePathname();
   const rtl = path.indexOf('/ar') > -1;
-  
+
   // Prevent duplicate initial fetch
   const hasInitialFetch = useRef(false);
 
   const fetchVideos = async (cursor: string | null) => {
     setLoading(true);
     try {
-      const data = await fetchVideosWithPagination(cursor);
+      const data = await fetchVideosWithPagination(cursor, user?.id);
       
       if (!data) {
         console.error("Failed to fetch videos");

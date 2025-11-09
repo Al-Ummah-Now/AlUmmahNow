@@ -1,8 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRealTimeVideoMetrics, useRealTimePresence } from '@/hooks/useRealTimeVideoMetrics';
-import { Eye, Heart, MessageCircle, Users } from 'lucide-react';
+import { Eye, Heart, MessageCircle, Users, ThumbsDown } from 'lucide-react';
+import { VideosAPI } from '@/lib/api/videos';
+import { useAuth } from '@/components/AuthProvider/authContext';
 
 interface VideoMetricsDisplayProps {
   videoId: string;
@@ -23,6 +25,11 @@ export function VideoMetricsDisplay({
   initialCommentsCount = 0,
   onMetricsUpdate
 }: VideoMetricsDisplayProps) {
+  const { user } = useAuth();
+  const [isLiked, setIsLiked] = useState(false);
+  const [isDisliked, setIsDisliked] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
   const { metrics, isConnected } = useRealTimeVideoMetrics({
     videoId,
     initialMetrics: {
@@ -46,6 +53,66 @@ export function VideoMetricsDisplay({
     return num.toString();
   };
 
+  const handleLike = async () => {
+    if (!user || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const headers = {
+        channelId: user.id || '',
+        userId: user.id || ''
+      };
+
+      if (isLiked) {
+        await VideosAPI.unlike(videoId, headers);
+        setIsLiked(false);
+        console.log('👍 Video unliked');
+      } else {
+        if (isDisliked) {
+          await VideosAPI.removeDislike(videoId, headers);
+          setIsDisliked(false);
+        }
+        await VideosAPI.like(videoId, headers);
+        setIsLiked(true);
+        console.log('👍 Video liked');
+      }
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDislike = async () => {
+    if (!user || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const headers = {
+        channelId: user.id || '',
+        userId: user.id || ''
+      };
+
+      if (isDisliked) {
+        await VideosAPI.removeDislike(videoId, headers);
+        setIsDisliked(false);
+        console.log('👎 Video dislike removed');
+      } else {
+        if (isLiked) {
+          await VideosAPI.unlike(videoId, headers);
+          setIsLiked(false);
+        }
+        await VideosAPI.dislike(videoId, headers);
+        setIsDisliked(true);
+        console.log('👎 Video disliked');
+      }
+    } catch (error) {
+      console.error('Failed to toggle dislike:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
       {/* View count */}
@@ -57,12 +124,34 @@ export function VideoMetricsDisplay({
       </div>
 
       {/* Likes */}
-      <div className="flex items-center gap-1">
-        <Heart className="w-4 h-4" />
+      <button
+        onClick={handleLike}
+        disabled={!user || isLoading}
+        className={`flex items-center gap-1 transition-all duration-200 ${
+          !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
+        } ${isLiked ? 'text-red-500' : ''}`}
+        title={!user ? 'Sign in to like' : isLiked ? 'Unlike' : 'Like'}
+      >
+        <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
         <span className={`transition-colors duration-200 ${isConnected ? 'text-green-600' : ''}`}>
           {formatNumber(metrics.likesCount)}
         </span>
-      </div>
+      </button>
+
+      {/* Dislikes */}
+      <button
+        onClick={handleDislike}
+        disabled={!user || isLoading}
+        className={`flex items-center gap-1 transition-all duration-200 ${
+          !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
+        } ${isDisliked ? 'text-blue-500' : ''}`}
+        title={!user ? 'Sign in to dislike' : isDisliked ? 'Remove dislike' : 'Dislike'}
+      >
+        <ThumbsDown className={`w-4 h-4 ${isDisliked ? 'fill-current' : ''}`} />
+        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-600' : ''}`}>
+          {formatNumber(metrics.dislikesCount)}
+        </span>
+      </button>
 
       {/* Comments */}
       <div className="flex items-center gap-1">

@@ -49,8 +49,8 @@ export class MessageProcessor {
       message.id &&
       message.type !== undefined && message.type !== null &&
       message.timestamp &&
-      message.data &&
-      typeof message.data === 'object'
+      message.payload &&
+      typeof message.payload === 'object'
     );
   }
 
@@ -122,9 +122,9 @@ export class MessageProcessor {
   }
 
   private async processProfileMessage(message: AlUmmahMessage): Promise<void> {
-    this.logger.debug(`Processing profile message: ${MessageType[message.type]}`, message.data);
-    
-    const { userId } = message.data as { userId: string; profileData?: unknown };
+    this.logger.debug(`Processing profile message: ${MessageType[message.type]}`, message.payload);
+
+    const { userId } = message.payload as { userId: string; profileData?: unknown };
     
     if (!userId) {
       throw new Error('Profile message missing required field: userId');
@@ -148,9 +148,9 @@ export class MessageProcessor {
   }
 
   private async processChannelMessage(message: AlUmmahMessage): Promise<void> {
-    this.logger.debug(`Processing channel message: ${MessageType[message.type]}`, message.data);
-    
-    const { channelId, userId } = message.data as { channelId: string; userId: string };
+    this.logger.debug(`Processing channel message: ${MessageType[message.type]}`, message.payload);
+
+    const { channelId, userId } = message.payload as { channelId: string; userId: string };
     
     if (!channelId || !userId) {
       throw new Error('Channel message missing required fields: channelId, userId');
@@ -174,9 +174,9 @@ export class MessageProcessor {
   }
 
   private async processSubscriptionMessage(message: AlUmmahMessage): Promise<void> {
-    this.logger.debug(`Processing subscription message: ${MessageType[message.type]}`, message.data);
-    
-    const { userId, channelId } = message.data as { userId: string; channelId: string };
+    this.logger.debug(`Processing subscription message: ${MessageType[message.type]}`, message.payload);
+
+    const { userId, channelId } = message.payload as { userId: string; channelId: string };
     
     if (!userId || !channelId) {
       throw new Error('Subscription message missing required fields: userId, channelId');
@@ -194,47 +194,50 @@ export class MessageProcessor {
   }
 
   private async processVideoMessage(message: AlUmmahMessage): Promise<void> {
-    this.logger.debug(`Processing video message: ${MessageType[message.type]}`, message.data);
-    
-    const { videoId, userId } = message.data as { videoId: string; userId: string };
-    
-    if (!videoId || !userId) {
-      throw new Error('Video message missing required fields: videoId, userId');
+    this.logger.debug(`Processing video message: ${MessageType[message.type]}`, message.payload);
+
+    // VideoView uses viewerId, other video messages use userId
+    const payload = message.payload as { videoId: string; userId?: string; viewerId?: string };
+    const { videoId, userId, viewerId } = payload;
+    const actualUserId = userId || viewerId; // Use whichever is provided
+
+    if (!videoId) {
+      throw new Error('Video message missing required field: videoId');
     }
 
     // Process video-related actions
     switch (message.type) {
       case MessageType.VideoCreate:
-        this.logger.info(`Video ${videoId} created by user ${userId}`);
+        this.logger.info(`Video ${videoId} created by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoEdit:
-        this.logger.info(`Video ${videoId} edited by user ${userId}`);
+        this.logger.info(`Video ${videoId} edited by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoDelete:
-        this.logger.info(`Video ${videoId} deleted by user ${userId}`);
+        this.logger.info(`Video ${videoId} deleted by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoView:
-        this.logger.info(`Video ${videoId} viewed by user ${userId}`);
+        this.logger.info(`Video ${videoId} viewed by user ${actualUserId || 'anonymous'}`);
         break;
       case MessageType.VideoLike:
-        this.logger.info(`Video ${videoId} liked by user ${userId}`);
+        this.logger.info(`Video ${videoId} liked by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoUnlike:
-        this.logger.info(`Video ${videoId} unliked by user ${userId}`);
+        this.logger.info(`Video ${videoId} unliked by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoDislike:
-        this.logger.info(`Video ${videoId} disliked by user ${userId}`);
+        this.logger.info(`Video ${videoId} disliked by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoUndislike:
-        this.logger.info(`Video ${videoId} undisliked by user ${userId}`);
+        this.logger.info(`Video ${videoId} undisliked by user ${actualUserId || 'unknown'}`);
         break;
     }
   }
 
   private async processCommentMessage(message: AlUmmahMessage): Promise<void> {
-    this.logger.debug(`Processing comment message: ${MessageType[message.type]}`, message.data);
-    
-    const { commentId, userId, videoId } = message.data as { commentId: string; userId: string; videoId: string };
+    this.logger.debug(`Processing comment message: ${MessageType[message.type]}`, message.payload);
+
+    const { commentId, userId, videoId } = message.payload as { commentId: string; userId: string; videoId: string };
     
     if (!commentId || !userId || !videoId) {
       throw new Error('Comment message missing required fields: commentId, userId, videoId');
@@ -267,9 +270,9 @@ export class MessageProcessor {
   }
 
   private async processPlaylistMessage(message: AlUmmahMessage): Promise<void> {
-    this.logger.debug(`Processing playlist message: ${MessageType[message.type]}`, message.data);
-    
-    const { playlistId, userId } = message.data as { playlistId: string; userId: string; videoId?: string };
+    this.logger.debug(`Processing playlist message: ${MessageType[message.type]}`, message.payload);
+
+    const { playlistId, userId } = message.payload as { playlistId: string; userId: string; videoId?: string };
     
     if (!playlistId || !userId) {
       throw new Error('Playlist message missing required fields: playlistId, userId');
@@ -308,15 +311,30 @@ export class MessageProcessor {
       const hour = String(messageDate.getUTCHours()).padStart(2, '0');
       const minute = String(messageDate.getUTCMinutes()).padStart(2, '0');
       const second = String(messageDate.getUTCSeconds()).padStart(2, '0');
-      
+
       const key = `${year}-${month}-${day}T${hour}-${minute}-${second}.${message.id}`;
-      
-      // Convert message to JSON string
-      const messageJson = JSON.stringify(message, null, 2);
-      
-      // Save to R2 bucket
-      await env.MESSAGES_BUCKET.put(key, messageJson);
-      
+
+      // Enhance message with human-readable type name for better queryability
+      const enhancedMessage = {
+        ...message,
+        typeName: MessageType[message.type], // Add human-readable type name (e.g., "VideoView")
+        timestampISO: new Date(message.timestamp).toISOString(), // Add ISO string for easier filtering
+      };
+
+      // Convert enhanced message to JSON string
+      const messageJson = JSON.stringify(enhancedMessage, null, 2);
+
+      // Save to R2 bucket with proper Content-Type metadata
+      await env.MESSAGES_BUCKET.put(key, messageJson, {
+        httpMetadata: {
+          contentType: 'application/json',
+        },
+        customMetadata: {
+          messageType: MessageType[message.type],
+          messageId: message.id,
+        },
+      });
+
       this.logger.debug(`Message ${message.id} saved to R2 bucket with key: ${key}`);
     } catch (error) {
       this.logger.error(`Failed to save message ${message.id} to R2 bucket`, error);
@@ -326,9 +344,9 @@ export class MessageProcessor {
   }
 
   private async processWatchHistoryMessage(message: AlUmmahMessage): Promise<void> {
-    this.logger.debug(`Processing watch history message`, message.data);
+    this.logger.debug(`Processing watch history message`, message.payload);
 
-    const { type, userId, videoId, progress, duration } = message.data as {
+    const { type, userId, videoId, progress, duration } = message.payload as {
       type: string;
       userId: string;
       videoId: string;
@@ -347,8 +365,12 @@ export class MessageProcessor {
         this.logger.info(`User ${userId} started watching video ${videoId}`);
         break;
       case 'watch_progress':
-        const percentage = Math.round((progress / duration) * 100);
-        this.logger.info(`User ${userId} progress on video ${videoId}: ${percentage}% (${progress}s/${duration}s)`);
+        if (progress !== undefined && duration !== undefined && duration > 0) {
+          const percentage = Math.round((progress / duration) * 100);
+          this.logger.info(`User ${userId} progress on video ${videoId}: ${percentage}% (${progress}s/${duration}s)`);
+        } else {
+          this.logger.warn(`Watch progress event missing progress/duration fields for video ${videoId}`);
+        }
         break;
       case 'watch_completed':
         this.logger.info(`User ${userId} completed watching video ${videoId}`);
