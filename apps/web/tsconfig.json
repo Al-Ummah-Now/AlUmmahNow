@@ -11,7 +11,7 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@al-ummah/shared-types": ["../../packages/shared-types/src"]
+      "@al-ummah/shared-types": ["../../packages/shared-types/dist"]
     },
     "skipLibCheck": true,
     "strict": true,

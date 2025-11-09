@@ -247,4 +247,5 @@ export interface LiveStreamUpdateRequest {
 export interface LiveStreamQueryParams extends ListQueryParams {
   status?: 'scheduled' | 'live' | 'ended' | 'cancelled';
   channelId?: string;
+  category?: string;
 }
