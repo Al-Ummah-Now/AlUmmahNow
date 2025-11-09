@@ -36,6 +36,7 @@ export class LiveStreamsAPI {
       if (params?.cursor) queryParams.append('cursor', params.cursor);
       if (params?.status) queryParams.append('status', params.status);
       if (params?.channelId) queryParams.append('channelId', params.channelId);
+      if (params?.category) queryParams.append('category', params.category);
 
       const response = await fetch(
         `${baseUrl}/api/live-streams?${queryParams.toString()}`,
