@@ -2,6 +2,7 @@ import { fromHono } from "chanfana";
 import { Hono } from "hono";
 import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth";
+import { loggingMiddleware } from "./middleware/logging";
 import { VideoCreate } from "./endpoints/video/videoCreate";
 import { VideoUpdate } from "./endpoints/video/videoUpdate";
 import { VideoDelete } from "./endpoints/video/videoDelete";
@@ -80,6 +81,9 @@ app.use('*', cors({
 	credentials: false,
 }));
 
+// Add comprehensive logging middleware for ALL routes
+app.use('*', loggingMiddleware);
+
 // Explicit OPTIONS handler for profile endpoints
 app.options('/api/profile*', (c) => {
 	c.header('Access-Control-Allow-Origin', '*');
@@ -139,6 +143,10 @@ openapi.registry.registerComponent("securitySchemes", "BearerToken", {
 	scheme: 'bearer',
 	bearerFormat: 'JWT'
 });
+
+// CRITICAL: Add logging middleware to OpenAPI router
+// Chanfana creates a new router, so we need to register middleware on it too
+openapi.original.use('*', loggingMiddleware);
 
 // Register OpenAPI endpoints
 // PUBLIC endpoints (optional auth - work without authentication)

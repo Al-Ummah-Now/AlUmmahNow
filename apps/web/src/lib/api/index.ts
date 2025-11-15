@@ -3,8 +3,9 @@ export { VideosAPI } from './videos';
 export { ChannelsAPI } from './channels';
 export { PlaylistsAPI } from './playlists';
 export { AnalyticsAPI } from './analytics';
-export { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI } from './profiles';
+export { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI, createProfile } from './profiles';
 export { isProfileComplete } from './profiles-utils';
+export { fetchProfile, checkProfileExists, updateProfile, updateProfilePhoto, updateCoverPhoto } from './profiles-client';
 
 // Import for internal use
 import { VideosAPI } from './videos';
@@ -62,10 +63,10 @@ export class APIClient {
   // Profiles
   get profiles() {
     return {
-      getCurrent: (userId: string, headers?: ApiHeaders) => getProfileCurrent(userId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      create: (data: ProfileUpdateRequest, headers?: ApiHeaders) => createProfileAPI(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      update: (data: ProfileUpdateRequest, headers?: ApiHeaders) => updateProfileAPI(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      delete: (headers?: ApiHeaders) => deleteProfileAPI({ ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      getCurrent: () => getProfileCurrent(),
+      create: (data: ProfileUpdateRequest) => createProfileAPI(data),
+      update: (data: ProfileUpdateRequest) => updateProfileAPI(data),
+      delete: () => deleteProfileAPI(),
     };
   }
 

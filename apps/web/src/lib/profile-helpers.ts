@@ -1,5 +1,5 @@
 import { User } from '@/interfaces';
-import { checkProfileExists } from '@/lib/api/profiles';
+import { checkProfileExists } from '@/lib/api/profiles-client';
 
 export async function shouldRedirectToProfileCreation(user: User | null): Promise<{ shouldRedirect: boolean; redirectPath: string | null }> {
   if (!user) {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
-import { updateProfile } from "@/lib/api/profiles";
+import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 
 const ProfileCreatePage = () => {
@@ -37,7 +37,6 @@ const ProfileCreatePage = () => {
     const formData = new FormData(event.target as HTMLFormElement);
     const firstName = formData.get('firstName') as string;
     const lastName = formData.get('lastName') as string;
-    const displayName = formData.get('displayName') as string;
 
     // Validation
     if (!firstName.trim()) {
@@ -46,15 +45,14 @@ const ProfileCreatePage = () => {
       return;
     }
 
-    const newProfile = {
-      ...profile,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      displayName: displayName.trim() || `${firstName.trim()} ${lastName.trim()}`.trim(),
-    };
-
     try {
-      await updateProfile(newProfile, setProfile);
+      await createProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        avatarUrl: profile.avatarUrl,
+        coverUrl: profile.coverUrl,
+        email: profile.email,
+      });
       // Redirect to home page after successful profile creation
       router.push('/ar/');
     } catch (error) {

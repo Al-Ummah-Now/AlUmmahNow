@@ -58,17 +58,14 @@ class ProfileManager {
     this.isLoading = true;
     this.notify();
 
-    this.fetchPromise = this.performFetch(user);
+    this.fetchPromise = this.performFetch();
     await this.fetchPromise;
     this.fetchPromise = null;
   }
 
-  private async performFetch(user: User) {
+  private async performFetch() {
     try {
-      const profile = await getProfileCurrent(user.id, {
-        userId: user.id,
-        channelId: user.id
-      });
+      const profile = await getProfileCurrent();
 
       if (profile) {
         this.profile = profile;

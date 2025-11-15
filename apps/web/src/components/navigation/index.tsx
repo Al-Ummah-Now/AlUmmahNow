@@ -8,7 +8,7 @@ import AccountNavigation from "@/components/accountNavigation";
 import AccountNavigationRtl from "@/components/accountNavigation/rtl";
 import { usePathname } from "next/navigation";
 import { Profile } from "@/interfaces";
-import { fetchProfile } from "@/lib/api/profiles";
+import { fetchProfile } from "@/lib/api/profiles-client";
 import { useAuth } from "../AuthProvider/authContext";
 import { ActiveChannelProvider } from "@/contexts/ActiveChannelContext";
 import { useChannels } from "@/hooks/useChannels";

@@ -155,14 +155,15 @@ export function NotificationCenter({ user }: NotificationCenterProps) {
       )}
 
       {/* Toast notifications */}
-      <div className="fixed top-0 right-0 z-50 space-y-2 p-4">
+      <div className="fixed top-0 right-0 z-50 space-y-2 p-4 pointer-events-none">
         {notifications
           .filter(n => visibleToasts.includes(n.id))
           .slice(0, 3) // Only show 3 toasts at a time
           .map((notification, index) => (
             <div
               key={notification.id}
-              style={{ 
+              className="pointer-events-auto"
+              style={{
                 transform: `translateY(${index * 10}px)`,
                 zIndex: 50 - index
               }}

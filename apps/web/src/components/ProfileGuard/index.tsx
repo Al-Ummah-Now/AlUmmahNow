@@ -2,7 +2,7 @@
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { checkProfileExists } from '@/lib/api/profiles';
+import { checkProfileExists } from '@/lib/api/profiles-client';
 
 interface ProfileGuardProps {
   children: React.ReactNode;

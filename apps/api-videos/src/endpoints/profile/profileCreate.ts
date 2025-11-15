@@ -70,9 +70,9 @@ export class ProfileCreate extends OpenAPIRoute {
 		const entityDefaults = createEntityDefaults();
 		
 		const businessProfile = {
-			id: userId, // Use userId as profile ID
 			...entityDefaults,
 			...profileInput,
+			id: userId, // Use userId as profile ID - MUST be last to override any other id
 			channels: [],
 		};
 

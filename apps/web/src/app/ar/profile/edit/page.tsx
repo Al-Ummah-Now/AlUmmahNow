@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect } from 'react';
 import { Profile } from '@/interfaces';
-import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles";
+import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import { useAuth } from '@/components/AuthProvider/authContext';
 
 const ProfilePage = () => {

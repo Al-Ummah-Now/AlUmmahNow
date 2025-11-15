@@ -2,13 +2,13 @@
 import React, { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import IcoButton from "@/components/iconButton";
-import Image from 'next/image';
 import Link from "next/link";
 import { AccountNavigationProps, NavItem } from "./interfaces";
 import DialogDefault from "../login";
 import { useTheme } from "next-themes"
 import LoginWrapper from "../login/loginButton";
 import LogoutWrapper from "../login/logoutButton";
+import UserAvatar from '@/components/UserAvatar';
 
 const AccountNavigation: React.FC<AccountNavigationProps> = ({
     isVisible,
@@ -84,10 +84,8 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                 className={`fixed top-0 right-0 h-screen bg-transparent z-50 transition-all duration-300 ease-in-out 
                     ${isVisible ? "w-44" : "w-0 hidden"}`}
             >
-                <div className="flex justify-end px-2 py-2.5">
-                    <div className="w-10 h-10 rounded-full overflow-hidden relative">
-                        <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" objectFit="cover" fill className="bg-gray-500" />
-                    </div>
+                <div className="flex justify-end px-2 py-1.5">
+                    <UserAvatar avatarUrl={profile?.avatarUrl} alt="User" />
                 </div>
                 <ul className="bg-white dark:bg-gray-900 h-screen">
                     {naveItems.map((item, index) => (

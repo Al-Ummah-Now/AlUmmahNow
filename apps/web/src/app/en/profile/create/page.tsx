@@ -47,7 +47,6 @@ const ProfileCreatePage = () => {
 
     try {
       const result = await createProfile({
-        id: auth.user.id,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         avatarUrl: profile.avatarUrl,

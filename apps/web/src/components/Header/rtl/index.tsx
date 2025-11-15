@@ -4,18 +4,10 @@ import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
 import { redirect } from "next/navigation";
 import { HeaderProps } from "../interfaces";
-import { useRealTimeNotifications } from '@/hooks/useRealTimeNotifications';
-import { useAuth } from '@/components/AuthProvider/authContext';
 import ChannelSwitcherRtl from '@/components/ChannelSwitcher/rtl';
+import UserAvatar from '@/components/UserAvatar';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, profile, channels }) => {
-  const { user } = useAuth();
-  const { isConnected } = useRealTimeNotifications({
-    userId: user?.id,
-    maxNotifications: 10,
-    autoRemoveAfter: 10000
-  });
-
   const handleClick = () => {
     redirect('/ar/');
   };
@@ -48,18 +40,11 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollaps
         {channels && channels.length > 0 && (
           <ChannelSwitcherRtl channels={channels} />
         )}
-        {/* Avatar with connection status ring */}
-        <div className="relative w-12 h-12 flex items-center justify-center cursor-pointer" onClick={toggleAccountCollapse}>
-          {/* Connection status ring - only show in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className={`absolute inset-0 rounded-full border-2 ${
-              isConnected ? 'border-green-500' : 'border-red-500'
-            } animate-pulse`} />
-          )}
-          <div className="w-10 h-10 rounded-full overflow-hidden relative">
-            <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" objectFit="cover" className="bg-gray-500" fill />
-          </div>
-        </div>
+        <UserAvatar
+          avatarUrl={profile?.avatarUrl}
+          alt="User"
+          onClick={toggleAccountCollapse}
+        />
       </div>
     </header>
   );
