@@ -19,12 +19,19 @@ export function getClientAuthToken(): string | null {
 
   try {
     const cookies = document.cookie.split(';');
+    console.log('[getClientAuthToken] All cookies:', document.cookie);
+    console.log('[getClientAuthToken] Parsed cookies:', cookies);
+
     for (const cookie of cookies) {
       const [name, value] = cookie.trim().split('=');
+      console.log('[getClientAuthToken] Checking cookie:', { name, hasValue: !!value });
       if (name === 'access_token') {
-        return decodeURIComponent(value);
+        const token = decodeURIComponent(value);
+        console.log('[getClientAuthToken] Found access_token, length:', token?.length);
+        return token;
       }
     }
+    console.warn('[getClientAuthToken] access_token cookie not found');
     return null;
   } catch (error) {
     console.error('[getClientAuthToken] Failed to read token from cookies:', error);

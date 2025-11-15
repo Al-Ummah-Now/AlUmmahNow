@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
-import { updateProfile } from "@/lib/clients/profiles";
+import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 
 const ProfileCreatePage = () => {
@@ -37,7 +37,6 @@ const ProfileCreatePage = () => {
     const formData = new FormData(event.target as HTMLFormElement);
     const firstName = formData.get('firstName') as string;
     const lastName = formData.get('lastName') as string;
-    const displayName = formData.get('displayName') as string;
 
     // Validation
     if (!firstName.trim()) {
@@ -46,20 +45,22 @@ const ProfileCreatePage = () => {
       return;
     }
 
-    const newProfile = {
-      ...profile,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      displayName: displayName.trim() || `${firstName.trim()} ${lastName.trim()}`.trim(),
-    };
-
     try {
-      await updateProfile(newProfile, setProfile);
+      const result = await createProfile({
+        id: auth.user.id,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        avatarUrl: profile.avatarUrl,
+        coverUrl: profile.coverUrl,
+        email: profile.email,
+      });
+
+      console.log('Profile created successfully:', result);
       // Redirect to home page after successful profile creation
       router.push('/en/');
     } catch (error) {
       console.error('Profile creation failed:', error);
-      setError('Failed to create profile. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to create profile. Please try again.');
     } finally {
       setLoading(false);
     }

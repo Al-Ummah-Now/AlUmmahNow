@@ -13,13 +13,15 @@ interface SubscribeButtonProps {
   initialSubscribed?: boolean;
   subscribersCount?: number;
   className?: string;
+  lang?: 'en' | 'ar';
 }
 
 export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   channelId,
   initialSubscribed = false,
   subscribersCount = 0,
-  className = ''
+  className = '',
+  lang = 'en'
 }) => {
   const router = useRouter();
   const { user } = useAuth();
@@ -37,7 +39,7 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   const handleSubscriptionToggle = async () => {
     if (!isAuthenticated || !user || !profile) {
       // Redirect to login page - user context makes it clear why they're being redirected
-      router.push('/en');
+      router.push(lang === 'ar' ? '/ar' : '/en');
       return;
     }
 
@@ -75,21 +77,30 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
     }
   };
 
+  const isRTL = lang === 'ar';
+  const texts = {
+    subscribe: isRTL ? 'اشتراك' : 'Subscribe',
+    subscribed: isRTL ? 'مشترك' : 'Subscribed',
+    loading: isRTL ? 'جاري التحميل...' : 'Loading...',
+    subscribers: isRTL ? 'مشترك' : 'subscribers'
+  };
+
   if (!isAuthenticated) {
     return (
       <Button
         variant="outline"
         size="sm"
         className={className}
-        onClick={() => router.push('/en')}
+        onClick={() => router.push(lang === 'ar' ? '/ar' : '/en')}
+        dir={isRTL ? 'rtl' : 'ltr'}
       >
-        Subscribe
+        {texts.subscribe}
       </Button>
     );
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
       <Button
         variant={isSubscribed ? "secondary" : "default"}
         size="sm"
@@ -98,20 +109,20 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
         disabled={isLoading}
       >
         {isLoading ? (
-          "Loading..."
+          texts.loading
         ) : isSubscribed ? (
           <>
-            <Bell className="w-4 h-4 mr-1" />
-            Subscribed
+            <Bell className={`w-4 h-4 ${isRTL ? 'ml-1' : 'mr-1'}`} />
+            {texts.subscribed}
           </>
         ) : (
-          "Subscribe"
+          texts.subscribe
         )}
       </Button>
-      
+
       {currentSubscribersCount > 0 && (
         <span className="text-sm text-gray-600 dark:text-gray-400">
-          {currentSubscribersCount.toLocaleString()} subscribers
+          {currentSubscribersCount.toLocaleString()} {texts.subscribers}
         </span>
       )}
     </div>

@@ -2,9 +2,9 @@
  * Tests for profile helper functions
  */
 import { shouldRedirectToProfileCreation, getProfileCreationPath } from '../profile-helpers';
-import { checkProfileExists } from '@/lib/clients/profiles';
+import { checkProfileExists } from '@/lib/api/profiles';
 
-jest.mock('@/lib/clients/profiles', () => ({
+jest.mock('@/lib/api/profiles', () => ({
   checkProfileExists: jest.fn(),
 }));
 

@@ -3,6 +3,7 @@ import React from 'react';
 import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useRouter } from 'next/navigation';
+import { ChannelManagementSection } from '@/components/channelManagement';
 
 const ProfilePage = () => {
   const auth = useAuth();
@@ -90,6 +91,9 @@ const ProfilePage = () => {
               </div>
               <h1 className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{`${profile?.firstName ?? ""} ${profile?.lastName ?? ""}`}</h1>
             </section>
+
+            {/* Channel Management Section */}
+            <ChannelManagementSection />
 
             {/* Videos Section */}
             <section id="videos" className="section mb-8">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Profile, User } from '@/interfaces';
-import { fetchProfile } from '@/lib/clients/profiles';
+import { fetchProfile } from '@/lib/api/profiles';
 
 export const useProfile = (user: User | null) => {
   const [profile, setProfile] = useState<Profile | null>(null);

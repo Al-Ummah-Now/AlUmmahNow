@@ -1,7 +1,9 @@
 import { Profile } from "@/interfaces"
+import { Channel } from "@al-ummah/shared-types"
 
-export type HeaderProps = { 
-    toggleCollapse: () => void, 
+export type HeaderProps = {
+    toggleCollapse: () => void,
     toggleAccountCollapse: () => void,
-    profile: Profile | null
+    profile: Profile | null,
+    channels: Channel[]
 }

@@ -86,6 +86,7 @@ export interface PlaylistAddVideoRequest {
 // Channel Types
 export interface ChannelCreateRequest {
   name: string;
+  description?: string;
   isMain?: boolean;
   avatarUrl?: string;
   coverUrl?: string;
@@ -110,6 +111,7 @@ export interface ApiHeaders {
 export interface ListQueryParams {
   limit?: number;
   cursor?: string;
+  channelId?: string; // Filter videos by channel ID
 }
 
 // Search and Discovery Types

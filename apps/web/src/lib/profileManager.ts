@@ -1,5 +1,5 @@
 import { Profile, User } from '@/interfaces';
-import { ProfilesAPI } from './api';
+import { getProfileCurrent } from './api';
 
 class ProfileManager {
   private currentUserId: string | null = null;
@@ -65,7 +65,7 @@ class ProfileManager {
 
   private async performFetch(user: User) {
     try {
-      const profile = await ProfilesAPI.getCurrent(user.id, {
+      const profile = await getProfileCurrent(user.id, {
         userId: user.id,
         channelId: user.id
       });

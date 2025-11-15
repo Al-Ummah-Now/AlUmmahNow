@@ -1,12 +1,15 @@
 // Main API client exports
 export { VideosAPI } from './videos';
-export { ProfilesAPI, ChannelsAPI } from './channels';
+export { ChannelsAPI } from './channels';
 export { PlaylistsAPI } from './playlists';
 export { AnalyticsAPI } from './analytics';
+export { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI } from './profiles';
+export { isProfileComplete } from './profiles-utils';
 
 // Import for internal use
 import { VideosAPI } from './videos';
-import { ProfilesAPI, ChannelsAPI } from './channels';
+import { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI } from './profiles';
+import { ChannelsAPI } from './channels';
 import { PlaylistsAPI } from './playlists';
 import { AnalyticsAPI } from './analytics';
 import { ModerationAPI, type ReportCreateRequest, type ModerationActionRequest } from './moderation';
@@ -59,9 +62,10 @@ export class APIClient {
   // Profiles
   get profiles() {
     return {
-      getCurrent: (userId: string, headers?: ApiHeaders) => ProfilesAPI.getCurrent(userId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      update: (data: ProfileUpdateRequest, headers?: ApiHeaders) => ProfilesAPI.update(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      delete: (headers?: ApiHeaders) => ProfilesAPI.delete({ ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      getCurrent: (userId: string, headers?: ApiHeaders) => getProfileCurrent(userId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      create: (data: ProfileUpdateRequest, headers?: ApiHeaders) => createProfileAPI(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      update: (data: ProfileUpdateRequest, headers?: ApiHeaders) => updateProfileAPI(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      delete: (headers?: ApiHeaders) => deleteProfileAPI({ ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
     };
   }
 

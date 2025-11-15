@@ -7,7 +7,7 @@ import { VideoMetricsDisplay } from "@/components/videoMetrics/VideoMetricsDispl
 import { useQueryState } from "nuqs";
 import { VideoInfo } from "@/interfaces";
 import { PlayerOptions } from "@/components/videoPlayer/interface";
-import { fetchVideoById, fetchVideos } from "@/lib/clients/videos";
+import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useRealTimeNotifications } from "@/hooks/useRealTimeNotifications";
 import { Button } from "@/components/ui/button";

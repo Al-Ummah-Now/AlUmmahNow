@@ -4,7 +4,7 @@ import { VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/rtl/index";
 import { useQueryState } from "nuqs";
 import { usePathname } from "next/navigation";
-import { fetchVideosWithPagination } from "@/lib/clients/videos";
+import { fetchVideosWithPagination } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 
 const VideosPage: React.FC = () => {

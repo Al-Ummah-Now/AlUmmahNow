@@ -1,4 +1,5 @@
-import { VideoObject } from "@/interfaces";
+import { VideoObject, VideoInfo } from "@/interfaces";
+import { PlayerOptions } from "@/components/videoPlayer/interface";
 import {
   ApiResponse,
   PaginationResponse,
@@ -21,14 +22,15 @@ export class VideosAPI {
    * GET /api/videos
    */
   static async list(
-    params?: ListQueryParams, 
+    params?: ListQueryParams,
     headers?: ApiHeaders
   ): Promise<PaginationResponse<VideoObject> | null> {
     try {
       const queryParams = new URLSearchParams();
       if (params?.limit) queryParams.append('limit', params.limit.toString());
       if (params?.cursor) queryParams.append('cursor', params.cursor);
-      
+      if (params?.channelId) queryParams.append('channelId', params.channelId);
+
       const response = await fetch(
         `${baseUrl}/api/videos?${queryParams.toString()}`,
         {
@@ -1034,3 +1036,96 @@ export class VideosAPI {
     }
   }
 }
+
+// Helper functions that use VideosAPI
+
+export async function fetchVideoById(vid: string): Promise<PlayerOptions | undefined> {
+    if (!vid) return undefined;
+
+    try {
+        console.log('[fetchVideoById] Fetching video:', vid);
+        const video = await VideosAPI.getById(vid);
+        console.log('[fetchVideoById] API response:', video);
+
+        if (!video) {
+            throw new Error('Video not found');
+        }
+
+        const playerOptions = {
+            id: video.id,
+            title: video.title,
+            description: video.description || '',
+            channel: video.channel,
+            url: video.videoUrl,
+            poster: video.thumbnailUrl, // Video thumbnail from API
+            views: `${video.views || 0}`, // Get views from API response
+            dateCreated: new Date(video.dateCreated),
+            autoplay: false,
+            type: "video/mp4",
+            width: video.width,
+            height: video.height,
+            availableResolutions: video.availableResolutions,
+            channelAvatar: video.channelAvatarUrl,
+            likesCount: video.likesCount,
+            dislikesCount: video.dislikesCount,
+            commentsCount: video.commentsCount,
+        };
+
+        console.log('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
+        return playerOptions;
+    } catch (error) {
+        console.error('[fetchVideoById] Error:', error);
+        return undefined;
+    }
+};
+
+
+export async function fetchVideos(cursor: string | null = null, userId?: string): Promise<VideoInfo[] | undefined> {
+    try {
+        const result = await VideosAPI.list({
+            limit: 15,
+            cursor: cursor || undefined
+        }, userId ? { userId } : undefined);
+
+        if (!result) {
+            throw new Error('Failed to fetch videos');
+        }
+
+        return result.data.map((video) => ({
+            id: video.id,
+            title: video.title,
+            description: video.description,
+            channel: video.channel,
+            channelId: video.channelId,
+            channelName: video.channelName,
+            thumbnail: video.thumbnailUrl,
+            video: video.videoUrl,
+            views: `${video.views || 0}`,
+            width: video.width,
+            height: video.height,
+            availableResolutions: video.availableResolutions,
+            dateCreated: new Date(video.dateCreated),
+            dateModified: new Date(video.dateModified),
+            likesCount: video.likesCount,
+            dislikesCount: video.dislikesCount,
+            commentsCount: video.commentsCount,
+        }));
+
+    } catch (error) {
+        console.error(error);
+        return undefined;
+    }
+};
+
+export async function fetchVideosWithPagination(cursor: string | null = null, userId?: string): Promise<PaginationResponse<VideoObject> | null> {
+    try {
+        const result = await VideosAPI.list({
+            limit: 15,
+            cursor: cursor || undefined
+        }, userId ? { userId } : undefined);
+        return result;
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+};

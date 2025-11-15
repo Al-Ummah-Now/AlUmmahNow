@@ -68,3 +68,4 @@ logs/
 .playwright-mcp/
 bmad/
 *.backup
+logs/

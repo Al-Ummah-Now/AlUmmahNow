@@ -8,8 +8,10 @@ import AccountNavigation from "@/components/accountNavigation";
 import AccountNavigationRtl from "@/components/accountNavigation/rtl";
 import { usePathname } from "next/navigation";
 import { Profile } from "@/interfaces";
-import { fetchProfile } from "@/lib/clients/profiles";
+import { fetchProfile } from "@/lib/api/profiles";
 import { useAuth } from "../AuthProvider/authContext";
+import { ActiveChannelProvider } from "@/contexts/ActiveChannelContext";
+import { useChannels } from "@/hooks/useChannels";
 
 const Navigation: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = useState(true);
@@ -18,6 +20,13 @@ const Navigation: React.FC = () => {
     const auth = useAuth();
     const path = usePathname();
     const rtl = path.indexOf('/ar') > -1;
+
+    // Fetch user channels for the ActiveChannelProvider
+    const { channels } = useChannels({
+        channelId: profile?.id,
+        userId: auth?.user?.id,
+        autoFetch: !!profile?.id && !!auth?.user?.id
+    });
 
     const toggleCollapse = () => {
         setIsCollapsed(!isCollapsed);
@@ -36,11 +45,11 @@ const Navigation: React.FC = () => {
     }, [auth]);
 
     return (
-        <>
+        <ActiveChannelProvider userChannels={channels} userId={auth?.user?.id}>
             <div style={{ direction: rtl ? "rtl" : "ltr" }}>
                 {rtl
-                    ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />
-                    : <Header profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />}
+                    ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} channels={channels} />
+                    : <Header profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} channels={channels} />}
                 <div className="flex flex-1">
                     {/* Left Navigation */}
                     {path.indexOf('/ar') > -1
@@ -54,7 +63,7 @@ const Navigation: React.FC = () => {
 
                 </div>
             </div>
-        </>
+        </ActiveChannelProvider>
     );
 };
 

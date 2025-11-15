@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
-import { updateProfile } from "@/lib/clients/profiles";
+import { updateProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 
 const ProfileCreatePage = () => {

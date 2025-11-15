@@ -4,7 +4,7 @@
   "private": true,
   "description": "Al Ummah Now - Video API Backend with Cloudflare Workers",
   "scripts": {
-    "dev": "wrangler dev --inspector-port=9230",
+    "dev": "wrangler dev --inspector-port=4086",
     "dev:node": "tsx watch --inspect --env-file=.env.dev src/index.ts",
     "build": "tsc --noEmit",
     "start": "wrangler dev",

@@ -4,14 +4,14 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import ProfileGuard from '@/components/ProfileGuard/index';
-import { checkProfileExists } from '@/lib/clients/profiles';
+import { checkProfileExists } from '@/lib/api/profiles';
 
 // Mock dependencies
 jest.mock('@/components/AuthProvider/authContext', () => ({
   useAuth: jest.fn(),
 }));
 
-jest.mock('@/lib/clients/profiles', () => ({
+jest.mock('@/lib/api/profiles', () => ({
   checkProfileExists: jest.fn(),
 }));
 

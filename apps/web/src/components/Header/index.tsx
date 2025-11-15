@@ -6,8 +6,9 @@ import { redirect } from "next/navigation";
 import { HeaderProps } from "./interfaces";
 import { useRealTimeNotifications } from '@/hooks/useRealTimeNotifications';
 import { useAuth } from '@/components/AuthProvider/authContext';
+import ChannelSwitcher from '@/components/ChannelSwitcher';
 
-const Header: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, profile }) => {
+const Header: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, profile, channels }) => {
   const { user } = useAuth();
   const { isConnected } = useRealTimeNotifications({
     userId: user?.id,
@@ -41,8 +42,12 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, 
         </div>
       </div>
 
-      {/* User Account Section */}
+      {/* Channel Switcher and User Account Section */}
       <div className="flex items-center space-x-4">
+        {/* Channel Switcher - only show if user has channels */}
+        {channels && channels.length > 0 && (
+          <ChannelSwitcher channels={channels} />
+        )}
         {/* Avatar with connection status ring */}
         <div className="relative w-12 h-12 flex items-center justify-center cursor-pointer" onClick={toggleAccountCollapse}>
           {/* Connection status ring - only show in development */}

@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "../interface";
 import CustomVideoPlayer from "@/components/VideoPlayer/CustomVideoPlayer";
@@ -43,16 +44,19 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
       </div>
 
       {/* Video Details */}
-      <div className="flex space-x-4 mt-4 justify-start items-center w-full">
-        <div className="w-10 h-10 rounded-full overflow-hidden relative">
+      <div className="flex space-x-4 mt-4 justify-start items-center w-full" dir="rtl">
+        <Link
+          href={`/ar/channel/${options.channel}`}
+          className="w-10 h-10 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
+        >
           <Image
             src={options.channelAvatar || '/avatar.png'}
-            alt="User"
+            alt="صورة القناة"
             sizes="10vw"
             className="bg-gray-500"
             fill
           />
-        </div>
+        </Link>
         <div className="mt-4">
           <h1 className="sm:text-md md:text-xl font-semibold text-black dark:text-white">
             {removeUnwantedChars(options.title)}

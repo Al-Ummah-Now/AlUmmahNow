@@ -6,7 +6,7 @@ import CommentsSection from "@/components/commentsSection/index";
 import { VideoMetricsDisplay } from "@/components/videoMetrics/VideoMetricsDisplay";
 import { useQueryState } from "nuqs";
 import { VideoInfo } from "../../../interfaces";
-import { fetchVideoById, fetchVideos } from "@/lib/clients/videos";
+import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
 import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider/authContext";
