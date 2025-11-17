@@ -263,8 +263,8 @@ export function useVideoWebSocket({
       }
       return undefined;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId, userId, authToken, autoConnect]);
+    // handleVideoUpdate is stable (empty deps), but included for completeness
+  }, [videoId, userId, authToken, autoConnect, handleVideoUpdate]);
 
   // Manage heartbeat interval - only run when playing and connected
   useEffect(() => {

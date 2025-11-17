@@ -33,7 +33,7 @@ export interface VideoObject {
 
 export type ResponseError = {
     message: string;
-    error?: any;
+    error?: unknown;
 };
 
 export interface VideoInfo {

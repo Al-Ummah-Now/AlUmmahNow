@@ -9,7 +9,7 @@
 export async function sendWebSocketNotification(
   websocketUrl: string,
   channel: string,
-  message: any
+  message: unknown
 ): Promise<boolean> {
   try {
     const response = await fetch(`${websocketUrl}/broadcast`, {

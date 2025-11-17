@@ -58,9 +58,10 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
       console.log('useChannels: API response:', response);
 
       // Handle different response formats
-      const channelData = (response as any).data ||
-                         (response as any).result?.channels ||
-                         (response as any).channels ||
+      const responseObj = response as Record<string, unknown>;
+      const channelData = (responseObj.data as Channel[]) ||
+                         ((responseObj.result as Record<string, unknown>)?.channels as Channel[]) ||
+                         (responseObj.channels as Channel[]) ||
                          [];
 
       setChannels(channelData);

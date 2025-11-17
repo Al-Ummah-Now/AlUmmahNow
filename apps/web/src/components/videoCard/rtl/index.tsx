@@ -6,7 +6,7 @@ import { VideoObject } from "@/interfaces";
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
 
 const VideoCardRTL: React.FC<VideoObject> = (video) => {
-  let handleClick = () => {
+  const handleClick = () => {
     redirect(`/ar/video?vid=${video.id}`);
   }
 

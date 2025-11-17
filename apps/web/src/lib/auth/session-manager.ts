@@ -535,7 +535,7 @@ export class SessionManager {
       // Fetch user's profile directly from API
       // Note: profiles API only exports getProfileCurrent() which uses auth context
       // We need to fetch by specific userId, so we call the API directly
-      const profile = await apiRequestServer<any>(
+      const profile = await apiRequestServer<unknown>(
         {
           method: 'GET',
           url: buildApiUrl(`/api/profiles/${userId}`),

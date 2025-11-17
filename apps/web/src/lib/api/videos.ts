@@ -164,7 +164,7 @@ export async function createVideoComment(
   videoId: string,
   data: CommentCreateRequest,
   headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-): Promise<ApiResponse<{ comment: any }> | null> {
+): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
   try {
     const response = await fetch(
       `${baseUrl}/api/videos/${videoId}/comments`,
@@ -200,7 +200,7 @@ export async function updateVideoComment(
   commentId: string,
   data: CommentUpdateRequest,
   headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-): Promise<ApiResponse<{ comment: any }> | null> {
+): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
   try {
     const response = await fetch(
       `${baseUrl}/api/videos/${videoId}/comments/${commentId}`,
@@ -900,7 +900,7 @@ export async function uploadVideo(
         } else {
           errorDetails = await response.text();
         }
-      } catch (e) {
+      } catch (_e) {
         errorDetails = 'Unable to parse error details';
       }
       throw new Error(

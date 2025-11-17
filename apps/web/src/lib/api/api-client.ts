@@ -22,7 +22,7 @@ const baseUrl = getApiUrl();
 export interface ApiRequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url: string;
-  body?: any;
+  body?: unknown;
   headers?: Record<string, string>;
   functionName: string;
 }
@@ -156,12 +156,12 @@ export function buildApiUrl(path: string): string {
 /**
  * Helper to build query parameters
  */
-export function buildQueryParams(params: Record<string, any>): string {
+export function buildQueryParams(params: Record<string, unknown>): string {
   const queryParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
-      queryParams.append(key, value.toString());
+      queryParams.append(key, String(value));
     }
   });
 

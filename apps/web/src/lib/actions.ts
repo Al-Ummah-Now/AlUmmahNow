@@ -32,7 +32,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
           }
         } as AuthSubject;
       }
-    } catch (sessionError) {
+    } catch (_sessionError) {
       // SessionManager not available, fall through to legacy
     }
 
@@ -50,7 +50,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
     let verified;
     try {
       verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
-    } catch (verifyError) {
+    } catch (_verifyError) {
       return false;
     }
 
@@ -78,12 +78,12 @@ export async function authenticated(): Promise<AuthSubject | false> {
           properties: payload.properties
         } as AuthSubject;
       }
-    } catch (manualError) {
+    } catch (_manualError) {
       // Silent fallback failure
     }
 
     return false;
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -97,7 +97,7 @@ export async function login() {
     if (session) {
       redirect("/");
     }
-  } catch (sessionError) {
+  } catch (_sessionError) {
     // SessionManager not available, continue with legacy check
   }
 
@@ -121,7 +121,7 @@ export async function login() {
       } else if (!hasError) {
         redirect("/");
       }
-    } catch (loginVerifyError) {
+    } catch (_loginVerifyError) {
       // Silent failure, proceed with new authorization
     }
   }
@@ -142,7 +142,7 @@ export async function logout() {
   try {
     const { SessionManager } = await import('./auth/session-manager');
     await SessionManager.clearAllSessions();
-  } catch (sessionError) {
+  } catch (_sessionError) {
     // SessionManager not available, continue with legacy cleanup
   }
 

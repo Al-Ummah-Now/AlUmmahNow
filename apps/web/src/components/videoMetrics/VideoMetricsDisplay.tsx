@@ -13,7 +13,7 @@ interface VideoMetricsDisplayProps {
   initialLikesCount?: number;
   initialDislikesCount?: number;
   initialCommentsCount?: number;
-  onMetricsUpdate?: (metrics: any) => void;
+  onMetricsUpdate?: (metrics: unknown) => void;
 }
 
 export function VideoMetricsDisplay({

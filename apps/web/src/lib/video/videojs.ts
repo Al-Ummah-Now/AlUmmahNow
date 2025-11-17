@@ -7,8 +7,8 @@
 
 import type { Player as VideoJsPlayer } from 'video.js';
 
-// Component type from video.js - using any for now as Component is not exported properly
-type Component = any;
+// Component type from video.js - using unknown for now as Component is not exported properly
+type Component = unknown;
 
 /**
  * Quality Level interface for Video.js quality selector plugin

@@ -28,7 +28,7 @@ export const preloadVideo = async (
             if (response.ok) {
               loadedSegments++;
             }
-          } catch (error) {
+          } catch (_error) {
             console.warn('Failed to preload segment:', segmentUrl);
           }
         })

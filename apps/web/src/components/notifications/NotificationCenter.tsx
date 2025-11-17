@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRealTimeNotifications, Notification } from '@/hooks/useRealTimeNotifications';
 import { User } from '@/interfaces';
 import { X, Bell, Heart, MessageCircle, UserPlus, Video, AlertCircle } from 'lucide-react';
@@ -15,6 +15,13 @@ interface NotificationToastProps {
 function NotificationToast({ notification, onClose, onAction }: NotificationToastProps) {
   const [isExiting, setIsExiting] = useState(false);
 
+  const handleClose = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onClose(notification.id);
+    }, 300); // Match animation duration
+  }, [notification.id, onClose]);
+
   useEffect(() => {
     // Auto-close after 5 seconds
     const timer = setTimeout(() => {
@@ -22,14 +29,7 @@ function NotificationToast({ notification, onClose, onAction }: NotificationToas
     }, 5000);
 
     return () => clearTimeout(timer);
-  }, []);
-
-  const handleClose = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onClose(notification.id);
-    }, 300); // Match animation duration
-  };
+  }, [handleClose]);
 
   const getIcon = () => {
     switch (notification.type) {

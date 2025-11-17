@@ -179,7 +179,7 @@ export class VideoPerformanceMonitor {
 
   private getCurrentBitrate(): number {
     if ('getVideoPlaybackQuality' in this.videoElement) {
-      const quality = (this.videoElement as any).getVideoPlaybackQuality();
+      const quality = (this.videoElement as unknown).getVideoPlaybackQuality();
       const totalBytes = quality.totalVideoFrames || 0;
       const totalFrames = quality.droppedVideoFrames || 1;
       return totalBytes > 0 ? (totalBytes * 8) / (totalFrames * 0.033) : 0;
@@ -189,7 +189,7 @@ export class VideoPerformanceMonitor {
 
   private getCurrentQuality(): string {
     if ('webkitVideoDecodedByteCount' in this.videoElement) {
-      const bytes = (this.videoElement as any).webkitVideoDecodedByteCount;
+      const bytes = (this.videoElement as unknown).webkitVideoDecodedByteCount;
       return bytes > 1000000 ? 'high' : bytes > 500000 ? 'medium' : 'low';
     }
     return 'unknown';

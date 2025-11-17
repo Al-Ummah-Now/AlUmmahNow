@@ -1,5 +1,5 @@
 "use client";
-import { useAuth } from '@/components/AuthProvider/authContext';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
@@ -10,7 +10,7 @@ interface ProfileGuardProps {
 }
 
 const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) => {
-  const auth = useAuth();
+  const { user, loading: accountLoading } = useMultiAccount();
   const router = useRouter();
   const pathname = usePathname();
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
@@ -18,7 +18,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
 
   // Don't run profile check if already on profile creation page or not authenticated
   const isProfileCreatePage = pathname.includes('/profile/create');
-  const shouldSkipCheck = !auth?.user || isProfileCreatePage;
+  const shouldSkipCheck = !user || isProfileCreatePage || accountLoading;
 
   useEffect(() => {
     if (shouldSkipCheck) {
@@ -28,9 +28,9 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
 
     const checkProfile = async () => {
       try {
-        const exists = await checkProfileExists(auth.user);
+        const exists = await checkProfileExists(user);
         setProfileExists(exists);
-        
+
         if (!exists) {
           // Profile doesn't exist, redirect to creation page
           const profileCreatePath = `/${locale}/profile/create`;
@@ -46,7 +46,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     };
 
     checkProfile();
-  }, [auth?.user, router, locale, shouldSkipCheck, pathname]);
+  }, [user, router, locale, shouldSkipCheck, pathname]);
 
   if (shouldSkipCheck) {
     return <>{children}</>;

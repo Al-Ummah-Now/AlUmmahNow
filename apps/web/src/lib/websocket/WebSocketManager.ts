@@ -14,7 +14,7 @@ export class WebSocketManager {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private messageQueue: WebSocketMessage[] = [];
-  private eventListeners: Map<string, Set<(data: any) => void>> = new Map();
+  private eventListeners: Map<string, Set<(data: unknown) => void>> = new Map();
 
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -135,7 +135,7 @@ export class WebSocketManager {
   /**
    * Subscribe to a channel for real-time updates
    */
-  subscribe(channel: string, callback: (data: any) => void): () => void {
+  subscribe(channel: string, callback: (data: unknown) => void): () => void {
     if (!this.subscriptions.has(channel)) {
       this.subscriptions.set(channel, []);
     }
@@ -173,7 +173,7 @@ export class WebSocketManager {
   /**
    * Send a message to the WebSocket server
    */
-  sendMessage(type: WebSocketEventType, data: any): void {
+  sendMessage(type: WebSocketEventType, data: unknown): void {
     const message: WebSocketMessage = {
       id: this.generateMessageId(),
       type,

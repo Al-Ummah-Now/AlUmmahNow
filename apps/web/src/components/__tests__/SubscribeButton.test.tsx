@@ -38,8 +38,8 @@ describe('SubscribeButton', () => {
   });
 
   it('should render subscribe button for unauthenticated users', () => {
-    mockUseAuth.mockReturnValue({ user: null } as any);
-    mockUseProfile.mockReturnValue({ profile: null } as any);
+    mockUseAuth.mockReturnValue({ user: null } as unknown);
+    mockUseProfile.mockReturnValue({ profile: null } as unknown);
 
     render(
       <SubscribeButton
@@ -54,10 +54,10 @@ describe('SubscribeButton', () => {
   it('should show subscribed state when initially subscribed', () => {
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
-    } as any);
+    } as unknown);
     mockUseProfile.mockReturnValue({ 
       profile: { channels: ['channel-456'] } 
-    } as any);
+    } as unknown);
 
     render(
       <SubscribeButton
@@ -78,10 +78,10 @@ describe('SubscribeButton', () => {
 
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
-    } as any);
+    } as unknown);
     mockUseProfile.mockReturnValue({ 
       profile: { channels: ['channel-456'] } 
-    } as any);
+    } as unknown);
 
     render(
       <SubscribeButton
@@ -117,10 +117,10 @@ describe('SubscribeButton', () => {
 
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
-    } as any);
+    } as unknown);
     mockUseProfile.mockReturnValue({ 
       profile: { channels: ['channel-456'] } 
-    } as any);
+    } as unknown);
 
     render(
       <SubscribeButton
@@ -158,10 +158,10 @@ describe('SubscribeButton', () => {
 
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
-    } as any);
+    } as unknown);
     mockUseProfile.mockReturnValue({ 
       profile: { channels: ['channel-456'] } 
-    } as any);
+    } as unknown);
 
     render(
       <SubscribeButton
@@ -185,10 +185,10 @@ describe('SubscribeButton', () => {
 
     mockUseAuth.mockReturnValue({ 
       user: { id: 'user-123' } 
-    } as any);
+    } as unknown);
     mockUseProfile.mockReturnValue({ 
       profile: { channels: ['channel-456'] } 
-    } as any);
+    } as unknown);
 
     render(
       <SubscribeButton

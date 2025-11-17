@@ -90,7 +90,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-2">Channel not found</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">The channel you're looking for doesn't exist or has been removed.</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">The channel you&apos;re looking for doesn&apos;t exist or has been removed.</p>
           <Link href="/en/" className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
             Go to Homepage
           </Link>
@@ -175,7 +175,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
               <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">No videos yet</h3>
-              <p className="text-gray-500 dark:text-gray-400">This channel hasn't uploaded any videos.</p>
+              <p className="text-gray-500 dark:text-gray-400">This channel hasn&apos;t uploaded any videos.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

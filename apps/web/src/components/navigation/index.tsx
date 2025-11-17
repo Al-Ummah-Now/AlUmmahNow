@@ -19,18 +19,9 @@ const LeftNavigationRtl = dynamic(() => import("@/components/LeftNavigation/rtl/
   ssr: true,
   loading: () => null,
 });
-const AccountNavigation = dynamic(() => import("@/components/accountNavigation"), {
-  ssr: true,
-  loading: () => null,
-});
-const AccountNavigationRtl = dynamic(() => import("@/components/accountNavigation/rtl"), {
-  ssr: true,
-  loading: () => null,
-});
 
 const Navigation: React.FC = memo(() => {
     const [isCollapsed, setIsCollapsed] = useState(true);
-    const [isAccountCollapsed, setIsAccountCollapsed] = useState(true);
     const [profile, setProfile] = React.useState<Profile | null>(null);
     const auth = useAuth();
     const path = usePathname();
@@ -47,10 +38,6 @@ const Navigation: React.FC = memo(() => {
         setIsCollapsed(!isCollapsed);
     };
 
-    const toggleAccountCollapse = () => {
-        setIsAccountCollapsed(!isAccountCollapsed);
-    };
-
     useEffect(() => {
         if (auth?.user) {
             fetchProfile(auth.user, setProfile);
@@ -63,19 +50,13 @@ const Navigation: React.FC = memo(() => {
         <ActiveChannelProvider userChannels={channels} userId={auth?.user?.id}>
             <div style={{ direction: rtl ? "rtl" : "ltr" }}>
                 {rtl
-                    ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} channels={channels} />
-                    : <Header profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} channels={channels} />}
+                    ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} channels={channels} />
+                    : <Header profile={profile} toggleCollapse={toggleCollapse} channels={channels} />}
                 <div className="flex flex-1">
                     {/* Left Navigation */}
                     {path.indexOf('/ar') > -1
                         ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
                         : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
-
-                    {/* Account Navigation */}
-                    {path.indexOf('/ar') > -1
-                        ? <AccountNavigationRtl profile={profile} user={auth.user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
-                        : <AccountNavigation profile={profile} user={auth.user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
-
                 </div>
             </div>
         </ActiveChannelProvider>

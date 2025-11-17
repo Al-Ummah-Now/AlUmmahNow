@@ -27,7 +27,7 @@ export function useExperiment(
 ): ExperimentState & {
   trackConversion: (value?: number) => void;
   reset: () => void;
-  getVariantConfig: () => any;
+  getVariantConfig: () => unknown;
 } {
   const [state, setState] = useState<ExperimentState>({
     isLoading: true,
@@ -38,7 +38,6 @@ export function useExperiment(
   });
 
   const {
-    autoTrack = true,
     enableConversionTracking = true,
     userContext = {}
   } = options;
@@ -115,7 +114,7 @@ export function useExperiment(
         error: error instanceof Error ? error.message : 'Failed to assign variant'
       }));
     }
-  }, [userId, experiment, experimentId, userContext, autoTrack]);
+  }, [userId, experiment, experimentId, userContext]);
 
   const trackConversion = useCallback((value?: number) => {
     if (!enableConversionTracking || !state.isInExperiment) return;
@@ -206,7 +205,7 @@ export function useExperiments(
 
   const getActiveVariants = useCallback(() => {
     return Object.entries(experiments)
-      .filter(([_, state]) => state.isInExperiment)
+      .filter(([, state]) => state.isInExperiment)
       .reduce((acc, [id, state]) => {
         if (state.variant) {
           acc[id] = state.variant;

@@ -57,7 +57,7 @@ describe('crypto utilities', () => {
     clearEncryptionCache();
 
     // Setup global mocks
-    global.crypto = mockCrypto as any;
+    global.crypto = mockCrypto as unknown;
     Object.defineProperty(global, 'localStorage', {
       value: mockLocalStorage,
       writable: true,
@@ -74,17 +74,17 @@ describe('crypto utilities', () => {
     it('should return true when Web Crypto API is available', () => {
       // Ensure crypto.subtle.encrypt is available
       mockCrypto.subtle.encrypt = jest.fn();
-      global.crypto = mockCrypto as any;
+      global.crypto = mockCrypto as unknown;
       expect(isEncryptionAvailable()).toBe(true);
     });
 
     it('should return false when Web Crypto API is not available', () => {
-      global.crypto = undefined as any;
+      global.crypto = undefined as unknown;
       expect(isEncryptionAvailable()).toBe(false);
     });
 
     it('should return false when crypto.subtle is not available', () => {
-      global.crypto = {} as any;
+      global.crypto = {} as unknown;
       expect(isEncryptionAvailable()).toBe(false);
     });
   });
@@ -133,7 +133,7 @@ describe('crypto utilities', () => {
     });
 
     it('should use fallback when Web Crypto API is not available', async () => {
-      global.crypto = undefined as any;
+      global.crypto = undefined as unknown;
 
       const testData = 'fallback test';
       const encrypted = await encryptData(testData);
@@ -147,7 +147,7 @@ describe('crypto utilities', () => {
 
     it('should throw EncryptionError on encryption failure', async () => {
       // Restore crypto to make the test actually use the encryption path
-      global.crypto = mockCrypto as any;
+      global.crypto = mockCrypto as unknown;
       mockCrypto.subtle.encrypt.mockRejectedValue(new Error('Encryption failed'));
 
       await expect(encryptData('test')).rejects.toThrow(EncryptionError);
@@ -156,7 +156,7 @@ describe('crypto utilities', () => {
 
     it('should throw EncryptionError on decryption failure', async () => {
       // Restore crypto to make the test actually use the decryption path
-      global.crypto = mockCrypto as any;
+      global.crypto = mockCrypto as unknown;
 
       // Create valid encrypted data first
       mockCrypto.subtle.encrypt.mockImplementation(async (_algo, _key, data) => {
@@ -266,7 +266,7 @@ describe('crypto utilities', () => {
 
     it('should throw EncryptionError when encryption fails during storage', async () => {
       // Restore crypto to ensure encryption path is used
-      global.crypto = mockCrypto as any;
+      global.crypto = mockCrypto as unknown;
       mockCrypto.subtle.encrypt.mockRejectedValue(new Error('Storage failed'));
 
       await expect(secureSetItem('key', 'data')).rejects.toThrow(EncryptionError);
@@ -274,7 +274,7 @@ describe('crypto utilities', () => {
 
     it('should throw EncryptionError when decryption fails during retrieval', async () => {
       // Restore crypto to ensure encryption/decryption path is used
-      global.crypto = mockCrypto as any;
+      global.crypto = mockCrypto as unknown;
 
       // First store successfully
       mockCrypto.subtle.encrypt.mockImplementation(async (_algo, _key, data) => {
@@ -313,7 +313,7 @@ describe('crypto utilities', () => {
   describe('clearEncryptionCache', () => {
     it('should clear the cached encryption key', async () => {
       // Restore crypto to ensure encryption path is used
-      global.crypto = mockCrypto as any;
+      global.crypto = mockCrypto as unknown;
 
       // Setup mocks for key derivation
       mockCrypto.subtle.importKey.mockResolvedValue({} as CryptoKey);
@@ -360,7 +360,7 @@ describe('crypto utilities', () => {
   describe('environment variables', () => {
     it('should require NEXT_PUBLIC_ENCRYPTION_SECRET in production', async () => {
       // Restore crypto to ensure encryption path is used
-      global.crypto = mockCrypto as any;
+      global.crypto = mockCrypto as unknown;
 
       // Save original env
       const originalEnv = { ...process.env };

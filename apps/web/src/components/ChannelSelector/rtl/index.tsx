@@ -172,6 +172,7 @@ export default function ChannelSelectorRTL() {
                   </div>
                   <div className="relative">
                     {ch.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={ch.avatarUrl}
                         alt={ch.name}

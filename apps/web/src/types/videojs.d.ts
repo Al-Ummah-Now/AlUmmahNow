@@ -1,5 +1,3 @@
-import videojs from 'video.js';
-
 declare module 'video.js' {
   export interface HlsQualitySelectorOptions {
     displayCurrentQuality?: boolean;
@@ -55,7 +53,7 @@ declare module 'video.js' {
         overrideNative?: boolean;
       };
     };
-    [key: string]: any;
+    [key: string]: unknown;
   }
 
   export default function videojs(

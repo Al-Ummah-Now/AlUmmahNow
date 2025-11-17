@@ -4,7 +4,7 @@
  * Tests quota management, cleanup, and safe storage operations
  */
 
-import { StorageManager } from '../storage';
+import { StorageManager, monitorStorage } from '../storage';
 
 // Mock localStorage for testing
 const localStorageMock = (() => {
@@ -114,7 +114,7 @@ describe('StorageManager', () => {
       // This should work in mock since it has 100KB limit but StorageManager thinks it's 4MB
       try {
         localStorage.setItem('large', largeData);
-      } catch (error) {
+      } catch (_error) {
         // If mock fails, use smaller data that fits in mock
         const smallerData = 'x'.repeat(40000); // 80KB of data
         localStorage.setItem('large', smallerData);
@@ -245,7 +245,7 @@ describe('StorageManager', () => {
   describe('emergency cleanup', () => {
     it('should keep only most recent watch progress', () => {
       const now = Date.now();
-      const watchProgress: Record<string, any> = {};
+      const watchProgress: Record<string, unknown> = {};
 
       // Create 20 watch progress entries
       for (let i = 0; i < 20; i++) {
@@ -302,7 +302,7 @@ describe('StorageManager', () => {
       const now = Date.now();
 
       // Simulate accumulated watch progress over time
-      const watchProgress: Record<string, any> = {};
+      const watchProgress: Record<string, unknown> = {};
 
       // Add 50 old entries (> 30 days)
       for (let i = 0; i < 50; i++) {
@@ -384,7 +384,7 @@ describe('Storage Monitoring', () => {
   it('should provide helpful monitoring in development', () => {
     // Set NODE_ENV to development
     const originalEnv = process.env.NODE_ENV;
-    (process.env as any).NODE_ENV = 'development';
+    (process.env as unknown).NODE_ENV = 'development';
 
     // Mock console.group methods
     const consoleGroupSpy = jest.spyOn(console, 'group').mockImplementation();
@@ -395,8 +395,7 @@ describe('Storage Monitoring', () => {
     localStorage.setItem('test1', 'x'.repeat(100));
     localStorage.setItem('test2', 'x'.repeat(200));
 
-    // Import and call monitorStorage
-    const { monitorStorage } = require('../storage');
+    // Call monitorStorage (already imported at top)
     monitorStorage();
 
     // Should have called console methods
@@ -408,6 +407,6 @@ describe('Storage Monitoring', () => {
     consoleGroupSpy.mockRestore();
     consoleLogSpy.mockRestore();
     consoleGroupEndSpy.mockRestore();
-    (process.env as any).NODE_ENV = originalEnv;
+    (process.env as unknown).NODE_ENV = originalEnv;
   });
 });

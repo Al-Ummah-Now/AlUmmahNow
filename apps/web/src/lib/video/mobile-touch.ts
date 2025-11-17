@@ -351,7 +351,7 @@ export function setupMobileTouchControls(
  */
 export function isMobileDevice(): boolean {
   // Check user agent for mobile indicators
-  const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+  const userAgent = navigator.userAgent || navigator.vendor || (window as unknown).opera;
   const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
 
   // Check touch support

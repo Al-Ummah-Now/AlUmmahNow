@@ -1,7 +1,7 @@
 import videojs from 'video.js';
 
 interface VideoJSPlugin {
-  (player: any, options?: any): void;
+  (player: videojs.Player, options?: Record<string, unknown>): void;
 }
 
 interface PluginLoaderOptions {
@@ -16,7 +16,7 @@ const pluginRegistry = {
   'sprite-thumbnails': () => import('videojs-sprite-thumbnails')
 };
 
-const loadedPlugins = new Map<string, any>();
+const loadedPlugins = new Map<string, VideoJSPlugin>();
 
 export async function loadPlugin(
   pluginName: keyof typeof pluginRegistry,
@@ -51,7 +51,7 @@ export async function loadPlugin(
       });
 
       const pluginPromise = pluginLoader();
-      const moduleImport = await Promise.race([pluginPromise, timeoutPromise]) as any;
+      const moduleImport = await Promise.race([pluginPromise, timeoutPromise]) as unknown;
 
       let plugin: VideoJSPlugin;
       if (moduleImport.default?.default) {

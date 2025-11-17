@@ -112,7 +112,7 @@ export class StorageManager {
 
         // Handle object with nested items (like watchProgress)
         if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-          const cleaned: Record<string, any> = {};
+          const cleaned: Record<string, unknown> = {};
           let hasChanges = false;
 
           Object.keys(parsed).forEach(subKey => {
@@ -170,24 +170,26 @@ export class StorageManager {
   /**
    * Extract timestamp from an object
    */
-  private static extractTimestamp(item: any): number | null {
+  private static extractTimestamp(item: unknown): number | null {
     if (!item || typeof item !== 'object') {
       return null;
     }
 
+    const record = item as Record<string, unknown>;
+
     // Check for various timestamp formats
-    if (item.timestamp) {
-      if (typeof item.timestamp === 'number') {
-        return item.timestamp;
+    if ('timestamp' in record) {
+      if (typeof record.timestamp === 'number') {
+        return record.timestamp;
       }
-      if (typeof item.timestamp === 'string') {
-        const parsed = Date.parse(item.timestamp);
+      if (typeof record.timestamp === 'string') {
+        const parsed = Date.parse(record.timestamp);
         return isNaN(parsed) ? null : parsed;
       }
     }
 
-    if (item.expiresAt && typeof item.expiresAt === 'number') {
-      return item.expiresAt;
+    if ('expiresAt' in record && typeof record.expiresAt === 'number') {
+      return record.expiresAt;
     }
 
     return null;
@@ -239,10 +241,11 @@ export class StorageManager {
       }
 
       return true;
-    } catch (error: any) {
-      if (error?.name === 'QuotaExceededError' ||
-          error?.code === 22 || // QUOTA_EXCEEDED_ERR
-          error?.code === 1014) { // NS_ERROR_DOM_QUOTA_REACHED (Firefox)
+    } catch (error: unknown) {
+      const err = error as { name?: string; code?: number };
+      if (err?.name === 'QuotaExceededError' ||
+          err?.code === 22 || // QUOTA_EXCEEDED_ERR
+          err?.code === 1014) { // NS_ERROR_DOM_QUOTA_REACHED (Firefox)
         console.error('[StorageManager] QuotaExceededError caught, running emergency cleanup');
         this.emergencyCleanup();
 
@@ -280,7 +283,7 @@ export class StorageManager {
           const entries = Object.entries(parsed);
 
           // Sort by timestamp, keep only 10 most recent
-          entries.sort((a: any, b: any) => {
+          entries.sort((a: [string, unknown], b: [string, unknown]) => {
             const timeA = this.extractTimestamp(a[1]) || 0;
             const timeB = this.extractTimestamp(b[1]) || 0;
             return timeB - timeA; // Most recent first

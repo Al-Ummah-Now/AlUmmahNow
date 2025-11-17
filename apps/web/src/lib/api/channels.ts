@@ -11,21 +11,21 @@ import {
 } from "./types";
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
+import { Channel } from "@al-ummah/shared-types";
 
 /**
  * List channels
  * GET /api/channels
  */
 export async function listChannels(
-  params?: ListQueryParams,
-  _headers?: ApiHeaders
-): Promise<PaginationResponse<any> | null> {
+  params?: ListQueryParams
+): Promise<PaginationResponse<Channel> | null> {
   const queryString = buildQueryParams({
     limit: params?.limit,
     cursor: params?.cursor
   });
 
-  return apiRequestServer<PaginationResponse<any>>({
+  return apiRequestServer<PaginationResponse<Channel>>({
     method: 'GET',
     url: buildApiUrl(`/api/channels${queryString}`),
     functionName: 'listChannels'
@@ -39,14 +39,14 @@ export async function listChannels(
 export async function listUserChannels(
   userId: string,
   params?: ListQueryParams
-): Promise<PaginationResponse<any> | null> {
+): Promise<PaginationResponse<Channel> | null> {
   const queryString = buildQueryParams({
     userId,
     limit: params?.limit,
     cursor: params?.cursor
   });
 
-  return apiRequestServer<PaginationResponse<any>>({
+  return apiRequestServer<PaginationResponse<Channel>>({
     method: 'GET',
     url: buildApiUrl(`/api/channels${queryString}`),
     functionName: 'listUserChannels'
@@ -58,10 +58,9 @@ export async function listUserChannels(
  * GET /api/channels/{id}
  */
 export async function getChannelById(
-  id: string,
-  _headers?: ApiHeaders
-): Promise<any | null> {
-  return apiRequestServer<any>({
+  id: string
+): Promise<Channel | null> {
+  return apiRequestServer<Channel>({
     method: 'GET',
     url: buildApiUrl(`/api/channels/${id}`),
     functionName: 'getChannelById'
@@ -75,8 +74,8 @@ export async function getChannelById(
 export async function createChannel(
   data: ChannelCreateRequest,
   headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-): Promise<ApiResponse<{ channel: any }> | null> {
-  return apiRequestServer<ApiResponse<{ channel: any }>>({
+): Promise<ApiResponse<{ channel: Channel }> | null> {
+  return apiRequestServer<ApiResponse<{ channel: Channel }>>({
     method: 'POST',
     url: buildApiUrl('/api/channels'),
     body: data,
@@ -96,8 +95,8 @@ export async function updateChannel(
   id: string,
   data: ChannelUpdateRequest,
   headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-): Promise<ApiResponse<{ channel: any }> | null> {
-  return apiRequestServer<ApiResponse<{ channel: any }>>({
+): Promise<ApiResponse<{ channel: Channel }> | null> {
+  return apiRequestServer<ApiResponse<{ channel: Channel }>>({
     method: 'PUT',
     url: buildApiUrl(`/api/channels/${id}`),
     body: data,

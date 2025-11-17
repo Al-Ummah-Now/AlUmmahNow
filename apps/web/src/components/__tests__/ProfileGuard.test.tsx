@@ -7,11 +7,11 @@ import ProfileGuard from '@/components/ProfileGuard/index';
 import { checkProfileExists } from '@/lib/api/profiles-client';
 
 // Mock dependencies
-jest.mock('@/components/AuthProvider/authContext', () => ({
-  useAuth: jest.fn(),
+jest.mock('@/hooks/useMultiAccount', () => ({
+  useMultiAccount: jest.fn(),
 }));
 
-jest.mock('@/lib/api/profiles', () => ({
+jest.mock('@/lib/api/profiles-client', () => ({
   checkProfileExists: jest.fn(),
 }));
 
@@ -23,10 +23,10 @@ jest.mock('next/navigation', () => ({
   usePathname: jest.fn(),
 }));
 
-import { useAuth } from '@/components/AuthProvider/authContext';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { usePathname } from 'next/navigation';
 
-const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockUseMultiAccount = useMultiAccount as jest.MockedFunction<typeof useMultiAccount>;
 const mockUsePathname = usePathname as jest.MockedFunction<typeof usePathname>;
 const mockCheckProfileExists = checkProfileExists as jest.MockedFunction<typeof checkProfileExists>;
 
@@ -37,7 +37,10 @@ describe('ProfileGuard', () => {
   });
 
   it('should render children when user is not authenticated', () => {
-    mockUseAuth.mockReturnValue({ user: null } as any);
+    mockUseMultiAccount.mockReturnValue({
+      user: null,
+      loading: false
+    } as unknown);
 
     render(
       <ProfileGuard>
@@ -49,9 +52,10 @@ describe('ProfileGuard', () => {
   });
 
   it('should render children when on profile creation page', () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
+    mockUseMultiAccount.mockReturnValue({
+      user: { id: 'user-123' },
+      loading: false
+    } as unknown);
     mockUsePathname.mockReturnValue('/en/profile/create');
 
     render(
@@ -65,9 +69,10 @@ describe('ProfileGuard', () => {
   });
 
   it('should show loading state while checking profile', async () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
+    mockUseMultiAccount.mockReturnValue({
+      user: { id: 'user-123' },
+      loading: false
+    } as unknown);
     mockCheckProfileExists.mockImplementation(
       () => new Promise(resolve => setTimeout(() => resolve(true), 100))
     );
@@ -82,9 +87,10 @@ describe('ProfileGuard', () => {
   });
 
   it('should render children when profile exists', async () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
+    mockUseMultiAccount.mockReturnValue({
+      user: { id: 'user-123' },
+      loading: false
+    } as unknown);
     mockCheckProfileExists.mockResolvedValue(true);
 
     render(
@@ -99,9 +105,10 @@ describe('ProfileGuard', () => {
   });
 
   it('should redirect to profile creation when profile does not exist', async () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
+    mockUseMultiAccount.mockReturnValue({
+      user: { id: 'user-123' },
+      loading: false
+    } as unknown);
     mockCheckProfileExists.mockResolvedValue(false);
 
     render(
@@ -116,9 +123,10 @@ describe('ProfileGuard', () => {
   });
 
   it('should redirect to Arabic profile creation when locale is ar', async () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
+    mockUseMultiAccount.mockReturnValue({
+      user: { id: 'user-123' },
+      loading: false
+    } as unknown);
     mockCheckProfileExists.mockResolvedValue(false);
 
     render(
@@ -133,9 +141,10 @@ describe('ProfileGuard', () => {
   });
 
   it('should handle profile check errors gracefully', async () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
+    mockUseMultiAccount.mockReturnValue({
+      user: { id: 'user-123' },
+      loading: false
+    } as unknown);
     mockCheckProfileExists.mockRejectedValue(new Error('Network error'));
 
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
@@ -159,9 +168,10 @@ describe('ProfileGuard', () => {
   });
 
   it('should show Arabic loading message when locale is ar', async () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
+    mockUseMultiAccount.mockReturnValue({
+      user: { id: 'user-123' },
+      loading: false
+    } as unknown);
     mockCheckProfileExists.mockImplementation(
       () => new Promise(resolve => setTimeout(() => resolve(true), 100))
     );
@@ -173,5 +183,21 @@ describe('ProfileGuard', () => {
     );
 
     expect(screen.getByText('جاري التحقق من الملف الشخصي...')).toBeInTheDocument();
+  });
+
+  it('should skip check when account is loading', () => {
+    mockUseMultiAccount.mockReturnValue({
+      user: { id: 'user-123' },
+      loading: true
+    } as unknown);
+
+    render(
+      <ProfileGuard>
+        <div>Protected Content</div>
+      </ProfileGuard>
+    );
+
+    expect(screen.getByText('Protected Content')).toBeInTheDocument();
+    expect(mockCheckProfileExists).not.toHaveBeenCalled();
   });
 });

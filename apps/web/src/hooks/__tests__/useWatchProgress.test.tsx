@@ -54,7 +54,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as any,
+        mockPlayer as unknown,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -89,7 +89,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as any,
+        mockPlayer as unknown,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -122,7 +122,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as any,
+        mockPlayer as unknown,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -141,7 +141,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result, unmount } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as any,
+        mockPlayer as unknown,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -166,7 +166,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as any,
+        mockPlayer as unknown,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -194,7 +194,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as any,
+        mockPlayer as unknown,
         'user-456',
         'auth-token',
         {
@@ -233,7 +233,7 @@ describe('useWatchProgress - Race Condition Scenarios', () => {
 
   it('should handle 10 rapid concurrent saves without race conditions', async () => {
     const saveProgressMock = WatchHistoryService.saveProgress as jest.Mock;
-    let callOrder: number[] = [];
+    const callOrder: number[] = [];
     let callCounter = 0;
 
     // Track call order with varying delays
@@ -252,7 +252,7 @@ describe('useWatchProgress - Race Condition Scenarios', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as any,
+        mockPlayer as unknown,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }

@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   // Stub for fetching analytics data
   return NextResponse.json({
     success: true,

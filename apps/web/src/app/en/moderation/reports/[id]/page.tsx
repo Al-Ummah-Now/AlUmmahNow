@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import * as ModerationAPI from "@/lib/api/moderation";
 import type { ContentReport, ModerationActionRequest } from "@/lib/api/moderation";
@@ -11,9 +11,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createApiHeaders } from "@/lib/utility";
 
-interface ReportDetailPageProps {}
-
-const ReportDetailPage: React.FC<ReportDetailPageProps> = () => {
+const ReportDetailPage: React.FC = () => {
   const [report, setReport] = useState<ContentReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,17 +34,7 @@ const ReportDetailPage: React.FC<ReportDetailPageProps> = () => {
   // Check if user has moderation privileges
   const isAuthorized = auth?.user && (auth.user.role === 'admin' || auth.user.role === 'moderator');
 
-  useEffect(() => {
-    if (!isAuthorized) {
-      setError("Access denied. You need moderator or admin privileges to access this page.");
-      setLoading(false);
-      return;
-    }
-
-    loadReport();
-  }, [isAuthorized, reportId]);
-
-  const loadReport = async () => {
+  const loadReport = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -60,7 +48,17 @@ const ReportDetailPage: React.FC<ReportDetailPageProps> = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [auth, reportId]);
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      setError("Access denied. You need moderator or admin privileges to access this page.");
+      setLoading(false);
+      return;
+    }
+
+    loadReport();
+  }, [isAuthorized, reportId, loadReport]);
 
   const handleModerationAction = async () => {
     if (!report || !actionForm.actionType) return;

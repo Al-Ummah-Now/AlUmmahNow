@@ -21,7 +21,7 @@ function isServer(): boolean {
 
 // Unified logger that works on both client and server
 export const logger = {
-  info: (message: string, data?: any) => {
+  info: (message: string, data?: unknown) => {
     if (isServer() && serverLogger) {
       serverLogger.info(message, data);
     } else {
@@ -29,7 +29,7 @@ export const logger = {
     }
   },
 
-  warn: (message: string, data?: any) => {
+  warn: (message: string, data?: unknown) => {
     if (isServer() && serverLogger) {
       serverLogger.warn(message, data);
     } else {
@@ -37,7 +37,7 @@ export const logger = {
     }
   },
 
-  error: (message: string, data?: any) => {
+  error: (message: string, data?: unknown) => {
     if (isServer() && serverLogger) {
       serverLogger.error(message, data);
     } else {
@@ -45,7 +45,7 @@ export const logger = {
     }
   },
 
-  debug: (message: string, data?: any) => {
+  debug: (message: string, data?: unknown) => {
     if (isServer() && serverLogger) {
       serverLogger.debug(message, data);
     } else {

@@ -70,7 +70,7 @@ export function loadVolumeState(): VolumeState | null {
     // Clear corrupted data
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (clearError) {
+    } catch (_clearError) {
       // Ignore errors when clearing
     }
     return null;
@@ -193,8 +193,8 @@ export function setupScrollWheelControl(player: Player | ExtendedPlayer): () => 
       delta = event.deltaY;
     } else if (typeof event.detail === 'number' && event.detail !== 0) {
       delta = event.detail;
-    } else if ('wheelDelta' in event && typeof (event as any).wheelDelta === 'number') {
-      delta = -(event as any).wheelDelta; // wheelDelta has inverted sign
+    } else if ('wheelDelta' in event && typeof (event as unknown).wheelDelta === 'number') {
+      delta = -(event as unknown).wheelDelta; // wheelDelta has inverted sign
     } else {
       delta = 0;
     }

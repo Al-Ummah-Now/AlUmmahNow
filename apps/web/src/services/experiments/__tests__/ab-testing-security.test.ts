@@ -21,7 +21,7 @@ describe('ABTestingEngine Security Tests', () => {
       const input = 'user123experiment456';
 
       // Access private method via type assertion for testing
-      const engineAny = engine as any;
+      const engineAny = engine as unknown;
 
       const hash1 = await engineAny.hashUserId(input);
       const hash2 = await engineAny.hashUserId(input);
@@ -32,7 +32,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should produce different hashes for similar inputs (avalanche effect)', async () => {
-      const engineAny = engine as any;
+      const engineAny = engine as unknown;
 
       const hash1 = await engineAny.hashUserId('user123');
       const hash2 = await engineAny.hashUserId('user124');
@@ -53,7 +53,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should have uniform distribution for variant assignment', async () => {
-      const engineAny = engine as any;
+      const engineAny = engine as unknown;
       const sampleSize = 10000;
       const results = { control: 0, treatment: 0 };
 
@@ -75,7 +75,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should be non-predictable - sequential users get random assignments', async () => {
-      const engineAny = engine as any;
+      const engineAny = engine as unknown;
       const sequentialResults: boolean[] = [];
 
       // Check 100 sequential user IDs
@@ -100,7 +100,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should handle traffic allocation consistently', async () => {
-      const engineAny = engine as any;
+      const engineAny = engine as unknown;
       const experimentId = 'test-experiment';
       const trafficAllocation = 30; // 30% traffic
 
@@ -125,7 +125,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should resist gaming attempts - cannot predict variant from user ID', async () => {
-      const engineAny = engine as any;
+      const engineAny = engine as unknown;
 
       // Attacker tries to find patterns
       const patterns: Record<string, number> = {};
@@ -152,11 +152,11 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should fallback gracefully when crypto.subtle is unavailable', async () => {
-      const engineAny = engine as any;
+      const engineAny = engine as unknown;
 
       // Mock crypto.subtle to be undefined
       const originalCrypto = global.crypto;
-      (global as any).crypto = undefined;
+      (global as unknown).crypto = undefined;
 
       try {
         const hash = await engineAny.hashUserId('test-input');
@@ -170,12 +170,12 @@ describe('ABTestingEngine Security Tests', () => {
         expect(hash).toBe(hash2);
       } finally {
         // Restore crypto
-        (global as any).crypto = originalCrypto;
+        (global as unknown).crypto = originalCrypto;
       }
     });
 
     it('should handle very long input strings efficiently', async () => {
-      const engineAny = engine as any;
+      const engineAny = engine as unknown;
 
       // Create a very long input string
       const longInput = 'user123' + 'x'.repeat(10000) + 'experiment456';

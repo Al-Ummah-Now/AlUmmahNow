@@ -154,7 +154,7 @@ describe('VideoAnalytics', () => {
       analytics.trackPlay();
 
       // Access private queue to verify event structure
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].userId).toBe('user-123');
 
       analytics.destroy();
@@ -166,7 +166,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackPlay();
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       const event = queue[0];
 
       expect(event.videoId).toBe('video-1');
@@ -407,13 +407,13 @@ describe('VideoAnalytics', () => {
 
     it('should clear flush interval on destroy', () => {
       const analytics = new VideoAnalytics('video-1');
-      const flushInterval = (analytics as any).flushInterval;
+      const flushInterval = (analytics as unknown).flushInterval;
 
       expect(flushInterval).toBeTruthy();
 
       analytics.destroy();
 
-      expect((analytics as any).flushInterval).toBeUndefined();
+      expect((analytics as unknown).flushInterval).toBeUndefined();
     });
 
     it('should remove event listeners on destroy', () => {
@@ -456,13 +456,13 @@ describe('VideoAnalytics', () => {
 
     it('should destroy specific analytics instance', () => {
       const analytics = getVideoAnalytics('video-1', 'user-1');
-      const flushInterval = (analytics as any).flushInterval;
+      const flushInterval = (analytics as unknown).flushInterval;
 
       expect(flushInterval).toBeTruthy();
 
       destroyVideoAnalytics('video-1', 'user-1');
 
-      expect((analytics as any).flushInterval).toBeUndefined();
+      expect((analytics as unknown).flushInterval).toBeUndefined();
     });
 
     it('should clear all analytics instances', () => {
@@ -471,15 +471,15 @@ describe('VideoAnalytics', () => {
 
       clearAllAnalytics();
 
-      expect((analytics1 as any).flushInterval).toBeUndefined();
-      expect((analytics2 as any).flushInterval).toBeUndefined();
+      expect((analytics1 as unknown).flushInterval).toBeUndefined();
+      expect((analytics2 as unknown).flushInterval).toBeUndefined();
     });
   });
 
   describe('Configuration', () => {
     it('should use default configuration', () => {
       const analytics = new VideoAnalytics('video-1');
-      const config = (analytics as any).config;
+      const config = (analytics as unknown).config;
 
       expect(config.endpoint).toBe('/api/analytics/video');
       expect(config.batchSize).toBe(20);
@@ -495,7 +495,7 @@ describe('VideoAnalytics', () => {
         flushInterval: 5000
       });
 
-      const config = (analytics as any).config;
+      const config = (analytics as unknown).config;
 
       expect(config.endpoint).toBe('/custom/analytics');
       expect(config.batchSize).toBe(10);
@@ -529,7 +529,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackSeek(10, 30);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].eventType).toBe(VideoEventType.SEEK);
       expect(queue[0].data.fromTime).toBe(10);
@@ -543,7 +543,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackSeek(10, 30);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.seekDistance).toBe(20);
 
       analytics.destroy();
@@ -554,7 +554,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackSeek(10, 30);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.isForward).toBe(true);
 
       analytics.destroy();
@@ -565,7 +565,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackSeek(30, 10);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.isForward).toBe(false);
       expect(queue[0].data.seekDistance).toBe(-20);
 
@@ -577,7 +577,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackSeek(5, 15);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       const event = queue[0];
 
       expect(event.videoId).toBe('video-1');
@@ -596,7 +596,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackProgress(30, 100, 30);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].eventType).toBe(VideoEventType.TIMEUPDATE);
       expect(queue[0].data.currentTime).toBe(30);
@@ -611,7 +611,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackProgress(30, 100, 30);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.remainingTime).toBe(70);
 
       analytics.destroy();
@@ -622,7 +622,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackProgress(105, 100, 105);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.percentage).toBe(100);
 
       analytics.destroy();
@@ -633,7 +633,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackProgress(0, 100, -5);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.percentage).toBe(0);
 
       analytics.destroy();
@@ -644,7 +644,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackProgress(0, 0, 0);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.currentTime).toBe(0);
       expect(queue[0].data.duration).toBe(0);
       expect(queue[0].data.percentage).toBe(0);
@@ -659,7 +659,7 @@ describe('VideoAnalytics', () => {
       analytics.trackProgress(50, 100, 50);
       analytics.trackProgress(75, 100, 75);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(3);
       expect(queue[0].data.percentage).toBe(25);
       expect(queue[1].data.percentage).toBe(50);
@@ -675,7 +675,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackQualityChange('720p', '1080p');
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].eventType).toBe(VideoEventType.QUALITY_CHANGE);
       expect(queue[0].data.fromQuality).toBe('720p');
@@ -693,7 +693,7 @@ describe('VideoAnalytics', () => {
       analytics.trackQualityChange(qualities[1], qualities[2]);
       analytics.trackQualityChange(qualities[2], qualities[3]);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(3);
       expect(queue[0].data.fromQuality).toBe('480p');
       expect(queue[0].data.toQuality).toBe('720p');
@@ -708,7 +708,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackQualityChange('720p', '1080p');
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.isUpgrade).toBe(true);
 
       analytics.destroy();
@@ -719,7 +719,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackQualityChange('1080p', '720p');
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.isUpgrade).toBe(false);
 
       analytics.destroy();
@@ -730,7 +730,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackQualityChange('720p', 'auto');
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.isAutomatic).toBe(true);
 
       analytics.destroy();
@@ -741,7 +741,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackQualityChange('auto', '1080p');
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue[0].data.isAutomatic).toBe(true);
 
       analytics.destroy();
@@ -754,7 +754,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackBufferStart();
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].eventType).toBe(VideoEventType.BUFFER_START);
       expect(queue[0].data.timestamp).toBeTruthy();
@@ -775,7 +775,7 @@ describe('VideoAnalytics', () => {
       dateNowSpy.mockReturnValue(mockNow + 1000);
       analytics.trackBufferEnd();
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(2);
       expect(queue[1].eventType).toBe(VideoEventType.BUFFER_END);
       expect(queue[1].data.duration).toBe(1000);
@@ -790,7 +790,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackBufferEnd(2500);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].eventType).toBe(VideoEventType.BUFFER_END);
       expect(queue[0].data.duration).toBe(2500);
@@ -803,10 +803,10 @@ describe('VideoAnalytics', () => {
       const analytics = new VideoAnalytics('video-1');
 
       analytics.trackBufferStart();
-      expect((analytics as any).bufferStartTime).toBeTruthy();
+      expect((analytics as unknown).bufferStartTime).toBeTruthy();
 
       analytics.trackBufferEnd();
-      expect((analytics as any).bufferStartTime).toBeUndefined();
+      expect((analytics as unknown).bufferStartTime).toBeUndefined();
 
       analytics.destroy();
     });
@@ -816,7 +816,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackBufferEnd();
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].data.duration).toBe(0);
 
@@ -840,7 +840,7 @@ describe('VideoAnalytics', () => {
       dateNowSpy.mockReturnValue(mockNow + 3500);
       analytics.trackBufferEnd();
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(4);
       expect(queue[0].eventType).toBe(VideoEventType.BUFFER_START);
       expect(queue[1].eventType).toBe(VideoEventType.BUFFER_END);
@@ -860,7 +860,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackQuartile(25);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].eventType).toBe(VideoEventType.QUARTILE_25);
       expect(queue[0].data.quartile).toBe(25);
@@ -874,7 +874,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackQuartile(50);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].eventType).toBe(VideoEventType.QUARTILE_50);
       expect(queue[0].data.quartile).toBe(50);
@@ -887,7 +887,7 @@ describe('VideoAnalytics', () => {
 
       analytics.trackQuartile(75);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
       expect(queue[0].eventType).toBe(VideoEventType.QUARTILE_75);
       expect(queue[0].data.quartile).toBe(75);
@@ -902,7 +902,7 @@ describe('VideoAnalytics', () => {
       analytics.trackQuartile(25);
       analytics.trackQuartile(25);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
 
       analytics.destroy();
@@ -915,7 +915,7 @@ describe('VideoAnalytics', () => {
       analytics.trackQuartile(50);
       analytics.trackQuartile(75);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(3);
       expect(queue[0].eventType).toBe(VideoEventType.QUARTILE_25);
       expect(queue[1].eventType).toBe(VideoEventType.QUARTILE_50);
@@ -930,7 +930,7 @@ describe('VideoAnalytics', () => {
       analytics.trackQuartile(25);
       analytics.trackQuartile(25);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       expect(queue).toHaveLength(1);
 
       analytics.destroy();
@@ -942,7 +942,7 @@ describe('VideoAnalytics', () => {
       analytics.trackQuartile(25);
       analytics.trackQuartile(50);
 
-      const quartilesFired = (analytics as any).quartilesFired;
+      const quartilesFired = (analytics as unknown).quartilesFired;
       expect(quartilesFired.size).toBe(2);
 
       analytics.destroy();
@@ -1042,7 +1042,7 @@ describe('VideoAnalytics', () => {
       analytics.trackProgress(26, 100, 26);
       analytics.trackQuartile(25);
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       const quartileEvents = queue.filter(
         (e: AnalyticsEvent) => e.eventType === VideoEventType.QUARTILE_25
       );
@@ -1069,7 +1069,7 @@ describe('VideoAnalytics', () => {
       dateNowSpy.mockReturnValue(mockNow + 4000);
       analytics.trackBufferEnd();
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       const bufferStartEvents = queue.filter(
         (e: AnalyticsEvent) => e.eventType === VideoEventType.BUFFER_START
       );
@@ -1096,7 +1096,7 @@ describe('VideoAnalytics', () => {
       analytics.trackProgress(60, 100, 60);
       analytics.trackQualityChange('480p', '1080p'); // Manual upgrade
 
-      const queue = (analytics as any).eventQueue;
+      const queue = (analytics as unknown).eventQueue;
       const qualityEvents = queue.filter(
         (e: AnalyticsEvent) => e.eventType === VideoEventType.QUALITY_CHANGE
       );

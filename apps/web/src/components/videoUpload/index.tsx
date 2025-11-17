@@ -48,7 +48,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   // File validation
   const validateFile = (file: File): string | null => {
-    if (!VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type as any)) {
+    if (!VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type as unknown)) {
       return VIDEO_UPLOAD_ERRORS.INVALID_TYPE;
     }
 
@@ -277,13 +277,14 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       };
 
       onUploadComplete(videoData);
-    } catch (error: any) {
-      if (error.name === 'AbortError' || error.message === 'Upload cancelled') {
+    } catch (error: unknown) {
+      const err = error as { name?: string; message?: string };
+      if (err.name === 'AbortError' || err.message === 'Upload cancelled') {
         setUploadProgress(null);
         return;
       }
 
-      const errorMessage = error.message || 'Upload failed. Please try again.';
+      const errorMessage = err.message || 'Upload failed. Please try again.';
       setUploadProgress({ percentage: 0, stage: 'preparing', error: errorMessage });
       onError(errorMessage);
     }

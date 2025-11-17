@@ -56,7 +56,7 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
         );
         console.log("[OAuth Callback] Saved to SessionManager:", user.id);
       }
-    } catch (sessionError) {
+    } catch (_sessionError) {
       console.log("[OAuth Callback] SessionManager not available, using legacy cookies");
       // Fall back to legacy cookie storage
       await setTokens(exchanged.tokens.access, exchanged.tokens.refresh);

@@ -137,7 +137,7 @@ export interface SearchSuggestion {
 }
 
 export interface TrendingContent {
-  videos: any[]; // VideoObject from interfaces
+  videos: unknown[]; // VideoObject from interfaces - using unknown to avoid circular dependency
   period: 'hour' | 'day' | 'week' | 'month';
   category?: string;
 }

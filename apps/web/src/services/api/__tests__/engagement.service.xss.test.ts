@@ -315,7 +315,7 @@ describe('VideoEngagementService - XSS Protection', () => {
     it('should handle undefined window gracefully', () => {
       // Temporarily remove window
       const originalWindow = global.window;
-      // @ts-ignore
+      // @ts-expect-error - Testing edge case with window removed
       delete global.window;
 
       const result = service.getShareUrl('valid-video', 'copy');
@@ -326,16 +326,16 @@ describe('VideoEngagementService - XSS Protection', () => {
     });
 
     it('should handle null/undefined inputs', async () => {
-      // @ts-ignore - Testing runtime behavior
+      // @ts-expect-error - Testing runtime behavior
       expect(service.getShareUrl(null, 'copy')).toBeNull();
-      // @ts-ignore
+      // @ts-expect-error - Testing runtime behavior
       expect(service.getShareUrl(undefined, 'copy')).toBeNull();
 
-      // @ts-ignore
+      // @ts-expect-error - Testing runtime behavior
       const result1 = await service.copyShareUrl(null);
       expect(result1.success).toBe(false);
 
-      // @ts-ignore
+      // @ts-expect-error - Testing runtime behavior
       const result2 = await service.trackShare(undefined, 'twitter');
       expect(result2.success).toBe(false);
     });
@@ -352,7 +352,7 @@ describe('VideoEngagementService - XSS Protection', () => {
       ];
 
       nonStringInputs.forEach(input => {
-        // @ts-ignore - Testing runtime behavior
+        // @ts-expect-error - Testing runtime behavior
         expect(service.getShareUrl(input, 'copy')).toBeNull();
       });
     });

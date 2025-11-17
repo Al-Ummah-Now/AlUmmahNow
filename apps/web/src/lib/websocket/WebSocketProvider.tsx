@@ -8,8 +8,8 @@ import { User } from '@/interfaces';
 interface WebSocketContextType {
   wsManager: WebSocketManager | null;
   connectionState: WebSocketConnectionState;
-  subscribe: (channel: string, callback: (data: any) => void) => (() => void) | null;
-  sendMessage: (type: any, data: any) => void;
+  subscribe: (channel: string, callback: (data: unknown) => void) => (() => void) | null;
+  sendMessage: (type: string, data: unknown) => void;
   isConnected: boolean;
 }
 
@@ -91,14 +91,14 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     }
   }, [user?.id]);
 
-  const subscribe = useCallback((channel: string, callback: (data: any) => void): (() => void) | null => {
+  const subscribe = useCallback((channel: string, callback: (data: unknown) => void): (() => void) | null => {
     if (wsManagerRef.current) {
       return wsManagerRef.current.subscribe(channel, callback);
     }
     return null;
   }, []);
 
-  const sendMessage = useCallback((type: any, data: any): void => {
+  const sendMessage = useCallback((type: string, data: unknown): void => {
     if (wsManagerRef.current) {
       wsManagerRef.current.sendMessage(type, data);
     }
@@ -129,7 +129,7 @@ export function useWebSocket(): WebSocketContextType {
 
 export function useWebSocketSubscription(
   channel: string,
-  callback: (data: any) => void,
+  callback: (data: unknown) => void,
   deps: React.DependencyList = []
 ): boolean {
   const { subscribe, isConnected } = useWebSocket();
@@ -145,7 +145,7 @@ export function useWebSocketSubscription(
     if (!channel) return;
 
     // Use stable callback from ref
-    const unsubscribe = subscribe(channel, (data: any) => {
+    const unsubscribe = subscribe(channel, (data: unknown) => {
       callbackRef.current(data);
     });
 

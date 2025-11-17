@@ -117,7 +117,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-2">Channel not found</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">The channel you're trying to edit doesn't exist.</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">The channel you&apos;re trying to edit doesn&apos;t exist.</p>
           <Link href="/en/profile" className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
             Back to Profile
           </Link>

@@ -12,6 +12,10 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import CustomVideoPlayer from '../CustomVideoPlayer';
 import type { VideoError } from '@/lib/video/error-handler';
+import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
+import { VideoAnalytics } from '@/services/analytics/video-analytics';
+import { createVideoErrorHandler } from '@/lib/video/error-handler';
+import { createVideoFallbackStrategy } from '@/lib/video/fallback-strategy';
 
 // Mock Video.js setup
 const mockDispose = jest.fn();
@@ -166,7 +170,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
   describe('Video.js Integration', () => {
     it('should initialize Video.js player with correct options', async () => {
-      const { createVideoPlayer } = require('@/lib/video/videojs-setup');
+      
 
       render(
         <CustomVideoPlayer
@@ -191,7 +195,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
     });
 
     it('should dispose player on unmount', async () => {
-      const { disposeVideoPlayer } = require('@/lib/video/videojs-setup');
+      
       const { unmount } = render(<CustomVideoPlayer {...defaultProps} />);
 
       await waitFor(() => {
@@ -206,7 +210,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
   describe('Analytics Integration (Phase 1.5)', () => {
     it('should initialize VideoAnalytics when enabled', async () => {
-      const { VideoAnalytics } = require('@/services/analytics/video-analytics');
+      
 
       render(
         <CustomVideoPlayer
@@ -222,7 +226,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
     });
 
     it('should not initialize analytics when disabled', async () => {
-      const { VideoAnalytics } = require('@/services/analytics/video-analytics');
+      
       VideoAnalytics.mockClear();
 
       render(<CustomVideoPlayer {...defaultProps} enableAnalytics={false} />);
@@ -299,8 +303,8 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
   describe('Error Handling (Phase 1.4)', () => {
     it('should initialize error handler and fallback strategy', async () => {
-      const { createVideoErrorHandler } = require('@/lib/video/error-handler');
-      const { createVideoFallbackStrategy } = require('@/lib/video/fallback-strategy');
+      
+      
 
       render(<CustomVideoPlayer {...defaultProps} />);
 
@@ -312,10 +316,10 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
     it('should display ErrorDisplay when error occurs', async () => {
       const mockError: VideoError = {
-        type: 'NETWORK_ERROR' as any,
+        type: 'NETWORK_ERROR' as unknown,
         message: 'Network failed',
         code: 'NET_ERR',
-        severity: 'WARNING' as any,
+        severity: 'WARNING' as unknown,
         timestamp: Date.now(),
         retryable: true,
         fallbackAvailable: false,
@@ -343,10 +347,10 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
     it('should call onError callback when error occurs', async () => {
       const onError = jest.fn();
       const mockError: VideoError = {
-        type: 'NETWORK_ERROR' as any,
+        type: 'NETWORK_ERROR' as unknown,
         message: 'Network failed',
         code: 'NET_ERR',
-        severity: 'WARNING' as any,
+        severity: 'WARNING' as unknown,
         timestamp: Date.now(),
         retryable: true,
         fallbackAvailable: false,
@@ -372,10 +376,10 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
     it('should track errors in analytics', async () => {
       const mockError: VideoError = {
-        type: 'HLS_ERROR' as any,
+        type: 'HLS_ERROR' as unknown,
         message: 'HLS failed',
         code: 'HLS_ERR',
-        severity: 'CRITICAL' as any,
+        severity: 'CRITICAL' as unknown,
         timestamp: Date.now(),
         retryable: false,
         fallbackAvailable: true,
@@ -405,10 +409,10 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
     it('should attempt fallback when error has fallback available', async () => {
       const mockError: VideoError = {
-        type: 'HLS_ERROR' as any,
+        type: 'HLS_ERROR' as unknown,
         message: 'HLS failed',
         code: 'HLS_ERR',
-        severity: 'CRITICAL' as any,
+        severity: 'CRITICAL' as unknown,
         timestamp: Date.now(),
         retryable: false,
         fallbackAvailable: true,

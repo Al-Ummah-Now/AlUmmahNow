@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import * as ModerationAPI from "@/lib/api/moderation";
 import type { ContentReport, ModerationStats } from "@/lib/api/moderation";
@@ -9,9 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
 
-interface ModerationDashboardProps {}
-
-const ModerationDashboard: React.FC<ModerationDashboardProps> = () => {
+const ModerationDashboard: React.FC = () => {
   const [reports, setReports] = useState<ContentReport[]>([]);
   const [stats, setStats] = useState<ModerationStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,17 +29,7 @@ const ModerationDashboard: React.FC<ModerationDashboardProps> = () => {
   // Check if user has moderation privileges
   const isAuthorized = auth?.user && (auth.user.role === 'admin' || auth.user.role === 'moderator');
 
-  useEffect(() => {
-    if (!isAuthorized) {
-      setError("Access denied. You need moderator or admin privileges to access this page.");
-      setLoading(false);
-      return;
-    }
-
-    loadDashboardData();
-  }, [isAuthorized, filter]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -66,7 +54,17 @@ const ModerationDashboard: React.FC<ModerationDashboardProps> = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [auth, filter]);
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      setError("Access denied. You need moderator or admin privileges to access this page.");
+      setLoading(false);
+      return;
+    }
+
+    loadDashboardData();
+  }, [isAuthorized, filter, loadDashboardData]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {

@@ -21,8 +21,8 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
     const [logout, setLogout] = React.useState(false);
     const { theme, setTheme } = useTheme();
 
-    let path = usePathname();
-    let params = useSearchParams()?.toString();
+    const path = usePathname();
+    const params = useSearchParams()?.toString();
 
     const newPath = path.replace("en", "ar");
     const newParams = params ? `?${params}` : "";
@@ -39,7 +39,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             }
         };
 
-        let items: NavItem[] = [
+        const items: NavItem[] = [
             {
                 label: "Dark Mode",
                 icon: `${theme === "dark" ? "fa-sun" : "fa-moon"}`,
@@ -62,9 +62,11 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                 items.push({ label: "Moderation", icon: "fa-shield-alt", href: "/en/moderation", onClick: onClose });
             }
         }
-        user
-            ? items.push({ label: "Logout", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout })
-            : items.push({ label: "Login", icon: "fa-sign-in-alt", href: "#", onClick: handleLogin });
+        if (user) {
+            items.push({ label: "Logout", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout });
+        } else {
+            items.push({ label: "Login", icon: "fa-sign-in-alt", href: "#", onClick: handleLogin });
+        }
         setNaveItems(items);
     }, [user, newUrl, login, logout, profile, theme, setTheme, onClose]);
 

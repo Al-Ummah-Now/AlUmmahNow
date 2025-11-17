@@ -136,8 +136,8 @@ test.describe('Performance - Core Web Vitals', () => {
 
         new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
-            if (!(entry as any).hadRecentInput) {
-              clsValue += (entry as any).value;
+            if (!(entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number }).hadRecentInput) {
+              clsValue += (entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number }).value || 0;
             }
           }
           resolve(clsValue);
@@ -167,13 +167,13 @@ test.describe('Performance - Core Web Vitals', () => {
           new PerformanceObserver((list) => {
             for (const entry of list.getEntries()) {
               // FID is the delay from first input to browser processing
-              if ((entry as any).processingStart) {
-                fid = (entry as any).processingStart - entry.startTime;
+              if ((entry as PerformanceEntry & { processingStart?: number }).processingStart) {
+                fid = (entry as PerformanceEntry & { processingStart?: number }).processingStart! - entry.startTime;
                 resolve(fid);
               }
             }
           }).observe({ type: 'first-input', buffered: true });
-        } catch (e) {
+        } catch {
           // If PerformanceObserver not supported, use setTimeout
           setTimeout(() => resolve(fid), 100);
         }
@@ -239,7 +239,7 @@ test.describe('Performance - JavaScript Execution', () => {
                 tasks.push(entry.duration);
               }
             }).observe({ type: 'longtask', buffered: true });
-          } catch (e) {
+          } catch {
             // longtask might not be supported
           }
         }

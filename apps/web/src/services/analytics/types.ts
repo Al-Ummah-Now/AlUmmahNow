@@ -46,7 +46,7 @@ export interface AnalyticsEvent {
   eventType: VideoEventType;
   timestamp: string;       // ISO 8601 format
   relativeTime: number;    // milliseconds since player init
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 /**

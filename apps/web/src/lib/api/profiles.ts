@@ -32,7 +32,7 @@ export async function getProfileCurrent(): Promise<Profile | null> {
     tokenLength: authContext.accessToken?.length
   });
 
-  const result = await apiRequestServer<any>(
+  const result = await apiRequestServer<unknown>(
     {
       method: 'GET',
       url: buildApiUrl(`/api/profiles/${userId}`),

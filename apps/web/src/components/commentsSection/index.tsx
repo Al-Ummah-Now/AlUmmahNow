@@ -94,6 +94,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
       {user && profile ? (
         <div className="space-y-3 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
           <div className="flex items-start space-x-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={profile.avatarUrl || "/avatar.png"}
               alt="Your avatar"

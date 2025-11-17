@@ -26,7 +26,7 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
         channelId: session.channelId, // ✅ Now includes channelId!
       };
     }
-  } catch (error) {
+  } catch (_error) {
     // SessionManager not available or error - fall back to legacy
     console.log('[getServerAuthContext] SessionManager not available, using legacy auth');
   }

@@ -200,7 +200,7 @@ export function setupAccessibility(
   const announcementManager = new AnnouncementManager();
 
   // Track all event handlers for cleanup
-  const eventHandlers: Array<{ event: string; handler: (...args: any[]) => void }> = [];
+  const eventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
 
   // Get player element
   const playerEl = player.el();

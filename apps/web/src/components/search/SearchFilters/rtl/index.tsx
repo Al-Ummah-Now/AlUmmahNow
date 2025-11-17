@@ -43,7 +43,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
   isOpen,
   onToggle,
 }) => {
-  const updateFilter = (key: keyof SearchFiltersType, value: any) => {
+  const updateFilter = (key: keyof SearchFiltersType, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
   };
 

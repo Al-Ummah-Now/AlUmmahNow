@@ -4,7 +4,7 @@ const nextConfig = {
     productionBrowserSourceMaps: true, // Enable source maps in production for better error tracking
 
     // Enable server-side source maps with webpack (more stable than Turbopack for Cloudflare Workers)
-    webpack: (config: any, { isServer }: { isServer: boolean }) => {
+    webpack: (config: Record<string, unknown>, { isServer }: { isServer: boolean }) => {
         if (isServer) {
             config.devtool = 'source-map';
         }

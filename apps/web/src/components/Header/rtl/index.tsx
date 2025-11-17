@@ -4,10 +4,9 @@ import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
 import { redirect } from "next/navigation";
 import { HeaderProps } from "../interfaces";
-import ChannelSelectorRTL from '@/components/ChannelSelector/rtl';
-import AccountSwitcherRTL from '@/components/AccountSwitcher/rtl';
+import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 
-const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse }) => {
+const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
   const handleClick = () => {
     redirect('/ar/');
   };
@@ -34,22 +33,9 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollaps
         </div>
       </div>
 
-      {/* Channel Selector, Account Switcher, and Settings Section */}
+      {/* Unified Navigation - combines AccountSwitcher, ChannelSelector, and AccountNavigation */}
       <div className="flex items-center gap-2">
-        {/* Settings Menu - opens AccountNavigation sidebar */}
-        <button
-          onClick={toggleAccountCollapse}
-          className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          aria-label="قائمة الإعدادات"
-        >
-          <i className="fa fa-bars text-[#ffa037]" />
-        </button>
-
-        {/* Account Switcher - multi-account support */}
-        <AccountSwitcherRTL />
-
-        {/* Channel Selector - with multi-channel support */}
-        <ChannelSelectorRTL />
+        <UnifiedNavigationRTL />
       </div>
     </header>
   );

@@ -1,9 +1,9 @@
 // WebSocket real-time event types and interfaces
-export interface WebSocketMessage {
+export interface WebSocketMessage<T = unknown> {
   id: string;
   type: WebSocketEventType;
   timestamp: number;
-  data: any;
+  data: T;
 }
 
 export type WebSocketEventType =
@@ -89,7 +89,7 @@ export interface WebSocketConnectionState {
 
 export interface WebSocketSubscription {
   channel: string;
-  callback: (data: any) => void;
+  callback: (data: unknown) => void;
 }
 
 export interface WebSocketConfig {

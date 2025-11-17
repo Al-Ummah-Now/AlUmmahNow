@@ -18,7 +18,24 @@ const eslintConfig = [
       "node_modules/**",
       "playwright-report/**",
       "test-results/**",
+      "jest.config.js",
+      "tailwind.config.ts",
+      "public/**",
     ],
+  },
+  {
+    rules: {
+      // Allow unused variables/parameters prefixed with underscore
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
+    },
   },
 ];
 

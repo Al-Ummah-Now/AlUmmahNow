@@ -11,6 +11,7 @@ export interface CommentProps {
 const Comment: React.FC<CommentProps> = ({ author, text, time, avatar }) => {
   return (
     <div className="flex items-start space-x-4">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={avatar} alt="Avatar" className="w-10 h-10 rounded-full" />
       <div>
         <h4 className="font-bold">{author}</h4>

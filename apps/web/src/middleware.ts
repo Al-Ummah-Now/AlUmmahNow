@@ -14,7 +14,6 @@
  */
 
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
 /**
  * Generate CSP policy based on environment variables
@@ -93,7 +92,7 @@ const SECURITY_HEADERS = {
 /**
  * Middleware function to add security headers
  */
-export function middleware(_request: NextRequest) {
+export function middleware() {
   const response = NextResponse.next();
 
   // Determine environment

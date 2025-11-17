@@ -12,7 +12,7 @@ export interface ApiLogContext {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url?: string;
   step?: string;
-  data?: any;
+  data?: unknown;
 }
 
 /**
@@ -72,7 +72,7 @@ export function logApiStep(context: ApiLogContext): void {
 /**
  * Log successful operation
  */
-export function logApiSuccess(functionName: string, message: string, data?: any): void {
+export function logApiSuccess(functionName: string, message: string, data?: unknown): void {
   console.log(formatMessage('success', functionName, message));
 
   if (data !== undefined) {
@@ -83,7 +83,7 @@ export function logApiSuccess(functionName: string, message: string, data?: any)
 /**
  * Log error
  */
-export function logApiError(functionName: string, message: string, error?: any): void {
+export function logApiError(functionName: string, message: string, error?: unknown): void {
   console.error(formatMessage('error', functionName, message));
 
   if (error) {
@@ -101,7 +101,7 @@ export function logApiError(functionName: string, message: string, error?: any):
 /**
  * Log warning
  */
-export function logApiWarn(functionName: string, message: string, data?: any): void {
+export function logApiWarn(functionName: string, message: string, data?: unknown): void {
   console.warn(formatMessage('warn', functionName, message));
 
   if (data !== undefined) {
@@ -114,7 +114,7 @@ export function logApiWarn(functionName: string, message: string, data?: any): v
  */
 export function logApiRequest(context: ApiLogContext & {
   headers?: Record<string, string>;
-  body?: any;
+  body?: unknown;
   params?: Record<string, string>;
 }): void {
   const { functionName, method, url, headers, body, params } = context;
@@ -153,7 +153,7 @@ export function logApiResponse(context: ApiLogContext & {
   statusText: string;
   ok: boolean;
   headers?: Headers;
-  body?: any;
+  body?: unknown;
 }): void {
   const { functionName, status, statusText, ok, headers, body } = context;
 
@@ -230,7 +230,7 @@ export function logApiCompact(
   functionName: string,
   level: LogLevel,
   message: string,
-  data?: any
+  data?: unknown
 ): void {
   const logFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
 

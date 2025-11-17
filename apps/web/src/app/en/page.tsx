@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
 import { useQueryState } from "nuqs";
@@ -17,7 +17,7 @@ const VideosPage: React.FC = () => {
   // Prevent duplicate initial fetch
   const hasInitialFetch = useRef(false);
 
-  const fetchVideos = async (cursor: string | null) => {
+  const fetchVideos = useCallback(async (cursor: string | null) => {
     setLoading(true);
     try {
       const data = await fetchVideosWithPagination(cursor, user?.id);
@@ -39,7 +39,7 @@ const VideosPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     // Prevent duplicate initial fetch
@@ -51,7 +51,7 @@ const VideosPage: React.FC = () => {
     console.log('VideosPage: Performing initial fetch');
     hasInitialFetch.current = true;
     fetchVideos(null);
-  }, []); // Empty dependency array to run only once
+  }, [fetchVideos]);
 
   const handleNextPage = () => {
     if (nextCursor) {

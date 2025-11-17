@@ -4,10 +4,9 @@ import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
 import { redirect } from "next/navigation";
 import { HeaderProps } from "./interfaces";
-import { ChannelSelector } from '@/components/ChannelSelector';
-import { AccountSwitcher } from '@/components/AccountSwitcher';
+import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 
-const Header: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse }) => {
+const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
   const handleClick = () => {
     redirect('/en/');
   };
@@ -34,22 +33,9 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse }
         </div>
       </div>
 
-      {/* Channel Selector, Account Switcher, and Settings Section */}
+      {/* Unified Navigation - combines AccountSwitcher, ChannelSelector, and AccountNavigation */}
       <div className="flex items-center gap-2">
-        {/* Channel Selector - with multi-channel support */}
-        <ChannelSelector />
-
-        {/* Account Switcher - multi-account support */}
-        <AccountSwitcher />
-
-        {/* Settings Menu - opens AccountNavigation sidebar */}
-        <button
-          onClick={toggleAccountCollapse}
-          className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          aria-label="Settings menu"
-        >
-          <i className="fa fa-bars text-[#ffa037]" />
-        </button>
+        <UnifiedNavigation />
       </div>
     </header>
   );

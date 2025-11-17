@@ -210,7 +210,7 @@ export class VideoPerformanceMonitor {
     const checkMemory = () => {
       if (!this.isMonitoring) return;
 
-      const memory = (performance as any).memory;
+      const memory = (performance as unknown).memory;
       if (memory && memory.usedJSHeapSize) {
         const usage = memory.usedJSHeapSize;
         
@@ -232,7 +232,7 @@ export class VideoPerformanceMonitor {
    */
   private getMemoryUsage(): number | undefined {
     if ('memory' in performance) {
-      return (performance as any).memory?.usedJSHeapSize;
+      return (performance as unknown).memory?.usedJSHeapSize;
     }
     return undefined;
   }
