@@ -5,10 +5,12 @@ export interface ChannelCardProps {
   onEdit: (channel: Channel) => void;
   onDelete: (channelId: string) => void;
   onView: (channelId: string) => void;
+  lang?: 'en' | 'ar';
 }
 
 export interface CreateChannelCardProps {
   onClick: () => void;
+  lang?: 'en' | 'ar';
 }
 
 export interface ChannelGridProps {
@@ -18,6 +20,7 @@ export interface ChannelGridProps {
   onView: (channelId: string) => void;
   onCreate: () => void;
   isLoading?: boolean;
+  lang?: 'en' | 'ar';
 }
 
 export interface CreateChannelDialogProps {

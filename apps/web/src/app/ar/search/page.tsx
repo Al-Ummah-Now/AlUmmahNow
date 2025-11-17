@@ -8,8 +8,10 @@ import TrendingContent from "@/components/search/TrendingContent/rtl/index";
 import { SearchFilters as SearchFiltersType } from "@/lib/api/types";
 import * as VideosAPI from "@/lib/api/videos";
 import { usePathname } from "next/navigation";
+import { useI18n } from '@/lib/i18n';
 
 const SearchPage: React.FC = () => {
+    const { t } = useI18n('ar');
     const [searchQuery, setSearchQuery] = useState("");
     const [videos, setVideos] = useState<VideoObject[]>([]);
     const [loading, setLoading] = useState(false);
@@ -83,7 +85,7 @@ const SearchPage: React.FC = () => {
 
     return (
         <main className="flex flex-col p-4 w-full transition-all duration-300" style={{ direction: rtl ? "rtl" : "ltr" }}>
-            <h1 className="text-2xl font-bold text-black mb-4">بحث الفيديوهات</h1>
+            <h1 className="text-2xl font-bold text-black mb-4">{t.search.searchPageTitle}</h1>
 
             {/* Search Bar with Suggestions and Filters */}
             <div className="flex items-center gap-2 mb-6" dir="rtl">
@@ -99,14 +101,14 @@ const SearchPage: React.FC = () => {
                     onClick={handleSearch}
                     className="px-4 py-2 bg-gray-700 text-white rounded-l-md hover:bg-gray-800 transition-colors"
                 >
-                    بحث
+                    {t.search.searchButton}
                 </button>
                 <SearchSuggestions
                     query={searchQuery}
                     onSuggestionSelect={handleSuggestionSelect}
                     onQueryChange={setSearchQuery}
                     onSearch={handleSearch}
-                    placeholder="ابحث عن الفيديوهات..."
+                    placeholder={t.search.searchPlaceholder}
                 />
             </div>
 
@@ -121,30 +123,30 @@ const SearchPage: React.FC = () => {
             {/* Active Filters Display */}
             {hasActiveFilters() && (
                 <div className="flex flex-wrap gap-2 mb-4" dir="rtl">
-                    <span className="text-sm text-gray-600">المرشحات النشطة:</span>
+                    <span className="text-sm text-gray-600">{t.search.activeFilters}</span>
                     {filters.category && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            الفئة: {filters.category}
+                            {t.search.category}: {filters.category}
                         </span>
                     )}
                     {filters.language && filters.language !== 'all' && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            اللغة: {filters.language === 'ar' ? 'العربية' : 'الإنجليزية'}
+                            {t.search.language}: {filters.language === 'ar' ? 'العربية' : 'الإنجليزية'}
                         </span>
                     )}
                     {filters.duration && filters.duration !== 'all' && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            المدة: {filters.duration === 'short' ? 'قصير' : filters.duration === 'medium' ? 'متوسط' : 'طويل'}
+                            {t.search.duration}: {filters.duration === 'short' ? 'قصير' : filters.duration === 'medium' ? 'متوسط' : 'طويل'}
                         </span>
                     )}
                     {filters.dateFrom && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            من: {filters.dateFrom}
+                            {t.search.dateFrom}: {filters.dateFrom}
                         </span>
                     )}
                     {filters.dateTo && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            إلى: {filters.dateTo}
+                            {t.search.dateTo}: {filters.dateTo}
                         </span>
                     )}
                 </div>
@@ -155,8 +157,11 @@ const SearchPage: React.FC = () => {
                 <>
                     <div className="flex items-center justify-between mb-4" dir="rtl">
                         <p className="text-gray-600">
-                            {loading ? 'جاري البحث...' : `تم العثور على ${videos.length} نتيجة`}
-                            {searchQuery && ` لـ "${searchQuery}"`}
+                            {loading ? t.search.searching : (
+                                searchQuery
+                                    ? t.search.foundResultsFor.replace('{count}', videos.length.toString()).replace('{query}', searchQuery)
+                                    : t.search.foundResults.replace('{count}', videos.length.toString())
+                            )}
                         </p>
                     </div>
 
@@ -182,16 +187,16 @@ const SearchPage: React.FC = () => {
                         <div className="text-center py-12">
                             <div className="text-gray-400 text-6xl mb-4">🔍</div>
                             <h3 className="text-lg font-semibold text-gray-600 mb-2">
-                                لم يتم العثور على نتائج
+                                {t.search.noResultsTitle}
                             </h3>
                             <p className="text-gray-500 mb-4">
-                                حاول تعديل مصطلحات البحث أو المرشحات
+                                {t.search.noResultsMessage}
                             </p>
                             <button
                                 onClick={handleClearFilters}
                                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
                             >
-                                مسح المرشحات
+                                {t.search.clearFilters}
                             </button>
                         </div>
                     )}

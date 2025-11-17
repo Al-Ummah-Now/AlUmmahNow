@@ -1,11 +1,16 @@
 "use client";
 import React from "react";
-import { redirect } from 'next/navigation';
+import { redirect, usePathname } from 'next/navigation';
 import Image from "next/image";
 import { VideoObject } from "@/interfaces";
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
+import { useI18n } from "@/lib/i18n";
 
 const VideoCardRTL: React.FC<VideoObject> = (video) => {
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t } = useI18n(locale);
+
   const handleClick = () => {
     redirect(`/ar/video?vid=${video.id}`);
   }
@@ -32,7 +37,7 @@ const VideoCardRTL: React.FC<VideoObject> = (video) => {
         </h3>
         <p className="text-sm truncate">{video.channel}</p>
         <p className="text-sm">
-          {video.views} views • {new Date(video.dateCreated).toLocaleDateString()}
+          {video.views} {t.video.videoViews.toLowerCase()} • {new Date(video.dateCreated).toLocaleDateString()}
         </p>
       </div>
     </div>

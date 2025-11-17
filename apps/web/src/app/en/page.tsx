@@ -5,8 +5,10 @@ import VideoCard from "@/components/videoCard/index";
 import { useQueryState } from "nuqs";
 import { fetchVideosWithPagination } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { useI18n } from "@/lib/i18n";
 
 const VideosPage: React.FC = () => {
+  const { t } = useI18n('en');
   const { user } = useAuth();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
@@ -66,9 +68,9 @@ const VideosPage: React.FC = () => {
             isCollapsed ? "md:pl-20" : "md:pl-56"
           }`}
         >
-          <h1 className="text-2xl font-bold text-black dark:text-white mb-4">Videos</h1>
+          <h1 className="text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+            <p className="text-gray-500 dark:text-gray-400">{t.common.loading}</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
               {videos.map((video) => (
@@ -82,7 +84,7 @@ const VideosPage: React.FC = () => {
               disabled={!nextCursor || loading}
               className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
             >
-              {loading ? "Loading..." : "Load More"}
+              {loading ? t.common.loading : t.common.viewAll}
             </button>
           </div>
         </main>

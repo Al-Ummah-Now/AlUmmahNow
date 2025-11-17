@@ -3,6 +3,7 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
+import { useI18n } from '@/lib/i18n';
 
 interface ProfileGuardProps {
   children: React.ReactNode;
@@ -12,6 +13,7 @@ interface ProfileGuardProps {
 const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) => {
   console.log('[ProfileGuard] ========== COMPONENT RENDER ==========');
 
+  const { t } = useI18n(locale);
   const { user, loading: accountLoading } = useMultiAccount();
   const router = useRouter();
   const pathname = usePathname();
@@ -115,7 +117,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">{locale === 'ar' ? 'جاري التحقق من الملف الشخصي...' : 'Checking profile...'}</p>
+          <p className="text-gray-600 dark:text-gray-400">{t.profile.checkingProfile}</p>
         </div>
       </div>
     );
@@ -128,7 +130,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">{locale === 'ar' ? 'إعادة توجيه إلى إنشاء الملف الشخصي...' : 'Redirecting to profile creation...'}</p>
+          <p className="text-gray-600 dark:text-gray-400">{t.profile.redirectingToProfileCreation}</p>
         </div>
       </div>
     );
@@ -141,7 +143,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">{locale === 'ar' ? 'إعادة التوجيه...' : 'Redirecting...'}</p>
+          <p className="text-gray-600 dark:text-gray-400">{t.profile.redirecting}</p>
         </div>
       </div>
     );

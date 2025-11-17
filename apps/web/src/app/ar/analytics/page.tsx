@@ -4,8 +4,10 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import * as AnalyticsAPI from '@/lib/api/analytics';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
 import AnalyticsDashboardRTL from '@/components/analytics/AnalyticsDashboard/rtl';
+import { useI18n } from '@/lib/i18n';
 
 const AnalyticsPage = () => {
+  const { t } = useI18n('ar');
   const auth = useAuth();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [channelData, setChannelData] = useState<ChannelAnalyticsData | null>(null);
@@ -39,7 +41,7 @@ const AnalyticsPage = () => {
         }
 
       } catch (err) {
-        setError('فشل في تحميل بيانات التحليلات');
+        setError(t.errors.genericError);
         console.error('Analytics loading error:', err);
       } finally {
         setIsLoading(false);
@@ -55,7 +57,7 @@ const AnalyticsPage = () => {
         <div className="container mx-auto px-4 py-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
-              لوحة التحليلات (وضع التجريبي)
+              {t.analytics.analyticsTitle} (وضع التجريبي)
             </h1>
             <p className="text-gray-600 dark:text-gray-300">
               هذه لوحة تحليلات تجريبية. يرجى تسجيل الدخول لعرض التحليلات الفعلية الخاصة بك.
@@ -77,7 +79,7 @@ const AnalyticsPage = () => {
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center" dir="rtl">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-300">جاري تحميل التحليلات...</p>
+          <p className="text-gray-600 dark:text-gray-300">{t.common.loading}</p>
         </div>
       </div>
     );
@@ -88,7 +90,7 @@ const AnalyticsPage = () => {
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center" dir="rtl">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">
-            خطأ
+            {t.common.error}
           </h2>
           <p className="text-gray-600 dark:text-gray-300">{error}</p>
         </div>
@@ -101,7 +103,7 @@ const AnalyticsPage = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
-            لوحة التحليلات
+            {t.analytics.analyticsTitle}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
             تتبع أداء الفيديو والتفاعل مع الجمهور

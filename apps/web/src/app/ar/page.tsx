@@ -6,8 +6,10 @@ import { useQueryState } from "nuqs";
 import { usePathname } from "next/navigation";
 import { fetchVideosWithPagination } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { useI18n } from "@/lib/i18n";
 
 const VideosPage: React.FC = () => {
+  const { t } = useI18n('ar');
   const { user } = useAuth();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true});
@@ -65,9 +67,9 @@ const VideosPage: React.FC = () => {
 
   return (
     <main className={`flex flex-col p-4 w-full transition-all duration-300 ${isCollapsed ? "md:pr-20" : "md:pr-56"}`} style={{ direction: rtl ? "rtl" : "ltr" }}>
-      <h1 className="text-2xl font-bold text-black dark:text-white mb-4">الفيديوهات</h1>
+      <h1 className="text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
       {loading && videos.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400">جاري التحميل...</p>
+        <p className="text-gray-500 dark:text-gray-400">{t.common.loading}</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
           {videos.map((video) => (
@@ -81,7 +83,7 @@ const VideosPage: React.FC = () => {
           disabled={!nextCursor || loading}
           className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
         >
-          {loading ? "جاري التحميل..." : "تحميل المزيد"}
+          {loading ? t.common.loading : t.common.viewAll}
         </button>
       </div>
     </main>

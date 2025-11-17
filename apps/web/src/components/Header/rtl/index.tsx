@@ -5,10 +5,10 @@ import IcoButton from '@/components/iconButton';
 import { redirect } from "next/navigation";
 import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
-import { useActiveChannel } from '@/contexts/ActiveChannelContext';
+import { useI18n } from '@/lib/i18n';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
-  const { activeChannel } = useActiveChannel();
+  const { t } = useI18n('ar');
   const handleClick = () => {
     redirect('/ar/');
   };
@@ -32,7 +32,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
             <Image src="/logo.png" alt="Logo" sizes="10vw" fill />
           </div>
           <h2 className="text-2xl font-[farsi] text-[#ffa037] cursor-pointer">
-            {activeChannel?.name || "لا توجد قناة محددة"}
+            {t.common.appName}
           </h2>
         </div>
       </div>

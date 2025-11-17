@@ -3,8 +3,10 @@ import React, { useEffect } from 'react';
 import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useI18n } from '@/lib/i18n';
 
 const ProfilePage = () => {
+  const { t } = useI18n('ar');
   const [profile, setProfile] = React.useState<Profile | null>(null);
   const auth = useAuth();
 
@@ -51,7 +53,7 @@ const ProfilePage = () => {
           </li>
           <li>
             <a href="#edit-profile" className="text-black hover:underline">
-              تعديل الملف الشخصي
+              {t.profile.editProfile}
             </a>
           </li>
           <li>
@@ -122,7 +124,7 @@ const ProfilePage = () => {
 
         {/* Edit Profile Section */}
         <section id="edit-profile" className="section mb-8">
-          <h2 className="text-2xl font-semibold text-gray-800">تعديل الملف الشخصي</h2>
+          <h2 className="text-2xl font-semibold text-gray-800">{t.profile.editProfile}</h2>
           <form className="space-y-4" onSubmit={handleSubmit}>
 
             <label className="block">
@@ -143,7 +145,7 @@ const ProfilePage = () => {
               </div>
             </label>
             <label className="block">
-              <span className="text-gray-700">البريد الإلكتروني:</span>
+              <span className="text-gray-700">{t.profile.email}:</span>
               <input
                 type="email"
                 name="email"
@@ -156,7 +158,7 @@ const ProfilePage = () => {
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              حفظ التغييرات
+              {t.common.save}
             </button>
           </form>
         </section>

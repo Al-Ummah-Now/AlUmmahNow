@@ -9,9 +9,12 @@
 
 import { useState } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { useI18n } from '@/lib/i18n';
 import { Tv, Plus, Check, ChevronDown, Crown } from 'lucide-react';
 
 export default function ChannelSelectorRTL() {
+  const { t } = useI18n('ar');
+
   const {
     user,
     loading,
@@ -40,7 +43,7 @@ export default function ChannelSelectorRTL() {
         className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
       >
         <Plus className="h-4 w-4" />
-        إنشاء قناة
+        {t.channel.createChannel}
       </button>
     );
   }
@@ -91,7 +94,7 @@ export default function ChannelSelectorRTL() {
         ) : (
           <>
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              اختر قناة
+              {t.channel.selectChannel}
             </span>
             <Tv className="h-4 w-4 text-gray-500" />
           </>
@@ -121,7 +124,7 @@ export default function ChannelSelectorRTL() {
             {/* Channel List */}
             <div className="p-2">
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-                قنواتك ({channels.length})
+                {t.channel.myChannels} ({channels.length})
               </div>
 
               {/* Option to work without channel */}
@@ -138,7 +141,7 @@ export default function ChannelSelectorRTL() {
                 )}
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    بدون قناة
+                    {t.header.noChannelSelected}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
                     تصفح بدون قناة
@@ -168,7 +171,7 @@ export default function ChannelSelectorRTL() {
                       {ch.name}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {ch.isMain ? 'القناة الرئيسية' : 'قناة'}
+                      {ch.isMain ? t.channel.mainChannel : 'قناة'}
                     </div>
                   </div>
                   <div className="relative">
@@ -203,7 +206,7 @@ export default function ChannelSelectorRTL() {
                   role="menuitem"
                 >
                   <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    إنشاء قناة جديدة
+                    {t.channel.createChannel}
                   </span>
                   <div className="h-8 w-8 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
                     <Plus className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -212,7 +215,7 @@ export default function ChannelSelectorRTL() {
               ) : (
                 <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    اسم القناة
+                    {t.channel.channelName}
                   </label>
                   <input
                     type="text"
@@ -235,14 +238,14 @@ export default function ChannelSelectorRTL() {
                       }}
                       className="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md transition-colors"
                     >
-                      إلغاء
+                      {t.common.cancel}
                     </button>
                     <button
                       onClick={handleCreateChannel}
                       disabled={!newChannelName.trim()}
                       className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
                     >
-                      إنشاء
+                      {t.common.create}
                     </button>
                   </div>
                 </div>

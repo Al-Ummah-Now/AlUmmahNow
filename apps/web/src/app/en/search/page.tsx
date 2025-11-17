@@ -7,8 +7,10 @@ import SearchSuggestions from "@/components/search/SearchSuggestions/index";
 import TrendingContent from "@/components/search/TrendingContent/index";
 import { SearchFilters as SearchFiltersType } from "@/lib/api/types";
 import * as VideosAPI from "@/lib/api/videos";
+import { useI18n } from '@/lib/i18n';
 
 const SearchPage: React.FC = () => {
+    const { t } = useI18n('en');
     const [searchQuery, setSearchQuery] = useState("");
     const [videos, setVideos] = useState<VideoObject[]>([]);
     const [loading, setLoading] = useState(false);
@@ -80,7 +82,7 @@ const SearchPage: React.FC = () => {
 
     return (
         <main className="flex flex-col p-4 w-full transition-all duration-300">
-            <h1 className="text-2xl font-bold text-black dark:text-white mb-4">Search Videos</h1>
+            <h1 className="text-2xl font-bold text-black dark:text-white mb-4">{t.search.searchPageTitle}</h1>
 
             {/* Search Bar with Suggestions and Filters */}
             <div className="flex items-center gap-2 mb-6">
@@ -89,13 +91,13 @@ const SearchPage: React.FC = () => {
                     onSuggestionSelect={handleSuggestionSelect}
                     onQueryChange={setSearchQuery}
                     onSearch={handleSearch}
-                    placeholder="Search for videos..."
+                    placeholder={t.search.searchPlaceholder}
                 />
                 <button
                     onClick={handleSearch}
                     className="px-4 py-2 bg-gray-700 text-white rounded-r-md hover:bg-gray-800 transition-colors"
                 >
-                    Search
+                    {t.search.searchButton}
                 </button>
                 <SearchFilters
                     filters={filters}
@@ -118,30 +120,30 @@ const SearchPage: React.FC = () => {
             {/* Active Filters Display */}
             {hasActiveFilters() && (
                 <div className="flex flex-wrap gap-2 mb-4">
-                    <span className="text-sm text-gray-600 dark:text-gray-300">Active filters:</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">{t.search.activeFilters}</span>
                     {filters.category && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            Category: {filters.category}
+                            {t.search.category}: {filters.category}
                         </span>
                     )}
                     {filters.language && filters.language !== 'all' && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            Language: {filters.language}
+                            {t.search.language}: {filters.language}
                         </span>
                     )}
                     {filters.duration && filters.duration !== 'all' && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            Duration: {filters.duration}
+                            {t.search.duration}: {filters.duration}
                         </span>
                     )}
                     {filters.dateFrom && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            From: {filters.dateFrom}
+                            {t.search.dateFrom}: {filters.dateFrom}
                         </span>
                     )}
                     {filters.dateTo && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            To: {filters.dateTo}
+                            {t.search.dateTo}: {filters.dateTo}
                         </span>
                     )}
                 </div>
@@ -152,8 +154,11 @@ const SearchPage: React.FC = () => {
                 <>
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-gray-600 dark:text-gray-300">
-                            {loading ? 'Searching...' : `Found ${videos.length} results`}
-                            {searchQuery && ` for "${searchQuery}"`}
+                            {loading ? t.search.searching : (
+                                searchQuery
+                                    ? t.search.foundResultsFor.replace('{count}', videos.length.toString()).replace('{query}', searchQuery)
+                                    : t.search.foundResults.replace('{count}', videos.length.toString())
+                            )}
                         </p>
                     </div>
 
@@ -179,16 +184,16 @@ const SearchPage: React.FC = () => {
                         <div className="text-center py-12">
                             <div className="text-gray-400 text-6xl mb-4">🔍</div>
                             <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">
-                                No results found
+                                {t.search.noResultsTitle}
                             </h3>
                             <p className="text-gray-500 dark:text-gray-400 mb-4">
-                                Try adjusting your search terms or filters
+                                {t.search.noResultsMessage}
                             </p>
                             <button
                                 onClick={handleClearFilters}
                                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
                             >
-                                Clear Filters
+                                {t.search.clearFilters}
                             </button>
                         </div>
                     )}

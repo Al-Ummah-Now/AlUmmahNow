@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useI18n } from '@/lib/i18n';
 
 const ProfileCreatePage = () => {
+  const { t } = useI18n('ar');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,7 @@ const ProfileCreatePage = () => {
 
     // Validation
     if (!firstName.trim()) {
-      setError('الاسم الأول مطلوب');
+      setError(t.validation.required);
       setLoading(false);
       return;
     }
@@ -57,7 +59,7 @@ const ProfileCreatePage = () => {
       router.push('/ar/');
     } catch (error) {
       console.error('Profile creation failed:', error);
-      setError('فشل في إنشاء الملف الشخصي. يرجى المحاولة مرة أخرى.');
+      setError(t.errors.genericError);
     } finally {
       setLoading(false);
     }
@@ -67,7 +69,7 @@ const ProfileCreatePage = () => {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center" dir="rtl">
         <div className="text-center">
-          <p className="text-gray-600 dark:text-gray-400">يرجى تسجيل الدخول لإنشاء ملفك الشخصي.</p>
+          <p className="text-gray-600 dark:text-gray-400">{t.errors.unauthorized}</p>
         </div>
       </div>
     );
@@ -78,8 +80,8 @@ const ProfileCreatePage = () => {
       <div className="max-w-2xl mx-auto px-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">إنشاء ملفك الشخصي</h1>
-            <p className="text-gray-600 dark:text-gray-400">مرحباً بك في الأمة الآن! دعنا ننشئ ملفك الشخصي للبدء.</p>
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">{t.profile.createProfile}</h1>
+            <p className="text-gray-600 dark:text-gray-400">مرحباً بك في {t.common.appName}! دعنا ننشئ ملفك الشخصي للبدء.</p>
           </div>
 
           {error && (
@@ -91,7 +93,7 @@ const ProfileCreatePage = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                عنوان البريد الإلكتروني
+                {t.profile.email}
               </label>
               <input
                 type="email"
@@ -131,7 +133,7 @@ const ProfileCreatePage = () => {
 
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                الاسم المعروض
+                {t.profile.displayName}
               </label>
               <input
                 type="text"
@@ -145,7 +147,7 @@ const ProfileCreatePage = () => {
             <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4">
               <h3 className="font-medium text-blue-900 dark:text-blue-300 mb-2">إشعار الخصوصية</h3>
               <p className="text-sm text-blue-800 dark:text-blue-400">
-                ستُستخدم معلومات ملفك الشخصي لتخصيص تجربتك على الأمة الآن.
+                ستُستخدم معلومات ملفك الشخصي لتخصيص تجربتك على {t.common.appName}.
                 يمكنك تحديث معلومات ملفك الشخصي في أي وقت في إعدادات الملف الشخصي.
               </p>
             </div>
@@ -156,7 +158,7 @@ const ProfileCreatePage = () => {
                 disabled={loading}
                 className="flex-1 bg-blue-600 dark:bg-blue-500 text-white py-3 px-6 rounded-md font-medium hover:bg-blue-700 dark:hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? 'إنشاء الملف الشخصي...' : 'إنشاء الملف الشخصي'}
+                {loading ? `${t.common.create}...` : t.profile.createProfile}
               </button>
             </div>
           </form>

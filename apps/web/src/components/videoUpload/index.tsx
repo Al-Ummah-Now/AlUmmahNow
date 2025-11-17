@@ -5,6 +5,8 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus, getBunnyAccessKey } from "@/lib/actions/upload";
+import { usePathname } from "next/navigation";
+import { useI18n } from "@/lib/i18n";
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -26,12 +28,16 @@ interface UploadProgress {
   error?: string;
 }
 
-const VideoUpload: React.FC<VideoUploadProps> = ({ 
-  onUploadComplete, 
-  onProgress, 
-  onError, 
-  className = "" 
+const VideoUpload: React.FC<VideoUploadProps> = ({
+  onUploadComplete,
+  onProgress,
+  onError,
+  className = ""
 }) => {
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t } = useI18n(locale);
+
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -316,7 +322,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       <div className={`bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg ${className}`}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Video Details
+            {t.upload.videoDetails}
           </h3>
           <button
             onClick={resetForm}
@@ -327,7 +333,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         </div>
 
         <div className="mb-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Selected file:</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t.upload.selectFile}:</p>
           <p className="font-medium text-gray-900 dark:text-white">{selectedFile.name}</p>
           <p className="text-sm text-gray-500">
             {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
@@ -338,10 +344,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {uploadProgress.stage === 'preparing' && 'Preparing upload...'}
-                {uploadProgress.stage === 'uploading' && 'Uploading video...'}
-                {uploadProgress.stage === 'processing' && 'Processing video...'}
-                {uploadProgress.stage === 'complete' && 'Upload complete!'}
+                {uploadProgress.stage === 'preparing' && t.upload.preparing}
+                {uploadProgress.stage === 'uploading' && t.upload.uploading}
+                {uploadProgress.stage === 'processing' && t.upload.processingVideo}
+                {uploadProgress.stage === 'complete' && t.upload.uploadComplete}
               </span>
               <span className="text-sm text-gray-500">{uploadProgress.percentage}%</span>
             </div>
@@ -363,14 +369,14 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         <div className="space-y-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title *
+              {t.video.videoTitle} *
             </label>
             <input
               type="text"
               value={metadata.title}
               onChange={(e) => setMetadata(prev => ({ ...prev, title: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="Enter video title"
+              placeholder={t.video.videoTitle}
               required
               disabled={!!uploadProgress}
             />
@@ -378,14 +384,14 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description
+              {t.video.videoDescription}
             </label>
             <textarea
               value={metadata.description}
               onChange={(e) => setMetadata(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="Enter video description"
+              placeholder={t.video.videoDescription}
               disabled={!!uploadProgress}
             />
           </div>
@@ -400,7 +406,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               disabled={!!uploadProgress}
             />
             <label htmlFor="isPublic" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-              Make this video public
+              {t.upload.makePublic}
             </label>
           </div>
         </div>
@@ -413,13 +419,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 disabled={!metadata.title.trim()}
                 className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
-                Upload Video
+                {t.upload.uploadTitle}
               </button>
               <button
                 onClick={resetForm}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
               >
-                Cancel
+                {t.common.cancel}
               </button>
             </>
           ) : (
@@ -427,7 +433,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               onClick={cancelUpload}
               className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium"
             >
-              Cancel Upload
+              {t.upload.cancelUpload}
             </button>
           )}
         </div>
@@ -455,7 +461,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           multiple={false}
         />
-        
+
         <div className="flex flex-col items-center">
           <Upload
             size={48}
@@ -464,13 +470,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             }`}
           />
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            {isDragOver ? 'Drop your video here' : 'Upload a video'}
+            {isDragOver ? t.upload.dropHere : t.upload.uploadTitle}
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Drag and drop a video file, or click to browse
+            {t.upload.dragDropFiles}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Supports {VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY} • Max {VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE_DISPLAY} • Max {VIDEO_UPLOAD_CONFIG.MAX_DURATION_DISPLAY}
+            {t.upload.supports} {VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY} • {t.upload.max} {VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE_DISPLAY} • {t.upload.max} {VIDEO_UPLOAD_CONFIG.MAX_DURATION_DISPLAY}
           </p>
         </div>
       </div>

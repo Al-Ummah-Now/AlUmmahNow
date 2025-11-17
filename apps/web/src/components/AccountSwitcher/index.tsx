@@ -8,10 +8,16 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { useI18n } from '@/lib/i18n';
 import { Plus, Check, LogOut, ChevronDown } from 'lucide-react';
 
 export function AccountSwitcher() {
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t } = useI18n(locale);
+
   const {
     user,
     accounts,
@@ -79,7 +85,7 @@ export function AccountSwitcher() {
             {/* Account List */}
             <div className="p-2">
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-                ACCOUNTS ({accounts.length})
+                {t.header.switchAccount.toUpperCase()} ({accounts.length})
               </div>
 
               {accounts.map((account) => (
@@ -148,7 +154,7 @@ export function AccountSwitcher() {
                   <Plus className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Add another account
+                  {t.header.addAccount}
                 </span>
               </button>
 
@@ -165,7 +171,7 @@ export function AccountSwitcher() {
                   <LogOut className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Sign out of {user.displayName}
+                  {t.header.logout} {user.displayName}
                 </span>
               </button>
 
@@ -183,7 +189,7 @@ export function AccountSwitcher() {
                     <LogOut className="h-5 w-5 text-red-600 dark:text-red-400" />
                   </div>
                   <span className="text-sm font-medium text-red-600 dark:text-red-400">
-                    Sign out of all accounts
+                    {t.header.logoutAll}
                   </span>
                 </button>
               )}

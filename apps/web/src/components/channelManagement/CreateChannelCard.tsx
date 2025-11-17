@@ -1,11 +1,17 @@
 import React from 'react';
 import { CreateChannelCardProps } from './types';
+import { useI18n } from '@/lib/i18n';
 
 /**
  * CreateChannelCard Component
  * Card with plus icon to trigger channel creation dialog
  */
-export const CreateChannelCard: React.FC<CreateChannelCardProps> = ({ onClick }) => {
+export const CreateChannelCard: React.FC<CreateChannelCardProps> = ({
+  onClick,
+  lang = 'en',
+}) => {
+  const { t } = useI18n(lang);
+
   return (
     <div
       onClick={onClick}
@@ -27,10 +33,12 @@ export const CreateChannelCard: React.FC<CreateChannelCardProps> = ({ onClick })
         </svg>
       </div>
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-        Create New Channel
+        {t.channel.createChannel}
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-        Start sharing your content with a new channel
+        {lang === 'ar'
+          ? 'ابدأ بمشاركة محتواك مع قناة جديدة'
+          : 'Start sharing your content with a new channel'}
       </p>
     </div>
   );

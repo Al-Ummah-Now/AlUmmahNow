@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChannelGridProps } from './types';
 import { ChannelCard } from './ChannelCard';
+import { useI18n } from '@/lib/i18n';
 
 /**
  * ChannelGrid Component
@@ -16,7 +17,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   onView,
   onCreate,
   isLoading,
+  lang = 'en',
 }) => {
+  const { t } = useI18n(lang);
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -49,10 +52,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           </svg>
         </div>
         <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-          No Channels Yet
+          {lang === 'ar' ? 'لا توجد قنوات بعد' : 'No Channels Yet'}
         </h3>
         <p className="text-gray-600 dark:text-gray-400 text-center mb-6 max-w-md">
-          Create your first channel to start sharing videos and building your audience.
+          {lang === 'ar'
+            ? 'أنشئ قناتك الأولى لبدء مشاركة الفيديوهات وبناء جمهورك.'
+            : 'Create your first channel to start sharing videos and building your audience.'}
         </p>
         <button
           onClick={onCreate}
@@ -66,7 +71,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               d="M12 4v16m8-8H4"
             />
           </svg>
-          Create Your First Channel
+          {t.channel.createChannel}
         </button>
       </div>
     );
@@ -82,6 +87,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onEdit={onEdit}
           onDelete={onDelete}
           onView={onView}
+          lang={lang}
         />
       ))}
     </div>

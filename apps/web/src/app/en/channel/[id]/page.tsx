@@ -8,17 +8,19 @@ import * as VideosAPI from '@/lib/api/videos';
 import { VideoObject } from '@/interfaces';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
+import { useI18n } from '@/lib/i18n';
 
 interface ChannelData {
   id: string;
   name: string;
   description?: string;
   avatarUrl?: string;
-  bannerUrl?: string;
+  coverUrl?: string;
   subscribersCount?: number;
 }
 
 function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
+  const { t } = useI18n('en');
   const [channelId, setChannelId] = useState<string | null>(null);
   const [channel, setChannel] = useState<ChannelData | null>(null);
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -43,10 +45,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
         const userChannelId = profile?.channels?.[0] || '';
 
         // Fetch channel info (the channel being viewed)
-        const channelData = await getChannelById(
-          channelId,
-          userChannelId && user?.id ? { channelId: userChannelId, userId: user.id } : undefined
-        );
+        const channelData = await getChannelById(channelId);
         if (channelData) {
           setChannel(channelData);
         }
@@ -76,7 +75,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading channel...</p>
+          <p className="text-gray-600 dark:text-gray-400">{t.common.loading}</p>
         </div>
       </div>
     );
@@ -89,10 +88,10 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
           <svg className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-2">Channel not found</h2>
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-2">{t.errors.notFound}</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6">The channel you&apos;re looking for doesn&apos;t exist or has been removed.</p>
           <Link href="/en/" className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
-            Go to Homepage
+            {t.feed.home}
           </Link>
         </div>
       </div>
@@ -104,9 +103,9 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
       <div className="font-sans text-gray-800 dark:text-gray-200 max-w-6xl mx-auto">
         {/* Channel Banner */}
         <div className="relative h-52 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-700 dark:to-purple-800">
-          {channel.bannerUrl ? (
+          {channel.coverUrl ? (
             <Image
-              src={channel.bannerUrl}
+              src={channel.coverUrl}
               alt="Channel Banner"
               fill
               className="object-cover"
@@ -143,7 +142,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{channel.name}</h1>
               {channel.subscribersCount !== undefined && (
                 <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  {channel.subscribersCount.toLocaleString()} subscribers
+                  {channel.subscribersCount.toLocaleString()} {t.channel.subscribers}
                 </p>
               )}
               {channel.description && (
@@ -155,7 +154,6 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
               channelName={channel.name}
               subscribersCount={channel.subscribersCount || 0}
               initialSubscribed={false}
-              lang="en"
             />
           </div>
         </div>
@@ -163,7 +161,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
         {/* Navigation Tabs */}
         <div className="flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-5 py-2">
           <button className="mr-5 px-4 py-2 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 font-semibold">
-            Videos
+            {t.channel.videos}
           </button>
         </div>
 
@@ -174,7 +172,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
               <svg className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
-              <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">No videos yet</h3>
+              <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">{t.common.noResults}</h3>
               <p className="text-gray-500 dark:text-gray-400">This channel hasn&apos;t uploaded any videos.</p>
             </div>
           ) : (
@@ -200,7 +198,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
                       {video.title}
                     </h3>
                     <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                      {video.views?.toLocaleString() || 0} views
+                      {video.views?.toLocaleString() || 0} {t.video.videoViews}
                     </p>
                   </div>
                 </Link>

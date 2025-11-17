@@ -1,9 +1,10 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
+import { useI18n } from '@/lib/i18n';
 import { subscribeToChannel, unsubscribeFromChannel } from '@/lib/api/channels';
 import { Bell } from 'lucide-react';
 
@@ -13,7 +14,6 @@ interface SubscribeButtonProps {
   initialSubscribed?: boolean;
   subscribersCount?: number;
   className?: string;
-  lang?: 'en' | 'ar';
 }
 
 export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
@@ -21,9 +21,11 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   initialSubscribed = false,
   subscribersCount = 0,
   className = '',
-  lang = 'en'
 }) => {
   const router = useRouter();
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t, dir } = useI18n(locale);
   const { user } = useAuth();
   const { profile } = useProfile(user);
   const isAuthenticated = !!user;
@@ -39,12 +41,12 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   const handleSubscriptionToggle = async () => {
     if (!isAuthenticated || !user || !profile) {
       // Redirect to login page - user context makes it clear why they're being redirected
-      router.push(lang === 'ar' ? '/ar' : '/en');
+      router.push(locale === 'ar' ? '/ar' : '/en');
       return;
     }
 
     setIsLoading(true);
-    
+
     try {
       const headers = {
         channelId: profile.channels?.[0] || '',
@@ -77,30 +79,22 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
     }
   };
 
-  const isRTL = lang === 'ar';
-  const texts = {
-    subscribe: isRTL ? 'اشتراك' : 'Subscribe',
-    subscribed: isRTL ? 'مشترك' : 'Subscribed',
-    loading: isRTL ? 'جاري التحميل...' : 'Loading...',
-    subscribers: isRTL ? 'مشترك' : 'subscribers'
-  };
-
   if (!isAuthenticated) {
     return (
       <Button
         variant="outline"
         size="sm"
         className={className}
-        onClick={() => router.push(lang === 'ar' ? '/ar' : '/en')}
-        dir={isRTL ? 'rtl' : 'ltr'}
+        onClick={() => router.push(locale === 'ar' ? '/ar' : '/en')}
+        dir={dir}
       >
-        {texts.subscribe}
+        {t.channel.subscribe}
       </Button>
     );
   }
 
   return (
-    <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className={`flex items-center gap-2 ${locale === 'ar' ? 'flex-row-reverse' : ''}`} dir={dir}>
       <Button
         variant={isSubscribed ? "secondary" : "default"}
         size="sm"
@@ -109,20 +103,20 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
         disabled={isLoading}
       >
         {isLoading ? (
-          texts.loading
+          t.common.loading
         ) : isSubscribed ? (
           <>
-            <Bell className={`w-4 h-4 ${isRTL ? 'ml-1' : 'mr-1'}`} />
-            {texts.subscribed}
+            <Bell className={`w-4 h-4 ${locale === 'ar' ? 'ml-1' : 'mr-1'}`} />
+            {t.channel.subscribed}
           </>
         ) : (
-          texts.subscribe
+          t.channel.subscribe
         )}
       </Button>
 
       {currentSubscribersCount > 0 && (
         <span className="text-sm text-gray-600 dark:text-gray-400">
-          {currentSubscribersCount.toLocaleString()} {texts.subscribers}
+          {currentSubscribersCount.toLocaleString()} {t.channel.subscribers}
         </span>
       )}
     </div>

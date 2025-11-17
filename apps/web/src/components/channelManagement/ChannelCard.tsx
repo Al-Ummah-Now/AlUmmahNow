@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChannelCardProps } from './types';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/lib/i18n';
 
 /**
  * ChannelCard Component
@@ -11,10 +12,16 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   onEdit,
   onDelete,
   onView,
+  lang = 'en',
 }) => {
+  const { t, dir } = useI18n(lang);
+
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete "${channel.name}"?`)) {
+    const confirmMessage = lang === 'ar'
+      ? `هل أنت متأكد من حذف "${channel.name}"؟`
+      : `Are you sure you want to delete "${channel.name}"?`;
+    if (window.confirm(confirmMessage)) {
       onDelete(channel.id);
     }
   };
@@ -28,10 +35,15 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     onView(channel.id);
   };
 
+  const cannotDeleteMessage = lang === 'ar'
+    ? 'لا يمكن حذف القناة الرئيسية'
+    : 'Cannot delete main channel';
+
   return (
     <div
       className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden cursor-pointer"
       onClick={handleView}
+      dir={dir}
     >
       {/* Channel Avatar/Cover */}
       <div
@@ -78,7 +90,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             </h3>
             {channel.isMain && (
               <span className="inline-block px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
-                Main Channel
+                {t.channel.mainChannel}
               </span>
             )}
           </div>
@@ -114,7 +126,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             onClick={handleView}
             className="flex-1"
           >
-            View
+            {lang === 'ar' ? 'عرض' : 'View'}
           </Button>
           <Button
             variant="outline"
@@ -135,7 +147,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             size="sm"
             onClick={handleDelete}
             disabled={channel.isMain}
-            title={channel.isMain ? 'Cannot delete main channel' : 'Delete channel'}
+            title={channel.isMain ? cannotDeleteMessage : t.channel.deleteChannel}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path

@@ -5,8 +5,10 @@ import VideoUpload from "@/components/videoUpload";
 import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle, Upload } from "lucide-react";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
+import { useI18n } from "@/lib/i18n";
 
 const UploadPageAr: React.FC = () => {
+  const { t } = useI18n('ar');
   const [uploadComplete, setUploadComplete] = useState(false);
   const [uploadedVideo, setUploadedVideo] = useState<VideoObject | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -47,10 +49,10 @@ const UploadPageAr: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            رفع فيديو
+            {t.upload.uploadTitle}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            شارك المحتوى الخاص بك مع مجتمع الأمة الآن
+            شارك المحتوى الخاص بك مع مجتمع {t.common.appName}
           </p>
         </div>
 
@@ -61,7 +63,7 @@ const UploadPageAr: React.FC = () => {
               <CheckCircle className="h-6 w-6 text-green-500 mt-1 ml-3 flex-shrink-0" />
               <div className="flex-1">
                 <h3 className="text-lg font-medium text-green-800 dark:text-green-200 mb-2">
-                  تم الرفع بنجاح!
+                  {t.upload.uploadComplete}!
                 </h3>
                 <p className="text-green-700 dark:text-green-300 mb-4">
                   تم رفع الفيديو الخاص بك &ldquo;{uploadedVideo.title}&rdquo; وهو الآن قيد المعالجة.
@@ -77,7 +79,7 @@ const UploadPageAr: React.FC = () => {
                     onClick={handleUploadAnother}
                     className="bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 px-4 py-2 rounded-md border border-green-600 dark:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 focus:outline-none focus:ring-2 focus:ring-green-500 font-medium"
                   >
-                    رفع فيديو آخر
+                    {t.upload.uploadTitle} فيديو آخر
                   </button>
                 </div>
               </div>
@@ -92,7 +94,7 @@ const UploadPageAr: React.FC = () => {
               <AlertCircle className="h-6 w-6 text-red-500 mt-1 ml-3 flex-shrink-0" />
               <div className="flex-1">
                 <h3 className="text-lg font-medium text-red-800 dark:text-red-200 mb-2">
-                  فشل الرفع
+                  {t.upload.uploadFailed}
                 </h3>
                 <p className="text-red-700 dark:text-red-300 mb-4">
                   {uploadError}
@@ -115,7 +117,7 @@ const UploadPageAr: React.FC = () => {
               <Upload className="h-6 w-6 text-blue-500 mt-1 ml-3 flex-shrink-0" />
               <div className="flex-1">
                 <h3 className="text-lg font-medium text-blue-800 dark:text-blue-200 mb-2">
-                  جاري رفع الفيديو...
+                  {t.upload.uploading}
                 </h3>
                 <p className="text-blue-700 dark:text-blue-300 mb-4">
                   يرجى الانتظار بينما يتم رفع ومعالجة الفيديو الخاص بك.

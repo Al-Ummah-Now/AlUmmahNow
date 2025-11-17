@@ -2,10 +2,15 @@
 import React from "react";
 import Image from "next/image";
 import { VideoInfo } from "@/interfaces";
-import { redirect } from "next/navigation";
+import { redirect, usePathname } from "next/navigation";
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
+import { useI18n } from "@/lib/i18n";
 
 const RelatedVideo: React.FC<VideoInfo> = (info) => {
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t } = useI18n(locale);
+
   const handleClick = () => {
     redirect(`/en/video?vid=${info.id}`);
   };
@@ -31,7 +36,7 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
         </h3>
         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{info.channel}</p>
         <p className="text-xs text-gray-500">
-          {info.views} views • {info?.dateModified?.toLocaleDateString()}
+          {info.views} {t.video.videoViews.toLowerCase()} • {info?.dateModified?.toLocaleDateString()}
         </p>
       </div>
     </div>

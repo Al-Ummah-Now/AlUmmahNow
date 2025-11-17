@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Channel } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useChannels } from '@/hooks/useChannels';
+import { useI18n } from '@/lib/i18n';
 import { ChannelManagementSectionProps, CreateChannelFormData } from './types';
 import { ChannelGrid } from './ChannelGrid';
 import { CreateChannelDialog } from './CreateChannelDialog';
@@ -22,6 +23,9 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   className = '',
 }) => {
   const router = useRouter();
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t, dir } = useI18n(locale);
   const auth = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -61,10 +65,10 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     });
 
     if (success) {
-      showToast('Channel created successfully!');
+      showToast(t.success.created);
       setDialogOpen(false);
     } else {
-      showToast('Failed to create channel. Please try again.');
+      showToast(t.errors.genericError);
     }
   };
 
@@ -72,7 +76,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const handleEditChannel = (channel: Channel) => {
     console.log('ChannelManagementSection: Edit channel:', channel);
     // Navigate to channel edit page
-    router.push(`/en/channel/${channel.id}/edit`);
+    router.push(`/${locale}/channel/${channel.id}/edit`);
   };
 
   // Handle delete channel
@@ -82,9 +86,9 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     const success = await deleteChannel(channelId);
 
     if (success) {
-      showToast('Channel deleted successfully!');
+      showToast(t.success.deleted);
     } else {
-      showToast('Failed to delete channel. Please try again.');
+      showToast(t.errors.genericError);
     }
   };
 
@@ -92,19 +96,19 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const handleViewChannel = (channelId: string) => {
     console.log('ChannelManagementSection: View channel:', channelId);
     // Navigate to channel page
-    router.push(`/en/channel/${channelId}`);
+    router.push(`/${locale}/channel/${channelId}`);
   };
 
   return (
-    <section id="channels" className={`section mb-8 ${className}`}>
+    <section id="channels" className={`section mb-8 ${className}`} dir={dir}>
       {/* Section Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">
-            My Channels
+            {t.channel.myChannels}
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Manage your channels and content
+            {t.channel.manageChannels}
           </p>
         </div>
         {channels.length > 0 && (
@@ -120,7 +124,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
                 d="M12 4v16m8-8H4"
               />
             </svg>
-            New Channel
+            {t.channel.createChannel}
           </button>
         )}
       </div>
@@ -155,6 +159,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
         onView={handleViewChannel}
         onCreate={() => setDialogOpen(true)}
         isLoading={isLoading}
+        lang={locale}
       />
 
       {/* Create Channel Dialog */}
@@ -163,6 +168,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
         onOpenChange={setDialogOpen}
         onSubmit={handleCreateChannel}
         isLoading={isLoading}
+        lang={locale}
       />
 
       {/* Toast Message */}

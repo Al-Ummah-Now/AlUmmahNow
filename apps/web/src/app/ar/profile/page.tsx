@@ -4,8 +4,10 @@ import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useRouter } from 'next/navigation';
 import { ChannelManagementSection } from '@/components/channelManagement/rtl';
+import { useI18n } from '@/lib/i18n';
 
 const ProfilePage = () => {
+  const { t } = useI18n('ar');
   const auth = useAuth();
   const router = useRouter();
   const { profile, isLoading, error } = useProfile(auth?.user || null);
@@ -18,7 +20,7 @@ const ProfilePage = () => {
           <div className="flex justify-center items-center min-h-screen">
             <div className="text-center">
               <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-400">جاري تحميل الملف الشخصي...</p>
+              <p className="text-gray-600 dark:text-gray-400">{t.common.loading}</p>
             </div>
           </div>
         ) : error ? (
@@ -148,7 +150,7 @@ const ProfilePage = () => {
                     />
                   </svg>
                   <p className="text-gray-600 dark:text-gray-400 text-lg font-medium mb-2">
-                    لا توجد قوائم تشغيل بعد
+                    {t.common.noResults}
                   </p>
                   <p className="text-gray-500 dark:text-gray-500 text-sm mb-4">
                     أنشئ قائمة التشغيل الأولى لتنظيم مقاطع الفيديو الخاصة بك
@@ -165,7 +167,7 @@ const ProfilePage = () => {
                         d="M12 4v16m8-8H4"
                       />
                     </svg>
-                    إنشاء قائمة تشغيل
+                    {t.common.create}
                   </button>
                 </div>
               </div>

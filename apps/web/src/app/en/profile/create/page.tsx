@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useI18n } from '@/lib/i18n';
 
 const ProfileCreatePage = () => {
+  const { t } = useI18n('en');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,7 @@ const ProfileCreatePage = () => {
 
     // Validation
     if (!firstName.trim()) {
-      setError('First name is required');
+      setError(t.validation.required);
       setLoading(false);
       return;
     }
@@ -59,7 +61,7 @@ const ProfileCreatePage = () => {
       router.push('/en/');
     } catch (error) {
       console.error('Profile creation failed:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create profile. Please try again.');
+      setError(error instanceof Error ? error.message : t.errors.genericError);
     } finally {
       setLoading(false);
     }
@@ -69,7 +71,7 @@ const ProfileCreatePage = () => {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 dark:text-gray-400">Please log in to create your profile.</p>
+          <p className="text-gray-600 dark:text-gray-400">{t.errors.unauthorized}</p>
         </div>
       </div>
     );
@@ -80,8 +82,8 @@ const ProfileCreatePage = () => {
       <div className="max-w-2xl mx-auto px-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Create Your Profile</h1>
-            <p className="text-gray-600 dark:text-gray-400">Welcome to Al Ummah Now! Let&apos;s set up your profile to get started.</p>
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">{t.profile.createProfile}</h1>
+            <p className="text-gray-600 dark:text-gray-400">Welcome to {t.common.appName}! Let&apos;s set up your profile to get started.</p>
           </div>
 
           {error && (
@@ -93,7 +95,7 @@ const ProfileCreatePage = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                Email Address
+                {t.profile.email}
               </label>
               <input
                 type="email"
@@ -133,7 +135,7 @@ const ProfileCreatePage = () => {
 
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                Display Name
+                {t.profile.displayName}
               </label>
               <input
                 type="text"
@@ -147,7 +149,7 @@ const ProfileCreatePage = () => {
             <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4">
               <h3 className="font-medium text-blue-900 dark:text-blue-300 mb-2">Privacy Notice</h3>
               <p className="text-sm text-blue-800 dark:text-blue-400">
-                Your profile information will be used to personalize your experience on Al Ummah Now.
+                Your profile information will be used to personalize your experience on {t.common.appName}.
                 You can update your profile information at any time in your profile settings.
               </p>
             </div>
@@ -158,7 +160,7 @@ const ProfileCreatePage = () => {
                 disabled={loading}
                 className="flex-1 bg-blue-600 dark:bg-blue-500 text-white py-3 px-6 rounded-md font-medium hover:bg-blue-700 dark:hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? 'Creating Profile...' : 'Create Profile'}
+                {loading ? `${t.common.create}...` : t.profile.createProfile}
               </button>
             </div>
           </form>

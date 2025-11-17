@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n";
 
 const ModerationDashboard: React.FC = () => {
+  const { t } = useI18n('en');
   const [reports, setReports] = useState<ContentReport[]>([]);
   const [stats, setStats] = useState<ModerationStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,7 +127,7 @@ const ModerationDashboard: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Content Moderation Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t.moderation.moderationTitle}</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">
           Review reported content and manage community standards
         </p>

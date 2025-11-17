@@ -1,7 +1,9 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { SearchSuggestion } from "@/lib/api/types";
 import * as VideosAPI from "@/lib/api/videos";
+import { useI18n } from "@/lib/i18n";
 
 interface SearchSuggestionsProps {
   query: string;
@@ -17,9 +19,13 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
   onSuggestionSelect,
   onQueryChange,
   onSearch,
-  placeholder = "Search for videos...",
+  placeholder,
   debounceDelay = 300 // Default 300ms debounce delay
 }) => {
+  const pathname = usePathname();
+  const locale = pathname.startsWith('/ar') ? 'ar' : 'en';
+  const { t } = useI18n(locale);
+  const defaultPlaceholder = placeholder || t.search.searchPlaceholder;
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -148,7 +154,7 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
           onKeyDown={handleKeyDown}
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
-          placeholder={placeholder}
+          placeholder={defaultPlaceholder}
           className="w-full px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         

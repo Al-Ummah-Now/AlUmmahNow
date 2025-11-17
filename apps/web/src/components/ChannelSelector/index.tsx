@@ -8,10 +8,16 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { useI18n } from '@/lib/i18n';
 import { Tv, Plus, Check, ChevronDown, Crown } from 'lucide-react';
 
 export function ChannelSelector() {
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t } = useI18n(locale);
+
   const {
     user,
     loading,
@@ -40,7 +46,7 @@ export function ChannelSelector() {
         className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
       >
         <Plus className="h-4 w-4" />
-        Create Channel
+        {t.channel.createChannel}
       </button>
     );
   }
@@ -91,7 +97,7 @@ export function ChannelSelector() {
           <>
             <Tv className="h-4 w-4 text-gray-500" />
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              Select Channel
+              {t.channel.selectChannel}
             </span>
           </>
         )}
@@ -121,7 +127,7 @@ export function ChannelSelector() {
             {/* Channel List */}
             <div className="p-2">
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-                YOUR CHANNELS ({channels.length})
+                {t.channel.myChannels.toUpperCase()} ({channels.length})
               </div>
 
               {/* Option to work without channel */}
@@ -138,10 +144,10 @@ export function ChannelSelector() {
                 </div>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    No Channel
+                    {t.header.noChannelSelected}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Browse without a channel
+                    {locale === 'ar' ? 'تصفح بدون قناة' : 'Browse without a channel'}
                   </div>
                 </div>
                 {!channel && (
@@ -182,7 +188,7 @@ export function ChannelSelector() {
                       {ch.name}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {ch.isMain ? 'Main Channel' : 'Channel'}
+                      {ch.isMain ? t.channel.mainChannel : locale === 'ar' ? 'قناة' : 'Channel'}
                     </div>
                   </div>
                   {channel?.id === ch.id && (
@@ -206,19 +212,19 @@ export function ChannelSelector() {
                     <Plus className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                   </div>
                   <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    Create New Channel
+                    {t.channel.createChannel}
                   </span>
                 </button>
               ) : (
                 <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Channel Name
+                    {t.channel.channelName}
                   </label>
                   <input
                     type="text"
                     value={newChannelName}
                     onChange={(e) => setNewChannelName(e.target.value)}
-                    placeholder="Enter channel name"
+                    placeholder={locale === 'ar' ? 'أدخل اسم القناة' : 'Enter channel name'}
                     className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
                     autoFocus
                     onKeyPress={(e) => {
@@ -233,7 +239,7 @@ export function ChannelSelector() {
                       disabled={!newChannelName.trim()}
                       className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
                     >
-                      Create
+                      {t.common.create}
                     </button>
                     <button
                       onClick={() => {
@@ -242,7 +248,7 @@ export function ChannelSelector() {
                       }}
                       className="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md transition-colors"
                     >
-                      Cancel
+                      {t.common.cancel}
                     </button>
                   </div>
                 </div>
@@ -257,7 +263,7 @@ export function ChannelSelector() {
                 }}
                 className="w-full text-center text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 py-1"
               >
-                Refresh channel list
+                {locale === 'ar' ? 'تحديث قائمة القنوات' : 'Refresh channel list'}
               </button>
             </div>
 

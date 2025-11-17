@@ -3,8 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useI18n } from '@/lib/i18n';
 
 const ProfileEditPage = () => {
+  const { t } = useI18n('en');
   const [profile, setProfile] = useState<Profile | null>(null);
   const auth = useAuth();
 
@@ -51,7 +53,7 @@ const ProfileEditPage = () => {
           </li>
           <li>
             <a href="#edit-profile" className="text-black hover:underline">
-              Edit Profile
+              {t.profile.editProfile}
             </a>
           </li>
           <li>
@@ -122,7 +124,7 @@ const ProfileEditPage = () => {
 
         {/* Edit Profile Section */}
         <section id="edit-profile" className="section mb-8">
-          <h2 className="text-2xl font-semibold text-gray-800">Edit Profile</h2>
+          <h2 className="text-2xl font-semibold text-gray-800">{t.profile.editProfile}</h2>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="block">
               <span className="text-gray-700">Name:</span>
@@ -142,7 +144,7 @@ const ProfileEditPage = () => {
               </div>
             </label>
             <label className="block">
-              <span className="text-gray-700">Email:</span>
+              <span className="text-gray-700">{t.profile.email}:</span>
               <input
                 type="email"
                 name="email"
@@ -155,7 +157,7 @@ const ProfileEditPage = () => {
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              Save Changes
+              {t.common.save}
             </button>
           </form>
         </section>

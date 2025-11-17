@@ -5,7 +5,11 @@ import IcoButton from '@/components/iconButton';
 import { redirect } from "next/navigation";
 import { HeaderProps } from "./interfaces";
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
+import { useI18n } from '@/lib/i18n';
+
 const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
+  const { t } = useI18n('en');
+
   const handleClick = () => {
     redirect('/en/');
   };
@@ -29,7 +33,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
             <Image src="/logo.png" alt="Logo" sizes="10vw" fill />
           </div>
           <h2 className="text-lg font-semibold text-[#ffa037] cursor-pointer">
-            Al Ummah Now
+            {t.common.appName}
           </h2>
         </div>
       </div>
