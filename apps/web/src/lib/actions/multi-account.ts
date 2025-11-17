@@ -104,9 +104,9 @@ export async function completeAddAccount(code: string): Promise<void> {
 /**
  * Switch to a different user account
  * If switching while on profile creation page, check if new account has profile
- * and redirect to profile page if it does
+ * Returns object indicating if redirect is needed (client will handle redirect)
  */
-export async function switchUserAccount(userId: string, currentPath?: string): Promise<void> {
+export async function switchUserAccount(userId: string, currentPath?: string): Promise<{ needsRedirect: boolean; redirectPath?: string }> {
   try {
     await SessionManager.setActiveAccount(userId);
 
@@ -127,10 +127,15 @@ export async function switchUserAccount(userId: string, currentPath?: string): P
         const { shouldRedirect, redirectPath } = await shouldRedirectToProfileCreation(userForCheck);
 
         if (!shouldRedirect) {
-          // Profile exists, redirect away from profile creation to profile page
+          // Profile exists, tell client to redirect away from profile creation
           const locale = currentPath.includes('/ar/') ? 'ar' : 'en';
-          redirect(`/${locale}/profile`);
-          return;
+          const targetPath = `/${locale}/profile`;
+
+          // Revalidate before returning (client will redirect)
+          revalidatePath('/');
+          revalidatePath('/[locale]', 'layout');
+
+          return { needsRedirect: true, redirectPath: targetPath };
         }
         // else: Profile doesn't exist, stay on profile creation page
       }
@@ -139,6 +144,8 @@ export async function switchUserAccount(userId: string, currentPath?: string): P
     // Revalidate all paths to refresh the UI with new account
     revalidatePath('/');
     revalidatePath('/[locale]', 'layout');
+
+    return { needsRedirect: false };
   } catch (error) {
     console.error('[switchUserAccount] Error:', error);
     throw new Error('Failed to switch account');

@@ -134,11 +134,16 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
       // Get current pathname to pass to server action for profile check
       const currentPath = window.location.pathname;
-      await switchUserAccount(userId, currentPath);
+      const result = await switchUserAccount(userId, currentPath);
       await loadSessionData();
 
-      // Refresh the page to update server components
-      router.refresh();
+      // Check if we need to redirect (profile exists when switching on profile/create page)
+      if (result.needsRedirect && result.redirectPath) {
+        router.push(result.redirectPath);
+      } else {
+        // Refresh the page to update server components
+        router.refresh();
+      }
     } catch (err) {
       console.error('[MultiAccountProvider] Failed to switch account:', err);
       setError('Failed to switch account');
