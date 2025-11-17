@@ -17,7 +17,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
   const pathname = usePathname();
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
   const [profileExists, setProfileExists] = useState<boolean | null>(null);
-  const [hasRedirected, setHasRedirected] = useState(false);
+  const [hasChecked, setHasChecked] = useState(false);
 
   console.log('[ProfileGuard] State:', {
     hasUser: !!user,
@@ -48,12 +48,18 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
       locale,
       shouldSkipCheck,
       isProfileCreatePage,
-      pathname
+      hasChecked
     });
 
     if (shouldSkipCheck) {
       console.log('[ProfileGuard] Skipping check (shouldSkipCheck=true)');
       setIsCheckingProfile(false);
+      return;
+    }
+
+    // Only check once per user session
+    if (hasChecked) {
+      console.log('[ProfileGuard] Already checked, skipping');
       return;
     }
 
@@ -63,6 +69,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
         const exists = await checkProfileExists(user);
         console.log('[ProfileGuard] checkProfileExists returned:', exists);
         setProfileExists(exists);
+        setHasChecked(true);
 
         if (isProfileCreatePage) {
           // On profile create page - redirect away if profile EXISTS
@@ -87,6 +94,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
         console.error('[ProfileGuard] ❌ Exception in checkProfile:', error);
         // On error, assume profile exists (fail-safe)
         setProfileExists(true);
+        setHasChecked(true);
       } finally {
         console.log('[ProfileGuard] Check complete, setting isCheckingProfile=false');
         setIsCheckingProfile(false);
@@ -94,7 +102,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     };
 
     checkProfile();
-  }, [user, router, locale, shouldSkipCheck, isProfileCreatePage, pathname]);
+  }, [user?.id, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, router]);
 
   if (shouldSkipCheck) {
     console.log('[ProfileGuard] Rendering children (shouldSkipCheck)');

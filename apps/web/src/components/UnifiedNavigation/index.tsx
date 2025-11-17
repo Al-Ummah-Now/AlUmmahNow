@@ -39,8 +39,6 @@ export function UnifiedNavigation() {
   const {
     user,
     accounts,
-    channel,
-    channels,
     loading,
     error,
     addAccount,
@@ -52,6 +50,9 @@ export function UnifiedNavigation() {
     logout,
     logoutAll,
   } = useMultiAccount();
+
+  const channel = user?.channel;
+  const channels = user?.channels || [];
 
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();

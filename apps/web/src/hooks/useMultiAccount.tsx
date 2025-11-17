@@ -23,19 +23,21 @@ import {
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 
 // Types
-interface UserInfo {
-  id: string;
-  email: string;
-  displayName: string;
-  avatarUrl?: string;
-}
-
 interface ChannelInfo {
   id: string;
   userId: string;  // Owner of the channel - needed for filtering by account
   name: string;
   avatarUrl?: string;
   isMain: boolean;
+}
+
+interface UserInfo {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  channel: ChannelInfo | null;
+  channels: ChannelInfo[];
 }
 
 interface AccountInfo {
@@ -49,9 +51,7 @@ interface AccountInfo {
 interface MultiAccountContextValue {
   // State
   user: UserInfo | null;
-  channel: ChannelInfo | null;
   accounts: AccountInfo[];
-  channels: ChannelInfo[];
   loading: boolean;
   error: string | null;
 
@@ -76,9 +76,7 @@ const MultiAccountContext = createContext<MultiAccountContextValue | null>(null)
 export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [channel, setChannel] = useState<ChannelInfo | null>(null);
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
-  const [channels, setChannels] = useState<ChannelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,14 +90,15 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
       if (sessionInfo) {
         setUser(sessionInfo.user);
-        setChannel(sessionInfo.channel);
         setAccounts(sessionInfo.accounts);
-        setChannels(sessionInfo.channels);
       } else {
         setUser(null);
-        setChannel(null);
         setAccounts([]);
-        setChannels([]);
+      }
+
+      // Dispatch event to notify other components (like CookieSizeMonitor)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('session-updated'));
       }
     } catch (err) {
       console.error('[MultiAccountProvider] Failed to load session:', err);
@@ -239,9 +238,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const sessionInfo = await getActiveSessionInfo();
       if (sessionInfo) {
         setUser(sessionInfo.user);
-        setChannel(sessionInfo.channel);
         setAccounts(sessionInfo.accounts);
-        setChannels(sessionInfo.channels);
       }
     } catch (err) {
       console.error('[MultiAccountProvider] Failed to reload channels:', err);
@@ -292,9 +289,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
   const value: MultiAccountContextValue = {
     user,
-    channel,
     accounts,
-    channels,
     loading,
     error,
     addAccount,
@@ -337,11 +332,11 @@ export function useCurrentUser() {
 }
 
 /**
- * Hook to get current channel
+ * Hook to get current channel (selected channel for active user)
  */
 export function useCurrentChannel() {
-  const { channel } = useMultiAccount();
-  return channel;
+  const { user } = useMultiAccount();
+  return user?.channel || null;
 }
 
 /**
@@ -353,9 +348,9 @@ export function useAccounts() {
 }
 
 /**
- * Hook to get all channels
+ * Hook to get all channels (channels for active user only)
  */
 export function useChannels() {
-  const { channels } = useMultiAccount();
-  return channels;
+  const { user } = useMultiAccount();
+  return user?.channels || [];
 }

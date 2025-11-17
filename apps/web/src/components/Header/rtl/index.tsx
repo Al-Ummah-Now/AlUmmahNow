@@ -5,8 +5,10 @@ import IcoButton from '@/components/iconButton';
 import { redirect } from "next/navigation";
 import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
+import { useActiveChannel } from '@/contexts/ActiveChannelContext';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
+  const { activeChannel } = useActiveChannel();
   const handleClick = () => {
     redirect('/ar/');
   };
@@ -29,7 +31,9 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
           <div className="relative left-0 w-13 h-13 rounded-full overflow-hidden">
             <Image src="/logo.png" alt="Logo" sizes="10vw" fill />
           </div>
-          <h2 className="text-2xl font-[farsi] text-[#ffa037] cursor-pointer">الأمة الآن</h2>
+          <h2 className="text-2xl font-[farsi] text-[#ffa037] cursor-pointer">
+            {activeChannel?.name || "لا توجد قناة محددة"}
+          </h2>
         </div>
       </div>
 

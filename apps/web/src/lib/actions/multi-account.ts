@@ -346,32 +346,36 @@ export async function getActiveSessionInfo() {
     return null;
   }
 
+  // Filter channels to only include those belonging to the active user
+  const userChannels = session.availableChannels.filter(ch => ch.userId === session.userId);
+
   return {
     user: {
       id: session.userId,
       email: session.email,
       displayName: session.displayName,
-      avatarUrl: session.avatarUrl, // ✅ Now includes avatar
+      avatarUrl: session.avatarUrl,
+      channel: session.channel ? {
+        id: session.channel.id,
+        userId: session.channel.userId,
+        name: session.channel.name,
+        avatarUrl: session.channel.avatarUrl,
+        isMain: session.channel.isMain,
+      } : null,
+      channels: userChannels.map(ch => ({
+        id: ch.id,
+        userId: ch.userId,
+        name: ch.name,
+        avatarUrl: ch.avatarUrl,
+        isMain: ch.isMain,
+      })),
     },
-    channel: session.channel ? {
-      id: session.channel.id,
-      name: session.channel.name,
-      avatarUrl: session.channel.avatarUrl,
-      isMain: session.channel.isMain,
-    } : null,
     accounts: session.availableAccounts.map(acc => ({
       userId: acc.userId,
       email: acc.email,
       displayName: acc.displayName,
-      avatarUrl: acc.avatarUrl, // ✅ Now includes avatar for all accounts
+      avatarUrl: acc.avatarUrl,
       isActive: acc.isActive,
-    })),
-    channels: session.availableChannels.map(ch => ({
-      id: ch.id,
-      userId: ch.userId,  // Include userId for filtering by account
-      name: ch.name,
-      avatarUrl: ch.avatarUrl,
-      isMain: ch.isMain,
     })),
   };
 }

@@ -14,8 +14,6 @@ import { Tv, Plus, Check, ChevronDown, Crown } from 'lucide-react';
 export default function ChannelSelectorRTL() {
   const {
     user,
-    channel,
-    channels,
     loading,
     error,
     switchToChannel,
@@ -30,6 +28,9 @@ export default function ChannelSelectorRTL() {
   if (loading || !user) {
     return null;
   }
+
+  const channel = user.channel;
+  const channels = user.channels;
 
   // Don't show selector if user has no channels or only one channel
   if (channels.length === 0) {

@@ -5,6 +5,7 @@ import { Channel } from "@al-ummah/shared-types";
 
 interface ActiveChannel {
   channelId: string;
+  userId: string;
   name: string;
   avatarUrl?: string;
   isMain: boolean;
@@ -102,6 +103,7 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
     if (defaultChannel) {
       const activeChannelData: ActiveChannel = {
         channelId: defaultChannel.id,
+        userId: defaultChannel.userId,
         name: defaultChannel.name,
         avatarUrl: defaultChannel.avatarUrl,
         isMain: defaultChannel.isMain,

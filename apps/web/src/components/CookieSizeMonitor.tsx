@@ -33,11 +33,23 @@ export function CookieSizeMonitor() {
       setIsVisible(!!info);
     };
 
+    // Load once on mount
     loadSizeInfo();
 
-    // Refresh every 5 seconds
-    const interval = setInterval(loadSizeInfo, 5000);
-    return () => clearInterval(interval);
+    // Listen for custom events that indicate session changes
+    const handleSessionChange = () => {
+      loadSizeInfo();
+    };
+
+    // Listen for storage events (when session changes in another tab)
+    window.addEventListener('storage', handleSessionChange);
+    // Listen for custom session update events
+    window.addEventListener('session-updated', handleSessionChange);
+
+    return () => {
+      window.removeEventListener('storage', handleSessionChange);
+      window.removeEventListener('session-updated', handleSessionChange);
+    };
   }, []);
 
   if (!isVisible || !sizeInfo) return null;
