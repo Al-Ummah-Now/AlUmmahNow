@@ -147,8 +147,9 @@ export async function switchUserAccount(userId: string, currentPath?: string): P
 
     return { needsRedirect: false };
   } catch (error) {
-    // Re-throw NEXT_REDIRECT errors (from revalidatePath) - they're expected
-    if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
+    // Re-throw NEXT_REDIRECT errors (from revalidatePath/router operations) - they're expected
+    // Check for both the error message and the digest property
+    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.startsWith?.('NEXT_REDIRECT'))) {
       throw error;
     }
     console.error('[switchUserAccount] Error:', error);
