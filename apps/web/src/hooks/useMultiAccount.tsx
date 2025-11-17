@@ -27,6 +27,7 @@ interface UserInfo {
   id: string;
   email: string;
   displayName: string;
+  avatarUrl?: string;
 }
 
 interface ChannelInfo {
@@ -40,6 +41,7 @@ interface AccountInfo {
   userId: string;
   email: string;
   displayName: string;
+  avatarUrl?: string;
   isActive: boolean;
 }
 

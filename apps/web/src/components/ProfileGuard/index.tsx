@@ -54,10 +54,10 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
 
   if (isCheckingProfile) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">{locale === 'ar' ? 'جاري التحقق من الملف الشخصي...' : 'Checking profile...'}</p>
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">{locale === 'ar' ? 'جاري التحقق من الملف الشخصي...' : 'Checking profile...'}</p>
         </div>
       </div>
     );
@@ -66,9 +66,10 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
   if (profileExists === false) {
     // This shouldn't normally show because we redirect above, but just in case
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600">{locale === 'ar' ? 'إعادة توجيه إلى إنشاء الملف الشخصي...' : 'Redirecting to profile creation...'}</p>
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">{locale === 'ar' ? 'إعادة توجيه إلى إنشاء الملف الشخصي...' : 'Redirecting to profile creation...'}</p>
         </div>
       </div>
     );

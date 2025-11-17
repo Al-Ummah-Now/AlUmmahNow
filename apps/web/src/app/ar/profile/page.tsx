@@ -15,12 +15,20 @@ const ProfilePage = () => {
       {/* Main Content */}
       <main className="main-content flex-1 p-6">
         {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="text-gray-600 dark:text-gray-300">جاري تحميل الملف الشخصي...</div>
+          <div className="flex justify-center items-center min-h-screen">
+            <div className="text-center">
+              <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-400">جاري تحميل الملف الشخصي...</p>
+            </div>
           </div>
         ) : error ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="text-red-600 dark:text-red-400">{error}</div>
+          <div className="flex justify-center items-center min-h-screen">
+            <div className="text-center">
+              <svg className="w-16 h-16 mx-auto mb-4 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-red-600 dark:text-red-400 text-lg font-semibold">{error}</p>
+            </div>
           </div>
         ) : (
           <>

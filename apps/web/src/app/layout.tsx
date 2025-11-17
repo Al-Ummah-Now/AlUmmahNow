@@ -9,6 +9,8 @@ import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
 import { WebSocketProvider } from "@/lib/websocket/WebSocketProvider";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { MultiAccountProvider } from "@/hooks/useMultiAccount";
+import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -49,7 +51,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#ffffff',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#111827' }, // gray-900
+  ],
 };
 
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
@@ -85,18 +90,22 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
               defaultTheme="system"
               enableSystem
               disableTransitionOnChange>
-              <AuthProvider>
-                <WebSocketProvider user={user}>
-                  <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
-                    {/* Header */}
-                    <Navigation></Navigation>
-                    {children}
-                    
-                    {/* Real-time notification center */}
-                    <NotificationCenter user={user} />
-                  </div>
-                </WebSocketProvider>
-              </AuthProvider>
+              <MultiAccountProvider>
+                <AuthProvider>
+                  <WebSocketProvider user={user}>
+                    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                      {/* Header */}
+                      <Navigation></Navigation>
+                      {children}
+
+                      {/* Real-time notification center */}
+                      <NotificationCenter user={user} />
+                    </div>
+                  </WebSocketProvider>
+                </AuthProvider>
+                {/* Cookie size monitor (dev mode only) */}
+                <CookieSizeMonitor />
+              </MultiAccountProvider>
             </ThemeProvider>
           </NuqsAdapter>
         </Suspense>

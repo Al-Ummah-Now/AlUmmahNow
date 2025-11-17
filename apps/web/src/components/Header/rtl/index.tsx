@@ -4,10 +4,10 @@ import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
 import { redirect } from "next/navigation";
 import { HeaderProps } from "../interfaces";
-import ChannelSwitcherRtl from '@/components/ChannelSwitcher/rtl';
-import UserAvatar from '@/components/UserAvatar';
+import ChannelSelectorRTL from '@/components/ChannelSelector/rtl';
+import AccountSwitcherRTL from '@/components/AccountSwitcher/rtl';
 
-const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, profile, channels }) => {
+const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse }) => {
   const handleClick = () => {
     redirect('/ar/');
   };
@@ -34,17 +34,22 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollaps
         </div>
       </div>
 
-      {/* Channel Switcher and User Account Section */}
-      <div className="flex items-center space-x-reverse space-x-4">
-        {/* Channel Switcher - only show if user has channels */}
-        {channels && channels.length > 0 && (
-          <ChannelSwitcherRtl channels={channels} />
-        )}
-        <UserAvatar
-          avatarUrl={profile?.avatarUrl}
-          alt="User"
+      {/* Channel Selector, Account Switcher, and Settings Section */}
+      <div className="flex items-center gap-2">
+        {/* Settings Menu - opens AccountNavigation sidebar */}
+        <button
           onClick={toggleAccountCollapse}
-        />
+          className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          aria-label="قائمة الإعدادات"
+        >
+          <i className="fa fa-bars text-[#ffa037]" />
+        </button>
+
+        {/* Account Switcher - multi-account support */}
+        <AccountSwitcherRTL />
+
+        {/* Channel Selector - with multi-channel support */}
+        <ChannelSelectorRTL />
       </div>
     </header>
   );

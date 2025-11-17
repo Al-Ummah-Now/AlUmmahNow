@@ -310,6 +310,7 @@ export async function getActiveSessionInfo() {
       id: session.userId,
       email: session.email,
       displayName: session.displayName,
+      avatarUrl: session.avatarUrl, // ✅ Now includes avatar
     },
     channel: session.channel ? {
       id: session.channel.id,
@@ -321,6 +322,7 @@ export async function getActiveSessionInfo() {
       userId: acc.userId,
       email: acc.email,
       displayName: acc.displayName,
+      avatarUrl: acc.avatarUrl, // ✅ Now includes avatar for all accounts
       isActive: acc.isActive,
     })),
     channels: session.availableChannels.map(ch => ({
