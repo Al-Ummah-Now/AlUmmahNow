@@ -67,12 +67,18 @@ export class ChannelsList extends OpenAPIRoute {
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
 		let Channels = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
-		
+
+		// Filter channels by userId if provided
+		let filteredChannels = Channels.items || [];
+		if (userId) {
+			filteredChannels = filteredChannels.filter(channel => channel.userId === userId);
+		}
+
 		// Transform business channels to view models
-		const channelViews = transformChannelsToView(Channels.items || []);
-		
+		const channelViews = transformChannelsToView(filteredChannels);
+
 		let response: PaginationResponse<any>;
-		if (!Channels.items || Channels.items.length === 0) {
+		if (!filteredChannels || filteredChannels.length === 0) {
 			response = {
 				cursor: "",
 				limit,
