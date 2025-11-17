@@ -21,11 +21,13 @@ export interface Profile extends Timestamps {
   userId: string;
   email: string;
   displayName?: string;
+  displayNameLocalized?: Record<string, string>; // Multi-language display names
   firstName?: string;
   lastName?: string;
   avatarUrl?: string;
   coverUrl?: string;
   bio?: string;
+  bioLocalized?: Record<string, string>; // Multi-language bios
   websiteUrl?: string;
   location?: string;
   channelsCount?: number;
@@ -34,11 +36,13 @@ export interface Profile extends Timestamps {
 
 export interface ProfileUpdateRequest {
   displayName?: string;
+  displayNameLocalized?: Record<string, string>;
   firstName?: string;
   lastName?: string;
   avatarUrl?: string;
   coverUrl?: string;
   bio?: string;
+  bioLocalized?: Record<string, string>;
   websiteUrl?: string;
   location?: string;
 }

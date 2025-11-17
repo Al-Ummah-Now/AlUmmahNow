@@ -81,12 +81,15 @@ export class ChannelCreate extends OpenAPIRoute {
 
 		// Create business channel object
 		const entityDefaults = createEntityDefaults();
-		
+
 		const businessChannel = {
 			...entityDefaults,
 			userId: userId,
 			email: userProfile.email,
 			name: channelInput.name,
+			nameLocalized: channelInput.nameLocalized,
+			description: channelInput.description,
+			descriptionLocalized: channelInput.descriptionLocalized,
 			isMain: channelInput.isMain || false,
 			avatarUrl: channelInput.avatarUrl,
 			coverUrl: channelInput.coverUrl,

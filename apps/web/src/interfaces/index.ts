@@ -60,10 +60,13 @@ export interface Profile {
     id: string;
     email: string;
     displayName?: string;
+    displayNameLocalized?: Record<string, string>; // Multi-language display names
     firstName?: string;
     lastName?: string;
     avatarUrl?: string;
     coverUrl?: string;
+    bio?: string;
+    bioLocalized?: Record<string, string>; // Multi-language bios
     channelsCount?: number;
     dateCreated?: string;
     dateModified?: string;
@@ -102,6 +105,9 @@ export interface Channel {
     userId: string;
     email: string;
     name: string;
+    nameLocalized?: Record<string, string>; // Multi-language names
+    description?: string;
+    descriptionLocalized?: Record<string, string>; // Multi-language descriptions
     isMain: boolean; // Added from API spec
     avatarUrl?: string;
     coverUrl?: string;

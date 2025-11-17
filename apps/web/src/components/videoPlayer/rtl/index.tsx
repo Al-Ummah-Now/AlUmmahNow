@@ -6,9 +6,12 @@ import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "../interface";
 import CustomVideoPlayer from "@/components/VideoPlayer/CustomVideoPlayer";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { getLocalizedValue } from "@al-ummah/shared-types";
 
 const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { user } = useAuth();
+
+  const title = getLocalizedValue((options as any).titleLocalized, options.title, 'ar');
 
   // Convert PlayerOptions to CustomVideoPlayer props
   const videoSources = [
@@ -38,7 +41,7 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             isLive={false}
             lang="ar"
             className="w-full"
-            ariaLabel={`فيديو: ${removeUnwantedChars(options.title)}`}
+            ariaLabel={`فيديو: ${removeUnwantedChars(title)}`}
           />
         </div>
       </div>
@@ -59,7 +62,7 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
         </Link>
         <div className="mt-4">
           <h1 className="sm:text-md md:text-xl font-semibold text-black dark:text-white">
-            {removeUnwantedChars(options.title)}
+            {removeUnwantedChars(title)}
           </h1>
         </div>
       </div>

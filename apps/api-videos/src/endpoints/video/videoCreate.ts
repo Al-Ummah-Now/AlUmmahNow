@@ -100,6 +100,9 @@ export class VideoCreate extends OpenAPIRoute {
 			dislikes: [],
 			isPublic: inputVideo.isPublic ?? true,
 			isLive: inputVideo.isLive ?? false,
+			// Ensure localized fields are stored
+			titleLocalized: inputVideo.titleLocalized,
+			descriptionLocalized: inputVideo.descriptionLocalized,
 		};
 
 		// create the video in Bunny Stream

@@ -10,7 +10,9 @@ import { useI18n } from '@/lib/i18n';
 interface ChannelData {
   id: string;
   name: string;
+  nameLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
 }
@@ -25,9 +27,14 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'en' | 'ar'>('ar'); // Default to Arabic for AR page
   const [formData, setFormData] = useState({
     name: '',
+    nameEn: '',
+    nameAr: '',
     description: '',
+    descriptionEn: '',
+    descriptionAr: '',
     avatarUrl: '',
     coverUrl: '',
   });

@@ -91,6 +91,9 @@ export class ChannelUpdate extends OpenAPIRoute {
             ...existingChannel,
             ...channelUpdateInput,
             dateModified: new Date().toISOString(),
+            // Preserve localized fields if provided
+            nameLocalized: channelUpdateInput.nameLocalized ?? existingChannel.nameLocalized,
+            descriptionLocalized: channelUpdateInput.descriptionLocalized ?? existingChannel.descriptionLocalized,
         };
 
         await repository.putObject(id, updatedChannel);

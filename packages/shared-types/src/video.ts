@@ -8,7 +8,9 @@ import { Timestamps } from './common';
 export interface VideoObject extends Timestamps {
   id: string;
   title: string;
+  titleLocalized?: Record<string, string>; // Multi-language titles
   description: string | null;
+  descriptionLocalized?: Record<string, string>; // Multi-language descriptions
   thumbnailUrl: string;
   videoUrl: string;
   userId: string;
@@ -59,7 +61,9 @@ export type VideoProcessingStatus =
 
 export interface VideoCreateRequest {
   title: string;
+  titleLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   channelId?: string;
   thumbnailUrl?: string;
   videoUrl: string;
@@ -71,7 +75,9 @@ export interface VideoCreateRequest {
 
 export interface VideoUpdateRequest {
   title?: string;
+  titleLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   thumbnailUrl?: string;
   isPublic?: boolean;
   tags?: string[];

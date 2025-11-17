@@ -17,7 +17,11 @@ interface VideoUploadProps {
 
 interface VideoMetadata {
   title: string;
+  titleEn: string;
+  titleAr: string;
   description?: string;
+  descriptionEn?: string;
+  descriptionAr?: string;
   tags?: string[];
   isPublic: boolean;
 }
@@ -43,11 +47,16 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [metadata, setMetadata] = useState<VideoMetadata>({
     title: '',
+    titleEn: '',
+    titleAr: '',
     description: '',
+    descriptionEn: '',
+    descriptionAr: '',
     tags: [],
     isPublic: true
   });
   const [showMetadataForm, setShowMetadataForm] = useState(false);
+  const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const auth = useAuth();
@@ -86,9 +95,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     }
 
     setSelectedFile(file);
+    const defaultTitle = file.name.replace(/\.[^/.]+$/, ""); // Remove extension for default title
     setMetadata(prev => ({
       ...prev,
-      title: file.name.replace(/\.[^/.]+$/, "") // Remove extension for default title
+      title: defaultTitle,
+      titleEn: defaultTitle,
+      titleAr: ''
     }));
     setShowMetadataForm(true);
   }, [onError]);
@@ -130,8 +142,16 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
       const tagsString = metadata.tags?.join(',') || '';
       const initiateResult = await initiateVideoUpload({
-        title: metadata.title,
-        description: metadata.description,
+        title: metadata.titleEn || metadata.title, // Legacy field (English)
+        titleLocalized: {
+          en: metadata.titleEn,
+          ar: metadata.titleAr
+        },
+        description: metadata.descriptionEn || metadata.description,
+        descriptionLocalized: {
+          en: metadata.descriptionEn || '',
+          ar: metadata.descriptionAr || ''
+        },
         isPublic: metadata.isPublic,
         tags: tagsString,
       });
@@ -251,7 +271,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       setUploadProgress(null);
       setMetadata({
         title: '',
+        titleEn: '',
+        titleAr: '',
         description: '',
+        descriptionEn: '',
+        descriptionAr: '',
         tags: [],
         isPublic: true
       });
@@ -311,7 +335,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     setUploadProgress(null);
     setMetadata({
       title: '',
+      titleEn: '',
+      titleAr: '',
       description: '',
+      descriptionEn: '',
+      descriptionAr: '',
       tags: [],
       isPublic: true
     });
@@ -367,33 +395,87 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         )}
 
         <div className="space-y-4 mb-6">
+          {/* Title with Language Tabs */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t.video.videoTitle} *
             </label>
-            <input
-              type="text"
-              value={metadata.title}
-              onChange={(e) => setMetadata(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder={t.video.videoTitle}
-              required
-              disabled={!!uploadProgress}
-            />
+            <div className="flex gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('en')}
+                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                  activeTab === 'en'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+                disabled={!!uploadProgress}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('ar')}
+                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                  activeTab === 'ar'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+                disabled={!!uploadProgress}
+              >
+                العربية
+              </button>
+            </div>
+            {activeTab === 'en' && (
+              <input
+                type="text"
+                value={metadata.titleEn}
+                onChange={(e) => setMetadata(prev => ({ ...prev, titleEn: e.target.value, title: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                placeholder="Title in English"
+                required
+                disabled={!!uploadProgress}
+              />
+            )}
+            {activeTab === 'ar' && (
+              <input
+                type="text"
+                value={metadata.titleAr}
+                onChange={(e) => setMetadata(prev => ({ ...prev, titleAr: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                placeholder="العنوان بالعربية"
+                dir="rtl"
+                disabled={!!uploadProgress}
+              />
+            )}
           </div>
 
+          {/* Description with Language Tabs */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t.video.videoDescription}
             </label>
-            <textarea
-              value={metadata.description}
-              onChange={(e) => setMetadata(prev => ({ ...prev, description: e.target.value }))}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder={t.video.videoDescription}
-              disabled={!!uploadProgress}
-            />
+            {activeTab === 'en' && (
+              <textarea
+                value={metadata.descriptionEn}
+                onChange={(e) => setMetadata(prev => ({ ...prev, descriptionEn: e.target.value, description: e.target.value }))}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                placeholder="Description in English"
+                disabled={!!uploadProgress}
+              />
+            )}
+            {activeTab === 'ar' && (
+              <textarea
+                value={metadata.descriptionAr}
+                onChange={(e) => setMetadata(prev => ({ ...prev, descriptionAr: e.target.value }))}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                placeholder="الوصف بالعربية"
+                dir="rtl"
+                disabled={!!uploadProgress}
+              />
+            )}
           </div>
 
           <div className="flex items-center">
@@ -416,7 +498,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             <>
               <button
                 onClick={uploadVideo}
-                disabled={!metadata.title.trim()}
+                disabled={!metadata.titleEn.trim()}
                 className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
                 {t.upload.uploadTitle}

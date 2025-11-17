@@ -59,6 +59,10 @@ export interface ProfileUpdateRequest {
   userName?: string;
   firstName?: string;
   lastName?: string;
+  displayName?: string;
+  displayNameLocalized?: Record<string, string>;
+  bio?: string;
+  bioLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
 }
@@ -152,9 +156,12 @@ export interface RecommendationRequest {
 // Additional request types not defined in OpenAPI but needed for implementation
 export interface ChannelUpdateRequest {
   name?: string;
+  nameLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   avatarUrl?: string;
   bannerUrl?: string;
+  coverUrl?: string;
 }
 
 export interface SubscriptionRequest {

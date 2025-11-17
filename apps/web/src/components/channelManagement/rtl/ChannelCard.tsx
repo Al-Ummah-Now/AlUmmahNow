@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChannelCardProps } from '../types';
 import { Button } from '@/components/ui/button';
+import { getLocalizedValue } from '@al-ummah/shared-types';
 
 /**
  * ChannelCard Component (RTL - Arabic)
@@ -13,9 +14,11 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
   onDelete,
   onView,
 }) => {
+  const name = getLocalizedValue(channel.nameLocalized, channel.name, 'ar');
+  const description = getLocalizedValue(channel.descriptionLocalized, channel.description, 'ar');
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm(`هل أنت متأكد من حذف "${channel.name}"؟`)) {
+    if (window.confirm(`هل أنت متأكد من حذف "${name}"؟`)) {
       onDelete(channel.id);
     }
   };
@@ -53,7 +56,7 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
               backgroundPosition: 'center',
             }}
           >
-            {!channel.avatarUrl && channel.name.charAt(0).toUpperCase()}
+            {!channel.avatarUrl && name.charAt(0).toUpperCase()}
           </div>
         )}
       </div>
@@ -63,7 +66,7 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-              {channel.name}
+              {name}
               {channel.isVerified && (
                 <svg
                   className="inline-block mr-1 w-4 h-4 text-blue-500"
@@ -86,9 +89,9 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
           </div>
         </div>
 
-        {channel.description && (
+        {description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2 text-right">
-            {channel.description}
+            {description}
           </p>
         )}
 

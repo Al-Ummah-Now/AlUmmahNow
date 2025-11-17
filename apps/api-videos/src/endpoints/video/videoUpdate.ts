@@ -137,6 +137,9 @@ export class VideoUpdate extends OpenAPIRoute {
 			...existingVideo,
 			...videoUpdateInput,
 			dateModified: new Date().toISOString(),
+			// Preserve localized fields if provided
+			titleLocalized: videoUpdateInput.titleLocalized ?? existingVideo.titleLocalized,
+			descriptionLocalized: videoUpdateInput.descriptionLocalized ?? existingVideo.descriptionLocalized,
 		};
 
 		// Update the video in Bunny Stream if title changed

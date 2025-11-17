@@ -9,7 +9,9 @@ export const CommentInput = z.object({
 
 export const VideoInput = z.object({
     title: Str({ description: "Video title" }),
+    titleLocalized: z.record(z.string()).optional().describe("Multi-language titles (e.g., {'en': 'Title', 'ar': 'العنوان'})"),
     description: Str({ required: false, description: "Video description" }),
+    descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions"),
     thumbnailUrl: Str({ required: false, description: "Thumbnail URL" }),
     videoUrl: Str({ required: false, description: "Video file URL" }),
     width: z.number().optional(),
@@ -38,6 +40,9 @@ export const ProfileInput = z.object({
 
 export const ChannelInput = z.object({
     name: Str({ description: "Channel name" }),
+    nameLocalized: z.record(z.string()).optional().describe("Multi-language channel names"),
+    description: Str({ required: false, description: "Channel description" }),
+    descriptionLocalized: z.record(z.string()).optional().describe("Multi-language channel descriptions"),
     isMain: Bool().optional(),
     avatarUrl: Str({ required: false, description: "Channel avatar URL" }),
     coverUrl: Str({ required: false, description: "Channel cover image URL" }),
@@ -46,7 +51,9 @@ export const ChannelInput = z.object({
 // Update operations (for PATCH endpoints) - defined explicitly to preserve OpenAPI metadata
 export const VideoUpdateInput = z.object({
     title: Str({ required: false, description: "Video title" }),
+    titleLocalized: z.record(z.string()).optional().describe("Multi-language titles (e.g., {'en': 'Title', 'ar': 'العنوان'})"),
     description: Str({ required: false, description: "Video description" }),
+    descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions"),
     thumbnailUrl: Str({ required: false, description: "Thumbnail URL" }),
     videoUrl: Str({ required: false, description: "Video file URL" }),
     width: z.number().optional(),
@@ -66,14 +73,21 @@ export const PlaylistUpdateInput = z.object({
 export const ProfileUpdateInput = z.object({
     email: Str({ required: false, description: "User email address" }),
     userName: Str({ required: false, description: "Display username" }),
+    displayName: Str({ required: false, description: "Display name" }),
+    displayNameLocalized: z.record(z.string()).optional().describe("Multi-language display names"),
     firstName: Str({ required: false, description: "First name" }),
     lastName: Str({ required: false, description: "Last name" }),
+    bio: Str({ required: false, description: "User bio" }),
+    bioLocalized: z.record(z.string()).optional().describe("Multi-language bios"),
     avatarUrl: Str({ required: false, description: "Profile avatar URL" }),
     coverUrl: Str({ required: false, description: "Profile cover image URL" }),
 });
 
 export const ChannelUpdateInput = z.object({
     name: Str({ required: false, description: "Channel name" }),
+    nameLocalized: z.record(z.string()).optional().describe("Multi-language channel names"),
+    description: Str({ required: false, description: "Channel description" }),
+    descriptionLocalized: z.record(z.string()).optional().describe("Multi-language channel descriptions"),
     isMain: z.boolean().optional(),
     avatarUrl: Str({ required: false, description: "Channel avatar URL" }),
     coverUrl: Str({ required: false, description: "Channel cover image URL" }),

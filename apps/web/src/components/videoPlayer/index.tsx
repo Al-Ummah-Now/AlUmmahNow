@@ -2,13 +2,19 @@
 import React, { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "./interface";
 import CustomVideoPlayer from "@/components/VideoPlayer/CustomVideoPlayer";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { getLocalizedValue } from "@al-ummah/shared-types";
 
 const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { user } = useAuth();
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+
+  const title = getLocalizedValue((options as any).titleLocalized, options.title, locale);
 
   // Convert PlayerOptions to CustomVideoPlayer props
   // Memoize to prevent new array reference on every render
@@ -47,7 +53,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             isLive={false}
             lang="en"
             className="w-full"
-            ariaLabel={`Video: ${removeUnwantedChars(options.title)}`}
+            ariaLabel={`Video: ${removeUnwantedChars(title)}`}
           />
         </div>
       </div>
@@ -68,7 +74,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
         </Link>
         <div className="mt-4">
           <h1 className="sm:text-md md:text-xl  font-semibold text-black dark:text-white">
-            {removeUnwantedChars(options.title)}
+            {removeUnwantedChars(title)}
           </h1>
         </div>
       </div>

@@ -212,6 +212,10 @@ export async function deleteProfileAPI(): Promise<{ success: boolean } | null> {
 export async function createProfile(data: {
   firstName: string;
   lastName: string;
+  displayName?: string;
+  displayNameLocalized?: Record<string, string>;
+  bio?: string;
+  bioLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
   email: string;

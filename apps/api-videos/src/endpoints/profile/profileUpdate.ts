@@ -70,21 +70,41 @@ export class ProfileUpdate extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
         // Retrieve the validated request body
-        const profile = request.body;
+        const profileUpdateInput = request.body;
 
-        // Implement your own object insertion here
+        // Get existing profile from storage
         const bucket = env.profiles;
         type ProfileType = z.infer<typeof BusinessProfile>;
         const repository = new R2Repository<ProfileType>(bucket);
-        await repository.putObject(id, profile);
-        try {
-            let updated = await repository.getObject(id);
-            return updated;
-        }
-        catch (error) {
-            console.error("Error fetching old profile:", error);
+        const existingProfile = await repository.getObject(id);
+
+        if (!existingProfile) {
+            return c.json({
+                success: false,
+                error: "Profile not found",
+            }, 404);
         }
 
-        return profile;
+        // Update the profile with new values
+        const updatedProfile = {
+            ...existingProfile,
+            ...profileUpdateInput,
+            dateModified: new Date().toISOString(),
+            // Preserve localized fields if provided
+            displayNameLocalized: profileUpdateInput.displayNameLocalized ?? existingProfile.displayNameLocalized,
+            bioLocalized: profileUpdateInput.bioLocalized ?? existingProfile.bioLocalized,
+        };
+
+        await repository.putObject(id, updatedProfile);
+
+        // Transform to view model for response
+        const profileView = transformProfileToView(updatedProfile);
+
+        return {
+            success: true,
+            result: {
+                profile: profileView,
+            },
+        };
     }
 }

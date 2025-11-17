@@ -9,7 +9,9 @@ export interface Channel extends Timestamps {
   userId: string;
   email: string;
   name: string;
+  nameLocalized?: Record<string, string>; // Multi-language names
   description?: string;
+  descriptionLocalized?: Record<string, string>; // Multi-language descriptions
   avatarUrl?: string;
   coverUrl?: string;
   isMain: boolean;
@@ -41,7 +43,9 @@ export interface SocialLinks {
 
 export interface ChannelCreateRequest {
   name: string;
+  nameLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
   category?: string;
@@ -52,7 +56,9 @@ export interface ChannelCreateRequest {
 
 export interface ChannelUpdateRequest {
   name?: string;
+  nameLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
   category?: string;

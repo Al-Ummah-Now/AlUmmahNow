@@ -2,6 +2,7 @@ import React from 'react';
 import { ChannelCardProps } from './types';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
+import { getLocalizedValue } from '@al-ummah/shared-types';
 
 /**
  * ChannelCard Component
@@ -16,11 +17,14 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 }) => {
   const { t, dir } = useI18n(lang);
 
+  const name = getLocalizedValue(channel.nameLocalized, channel.name, lang);
+  const description = getLocalizedValue(channel.descriptionLocalized, channel.description, lang);
+
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     const confirmMessage = lang === 'ar'
-      ? `هل أنت متأكد من حذف "${channel.name}"؟`
-      : `Are you sure you want to delete "${channel.name}"?`;
+      ? `هل أنت متأكد من حذف "${name}"؟`
+      : `Are you sure you want to delete "${name}"?`;
     if (window.confirm(confirmMessage)) {
       onDelete(channel.id);
     }
@@ -63,7 +67,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
               backgroundPosition: 'center',
             }}
           >
-            {!channel.avatarUrl && channel.name.charAt(0).toUpperCase()}
+            {!channel.avatarUrl && name.charAt(0).toUpperCase()}
           </div>
         )}
       </div>
@@ -73,7 +77,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-              {channel.name}
+              {name}
               {channel.isVerified && (
                 <svg
                   className="inline-block ml-1 w-4 h-4 text-blue-500"
@@ -96,9 +100,9 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           </div>
         </div>
 
-        {channel.description && (
+        {description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-            {channel.description}
+            {description}
           </p>
         )}
 

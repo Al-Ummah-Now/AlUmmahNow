@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { SubscribeButton } from '@/components/subscription/SubscribeButton';
 import { getChannelById } from '@/lib/api/channels';
 import * as VideosAPI from '@/lib/api/videos';
-import { VideoObject } from '@/interfaces';
+import { VideoObject, getLocalizedValue } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useI18n } from '@/lib/i18n';
@@ -17,6 +17,8 @@ interface ChannelData {
   avatarUrl?: string;
   coverUrl?: string;
   subscribersCount?: number;
+  nameLocalized?: Record<string, string>;
+  descriptionLocalized?: Record<string, string>;
 }
 
 function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
@@ -98,6 +100,9 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
     );
   }
 
+  const channelName = getLocalizedValue(channel.nameLocalized, channel.name, 'ar');
+  const channelDescription = getLocalizedValue(channel.descriptionLocalized, channel.description, 'ar');
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900" dir="rtl">
       <div className="font-sans text-gray-800 dark:text-gray-200 max-w-6xl mx-auto">
@@ -121,14 +126,14 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
             {channel.avatarUrl ? (
               <Image
                 src={channel.avatarUrl}
-                alt={channel.name}
+                alt={channelName}
                 fill
                 className="object-cover"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
                 <span className="text-3xl font-bold text-white">
-                  {channel.name.charAt(0).toUpperCase()}
+                  {channelName.charAt(0).toUpperCase()}
                 </span>
               </div>
             )}
@@ -139,19 +144,19 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
         <div className="pt-16 pb-5 px-5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{channel.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{channelName}</h1>
               {channel.subscribersCount !== undefined && (
                 <p className="text-gray-600 dark:text-gray-400 mt-1">
                   {channel.subscribersCount.toLocaleString('ar-EG')} {t.channel.subscribers}
                 </p>
               )}
-              {channel.description && (
-                <p className="text-gray-600 dark:text-gray-400 mt-2">{channel.description}</p>
+              {channelDescription && (
+                <p className="text-gray-600 dark:text-gray-400 mt-2">{channelDescription}</p>
               )}
             </div>
             <SubscribeButton
               channelId={channelId}
-              channelName={channel.name}
+              channelName={channelName}
               subscribersCount={channel.subscribersCount || 0}
               initialSubscribed={false}
             />
@@ -177,32 +182,35 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {videos.map((video) => (
-                <Link
-                  key={video.id}
-                  href={`/ar/video?vid=${video.id}`}
-                  className="group rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900 hover:shadow-xl transition-all duration-300 border border-gray-200 dark:border-gray-700"
-                >
-                  <div className="relative w-full aspect-video bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                    {video.thumbnailUrl && (
-                      <Image
-                        src={video.thumbnailUrl}
-                        alt={video.title}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <h3 className="text-sm font-semibold line-clamp-2 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                      {video.title}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                      {video.views?.toLocaleString('ar-EG') || 0} {t.video.videoViews}
-                    </p>
-                  </div>
-                </Link>
-              ))}
+              {videos.map((video) => {
+                const videoTitle = getLocalizedValue(video.titleLocalized, video.title, 'ar');
+                return (
+                  <Link
+                    key={video.id}
+                    href={`/ar/video?vid=${video.id}`}
+                    className="group rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900 hover:shadow-xl transition-all duration-300 border border-gray-200 dark:border-gray-700"
+                  >
+                    <div className="relative w-full aspect-video bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                      {video.thumbnailUrl && (
+                        <Image
+                          src={video.thumbnailUrl}
+                          alt={videoTitle}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <h3 className="text-sm font-semibold line-clamp-2 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                        {videoTitle}
+                      </h3>
+                      <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                        {video.views?.toLocaleString('ar-EG') || 0} {t.video.videoViews}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

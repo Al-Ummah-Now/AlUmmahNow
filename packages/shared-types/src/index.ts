@@ -7,3 +7,6 @@ export * from './comment';
 export * from './analytics';
 export * from './common';
 export * from './watch-history';
+
+// Export localization utility
+export * from './localization';
