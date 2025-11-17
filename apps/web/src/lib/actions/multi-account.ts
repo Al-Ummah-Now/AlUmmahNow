@@ -15,6 +15,7 @@ import { SessionManager, type AccountInfo } from '../auth/session-manager';
 import { createChannel } from '../api/channels';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 import { subjects } from '../auth';
+import { shouldRedirectToProfileCreation } from '../profile-helpers';
 
 /**
  * Get OpenAuth client
@@ -102,10 +103,38 @@ export async function completeAddAccount(code: string): Promise<void> {
 
 /**
  * Switch to a different user account
+ * If switching while on profile creation page, check if new account has profile
+ * and redirect to profile page if it does
  */
-export async function switchUserAccount(userId: string): Promise<void> {
+export async function switchUserAccount(userId: string, currentPath?: string): Promise<void> {
   try {
     await SessionManager.setActiveAccount(userId);
+
+    // Check if we're on profile creation page
+    const isOnProfileCreatePage = currentPath?.includes('/profile/create');
+
+    if (isOnProfileCreatePage) {
+      // Get the new active session to check profile
+      const session = await SessionManager.getActiveSession();
+
+      if (session) {
+        const userForCheck = {
+          id: session.userId,
+          email: session.email,
+        };
+
+        // Check if this account needs profile creation
+        const { shouldRedirect, redirectPath } = await shouldRedirectToProfileCreation(userForCheck);
+
+        if (!shouldRedirect) {
+          // Profile exists, redirect away from profile creation to profile page
+          const locale = currentPath.includes('/ar/') ? 'ar' : 'en';
+          redirect(`/${locale}/profile`);
+          return;
+        }
+        // else: Profile doesn't exist, stay on profile creation page
+      }
+    }
 
     // Revalidate all paths to refresh the UI with new account
     revalidatePath('/');
@@ -327,6 +356,7 @@ export async function getActiveSessionInfo() {
     })),
     channels: session.availableChannels.map(ch => ({
       id: ch.id,
+      userId: ch.userId,  // Include userId for filtering by account
       name: ch.name,
       avatarUrl: ch.avatarUrl,
       isMain: ch.isMain,

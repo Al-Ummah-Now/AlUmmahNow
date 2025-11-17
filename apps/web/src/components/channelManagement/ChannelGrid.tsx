@@ -1,7 +1,6 @@
 import React from 'react';
 import { ChannelGridProps } from './types';
 import { ChannelCard } from './ChannelCard';
-import { CreateChannelCard } from './CreateChannelCard';
 
 /**
  * ChannelGrid Component
@@ -75,9 +74,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {/* Create Channel Card - Always first */}
-      <CreateChannelCard onClick={onCreate} />
-
       {/* Channel Cards */}
       {channels.map((channel) => (
         <ChannelCard

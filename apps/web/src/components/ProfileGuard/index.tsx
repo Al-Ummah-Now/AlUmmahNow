@@ -10,37 +10,70 @@ interface ProfileGuardProps {
 }
 
 const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) => {
+  console.log('[ProfileGuard] ========== COMPONENT RENDER ==========');
+
   const { user, loading: accountLoading } = useMultiAccount();
   const router = useRouter();
   const pathname = usePathname();
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
   const [profileExists, setProfileExists] = useState<boolean | null>(null);
 
+  console.log('[ProfileGuard] State:', {
+    hasUser: !!user,
+    userId: user?.id,
+    userEmail: user?.email,
+    accountLoading,
+    pathname,
+    isCheckingProfile,
+    profileExists
+  });
+
   // Don't run profile check if already on profile creation page or not authenticated
   const isProfileCreatePage = pathname.includes('/profile/create');
   const shouldSkipCheck = !user || isProfileCreatePage || accountLoading;
 
+  console.log('[ProfileGuard] Should skip check?', {
+    shouldSkipCheck,
+    noUser: !user,
+    isProfileCreatePage,
+    accountLoading
+  });
+
   useEffect(() => {
+    console.log('[ProfileGuard] useEffect triggered');
+    console.log('[ProfileGuard] Dependencies:', {
+      user: user?.id,
+      locale,
+      shouldSkipCheck,
+      pathname
+    });
+
     if (shouldSkipCheck) {
+      console.log('[ProfileGuard] Skipping check (shouldSkipCheck=true)');
       setIsCheckingProfile(false);
       return;
     }
 
     const checkProfile = async () => {
+      console.log('[ProfileGuard] Starting profile check...');
       try {
         const exists = await checkProfileExists(user);
+        console.log('[ProfileGuard] checkProfileExists returned:', exists);
         setProfileExists(exists);
 
-        if (!exists) {
-          // Profile doesn't exist, redirect to creation page
+        // Only redirect if we're absolutely sure the profile doesn't exist
+        if (exists === false) {
           const profileCreatePath = `/${locale}/profile/create`;
+          console.log('[ProfileGuard] 🚨 REDIRECTING to:', profileCreatePath);
           router.push(profileCreatePath);
+        } else {
+          console.log('[ProfileGuard] ✅ Profile exists or error occurred (fail-safe) - allowing access');
         }
       } catch (error) {
-        console.error('Error checking profile:', error);
-        // On error, allow access to avoid breaking the app
+        console.error('[ProfileGuard] ❌ Exception in checkProfile:', error);
         setProfileExists(true);
       } finally {
+        console.log('[ProfileGuard] Check complete, setting isCheckingProfile=false');
         setIsCheckingProfile(false);
       }
     };
@@ -49,10 +82,12 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
   }, [user, router, locale, shouldSkipCheck, pathname]);
 
   if (shouldSkipCheck) {
+    console.log('[ProfileGuard] Rendering children (shouldSkipCheck)');
     return <>{children}</>;
   }
 
   if (isCheckingProfile) {
+    console.log('[ProfileGuard] Rendering loading state');
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -64,7 +99,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
   }
 
   if (profileExists === false) {
-    // This shouldn't normally show because we redirect above, but just in case
+    console.log('[ProfileGuard] Rendering redirect message (profileExists=false)');
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -75,6 +110,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     );
   }
 
+  console.log('[ProfileGuard] Rendering children (profile exists)');
   return <>{children}</>;
 };
 

@@ -82,21 +82,50 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
 /**
  * Client-side helper function for checking if the current user's profile exists
  * Uses server session automatically
+ * Returns true if profile exists, false if definitely doesn't exist, or true on error (fail-safe)
  */
 export const checkProfileExists = async (user: User | null | undefined): Promise<boolean> => {
+    console.log('[checkProfileExists] ========== START ==========');
+    console.log('[checkProfileExists] User input:', {
+        hasUser: !!user,
+        userId: user?.id,
+        userEmail: user?.email
+    });
+
     // Early return for any invalid input
     if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
+        console.log('[checkProfileExists] ❌ Invalid user input - returning false');
+        console.log('[checkProfileExists] ========== END (INVALID) ==========');
         return false;
     }
 
     try {
+        console.log('[checkProfileExists] Calling getProfileCurrent()...');
         // Call the server action (uses auth session automatically)
         const profile = await getProfileCurrent();
 
-        return profile !== null;
+        console.log('[checkProfileExists] getProfileCurrent() returned:', {
+            isNull: profile === null,
+            hasProfile: !!profile,
+            profileId: profile?.id,
+            profileEmail: profile?.email,
+            profileType: typeof profile
+        });
+
+        const exists = profile !== null;
+        console.log('[checkProfileExists] Result: exists =', exists);
+        console.log('[checkProfileExists] ========== END (SUCCESS) ==========');
+        return exists;
     } catch (error) {
-        console.error('checkProfileExists: ❌ Error:', error);
-        return false;
+        console.error('[checkProfileExists] ❌ EXCEPTION during profile check:');
+        console.error('[checkProfileExists] Error:', error);
+        console.error('[checkProfileExists] Error message:', error instanceof Error ? error.message : 'Unknown');
+        console.error('[checkProfileExists] Error stack:', error instanceof Error ? error.stack : 'N/A');
+        // On error, assume profile exists to avoid false redirects
+        // This is safer during session updates or network issues
+        console.log('[checkProfileExists] Returning TRUE (fail-safe) due to error');
+        console.log('[checkProfileExists] ========== END (ERROR) ==========');
+        return true;
     }
 };
 

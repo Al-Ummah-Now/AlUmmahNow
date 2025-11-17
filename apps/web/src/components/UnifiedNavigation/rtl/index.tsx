@@ -20,6 +20,7 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useTheme } from 'next-themes';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { login } from '@/lib/actions';
 import {
   ChevronDown,
   Check,
@@ -48,6 +49,7 @@ export function UnifiedNavigationRTL() {
     removeAccount,
     switchToChannel,
     createChannel,
+    reloadChannels,
     logout,
     logoutAll,
   } = useMultiAccount();
@@ -67,10 +69,6 @@ export function UnifiedNavigationRTL() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
-
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
@@ -83,6 +81,92 @@ export function UnifiedNavigationRTL() {
     setIsOpen(false);
   };
 
+  // Anonymous user - show menu icon with Sign In option
+  if (!user) {
+    return (
+      <div className="relative">
+        {/* Trigger Button - Menu Icon */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          aria-label="قائمة التنقل"
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+        >
+          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
+            <User className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+          </div>
+          <ChevronDown className="h-4 w-4 text-gray-500" />
+        </button>
+
+        {/* Dropdown Menu */}
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setIsOpen(false)}
+              aria-hidden="true"
+            />
+
+            {/* Menu */}
+            <div
+              className="absolute left-0 mt-2 w-80 rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
+              role="menu"
+              aria-orientation="vertical"
+              dir="rtl"
+            >
+              {/* Quick Actions - Dark Mode & Language */}
+              <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex gap-2">
+                  <button
+                    onClick={toggleTheme}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    role="menuitem"
+                  >
+                    {theme === 'dark' ? (
+                      <Sun className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                    ) : (
+                      <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                    )}
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      {theme === 'dark' ? 'فاتح' : 'داكن'}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={switchLanguage}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    role="menuitem"
+                  >
+                    <Languages className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      English
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sign In */}
+              <div className="p-3">
+                <form action={login}>
+                  <button
+                    type="submit"
+                    className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-gray-900 font-semibold transition-all shadow-md hover:shadow-lg"
+                    role="menuitem"
+                  >
+                    <User className="h-5 w-5" />
+                    <span className="text-sm">تسجيل الدخول</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   const handleCreateChannel = async () => {
     if (!newChannelName.trim()) return;
 
@@ -93,6 +177,8 @@ export function UnifiedNavigationRTL() {
     if (created) {
       setNewChannelName('');
       setIsCreatingChannel(false);
+      // Reload channels to show the newly created channel
+      await reloadChannels();
     }
   };
 

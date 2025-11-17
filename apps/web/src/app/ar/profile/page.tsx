@@ -103,19 +103,70 @@ const ProfilePage = () => {
             {/* Channel Management Section */}
             <ChannelManagementSection />
 
-            {/* Videos Section */}
-            <section id="videos" className="section mb-8">
-              <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">مقاطع الفيديو</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Example video thumbnails */}
-                <div className="video-thumbnail bg-gray-200 dark:bg-gray-700 h-40 rounded-md flex items-center justify-center">
-                  <span className="text-gray-500 dark:text-gray-300">فيديو 1</span>
+            {/* Playlists Section */}
+            <section id="playlists" className="section mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">
+                    قوائم التشغيل الخاصة بي
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400 mt-1">
+                    نظم مقاطع الفيديو المفضلة لديك في قوائم تشغيل
+                  </p>
                 </div>
-                <div className="video-thumbnail bg-gray-200 dark:bg-gray-700 h-40 rounded-md flex items-center justify-center">
-                  <span className="text-gray-500 dark:text-gray-300">فيديو 2</span>
-                </div>
-                <div className="video-thumbnail bg-gray-200 dark:bg-gray-700 h-40 rounded-md flex items-center justify-center">
-                  <span className="text-gray-500 dark:text-gray-300">فيديو 3</span>
+                <button
+                  onClick={() => router.push('/ar/playlist/create')}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  قائمة تشغيل جديدة
+                </button>
+              </div>
+
+              {/* Playlists Grid - Placeholder */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Empty state */}
+                <div className="col-span-full flex flex-col items-center justify-center py-12 px-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
+                  <svg
+                    className="w-16 h-16 text-gray-400 dark:text-gray-600 mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  <p className="text-gray-600 dark:text-gray-400 text-lg font-medium mb-2">
+                    لا توجد قوائم تشغيل بعد
+                  </p>
+                  <p className="text-gray-500 dark:text-gray-500 text-sm mb-4">
+                    أنشئ قائمة التشغيل الأولى لتنظيم مقاطع الفيديو الخاصة بك
+                  </p>
+                  <button
+                    onClick={() => router.push('/ar/playlist/create')}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                    إنشاء قائمة تشغيل
+                  </button>
                 </div>
               </div>
             </section>

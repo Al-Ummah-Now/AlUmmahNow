@@ -32,6 +32,7 @@ interface UserInfo {
 
 interface ChannelInfo {
   id: string;
+  userId: string;  // Owner of the channel - needed for filtering by account
   name: string;
   avatarUrl?: string;
   isMain: boolean;
@@ -131,7 +132,9 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       setError(null);
       setLoading(true);
 
-      await switchUserAccount(userId);
+      // Get current pathname to pass to server action for profile check
+      const currentPath = window.location.pathname;
+      await switchUserAccount(userId, currentPath);
       await loadSessionData();
 
       // Refresh the page to update server components
@@ -210,18 +213,27 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     }
   }, [loadSessionData, router]);
 
-  // Reload channels
+  // Reload channels (without triggering full loading state)
   const reloadChannels = useCallback(async () => {
     try {
       setError(null);
 
       await reloadUserChannels();
-      await loadSessionData();
+
+      // Update session data WITHOUT setting loading state
+      // This prevents UI flicker when reloading channels
+      const sessionInfo = await getActiveSessionInfo();
+      if (sessionInfo) {
+        setUser(sessionInfo.user);
+        setChannel(sessionInfo.channel);
+        setAccounts(sessionInfo.accounts);
+        setChannels(sessionInfo.channels);
+      }
     } catch (err) {
       console.error('[MultiAccountProvider] Failed to reload channels:', err);
       setError('Failed to reload channels');
     }
-  }, [loadSessionData]);
+  }, []);
 
   // Logout current account
   const logout = useCallback(async () => {
