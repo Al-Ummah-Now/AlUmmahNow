@@ -14,7 +14,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useTheme } from 'next-themes';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
@@ -61,6 +61,20 @@ export function UnifiedNavigation() {
   const [isOpen, setIsOpen] = useState(false);
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
+
+  // Handle Escape key to close menu
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+        setIsCreatingChannel(false);
+        setNewChannelName('');
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen]);
 
   if (loading) {
     return (

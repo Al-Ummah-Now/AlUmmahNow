@@ -496,13 +496,22 @@ export class SessionManager {
       if (response?.data) {
         account.channels = Array.isArray(response.data) ? response.data : [];
 
-        // Set first channel as active if none selected
-        if (!account.activeChannelId && account.channels.length > 0) {
-          const mainChannel = account.channels.find(c => c.isMain) || account.channels[0];
-          account.activeChannelId = mainChannel.id;
+        // Set first channel as active if none selected AND channels exist
+        // Clear active channel if no channels exist
+        if (account.channels.length > 0) {
+          if (!account.activeChannelId) {
+            const mainChannel = account.channels.find(c => c.isMain) || account.channels[0];
+            account.activeChannelId = mainChannel.id;
 
+            if (sessionData.activeUserId === userId) {
+              sessionData.activeChannelId = mainChannel.id;
+            }
+          }
+        } else {
+          // No channels - clear active channel ID
+          account.activeChannelId = null;
           if (sessionData.activeUserId === userId) {
-            sessionData.activeChannelId = mainChannel.id;
+            sessionData.activeChannelId = null;
           }
         }
 

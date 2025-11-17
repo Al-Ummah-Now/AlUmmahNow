@@ -95,8 +95,9 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
     }
 
     // Default to main channel or first channel
-    const mainChannel = userChannels.find(ch => ch.isMain);
-    const defaultChannel = mainChannel || userChannels[0];
+    // IMPORTANT: Only set default channel if channels belong to current user
+    const mainChannel = userChannels.find(ch => ch.isMain && ch.userId === userId);
+    const defaultChannel = mainChannel || userChannels.find(ch => ch.userId === userId);
 
     if (defaultChannel) {
       const activeChannelData: ActiveChannel = {
@@ -112,6 +113,13 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
       // Save to localStorage with user-specific key
       if (typeof window !== 'undefined') {
         localStorage.setItem(storageKey, JSON.stringify(activeChannelData));
+      }
+    } else {
+      // No channels for this user - clear active channel
+      console.log('ActiveChannelProvider: No channels for user, clearing active channel');
+      setActiveChannelState(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(storageKey);
       }
     }
   }, [userChannels, userId]);
