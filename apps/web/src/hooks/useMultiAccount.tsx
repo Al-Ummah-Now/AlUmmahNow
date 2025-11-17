@@ -135,13 +135,22 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       // Get current pathname to pass to server action for profile check
       const currentPath = window.location.pathname;
       const result = await switchUserAccount(userId, currentPath);
+
+      console.log('[MultiAccountProvider] Account switched successfully');
+      console.log('[MultiAccountProvider] Current path:', currentPath);
+      console.log('[MultiAccountProvider] Redirect needed?', result.needsRedirect);
+      console.log('[MultiAccountProvider] Redirect path:', result.redirectPath);
+
+      // Reload session data to get new user/channels
       await loadSessionData();
 
-      // Check if we need to redirect (profile exists when switching on profile/create page)
       if (result.needsRedirect && result.redirectPath) {
+        // Navigate to redirect path (e.g., from /profile/create to home if new user has profile)
+        console.log('[MultiAccountProvider] Navigating to:', result.redirectPath);
         router.push(result.redirectPath);
       } else {
-        // Refresh the page to update server components
+        // Stay on current page but refresh to re-run ProfileGuard and server components
+        console.log('[MultiAccountProvider] Refreshing current page');
         router.refresh();
       }
     } catch (err) {

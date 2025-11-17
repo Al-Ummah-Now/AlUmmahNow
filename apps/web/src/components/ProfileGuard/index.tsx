@@ -17,6 +17,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
   const pathname = usePathname();
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
   const [profileExists, setProfileExists] = useState<boolean | null>(null);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   console.log('[ProfileGuard] State:', {
     hasUser: !!user,
@@ -28,9 +29,10 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     profileExists
   });
 
-  // Don't run profile check if already on profile creation page or not authenticated
   const isProfileCreatePage = pathname.includes('/profile/create');
-  const shouldSkipCheck = !user || isProfileCreatePage || accountLoading;
+
+  // Skip check if no user or still loading account
+  const shouldSkipCheck = !user || accountLoading;
 
   console.log('[ProfileGuard] Should skip check?', {
     shouldSkipCheck,
@@ -45,6 +47,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
       user: user?.id,
       locale,
       shouldSkipCheck,
+      isProfileCreatePage,
       pathname
     });
 
@@ -61,16 +64,28 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
         console.log('[ProfileGuard] checkProfileExists returned:', exists);
         setProfileExists(exists);
 
-        // Only redirect if we're absolutely sure the profile doesn't exist
-        if (exists === false) {
-          const profileCreatePath = `/${locale}/profile/create`;
-          console.log('[ProfileGuard] 🚨 REDIRECTING to:', profileCreatePath);
-          router.push(profileCreatePath);
+        if (isProfileCreatePage) {
+          // On profile create page - redirect away if profile EXISTS
+          if (exists === true) {
+            const homePath = `/${locale}/`;
+            console.log('[ProfileGuard] 🚨 Profile exists on create page - REDIRECTING to:', homePath);
+            router.push(homePath);
+          } else {
+            console.log('[ProfileGuard] ✅ No profile exists - allowing create page access');
+          }
         } else {
-          console.log('[ProfileGuard] ✅ Profile exists or error occurred (fail-safe) - allowing access');
+          // On regular pages - redirect to create if profile DOESN'T exist
+          if (exists === false) {
+            const profileCreatePath = `/${locale}/profile/create`;
+            console.log('[ProfileGuard] 🚨 No profile on regular page - REDIRECTING to:', profileCreatePath);
+            router.push(profileCreatePath);
+          } else {
+            console.log('[ProfileGuard] ✅ Profile exists - allowing access to regular page');
+          }
         }
       } catch (error) {
         console.error('[ProfileGuard] ❌ Exception in checkProfile:', error);
+        // On error, assume profile exists (fail-safe)
         setProfileExists(true);
       } finally {
         console.log('[ProfileGuard] Check complete, setting isCheckingProfile=false');
@@ -79,7 +94,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     };
 
     checkProfile();
-  }, [user, router, locale, shouldSkipCheck, pathname]);
+  }, [user, router, locale, shouldSkipCheck, isProfileCreatePage, pathname]);
 
   if (shouldSkipCheck) {
     console.log('[ProfileGuard] Rendering children (shouldSkipCheck)');
@@ -98,8 +113,9 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     );
   }
 
-  if (profileExists === false) {
-    console.log('[ProfileGuard] Rendering redirect message (profileExists=false)');
+  // If on regular page and profile doesn't exist, show redirect message
+  if (!isProfileCreatePage && profileExists === false) {
+    console.log('[ProfileGuard] Rendering redirect message (regular page, no profile)');
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -110,7 +126,20 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     );
   }
 
-  console.log('[ProfileGuard] Rendering children (profile exists)');
+  // If on create page and profile exists, show redirect message
+  if (isProfileCreatePage && profileExists === true) {
+    console.log('[ProfileGuard] Rendering redirect message (create page, profile exists)');
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">{locale === 'ar' ? 'إعادة التوجيه...' : 'Redirecting...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('[ProfileGuard] Rendering children (access allowed)');
   return <>{children}</>;
 };
 

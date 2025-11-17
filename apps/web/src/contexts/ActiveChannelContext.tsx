@@ -19,7 +19,13 @@ interface ActiveChannelContextType {
 
 const ActiveChannelContext = createContext<ActiveChannelContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'al-ummah-active-channel';
+const STORAGE_KEY_PREFIX = 'al-ummah-active-channel';
+
+// Helper to get user-specific storage key
+const getStorageKey = (userId: string | undefined) => {
+  if (!userId) return STORAGE_KEY_PREFIX;
+  return `${STORAGE_KEY_PREFIX}-${userId}`;
+};
 
 export interface ActiveChannelProviderProps {
   children: React.ReactNode;
@@ -37,27 +43,36 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
   // Initialize active channel from localStorage or default to main/first channel
   useEffect(() => {
     console.log('ActiveChannelProvider: Initializing with channels:', userChannels);
+    console.log('ActiveChannelProvider: userId:', userId);
 
     // Clear active channel if no user
     if (!userId) {
       console.log('ActiveChannelProvider: No userId, clearing active channel');
       setActiveChannelState(null);
       if (typeof window !== 'undefined') {
-        localStorage.removeItem(STORAGE_KEY);
+        // Clear any stored channel for this session
+        localStorage.removeItem(STORAGE_KEY_PREFIX);
       }
       return;
     }
 
-    // No channels available yet
+    // Clear active channel if no channels available (user has no profile/channels)
     if (!userChannels || userChannels.length === 0) {
-      console.log('ActiveChannelProvider: No channels available');
+      console.log('ActiveChannelProvider: No channels available, clearing active channel');
+      setActiveChannelState(null);
+      const storageKey = getStorageKey(userId);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(storageKey);
+      }
       return;
     }
 
-    // Try to load from localStorage
+    const storageKey = getStorageKey(userId);
+
+    // Try to load from localStorage for THIS user
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = localStorage.getItem(storageKey);
         if (stored) {
           const parsed = JSON.parse(stored) as ActiveChannel;
 
@@ -70,12 +85,12 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
             return;
           } else {
             console.log('ActiveChannelProvider: Stored channel no longer exists, clearing');
-            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(storageKey);
           }
         }
       } catch (error) {
         console.error('ActiveChannelProvider: Error loading from localStorage:', error);
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(storageKey);
       }
     }
 
@@ -94,9 +109,9 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
       console.log('ActiveChannelProvider: Setting default channel:', activeChannelData);
       setActiveChannelState(activeChannelData);
 
-      // Save to localStorage
+      // Save to localStorage with user-specific key
       if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(activeChannelData));
+        localStorage.setItem(storageKey, JSON.stringify(activeChannelData));
       }
     }
   }, [userChannels, userId]);
@@ -105,21 +120,23 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
     console.log('ActiveChannelProvider: Setting active channel:', channel);
     setActiveChannelState(channel);
 
-    // Persist to localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(channel));
+    // Persist to localStorage with user-specific key
+    if (typeof window !== 'undefined' && userId) {
+      const storageKey = getStorageKey(userId);
+      localStorage.setItem(storageKey, JSON.stringify(channel));
     }
-  }, []);
+  }, [userId]);
 
   const clearActiveChannel = useCallback(() => {
     console.log('ActiveChannelProvider: Clearing active channel');
     setActiveChannelState(null);
 
     // Remove from localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY);
+    if (typeof window !== 'undefined' && userId) {
+      const storageKey = getStorageKey(userId);
+      localStorage.removeItem(storageKey);
     }
-  }, []);
+  }, [userId]);
 
   const isOwnChannel = useCallback((channelId: string): boolean => {
     return userChannels.some(ch => ch.id === channelId);
