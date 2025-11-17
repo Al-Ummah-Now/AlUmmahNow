@@ -1,4 +1,8 @@
 import { Context, Next } from 'hono';
+import { createLogger } from '@al-ummah/logger';
+
+// Create logger instance
+const logger = createLogger('api-videos', { logLevel: 'info', forceHttpLogging: true });
 
 /**
  * Sanitize sensitive headers
@@ -49,47 +53,37 @@ export async function loggingMiddleware(c: Context, next: Next) {
 	const userId = c.get('userId') || c.req.header('userId') || 'unauthenticated';
 	const auth = c.get('auth');
 
-	console.log('========================================');
-	console.log(`[API REQUEST] ========== START ==========`);
-	console.log(`[API REQUEST] Request ID: ${requestId}`);
-	console.log(`[API REQUEST] Timestamp: ${new Date().toISOString()}`);
-	console.log(`[API REQUEST] Method: ${method}`);
-	console.log(`[API REQUEST] Path: ${path}`);
-	if (query) {
-		console.log(`[API REQUEST] Query: ${query}`);
-	}
-	console.log(`[API REQUEST] User ID: ${userId}`);
-	console.log(`[API REQUEST] Headers:`, JSON.stringify(headers, null, 2));
+	const requestInfo = {
+		requestId,
+		timestamp: new Date().toISOString(),
+		method,
+		path,
+		query: query || undefined,
+		userId,
+		headers,
+		auth: auth ? { userId: auth.userId, email: auth.email } : undefined
+	};
 
-	// Log authentication context
-	if (auth) {
-		console.log(`[API REQUEST] Auth Context:`, {
-			userId: auth.userId,
-			email: auth.email
-		});
-	}
+	logger.info(`[API REQUEST] ${method} ${path}`, requestInfo);
 
 	// Log request body for POST/PUT/PATCH
 	if (['POST', 'PUT', 'PATCH'].includes(method)) {
 		try {
-			// Clone the raw request to read the body without consuming it
 			const clonedReq = c.req.raw.clone();
 			const contentType = c.req.header('content-type');
 
 			if (contentType?.includes('application/json')) {
 				const body = await clonedReq.json();
-				console.log(`[API REQUEST] Body:`, JSON.stringify(body, null, 2));
+				logger.debug(`[API REQUEST] Body`, { requestId, body });
 			} else if (contentType?.includes('multipart/form-data')) {
-				console.log(`[API REQUEST] Body: [FormData - File Upload]`);
+				logger.debug(`[API REQUEST] Body: FormData - File Upload`, { requestId });
 			} else {
-				console.log(`[API REQUEST] Body: [${contentType || 'unknown content type'}]`);
+				logger.debug(`[API REQUEST] Body: ${contentType || 'unknown content type'}`, { requestId });
 			}
 		} catch (error) {
-			console.log(`[API REQUEST] Body: [Unable to parse]`);
+			logger.warn(`[API REQUEST] Unable to parse body`, { requestId, error });
 		}
 	}
-
-	console.log(`[API REQUEST] ========== PROCESSING ==========`);
 
 	// Process the request
 	let error: any = null;
@@ -103,48 +97,46 @@ export async function loggingMiddleware(c: Context, next: Next) {
 		const duration = endTime - startTime;
 		const status = c.res.status;
 
-		console.log(`[API RESPONSE] ========== END ==========`);
-		console.log(`[API RESPONSE] Request ID: ${requestId}`);
-		console.log(`[API RESPONSE] Status: ${status}`);
-		console.log(`[API RESPONSE] Duration: ${duration}ms`);
+		const responseInfo = {
+			requestId,
+			status,
+			duration: `${duration}ms`,
+			method,
+			path
+		};
 
-		// Log response body for errors or successful creates/updates
 		if (error) {
-			console.error(`[API RESPONSE] ❌ Error:`, {
-				error,
-				message: error instanceof Error ? error.message : 'Unknown error',
+			logger.error(`[API RESPONSE] Error ${status} ${method} ${path}`, {
+				...responseInfo,
+				error: error instanceof Error ? error.message : 'Unknown error',
 				stack: error instanceof Error ? error.stack : undefined
 			});
 		} else {
-			// Log response body for certain status codes
+			// Log response body for errors or non-GET requests
 			if (status >= 400 || method !== 'GET') {
 				try {
-					// Clone response to read body
 					const clonedRes = c.res.clone();
 					const responseBody = await clonedRes.text();
 
 					try {
 						const json = JSON.parse(responseBody);
-						console.log(`[API RESPONSE] Body:`, JSON.stringify(json, null, 2));
+						if (status >= 500) {
+							logger.error(`[API RESPONSE] Server Error ${status} ${method} ${path}`, { ...responseInfo, body: json });
+						} else if (status >= 400) {
+							logger.warn(`[API RESPONSE] Client Error ${status} ${method} ${path}`, { ...responseInfo, body: json });
+						} else {
+							logger.info(`[API RESPONSE] ${status} ${method} ${path}`, { ...responseInfo, body: json });
+						}
 					} catch {
-						// Not JSON
-						console.log(`[API RESPONSE] Body:`, responseBody.substring(0, 500));
+						logger.debug(`[API RESPONSE] ${status} ${method} ${path}`, { ...responseInfo, body: responseBody.substring(0, 500) });
 					}
 				} catch {
-					console.log(`[API RESPONSE] Body: [Unable to read]`);
+					logger.warn(`[API RESPONSE] Unable to read response body`, responseInfo);
 				}
-			}
-
-			// Success indicator
-			if (status >= 200 && status < 300) {
-				console.log(`[API RESPONSE] ✅ Success`);
-			} else if (status >= 400 && status < 500) {
-				console.log(`[API RESPONSE] ⚠️  Client Error`);
-			} else if (status >= 500) {
-				console.log(`[API RESPONSE] ❌ Server Error`);
+			} else {
+				// Success - just log the basics
+				logger.info(`[API RESPONSE] ${status} ${method} ${path}`, responseInfo);
 			}
 		}
-
-		console.log('========================================');
 	}
 }

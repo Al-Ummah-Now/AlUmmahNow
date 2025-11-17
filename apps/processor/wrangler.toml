@@ -1,6 +1,7 @@
 name = "al-ummah-now-processor"
 main = "src/index.ts"
 compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
 
 # R2 bucket configuration
 [[r2_buckets]]

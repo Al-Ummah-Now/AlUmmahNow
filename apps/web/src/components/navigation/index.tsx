@@ -1,11 +1,8 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, memo } from "react";
+import dynamic from "next/dynamic";
 import Header from "@/components/Header/index";
-import LeftNavigation from "@/components/LeftNavigation/index";
 import HeaderRtl from "@/components/Header/rtl/index";
-import LeftNavigationRtl from "@/components/LeftNavigation/rtl/index";
-import AccountNavigation from "@/components/accountNavigation";
-import AccountNavigationRtl from "@/components/accountNavigation/rtl";
 import { usePathname } from "next/navigation";
 import { Profile } from "@/interfaces";
 import { fetchProfile } from "@/lib/api/profiles-client";
@@ -13,7 +10,25 @@ import { useAuth } from "../AuthProvider/authContext";
 import { ActiveChannelProvider } from "@/contexts/ActiveChannelContext";
 import { useChannels } from "@/hooks/useChannels";
 
-const Navigation: React.FC = () => {
+// Lazy load navigation components for better FID
+const LeftNavigation = dynamic(() => import("@/components/LeftNavigation/index"), {
+  ssr: true,
+  loading: () => null,
+});
+const LeftNavigationRtl = dynamic(() => import("@/components/LeftNavigation/rtl/index"), {
+  ssr: true,
+  loading: () => null,
+});
+const AccountNavigation = dynamic(() => import("@/components/accountNavigation"), {
+  ssr: true,
+  loading: () => null,
+});
+const AccountNavigationRtl = dynamic(() => import("@/components/accountNavigation/rtl"), {
+  ssr: true,
+  loading: () => null,
+});
+
+const Navigation: React.FC = memo(() => {
     const [isCollapsed, setIsCollapsed] = useState(true);
     const [isAccountCollapsed, setIsAccountCollapsed] = useState(true);
     const [profile, setProfile] = React.useState<Profile | null>(null);
@@ -65,6 +80,8 @@ const Navigation: React.FC = () => {
             </div>
         </ActiveChannelProvider>
     );
-};
+});
+
+Navigation.displayName = 'Navigation';
 
 export default Navigation;

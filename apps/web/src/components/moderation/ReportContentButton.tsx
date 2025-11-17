@@ -1,7 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import { useAuth } from "@/components/AuthProvider/authContext";
-import { ModerationAPI, ReportCreateRequest } from "@/lib/api/moderation";
+import * as ModerationAPI from "@/lib/api/moderation";
+import type { ReportCreateRequest } from "@/lib/api/moderation";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createApiHeaders } from "@/lib/utility";

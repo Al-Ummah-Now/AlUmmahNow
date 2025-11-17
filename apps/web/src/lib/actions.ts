@@ -16,6 +16,27 @@ export async function getClient() {
 
 export async function authenticated(): Promise<AuthSubject | false> {
   try {
+    // Try SessionManager first (new multi-account system)
+    try {
+      const { SessionManager } = await import('./auth/session-manager');
+      const session = await SessionManager.getActiveSession();
+
+      if (session) {
+        // Return AuthSubject from SessionManager
+        return {
+          type: "user",
+          properties: {
+            id: session.userId,
+            email: session.email,
+            displayName: session.displayName,
+          }
+        } as AuthSubject;
+      }
+    } catch (sessionError) {
+      // SessionManager not available, fall through to legacy
+    }
+
+    // Fall back to legacy cookies
     const cookies = await getCookies()
     const accessToken = cookies.get("access_token")
     const refreshToken = cookies.get("refresh_token")
@@ -23,9 +44,9 @@ export async function authenticated(): Promise<AuthSubject | false> {
     if (!accessToken?.value) {
       return false
     }
-    
+
     const client = await getClient();
-    
+
     let verified;
     try {
       verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
@@ -35,11 +56,11 @@ export async function authenticated(): Promise<AuthSubject | false> {
 
     // Check if verification has an actual error (not just empty object)
     const hasError = verified.err && Object.keys(verified.err).length > 0;
-    
+
     if (hasError) {
       return false;
     }
-    
+
     if ('tokens' in verified) {
       await setTokens(verified.tokens!.access, verified.tokens!.refresh);
     }
@@ -47,7 +68,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
     if ('subject' in verified) {
       return verified.subject;
     }
-    
+
     // If no subject but verification succeeded, try manual extraction
     try {
       const payload = JSON.parse(atob(accessToken.value.split('.')[1]));
@@ -60,7 +81,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
     } catch (manualError) {
       // Silent fallback failure
     }
-    
+
     return false;
   } catch (error) {
     return false;
@@ -68,6 +89,19 @@ export async function authenticated(): Promise<AuthSubject | false> {
 }
 
 export async function login() {
+  // Check if already logged in via SessionManager
+  try {
+    const { SessionManager } = await import('./auth/session-manager');
+    const session = await SessionManager.getActiveSession();
+
+    if (session) {
+      redirect("/");
+    }
+  } catch (sessionError) {
+    // SessionManager not available, continue with legacy check
+  }
+
+  // Check legacy cookies
   const cookies = await getCookies()
   const accessToken = cookies.get("access_token")
   const refreshToken = cookies.get("refresh_token")
@@ -78,7 +112,7 @@ export async function login() {
       const verified = await client.verify(subjects, accessToken.value, {
         refresh: refreshToken?.value,
       });
-      
+
       const hasError = verified.err && Object.keys(verified.err).length > 0;
 
       if (!hasError && 'tokens' in verified) {
@@ -92,6 +126,7 @@ export async function login() {
     }
   }
 
+  // Redirect to OAuth login
   const headers = await getHeaders()
   const host = headers.get("host")
   const protocol = host?.includes("localhost") ? "http" : "https"
@@ -103,6 +138,15 @@ export async function login() {
 }
 
 export async function logout() {
+  // Clear SessionManager if available
+  try {
+    const { SessionManager } = await import('./auth/session-manager');
+    await SessionManager.clearAllSessions();
+  } catch (sessionError) {
+    // SessionManager not available, continue with legacy cleanup
+  }
+
+  // Clear legacy cookies
   const cookies = await getCookies()
   cookies.delete("access_token")
   cookies.delete("refresh_token")

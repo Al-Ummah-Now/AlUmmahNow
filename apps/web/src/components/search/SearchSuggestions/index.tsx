@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { SearchSuggestion } from "@/lib/api/types";
-import { VideosAPI } from "@/lib/api/videos";
+import * as VideosAPI from "@/lib/api/videos";
 
 interface SearchSuggestionsProps {
   query: string;

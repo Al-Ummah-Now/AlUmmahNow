@@ -6,7 +6,7 @@ import SearchFilters from "@/components/search/SearchFilters/index";
 import SearchSuggestions from "@/components/search/SearchSuggestions/index";
 import TrendingContent from "@/components/search/TrendingContent/index";
 import { SearchFilters as SearchFiltersType } from "@/lib/api/types";
-import { VideosAPI } from "@/lib/api/videos";
+import * as VideosAPI from "@/lib/api/videos";
 
 const SearchPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState("");
@@ -35,7 +35,7 @@ const SearchPage: React.FC = () => {
         setLoading(true);
         setHasSearched(true);
         try {
-            const data = await VideosAPI.search(searchQuery, filters, { limit: 20 });
+            const data = await VideosAPI.searchVideos(searchQuery, filters, { limit: 20 });
             setVideos(data?.data || []);
         } catch (error) {
             console.error('Search error:', error);

@@ -14,7 +14,7 @@
  * - Automatic quota management with StorageManager
  */
 
-import { VideosAPI } from '@/lib/api/videos';
+import * as VideosAPI from '@/lib/api/videos';
 import { StorageManager } from '@/lib/utils/storage';
 
 /**
@@ -308,7 +308,7 @@ export class VideoEngagementService {
     }
 
     try {
-      const result = await VideosAPI.like(videoId, { channelId, userId });
+      const result = await VideosAPI.likeVideo(videoId, { channelId, userId });
 
       if (!result || !result.success) {
         throw new Error('Failed to like video');
@@ -353,7 +353,7 @@ export class VideoEngagementService {
     }
 
     try {
-      const result = await VideosAPI.unlike(videoId, { channelId, userId });
+      const result = await VideosAPI.unlikeVideo(videoId, { channelId, userId });
 
       if (!result || !result.success) {
         throw new Error('Failed to unlike video');
@@ -398,7 +398,7 @@ export class VideoEngagementService {
     }
 
     try {
-      const result = await VideosAPI.dislike(videoId, { channelId, userId });
+      const result = await VideosAPI.dislikeVideo(videoId, { channelId, userId });
 
       if (!result || !result.success) {
         throw new Error('Failed to dislike video');
@@ -443,7 +443,7 @@ export class VideoEngagementService {
     }
 
     try {
-      const result = await VideosAPI.removeDislike(videoId, { channelId, userId });
+      const result = await VideosAPI.removeVideoDislike(videoId, { channelId, userId });
 
       if (!result || !result.success) {
         throw new Error('Failed to remove dislike');

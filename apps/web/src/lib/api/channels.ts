@@ -1,3 +1,5 @@
+'use server';
+
 import {
   ApiResponse,
   ApiHeaders,
@@ -7,241 +9,161 @@ import {
   SubscriptionRequest,
   PaginationResponse
 } from "./types";
-import { getApiUrl } from "@/lib/runtime-config";
+import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
+import { getServerAuthContext } from "./server-auth";
 
-const baseUrl = getApiUrl();
+/**
+ * List channels
+ * GET /api/channels
+ */
+export async function listChannels(
+  params?: ListQueryParams,
+  _headers?: ApiHeaders
+): Promise<PaginationResponse<any> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
 
-export class ChannelsAPI {
-  /**
-   * List channels
-   * GET /api/channels
-   */
-  static async list(
-    params?: ListQueryParams,
-    headers?: ApiHeaders
-  ): Promise<PaginationResponse<any> | null> {
-    try {
-      const queryParams = new URLSearchParams();
-      if (params?.limit) queryParams.append('limit', params.limit.toString());
-      if (params?.cursor) queryParams.append('cursor', params.cursor);
-      
-      const response = await fetch(
-        `${baseUrl}/api/channels?${queryParams.toString()}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(headers?.channelId && { 'channelId': headers.channelId }),
-            ...(headers?.userId && { 'userId': headers.userId }),
-          },
-        }
-      );
+  return apiRequestServer<PaginationResponse<any>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels${queryString}`),
+    functionName: 'listChannels'
+  }, getServerAuthContext, false);
+}
 
-      if (!response.ok) {
-        throw new Error(`Error fetching channels: ${response.statusText}`);
-      }
+/**
+ * List channels for a specific user
+ * GET /api/channels?userId={userId}
+ */
+export async function listUserChannels(
+  userId: string,
+  params?: ListQueryParams
+): Promise<PaginationResponse<any> | null> {
+  const queryString = buildQueryParams({
+    userId,
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
 
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.list error:', error);
-      return null;
-    }
-  }
+  return apiRequestServer<PaginationResponse<any>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels${queryString}`),
+    functionName: 'listUserChannels'
+  }, getServerAuthContext, false);
+}
 
-  /**
-   * Get a channel by id
-   * GET /api/channels/{id}
-   */
-  static async getById(
-    id: string,
-    headers?: ApiHeaders
-  ): Promise<any | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${id}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(headers?.channelId && { 'channelId': headers.channelId }),
-            ...(headers?.userId && { 'userId': headers.userId }),
-          },
-        }
-      );
+/**
+ * Get a channel by id
+ * GET /api/channels/{id}
+ */
+export async function getChannelById(
+  id: string,
+  _headers?: ApiHeaders
+): Promise<any | null> {
+  return apiRequestServer<any>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${id}`),
+    functionName: 'getChannelById'
+  }, getServerAuthContext, false);
+}
 
-      if (!response.ok) {
-        throw new Error(`Error fetching channel: ${response.statusText}`);
-      }
+/**
+ * Create a new channel
+ * POST /api/channels
+ */
+export async function createChannel(
+  data: ChannelCreateRequest,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<ApiResponse<{ channel: any }> | null> {
+  return apiRequestServer<ApiResponse<{ channel: any }>>({
+    method: 'POST',
+    url: buildApiUrl('/api/channels'),
+    body: data,
+    functionName: 'createChannel'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
 
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.getById error:', error);
-      return null;
-    }
-  }
+/**
+ * Update a channel
+ * PUT /api/channels/{id}
+ */
+export async function updateChannel(
+  id: string,
+  data: ChannelUpdateRequest,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<ApiResponse<{ channel: any }> | null> {
+  return apiRequestServer<ApiResponse<{ channel: any }>>({
+    method: 'PUT',
+    url: buildApiUrl(`/api/channels/${id}`),
+    body: data,
+    functionName: 'updateChannel'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
 
-  /**
-   * Create a new channel
-   * POST /api/channels
-   */
-  static async create(
-    data: ChannelCreateRequest,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<ApiResponse<{ channel: any }> | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-          body: JSON.stringify(data),
-        }
-      );
+/**
+ * Delete a channel
+ * DELETE /api/channels/{id}
+ */
+export async function deleteChannel(
+  id: string,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<{ success: boolean } | null> {
+  return apiRequestServer<{ success: boolean }>({
+    method: 'DELETE',
+    url: buildApiUrl(`/api/channels/${id}`),
+    functionName: 'deleteChannel'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
 
-      if (!response.ok) {
-        throw new Error(`Error creating channel: ${response.statusText}`);
-      }
+/**
+ * Subscribe to a channel
+ * POST /api/channels/{id}/subscribe
+ */
+export async function subscribeToChannel(
+  channelId: string,
+  data: SubscriptionRequest,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<{ success: boolean } | null> {
+  return apiRequestServer<{ success: boolean }>({
+    method: 'POST',
+    url: buildApiUrl(`/api/channels/${channelId}/subscribe`),
+    body: data,
+    functionName: 'subscribeToChannel'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
 
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.create error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Update a channel
-   * PUT /api/channels/{id}
-   */
-  static async update(
-    id: string,
-    data: ChannelUpdateRequest,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<ApiResponse<{ channel: any }> | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-          body: JSON.stringify(data),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error updating channel: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.update error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Delete a channel
-   * DELETE /api/channels/{id}
-   */
-  static async delete(
-    id: string,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<{ success: boolean } | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${id}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error deleting channel: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.delete error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Subscribe to a channel
-   * POST /api/channels/{id}/subscribe
-   */
-  static async subscribe(
-    channelId: string,
-    data: SubscriptionRequest,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<{ success: boolean } | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${channelId}/subscribe`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-          body: JSON.stringify(data),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error subscribing to channel: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.subscribe error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Unsubscribe from a channel
-   * DELETE /api/channels/{id}/subscribe
-   */
-  static async unsubscribe(
-    channelId: string,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<{ success: boolean } | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${channelId}/subscribe`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error unsubscribing from channel: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.unsubscribe error:', error);
-      return null;
-    }
-  }
+/**
+ * Unsubscribe from a channel
+ * DELETE /api/channels/{id}/subscribe
+ */
+export async function unsubscribeFromChannel(
+  channelId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<{ success: boolean } | null> {
+  return apiRequestServer<{ success: boolean }>({
+    method: 'DELETE',
+    url: buildApiUrl(`/api/channels/${channelId}/subscribe`),
+    functionName: 'unsubscribeFromChannel'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
 }

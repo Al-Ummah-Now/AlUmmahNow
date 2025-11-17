@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRealTimeVideoMetrics, useRealTimePresence } from '@/hooks/useRealTimeVideoMetrics';
 import { Eye, Heart, MessageCircle, Users, ThumbsDown } from 'lucide-react';
-import { VideosAPI } from '@/lib/api/videos';
+import * as VideosAPI from '@/lib/api/videos';
 import { useAuth } from '@/components/AuthProvider/authContext';
 
 interface VideoMetricsDisplayProps {
@@ -68,7 +68,7 @@ export function VideoMetricsDisplay({
         updateMetrics({ likesCount: Math.max(0, metrics.likesCount - 1) });
         setIsLiked(false);
 
-        await VideosAPI.unlike(videoId, headers);
+        await VideosAPI.unlikeVideo(videoId, headers);
         console.log('👍 Video unliked');
       } else {
         // If currently disliked, remove dislike first
@@ -78,14 +78,14 @@ export function VideoMetricsDisplay({
             likesCount: metrics.likesCount + 1
           });
           setIsDisliked(false);
-          await VideosAPI.removeDislike(videoId, headers);
+          await VideosAPI.removeVideoDislike(videoId, headers);
         } else {
           // Just add like
           updateMetrics({ likesCount: metrics.likesCount + 1 });
         }
 
         setIsLiked(true);
-        await VideosAPI.like(videoId, headers);
+        await VideosAPI.likeVideo(videoId, headers);
         console.log('👍 Video liked');
       }
     } catch (error) {
@@ -118,7 +118,7 @@ export function VideoMetricsDisplay({
         updateMetrics({ dislikesCount: Math.max(0, metrics.dislikesCount - 1) });
         setIsDisliked(false);
 
-        await VideosAPI.removeDislike(videoId, headers);
+        await VideosAPI.removeVideoDislike(videoId, headers);
         console.log('👎 Video dislike removed');
       } else {
         // If currently liked, remove like first
@@ -128,14 +128,14 @@ export function VideoMetricsDisplay({
             dislikesCount: metrics.dislikesCount + 1
           });
           setIsLiked(false);
-          await VideosAPI.unlike(videoId, headers);
+          await VideosAPI.unlikeVideo(videoId, headers);
         } else {
           // Just add dislike
           updateMetrics({ dislikesCount: metrics.dislikesCount + 1 });
         }
 
         setIsDisliked(true);
-        await VideosAPI.dislike(videoId, headers);
+        await VideosAPI.dislikeVideo(videoId, headers);
         console.log('👎 Video disliked');
       }
     } catch (error) {

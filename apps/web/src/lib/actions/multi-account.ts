@@ -1,0 +1,346 @@
+/**
+ * Server Actions for Multi-Account and Multi-Channel Management
+ *
+ * These server actions handle account switching, channel selection,
+ * and related operations for the multi-account system.
+ */
+
+'use server';
+
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { headers as getHeaders } from "next/headers";
+import { createClient } from "@openauthjs/openauth/client";
+import { SessionManager, type AccountInfo } from '../auth/session-manager';
+import { createChannel } from '../api/channels';
+import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
+import { subjects } from '../auth';
+
+/**
+ * Get OpenAuth client
+ */
+async function getAuthClient() {
+  return createClient({
+    clientID: process.env.ClientId!,
+    issuer: process.env.Issuer!,
+  });
+}
+
+/**
+ * Add a new user account (login with additional account)
+ */
+export async function addUserAccount(): Promise<void> {
+  const headers = await getHeaders();
+  const host = headers.get("host");
+  const protocol = host?.includes("localhost") ? "http" : "https";
+
+  const client = await getAuthClient();
+  const { url } = await client.authorize(
+    `${protocol}://${host}/api/callback/multi-account`,
+    "code"
+  );
+
+  redirect(url);
+}
+
+/**
+ * Complete the OAuth flow for adding a new account
+ */
+export async function completeAddAccount(code: string): Promise<void> {
+  try {
+    const headers = await getHeaders();
+    const host = headers.get("host");
+    const protocol = host?.includes("localhost") ? "http" : "https";
+
+    const client = await getAuthClient();
+    const exchanged = await client.exchange(
+      code,
+      `${protocol}://${host}/api/callback/multi-account`
+    );
+
+    if (exchanged.err || !exchanged.tokens) {
+      throw new Error('Failed to exchange code for tokens');
+    }
+
+    // Verify the tokens and get user info
+    const verified = await client.verify(subjects, exchanged.tokens.access, {
+      refresh: exchanged.tokens.refresh,
+    });
+
+    if (verified.err || !verified.subject) {
+      throw new Error('Failed to verify tokens');
+    }
+
+    const userInfo = verified.subject.properties;
+
+    // Add account to session
+    // Note: OpenAuth JWT only includes id and email (see subjects.ts)
+    await SessionManager.addAccount(
+      {
+        accessToken: exchanged.tokens.access,
+        refreshToken: exchanged.tokens.refresh,
+      },
+      {
+        id: userInfo.id,
+        email: userInfo.email,
+        displayName: userInfo.email, // Use email as fallback, profile API will provide actual displayName
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+    );
+
+    // Load user's channels
+    await SessionManager.loadUserChannels(userInfo.id);
+
+    revalidatePath('/');
+    redirect('/');
+  } catch (error) {
+    console.error('[completeAddAccount] Error:', error);
+    redirect('/login?error=add_account_failed');
+  }
+}
+
+/**
+ * Switch to a different user account
+ */
+export async function switchUserAccount(userId: string): Promise<void> {
+  try {
+    await SessionManager.setActiveAccount(userId);
+
+    // Revalidate all paths to refresh the UI with new account
+    revalidatePath('/');
+    revalidatePath('/[locale]', 'layout');
+  } catch (error) {
+    console.error('[switchUserAccount] Error:', error);
+    throw new Error('Failed to switch account');
+  }
+}
+
+/**
+ * Remove a user account from the session
+ */
+export async function removeUserAccount(userId: string): Promise<void> {
+  try {
+    await SessionManager.removeAccount(userId);
+
+    // Revalidate all paths to refresh the UI
+    revalidatePath('/');
+    revalidatePath('/[locale]', 'layout');
+  } catch (error) {
+    console.error('[removeUserAccount] Error:', error);
+    throw new Error('Failed to remove account');
+  }
+}
+
+/**
+ * Get list of all logged-in user accounts
+ */
+export async function listUserAccounts(): Promise<AccountInfo[]> {
+  try {
+    return await SessionManager.getAllSessions();
+  } catch (error) {
+    console.error('[listUserAccounts] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Switch to a different channel for the active user
+ */
+export async function switchChannel(channelId: string | null): Promise<void> {
+  try {
+    await SessionManager.setActiveChannel(channelId);
+
+    // Revalidate all paths to refresh the UI with new channel
+    revalidatePath('/');
+    revalidatePath('/[locale]', 'layout');
+  } catch (error) {
+    console.error('[switchChannel] Error:', error);
+    throw new Error('Failed to switch channel');
+  }
+}
+
+/**
+ * Get channels for the active user
+ */
+export async function getUserChannels(): Promise<Channel[]> {
+  try {
+    const session = await SessionManager.getActiveSession();
+    if (!session) {
+      return [];
+    }
+
+    // Return cached channels from session
+    return session.availableChannels;
+  } catch (error) {
+    console.error('[getUserChannels] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Reload channels for a specific user
+ */
+export async function reloadUserChannels(userId?: string): Promise<Channel[]> {
+  try {
+    const session = await SessionManager.getActiveSession();
+    if (!session) {
+      return [];
+    }
+
+    const targetUserId = userId || session.userId;
+    return await SessionManager.loadUserChannels(targetUserId);
+  } catch (error) {
+    console.error('[reloadUserChannels] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Create a new channel for the active user
+ */
+export async function createChannelForActiveUser(
+  data: ChannelCreateRequest
+): Promise<Channel | null> {
+  try {
+    const session = await SessionManager.getActiveSession();
+    if (!session) {
+      throw new Error('No active session');
+    }
+
+    // Create channel via API
+    const response = await createChannel(data, {
+      userId: session.userId,
+      channelId: session.channelId || '', // Use empty string if no channel selected
+    });
+
+    if (response?.result?.channel) {
+      // Reload channels to include the new one
+      await SessionManager.loadUserChannels(session.userId);
+
+      // If this is the first channel, set it as active
+      if (!session.channelId) {
+        await SessionManager.setActiveChannel(response.result.channel.id);
+      }
+
+      revalidatePath('/');
+      return response.result.channel;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[createChannelForActiveUser] Error:', error);
+    return null;
+  }
+}
+
+/**
+ * Logout the current active account only
+ */
+export async function logoutCurrentAccount(): Promise<void> {
+  try {
+    const session = await SessionManager.getActiveSession();
+    if (!session) {
+      redirect('/');
+      return;
+    }
+
+    await SessionManager.removeAccount(session.userId);
+
+    // If no accounts left, redirect to login
+    const remainingAccounts = await SessionManager.getAllSessions();
+    if (remainingAccounts.length === 0) {
+      redirect('/login');
+    } else {
+      revalidatePath('/');
+    }
+  } catch (error) {
+    console.error('[logoutCurrentAccount] Error:', error);
+    redirect('/');
+  }
+}
+
+/**
+ * Logout all accounts
+ */
+export async function logoutAllAccounts(): Promise<void> {
+  try {
+    await SessionManager.clearAllSessions();
+    redirect('/login');
+  } catch (error) {
+    console.error('[logoutAllAccounts] Error:', error);
+    redirect('/login');
+  }
+}
+
+/**
+ * Refresh tokens for all accounts (maintenance task)
+ */
+export async function refreshAllAccountTokens(): Promise<void> {
+  try {
+    await SessionManager.refreshAllTokens();
+  } catch (error) {
+    console.error('[refreshAllAccountTokens] Error:', error);
+  }
+}
+
+/**
+ * Cleanup expired sessions (maintenance task)
+ */
+export async function cleanupExpiredSessions(): Promise<void> {
+  try {
+    await SessionManager.cleanupExpiredSessions();
+  } catch (error) {
+    console.error('[cleanupExpiredSessions] Error:', error);
+  }
+}
+
+/**
+ * Get active session info for client components
+ */
+export async function getActiveSessionInfo() {
+  const session = await SessionManager.getActiveSession();
+
+  if (!session) {
+    return null;
+  }
+
+  return {
+    user: {
+      id: session.userId,
+      email: session.email,
+      displayName: session.displayName,
+    },
+    channel: session.channel ? {
+      id: session.channel.id,
+      name: session.channel.name,
+      avatarUrl: session.channel.avatarUrl,
+      isMain: session.channel.isMain,
+    } : null,
+    accounts: session.availableAccounts.map(acc => ({
+      userId: acc.userId,
+      email: acc.email,
+      displayName: acc.displayName,
+      isActive: acc.isActive,
+    })),
+    channels: session.availableChannels.map(ch => ({
+      id: ch.id,
+      name: ch.name,
+      avatarUrl: ch.avatarUrl,
+      isMain: ch.isMain,
+    })),
+  };
+}
+
+/**
+ * Get session cookie size information
+ * Useful for monitoring and debugging cookie size issues
+ */
+export async function getSessionCookieSize() {
+  try {
+    return await SessionManager.getCookieSizeInfo();
+  } catch (error) {
+    console.error('[getSessionCookieSize] Error:', error);
+    return null;
+  }
+}

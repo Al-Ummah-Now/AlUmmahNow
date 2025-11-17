@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { SubscribeButton } from '@/components/subscription/SubscribeButton';
-import { ChannelsAPI } from '@/lib/api/channels';
-import { VideosAPI } from '@/lib/api/videos';
+import { getChannelById } from '@/lib/api/channels';
+import * as VideosAPI from '@/lib/api/videos';
 import { VideoObject } from '@/interfaces';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
@@ -43,7 +43,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
         const userChannelId = profile?.channels?.[0] || '';
 
         // Fetch channel info (the channel being viewed)
-        const channelData = await ChannelsAPI.getById(
+        const channelData = await getChannelById(
           channelId,
           userChannelId && user?.id ? { channelId: userChannelId, userId: user.id } : undefined
         );
@@ -54,7 +54,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
         // Fetch videos FROM the channel being viewed
         // channelId in query params filters by channel (takes precedence over header)
         // channelId in headers is for auth (user's own channel)
-        const videosResponse = await VideosAPI.list(
+        const videosResponse = await VideosAPI.listVideos(
           { limit: 12, channelId }, // Query param: filter by this channel
           userChannelId && user?.id ? { channelId: userChannelId, userId: user.id } : undefined // Header: auth
         );

@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
-import { AnalyticsAPI } from '@/lib/api/analytics';
+import * as AnalyticsAPI from '@/lib/api/analytics';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
 import AnalyticsDashboardRTL from '@/components/analytics/AnalyticsDashboard/rtl';
 

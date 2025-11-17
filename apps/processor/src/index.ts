@@ -1,6 +1,6 @@
 import { AlUmmahMessage, QueueEnvironment } from './types';
 import { MessageProcessor } from './messageProcessor';
-import Logger from './logger';
+import { createLogger } from '@al-ummah/logger';
 
 interface QueueMessage<T> {
   body: T;
@@ -56,7 +56,10 @@ async function checkDLQHealth(_env: QueueEnvironment): Promise<{ status: string;
 
 export default {
   async queue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment): Promise<void> {
-    const logger = new Logger((env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info');
+    const logger = createLogger('processor', {
+      logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+      forceHttpLogging: true,
+    });
     const processor = new MessageProcessor(logger);
 
     logger.info(`Processing batch of ${batch.messages.length} messages`);
@@ -108,7 +111,10 @@ export default {
   },
 
   async fetch(request: Request, env: QueueEnvironment): Promise<Response> {
-    const logger = new Logger((env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info');
+    const logger = createLogger('processor', {
+      logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+      forceHttpLogging: true,
+    });
     const url = new URL(request.url);
     
     logger.debug(`Received ${request.method} request to ${url.pathname}`);

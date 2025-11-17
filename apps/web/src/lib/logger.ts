@@ -1,81 +1,55 @@
 /**
- * File logger for local development
- * Logs to both console and a log file via API route
- * Log file: /tmp/al-ummah-web.log
+ * Unified logger for Next.js web app
+ * - Server-side: Uses @al-ummah/logger for file + console logging
+ * - Client-side: Console logging only (browser environment)
  */
 
-interface LogEntry {
-  timestamp: string;
-  level: 'info' | 'warn' | 'error' | 'debug';
-  message: string;
-  data?: any;
+import { createLogger } from '@al-ummah/logger';
+
+// Server-side logger instance (only works on server)
+const serverLogger = typeof window === 'undefined'
+  ? createLogger('web', {
+      logLevel: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+      forceHttpLogging: true,
+    })
+  : null;
+
+// Helper to check if running on server
+function isServer(): boolean {
+  return typeof window === 'undefined';
 }
 
-async function writeLog(entry: LogEntry) {
-  // Always log to console
-  const consoleMsg = `[${entry.timestamp}] [${entry.level.toUpperCase()}] ${entry.message}`;
-
-  switch (entry.level) {
-    case 'error':
-      console.error(consoleMsg, entry.data || '');
-      break;
-    case 'warn':
-      console.warn(consoleMsg, entry.data || '');
-      break;
-    default:
-      console.log(consoleMsg, entry.data || '');
-  }
-
-  // Write to file via API route (only in browser)
-  if (typeof window !== 'undefined') {
-    try {
-      await fetch('/api/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
-      }).catch(() => {
-        // Silently fail if logging endpoint doesn't respond
-      });
-    } catch (error) {
-      // Ignore logging errors
-    }
-  }
-}
-
+// Unified logger that works on both client and server
 export const logger = {
   info: (message: string, data?: any) => {
-    writeLog({
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      message,
-      data,
-    });
+    if (isServer() && serverLogger) {
+      serverLogger.info(message, data);
+    } else {
+      console.log(`[INFO] ${message}`, data || '');
+    }
   },
 
   warn: (message: string, data?: any) => {
-    writeLog({
-      timestamp: new Date().toISOString(),
-      level: 'warn',
-      message,
-      data,
-    });
+    if (isServer() && serverLogger) {
+      serverLogger.warn(message, data);
+    } else {
+      console.warn(`[WARN] ${message}`, data || '');
+    }
   },
 
   error: (message: string, data?: any) => {
-    writeLog({
-      timestamp: new Date().toISOString(),
-      level: 'error',
-      message,
-      data,
-    });
+    if (isServer() && serverLogger) {
+      serverLogger.error(message, data);
+    } else {
+      console.error(`[ERROR] ${message}`, data || '');
+    }
   },
 
   debug: (message: string, data?: any) => {
-    writeLog({
-      timestamp: new Date().toISOString(),
-      level: 'debug',
-      message,
-      data,
-    });
+    if (isServer() && serverLogger) {
+      serverLogger.debug(message, data);
+    } else {
+      console.log(`[DEBUG] ${message}`, data || '');
+    }
   },
 };

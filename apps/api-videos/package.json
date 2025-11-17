@@ -18,6 +18,7 @@
     "test:metrics": "curl -s http://127.0.0.1:3086/metrics | jq ."
   },
   "dependencies": {
+    "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
     "@bunny.net/storage-sdk": "0.3.0",
     "@openauthjs/openauth": "^0.4.3",

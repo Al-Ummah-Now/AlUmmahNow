@@ -1,5 +1,5 @@
 import { AlUmmahMessage, ProcessingResult, MessageType, QueueEnvironment } from './types';
-import Logger from './logger';
+import { Logger } from '@al-ummah/logger';
 
 export class MessageProcessor {
   private logger: Logger;

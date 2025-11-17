@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
-import { ChannelsAPI } from '@/lib/api/channels';
+import { subscribeToChannel, unsubscribeFromChannel } from '@/lib/api/channels';
 import { Button } from '@/components/ui/button';
 import { Bell, BellOff, X } from 'lucide-react';
 import Image from 'next/image';
@@ -72,7 +72,7 @@ export const SubscriptionManagement: React.FC = () => {
       };
 
       // Resubscribe with updated notification preference
-      const result = await ChannelsAPI.subscribe(
+      const result = await subscribeToChannel(
         channelId,
         { notificationsEnabled: !currentState },
         headers
@@ -92,7 +92,7 @@ export const SubscriptionManagement: React.FC = () => {
     }
   };
 
-  const unsubscribeFromChannel = async (channelId: string) => {
+  const handleUnsubscribe = async (channelId: string) => {
     if (!user || !profile) return;
 
     setIsLoading(true);
@@ -102,7 +102,7 @@ export const SubscriptionManagement: React.FC = () => {
         userId: user.id
       };
 
-      const result = await ChannelsAPI.unsubscribe(channelId, headers);
+      const result = await unsubscribeFromChannel(channelId, headers);
 
       if (result?.success) {
         setSubscriptions(prev => prev.filter(sub => sub.id !== channelId));
@@ -213,7 +213,7 @@ export const SubscriptionManagement: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => unsubscribeFromChannel(subscription.id)}
+                  onClick={() => handleUnsubscribe(subscription.id)}
                   disabled={isLoading}
                   className="text-red-600 hover:text-red-700 flex items-center gap-1"
                 >

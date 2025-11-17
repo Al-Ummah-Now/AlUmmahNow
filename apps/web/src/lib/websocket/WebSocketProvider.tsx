@@ -34,8 +34,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   // Initialize WebSocket manager
   useEffect(() => {
     // Get WebSocket URL from runtime config or environment variable
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const wsUrl = (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__?.WEBSOCKET_URL)
+    const wsUrl = (typeof window !== 'undefined' && (window as {__RUNTIME_CONFIG__?: {WEBSOCKET_URL?: string}}).__RUNTIME_CONFIG__?.WEBSOCKET_URL)
       || process.env.NEXT_PUBLIC_WEBSOCKET_URL
       || '';
 

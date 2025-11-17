@@ -1,19 +1,23 @@
 // Main API client exports
-export { VideosAPI } from './videos';
-export { ChannelsAPI } from './channels';
-export { PlaylistsAPI } from './playlists';
-export { AnalyticsAPI } from './analytics';
+export * as VideosAPI from './videos';
+export * as ChannelsAPI from './channels';
+export * as PlaylistsAPI from './playlists';
+export * as LiveStreamsAPI from './livestreams';
+export * as AnalyticsAPI from './analytics';
+export * as ModerationAPI from './moderation';
 export { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI, createProfile } from './profiles';
 export { isProfileComplete } from './profiles-utils';
 export { fetchProfile, checkProfileExists, updateProfile, updateProfilePhoto, updateCoverPhoto } from './profiles-client';
 
 // Import for internal use
-import { VideosAPI } from './videos';
+import * as VideosAPI from './videos';
 import { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI } from './profiles';
-import { ChannelsAPI } from './channels';
-import { PlaylistsAPI } from './playlists';
-import { AnalyticsAPI } from './analytics';
-import { ModerationAPI, type ReportCreateRequest, type ModerationActionRequest } from './moderation';
+import * as ChannelsAPI from './channels';
+import * as PlaylistsAPI from './playlists';
+import * as LiveStreamsAPI from './livestreams';
+import * as AnalyticsAPI from './analytics';
+import * as ModerationAPI from './moderation';
+import type { ReportCreateRequest, ModerationActionRequest } from './moderation';
 import type {
   ListQueryParams,
   ApiHeaders,
@@ -45,18 +49,18 @@ export class APIClient {
   // Videos
   get videos() {
     return {
-      list: (params?: ListQueryParams, headers?: ApiHeaders) => VideosAPI.list(params, { ...this.headers, ...headers }),
-      getById: (id: string, headers?: ApiHeaders) => VideosAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.create(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      upload: (file: File, metadata: { title: string; description?: string; isPublic: boolean; tags?: string[] }, headers?: ApiHeaders) => VideosAPI.upload(file, metadata, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      delete: (id: string, headers?: ApiHeaders) => VideosAPI.delete(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      createComment: (videoId: string, data: CommentCreateRequest, headers?: ApiHeaders) => VideosAPI.createComment(videoId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      updateComment: (videoId: string, commentId: string, data: CommentUpdateRequest, headers?: ApiHeaders) => VideosAPI.updateComment(videoId, commentId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      deleteComment: (videoId: string, commentId: string, headers?: ApiHeaders) => VideosAPI.deleteComment(videoId, commentId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      like: (videoId: string, headers?: ApiHeaders) => VideosAPI.like(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      unlike: (videoId: string, headers?: ApiHeaders) => VideosAPI.unlike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      dislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.dislike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      removeDislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.removeDislike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      list: (params?: ListQueryParams, headers?: ApiHeaders) => VideosAPI.listVideos(params, { ...this.headers, ...headers }),
+      getById: (id: string, headers?: ApiHeaders) => VideosAPI.getVideoById(id, { ...this.headers, ...headers }),
+      create: (data: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.createVideo(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      upload: (file: File, metadata: { title: string; description?: string; isPublic: boolean; tags?: string[] }, headers?: ApiHeaders) => VideosAPI.uploadVideo(file, metadata, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      delete: (id: string, headers?: ApiHeaders) => VideosAPI.deleteVideo(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      createComment: (videoId: string, data: CommentCreateRequest, headers?: ApiHeaders) => VideosAPI.createVideoComment(videoId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      updateComment: (videoId: string, commentId: string, data: CommentUpdateRequest, headers?: ApiHeaders) => VideosAPI.updateVideoComment(videoId, commentId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      deleteComment: (videoId: string, commentId: string, headers?: ApiHeaders) => VideosAPI.deleteVideoComment(videoId, commentId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      like: (videoId: string, headers?: ApiHeaders) => VideosAPI.likeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      unlike: (videoId: string, headers?: ApiHeaders) => VideosAPI.unlikeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      dislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.dislikeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      removeDislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.removeVideoDislike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
     };
   }
 
@@ -73,26 +77,41 @@ export class APIClient {
   // Channels
   get channels() {
     return {
-      list: (params?: ListQueryParams, headers?: ApiHeaders) => ChannelsAPI.list(params, { ...this.headers, ...headers }),
-      getById: (id: string, headers?: ApiHeaders) => ChannelsAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data: ChannelCreateRequest, headers?: ApiHeaders) => ChannelsAPI.create(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      update: (id: string, data: ChannelUpdateRequest, headers?: ApiHeaders) => ChannelsAPI.update(id, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      delete: (id: string, headers?: ApiHeaders) => ChannelsAPI.delete(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      subscribe: (channelId: string, data: SubscriptionRequest, headers?: ApiHeaders) => ChannelsAPI.subscribe(channelId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      unsubscribe: (channelId: string, headers?: ApiHeaders) => ChannelsAPI.unsubscribe(channelId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      list: (params?: ListQueryParams, headers?: ApiHeaders) => ChannelsAPI.listChannels(params, { ...this.headers, ...headers }),
+      getById: (id: string, headers?: ApiHeaders) => ChannelsAPI.getChannelById(id, { ...this.headers, ...headers }),
+      create: (data: ChannelCreateRequest, headers?: ApiHeaders) => ChannelsAPI.createChannel(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      update: (id: string, data: ChannelUpdateRequest, headers?: ApiHeaders) => ChannelsAPI.updateChannel(id, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      delete: (id: string, headers?: ApiHeaders) => ChannelsAPI.deleteChannel(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      subscribe: (channelId: string, data: SubscriptionRequest, headers?: ApiHeaders) => ChannelsAPI.subscribeToChannel(channelId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      unsubscribe: (channelId: string, headers?: ApiHeaders) => ChannelsAPI.unsubscribeFromChannel(channelId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
     };
   }
 
   // Playlists
   get playlists() {
     return {
-      list: (params?: ListQueryParams, headers?: ApiHeaders) => PlaylistsAPI.list(params, { ...this.headers, ...headers }),
-      getById: (id: string, headers?: ApiHeaders) => PlaylistsAPI.getById(id, { ...this.headers, ...headers }),
-      create: (data: PlaylistCreateRequest, headers?: ApiHeaders) => PlaylistsAPI.create(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      update: (id: string, data: PlaylistUpdateRequest, headers?: ApiHeaders) => PlaylistsAPI.update(id, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      delete: (id: string, headers?: ApiHeaders) => PlaylistsAPI.delete(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      addVideo: (playlistId: string, data: PlaylistAddVideoRequest, headers?: ApiHeaders) => PlaylistsAPI.addVideo(playlistId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
-      removeVideo: (playlistId: string, videoId: string, headers?: ApiHeaders) => PlaylistsAPI.removeVideo(playlistId, videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      list: (params?: ListQueryParams, headers?: ApiHeaders) => PlaylistsAPI.listPlaylists(params, { ...this.headers, ...headers }),
+      getById: (id: string, headers?: ApiHeaders) => PlaylistsAPI.getPlaylistById(id, { ...this.headers, ...headers }),
+      create: (data: PlaylistCreateRequest, headers?: ApiHeaders) => PlaylistsAPI.createPlaylist(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      update: (id: string, data: PlaylistUpdateRequest, headers?: ApiHeaders) => PlaylistsAPI.updatePlaylist(id, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      delete: (id: string, headers?: ApiHeaders) => PlaylistsAPI.deletePlaylist(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      addVideo: (playlistId: string, data: PlaylistAddVideoRequest, headers?: ApiHeaders) => PlaylistsAPI.addVideoToPlaylist(playlistId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+      removeVideo: (playlistId: string, videoId: string, headers?: ApiHeaders) => PlaylistsAPI.removeVideoFromPlaylist(playlistId, videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId' | 'userId'>>),
+    };
+  }
+
+  // Live Streams
+  get liveStreams() {
+    return {
+      list: (params?: any, headers?: ApiHeaders) => LiveStreamsAPI.listLiveStreams(params, { ...this.headers, ...headers }),
+      create: (data: any, authToken: string) => LiveStreamsAPI.createLiveStream(data, authToken),
+      update: (streamId: string, data: any, authToken: string) => LiveStreamsAPI.updateLiveStream(streamId, data, authToken),
+      goLive: (streamId: string, authToken: string) => LiveStreamsAPI.goLive(streamId, authToken),
+      endStream: (streamId: string, authToken: string) => LiveStreamsAPI.endLiveStream(streamId, authToken),
+      cancelStream: (streamId: string, authToken: string) => LiveStreamsAPI.cancelLiveStream(streamId, authToken),
+      getLiveNow: (limit?: number) => LiveStreamsAPI.getLiveNow(limit),
+      getScheduled: (limit?: number) => LiveStreamsAPI.getScheduledStreams(limit),
+      getByChannel: (channelId: string, status?: any, limit?: number) => LiveStreamsAPI.getStreamsByChannel(channelId, status, limit),
     };
   }
 

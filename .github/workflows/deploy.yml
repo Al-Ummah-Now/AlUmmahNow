@@ -43,8 +43,8 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
 
-  # Build shared types first (dependency for other apps)
-  build-shared-types:
+  # Build shared packages first (dependency for other apps)
+  build-shared-packages:
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -63,13 +63,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared types
-        run: pnpm --filter @al-ummah/shared-types build
+      - name: Build shared packages (types + logger)
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
         timeout-minutes: 2
 
   # Build Web App
   build-web:
-    needs: build-shared-types
+    needs: build-shared-packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,7 +119,7 @@ jobs:
 
   # Validate API Videos
   validate-api:
-    needs: build-shared-types
+    needs: build-shared-packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -148,7 +150,7 @@ jobs:
 
   # Validate Processor
   validate-processor:
-    needs: build-shared-types
+    needs: build-shared-packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -177,7 +179,7 @@ jobs:
 
   # Validate WebSocket Server
   validate-websocket:
-    needs: build-shared-types
+    needs: build-shared-packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

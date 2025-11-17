@@ -10,6 +10,8 @@
     "type-check": "turbo run type-check",
     "test": "turbo run test",
     "clean": "turbo run clean && rm -rf node_modules",
+    "log-service:dev": "turbo run dev --filter=@al-ummah/log-service",
+    "log-service:start": "turbo run start --filter=@al-ummah/log-service",
     "web:dev": "turbo run dev --filter=@al-ummah/web",
     "web:build": "turbo run build --filter=@al-ummah/web",
     "web:deploy": "turbo run deploy --filter=@al-ummah/web",
@@ -30,7 +32,7 @@
     "typescript": "5.9.3",
     "wrangler": "^4.46.0"
   },
-  "packageManager": "pnpm@9.15.4",
+  "packageManager": "pnpm@10.22.0",
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=9.0.0"

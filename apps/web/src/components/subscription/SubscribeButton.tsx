@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
-import { ChannelsAPI } from '@/lib/api/channels';
+import { subscribeToChannel, unsubscribeFromChannel } from '@/lib/api/channels';
 import { Bell } from 'lucide-react';
 
 interface SubscribeButtonProps {
@@ -53,14 +53,14 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
 
       if (isSubscribed) {
         // Unsubscribe
-        const result = await ChannelsAPI.unsubscribe(channelId, headers);
+        const result = await unsubscribeFromChannel(channelId, headers);
         if (result?.success) {
           setIsSubscribed(false);
           setCurrentSubscribersCount(prev => Math.max(0, prev - 1));
         }
       } else {
         // Subscribe with notifications enabled by default
-        const result = await ChannelsAPI.subscribe(
+        const result = await subscribeToChannel(
           channelId,
           { notificationsEnabled: true },
           headers

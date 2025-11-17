@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
-import { VideosAPI } from "@/lib/api/videos";
+import * as VideosAPI from "@/lib/api/videos";
 import VideoCard from "@/components/videoCard/rtl/index";
 
 interface TrendingContentProps {
@@ -31,7 +31,7 @@ export const TrendingContent: React.FC<TrendingContentProps> = ({
   const fetchTrendingVideos = useCallback(async () => {
     setLoading(true);
     try {
-      const trendingVideos = await VideosAPI.getTrending(selectedPeriod, category, limit);
+      const trendingVideos = await VideosAPI.getTrendingVideos(selectedPeriod, category, limit);
       setVideos(trendingVideos);
     } catch (error) {
       console.error('Error fetching trending videos:', error);

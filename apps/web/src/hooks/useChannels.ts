@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Channel } from '@al-ummah/shared-types';
-import { ChannelsAPI } from '@/lib/api/channels';
+import { listChannels, createChannel as createChannelAPI, updateChannel as updateChannelAPI, deleteChannel as deleteChannelAPI } from '@/lib/api/channels';
 import { ChannelCreateRequest, ChannelUpdateRequest, ApiHeaders } from '@/lib/api/types';
 
 interface UseChannelsOptions {
@@ -46,7 +46,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     try {
       console.log('useChannels: Fetching channels with headers:', { channelId, userId });
 
-      const response = await ChannelsAPI.list(
+      const response = await listChannels(
         { limit: 100 }, // Get up to 100 channels
         { channelId, userId }
       );
@@ -100,7 +100,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         userId
       };
 
-      const response = await ChannelsAPI.create(data, headers);
+      const response = await createChannelAPI(data, headers);
 
       if (!response) {
         throw new Error('Failed to create channel');
@@ -142,7 +142,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         userId
       };
 
-      const response = await ChannelsAPI.update(id, data, headers);
+      const response = await updateChannelAPI(id, data, headers);
 
       if (!response) {
         throw new Error('Failed to update channel');
@@ -181,7 +181,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         userId
       };
 
-      const response = await ChannelsAPI.delete(id, headers);
+      const response = await deleteChannelAPI(id, headers);
 
       if (!response || !response.success) {
         throw new Error('Failed to delete channel');
