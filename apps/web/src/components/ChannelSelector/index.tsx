@@ -8,15 +8,12 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname } from 'next/navigation';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { Tv, Plus, Check, ChevronDown, Crown } from 'lucide-react';
 
 export function ChannelSelector() {
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t } = useLanguage();
 
   const {
     user,
@@ -147,7 +144,7 @@ export function ChannelSelector() {
                     {t.header.noChannelSelected}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {locale === 'ar' ? 'تصفح بدون قناة' : 'Browse without a channel'}
+                    {t.channel.browseWithoutChannel}
                   </div>
                 </div>
                 {!channel && (
@@ -188,7 +185,7 @@ export function ChannelSelector() {
                       {ch.name}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {ch.isMain ? t.channel.mainChannel : locale === 'ar' ? 'قناة' : 'Channel'}
+                      {ch.isMain ? t.channel.mainChannel : t.channel.singleChannel}
                     </div>
                   </div>
                   {channel?.id === ch.id && (
@@ -224,7 +221,7 @@ export function ChannelSelector() {
                     type="text"
                     value={newChannelName}
                     onChange={(e) => setNewChannelName(e.target.value)}
-                    placeholder={locale === 'ar' ? 'أدخل اسم القناة' : 'Enter channel name'}
+                    placeholder={t.channel.enterChannelNamePlaceholder}
                     className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
                     autoFocus
                     onKeyPress={(e) => {
@@ -263,7 +260,7 @@ export function ChannelSelector() {
                 }}
                 className="w-full text-center text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 py-1"
               >
-                {locale === 'ar' ? 'تحديث قائمة القنوات' : 'Refresh channel list'}
+                {t.channel.refreshChannelList}
               </button>
             </div>
 

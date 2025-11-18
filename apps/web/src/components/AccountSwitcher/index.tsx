@@ -8,15 +8,12 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname } from 'next/navigation';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { Plus, Check, LogOut, ChevronDown } from 'lucide-react';
 
 export function AccountSwitcher() {
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t } = useLanguage();
 
   const {
     user,

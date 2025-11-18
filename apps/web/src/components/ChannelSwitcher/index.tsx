@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Channel } from "@al-ummah/shared-types";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { ChevronDown, Check } from "lucide-react";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface ChannelSwitcherProps {
   channels: Channel[];
@@ -14,6 +15,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { activeChannel, setActiveChannel } = useActiveChannel();
+  const { t, lang } = useLanguage();
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -78,7 +80,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {channel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {channel.subscribersCount.toLocaleString()} subscribers
+              {channel.subscribersCount.toLocaleString()} {t.channel.subscribers.toLowerCase()}
             </span>
           )}
         </div>
@@ -115,7 +117,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {currentChannel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {currentChannel.subscribersCount.toLocaleString()} subscribers
+              {currentChannel.subscribersCount.toLocaleString()} {t.channel.subscribers.toLowerCase()}
             </span>
           )}
         </div>
@@ -137,7 +139,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           {/* Header */}
           <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Your Channels
+              {t.channel.yourChannels}
             </h3>
           </div>
 
@@ -168,13 +170,13 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
                       {channel.name}
                       {channel.isMain && (
                         <span className="ml-2 text-xs text-[#ffa037] font-normal">
-                          (Main)
+                          ({t.channel.mainChannel})
                         </span>
                       )}
                     </span>
                     {channel.subscribersCount !== undefined && (
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {channel.subscribersCount.toLocaleString()} subscribers
+                        {channel.subscribersCount.toLocaleString()} {t.channel.subscribers.toLowerCase()}
                       </span>
                     )}
                   </div>
@@ -189,11 +191,11 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           {/* Footer - Manage Channels Link */}
           <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
             <a
-              href="/en/channels"
+              href={`/${lang}/channels`}
               className="text-sm text-[#ffa037] hover:text-[#ff8c1a] transition-colors duration-150"
               onClick={() => setIsOpen(false)}
             >
-              Manage Channels
+              {t.channel.manageChannels}
             </a>
           </div>
         </div>

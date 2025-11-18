@@ -5,10 +5,10 @@ import VideoCard from "@/components/videoCard/index";
 import { useQueryState } from "nuqs";
 import { fetchVideosWithPagination } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const VideosPage: React.FC = () => {
-  const { t } = useI18n('en');
+  const { t } = useLanguage();
   const { user } = useAuth();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });

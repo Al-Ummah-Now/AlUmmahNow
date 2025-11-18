@@ -18,6 +18,7 @@ import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useTheme } from 'next-themes';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import { useLanguage } from '@/hooks/useLanguage';
 import Link from 'next/link';
 import { login } from '@/lib/actions';
 import {
@@ -36,6 +37,13 @@ import {
 } from 'lucide-react';
 
 export function UnifiedNavigation() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Get language context and translations
+  const { t, lang, oppositeLanguage, languages } = useLanguage();
+
   const {
     user,
     accounts,
@@ -68,9 +76,6 @@ export function UnifiedNavigation() {
   }, [user?.id, user?.channel, user?.channels]);
 
   const { theme, setTheme } = useTheme();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const router = useRouter();
 
   const [isOpen, setIsOpen] = useState(false);
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
@@ -96,13 +101,13 @@ export function UnifiedNavigation() {
     );
   }
 
-  const isRTL = pathname?.includes('/ar');
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
   const switchLanguage = () => {
-    const newPath = pathname?.replace(isRTL ? '/ar' : '/en', isRTL ? '/en' : '/ar') || '/';
+    // Smart language switching using language context
+    const newPath = pathname?.replace(`/${lang}`, `/${oppositeLanguage}`) || `/${oppositeLanguage}`;
     const params = searchParams?.toString();
     const newUrl = params ? `${newPath}?${params}` : newPath;
     router.push(newUrl);
@@ -117,7 +122,7 @@ export function UnifiedNavigation() {
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          aria-label="Navigation menu"
+          aria-label={t.navigation.navigationMenu}
           aria-expanded={isOpen}
           aria-haspopup="menu"
         >
@@ -157,7 +162,7 @@ export function UnifiedNavigation() {
                       <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                     )}
                     <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      {theme === 'dark' ? 'Light' : 'Dark'}
+                      {theme === 'dark' ? t.navigation.light : t.navigation.dark}
                     </span>
                   </button>
 
@@ -168,7 +173,7 @@ export function UnifiedNavigation() {
                   >
                     <Languages className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                     <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      {isRTL ? 'English' : 'العربية'}
+                      {languages[oppositeLanguage].displayName}
                     </span>
                   </button>
                 </div>
@@ -183,7 +188,7 @@ export function UnifiedNavigation() {
                     role="menuitem"
                   >
                     <User className="h-5 w-5" />
-                    <span className="text-sm">Sign In</span>
+                    <span className="text-sm">{t.navigation.signIn}</span>
                   </button>
                 </form>
               </div>
@@ -211,19 +216,19 @@ export function UnifiedNavigation() {
 
   const navItems = [
     {
-      label: 'Profile',
+      label: t.navigation.profile,
       icon: User,
-      href: `/${isRTL ? 'ar' : 'en'}/profile`,
+      href: `/${lang}/profile`,
     },
     {
-      label: 'Analytics',
+      label: t.navigation.analytics,
       icon: BarChart3,
-      href: `/${isRTL ? 'ar' : 'en'}/analytics`,
+      href: `/${lang}/analytics`,
     },
     {
-      label: 'Settings',
+      label: t.header.settings,
       icon: Settings,
-      href: `/${isRTL ? 'ar' : 'en'}/settings`,
+      href: `/${lang}/settings`,
     },
   ];
 
@@ -233,7 +238,7 @@ export function UnifiedNavigation() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        aria-label="Navigation menu"
+        aria-label={t.navigation.navigationMenu}
         aria-expanded={isOpen}
         aria-haspopup="menu"
       >
@@ -248,7 +253,7 @@ export function UnifiedNavigation() {
             {user.displayName}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">
-            {channel ? channel.name : 'No Channel'}
+            {channel ? channel.name : t.navigation.noChannel}
           </div>
         </div>
 
@@ -308,7 +313,7 @@ export function UnifiedNavigation() {
                 <div className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
                   <Tv className="h-4 w-4 text-gray-500" />
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    No active channel
+                    {t.navigation.noActiveChannel}
                   </span>
                 </div>
               )}
@@ -328,7 +333,7 @@ export function UnifiedNavigation() {
                     <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                   )}
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {theme === 'dark' ? 'Light' : 'Dark'}
+                    {theme === 'dark' ? t.navigation.light : t.navigation.dark}
                   </span>
                 </button>
 
@@ -339,7 +344,7 @@ export function UnifiedNavigation() {
                 >
                   <Languages className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {isRTL ? 'English' : 'العربية'}
+                    {languages[oppositeLanguage].displayName}
                   </span>
                 </button>
               </div>
@@ -348,7 +353,7 @@ export function UnifiedNavigation() {
             {/* Navigation Links */}
             <div className="p-2 border-b border-gray-200 dark:border-gray-700">
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-                NAVIGATION
+                {t.navigation.navigation.toUpperCase()}
               </div>
               {navItems.map((item) => {
                 const Icon = item.icon;
@@ -372,7 +377,7 @@ export function UnifiedNavigation() {
             {/* Account Management with Nested Channels */}
             <div className="p-2 border-b border-gray-200 dark:border-gray-700">
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-                ACCOUNTS {accounts.length > 1 && `(${accounts.length})`}
+                {t.navigation.accounts.toUpperCase()} {accounts.length > 1 && `(${accounts.length})`}
               </div>
 
               {accounts.map((account) => {
@@ -403,7 +408,7 @@ export function UnifiedNavigation() {
                             {account.displayName}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {accountChannels.length} {accountChannels.length === 1 ? 'channel' : 'channels'}
+                            {accountChannels.length} {accountChannels.length === 1 ? t.navigation.channel : t.navigation.channels}
                           </div>
                         </div>
                         {isActive && (
@@ -442,7 +447,7 @@ export function UnifiedNavigation() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                              No Channel
+                              {t.navigation.noChannel}
                             </div>
                           </div>
                           {!channel && (
@@ -499,19 +504,19 @@ export function UnifiedNavigation() {
                               <Plus className="h-3 w-3 text-gray-500 dark:text-gray-400" />
                             </div>
                             <span className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                              Create Channel
+                              {t.navigation.createChannel}
                             </span>
                           </button>
                         ) : (
                           <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg mt-1">
                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                              Channel Name
+                              {t.navigation.channelName}
                             </label>
                             <input
                               type="text"
                               value={newChannelName}
                               onChange={(e) => setNewChannelName(e.target.value)}
-                              placeholder="Enter channel name"
+                              placeholder={t.navigation.enterChannelName}
                               className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
                               autoFocus
                               onKeyPress={(e) => {
@@ -526,7 +531,7 @@ export function UnifiedNavigation() {
                                 disabled={!newChannelName.trim()}
                                 className="flex-1 px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
                               >
-                                Create
+                                {t.common.create}
                               </button>
                               <button
                                 onClick={() => {
@@ -535,7 +540,7 @@ export function UnifiedNavigation() {
                                 }}
                                 className="flex-1 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md transition-colors"
                               >
-                                Cancel
+                                {t.common.cancel}
                               </button>
                             </div>
                           </div>
@@ -562,7 +567,7 @@ export function UnifiedNavigation() {
                   <Plus className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Add another account
+                  {t.navigation.addAnotherAccount}
                 </span>
               </button>
 
@@ -579,7 +584,7 @@ export function UnifiedNavigation() {
                   <LogOut className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Sign out of {user.displayName}
+                  {t.navigation.signOutOf} {user.displayName}
                 </span>
               </button>
 
@@ -597,7 +602,7 @@ export function UnifiedNavigation() {
                     <LogOut className="h-5 w-5 text-red-600 dark:text-red-400" />
                   </div>
                   <span className="text-sm font-medium text-red-600 dark:text-red-400">
-                    Sign out of all accounts
+                    {t.navigation.signOutOfAll}
                   </span>
                 </button>
               )}

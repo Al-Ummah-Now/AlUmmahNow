@@ -57,6 +57,30 @@ export interface AppTranslations {
   };
 
   /**
+   * Navigation menu
+   */
+  navigation: {
+    navigationMenu: string;
+    navigation: string;
+    accounts: string;
+    profile: string;
+    analytics: string;
+    noChannel: string;
+    noActiveChannel: string;
+    createChannel: string;
+    channelName: string;
+    enterChannelName: string;
+    addAnotherAccount: string;
+    signOutOf: string;
+    signOutOfAll: string;
+    signIn: string;
+    light: string;
+    dark: string;
+    channel: string;
+    channels: string;
+  };
+
+  /**
    * Channel related
    */
   channel: {
@@ -75,6 +99,11 @@ export interface AppTranslations {
     subscribed: string;
     unsubscribe: string;
     manageChannels: string;
+    yourChannels: string;
+    browseWithoutChannel: string;
+    enterChannelNamePlaceholder: string;
+    refreshChannelList: string;
+    singleChannel: string;
   };
 
   /**
@@ -93,6 +122,19 @@ export interface AppTranslations {
     checkingProfile: string;
     redirectingToProfileCreation: string;
     redirecting: string;
+    welcomeMessage: string;
+    emailCannotBeChanged: string;
+    firstName: string;
+    lastName: string;
+    yourFirstName: string;
+    yourLastName: string;
+    displayNameOptional: string;
+    displayNameArabic: string;
+    displayNameEmpty: string;
+    bioOptional: string;
+    bioArabic: string;
+    privacyNotice: string;
+    privacyNoticeText: string;
   };
 
   /**
@@ -228,6 +270,17 @@ export interface AppTranslations {
     notificationSettings: string;
     subscriptionFeed: string;
     noSubscriptions: string;
+    loginToSeeVideos: string;
+    latestVideos: string;
+    lastUpdated: string;
+    refresh: string;
+    loadingFeed: string;
+    noVideosInFeed: string;
+    subscribeToSeeVideos: string;
+    discoverChannels: string;
+    loadMoreComingSoon: string;
+    showingVideosFrom: string;
+    wantMore: string;
   };
 
   /**

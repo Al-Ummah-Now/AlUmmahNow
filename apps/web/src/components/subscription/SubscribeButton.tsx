@@ -1,10 +1,10 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { subscribeToChannel, unsubscribeFromChannel } from '@/lib/api/channels';
 import { Bell } from 'lucide-react';
 
@@ -23,9 +23,8 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   className = '',
 }) => {
   const router = useRouter();
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t, dir } = useI18n(locale);
+  const { t, lang, dir } = useLanguage();
+  const locale = lang;
   const { user } = useAuth();
   const { profile } = useProfile(user);
   const isAuthenticated = !!user;

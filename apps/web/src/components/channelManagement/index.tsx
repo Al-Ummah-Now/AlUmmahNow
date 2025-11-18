@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Channel } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useChannels } from '@/hooks/useChannels';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { ChannelManagementSectionProps, CreateChannelFormData } from './types';
 import { ChannelGrid } from './ChannelGrid';
 import { CreateChannelDialog } from './CreateChannelDialog';
@@ -23,9 +23,8 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   className = '',
 }) => {
   const router = useRouter();
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t, dir } = useI18n(locale);
+  const { t, lang, dir } = useLanguage();
+  const locale = lang;
   const auth = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);

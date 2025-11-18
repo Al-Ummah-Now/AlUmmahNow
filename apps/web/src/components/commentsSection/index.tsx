@@ -1,13 +1,12 @@
 "use client";
 import React, { useState } from "react";
-import { usePathname } from "next/navigation";
 import Comment, { CommentProps } from "@/components/comment";
 import { Comments } from "@/interfaces";
 import { useRealTimeComments } from "@/hooks/useRealTimeComments";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfile } from "@/hooks/useProfile";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 import { User } from "@/interfaces";
 
 interface CommentsSectionProps {
@@ -21,9 +20,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   initialComments = [],
   user
 }) => {
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t } = useLanguage();
   const { profile } = useProfile(user || null);
   const [newCommentText, setNewCommentText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
