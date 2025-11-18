@@ -9,9 +9,11 @@ import { VideoObject, getLocalizedValue } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useI18n } from '@/lib/i18n';
+import { useRouter } from 'next/navigation';
 
 interface ChannelData {
   id: string;
+  userId: string;
   name: string;
   description?: string;
   avatarUrl?: string;
@@ -23,6 +25,7 @@ interface ChannelData {
 
 function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
   const { t } = useI18n('ar');
+  const router = useRouter();
   const [channelId, setChannelId] = useState<string | null>(null);
   const [channel, setChannel] = useState<ChannelData | null>(null);
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -102,6 +105,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
 
   const channelName = getLocalizedValue(channel.nameLocalized, channel.name, 'ar');
   const channelDescription = getLocalizedValue(channel.descriptionLocalized, channel.description, 'ar');
+  const isOwner = user?.id === channel.userId;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900" dir="rtl">
@@ -121,6 +125,30 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
                 <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
+          )}
+          {/* Edit Button - Always visible for owner */}
+          {isOwner && (
+            <button
+              type="button"
+              onClick={() => router.push(`/ar/channel/${channelId}/edit`)}
+              className="absolute top-4 left-4 inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg cursor-pointer"
+              aria-label="تعديل القناة"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                />
+              </svg>
+              {t.common.edit}
+            </button>
           )}
           <div className="absolute bottom-[-50px] right-5 w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-700 border-4 border-gray-50 dark:border-gray-900 overflow-hidden shadow-lg">
             {channel.avatarUrl ? (

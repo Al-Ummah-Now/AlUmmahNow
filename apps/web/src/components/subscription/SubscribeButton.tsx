@@ -81,11 +81,12 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   if (!isAuthenticated) {
     return (
       <Button
+        type="button"
         variant="outline"
-        size="sm"
-        className={className}
+        className={`cursor-pointer px-4 py-2 ${className}`}
         onClick={() => router.push(locale === 'ar' ? '/ar' : '/en')}
         dir={dir}
+        aria-label={t.channel.subscribe}
       >
         {t.channel.subscribe}
       </Button>
@@ -95,11 +96,12 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
   return (
     <div className={`flex items-center gap-2 ${locale === 'ar' ? 'flex-row-reverse' : ''}`} dir={dir}>
       <Button
+        type="button"
         variant={isSubscribed ? "secondary" : "default"}
-        size="sm"
-        className={className}
+        className={`cursor-pointer px-4 py-2 ${className}`}
         onClick={handleSubscriptionToggle}
         disabled={isLoading}
+        aria-label={isSubscribed ? t.channel.subscribed : t.channel.subscribe}
       >
         {isLoading ? (
           t.common.loading
