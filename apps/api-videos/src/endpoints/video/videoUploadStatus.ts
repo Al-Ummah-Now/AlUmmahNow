@@ -5,6 +5,7 @@ import { getAuthContext } from "../../middleware/auth";
 import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
+import { requireSecret } from "../../lib/env-helpers";
 
 // Upload status type
 const UploadStatus = z.object({
@@ -128,10 +129,11 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		// Get status from Bunny Stream if possible
 		let bunnyStreamStatus = null;
 		try {
-			const key = await env["bunny-stream-key"].get();
+			const key = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
 			if (key) {
+				const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
-				const libraryId = parseInt(await env.bunny_stream_library_id.get());
 				
 				// Get video details from Bunny Stream
 				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);

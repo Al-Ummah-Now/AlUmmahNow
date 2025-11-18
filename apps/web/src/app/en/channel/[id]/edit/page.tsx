@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getChannelById, updateChannel } from '@/lib/api/channels';
+import { getChannelById, updateChannel, updateChannelAvatar, updateChannelCover } from '@/lib/api/channels';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -118,21 +118,55 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
     if (!channelId || !user?.id) return;
 
     try {
-      // TODO: Implement file upload to storage service
-      // For now, create a local URL preview
-      const previewUrl = URL.createObjectURL(file);
+      // Show loading state
+      setIsSaving(true);
+      setError(null);
 
+      // Create local preview immediately
+      const previewUrl = URL.createObjectURL(file);
       if (type === 'avatar') {
         setFormData({ ...formData, avatarUrl: previewUrl });
-      } else if (type === 'cover') {
+      } else {
         setFormData({ ...formData, coverUrl: previewUrl });
       }
 
-      // TODO: Upload to R2/Bunny.net and update formData with permanent URL
-      console.log('File upload to be implemented:', type, file.name);
+      // Upload to server via Server Action (10MB limit configured in next.config.ts)
+      const userChannelId = profile?.channels?.[0] || channelId;
+      const uploadFn = type === 'avatar' ? updateChannelAvatar : updateChannelCover;
+
+      const updatedChannel = await uploadFn(
+        channelId,
+        file,
+        { channelId: userChannelId, userId: user.id }
+      );
+
+      if (updatedChannel) {
+        // Update form data with permanent URL from server
+        if (type === 'avatar') {
+          setFormData({ ...formData, avatarUrl: updatedChannel.avatarUrl || '' });
+        } else {
+          setFormData({ ...formData, coverUrl: updatedChannel.coverUrl || '' });
+        }
+
+        // Update channel state
+        setChannel(updatedChannel);
+      } else {
+        throw new Error('Upload failed');
+      }
     } catch (error) {
       console.error('Error uploading file:', error);
       setError(t.errors.genericError);
+
+      // Revert to original URL on error
+      if (channel) {
+        if (type === 'avatar') {
+          setFormData({ ...formData, avatarUrl: channel.avatarUrl || '' });
+        } else {
+          setFormData({ ...formData, coverUrl: channel.coverUrl || '' });
+        }
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 

@@ -7,6 +7,7 @@ import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient } from "../../lib/bunny/stream";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { requireSecret } from "../../lib/env-helpers";
 
 export class AnalyticsGet extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -130,11 +131,12 @@ export class AnalyticsGet extends OpenAPIRoute {
 			// Try to get analytics from Bunny.net first
 			let bunnyAnalytics = null;
 			try {
-				const bunnyKey = await env["bunny-stream-key"].get();
+				const bunnyKey = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
 				if (bunnyKey) {
 					const { BunnyStreamClient } = await import("../../lib/bunny/stream");
+					const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+					const libraryId = parseInt(libraryIdStr);
 					const bunnyStream = new BunnyStreamClient(bunnyKey);
-					const libraryId = parseInt(await env.bunny_stream_library_id.get());
 					
 					const dateFrom = startDate.toISOString().split('T')[0];
 					const dateTo = endDate.toISOString().split('T')[0];

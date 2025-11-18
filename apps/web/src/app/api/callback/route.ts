@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getClient } from "@/lib/actions";
 import { shouldRedirectToProfileCreation } from "@/lib/profile-helpers";
 import { User } from "@/interfaces";
+import { logger } from "@/lib/logger";
 
 // Discriminated union type for clearer type safety
 type ValidationResult =
@@ -11,13 +12,13 @@ type ValidationResult =
   | { success: false; error: InvalidAccessTokenError };
 
 async function validate(code: string | null, url: URL): Promise<ValidationResult> {
-  console.log("code", code)
-  console.log("url", url)
+  logger.debug("[code]", code)
+  logger.debug("[url]", url)
 
   const client = await getClient();
 
   const exchanged = await client.exchange(code!, `${url.origin}/api/callback`);
-  console.log("exchanged", exchanged)
+  logger.debug("[exchanged]", exchanged)
   if (exchanged.err == false) {
     // Extract user info from the access token
     // NOTE: This is a simple JWT payload extraction without signature validation.
@@ -31,7 +32,7 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
         user = payload.properties as User;
       }
     } catch (error) {
-      console.error("Error extracting user from token:", error);
+      logger.error("Error extracting user from token", error);
     }
 
     // Try to save to SessionManager (new multi-account system)
@@ -54,10 +55,10 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
             updatedAt: new Date().toISOString(),
           }
         );
-        console.log("[OAuth Callback] Saved to SessionManager:", user.id);
+        logger.info("[OAuth Callback] Saved to SessionManager:", user.id);
       }
     } catch (_sessionError) {
-      console.log("[OAuth Callback] SessionManager not available, using legacy cookies");
+      logger.info("[OAuth Callback] SessionManager not available, using legacy cookies");
       // Fall back to legacy cookie storage
       await setTokens(exchanged.tokens.access, exchanged.tokens.refresh);
     }
@@ -75,19 +76,19 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const result = await validate(code, url);
-  console.log("result", result)
+  logger.debug("[result]", result)
 
   if (result.success) {
     // Check if user needs to create profile
     if (result.user) {
       const profileCheck = await shouldRedirectToProfileCreation(result.user);
       if (profileCheck.shouldRedirect && profileCheck.redirectPath) {
-        console.log("Redirecting new user to profile creation:", profileCheck.redirectPath);
+        logger.info("Redirecting new user to profile creation", profileCheck.redirectPath);
         return NextResponse.redirect(`${url.origin}${profileCheck.redirectPath}`);
       }
     }
 
-    console.log("redirect", `${url.origin}/`)
+    logger.debug("[redirect]", `${url.origin}/`)
     return NextResponse.redirect(`${url.origin}/`);
   }
   return NextResponse.json(result.error, { status: 400 });

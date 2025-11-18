@@ -12,6 +12,7 @@ import {
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { Channel } from "@al-ummah/shared-types";
+import { logger } from "@/lib/logger";
 
 /**
  * List channels
@@ -167,4 +168,124 @@ export async function unsubscribeFromChannel(
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
+}
+
+/**
+ * Update channel avatar
+ * PUT /api/channels/{id}/avatar
+ */
+export async function updateChannelAvatar(
+  channelId: string,
+  file: File,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<Channel | null> {
+  const formData = new FormData();
+  formData.append('photo', file);
+
+  const authContext = await getServerAuthContext();
+
+  logger.info('[updateChannelAvatar] Auth context', {
+    hasToken: !!authContext?.accessToken,
+    tokenLength: authContext?.accessToken?.length,
+    userId: authContext?.userId,
+    channelId: authContext?.channelId,
+    headersChannelId: headers.channelId,
+    headersUserId: headers.userId,
+  });
+
+  const requestHeaders = {
+    'Authorization': `Bearer ${authContext?.accessToken || ''}`,
+    'channelId': headers.channelId,
+    'userId': headers.userId,
+  };
+
+  logger.info('[updateChannelAvatar] Request headers', {
+    hasAuth: requestHeaders.Authorization.length > 10,
+    channelId: requestHeaders.channelId,
+    userId: requestHeaders.userId,
+  });
+
+  const response = await fetch(buildApiUrl(`/api/channels/${channelId}/avatar`), {
+    method: 'PUT',
+    headers: requestHeaders,
+    body: formData,
+  });
+
+  logger.info('[updateChannelAvatar] Response', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error('[updateChannelAvatar] Failed', {
+      status: response.status,
+      statusText: response.statusText,
+      errorBody: errorText,
+    });
+    return null;
+  }
+
+  return response.json();
+}
+
+/**
+ * Update channel cover
+ * PUT /api/channels/{id}/cover
+ */
+export async function updateChannelCover(
+  channelId: string,
+  file: File,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<Channel | null> {
+  const formData = new FormData();
+  formData.append('photo', file);
+
+  const authContext = await getServerAuthContext();
+
+  logger.info('[updateChannelCover] Auth context', {
+    hasToken: !!authContext?.accessToken,
+    tokenLength: authContext?.accessToken?.length,
+    userId: authContext?.userId,
+    channelId: authContext?.channelId,
+    headersChannelId: headers.channelId,
+    headersUserId: headers.userId,
+  });
+
+  const requestHeaders = {
+    'Authorization': `Bearer ${authContext?.accessToken || ''}`,
+    'channelId': headers.channelId,
+    'userId': headers.userId,
+  };
+
+  logger.info('[updateChannelCover] Request headers', {
+    hasAuth: requestHeaders.Authorization.length > 10,
+    channelId: requestHeaders.channelId,
+    userId: requestHeaders.userId,
+  });
+
+  const response = await fetch(buildApiUrl(`/api/channels/${channelId}/cover`), {
+    method: 'PUT',
+    headers: requestHeaders,
+    body: formData,
+  });
+
+  logger.info('[updateChannelCover] Response', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error('[updateChannelCover] Failed', {
+      status: response.status,
+      statusText: response.statusText,
+      errorBody: errorText,
+    });
+    return null;
+  }
+
+  return response.json();
 }

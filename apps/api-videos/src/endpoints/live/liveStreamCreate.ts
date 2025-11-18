@@ -8,6 +8,7 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { requireSecret } from "../../lib/env-helpers";
 
 export class LiveStreamCreate extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -104,10 +105,11 @@ export class LiveStreamCreate extends OpenAPIRoute {
 
 		// Create the live stream in Bunny Stream if possible
 		try {
-			const key = await env["bunny-stream-key"].get();
+			const key = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
 			if (key) {
+				const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
-				const libraryId = parseInt(await env.bunny_stream_library_id.get());
 				
 				// Create a video entry for the live stream
 				const videoId = await bunnyStream.createVideo(libraryId, {

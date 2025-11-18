@@ -30,6 +30,8 @@ import { ClearWatchHistory } from "./endpoints/watch-history/clear";
 import { UpdateWatchProgress } from "./endpoints/watch-history/update-progress";
 import { GetWatchProgress } from "./endpoints/watch-history/get-progress";
 import handleCoverUpdate from "./endpoints/profile/profileCoverUpdate";
+import handleChannelAvatarUpdate from "./endpoints/channel/channelAvatarUpdate";
+import handleChannelCoverUpdate from "./endpoints/channel/channelCoverUpdate";
 import { PlaylistCreate } from "./endpoints/playlist/playlistCreate";
 import { PlaylistFetch } from "./endpoints/playlist/playlistFetch";
 import { PlaylistDelete } from "./endpoints/playlist/playlistDelete";
@@ -251,6 +253,10 @@ openapi.get("/api/watch-history/:videoId/progress", GetWatchProgress);
 // Profile photo/cover routes (also require auth)
 app.put("/api/profiles/:id/avatar", authMiddleware, handleAvatarUpdate);
 app.put("/api/profiles/:id/cover", authMiddleware, handleCoverUpdate);
+
+// Channel photo/cover routes (also require auth)
+app.put("/api/channels/:id/avatar", authMiddleware, handleChannelAvatarUpdate);
+app.put("/api/channels/:id/cover", authMiddleware, handleChannelCoverUpdate);
 
 // Playlist management (require auth)
 openapi.post("/api/playlists", PlaylistCreate);

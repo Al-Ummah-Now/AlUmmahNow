@@ -12,6 +12,10 @@
     "clean": "turbo run clean && rm -rf node_modules",
     "log-service:dev": "turbo run dev --filter=@al-ummah/log-service",
     "log-service:start": "turbo run start --filter=@al-ummah/log-service",
+    "logs:monitor": "tsx monitor-logs.ts",
+    "logs:monitor:web": "tsx monitor-logs.ts web",
+    "logs:monitor:api": "tsx monitor-logs.ts api-videos",
+    "logs:monitor:errors": "tsx monitor-logs.ts --level=error",
     "web:dev": "turbo run dev --filter=@al-ummah/web",
     "web:build": "turbo run build --filter=@al-ummah/web",
     "web:deploy": "turbo run deploy --filter=@al-ummah/web",
@@ -28,6 +32,7 @@
     "deploy:all": "pnpm run web:deploy:production && pnpm run api:deploy && pnpm run processor:deploy && pnpm run websocket:deploy"
   },
   "devDependencies": {
+    "tsx": "^4.20.6",
     "turbo": "^2.6.0",
     "typescript": "5.9.3",
     "wrangler": "^4.46.0"

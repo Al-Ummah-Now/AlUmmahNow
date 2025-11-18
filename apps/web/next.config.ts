@@ -14,6 +14,14 @@ const nextConfig = {
     // Empty turbopack config to silence Next.js 16 warning
     turbopack: {},
 
+    // Increase body size limit for file uploads (default is 1MB)
+    // Server Actions have a 1MB limit by default - increase to 10MB for image uploads
+    experimental: {
+        serverActions: {
+            bodySizeLimit: '10mb',
+        },
+    },
+
     images: {
         remotePatterns: [
           {

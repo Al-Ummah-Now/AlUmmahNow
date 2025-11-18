@@ -6,6 +6,7 @@ import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
+import { requireSecret } from "../../lib/env-helpers";
 
 export class UploadInitiateEndpoint extends OpenAPIRoute {
 	schema = {
@@ -86,20 +87,14 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 			const channelId = c.req.header('channelId') || userId;
 
 			// Create video in Bunny Stream first to get video ID
-			const bunnyKey = await env["bunny-stream-key"].get();
-			if (!bunnyKey) {
-				return c.json({
-					success: false,
-					error: "Bunny Stream not configured"
-				}, 500);
-			}
-
-			const libraryIdRaw = await env.bunny_stream_library_id.get();
+			const bunnyKey = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
+			const libraryIdRaw = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
 			const libraryId = parseInt(libraryIdRaw, 10);
-			if (!libraryIdRaw || isNaN(libraryId)) {
+
+			if (isNaN(libraryId)) {
 				return c.json({
 					success: false,
-					error: "Bunny Stream library ID is not configured or is invalid"
+					error: "Bunny Stream library ID is invalid"
 				}, 500);
 			}
 

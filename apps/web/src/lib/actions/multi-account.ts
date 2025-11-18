@@ -16,6 +16,7 @@ import { createChannel } from '../api/channels';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 import { subjects } from '../auth';
 import { shouldRedirectToProfileCreation } from '../profile-helpers';
+import { logger } from '@/lib/logger';
 
 /**
  * Get OpenAuth client
@@ -96,7 +97,7 @@ export async function completeAddAccount(code: string): Promise<void> {
     revalidatePath('/');
     redirect('/');
   } catch (error) {
-    console.error('[completeAddAccount] Error:', error);
+    logger.error('[completeAddAccount] Error:', error);
     redirect('/login?error=add_account_failed');
   }
 }
@@ -152,7 +153,7 @@ export async function switchUserAccount(userId: string, currentPath?: string): P
     if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.startsWith?.('NEXT_REDIRECT'))) {
       throw error;
     }
-    console.error('[switchUserAccount] Error:', error);
+    logger.error('[switchUserAccount] Error:', error);
     throw new Error('Failed to switch account');
   }
 }
@@ -168,7 +169,7 @@ export async function removeUserAccount(userId: string): Promise<void> {
     revalidatePath('/');
     revalidatePath('/[locale]', 'layout');
   } catch (error) {
-    console.error('[removeUserAccount] Error:', error);
+    logger.error('[removeUserAccount] Error:', error);
     throw new Error('Failed to remove account');
   }
 }
@@ -180,7 +181,7 @@ export async function listUserAccounts(): Promise<AccountInfo[]> {
   try {
     return await SessionManager.getAllSessions();
   } catch (error) {
-    console.error('[listUserAccounts] Error:', error);
+    logger.error('[listUserAccounts] Error:', error);
     return [];
   }
 }
@@ -196,7 +197,7 @@ export async function switchChannel(channelId: string | null): Promise<void> {
     revalidatePath('/');
     revalidatePath('/[locale]', 'layout');
   } catch (error) {
-    console.error('[switchChannel] Error:', error);
+    logger.error('[switchChannel] Error:', error);
     throw new Error('Failed to switch channel');
   }
 }
@@ -214,7 +215,7 @@ export async function getUserChannels(): Promise<Channel[]> {
     // Return cached channels from session
     return session.availableChannels;
   } catch (error) {
-    console.error('[getUserChannels] Error:', error);
+    logger.error('[getUserChannels] Error:', error);
     return [];
   }
 }
@@ -232,7 +233,7 @@ export async function reloadUserChannels(userId?: string): Promise<Channel[]> {
     const targetUserId = userId || session.userId;
     return await SessionManager.loadUserChannels(targetUserId);
   } catch (error) {
-    console.error('[reloadUserChannels] Error:', error);
+    logger.error('[reloadUserChannels] Error:', error);
     return [];
   }
 }
@@ -270,7 +271,7 @@ export async function createChannelForActiveUser(
 
     return null;
   } catch (error) {
-    console.error('[createChannelForActiveUser] Error:', error);
+    logger.error('[createChannelForActiveUser] Error:', error);
     return null;
   }
 }
@@ -296,7 +297,7 @@ export async function logoutCurrentAccount(): Promise<void> {
       revalidatePath('/');
     }
   } catch (error) {
-    console.error('[logoutCurrentAccount] Error:', error);
+    logger.error('[logoutCurrentAccount] Error:', error);
     redirect('/');
   }
 }
@@ -309,7 +310,7 @@ export async function logoutAllAccounts(): Promise<void> {
     await SessionManager.clearAllSessions();
     redirect('/login');
   } catch (error) {
-    console.error('[logoutAllAccounts] Error:', error);
+    logger.error('[logoutAllAccounts] Error:', error);
     redirect('/login');
   }
 }
@@ -321,7 +322,7 @@ export async function refreshAllAccountTokens(): Promise<void> {
   try {
     await SessionManager.refreshAllTokens();
   } catch (error) {
-    console.error('[refreshAllAccountTokens] Error:', error);
+    logger.error('[refreshAllAccountTokens] Error:', error);
   }
 }
 
@@ -332,7 +333,7 @@ export async function cleanupExpiredSessions(): Promise<void> {
   try {
     await SessionManager.cleanupExpiredSessions();
   } catch (error) {
-    console.error('[cleanupExpiredSessions] Error:', error);
+    logger.error('[cleanupExpiredSessions] Error:', error);
   }
 }
 
@@ -357,7 +358,7 @@ export async function getActiveSessionInfo() {
     isMain: session.channel.isMain,
   } : null;
 
-  console.log('[getActiveSessionInfo] TRACE:', {
+  logger.debug('[getActiveSessionInfo] TRACE', {
     userId: session.userId,
     email: session.email,
     'session.channel': session.channel ? session.channel.name : null,
@@ -398,7 +399,7 @@ export async function getSessionCookieSize() {
   try {
     return await SessionManager.getCookieSizeInfo();
   } catch (error) {
-    console.error('[getSessionCookieSize] Error:', error);
+    logger.error('[getSessionCookieSize] Error:', error);
     return null;
   }
 }

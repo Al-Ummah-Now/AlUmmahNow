@@ -9,6 +9,7 @@ import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
+import { requireSecret } from "../../lib/env-helpers";
 
 export class VideoUpdate extends OpenAPIRoute {
 	schema = {
@@ -145,9 +146,10 @@ export class VideoUpdate extends OpenAPIRoute {
 		// Update the video in Bunny Stream if title changed
 		if (videoUpdateInput.title && videoUpdateInput.title !== existingVideo.title) {
 			try {
-				const key = await env["bunny-stream-key"].get();
+				const key = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
+				const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
-				const libraryId = parseInt(await env.bunny_stream_library_id.get());
 
 				await bunnyStream.updateVideo(libraryId, id, {
 					title: videoUpdateInput.title,

@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { authenticated } from '@/lib/actions';
 import { AuthContext } from './api-client';
+import { logger } from '@/lib/logger';
 
 /**
  * Get authentication context from server-side cookies
@@ -28,7 +29,7 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
     }
   } catch (_error) {
     // SessionManager not available or error - fall back to legacy
-    console.log('[getServerAuthContext] SessionManager not available, using legacy auth');
+    logger.info('[getServerAuthContext] SessionManager not available, using legacy auth');
   }
 
   // Fall back to legacy cookies
@@ -64,10 +65,10 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
         updatedAt: new Date().toISOString(),
       }
     );
-    console.log('[getServerAuthContext] Auto-migrated user to SessionManager:', userId);
+    logger.info('[getServerAuthContext] Auto-migrated user to SessionManager', { userId });
   } catch (migrationError) {
     // Migration failed, continue with legacy auth
-    console.error('[getServerAuthContext] Auto-migration failed:', migrationError);
+    logger.error('[getServerAuthContext] Auto-migration failed', migrationError);
   }
 
   return {
