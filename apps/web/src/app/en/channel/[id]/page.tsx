@@ -4,12 +4,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { SubscribeButton } from '@/components/subscription/SubscribeButton';
 import { getChannelById } from '@/lib/api/channels';
-import * as VideosAPI from '@/lib/api/videos';
-import { VideoObject, getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useI18n } from '@/lib/i18n';
 import { useRouter } from 'next/navigation';
+import { ChannelSections } from '@/components/ChannelSections';
 
 interface ChannelData {
   id: string;
@@ -28,7 +28,6 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [channelId, setChannelId] = useState<string | null>(null);
   const [channel, setChannel] = useState<ChannelData | null>(null);
-  const [videos, setVideos] = useState<VideoObject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
   const { profile } = useProfile(user);
@@ -46,24 +45,10 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
     const fetchChannelData = async () => {
       setIsLoading(true);
       try {
-        // Get user's own channel ID for auth headers
-        const userChannelId = profile?.channels?.[0] || '';
-
         // Fetch channel info (the channel being viewed)
         const channelData = await getChannelById(channelId);
         if (channelData) {
           setChannel(channelData);
-        }
-
-        // Fetch videos FROM the channel being viewed
-        // channelId in query params filters by channel (takes precedence over header)
-        // channelId in headers is for auth (user's own channel)
-        const videosResponse = await VideosAPI.listVideos(
-          { limit: 12, channelId }, // Query param: filter by this channel
-          userChannelId && user?.id ? { channelId: userChannelId, userId: user.id } : undefined // Header: auth
-        );
-        if (videosResponse?.data) {
-          setVideos(videosResponse.data);
         }
       } catch (error) {
         console.error('Error fetching channel data:', error);
@@ -194,53 +179,16 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
         {/* Navigation Tabs */}
         <div className="flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-5 py-2">
           <button className="mr-5 px-4 py-2 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 font-semibold">
+            Home
+          </button>
+          <button className="mr-5 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-medium">
             {t.channel.videos}
           </button>
         </div>
 
-        {/* Video Grid */}
+        {/* Channel Sections (Home Tab) */}
         <div className="p-5 bg-white dark:bg-gray-800">
-          {videos.length === 0 ? (
-            <div className="text-center py-16">
-              <svg className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">{t.common.noResults}</h3>
-              <p className="text-gray-500 dark:text-gray-400">This channel hasn&apos;t uploaded any videos.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {videos.map((video) => {
-                const videoTitle = getLocalizedValue(video.titleLocalized, video.title, 'en');
-                return (
-                  <Link
-                    key={video.id}
-                    href={`/en/video?vid=${video.id}`}
-                    className="group rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900 hover:shadow-xl transition-all duration-300 border border-gray-200 dark:border-gray-700"
-                  >
-                    <div className="relative w-full aspect-video bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                      {video.thumbnailUrl && (
-                        <Image
-                          src={video.thumbnailUrl}
-                          alt={videoTitle}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <h3 className="text-sm font-semibold line-clamp-2 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                        {videoTitle}
-                      </h3>
-                      <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                        {video.views?.toLocaleString() || 0} {t.video.videoViews}
-                      </p>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
+          <ChannelSections channelId={channelId} />
         </div>
       </div>
     </div>

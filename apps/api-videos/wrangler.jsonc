@@ -60,6 +60,12 @@
 			"bucket_name": "watch-history",
 			"preview_bucket_name": "watch-history-preview",
 			"remote": true
+		},
+		{
+			"binding": "channel_sections",
+			"bucket_name": "channel-sections",
+			"preview_bucket_name": "channel-sections-preview",
+			"remote": true
 		}
 	],
 	"kv_namespaces": [

@@ -19,7 +19,10 @@ export interface Channel extends Timestamps {
 
   // Stats
   subscribersCount?: number;
-  videosCount?: number;
+  videosCount?: number; // Long-form videos
+  shortsCount?: number; // Short-form videos
+  liveStreamsCount?: number; // Past + upcoming live streams
+  playlistsCount?: number; // Public playlists
   totalViews?: number;
 
   // Metadata

@@ -46,6 +46,13 @@ import { ChannelDelete } from "./endpoints/channel/channelDelete";
 import { ChannelsList } from "./endpoints/channel/channelList";
 import { SubscriptionCreate } from "./endpoints/channel/SubscriptionCreate";
 import { SubscriptionDelete } from "./endpoints/channel/SubscriptionDelete";
+// Channel Sections endpoints
+import { ChannelSectionsList } from "./endpoints/channel/channelSectionsList";
+import { ChannelSectionsGet } from "./endpoints/channel/channelSectionsGet";
+import { ChannelSectionCreate } from "./endpoints/channel/channelSectionCreate";
+import { ChannelSectionUpdate } from "./endpoints/channel/channelSectionUpdate";
+import { ChannelSectionDelete } from "./endpoints/channel/channelSectionDelete";
+import { ChannelSectionsReorder } from "./endpoints/channel/channelSectionsReorder";
 import { CommentCreate } from "./endpoints/video/commentCreate";
 import { CommentUpdate } from "./endpoints/video/commentUpdate";
 import { CommentDelete } from "./endpoints/video/commentDelete";
@@ -274,6 +281,14 @@ openapi.delete("/api/channels/:id", ChannelDelete);
 openapi.post("/api/channels/:id/subscriptions", SubscriptionCreate);
 openapi.delete("/api/channels/:id/subscriptions", SubscriptionDelete);
 
+// Channel Sections management
+openapi.get("/api/channels/:channelId/sections", ChannelSectionsList); // Public: list sections
+openapi.get("/api/channels/:channelId/sections/:sectionId", ChannelSectionsGet); // Public: get section
+openapi.post("/api/channels/:channelId/sections", ChannelSectionCreate); // Auth required: create
+openapi.put("/api/channels/:channelId/sections/:sectionId", ChannelSectionUpdate); // Auth required: update
+openapi.delete("/api/channels/:channelId/sections/:sectionId", ChannelSectionDelete); // Auth required: delete
+openapi.post("/api/channels/:channelId/sections/reorder", ChannelSectionsReorder); // Auth required: reorder
+
 // Comment management (require auth)
 openapi.post("/api/videos/:id/comments", CommentCreate);
 openapi.put("/api/videos/:id/comments/:cid", CommentUpdate);
@@ -375,6 +390,10 @@ app.get("/openapi.json", async (c) => {
 		'/api/channels/{id}/avatar', // PUT
 		'/api/channels/{id}/cover', // PUT
 		'/api/channels/{id}/subscriptions', // POST, DELETE
+		// Channel Sections management
+		'/api/channels/{channelId}/sections', // POST (create)
+		'/api/channels/{channelId}/sections/{sectionId}', // PUT, DELETE
+		'/api/channels/{channelId}/sections/reorder', // POST
 		// Playlist management
 		'/api/playlists', // POST
 		'/api/playlists/{id}', // PUT, DELETE
