@@ -1,56 +1,20 @@
-// Message type enum as provided by @meywd
-export enum MessageType {
-  ProfileCreate,
-  ProfileUpdate,
-  ProfileDelete,
-  ProfileView,
-  ChannelCreate,
-  ChannelUpdate,
-  ChannelDelete,
-  ChannelView,
-  Subscribe,
-  Unsubscribe,
-  VideoCreate,
-  VideoEdit,
-  VideoDelete,
-  VideoView,
-  VideoLike,
-  VideoUnlike,
-  VideoDislike,
-  VideoUndislike,
-  CommentCreate,
-  CommentEdit,
-  CommentDelete,
-  CommentLike,
-  CommentDislike,
-  CommentUnlike,
-  CommentUndislike,
-  PlaylistEdit,
-  PlaylistDelete,
-  PlaylistAdd,
-  PlaylistRemove,
-  PlaylistCreate,
-  PlaylistClone,
-  WatchHistory,
-}
+// Import shared types from @al-ummah/shared-types
+import { MessageType, ProcessingResult } from '@al-ummah/shared-types';
 
-// Types for our queue messages
+// Re-export for use throughout processor
+export { MessageType };
+export type { ProcessingResult };
+
+// Processor-specific message type (based on shared QueueMessage)
 export interface AlUmmahMessage {
   id: string;
   type: MessageType;
-  timestamp: number | string; // API sends number (Date.now()), allow both
-  payload: Record<string, unknown>; // API sends 'payload', not 'data'
-  priority?: 'low' | 'normal' | 'high' | 'critical';
+  timestamp: number | string; // API sends number (Date.now()), allow both for flexibility
+  payload: Record<string, unknown>;
   retryCount?: number;
+  priority?: 'low' | 'normal' | 'high' | 'critical';
   failureReason?: string;
   failedAt?: string;
-}
-
-export interface ProcessingResult {
-  success: boolean;
-  error?: string;
-  shouldRetry?: boolean;
-  processedAt: string;
 }
 
 export interface R2PutOptions {

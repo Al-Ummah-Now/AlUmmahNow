@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import Queue, { MessageType } from '../../lib/queue';
 
 export class DeleteCommunityPost extends OpenAPIRoute {
   static schema = addAuthToSchema({
@@ -99,8 +100,8 @@ export class DeleteCommunityPost extends OpenAPIRoute {
       await this.removeFromChannelIndex(c, channelId, postId);
 
       // Send deletion event to queue
-      await c.env.queue.send({
-        type: 'community_post_deleted',
+      const queue = new Queue();
+      await queue.send(MessageType.CommunityPostDeleted, {
         postId: postId,
         channelId: channelId,
         timestamp: new Date().toISOString()

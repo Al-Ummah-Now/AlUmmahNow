@@ -1,62 +1,11 @@
 import { env } from 'cloudflare:workers';
+import { MessageType, QueueMessage } from '@al-ummah/shared-types';
 
-export enum MessageType {
-    ProfileCreate,
-    ProfileUpdate,
-    ProfileDelete,
-    ProfileView,
-    ChannelCreate,
-    ChannelUpdate,
-    ChannelDelete,
-    ChannelView,
-    Subscribe,
-    Unsubscribe,
-    VideoCreate,
-    VideoEdit,
-    VideoDelete,
-    VideoView,
-    VideoLike,
-    VideoUnlike,
-    VideoDislike,
-    VideoUndislike,
-    CommentCreate,
-    CommentEdit,
-    CommentDelete,
-    CommentLike,
-    CommentDislike,
-    CommentUnlike,
-    CommentUndislike,
-    PlaylistEdit,
-    PlaylistDelete,
-    PlaylistAdd,
-    PlaylistRemove,
-    PlaylistCreate,
-    PlaylistClone,
-    // Live streaming events
-    LiveStreamCreate,
-    LiveStreamUpdate,
-    LiveStreamStart,
-    LiveStreamEnd,
-    LiveStreamView,
-    // Video upload events
-    VideoUploadStarted,
-    VideoUploadCompleted,
-    VideoProcessingCompleted,
-    VideoUploadFailed,
-    // Community post comment events
-    PostCommentCreated,
-    PostCommentLiked,
-    PostCommentDeleted,
-    PostCommentPinned,
-    PostCommentHearted,
-}
+// Re-export for backward compatibility
+export { MessageType, QueueMessage };
 
-export type Message<T> = {
-    id: string;
-    type: MessageType;
-    payload: T;
-    timestamp: number;
-}
+// Legacy Message type alias (deprecated - use QueueMessage instead)
+export type Message<T> = QueueMessage<T>;
 
 export default class Queue {
     async send<T>(type: MessageType, payload: T) {

@@ -10,6 +10,7 @@ import {
 } from '@al-ummah/shared-types';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import Queue, { MessageType } from '../../lib/queue';
 
 const voteSchema = z.object({
   optionIds: z.array(z.string()).min(1).max(5),
@@ -155,8 +156,8 @@ export class VoteOnPoll extends OpenAPIRoute {
       await c.env.community_posts.put(postKey, JSON.stringify(post));
 
       // Send to queue for analytics
-      await c.env.queue.send({
-        type: 'poll_vote',
+      const queue = new Queue();
+      await queue.send(MessageType.PollVoted, {
         postId,
         channelId: post.channelId,
         userId: auth.userId,

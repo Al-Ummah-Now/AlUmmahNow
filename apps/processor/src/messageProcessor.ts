@@ -116,6 +116,23 @@ export class MessageProcessor {
         await this.processWatchHistoryMessage(message);
         break;
 
+      // Community post comment events
+      case MessageType.PostCommentCreated:
+      case MessageType.PostCommentLiked:
+      case MessageType.PostCommentDeleted:
+      case MessageType.PostCommentPinned:
+      case MessageType.PostCommentHearted:
+        await this.processPostCommentMessage(message);
+        break;
+
+      // Community post events
+      case MessageType.CommunityPostCreated:
+      case MessageType.CommunityPostLiked:
+      case MessageType.CommunityPostDeleted:
+      case MessageType.PollVoted:
+        await this.processCommunityPostMessage(message);
+        break;
+
       default:
         throw new Error(`Unknown message type: ${message.type}`);
     }
@@ -377,6 +394,74 @@ export class MessageProcessor {
         break;
       default:
         this.logger.warn(`Unknown watch history event type: ${type}`);
+    }
+  }
+
+  private async processCommunityPostMessage(message: AlUmmahMessage): Promise<void> {
+    this.logger.debug(`Processing community post message: ${MessageType[message.type]}`, message.payload);
+
+    const { postId, channelId, userId } = message.payload as {
+      postId: string;
+      channelId: string;
+      userId?: string;
+      likerChannelId?: string;
+      optionIds?: string[];
+    };
+
+    if (!postId || !channelId) {
+      throw new Error('Community post message missing required fields: postId, channelId');
+    }
+
+    // Process community post actions
+    switch (message.type) {
+      case MessageType.CommunityPostCreated:
+        this.logger.info(`Community post ${postId} created on channel ${channelId} by user ${userId}`);
+        break;
+      case MessageType.CommunityPostLiked:
+        this.logger.info(`Community post ${postId} liked by user ${userId}`);
+        break;
+      case MessageType.CommunityPostDeleted:
+        this.logger.info(`Community post ${postId} deleted from channel ${channelId}`);
+        break;
+      case MessageType.PollVoted:
+        const { optionIds } = message.payload as { optionIds?: string[] };
+        this.logger.info(`User ${userId} voted on poll ${postId} (${optionIds?.length || 0} options selected)`);
+        break;
+    }
+  }
+
+  private async processPostCommentMessage(message: AlUmmahMessage): Promise<void> {
+    this.logger.debug(`Processing post comment message: ${MessageType[message.type]}`, message.payload);
+
+    const { postId, commentId, authorChannelId } = message.payload as {
+      postId: string;
+      commentId: string;
+      authorChannelId?: string;
+      authorUserId?: string;
+      parentCommentId?: string;
+    };
+
+    if (!postId || !commentId) {
+      throw new Error('Post comment message missing required fields: postId, commentId');
+    }
+
+    // Process post comment actions
+    switch (message.type) {
+      case MessageType.PostCommentCreated:
+        this.logger.info(`Comment ${commentId} created by channel ${authorChannelId} on post ${postId}`);
+        break;
+      case MessageType.PostCommentLiked:
+        this.logger.info(`Comment ${commentId} liked on post ${postId}`);
+        break;
+      case MessageType.PostCommentDeleted:
+        this.logger.info(`Comment ${commentId} deleted from post ${postId}`);
+        break;
+      case MessageType.PostCommentPinned:
+        this.logger.info(`Comment ${commentId} pinned on post ${postId}`);
+        break;
+      case MessageType.PostCommentHearted:
+        this.logger.info(`Comment ${commentId} hearted on post ${postId}`);
+        break;
     }
   }
 

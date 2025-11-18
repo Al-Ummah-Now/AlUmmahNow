@@ -10,6 +10,7 @@ import {
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateCreatePost } from '../../validation/community-posts';
+import Queue, { MessageType } from '../../lib/queue';
 
 const createPostSchema = z.object({
   type: z.nativeEnum(PostType),
@@ -189,8 +190,8 @@ export class CreateCommunityPost extends OpenAPIRoute {
 
       // Send to processor queue for notifications (if published)
       if (post.status === PostStatus.PUBLISHED) {
-        await c.env.queue.send({
-          type: 'community_post_created',
+        const queue = new Queue();
+        await queue.send(MessageType.CommunityPostCreated, {
           postId: post.id,
           channelId: channelId,
           userId: userId,

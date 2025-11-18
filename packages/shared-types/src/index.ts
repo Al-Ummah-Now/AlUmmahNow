@@ -10,6 +10,7 @@ export * from './common';
 export * from './watch-history';
 export * from './community-post';
 export * from './post-comment';
+export * from './queue';
 
 // Export localization utility
 export * from './localization';

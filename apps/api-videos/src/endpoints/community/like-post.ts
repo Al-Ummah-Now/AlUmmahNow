@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { CommunityPost, LikePostResponse } from '@al-ummah/shared-types';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import Queue, { MessageType } from '../../lib/queue';
 
 export class LikeCommunityPost extends OpenAPIRoute {
   static schema = addAuthToSchema({
@@ -90,8 +91,8 @@ export class LikeCommunityPost extends OpenAPIRoute {
         await c.env.community_posts.put(postKey, JSON.stringify(post));
 
         // Send to queue for notifications
-        await c.env.queue.send({
-          type: 'community_post_liked',
+        const queue = new Queue();
+        await queue.send(MessageType.CommunityPostLiked, {
           postId,
           channelId: post.channelId,
           userId: userId,
