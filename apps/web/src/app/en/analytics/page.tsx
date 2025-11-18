@@ -4,10 +4,10 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import * as AnalyticsAPI from '@/lib/api/analytics';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
 import AnalyticsDashboard from '@/components/analytics/AnalyticsDashboard';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const AnalyticsPage = () => {
-  const { t } = useI18n('en');
+  const { t } = useLanguage();
   const auth = useAuth();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [channelData, setChannelData] = useState<ChannelAnalyticsData | null>(null);
@@ -34,10 +34,6 @@ const AnalyticsPage = () => {
         if (auth?.user?.id) {
           const channelAnalytics = await AnalyticsAPI.getChannelAnalytics(auth.user.id);
           setChannelData(channelAnalytics);
-        } else {
-          // Load mock channel data for demonstration
-          const mockChannelData = await AnalyticsAPI.getChannelAnalytics('demo-channel');
-          setChannelData(mockChannelData);
         }
 
       } catch (err) {
@@ -49,7 +45,7 @@ const AnalyticsPage = () => {
     };
 
     loadAnalyticsData();
-  }, [auth?.user]);
+  }, [auth?.user, t]);
 
   if (!auth?.user) {
     return (

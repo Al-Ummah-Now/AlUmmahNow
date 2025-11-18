@@ -66,7 +66,7 @@ export function UnifiedNavigationRTL() {
     });
     setChannel(user?.channel);
     setChannels(user?.channels || []);
-  }, [user?.id, user?.channel, user?.channels]);
+  }, [user?.id, user?.email, user?.channel, user?.channels]);
 
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();

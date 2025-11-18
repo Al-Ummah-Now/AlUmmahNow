@@ -12,98 +12,6 @@ interface SubscriptionFeedProps {
   className?: string;
 }
 
-// Mock data for demonstration - in reality this would come from the API
-const mockSubscriptionVideos: VideoObject[] = [
-    {
-      id: '1',
-      title: 'The Importance of Daily Prayers - Complete Guide',
-      description: 'A comprehensive guide to understanding and performing the five daily prayers',
-      thumbnailUrl: '/placeholder-thumbnail.jpg',
-      videoUrl: '/placeholder-video.mp4',
-      userId: 'user1',
-      channel: 'Islamic Lectures',
-      channelId: 'channel1',
-      channelAvatarUrl: '/default-avatar.png',
-      channelName: 'Islamic Lectures',
-      dateCreated: '2024-01-20T10:00:00Z',
-      dateModified: '2024-01-20T10:00:00Z',
-      createdAt: '2024-01-20T10:00:00Z',
-      updatedAt: '2024-01-20T10:00:00Z',
-      views: 15420,
-      likesCount: 892,
-      dislikesCount: 23,
-      commentsCount: 156,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: '2',
-      title: 'Beautiful Quran Recitation - Surah Al-Fatiha',
-      description: 'Beautiful recitation of the opening chapter of the Holy Quran',
-      thumbnailUrl: '/placeholder-thumbnail.jpg',
-      videoUrl: '/placeholder-video.mp4',
-      userId: 'user2',
-      channel: 'Quran Recitations',
-      channelId: 'channel2',
-      channelAvatarUrl: '/default-avatar.png',
-      channelName: 'Quran Recitations',
-      dateCreated: '2024-01-19T15:30:00Z',
-      dateModified: '2024-01-19T15:30:00Z',
-      createdAt: '2024-01-19T15:30:00Z',
-      updatedAt: '2024-01-19T15:30:00Z',
-      views: 28540,
-      likesCount: 1250,
-      dislikesCount: 18,
-      commentsCount: 234,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: '3',
-      title: 'Stories from Islamic History - The Golden Age',
-      description: 'Exploring the remarkable achievements during the Islamic Golden Age',
-      thumbnailUrl: '/placeholder-thumbnail.jpg',
-      videoUrl: '/placeholder-video.mp4',
-      userId: 'user3',
-      channel: 'Islamic History',
-      channelId: 'channel3',
-      channelAvatarUrl: '/default-avatar.png',
-      channelName: 'Islamic History',
-      dateCreated: '2024-01-18T09:15:00Z',
-      dateModified: '2024-01-18T09:15:00Z',
-      createdAt: '2024-01-18T09:15:00Z',
-      updatedAt: '2024-01-18T09:15:00Z',
-      views: 9870,
-      likesCount: 445,
-      dislikesCount: 12,
-      commentsCount: 89,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: '4',
-      title: 'Understanding the Pillars of Islam',
-      description: 'A detailed explanation of the five fundamental acts of worship in Islam',
-      thumbnailUrl: '/placeholder-thumbnail.jpg',
-      videoUrl: '/placeholder-video.mp4',
-      userId: 'user1',
-      channel: 'Islamic Lectures',
-      channelId: 'channel1',
-      channelAvatarUrl: '/default-avatar.png',
-      channelName: 'Islamic Lectures',
-      dateCreated: '2024-01-17T14:20:00Z',
-      dateModified: '2024-01-17T14:20:00Z',
-      createdAt: '2024-01-17T14:20:00Z',
-      updatedAt: '2024-01-17T14:20:00Z',
-      views: 12340,
-      likesCount: 678,
-      dislikesCount: 15,
-      commentsCount: 123,
-      isPublic: true,
-      isLive: false
-    }
-];
-
 export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
   className = ''
 }) => {
@@ -111,17 +19,16 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
   const { user } = useAuth();
   const { t, lang } = useLanguage();
   const isAuthenticated = !!user;
-  const [videos, setVideos] = useState<VideoObject[]>([]);
+  const [videos, _setVideos] = useState<VideoObject[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const loadSubscriptionFeed = useCallback(async () => {
     setIsLoading(true);
     try {
-      // In a real implementation, this would fetch from the API
-      // For now, we'll simulate loading with mock data
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setVideos(mockSubscriptionVideos);
+      // TODO: Implement API call to fetch subscription feed
+      // const response = await fetchSubscriptionVideos(user.id);
+      // _setVideos(response.videos);
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Failed to load subscription feed:', error);

@@ -75,7 +75,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
     };
 
     fetchChannel();
-  }, [channelId, user?.id, profile]);
+  }, [channelId, user?.id, profile, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

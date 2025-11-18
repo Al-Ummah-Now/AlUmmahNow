@@ -26,39 +26,14 @@ export const SubscriptionManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'notifications'>('all');
 
-  // Mock data for demonstration - in reality this would come from the API
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Mock subscription data
-      setSubscriptions([
-        {
-          id: '1',
-          name: 'Islamic Lectures',
-          avatarUrl: '/default-avatar.png',
-          subscribersCount: 150000,
-          videosCount: 245,
-          notificationsEnabled: true,
-          dateSubscribed: '2024-01-15'
-        },
-        {
-          id: '2',
-          name: 'Quran Recitations',
-          avatarUrl: '/default-avatar.png',
-          subscribersCount: 85000,
-          videosCount: 120,
-          notificationsEnabled: false,
-          dateSubscribed: '2024-02-20'
-        },
-        {
-          id: '3',
-          name: 'Islamic History',
-          avatarUrl: '/default-avatar.png',
-          subscribersCount: 45000,
-          videosCount: 89,
-          notificationsEnabled: true,
-          dateSubscribed: '2024-03-10'
-        }
-      ]);
+      // TODO: Implement API call to fetch user subscriptions
+      // const fetchSubscriptions = async () => {
+      //   const response = await getUserSubscriptions(user.id);
+      //   setSubscriptions(response.subscriptions);
+      // };
+      // fetchSubscriptions();
     }
   }, [isAuthenticated, user]);
 

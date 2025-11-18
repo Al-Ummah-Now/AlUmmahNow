@@ -115,7 +115,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     };
 
     checkProfile();
-  }, [user?.id, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, router]);
+  }, [user, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, router]);
 
   if (shouldSkipCheck) {
     console.log('[ProfileGuard] Rendering children (shouldSkipCheck)');

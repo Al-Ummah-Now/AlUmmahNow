@@ -141,7 +141,7 @@ test.describe('Account Switching', () => {
           await page.waitForTimeout(3000); // Wait for server action to complete
         }
       }
-    } catch (error) {
+    } catch (_error) {
       console.log('Could not perform account switch, but checking for 500 errors...');
     }
 

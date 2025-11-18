@@ -49,7 +49,7 @@ const AnalyticsPage = () => {
     };
 
     loadAnalyticsData();
-  }, [auth?.user]);
+  }, [auth?.user, t]);
 
   if (!auth?.user) {
     return (
