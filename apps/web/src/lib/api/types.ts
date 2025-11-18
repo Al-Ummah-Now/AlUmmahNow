@@ -22,7 +22,9 @@ export interface PaginationMeta {
 // Video Types
 export interface VideoCreateRequest {
   title: string;
+  titleLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   thumbnailUrl?: string;
   videoUrl?: string;
   width?: number;
@@ -34,7 +36,9 @@ export interface VideoCreateRequest {
 
 export interface VideoUpdateRequest {
   title?: string;
+  titleLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   thumbnailUrl?: string;
   videoUrl?: string;
   width?: number;
@@ -90,7 +94,9 @@ export interface PlaylistAddVideoRequest {
 // Channel Types
 export interface ChannelCreateRequest {
   name: string;
+  nameLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   isMain?: boolean;
   avatarUrl?: string;
   coverUrl?: string;

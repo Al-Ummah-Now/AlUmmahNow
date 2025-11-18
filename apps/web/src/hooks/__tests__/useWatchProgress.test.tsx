@@ -8,6 +8,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWatchProgress } from '../useWatchProgress';
 import { WatchHistoryService } from '@/services/api/watch-history';
+import type { ExtendedPlayer } from '@/lib/video/videojs';
 
 // Mock the service
 jest.mock('@/services/api/watch-history', () => ({
@@ -54,7 +55,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as unknown,
+        mockPlayer as unknown as ExtendedPlayer | null,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -89,7 +90,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as unknown,
+        mockPlayer as unknown as ExtendedPlayer | null,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -122,7 +123,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as unknown,
+        mockPlayer as unknown as ExtendedPlayer | null,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -141,7 +142,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result, unmount } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as unknown,
+        mockPlayer as unknown as ExtendedPlayer | null,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -166,7 +167,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as unknown,
+        mockPlayer as unknown as ExtendedPlayer | null,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }
@@ -194,7 +195,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as unknown,
+        mockPlayer as unknown as ExtendedPlayer | null,
         'user-456',
         'auth-token',
         {
@@ -252,7 +253,7 @@ describe('useWatchProgress - Race Condition Scenarios', () => {
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
-        mockPlayer as unknown,
+        mockPlayer as unknown as ExtendedPlayer | null,
         'user-456',
         'auth-token',
         { enableDebugLogging: true }

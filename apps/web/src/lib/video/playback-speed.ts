@@ -162,7 +162,7 @@ export function setupPlaybackSpeedKeyboardShortcuts(player: Player | ExtendedPla
   // Store cleanup function on player for later removal
   const playerEl = (player as ExtendedPlayer).el();
   if (playerEl) {
-    (playerEl as unknown).__playbackSpeedKeydownHandler = handleKeyDown;
+    (playerEl as HTMLElement & { __playbackSpeedKeydownHandler?: typeof handleKeyDown }).__playbackSpeedKeydownHandler = handleKeyDown;
   }
 }
 
@@ -178,10 +178,11 @@ export function cleanupPlaybackSpeedKeyboardShortcuts(player: Player | ExtendedP
 
   const playerEl = (player as ExtendedPlayer).el();
   if (playerEl) {
-    const handler = (playerEl as unknown).__playbackSpeedKeydownHandler;
+    const extPlayerEl = playerEl as HTMLElement & { __playbackSpeedKeydownHandler?: (event: KeyboardEvent) => void };
+    const handler = extPlayerEl.__playbackSpeedKeydownHandler;
     if (handler) {
       document.removeEventListener('keydown', handler);
-      delete (playerEl as unknown).__playbackSpeedKeydownHandler;
+      delete extPlayerEl.__playbackSpeedKeydownHandler;
     }
   }
 }

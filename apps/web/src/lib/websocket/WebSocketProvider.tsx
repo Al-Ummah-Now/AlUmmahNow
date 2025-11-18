@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
-import { WebSocketConnectionState, WebSocketConfig } from '@/interfaces/websocket';
+import { WebSocketConnectionState, WebSocketConfig, WebSocketEventType } from '@/interfaces/websocket';
 import { User } from '@/interfaces';
 
 interface WebSocketContextType {
@@ -100,7 +100,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
   const sendMessage = useCallback((type: string, data: unknown): void => {
     if (wsManagerRef.current) {
-      wsManagerRef.current.sendMessage(type, data);
+      wsManagerRef.current.sendMessage(type as WebSocketEventType, data);
     }
   }, []);
 

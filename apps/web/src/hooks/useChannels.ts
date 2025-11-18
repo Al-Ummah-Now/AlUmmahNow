@@ -58,14 +58,26 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
       console.log('useChannels: API response:', response);
 
       // Handle different response formats
-      const responseObj = response as Record<string, unknown>;
-      const channelData = (responseObj.data as Channel[]) ||
-                         ((responseObj.result as Record<string, unknown>)?.channels as Channel[]) ||
-                         (responseObj.channels as Channel[]) ||
-                         [];
-
-      setChannels(channelData);
-      console.log('useChannels: Set channels:', channelData);
+      if ('data' in response && Array.isArray(response.data)) {
+        const channelData = response.data as Channel[];
+        setChannels(channelData);
+        console.log('useChannels: Set channels:', channelData);
+      } else if ('result' in response) {
+        const resultObj = response.result as Record<string, unknown>;
+        if (resultObj && 'channels' in resultObj && Array.isArray(resultObj.channels)) {
+          const channelData = resultObj.channels as Channel[];
+          setChannels(channelData);
+          console.log('useChannels: Set channels:', channelData);
+        } else {
+          setChannels([]);
+        }
+      } else if ('channels' in response && Array.isArray(response.channels)) {
+        const channelData = response.channels as Channel[];
+        setChannels(channelData);
+        console.log('useChannels: Set channels:', channelData);
+      } else {
+        setChannels([]);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch channels';
       console.error('useChannels: Error fetching channels:', err);

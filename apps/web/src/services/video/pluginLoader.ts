@@ -1,7 +1,7 @@
-import videojs from 'video.js';
+import videojs, { Player } from 'video.js';
 
 interface VideoJSPlugin {
-  (player: videojs.Player, options?: Record<string, unknown>): void;
+  (player: Player, options?: Record<string, unknown>): void;
 }
 
 interface PluginLoaderOptions {
@@ -25,11 +25,12 @@ export async function loadPlugin(
   const { timeout = 5000, retries = 2 } = options;
 
   if (loadedPlugins.has(pluginName)) {
-    return loadedPlugins.get(pluginName);
+    return loadedPlugins.get(pluginName) ?? null;
   }
 
-  if (videojs.getPlugin?.(pluginName)) {
-    const plugin = videojs.getPlugin(pluginName);
+  const videojsTyped = videojs as typeof videojs & { getPlugin?: (name: string) => VideoJSPlugin | undefined };
+  if (videojsTyped.getPlugin?.(pluginName)) {
+    const plugin = videojsTyped.getPlugin(pluginName);
     if (plugin && typeof plugin === 'function') {
       loadedPlugins.set(pluginName, plugin as VideoJSPlugin);
       return plugin as VideoJSPlugin;
@@ -51,15 +52,15 @@ export async function loadPlugin(
       });
 
       const pluginPromise = pluginLoader();
-      const moduleImport = await Promise.race([pluginPromise, timeoutPromise]) as unknown;
+      const moduleImport = await Promise.race([pluginPromise, timeoutPromise]) as { default?: VideoJSPlugin | { default?: VideoJSPlugin } };
 
       let plugin: VideoJSPlugin;
-      if (moduleImport.default?.default) {
-        plugin = moduleImport.default.default;
+      if (moduleImport.default && typeof moduleImport.default === 'object' && 'default' in moduleImport.default) {
+        plugin = moduleImport.default.default as VideoJSPlugin;
       } else if (moduleImport.default) {
-        plugin = moduleImport.default;
+        plugin = moduleImport.default as VideoJSPlugin;
       } else {
-        plugin = moduleImport;
+        plugin = moduleImport as unknown as VideoJSPlugin;
       }
 
       loadedPlugins.set(pluginName, plugin);
@@ -125,9 +126,11 @@ export async function preloadPlugins(
 }
 
 export function isPluginLoaded(pluginName: string): boolean {
-  return loadedPlugins.has(pluginName) || Boolean(videojs.getPlugin?.(pluginName));
+  const videojsTyped = videojs as typeof videojs & { getPlugin?: (name: string) => VideoJSPlugin | undefined };
+  return loadedPlugins.has(pluginName) || Boolean(videojsTyped.getPlugin?.(pluginName));
 }
 
 export function getLoadedPlugin(pluginName: string): VideoJSPlugin | null {
-  return loadedPlugins.get(pluginName) || videojs.getPlugin?.(pluginName) || null;
+  const videojsTyped = videojs as typeof videojs & { getPlugin?: (name: string) => VideoJSPlugin | undefined };
+  return loadedPlugins.get(pluginName) ?? videojsTyped.getPlugin?.(pluginName) ?? null;
 }

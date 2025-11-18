@@ -57,7 +57,11 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
           setChannel(channelData);
           setFormData({
             name: channelData.name || '',
+            nameEn: channelData.nameLocalized?.en || channelData.name || '',
+            nameAr: channelData.nameLocalized?.ar || '',
             description: channelData.description || '',
+            descriptionEn: channelData.descriptionLocalized?.en || channelData.description || '',
+            descriptionAr: channelData.descriptionLocalized?.ar || '',
             avatarUrl: channelData.avatarUrl || '',
             coverUrl: channelData.coverUrl || '',
           });
@@ -84,7 +88,20 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
       const userChannelId = profile?.channels?.[0] || channelId;
       await updateChannel(
         channelId,
-        formData,
+        {
+          name: formData.nameEn || formData.name,
+          nameLocalized: {
+            en: formData.nameEn,
+            ar: formData.nameAr
+          },
+          description: formData.descriptionEn || formData.description,
+          descriptionLocalized: {
+            en: formData.descriptionEn || '',
+            ar: formData.descriptionAr || ''
+          },
+          avatarUrl: formData.avatarUrl,
+          coverUrl: formData.coverUrl
+        },
         { channelId: userChannelId, userId: user.id }
       );
 
@@ -160,42 +177,101 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-          {/* Channel Name */}
+          {/* Language Tabs */}
           <div className="mb-6">
-            <label htmlFor="name" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              {t.channel.channelName} *
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              maxLength={100}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-              placeholder="أدخل اسم القناة"
-            />
+            <div className="flex gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('ar')}
+                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                  activeTab === 'ar'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                العربية
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('en')}
+                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                  activeTab === 'en'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                English
+              </button>
+            </div>
           </div>
 
-          {/* Description */}
+          {/* Channel Name with Language Tabs */}
           <div className="mb-6">
-            <label htmlFor="description" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              {t.channel.channelName} {activeTab === 'en' && '*'}
+            </label>
+            {activeTab === 'ar' && (
+              <input
+                type="text"
+                value={formData.nameAr}
+                onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                maxLength={100}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="اسم القناة بالعربية"
+                dir="rtl"
+              />
+            )}
+            {activeTab === 'en' && (
+              <input
+                type="text"
+                value={formData.nameEn}
+                onChange={(e) => setFormData({ ...formData, nameEn: e.target.value, name: e.target.value })}
+                required
+                maxLength={100}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Channel name in English"
+                dir="ltr"
+              />
+            )}
+          </div>
+
+          {/* Description with Language Tabs */}
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               {t.channel.channelDescription}
             </label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={4}
-              maxLength={500}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-              placeholder="صف قناتك"
-            />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {formData.description.length}/500 حرف
-            </p>
+            {activeTab === 'ar' && (
+              <>
+                <textarea
+                  value={formData.descriptionAr}
+                  onChange={(e) => setFormData({ ...formData, descriptionAr: e.target.value })}
+                  rows={4}
+                  maxLength={500}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="وصف قناتك بالعربية"
+                  dir="rtl"
+                />
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {formData.descriptionAr.length}/500 حرف
+                </p>
+              </>
+            )}
+            {activeTab === 'en' && (
+              <>
+                <textarea
+                  value={formData.descriptionEn}
+                  onChange={(e) => setFormData({ ...formData, descriptionEn: e.target.value, description: e.target.value })}
+                  rows={4}
+                  maxLength={500}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Describe your channel in English"
+                  dir="ltr"
+                />
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {formData.descriptionEn.length}/500 characters
+                </p>
+              </>
+            )}
           </div>
 
           {/* Avatar URL */}

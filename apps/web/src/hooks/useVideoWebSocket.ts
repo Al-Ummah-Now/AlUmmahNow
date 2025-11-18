@@ -123,18 +123,25 @@ export function useVideoWebSocket({
    * Handle incoming messages from video channel
    * Wrapped in useCallback with no dependencies to prevent re-creation
    */
-  const handleVideoUpdate = useCallback((data: PresenceEvent | { type: 'viewer_count'; viewerCount: number }) => {
+  const handleVideoUpdate = useCallback((eventData: unknown) => {
+    // Type guard to ensure eventData is a valid object
+    if (!eventData || typeof eventData !== 'object' || !('type' in eventData)) {
+      return;
+    }
+
+    const data = eventData as PresenceEvent | { type: 'viewer_count'; viewerCount: number };
+
     if (process.env.NODE_ENV !== 'production') {
       console.log('[useVideoWebSocket] Received update:', data);
     }
 
-    if (data.type === 'presence_update' && typeof data.viewerCount === 'number') {
+    if (data.type === 'presence_update' && 'viewerCount' in data && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
-    } else if (data.type === 'user_joined' && typeof data.viewerCount === 'number') {
+    } else if (data.type === 'user_joined' && 'viewerCount' in data && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
-    } else if (data.type === 'user_left' && typeof data.viewerCount === 'number') {
+    } else if (data.type === 'user_left' && 'viewerCount' in data && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
-    } else if (data.type === 'viewer_count' && typeof data.viewerCount === 'number') {
+    } else if (data.type === 'viewer_count' && 'viewerCount' in data && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
     }
   }, []); // Empty deps - setViewerCount is stable

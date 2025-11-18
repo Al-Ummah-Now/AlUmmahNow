@@ -51,8 +51,21 @@ export function UnifiedNavigation() {
     logoutAll,
   } = useMultiAccount();
 
-  const channel = user?.channel;
-  const channels = user?.channels || [];
+  const [channel, setChannel] = useState(user?.channel);
+  const [channels, setChannels] = useState(user?.channels || []);
+
+  // Update local state when user changes
+  useEffect(() => {
+    console.log('[UnifiedNavigation] User changed:', {
+      userId: user?.id,
+      email: user?.email,
+      hasChannel: !!user?.channel,
+      channelName: user?.channel?.name,
+      channelsCount: user?.channels?.length || 0,
+    });
+    setChannel(user?.channel);
+    setChannels(user?.channels || []);
+  }, [user?.id, user?.channel, user?.channels]);
 
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();

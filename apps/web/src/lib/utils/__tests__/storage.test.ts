@@ -384,7 +384,7 @@ describe('Storage Monitoring', () => {
   it('should provide helpful monitoring in development', () => {
     // Set NODE_ENV to development
     const originalEnv = process.env.NODE_ENV;
-    (process.env as unknown).NODE_ENV = 'development';
+    (process.env as any).NODE_ENV = 'development';
 
     // Mock console.group methods
     const consoleGroupSpy = jest.spyOn(console, 'group').mockImplementation();
@@ -407,6 +407,6 @@ describe('Storage Monitoring', () => {
     consoleGroupSpy.mockRestore();
     consoleLogSpy.mockRestore();
     consoleGroupEndSpy.mockRestore();
-    (process.env as unknown).NODE_ENV = originalEnv;
+    (process.env as any).NODE_ENV = originalEnv;
   });
 });

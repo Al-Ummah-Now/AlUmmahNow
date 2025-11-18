@@ -97,7 +97,10 @@ export function initializeSpriteThumbnails(
   }
 
   // Check if plugin is available
-  if (typeof (player as unknown).spriteThumbnails !== 'function') {
+  interface PlayerWithSpriteThumbnailsCheck {
+    spriteThumbnails?: (...args: unknown[]) => void;
+  }
+  if (typeof (player as PlayerWithSpriteThumbnailsCheck).spriteThumbnails !== 'function') {
     console.warn('[ProgressPreview] videojs-sprite-thumbnails plugin is not loaded. Sprite thumbnails will not be available.');
     return;
   }
@@ -115,7 +118,18 @@ export function initializeSpriteThumbnails(
     const previewUrl = getBunnyPreviewUrl(bunnyVideoId, libraryId);
 
     // Initialize sprite thumbnails plugin
-    (player as unknown).spriteThumbnails({
+    interface PlayerWithSpriteThumbnails extends ExtendedPlayer {
+      spriteThumbnails(config: {
+        interval: number;
+        url: string;
+        width: number;
+        height: number;
+        downlink?: number;
+        responsive: number;
+      }): void;
+    }
+
+    (player as PlayerWithSpriteThumbnails).spriteThumbnails({
       interval,
       url: previewUrl,
       width,

@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n';
 const ProfilePage = () => {
   const { t } = useI18n('ar');
   const [profile, setProfile] = React.useState<Profile | null>(null);
+  const [activeTab, setActiveTab] = React.useState<'en' | 'ar'>('ar');
   const auth = useAuth();
 
   useEffect(() => {
@@ -20,11 +21,26 @@ const ProfilePage = () => {
     event.preventDefault();
     // Handle form submission logic here
     const formData = new FormData(event.target as HTMLFormElement);
+    const displayNameEn = formData.get('displayNameEn') as string;
+    const displayNameAr = formData.get('displayNameAr') as string;
+    const bioEn = formData.get('bioEn') as string;
+    const bioAr = formData.get('bioAr') as string;
+
     const newProfile = {
       id: auth.user!.id,
       email: auth.user!.email,
       firstName: formData.get('firstName') as string,
       lastName: formData.get('lastName') as string,
+      displayName: displayNameEn || '',
+      displayNameLocalized: {
+        en: displayNameEn || '',
+        ar: displayNameAr || ''
+      },
+      bio: bioEn || '',
+      bioLocalized: {
+        en: bioEn || '',
+        ar: bioAr || ''
+      },
     };
     updateProfile(newProfile, setProfile);
   };
@@ -144,6 +160,79 @@ const ProfilePage = () => {
                 />
               </div>
             </label>
+
+            {/* Display Name with Language Tabs */}
+            <label className="block">
+              <span className="text-gray-700">{t.profile.displayName}:</span>
+              <div className="flex gap-2 mt-2 mb-2 flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ar')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                    activeTab === 'ar'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  العربية
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('en')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                    activeTab === 'en'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  English
+                </button>
+              </div>
+              {activeTab === 'en' && (
+                <input
+                  type="text"
+                  name="displayNameEn"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
+                  placeholder="Display name in English"
+                  defaultValue={profile?.displayNameLocalized?.en || profile?.displayName || ''}
+                />
+              )}
+              {activeTab === 'ar' && (
+                <input
+                  type="text"
+                  name="displayNameAr"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
+                  placeholder="الاسم المعروض بالعربية"
+                  defaultValue={profile?.displayNameLocalized?.ar || ''}
+                  dir="rtl"
+                />
+              )}
+            </label>
+
+            {/* Bio with Language Tabs */}
+            <label className="block">
+              <span className="text-gray-700">السيرة الذاتية:</span>
+              {activeTab === 'en' && (
+                <textarea
+                  name="bioEn"
+                  rows={3}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
+                  placeholder="Tell us about yourself"
+                  defaultValue={profile?.bioLocalized?.en || profile?.bio || ''}
+                />
+              )}
+              {activeTab === 'ar' && (
+                <textarea
+                  name="bioAr"
+                  rows={3}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
+                  placeholder="أخبرنا عن نفسك"
+                  defaultValue={profile?.bioLocalized?.ar || ''}
+                  dir="rtl"
+                />
+              )}
+            </label>
+
             <label className="block">
               <span className="text-gray-700">{t.profile.email}:</span>
               <input

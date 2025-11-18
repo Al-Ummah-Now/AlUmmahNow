@@ -14,7 +14,7 @@ export class WebSocketManager {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private messageQueue: WebSocketMessage[] = [];
-  private eventListeners: Map<string, Set<(data: unknown) => void>> = new Map();
+  private eventListeners: Map<string, Set<(data: WebSocketConnectionState) => void>> = new Map();
 
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -269,6 +269,15 @@ export class WebSocketManager {
   private getChannelKeyFromMessage(message: WebSocketMessage): string | null {
     const { type, data } = message;
 
+    // Type guard to check if data has videoId or channelId
+    const hasVideoId = (obj: unknown): obj is { videoId: string } => {
+      return typeof obj === 'object' && obj !== null && 'videoId' in obj && typeof (obj as { videoId: string }).videoId === 'string';
+    };
+
+    const hasChannelId = (obj: unknown): obj is { channelId: string } => {
+      return typeof obj === 'object' && obj !== null && 'channelId' in obj && typeof (obj as { channelId: string }).channelId === 'string';
+    };
+
     switch (type) {
       case 'comment_added':
       case 'comment_updated':
@@ -276,10 +285,10 @@ export class WebSocketManager {
       case 'video_liked':
       case 'video_unliked':
       case 'view_count_updated':
-        return data.videoId ? `video:${data.videoId}` : null;
+        return hasVideoId(data) ? `video:${data.videoId}` : null;
       case 'user_joined':
       case 'user_left':
-        return data.channelId ? `channel:${data.channelId}` : null;
+        return hasChannelId(data) ? `channel:${data.channelId}` : null;
       default:
         return null;
     }

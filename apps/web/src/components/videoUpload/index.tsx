@@ -63,7 +63,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   // File validation
   const validateFile = (file: File): string | null => {
-    if (!VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type as unknown)) {
+    type VideoMimeType = 'video/mp4' | 'video/mov' | 'video/avi' | 'video/webm';
+    if (!VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type as VideoMimeType)) {
       return VIDEO_UPLOAD_ERRORS.INVALID_TYPE;
     }
 
@@ -294,6 +295,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         channelName: auth.user.email || 'Unknown',
         dateCreated: new Date().toISOString(),
         dateModified: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         views: 0,
         availableResolutions: [],
         likesCount: 0,

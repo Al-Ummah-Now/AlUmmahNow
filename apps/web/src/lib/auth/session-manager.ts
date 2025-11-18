@@ -371,7 +371,27 @@ export class SessionManager {
     }
 
     sessionData.activeUserId = userId;
-    sessionData.activeChannelId = sessionData.accounts[userId].activeChannelId;
+    const targetAccount = sessionData.accounts[userId];
+
+    // Validate and set active channel
+    if (targetAccount.activeChannelId) {
+      // Check if the stored channel still exists for this user
+      const channelStillExists = targetAccount.channels.find(c => c.id === targetAccount.activeChannelId);
+      if (channelStillExists) {
+        sessionData.activeChannelId = targetAccount.activeChannelId;
+      } else {
+        // Stored channel no longer exists, reset to first/main channel or null
+        const mainChannel = targetAccount.channels.find(c => c.isMain) || targetAccount.channels[0];
+        targetAccount.activeChannelId = mainChannel?.id || null;
+        sessionData.activeChannelId = mainChannel?.id || null;
+      }
+    } else {
+      // No stored channel, try to set first/main channel or null
+      const mainChannel = targetAccount.channels.find(c => c.isMain) || targetAccount.channels[0];
+      targetAccount.activeChannelId = mainChannel?.id || null;
+      sessionData.activeChannelId = mainChannel?.id || null;
+    }
+
     sessionData.accounts[userId].lastActivity = Date.now();
 
     await this.setSessionData(sessionData);
@@ -418,20 +438,76 @@ export class SessionManager {
     const activeAccount = sessionData.accounts[sessionData.activeUserId];
     if (!activeAccount) return null;
 
-    // Find active channel
+    console.log('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
+      userId: activeAccount.userId,
+      email: activeAccount.email,
+      'sessionData.activeChannelId': sessionData.activeChannelId,
+      'activeAccount.activeChannelId': activeAccount.activeChannelId,
+      'activeAccount.channels': activeAccount.channels.map(c => ({ id: c.id, name: c.name, userId: c.userId })),
+    });
+
+    // IMPORTANT: Filter out channels that don't belong to their respective users for ALL accounts
+    // This can happen if old session data has stale channels from before fixes
+    let sessionNeedsUpdate = false;
+
+    Object.values(sessionData.accounts).forEach(account => {
+      const accountChannels = account.channels.filter(c => c.userId === account.userId);
+
+      if (accountChannels.length !== account.channels.length) {
+        console.log('[SessionManager] Cleaning channels for user:', {
+          userId: account.userId,
+          email: account.email,
+          before: account.channels.length,
+          after: accountChannels.length,
+          removed: account.channels.filter(c => c.userId !== account.userId).map(c => c.name),
+        });
+        account.channels = accountChannels;
+        sessionNeedsUpdate = true;
+      }
+    });
+
+    // Find active channel - MUST belong to active user
     const activeChannel = activeAccount.channels.find(
       c => c.id === sessionData.activeChannelId
     );
 
+    // If activeChannelId doesn't match any channel for this user, clear it
+    if (sessionData.activeChannelId && !activeChannel) {
+      console.log('[SessionManager] Active channel ID does not belong to current user, clearing it');
+      sessionData.activeChannelId = null;
+      activeAccount.activeChannelId = null;
+      sessionNeedsUpdate = true;
+    }
+
+    // Save updated session data if we made changes
+    if (sessionNeedsUpdate) {
+      await this.setSessionData(sessionData);
+    }
+
+    console.log('[SessionManager.getActiveSession] TRACE AFTER FILTER:', {
+      userId: activeAccount.userId,
+      email: activeAccount.email,
+      'sessionData.activeChannelId': sessionData.activeChannelId,
+      'activeAccount.activeChannelId': activeAccount.activeChannelId,
+      'activeChannel': activeChannel ? activeChannel.name : null,
+      'activeAccount.channels.length': activeAccount.channels.length,
+    });
+
     // Build account info for all accounts
-    const availableAccounts: AccountInfo[] = Object.values(sessionData.accounts).map(account => ({
-      userId: account.userId,
-      email: account.email,
-      displayName: account.displayName,
-      avatarUrl: account.avatarUrl,
-      isActive: account.userId === sessionData.activeUserId,
-      channelsCount: account.channels.length,
-    }));
+    // IMPORTANT: Filter channels for each account to ensure counts are accurate
+    const availableAccounts: AccountInfo[] = Object.values(sessionData.accounts).map(account => {
+      // Filter channels to only those belonging to this account
+      const accountChannels = account.channels.filter(c => c.userId === account.userId);
+
+      return {
+        userId: account.userId,
+        email: account.email,
+        displayName: account.displayName,
+        avatarUrl: account.avatarUrl,
+        isActive: account.userId === sessionData.activeUserId,
+        channelsCount: accountChannels.length,
+      };
+    });
 
     return {
       userId: activeAccount.userId,
@@ -488,10 +564,22 @@ export class SessionManager {
 
     try {
       // Import dynamically to avoid circular dependency
-      const { listUserChannels } = await import('../api/channels');
+      const { apiRequestServer, buildApiUrl, buildQueryParams } = await import('../api/api-client');
 
-      // Fetch channels for this specific user
-      const response = await listUserChannels(userId);
+      // Fetch channels for this specific user using their own access token
+      const queryString = buildQueryParams({ userId });
+      const response = await apiRequestServer<{ data: Channel[]; cursor: string; limit: number }>(
+        {
+          method: 'GET',
+          url: buildApiUrl(`/api/channels${queryString}`),
+          functionName: 'SessionManager.loadUserChannels'
+        },
+        async () => ({
+          userId: account.userId,
+          accessToken: account.accessToken,  // Use this user's token, not active user's token
+        }),
+        false  // Don't require auth (we're providing the token explicitly)
+      );
 
       if (response?.data) {
         account.channels = Array.isArray(response.data) ? response.data : [];
@@ -560,9 +648,11 @@ export class SessionManager {
       if (profile) {
         // Update displayName and avatarUrl from profile
         // Handle different response formats (direct profile object or wrapped)
-        const profileData = profile.profile || profile;
-        account.displayName = profileData.displayName || profileData.email || account.email;
-        account.avatarUrl = profileData.avatarUrl;
+        const profileResponse = profile as Record<string, unknown>;
+        const profileData = ('profile' in profileResponse ? profileResponse.profile : profileResponse) as Record<string, unknown>;
+
+        account.displayName = (profileData.displayName as string) || (profileData.email as string) || account.email;
+        account.avatarUrl = profileData.avatarUrl as string | undefined;
         await this.setSessionData(sessionData);
         console.log('[SessionManager] Updated profile for user:', userId, {
           displayName: account.displayName,

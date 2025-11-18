@@ -55,19 +55,25 @@ export function useRealTimeNotifications(
     autoRemoveAfterRef.current = autoRemoveAfter;
   }, [removeNotification, maxNotifications, autoRemoveAfter]);
 
-  const handleNotificationUpdate = useCallback((eventData: NotificationEvent) => {
-    console.log('📥 Real-time notification:', eventData);
+  const handleNotificationUpdate = useCallback((eventData: unknown) => {
+    // Type guard to ensure eventData is NotificationEvent
+    if (!eventData || typeof eventData !== 'object' || !('type' in eventData)) {
+      return;
+    }
 
-    if (eventData.type === 'notification') {
+    const event = eventData as NotificationEvent;
+    console.log('📥 Real-time notification:', event);
+
+    if (event.type === 'notification') {
       const notification: Notification = {
-        id: eventData.notificationId,
-        title: eventData.title,
-        message: eventData.message,
-        type: eventData.notificationType,
-        actionUrl: eventData.actionUrl,
+        id: event.notificationId,
+        title: event.title,
+        message: event.message,
+        type: event.notificationType,
+        actionUrl: event.actionUrl,
         timestamp: new Date(),
         read: false,
-        userId: eventData.userId
+        userId: event.userId
       };
 
       setNotifications(prevNotifications => {

@@ -50,23 +50,28 @@ export async function getProfileCurrent(): Promise<Profile | null> {
   let profile: Profile | null = null;
 
   if (result && typeof result === 'object') {
+    const response = result as Record<string, unknown>;
+
     // If it's already a Profile object
-    if (result.id && result.email) {
+    if ('id' in response && 'email' in response) {
       logApiSuccess(fnName, 'Response format: Direct Profile object');
-      profile = result as Profile;
+      profile = response as unknown as Profile;
     }
     // If it's wrapped in a success/result structure
-    else if (result.success && result.result && result.result.profile) {
-      logApiSuccess(fnName, 'Response format: Wrapped in success/result structure');
-      profile = result.result.profile as Profile;
+    else if ('success' in response && 'result' in response) {
+      const resultObj = response.result as Record<string, unknown>;
+      if (resultObj && 'profile' in resultObj) {
+        logApiSuccess(fnName, 'Response format: Wrapped in success/result structure');
+        profile = resultObj.profile as Profile;
+      }
     }
     // If it's wrapped differently
-    else if (result.profile) {
+    else if ('profile' in response) {
       logApiSuccess(fnName, 'Response format: Wrapped in profile property');
-      profile = result.profile as Profile;
+      profile = response.profile as Profile;
     }
     else {
-      logApiError(fnName, 'Response format not recognized', { responseKeys: Object.keys(result) });
+      logApiError(fnName, 'Response format not recognized', { responseKeys: Object.keys(response) });
     }
   }
 

@@ -46,6 +46,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
     console.log("ChannelSwitcher: Switching to channel:", channel);
     setActiveChannel({
       channelId: channel.id,
+      userId: channel.userId,
       name: channel.name,
       avatarUrl: channel.avatarUrl,
       isMain: channel.isMain,

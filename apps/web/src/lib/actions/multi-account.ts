@@ -124,11 +124,11 @@ export async function switchUserAccount(userId: string, currentPath?: string): P
         };
 
         // Check if this account needs profile creation
-        const { shouldRedirect, redirectPath } = await shouldRedirectToProfileCreation(userForCheck);
+        const { shouldRedirect } = await shouldRedirectToProfileCreation(userForCheck);
 
         if (!shouldRedirect) {
           // Profile exists, tell client to redirect away from profile creation
-          const locale = currentPath.includes('/ar/') ? 'ar' : 'en';
+          const locale = currentPath?.includes('/ar/') ? 'ar' : 'en';
           const targetPath = `/${locale}/profile`;
 
           // Revalidate before returning (client will redirect)
@@ -349,19 +349,29 @@ export async function getActiveSessionInfo() {
   // Filter channels to only include those belonging to the active user
   const userChannels = session.availableChannels.filter(ch => ch.userId === session.userId);
 
+  const channelData = session.channel ? {
+    id: session.channel.id,
+    userId: session.channel.userId,
+    name: session.channel.name,
+    avatarUrl: session.channel.avatarUrl,
+    isMain: session.channel.isMain,
+  } : null;
+
+  console.log('[getActiveSessionInfo] TRACE:', {
+    userId: session.userId,
+    email: session.email,
+    'session.channel': session.channel ? session.channel.name : null,
+    'channelData': channelData ? channelData.name : null,
+    userChannelsCount: userChannels.length,
+  });
+
   return {
     user: {
       id: session.userId,
       email: session.email,
       displayName: session.displayName,
       avatarUrl: session.avatarUrl,
-      channel: session.channel ? {
-        id: session.channel.id,
-        userId: session.channel.userId,
-        name: session.channel.name,
-        avatarUrl: session.channel.avatarUrl,
-        isMain: session.channel.isMain,
-      } : null,
+      channel: channelData,
       channels: userChannels.map(ch => ({
         id: ch.id,
         userId: ch.userId,

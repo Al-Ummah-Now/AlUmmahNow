@@ -33,7 +33,9 @@ export interface CreateChannelDialogProps {
 
 export interface CreateChannelFormData {
   name: string;
+  nameLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
 }
 
 export interface ChannelManagementSectionProps {

@@ -20,6 +20,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
   const [profileExists, setProfileExists] = useState<boolean | null>(null);
   const [hasChecked, setHasChecked] = useState(false);
+  const [lastCheckedUserId, setLastCheckedUserId] = useState<string | null>(null);
 
   console.log('[ProfileGuard] State:', {
     hasUser: !!user,
@@ -50,7 +51,8 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
       locale,
       shouldSkipCheck,
       isProfileCreatePage,
-      hasChecked
+      hasChecked,
+      lastCheckedUserId
     });
 
     if (shouldSkipCheck) {
@@ -59,9 +61,18 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
       return;
     }
 
+    // Reset check state if user changed
+    if (user?.id && user.id !== lastCheckedUserId) {
+      console.log('[ProfileGuard] User changed, resetting check state');
+      setHasChecked(false);
+      setProfileExists(null);
+      setLastCheckedUserId(user.id);
+      setIsCheckingProfile(true);
+    }
+
     // Only check once per user session
-    if (hasChecked) {
-      console.log('[ProfileGuard] Already checked, skipping');
+    if (hasChecked && user?.id === lastCheckedUserId) {
+      console.log('[ProfileGuard] Already checked for this user, skipping');
       return;
     }
 
@@ -104,7 +115,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     };
 
     checkProfile();
-  }, [user?.id, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, router]);
+  }, [user?.id, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, router]);
 
   if (shouldSkipCheck) {
     console.log('[ProfileGuard] Rendering children (shouldSkipCheck)');

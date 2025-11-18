@@ -13,11 +13,11 @@ const mockPerfObserver = jest.fn().mockImplementation(() => ({
   disconnect: jest.fn(),
   takeRecords: jest.fn(() => []),
 }));
-global.PerformanceObserver = mockPerfObserver as unknown;
+global.PerformanceObserver = mockPerfObserver as any;
 
 // Mock window object if not present
 if (typeof window === 'undefined') {
-  (global as unknown).window = {};
+  (global as any).window = {};
 }
 
 import { VideoPerformanceMonitor, createPerformanceMonitor } from '../performance-monitor';
@@ -32,9 +32,9 @@ describe('VideoPerformanceMonitor', () => {
     jest.useFakeTimers();
     
     // Add missing methods to Jest's performance object AFTER fake timers are set up
-    (global as unknown).performance.mark = mockPerformanceMark;
-    (global as unknown).performance.measure = mockPerformanceMeasure;
-    (global as unknown).performance.memory = {
+    (global as any).performance.mark = mockPerformanceMark;
+    (global as any).performance.measure = mockPerformanceMeasure;
+    (global as any).performance.memory = {
       usedJSHeapSize: 1000000,
       totalJSHeapSize: 2000000,
       jsHeapSizeLimit: 4000000,
@@ -183,13 +183,13 @@ describe('VideoPerformanceMonitor', () => {
     it('should handle server-side environment', () => {
       // Mock server environment
       const originalWindow = global.window;
-      delete (global as unknown).window;
-      
+      delete (global as any).window;
+
       const serverMonitor = new VideoPerformanceMonitor(mockPlayer);
       serverMonitor.start();
-      
+
       expect(serverMonitor.getMetrics().fps).toBe(0);
-      
+
       // Restore window
       global.window = originalWindow;
     });

@@ -22,7 +22,9 @@ async function getAccessToken(): Promise<string | null> {
  */
 export async function initiateVideoUpload(metadata: {
   title: string;
+  titleLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   isPublic?: boolean;
   tags?: string;
 }): Promise<{

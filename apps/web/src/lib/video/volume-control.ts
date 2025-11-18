@@ -193,8 +193,13 @@ export function setupScrollWheelControl(player: Player | ExtendedPlayer): () => 
       delta = event.deltaY;
     } else if (typeof event.detail === 'number' && event.detail !== 0) {
       delta = event.detail;
-    } else if ('wheelDelta' in event && typeof (event as unknown).wheelDelta === 'number') {
-      delta = -(event as unknown).wheelDelta; // wheelDelta has inverted sign
+    } else if ('wheelDelta' in event) {
+      const wheelEvent = event as WheelEvent & { wheelDelta?: number };
+      if (typeof wheelEvent.wheelDelta === 'number') {
+        delta = -wheelEvent.wheelDelta; // wheelDelta has inverted sign
+      } else {
+        delta = 0;
+      }
     } else {
       delta = 0;
     }

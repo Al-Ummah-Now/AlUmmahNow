@@ -18,7 +18,8 @@ import { Channel } from "@al-ummah/shared-types";
  * GET /api/channels
  */
 export async function listChannels(
-  params?: ListQueryParams
+  params?: ListQueryParams,
+  _headers?: ApiHeaders
 ): Promise<PaginationResponse<Channel> | null> {
   const queryString = buildQueryParams({
     limit: params?.limit,
@@ -58,7 +59,8 @@ export async function listUserChannels(
  * GET /api/channels/{id}
  */
 export async function getChannelById(
-  id: string
+  id: string,
+  _headers?: ApiHeaders
 ): Promise<Channel | null> {
   return apiRequestServer<Channel>({
     method: 'GET',

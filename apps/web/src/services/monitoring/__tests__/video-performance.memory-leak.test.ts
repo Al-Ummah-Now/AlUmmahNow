@@ -16,7 +16,7 @@ const mockVideoElement = {
 // Mock performance.now
 global.performance = {
   now: jest.fn(() => 1000),
-} as unknown;
+} as unknown as Performance;
 
 // Mock fetch
 global.fetch = jest.fn(() =>
@@ -24,7 +24,7 @@ global.fetch = jest.fn(() =>
     ok: true,
     status: 200,
   })
-) as unknown;
+) as unknown as typeof fetch;
 
 // Mock auth module
 jest.mock('@/lib/auth/client-token', () => ({
@@ -55,7 +55,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     });
 
     // Access private property for testing (TypeScript hack)
-    const getMapSize = () => (monitor as unknown).watchStartTimes.size;
+    const getMapSize = () => (monitor as any).watchStartTimes.size;
 
     // Initial state
     expect(getMapSize()).toBe(0);
@@ -82,7 +82,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
       enableAutoSend: false,
     });
 
-    const getMapSize = () => (monitor as unknown).watchStartTimes.size;
+    const getMapSize = () => (monitor as any).watchStartTimes.size;
     const playHandler = (mockVideoElement.addEventListener as jest.Mock).mock.calls
       .find(call => call[0] === 'play')?.[1];
 
@@ -101,7 +101,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     jest.advanceTimersByTime(3700000); // 1 hour + 100 seconds
 
     // Trigger cleanup
-    (monitor as unknown).cleanupStaleEntries();
+    (monitor as any).cleanupStaleEntries();
 
     // All entries should be removed as stale
     expect(getMapSize()).toBe(0);
@@ -144,7 +144,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     }
 
     // Check that currentWatchStartTime is set
-    expect((monitor as unknown).currentWatchStartTime).toBeGreaterThan(0);
+    expect((monitor as any).currentWatchStartTime).toBeGreaterThan(0);
 
     // Advance time and pause
     jest.advanceTimersByTime(5000);
@@ -153,10 +153,10 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     }
 
     // currentWatchStartTime should be reset
-    expect((monitor as unknown).currentWatchStartTime).toBe(0);
+    expect((monitor as any).currentWatchStartTime).toBe(0);
 
     // totalDurationWatched should have increased
-    expect((monitor as unknown).totalDurationWatched).toBeGreaterThan(0);
+    expect((monitor as any).totalDurationWatched).toBeGreaterThan(0);
   });
 
   test('destroy should clear Map and all timers', () => {
@@ -174,7 +174,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
       playHandler();
     }
 
-    const getMapSize = () => (monitor as unknown).watchStartTimes.size;
+    const getMapSize = () => (monitor as any).watchStartTimes.size;
     expect(getMapSize()).toBeGreaterThan(0);
 
     // Destroy monitor
@@ -184,8 +184,8 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     expect(getMapSize()).toBe(0);
 
     // Timers should be null
-    expect((monitor as unknown).sendTimer).toBeNull();
-    expect((monitor as unknown).cleanupTimer).toBeNull();
+    expect((monitor as any).sendTimer).toBeNull();
+    expect((monitor as any).cleanupTimer).toBeNull();
   });
 
   test('memory usage remains bounded under continuous operation', () => {
@@ -207,7 +207,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     }
 
     // Map size should still be bounded
-    const getMapSize = () => (monitor as unknown).watchStartTimes.size;
+    const getMapSize = () => (monitor as any).watchStartTimes.size;
     expect(getMapSize()).toBeLessThanOrEqual(10);
 
     // Simulate periodic cleanup

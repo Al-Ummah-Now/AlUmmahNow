@@ -36,42 +36,48 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
   }, [onCommentAdded, onCommentUpdated, onCommentDeleted]);
 
   // Handle real-time comment updates
-  const handleCommentUpdate = useCallback((eventData: CommentEvent) => {
-    console.log('📥 Real-time comment update:', eventData);
+  const handleCommentUpdate = useCallback((eventData: unknown) => {
+    // Type guard to ensure eventData is CommentEvent
+    if (!eventData || typeof eventData !== 'object' || !('type' in eventData)) {
+      return;
+    }
 
-    switch (eventData.type) {
+    const event = eventData as CommentEvent;
+    console.log('📥 Real-time comment update:', event);
+
+    switch (event.type) {
       case 'comment_added':
-        if (eventData.comment) {
+        if (event.comment) {
           setComments(prevComments => {
             // Avoid duplicates
-            if (prevComments.some(c => c.id === eventData.comment!.id)) {
+            if (prevComments.some(c => c.id === event.comment!.id)) {
               return prevComments;
             }
-            const newComments = [eventData.comment!, ...prevComments];
-            onCommentAddedRef.current?.(eventData.comment!);
+            const newComments = [event.comment!, ...prevComments];
+            onCommentAddedRef.current?.(event.comment!);
             return newComments;
           });
         }
         break;
 
       case 'comment_updated':
-        if (eventData.comment) {
+        if (event.comment) {
           setComments(prevComments =>
             prevComments.map(comment =>
-              comment.id === eventData.comment!.id
-                ? { ...comment, ...eventData.comment! }
+              comment.id === event.comment!.id
+                ? { ...comment, ...event.comment! }
                 : comment
             )
           );
-          onCommentUpdatedRef.current?.(eventData.comment!);
+          onCommentUpdatedRef.current?.(event.comment!);
         }
         break;
 
       case 'comment_deleted':
         setComments(prevComments =>
-          prevComments.filter(comment => comment.id !== eventData.commentId)
+          prevComments.filter(comment => comment.id !== event.commentId)
         );
-        onCommentDeletedRef.current?.(eventData.commentId);
+        onCommentDeletedRef.current?.(event.commentId);
         break;
     }
   }, []);

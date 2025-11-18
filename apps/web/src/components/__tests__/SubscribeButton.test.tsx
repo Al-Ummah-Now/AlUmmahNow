@@ -5,6 +5,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SubscribeButton } from '@/components/subscription/SubscribeButton';
 import * as ChannelsAPI from '@/lib/api/channels';
+import type { User, Profile } from '@/interfaces';
 
 // Mock dependencies
 jest.mock('@/components/AuthProvider/authContext', () => ({
@@ -38,8 +39,8 @@ describe('SubscribeButton', () => {
   });
 
   it('should render subscribe button for unauthenticated users', () => {
-    mockUseAuth.mockReturnValue({ user: null } as unknown);
-    mockUseProfile.mockReturnValue({ profile: null } as unknown);
+    mockUseAuth.mockReturnValue({ user: null });
+    mockUseProfile.mockReturnValue({ profile: null, isLoading: false, error: null });
 
     render(
       <SubscribeButton
@@ -52,12 +53,14 @@ describe('SubscribeButton', () => {
   });
 
   it('should show subscribed state when initially subscribed', () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as unknown);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as unknown);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton
@@ -76,12 +79,14 @@ describe('SubscribeButton', () => {
     const mockSubscribe = jest.fn().mockResolvedValue({ success: true });
     (ChannelsAPI.subscribeToChannel as jest.Mock).mockImplementation(mockSubscribe);
 
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as unknown);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as unknown);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton
@@ -115,12 +120,14 @@ describe('SubscribeButton', () => {
     const mockUnsubscribe = jest.fn().mockResolvedValue({ success: true });
     (ChannelsAPI.unsubscribeFromChannel as jest.Mock).mockImplementation(mockUnsubscribe);
 
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as unknown);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as unknown);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton
@@ -156,12 +163,14 @@ describe('SubscribeButton', () => {
     );
     (ChannelsAPI.subscribeToChannel as jest.Mock).mockImplementation(mockSubscribe);
 
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as unknown);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as unknown);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton
@@ -183,12 +192,14 @@ describe('SubscribeButton', () => {
     const mockUnsubscribe = jest.fn().mockResolvedValue({ success: true });
     (ChannelsAPI.unsubscribeFromChannel as jest.Mock).mockImplementation(mockUnsubscribe);
 
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as unknown);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as unknown);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton

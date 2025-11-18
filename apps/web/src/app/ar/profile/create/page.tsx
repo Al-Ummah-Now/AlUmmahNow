@@ -11,6 +11,7 @@ const ProfileCreatePage = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'en' | 'ar'>('ar');
   const auth = useAuth();
   const router = useRouter();
 
@@ -39,6 +40,10 @@ const ProfileCreatePage = () => {
     const formData = new FormData(event.target as HTMLFormElement);
     const firstName = formData.get('firstName') as string;
     const lastName = formData.get('lastName') as string;
+    const displayNameEn = formData.get('displayNameEn') as string;
+    const displayNameAr = formData.get('displayNameAr') as string;
+    const bioEn = formData.get('bioEn') as string;
+    const bioAr = formData.get('bioAr') as string;
 
     // Validation
     if (!firstName.trim()) {
@@ -51,6 +56,16 @@ const ProfileCreatePage = () => {
       await createProfile({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        displayName: displayNameEn || '',
+        displayNameLocalized: {
+          en: displayNameEn || '',
+          ar: displayNameAr || ''
+        },
+        bio: bioEn || '',
+        bioLocalized: {
+          en: bioEn || '',
+          ar: bioAr || ''
+        },
         avatarUrl: profile.avatarUrl,
         coverUrl: profile.coverUrl,
         email: profile.email,
@@ -131,17 +146,77 @@ const ProfileCreatePage = () => {
               </div>
             </div>
 
+            {/* Display Name with Language Tabs */}
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.displayName}
               </label>
-              <input
-                type="text"
-                name="displayName"
-                className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                placeholder="كيف سيراك الآخرون (اختياري)"
-              />
+              <div className="flex gap-2 mb-2 flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ar')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                    activeTab === 'ar'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  العربية
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('en')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                    activeTab === 'en'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  English
+                </button>
+              </div>
+              {activeTab === 'en' && (
+                <input
+                  type="text"
+                  name="displayNameEn"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
+                  placeholder="How others will see your name (optional)"
+                />
+              )}
+              {activeTab === 'ar' && (
+                <input
+                  type="text"
+                  name="displayNameAr"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
+                  placeholder="كيف سيراك الآخرون (اختياري)"
+                  dir="rtl"
+                />
+              )}
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">إذا تُرك فارغاً، سنستخدم اسمك الأول والأخير</p>
+            </div>
+
+            {/* Bio with Language Tabs */}
+            <div>
+              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                السيرة الذاتية
+              </label>
+              {activeTab === 'en' && (
+                <textarea
+                  name="bioEn"
+                  rows={3}
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
+                  placeholder="Tell us about yourself (optional)"
+                />
+              )}
+              {activeTab === 'ar' && (
+                <textarea
+                  name="bioAr"
+                  rows={3}
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
+                  placeholder="أخبرنا عن نفسك (اختياري)"
+                  dir="rtl"
+                />
+              )}
             </div>
 
             <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4">

@@ -4,7 +4,6 @@ import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView } from "../../lib/transformations";
 import { getAuthContext, getUserId } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -75,7 +74,7 @@ export class ProfileFetch extends OpenAPIRoute {
 		const channelId = request.headers?.channelId;
 
 		// Get profile from storage
-        const bucket = env.profiles;
+		const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
 		const profile = await repository.getObject(id);

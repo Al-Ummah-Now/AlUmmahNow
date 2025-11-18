@@ -7,7 +7,9 @@ export type PaginationResponse<T> = {
 export interface VideoObject {
     id: string;
     title: string;
+    titleLocalized?: Record<string, string>; // Multi-language titles
     description: string | null;
+    descriptionLocalized?: Record<string, string>; // Multi-language descriptions
     thumbnailUrl: string;
     videoUrl: string;
     userId: string;
@@ -17,6 +19,8 @@ export interface VideoObject {
     channelName: string;
     dateCreated: string;
     dateModified: string;
+    createdAt: string; // For compatibility with shared-types
+    updatedAt: string; // For compatibility with shared-types
     views?: number;
     width?: number;
     height?: number;

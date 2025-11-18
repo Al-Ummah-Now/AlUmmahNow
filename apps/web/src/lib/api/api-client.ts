@@ -83,11 +83,16 @@ export async function apiRequest<T>(
     });
 
     // Make request
-    const response = await fetch(url, {
+    const fetchOptions: RequestInit = {
       method,
-      headers: requestHeaders,
-      ...(body && { body: JSON.stringify(body) })
-    });
+      headers: requestHeaders
+    };
+
+    if (body) {
+      fetchOptions.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(url, fetchOptions);
 
     // Log response
     logApiResponse({

@@ -24,9 +24,12 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
   isLoading,
   lang = 'en',
 }) => {
+  const [activeTab, setActiveTab] = useState<'en' | 'ar'>(lang);
   const [formData, setFormData] = useState<CreateChannelFormData>({
     name: '',
+    nameLocalized: { en: '', ar: '' },
     description: '',
+    descriptionLocalized: { en: '', ar: '' },
   });
   const [errors, setErrors] = useState<{ name?: string; description?: string }>({});
 
@@ -73,15 +76,18 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
 
     // Validate
     const newErrors: { name?: string; description?: string } = {};
-    if (!formData.name.trim()) {
+    const nameEn = formData.nameLocalized?.en || '';
+
+    if (!nameEn.trim()) {
       newErrors.name = t.required;
-    } else if (formData.name.length < 3) {
+    } else if (nameEn.length < 3) {
       newErrors.name = t.minLength;
-    } else if (formData.name.length > 50) {
+    } else if (nameEn.length > 50) {
       newErrors.name = t.maxLength;
     }
 
-    if (formData.description && formData.description.length > 500) {
+    const descriptionEn = formData.descriptionLocalized?.en || '';
+    if (descriptionEn && descriptionEn.length > 500) {
       newErrors.description = t.descMaxLength;
     }
 
@@ -90,11 +96,27 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
       return;
     }
 
-    // Submit
+    // Submit with properly formatted data
     try {
-      await onSubmit(formData);
+      await onSubmit({
+        name: nameEn,
+        nameLocalized: {
+          en: nameEn,
+          ar: formData.nameLocalized?.ar || ''
+        },
+        description: descriptionEn,
+        descriptionLocalized: {
+          en: descriptionEn,
+          ar: formData.descriptionLocalized?.ar || ''
+        }
+      });
       // Reset form on success
-      setFormData({ name: '', description: '' });
+      setFormData({
+        name: '',
+        nameLocalized: { en: '', ar: '' },
+        description: '',
+        descriptionLocalized: { en: '', ar: '' }
+      });
       setErrors({});
       onOpenChange(false);
     } catch (error) {
@@ -104,7 +126,12 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
 
   const handleCancel = () => {
     // Reset form on cancel
-    setFormData({ name: '', description: '' });
+    setFormData({
+      name: '',
+      nameLocalized: { en: '', ar: '' },
+      description: '',
+      descriptionLocalized: { en: '', ar: '' }
+    });
     setErrors({});
     onOpenChange(false);
   };
@@ -121,27 +148,75 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
+            {/* Language Tabs */}
+            <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setActiveTab('en')}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === 'en'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('ar')}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === 'ar'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                العربية
+              </button>
+            </div>
+
             {/* Channel Name */}
             <div className="grid gap-2">
               <label
                 htmlFor="channel-name"
                 className="text-sm font-medium text-gray-900 dark:text-white"
               >
-                {t.channelName} <span className="text-red-500">*</span>
+                {t.channelName} {activeTab === 'en' && <span className="text-red-500">*</span>}
               </label>
-              <Input
-                id="channel-name"
-                type="text"
-                placeholder={t.channelNamePlaceholder}
-                value={formData.name}
-                onChange={(e) => {
-                  setFormData({ ...formData, name: e.target.value });
-                  setErrors({ ...errors, name: undefined });
-                }}
-                disabled={isLoading}
-                className={errors.name ? 'border-red-500 focus-visible:ring-red-500' : ''}
-              />
-              {errors.name && (
+              {activeTab === 'en' && (
+                <Input
+                  id="channel-name-en"
+                  type="text"
+                  placeholder="Channel name in English"
+                  value={formData.nameLocalized?.en || ''}
+                  onChange={(e) => {
+                    setFormData({
+                      ...formData,
+                      name: e.target.value,
+                      nameLocalized: { ...formData.nameLocalized, en: e.target.value }
+                    });
+                    setErrors({ ...errors, name: undefined });
+                  }}
+                  disabled={isLoading}
+                  className={errors.name ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                />
+              )}
+              {activeTab === 'ar' && (
+                <Input
+                  id="channel-name-ar"
+                  type="text"
+                  placeholder="اسم القناة بالعربية"
+                  value={formData.nameLocalized?.ar || ''}
+                  onChange={(e) => {
+                    setFormData({
+                      ...formData,
+                      nameLocalized: { ...formData.nameLocalized, ar: e.target.value }
+                    });
+                  }}
+                  disabled={isLoading}
+                  dir="rtl"
+                />
+              )}
+              {errors.name && activeTab === 'en' && (
                 <p className="text-sm text-red-600 dark:text-red-400">{errors.name}</p>
               )}
             </div>
@@ -154,27 +229,56 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
               >
                 {t.descriptionLabel}
               </label>
-              <Textarea
-                id="channel-description"
-                placeholder={t.descriptionPlaceholder}
-                value={formData.description}
-                onChange={(e) => {
-                  setFormData({ ...formData, description: e.target.value });
-                  setErrors({ ...errors, description: undefined });
-                }}
-                disabled={isLoading}
-                rows={4}
-                className={errors.description ? 'border-red-500 focus-visible:ring-red-500' : ''}
-              />
-              <div className="flex justify-between items-center">
-                {errors.description ? (
-                  <p className="text-sm text-red-600 dark:text-red-400">{errors.description}</p>
-                ) : (
+              {activeTab === 'en' && (
+                <>
+                  <Textarea
+                    id="channel-description-en"
+                    placeholder="Describe your channel in English"
+                    value={formData.descriptionLocalized?.en || ''}
+                    onChange={(e) => {
+                      setFormData({
+                        ...formData,
+                        description: e.target.value,
+                        descriptionLocalized: { ...formData.descriptionLocalized, en: e.target.value }
+                      });
+                      setErrors({ ...errors, description: undefined });
+                    }}
+                    disabled={isLoading}
+                    rows={4}
+                    className={errors.description ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  />
+                  <div className="flex justify-between items-center">
+                    {errors.description ? (
+                      <p className="text-sm text-red-600 dark:text-red-400">{errors.description}</p>
+                    ) : (
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {formData.descriptionLocalized?.en?.length || 0}/500 {t.charactersCount}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+              {activeTab === 'ar' && (
+                <>
+                  <Textarea
+                    id="channel-description-ar"
+                    placeholder="وصف قناتك بالعربية"
+                    value={formData.descriptionLocalized?.ar || ''}
+                    onChange={(e) => {
+                      setFormData({
+                        ...formData,
+                        descriptionLocalized: { ...formData.descriptionLocalized, ar: e.target.value }
+                      });
+                    }}
+                    disabled={isLoading}
+                    rows={4}
+                    dir="rtl"
+                  />
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {formData.description?.length || 0}/500 {t.charactersCount}
+                    {formData.descriptionLocalized?.ar?.length || 0}/500 {t.charactersCount}
                   </span>
-                )}
-              </div>
+                </>
+              )}
             </div>
           </div>
 
