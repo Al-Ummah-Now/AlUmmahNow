@@ -58,7 +58,8 @@ const ProfilePage = () => {
   };
 
   return (
-    <main className="flex-1 p-6 max-w-4xl mx-auto w-full" dir="rtl">
+    <div className="profile-edit-page flex flex-col flex-1 bg-gray-100 dark:bg-gray-900" dir="rtl">
+      <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
         {/* Name Section */}
         <section id="name" className="section mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
           <div className="relative group">
@@ -251,7 +252,8 @@ const ProfilePage = () => {
             </button>
           </form>
         </section>
-    </main>
+      </main>
+    </div>
   );
 };
 
