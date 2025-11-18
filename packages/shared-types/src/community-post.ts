@@ -3,6 +3,7 @@
 export interface CommunityPost {
   id: string;                        // UUID
   channelId: string;                 // Channel that created the post
+  userId: string;                    // User ID of the post creator
   type: PostType;                    // text, image, poll, quiz, video, gif
   content?: string;                  // Text content (optional for image-only posts)
 

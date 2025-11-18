@@ -21,6 +21,10 @@ const updateCommentSchema = {
       postId: Str({ description: 'Post ID' }),
       commentId: Str({ description: 'Comment ID' }),
     }),
+    headers: z.object({
+      channelId: z.string().optional(),
+      userId: z.string(),
+    }),
     body: {
       content: {
         'application/json': {
@@ -76,7 +80,8 @@ export class UpdatePostComment extends OpenAPIRoute {
     }
 
     const { postId, commentId } = c.req.param();
-    const data = await this.getValidatedData<z.infer<typeof updateCommentRequestSchema>>();
+    const data: any = await this.getValidatedData<z.infer<typeof updateCommentRequestSchema>>();
+    const { channelId, userId } = data.headers;
 
     if (!data.body) {
       return c.json({ success: false, error: 'Request body is required' }, 400);
@@ -99,7 +104,7 @@ export class UpdatePostComment extends OpenAPIRoute {
     }
 
     // 2. Check authorization (only comment author can update)
-    if (comment.userId !== auth.userId) {
+    if (comment.userId !== userId) {
       return c.json(
         {
           success: false,

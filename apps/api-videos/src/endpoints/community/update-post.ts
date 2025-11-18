@@ -25,6 +25,10 @@ export class UpdateCommunityPost extends OpenAPIRoute {
       params: z.object({
         postId: z.string(),
       }),
+      headers: z.object({
+        channelId: z.string(),
+        userId: z.string(),
+      }),
       body: {
         content: {
           'application/json': {
@@ -81,30 +85,22 @@ export class UpdateCommunityPost extends OpenAPIRoute {
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
     const { postId } = c.req.param();
-    const request = await this.getValidatedData<typeof this.schema>();
+    const request: any = await this.getValidatedData<typeof this.schema>();
     const body: any = request.body;
+    const { channelId, userId } = request.headers;
 
     if (!body) {
       return c.json({ error: 'Request body is required' }, 400);
     }
 
-    // Get user's channel ID from their profile
-    const profileKey = `${auth.userId}/profile.json`;
-    const profileData = await c.env.profiles.get(profileKey);
-
-    if (!profileData) {
-      return c.json({ error: 'User profile not found' }, 404);
-    }
-
-    const profile = await profileData.json();
-
-    if (!profile.channelId) {
-      return c.json({ error: 'User does not own a channel' }, 403);
+    if (!channelId) {
+      return c.json({ error: 'channelId header is required for updating posts' }, 400);
     }
 
     const user = {
       ...auth,
-      channelId: profile.channelId
+      channelId,
+      userId,
     };
 
     try {

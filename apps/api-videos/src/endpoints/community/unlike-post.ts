@@ -12,6 +12,10 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
       params: z.object({
         postId: z.string(),
       }),
+      headers: z.object({
+        channelId: z.string().optional(),
+        userId: z.string(),
+      }),
     },
     responses: {
       200: {
@@ -42,6 +46,8 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
     const { postId } = c.req.param();
+    const request: any = await this.getValidatedData<typeof this.schema>();
+    const { channelId, userId } = request.headers;
 
     try {
       // Find the post
@@ -66,7 +72,7 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
       }
 
       // Check if user liked
-      const likeKey = `likes/${postId}/${auth.userId}.json`;
+      const likeKey = `likes/${postId}/${userId}.json`;
       const existingLike = await c.env.community_posts.get(likeKey);
 
       if (existingLike) {

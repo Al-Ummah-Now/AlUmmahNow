@@ -92,6 +92,9 @@ import { UpdatePostComment } from "./endpoints/community/post-comment-update";
 import { DeletePostComment } from "./endpoints/community/post-comment-delete";
 import { LikePostComment } from "./endpoints/community/post-comment-like";
 import { UnlikePostComment } from "./endpoints/community/post-comment-unlike";
+// Community Posts - Media Upload imports
+import { UploadCommunityPostImages } from "./endpoints/community/upload-images";
+import { UploadCommunityPostGif } from "./endpoints/community/upload-gif";
 
 
 // Start a Hono app - testing reload
@@ -373,6 +376,10 @@ openapi.delete("/api/community/posts/:postId/comments/:commentId", DeletePostCom
 openapi.post("/api/community/posts/:postId/comments/:commentId/like", LikePostComment);
 openapi.delete("/api/community/posts/:postId/comments/:commentId/like", UnlikePostComment);
 
+// Community Posts - Media Upload (require auth)
+openapi.post("/api/community/media/upload/images", UploadCommunityPostImages);
+openapi.post("/api/community/media/upload/gif", UploadCommunityPostGif);
+
 // Override the default OpenAPI document to include authentication
 app.get("/openapi.json", async (c) => {
 	// Get the original OpenAPI document from Chanfana
@@ -479,6 +486,9 @@ app.get("/openapi.json", async (c) => {
 		'/api/community/posts/{postId}/comments', // POST (create)
 		'/api/community/posts/{postId}/comments/{commentId}', // PUT, DELETE
 		'/api/community/posts/{postId}/comments/{commentId}/like', // POST, DELETE
+		// Community Posts - Media Upload
+		'/api/community/media/upload/images', // POST
+		'/api/community/media/upload/gif', // POST
 	];
 
 	// Add security requirements to authenticated endpoints

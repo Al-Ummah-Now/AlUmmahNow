@@ -18,6 +18,10 @@ const likeCommentSchema = {
       postId: Str({ description: 'Post ID' }),
       commentId: Str({ description: 'Comment ID' }),
     }),
+    headers: z.object({
+      channelId: z.string().optional(),
+      userId: z.string(),
+    }),
   },
   responses: {
     '200': {
@@ -56,6 +60,8 @@ export class LikePostComment extends OpenAPIRoute {
     }
 
     const { postId, commentId } = c.req.param();
+    const request: any = await this.getValidatedData<typeof this.schema>();
+    const { channelId, userId } = request.headers;
 
     const bucket = c.env.community_posts;
 
@@ -84,7 +90,7 @@ export class LikePostComment extends OpenAPIRoute {
     }
 
     // 3. Check if already liked
-    const likeKey = `comment-likes/${postId}/${commentId}/${auth.userId}.json`;
+    const likeKey = `comment-likes/${postId}/${commentId}/${userId}.json`;
     const existingLike = await bucket.get(likeKey);
 
     if (existingLike) {
@@ -98,7 +104,7 @@ export class LikePostComment extends OpenAPIRoute {
 
     // 4. Create like record
     const likeRecord: PostCommentLikeRecord = {
-      userId: auth.userId,
+      userId: userId,
       postId,
       commentId,
       likedAt: new Date().toISOString(),
@@ -115,8 +121,8 @@ export class LikePostComment extends OpenAPIRoute {
     await queue.send(MessageType.PostCommentLiked, {
       postId,
       commentId,
-      likerChannelId: auth.userId,
-      likerUserId: auth.userId,
+      likerChannelId: channelId,
+      likerUserId: userId,
       timestamp: likeRecord.likedAt,
     });
 

@@ -30,6 +30,10 @@ const createCommentSchema = {
     params: z.object({
       postId: Str({ description: 'Post ID' }),
     }),
+    headers: z.object({
+      channelId: z.string().optional(),
+      userId: z.string(),
+    }),
     body: {
       content: {
         'application/json': {
@@ -85,7 +89,8 @@ export class CreatePostComment extends OpenAPIRoute {
     }
 
     const { postId } = c.req.param();
-    const data = await this.getValidatedData<z.infer<typeof createCommentRequestSchema>>();
+    const data: any = await this.getValidatedData<z.infer<typeof createCommentRequestSchema>>();
+    const { channelId, userId } = data.headers;
 
     if (!data.body) {
       return c.json({ success: false, error: 'Request body is required' }, 400);
@@ -174,8 +179,8 @@ export class CreatePostComment extends OpenAPIRoute {
     const comment: PostComment = {
       id: crypto.randomUUID(),
       postId,
-      channelId: auth.channelId || auth.userId,
-      userId: auth.userId,
+      channelId: channelId || userId,
+      userId: userId,
       parentCommentId: requestBody.parentCommentId,
       content: requestBody.content,
       userDisplayName: (auth.payload as any).email || 'Anonymous',
@@ -227,8 +232,8 @@ export class CreatePostComment extends OpenAPIRoute {
     await queue.send(MessageType.PostCommentCreated, {
       postId,
       commentId: comment.id,
-      authorChannelId: comment.channelId,
-      authorUserId: comment.userId,
+      authorChannelId: channelId,
+      authorUserId: userId,
       parentCommentId: requestBody.parentCommentId,
       timestamp: comment.createdAt,
     });

@@ -59,6 +59,10 @@ export class CreateCommunityPost extends OpenAPIRoute {
     tags: ['Community'],
     summary: 'Create a community post',
     request: {
+      headers: z.object({
+        channelId: z.string().optional(),
+        userId: z.string(),
+      }),
       body: {
         content: {
           'application/json': {
@@ -90,45 +94,32 @@ export class CreateCommunityPost extends OpenAPIRoute {
         },
       },
     },
-  });
+  }, 'required');
 
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
-    const request = await this.getValidatedData<typeof this.schema>();
+    const request: any = await this.getValidatedData<typeof this.schema>();
     const body: any = request.body;
+    const { channelId, userId } = request.headers;
 
     if (!body) {
       return c.json({ error: 'Request body is required' }, 400);
     }
 
-    // Get user's channel ID from their profile
-    const profileKey = `${auth.userId}/profile.json`;
-    const profileData = await c.env.profiles.get(profileKey);
-
-    if (!profileData) {
-      return c.json({ error: 'User profile not found' }, 404);
+    // Community posts require a channel (can't post as just a user)
+    if (!channelId) {
+      return c.json({ error: 'channelId header is required for creating posts' }, 400);
     }
-
-    const profile = await profileData.json();
-
-    if (!profile.channelId) {
-      return c.json({ error: 'User does not own a channel' }, 403);
-    }
-
-    const user = {
-      ...auth,
-      channelId: profile.channelId
-    };
 
     // Validate request
-    const validation = await validateCreatePost(body, user);
+    const validation = await validateCreatePost(body, { userId, channelId });
     if (!validation.valid) {
       return c.json({ error: validation.error }, 400);
     }
 
     try {
-      // Get channel info
-      const channelKey = `${profile.channelId}/channel.json`;
+      // Get channel info for denormalized fields
+      const channelKey = `${channelId}/channel.json`;
       const channelData = await c.env.channels.get(channelKey);
 
       if (!channelData) {
@@ -137,21 +128,21 @@ export class CreateCommunityPost extends OpenAPIRoute {
 
       const channel = await channelData.json();
 
+      // Verify user owns this channel
+      if (channel.userId !== userId) {
+        return c.json({ error: 'User does not own this channel' }, 403);
+      }
+
       // Create post object
       const post: CommunityPost = {
         id: crypto.randomUUID(),
-        channelId: profile.channelId,
+        channelId: channelId,
+        userId: userId,
         type: body.type,
         content: body.content,
-        images: body.images ? body.images.map(img => ({
-          ...img,
-          url: `https://cdn.example.com/posts/${crypto.randomUUID()}` // Placeholder URL
-        })) : undefined,
+        images: body.images, // Images should be pre-uploaded via /api/community/media/upload/images
         videoId: body.videoId,
-        gif: body.gif ? {
-          ...body.gif,
-          url: `https://cdn.example.com/gifs/${crypto.randomUUID()}` // Placeholder URL
-        } : undefined,
+        gif: body.gif, // GIF should be pre-uploaded via /api/community/media/upload/gif
         poll: body.poll ? {
           ...body.poll,
           totalVotes: 0,
@@ -159,14 +150,7 @@ export class CreateCommunityPost extends OpenAPIRoute {
           options: body.poll.options.map((opt, idx) => ({
             id: `option-${idx}`,
             text: opt.text,
-            image: opt.image ? {
-              ...opt.image,
-              url: `https://cdn.example.com/poll-images/${crypto.randomUUID()}`,
-              width: 400,
-              height: 400,
-              mimeType: 'image/jpeg',
-              size: 50000
-            } : undefined,
+            image: opt.image, // Poll option images should be pre-uploaded
             votes: 0,
             percentage: 0
           }))
@@ -178,15 +162,7 @@ export class CreateCommunityPost extends OpenAPIRoute {
           options: body.quiz.options.map((opt, idx) => ({
             id: `quiz-option-${idx}`,
             text: opt.text,
-            image: opt.image ? {
-              ...opt.image,
-              url: `https://cdn.example.com/quiz-images/${crypto.randomUUID()}`,
-              width: 400,
-              height: 400,
-              caption: opt.image.caption,
-              mimeType: 'image/jpeg',
-              size: 50000
-            } : undefined,
+            image: opt.image, // Quiz option images should be pre-uploaded
           }))
         } : undefined,
         likes: 0,
@@ -205,18 +181,19 @@ export class CreateCommunityPost extends OpenAPIRoute {
       };
 
       // Save to R2
-      const postKey = `posts/${profile.channelId}/${post.id}.json`;
+      const postKey = `posts/${channelId}/${post.id}.json`;
       await c.env.community_posts.put(postKey, JSON.stringify(post));
 
       // Update channel index
-      await this.updateChannelIndex(c, profile.channelId, post.id);
+      await this.updateChannelIndex(c, channelId, post.id);
 
       // Send to processor queue for notifications (if published)
       if (post.status === PostStatus.PUBLISHED) {
         await c.env.queue.send({
           type: 'community_post_created',
           postId: post.id,
-          channelId: profile.channelId,
+          channelId: channelId,
+          userId: userId,
           timestamp: post.createdAt
         });
       }

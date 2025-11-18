@@ -13,6 +13,10 @@ const unlikeCommentSchema = {
       postId: Str({ description: 'Post ID' }),
       commentId: Str({ description: 'Comment ID' }),
     }),
+    headers: z.object({
+      channelId: z.string().optional(),
+      userId: z.string(),
+    }),
   },
   responses: {
     '200': {
@@ -51,6 +55,8 @@ export class UnlikePostComment extends OpenAPIRoute {
     }
 
     const { postId, commentId } = c.req.param();
+    const request: any = await this.getValidatedData<typeof this.schema>();
+    const { channelId, userId } = request.headers;
 
     const bucket = c.env.community_posts;
 
@@ -68,7 +74,7 @@ export class UnlikePostComment extends OpenAPIRoute {
     }
 
     // 2. Check if liked
-    const likeKey = `comment-likes/${postId}/${commentId}/${auth.userId}.json`;
+    const likeKey = `comment-likes/${postId}/${commentId}/${userId}.json`;
     const existingLike = await bucket.get(likeKey);
 
     if (!existingLike) {

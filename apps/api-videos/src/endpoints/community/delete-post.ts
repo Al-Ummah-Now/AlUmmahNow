@@ -12,6 +12,10 @@ export class DeleteCommunityPost extends OpenAPIRoute {
       params: z.object({
         postId: z.string(),
       }),
+      headers: z.object({
+        channelId: z.string(),
+        userId: z.string(),
+      }),
     },
     responses: {
       200: {
@@ -51,19 +55,11 @@ export class DeleteCommunityPost extends OpenAPIRoute {
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
     const { postId } = c.req.param();
+    const request: any = await this.getValidatedData<typeof this.schema>();
+    const { channelId, userId } = request.headers;
 
-    // Get user's channel ID from their profile
-    const profileKey = `${auth.userId}/profile.json`;
-    const profileData = await c.env.profiles.get(profileKey);
-
-    if (!profileData) {
-      return c.json({ error: 'User profile not found' }, 404);
-    }
-
-    const profile = await profileData.json();
-
-    if (!profile.channelId) {
-      return c.json({ error: 'User does not own a channel' }, 403);
+    if (!channelId) {
+      return c.json({ error: 'channelId header is required for deleting posts' }, 400);
     }
 
     try {
@@ -89,7 +85,7 @@ export class DeleteCommunityPost extends OpenAPIRoute {
       }
 
       // Check ownership
-      if (post.channelId !== profile.channelId) {
+      if (post.channelId !== channelId) {
         return c.json({ error: 'You can only delete your own posts' }, 403);
       }
 
@@ -100,13 +96,13 @@ export class DeleteCommunityPost extends OpenAPIRoute {
       await c.env.community_posts.put(postKey, JSON.stringify(post));
 
       // Remove from channel index
-      await this.removeFromChannelIndex(c, profile.channelId, postId);
+      await this.removeFromChannelIndex(c, channelId, postId);
 
       // Send deletion event to queue
       await c.env.queue.send({
         type: 'community_post_deleted',
         postId: postId,
-        channelId: profile.channelId,
+        channelId: channelId,
         timestamp: new Date().toISOString()
       });
 

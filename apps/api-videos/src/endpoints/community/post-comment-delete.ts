@@ -15,6 +15,10 @@ const deleteCommentSchema = {
       postId: Str({ description: 'Post ID' }),
       commentId: Str({ description: 'Comment ID' }),
     }),
+    headers: z.object({
+      channelId: z.string().optional(),
+      userId: z.string(),
+    }),
   },
   responses: {
     '200': {
@@ -63,6 +67,8 @@ export class DeletePostComment extends OpenAPIRoute {
     }
 
     const { postId, commentId } = c.req.param();
+    const request: any = await this.getValidatedData<typeof this.schema>();
+    const { channelId, userId } = request.headers;
 
     const bucket = c.env.community_posts;
 
@@ -105,8 +111,8 @@ export class DeletePostComment extends OpenAPIRoute {
     }
 
     // 3. Check authorization (comment author OR post owner)
-    const isCommentAuthor = comment.userId === auth.userId;
-    const isPostOwner = post.channelId === auth.userId;
+    const isCommentAuthor = comment.userId === userId;
+    const isPostOwner = post.channelId === channelId;
 
     if (!isCommentAuthor && !isPostOwner) {
       return c.json(
@@ -157,7 +163,7 @@ export class DeletePostComment extends OpenAPIRoute {
     await queue.send(MessageType.PostCommentDeleted, {
       postId,
       commentId,
-      deletedByUserId: auth.userId,
+      deletedByUserId: userId,
       timestamp: comment.deletedAt,
     });
 
