@@ -39,65 +39,44 @@ const ProfilePage = () => {
               <div className="relative">
                 {/* Cover Photo */}
                 <div
-                  className="cover-photo h-48 bg-gray-300 dark:bg-gray-600 rounded-md overflow-hidden group"
+                  className="cover-photo h-48 bg-gray-300 dark:bg-gray-600 rounded-md overflow-hidden relative"
                   style={{
-                    backgroundImage: `url(${profile?.coverUrl || '/default-cover.jpg'})`,
+                    backgroundImage: profile?.coverUrl ? `url(${profile.coverUrl})` : 'none',
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                   }}
                 >
-                  {/* Edit Icon */}
-                  <div
-                    className="edit-icon w-full h-full bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-50 transition-opacity cursor-pointer"
+                  {/* Edit Button - Always visible */}
+                  <button
                     onClick={() => router.push('/en/profile/edit')}
+                    className="absolute top-4 right-4 inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg"
                   >
                     <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-6 w-6 text-white"
+                      className="w-4 h-4"
                       fill="none"
-                      viewBox="0 0 24 24"
                       stroke="currentColor"
-                      strokeWidth={2}
+                      viewBox="0 0 24 24"
                     >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        d="M15.232 5.232l3.536 3.536M9 11l6.536-6.536a2 2 0 112.828 2.828L11.828 13.828a2 2 0 01-.828.536l-4 1a1 1 0 01-1.264-1.264l1-4a2 2 0 01.536-.828z"
+                        strokeWidth={2}
+                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
                       />
                     </svg>
-                  </div>
+                    {t.common.edit}
+                  </button>
                 </div>
 
                 {/* Profile Photo */}
                 <div
-                  className="profile-photo w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-600 border-4 border-white dark:border-gray-800 absolute bottom-[-24px] left-4 overflow-hidden group"
+                  className="profile-photo w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-600 border-4 border-white dark:border-gray-800 absolute bottom-[-24px] left-4 overflow-hidden"
                   style={{
-                    backgroundImage: `url(${profile?.avatarUrl || '/default-profile.jpg'})`,
+                    backgroundImage: profile?.avatarUrl ? `url(${profile.avatarUrl})` : `url(/avatar.png)`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                   }}
-                >
-                  {/* Edit Icon */}
-                  <div
-                    className="edit-icon w-full h-full bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-50 transition-opacity cursor-pointer"
-                    onClick={() => router.push('/en/profile/edit')}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-6 w-6 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M15.232 5.232l3.536 3.536M9 11l6.536-6.536a2 2 0 112.828 2.828L11.828 13.828a2 2 0 01-.828.536l-4 1a1 1 0 01-1.264-1.264l1-4a2 2 0 01.536-.828z"
-                      />
-                    </svg>
-                  </div>
-                </div>
+                />
               </div>
               <h1 className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{`${profile?.firstName ?? ""} ${profile?.lastName ?? ""}`}</h1>
             </section>

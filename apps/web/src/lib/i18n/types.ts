@@ -104,6 +104,12 @@ export interface AppTranslations {
     enterChannelNamePlaceholder: string;
     refreshChannelList: string;
     singleChannel: string;
+    clickToChangeCover: string;
+    clickToChangeAvatar: string;
+    updateChannelInformation: string;
+    channelNotFoundMessage: string;
+    charactersRemaining: string;
+    saveChanges: string;
   };
 
   /**

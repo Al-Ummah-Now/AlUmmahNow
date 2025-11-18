@@ -84,6 +84,12 @@ export const AR_TRANSLATIONS: AppTranslations = {
     enterChannelNamePlaceholder: 'أدخل اسم القناة',
     refreshChannelList: 'تحديث قائمة القنوات',
     singleChannel: 'قناة',
+    clickToChangeCover: 'اضغط لتغيير الغلاف',
+    clickToChangeAvatar: 'اضغط لتغيير الصورة',
+    updateChannelInformation: 'تحديث معلومات قناتك',
+    channelNotFoundMessage: 'القناة التي تحاول تعديلها غير موجودة.',
+    charactersRemaining: 'حرف',
+    saveChanges: 'حفظ التغييرات',
   },
 
   profile: {

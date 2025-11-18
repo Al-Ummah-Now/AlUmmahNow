@@ -84,6 +84,12 @@ export const EN_TRANSLATIONS: AppTranslations = {
     enterChannelNamePlaceholder: 'Enter channel name',
     refreshChannelList: 'Refresh channel list',
     singleChannel: 'Channel',
+    clickToChangeCover: 'Click to change cover',
+    clickToChangeAvatar: 'Click to change avatar',
+    updateChannelInformation: 'Update your channel information',
+    channelNotFoundMessage: "The channel you're trying to edit doesn't exist.",
+    charactersRemaining: 'characters',
+    saveChanges: 'Save Changes',
   },
 
   profile: {
