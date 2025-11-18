@@ -66,6 +66,12 @@
 			"bucket_name": "channel-sections",
 			"preview_bucket_name": "channel-sections-preview",
 			"remote": true
+		},
+		{
+			"binding": "community_posts",
+			"bucket_name": "community-posts",
+			"preview_bucket_name": "community-posts-preview",
+			"remote": true
 		}
 	],
 	"kv_namespaces": [

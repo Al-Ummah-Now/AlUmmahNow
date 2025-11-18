@@ -8,6 +8,8 @@ export * from './comment';
 export * from './analytics';
 export * from './common';
 export * from './watch-history';
+export * from './community-post';
+export * from './post-comment';
 
 // Export localization utility
 export * from './localization';

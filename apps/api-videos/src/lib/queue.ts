@@ -43,6 +43,12 @@ export enum MessageType {
     VideoUploadCompleted,
     VideoProcessingCompleted,
     VideoUploadFailed,
+    // Community post comment events
+    PostCommentCreated,
+    PostCommentLiked,
+    PostCommentDeleted,
+    PostCommentPinned,
+    PostCommentHearted,
 }
 
 export type Message<T> = {

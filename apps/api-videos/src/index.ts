@@ -75,6 +75,23 @@ import { AnalyticsGet } from "./endpoints/analytics/analyticsGet";
 // Phase 2: Content Moderation imports
 import { ReportCreate } from "./endpoints/moderation/reportCreate";
 import { ModerationAction } from "./endpoints/moderation/moderationAction";
+// Community Posts imports
+import { ListCommunityPosts } from "./endpoints/community/list-posts";
+import { GetCommunityPost } from "./endpoints/community/get-post";
+import { CreateCommunityPost } from "./endpoints/community/create-post";
+import { UpdateCommunityPost } from "./endpoints/community/update-post";
+import { DeleteCommunityPost } from "./endpoints/community/delete-post";
+import { LikeCommunityPost } from "./endpoints/community/like-post";
+import { UnlikeCommunityPost } from "./endpoints/community/unlike-post";
+import { VoteOnPoll } from "./endpoints/community/vote-poll";
+import { GetPollResults } from "./endpoints/community/get-poll-results";
+// Community Posts - Comments imports
+import { ListPostComments } from "./endpoints/community/post-comments-list";
+import { CreatePostComment } from "./endpoints/community/post-comment-create";
+import { UpdatePostComment } from "./endpoints/community/post-comment-update";
+import { DeletePostComment } from "./endpoints/community/post-comment-delete";
+import { LikePostComment } from "./endpoints/community/post-comment-like";
+import { UnlikePostComment } from "./endpoints/community/post-comment-unlike";
 
 
 // Start a Hono app - testing reload
@@ -169,9 +186,15 @@ openapi.get("/api/playlists", PlaylistsList);
 openapi.get("/api/playlists/:id", PlaylistFetch);
 openapi.get("/api/channels", ChannelsList);
 openapi.get("/api/channels/:id", ChannelFetch);
+// Community Posts endpoints (public)
+openapi.get("/api/community/posts", ListCommunityPosts);
+openapi.get("/api/community/posts/:postId", GetCommunityPost);
+openapi.get("/api/community/posts/:postId/results", GetPollResults);
+// Community Posts - Comments endpoints (public read, auth required for write)
+openapi.get("/api/community/posts/:postId/comments", ListPostComments);
 // Phase 2: Live Streaming endpoints
 openapi.get("/api/live-streams", LiveStreamsList);
-// Phase 2: Analytics endpoints  
+// Phase 2: Analytics endpoints
 openapi.get("/api/analytics", AnalyticsGet);
 
 // Monitoring and testing endpoints (public)
@@ -231,6 +254,28 @@ app.use('/api/analytics', authMiddleware);
 app.use('/api/moderation/*', authMiddleware);
 app.use('/api/watch-history/*', authMiddleware);
 app.use('/api/watch-history', authMiddleware);
+
+// Community posts - GET endpoints are public, others require auth
+app.use('/api/community/posts', (c, next) => {
+	if (c.req.method === 'GET') {
+		return next();
+	}
+	return authMiddleware(c, next);
+});
+
+app.use('/api/community/posts/:postId/like', authMiddleware);
+app.use('/api/community/posts/:postId/vote', authMiddleware);
+
+// Community posts comments - GET is public, others require auth
+app.use('/api/community/posts/:postId/comments', (c, next) => {
+	if (c.req.method === 'GET') {
+		return next();
+	}
+	return authMiddleware(c, next);
+});
+
+app.use('/api/community/posts/:postId/comments/:commentId', authMiddleware);
+app.use('/api/community/posts/:postId/comments/:commentId/like', authMiddleware);
 
 // AUTHENTICATED endpoints (require valid JWT token)
 openapi.post("/api/videos", VideoCreate);
@@ -312,6 +357,21 @@ openapi.patch("/api/live-streams/:id", LiveStreamUpdate);
 // Content Moderation (require auth)
 openapi.post("/api/moderation/report", ReportCreate);
 openapi.post("/api/moderation/actions/:reportId", ModerationAction);
+
+// Community Posts management (require auth)
+openapi.post("/api/community/posts", CreateCommunityPost);
+openapi.put("/api/community/posts/:postId", UpdateCommunityPost);
+openapi.delete("/api/community/posts/:postId", DeleteCommunityPost);
+openapi.post("/api/community/posts/:postId/like", LikeCommunityPost);
+openapi.delete("/api/community/posts/:postId/like", UnlikeCommunityPost);
+openapi.post("/api/community/posts/:postId/vote", VoteOnPoll);
+
+// Community Posts - Comments management (require auth)
+openapi.post("/api/community/posts/:postId/comments", CreatePostComment);
+openapi.put("/api/community/posts/:postId/comments/:commentId", UpdatePostComment);
+openapi.delete("/api/community/posts/:postId/comments/:commentId", DeletePostComment);
+openapi.post("/api/community/posts/:postId/comments/:commentId/like", LikePostComment);
+openapi.delete("/api/community/posts/:postId/comments/:commentId/like", UnlikePostComment);
 
 // Override the default OpenAPI document to include authentication
 app.get("/openapi.json", async (c) => {
@@ -410,6 +470,15 @@ app.get("/openapi.json", async (c) => {
 		// Phase 2: Content Moderation
 		'/api/moderation/report', // POST
 		'/api/moderation/actions/{reportId}', // POST
+		// Community Posts management
+		'/api/community/posts', // POST (create)
+		'/api/community/posts/{postId}', // PUT, DELETE
+		'/api/community/posts/{postId}/like', // POST, DELETE
+		'/api/community/posts/{postId}/vote', // POST
+		// Community Posts - Comments management
+		'/api/community/posts/{postId}/comments', // POST (create)
+		'/api/community/posts/{postId}/comments/{commentId}', // PUT, DELETE
+		'/api/community/posts/{postId}/comments/{commentId}/like', // POST, DELETE
 	];
 
 	// Add security requirements to authenticated endpoints
