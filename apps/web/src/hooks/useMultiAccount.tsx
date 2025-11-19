@@ -21,6 +21,7 @@ import {
   getActiveSessionInfo,
 } from '@/lib/actions/multi-account';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
+import { logger } from '@/lib/logger-client';
 
 // Types
 interface ChannelInfo {
@@ -64,7 +65,7 @@ interface MultiAccountContextValue {
   createChannel: (data: ChannelCreateRequest) => Promise<Channel | null>;
   reloadChannels: () => Promise<void>;
   logout: () => Promise<void>;
-  logoutAll: () => Promise<void>;
+  logoutAll: (skipConfirmation?: boolean) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -94,7 +95,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const loadSessionData = useCallback(async () => {
     // Prevent concurrent loads
     if (loadingRef.current) {
-      console.log('[MultiAccountProvider] Already loading, skipping duplicate call');
+      logger.info('[MultiAccountProvider] Already loading, skipping duplicate call');
       return;
     }
 
@@ -105,16 +106,27 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         setError(null);
       }
 
+      logger.info('[MultiAccountProvider] Fetching session info...');
       const sessionInfo = await getActiveSessionInfo();
+      logger.info('[MultiAccountProvider] Session info received:', sessionInfo ? 'Has data' : 'No data');
 
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) {
+        logger.info('[MultiAccountProvider] Component unmounted, aborting');
+        return;
+      }
 
       if (sessionInfo) {
         setUser(sessionInfo.user);
         setAccounts(sessionInfo.accounts);
+        logger.info('[MultiAccountProvider] Session loaded successfully:', {
+          userId: sessionInfo.user?.id,
+          email: sessionInfo.user?.email,
+          accountsCount: sessionInfo.accounts.length
+        });
       } else {
         setUser(null);
         setAccounts([]);
+        logger.info('[MultiAccountProvider] No session found');
       }
 
       // Dispatch event to notify other components (like CookieSizeMonitor)
@@ -123,15 +135,18 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       if (!mountedRef.current) return;
-      console.error('[MultiAccountProvider] Failed to load session:', err);
-      setError('Failed to load session data');
+      logger.error('[MultiAccountProvider] Failed to load session:', err);
+      setUser(null);
+      setAccounts([]);
+      setError(err instanceof Error ? err.message : 'Failed to load session data');
     } finally {
       loadingRef.current = false;
       if (mountedRef.current) {
         setLoading(false);
       }
+      logger.info('[MultiAccountProvider] Loading complete, loading state set to false');
     }
-  }, []);
+  }, [router]);
 
   // Load data on mount
   useEffect(() => {
@@ -141,7 +156,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   // Listen for navigation events to detect OAuth callback returns
   useEffect(() => {
     const handleRouteChange = () => {
-      console.log('[MultiAccountProvider] Route changed, reloading session data');
+      logger.info('[MultiAccountProvider] Route changed, reloading session data');
       loadSessionData();
     };
 
@@ -159,29 +174,27 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
   // Detect OAuth callback redirect with session_updated query param
   useEffect(() => {
-    const checkSessionUpdate = () => {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('session_updated') === 'true') {
-        console.log('[MultiAccountProvider] Session updated detected, reloading session data');
+    const params = new URLSearchParams(window.location.search);
+    const hasSessionUpdate = params.get('session_updated') === 'true';
 
-        // Reload session data
-        loadSessionData();
+    if (hasSessionUpdate) {
+      logger.info('[MultiAccountProvider] Session updated parameter detected');
 
-        // Clean up URL by removing the query parameter
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete('session_updated');
-        window.history.replaceState({}, '', newUrl.toString());
-      }
-    };
+      // Clean up URL immediately
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('session_updated');
+      window.history.replaceState({}, '', newUrl.toString());
 
-    // Check on mount
-    checkSessionUpdate();
+      // The session will load via the normal loadSessionData on mount
+      // Just trigger a router refresh after a short delay to ensure everything is ready
+      const timeoutId = setTimeout(() => {
+        logger.info('[MultiAccountProvider] Calling router.refresh() after OAuth callback');
+        router.refresh();
+      }, 200);
 
-    // Also check after a short delay to ensure cookies are set
-    const timeoutId = setTimeout(checkSessionUpdate, 100);
-
-    return () => clearTimeout(timeoutId);
-  }, [loadSessionData]);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [router]);
 
   // Add a new account
   const addAccount = useCallback(async () => {
@@ -190,7 +203,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       await addUserAccount();
       // This will redirect to OAuth flow
     } catch (err) {
-      console.error('[MultiAccountProvider] Failed to add account:', err);
+      logger.error('[MultiAccountProvider] Failed to add account:', err);
       setError('Failed to add account');
     }
   }, []);
@@ -205,25 +218,25 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const currentPath = window.location.pathname;
       const result = await switchUserAccount(userId, currentPath);
 
-      console.log('[MultiAccountProvider] Account switched successfully');
-      console.log('[MultiAccountProvider] Current path:', currentPath);
-      console.log('[MultiAccountProvider] Redirect needed?', result.needsRedirect);
-      console.log('[MultiAccountProvider] Redirect path:', result.redirectPath);
+      logger.info('[MultiAccountProvider] Account switched successfully');
+      logger.info('[MultiAccountProvider] Current path:', currentPath);
+      logger.info('[MultiAccountProvider] Redirect needed?', result.needsRedirect);
+      logger.info('[MultiAccountProvider] Redirect path:', result.redirectPath);
 
       // Reload session data to get new user/channels
       await loadSessionData();
 
       if (result.needsRedirect && result.redirectPath) {
         // Navigate to redirect path (e.g., from /profile/create to home if new user has profile)
-        console.log('[MultiAccountProvider] Navigating to:', result.redirectPath);
+        logger.info('[MultiAccountProvider] Navigating to:', result.redirectPath);
         router.push(result.redirectPath);
       } else {
         // Stay on current page but refresh to re-run ProfileGuard and server components
-        console.log('[MultiAccountProvider] Refreshing current page');
+        logger.info('[MultiAccountProvider] Refreshing current page');
         router.refresh();
       }
     } catch (err) {
-      console.error('[MultiAccountProvider] Failed to switch account:', err);
+      logger.error('[MultiAccountProvider] Failed to switch account:', err);
       setError('Failed to switch account');
     } finally {
       setLoading(false);
@@ -251,7 +264,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       // Refresh the page to update server components
       router.refresh();
     } catch (err) {
-      console.error('[MultiAccountProvider] Failed to remove account:', err);
+      logger.error('[MultiAccountProvider] Failed to remove account:', err);
       setError('Failed to remove account');
     }
   }, [accounts, loadSessionData, router]);
@@ -268,7 +281,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       // Refresh the page to update server components
       router.refresh();
     } catch (err) {
-      console.error('[MultiAccountProvider] Failed to switch channel:', err);
+      logger.error('[MultiAccountProvider] Failed to switch channel:', err);
       setError('Failed to switch channel');
     } finally {
       setLoading(false);
@@ -290,7 +303,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
       return null;
     } catch (err) {
-      console.error('[MultiAccountProvider] Failed to create channel:', err);
+      logger.error('[MultiAccountProvider] Failed to create channel:', err);
       setError('Failed to create channel');
       return null;
     }
@@ -311,7 +324,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         setAccounts(sessionInfo.accounts);
       }
     } catch (err) {
-      console.error('[MultiAccountProvider] Failed to reload channels:', err);
+      logger.error('[MultiAccountProvider] Failed to reload channels:', err);
       setError('Failed to reload channels');
     }
   }, []);
@@ -323,7 +336,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
       // Check if this is the last account BEFORE logging out
       const isLastAccount = accounts.length <= 1;
-      console.log('[MultiAccountProvider] Logging out, is last account:', isLastAccount);
+      logger.info('[MultiAccountProvider] Logging out, is last account:', isLastAccount);
 
       try {
         await logoutCurrentAccount();
@@ -331,12 +344,12 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         // Next.js redirect errors are expected - they indicate successful server-side redirect
         const isRedirectError = serverError instanceof Error &&
           (serverError.message === 'NEXT_REDIRECT' ||
-           (serverError as any).digest?.startsWith?.('NEXT_REDIRECT'));
+           (serverError as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'));
 
         if (!isRedirectError) {
           throw serverError;
         }
-        console.log('[MultiAccountProvider] Server redirect detected (expected behavior)');
+        logger.info('[MultiAccountProvider] Server redirect detected (expected behavior)');
       }
 
       // Clear local state immediately
@@ -345,7 +358,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
       // If this was the last account, force navigation to home
       if (isLastAccount) {
-        console.log('[MultiAccountProvider] Last account logged out, navigating to home');
+        logger.info('[MultiAccountProvider] Last account logged out, navigating to home');
         const locale = window.location.pathname.includes('/ar') ? 'ar' : 'en';
         router.push(`/${locale}`);
       } else {
@@ -354,18 +367,22 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         router.refresh();
       }
     } catch (err) {
-      console.error('[MultiAccountProvider] Failed to logout:', err);
+      logger.error('[MultiAccountProvider] Failed to logout:', err);
       setError('Failed to logout');
     }
   }, [accounts, loadSessionData, router]);
 
   // Logout all accounts
-  const logoutAll = useCallback(async () => {
+  const logoutAll = useCallback(async (skipConfirmation = false) => {
     try {
       setError(null);
 
-      const confirmed = window.confirm('Logout from all accounts?');
-      if (!confirmed) return;
+      // Confirmation should be handled by the UI component calling this function
+      // skipConfirmation is true when UI has already shown confirmation dialog
+      if (!skipConfirmation) {
+        logger.warn('[MultiAccountProvider] logoutAll called without confirmation - UI should handle confirmation');
+        return;
+      }
 
       try {
         await logoutAllAccounts();
@@ -373,12 +390,12 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         // Next.js redirect errors are expected - they indicate successful server-side redirect
         const isRedirectError = serverError instanceof Error &&
           (serverError.message === 'NEXT_REDIRECT' ||
-           (serverError as any).digest?.startsWith?.('NEXT_REDIRECT'));
+           (serverError as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'));
 
         if (!isRedirectError) {
           throw serverError;
         }
-        console.log('[MultiAccountProvider] Server redirect detected (expected behavior)');
+        logger.info('[MultiAccountProvider] Server redirect detected (expected behavior)');
       }
 
       // Clear local state immediately
@@ -386,11 +403,11 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       setAccounts([]);
 
       // Force navigation to home
-      console.log('[MultiAccountProvider] All accounts logged out, navigating to home');
+      logger.info('[MultiAccountProvider] All accounts logged out, navigating to home');
       const locale = window.location.pathname.includes('/ar') ? 'ar' : 'en';
       router.push(`/${locale}`);
     } catch (err) {
-      console.error('[MultiAccountProvider] Failed to logout all:', err);
+      logger.error('[MultiAccountProvider] Failed to logout all:', err);
       setError('Failed to logout');
     }
   }, [router]);

@@ -154,6 +154,7 @@ export function UnifiedNavigation() {
   const [isOpen, setIsOpen] = useState(false);
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
+  const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false);
 
   // Handle Escape key to close menu
   useEffect(() => {
@@ -720,8 +721,7 @@ export function UnifiedNavigation() {
               {accounts.length > 1 && (
                 <button
                   onClick={() => {
-                    logoutAll();
-                    setIsOpen(false);
+                    setShowLogoutAllConfirm(true);
                   }}
                   className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
                   role="menuitem"
@@ -745,6 +745,46 @@ export function UnifiedNavigation() {
                 </div>
               </>
             )}
+          </div>
+        </>
+      )}
+
+      {/* Logout All Confirmation Dialog */}
+      {showLogoutAllConfirm && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={() => setShowLogoutAllConfirm(false)}
+            aria-hidden="true"
+          />
+
+          {/* Dialog */}
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md p-6 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              {t.navigation.signOutOfAll}?
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              You will be logged out from all {accounts.length} accounts.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowLogoutAllConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                onClick={() => {
+                  setShowLogoutAllConfirm(false);
+                  setIsOpen(false);
+                  logoutAll(true); // Pass true to skip confirmation check
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                {t.navigation.signOutOfAll}
+              </button>
+            </div>
           </div>
         </>
       )}

@@ -16,7 +16,7 @@ import { createChannel } from '../api/channels';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 import { subjects } from '../auth';
 import { shouldRedirectToProfileCreation } from '../profile-helpers';
-import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger-server';
 
 /**
  * Get OpenAuth client
@@ -150,7 +150,7 @@ export async function switchUserAccount(userId: string, currentPath?: string): P
   } catch (error) {
     // Re-throw NEXT_REDIRECT errors (from revalidatePath/router operations) - they're expected
     // Check for both the error message and the digest property
-    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.startsWith?.('NEXT_REDIRECT'))) {
+    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'))) {
       throw error;
     }
     logger.error('[switchUserAccount] Error:', error);
@@ -298,7 +298,7 @@ export async function logoutCurrentAccount(): Promise<void> {
     }
   } catch (error) {
     // Re-throw NEXT_REDIRECT errors - they're expected behavior
-    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.startsWith?.('NEXT_REDIRECT'))) {
+    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'))) {
       throw error;
     }
     logger.error('[logoutCurrentAccount] Error:', error);
@@ -315,7 +315,7 @@ export async function logoutAllAccounts(): Promise<void> {
     redirect('/');
   } catch (error) {
     // Re-throw NEXT_REDIRECT errors - they're expected behavior
-    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.startsWith?.('NEXT_REDIRECT'))) {
+    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'))) {
       throw error;
     }
     logger.error('[logoutAllAccounts] Error:', error);
