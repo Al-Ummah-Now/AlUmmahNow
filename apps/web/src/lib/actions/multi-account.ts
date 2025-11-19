@@ -98,7 +98,7 @@ export async function completeAddAccount(code: string): Promise<void> {
     redirect('/');
   } catch (error) {
     logger.error('[completeAddAccount] Error:', error);
-    redirect('/login?error=add_account_failed');
+    redirect('/?error=add_account_failed');
   }
 }
 
@@ -289,14 +289,18 @@ export async function logoutCurrentAccount(): Promise<void> {
 
     await SessionManager.removeAccount(session.userId);
 
-    // If no accounts left, redirect to login
+    // If no accounts left, redirect to home
     const remainingAccounts = await SessionManager.getAllSessions();
     if (remainingAccounts.length === 0) {
-      redirect('/login');
+      redirect('/');
     } else {
       revalidatePath('/');
     }
   } catch (error) {
+    // Re-throw NEXT_REDIRECT errors - they're expected behavior
+    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.startsWith?.('NEXT_REDIRECT'))) {
+      throw error;
+    }
     logger.error('[logoutCurrentAccount] Error:', error);
     redirect('/');
   }
@@ -308,10 +312,14 @@ export async function logoutCurrentAccount(): Promise<void> {
 export async function logoutAllAccounts(): Promise<void> {
   try {
     await SessionManager.clearAllSessions();
-    redirect('/login');
+    redirect('/');
   } catch (error) {
+    // Re-throw NEXT_REDIRECT errors - they're expected behavior
+    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.startsWith?.('NEXT_REDIRECT'))) {
+      throw error;
+    }
     logger.error('[logoutAllAccounts] Error:', error);
-    redirect('/login');
+    redirect('/');
   }
 }
 
@@ -354,6 +362,7 @@ export async function getActiveSessionInfo() {
     id: session.channel.id,
     userId: session.channel.userId,
     name: session.channel.name,
+    nameLocalized: session.channel.nameLocalized,
     avatarUrl: session.channel.avatarUrl,
     isMain: session.channel.isMain,
   } : null;
@@ -377,6 +386,7 @@ export async function getActiveSessionInfo() {
         id: ch.id,
         userId: ch.userId,
         name: ch.name,
+        nameLocalized: ch.nameLocalized,
         avatarUrl: ch.avatarUrl,
         isMain: ch.isMain,
       })),

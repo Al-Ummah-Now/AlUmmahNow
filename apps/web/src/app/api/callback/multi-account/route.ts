@@ -78,7 +78,8 @@ export async function GET(req: NextRequest) {
     // For multi-account callback, redirect to profile page where user can see all their accounts
     // Note: Could use state parameter to track where "Add Account" was clicked for better UX
     logger.info("[Multi-Account Callback] Redirecting to profile page");
-    return NextResponse.redirect(`${url.origin}/en/profile`);
+    // Add query param to trigger session reload
+    return NextResponse.redirect(`${url.origin}/en/profile?session_updated=true`);
   }
 
   logger.error("[Multi-Account Callback] Authentication failed:", result.error);

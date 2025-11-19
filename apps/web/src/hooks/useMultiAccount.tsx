@@ -27,6 +27,7 @@ interface ChannelInfo {
   id: string;
   userId: string;  // Owner of the channel - needed for filtering by account
   name: string;
+  nameLocalized?: Record<string, string>; // Multi-language channel names
   avatarUrl?: string;
   isMain: boolean;
 }
@@ -111,6 +112,51 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   // Load data on mount
   useEffect(() => {
     loadSessionData();
+  }, [loadSessionData]);
+
+  // Listen for navigation events to detect OAuth callback returns
+  useEffect(() => {
+    const handleRouteChange = () => {
+      console.log('[MultiAccountProvider] Route changed, reloading session data');
+      loadSessionData();
+    };
+
+    // Listen for popstate (browser back/forward)
+    window.addEventListener('popstate', handleRouteChange);
+
+    // Listen for custom navigation events (for client-side navigation)
+    window.addEventListener('session-login', handleRouteChange);
+
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+      window.removeEventListener('session-login', handleRouteChange);
+    };
+  }, [loadSessionData]);
+
+  // Detect OAuth callback redirect with session_updated query param
+  useEffect(() => {
+    const checkSessionUpdate = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('session_updated') === 'true') {
+        console.log('[MultiAccountProvider] Session updated detected, reloading session data');
+
+        // Reload session data
+        loadSessionData();
+
+        // Clean up URL by removing the query parameter
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('session_updated');
+        window.history.replaceState({}, '', newUrl.toString());
+      }
+    };
+
+    // Check on mount
+    checkSessionUpdate();
+
+    // Also check after a short delay to ensure cookies are set
+    const timeoutId = setTimeout(checkSessionUpdate, 100);
+
+    return () => clearTimeout(timeoutId);
   }, [loadSessionData]);
 
   // Add a new account
@@ -252,19 +298,17 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       await logoutCurrentAccount();
+
+      // Reload session data to get updated accounts list
       await loadSessionData();
 
-      // Refresh or redirect based on remaining accounts
-      if (accounts.length <= 1) {
-        router.push('/login');
-      } else {
-        router.refresh();
-      }
+      // Router.refresh will handle updating the UI
+      router.refresh();
     } catch (err) {
       console.error('[MultiAccountProvider] Failed to logout:', err);
       setError('Failed to logout');
     }
-  }, [accounts.length, loadSessionData, router]);
+  }, [loadSessionData, router]);
 
   // Logout all accounts
   const logoutAll = useCallback(async () => {
@@ -275,12 +319,17 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       if (!confirmed) return;
 
       await logoutAllAccounts();
-      router.push('/login');
+
+      // Reload session data (should be empty now)
+      await loadSessionData();
+
+      // Refresh will redirect to home
+      router.refresh();
     } catch (err) {
       console.error('[MultiAccountProvider] Failed to logout all:', err);
       setError('Failed to logout');
     }
-  }, [router]);
+  }, [loadSessionData, router]);
 
   // Refresh session data
   const refresh = useCallback(async () => {

@@ -21,6 +21,8 @@ import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import Link from 'next/link';
 import { login } from '@/lib/actions';
+import { fetchProfile } from '@/lib/api/profiles-client';
+import type { Profile } from '@/interfaces';
 import {
   ChevronDown,
   Check,
@@ -61,6 +63,48 @@ export function UnifiedNavigation() {
 
   const [channel, setChannel] = useState(user?.channel);
   const [channels, setChannels] = useState(user?.channels || []);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [accountProfiles, setAccountProfiles] = useState<Map<string, Profile>>(new Map());
+
+  // Fetch user profile for localized display name and avatar
+  useEffect(() => {
+    if (user) {
+      fetchProfile(user, (profileData: Profile) => {
+        setProfile(profileData);
+      }).catch((err: Error) => {
+        console.error('[UnifiedNavigation] Failed to load profile:', err);
+      });
+    } else {
+      setProfile(null);
+    }
+  }, [user]);
+
+  // Fetch profiles for all accounts
+  useEffect(() => {
+    const loadAccountProfiles = async () => {
+      const profilesMap = new Map<string, Profile>();
+
+      for (const account of accounts) {
+        try {
+          const accountUser = { id: account.userId, email: account.email };
+          await new Promise<void>((resolve) => {
+            fetchProfile(accountUser, (profileData: Profile) => {
+              profilesMap.set(account.userId, profileData);
+              resolve();
+            }).catch(() => resolve()); // Silently fail for individual accounts
+          });
+        } catch (err) {
+          console.error(`[UnifiedNavigation] Failed to load profile for ${account.userId}`);
+        }
+      }
+
+      setAccountProfiles(profilesMap);
+    };
+
+    if (accounts.length > 0) {
+      loadAccountProfiles();
+    }
+  }, [accounts]);
 
   // Update local state when user changes
   useEffect(() => {
@@ -74,6 +118,36 @@ export function UnifiedNavigation() {
     setChannel(user?.channel);
     setChannels(user?.channels || []);
   }, [user?.id, user?.email, user?.channel, user?.channels]);
+
+  // Get localized display name
+  const getDisplayName = () => {
+    if (profile?.displayNameLocalized?.[lang]) {
+      return profile.displayNameLocalized[lang];
+    }
+    if (profile?.displayName) {
+      return profile.displayName;
+    }
+    return user?.displayName || user?.email || '';
+  };
+
+  // Get user avatar (always from profile, never from channel)
+  const getUserAvatar = () => {
+    return profile?.avatarUrl || user?.avatarUrl;
+  };
+
+  // Get avatar for any account by userId
+  const getAccountAvatar = (userId: string) => {
+    const accountProfile = accountProfiles.get(userId);
+    return accountProfile?.avatarUrl;
+  };
+
+  // Get localized channel name
+  const getChannelName = (channelName: string, channelNameLocalized?: Record<string, string>) => {
+    if (channelNameLocalized?.[lang]) {
+      return channelNameLocalized[lang];
+    }
+    return channelName;
+  };
 
   const { theme, setTheme } = useTheme();
 
@@ -234,7 +308,7 @@ export function UnifiedNavigation() {
 
   return (
     <div className="relative">
-      {/* Trigger Button - User Avatar with Dropdown */}
+      {/* Trigger Button - Avatar with Dropdown */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -242,18 +316,34 @@ export function UnifiedNavigation() {
         aria-expanded={isOpen}
         aria-haspopup="menu"
       >
-        {/* User Avatar */}
-        <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">
-          {user.displayName?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
-        </div>
+        {/* Avatar: Show channel avatar if channel selected, otherwise user avatar */}
+        {channel?.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={channel.avatarUrl}
+            alt={channel.name}
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : getUserAvatar() ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={getUserAvatar()!}
+            alt={getDisplayName()}
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : (
+          <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">
+            {getDisplayName()[0]?.toUpperCase() || user.email[0].toUpperCase()}
+          </div>
+        )}
 
         {/* User Info (hidden on mobile) */}
         <div className="hidden md:block text-left">
           <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">
-            {user.displayName}
+            {getDisplayName()}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">
-            {channel ? channel.name : t.navigation.noChannel}
+            {channel ? getChannelName(channel.name, channel.nameLocalized) : t.navigation.noChannel}
           </div>
         </div>
 
@@ -283,12 +373,22 @@ export function UnifiedNavigation() {
             {/* Active Context Card */}
             <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3 mb-3">
-                <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-lg font-semibold flex-shrink-0">
-                  {user.displayName?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
-                </div>
+                {/* User Avatar (always user, never channel) */}
+                {getUserAvatar() ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={getUserAvatar()!}
+                    alt={getDisplayName()}
+                    className="h-12 w-12 rounded-full object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-lg font-semibold flex-shrink-0">
+                    {getDisplayName()[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                    {user.displayName}
+                    {getDisplayName()}
                   </div>
                   <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
                     {user.email}
@@ -299,15 +399,26 @@ export function UnifiedNavigation() {
               {/* Active Channel Display */}
               {channel ? (
                 <div className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
-                  <div className="h-6 w-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-semibold">
-                    {channel.name[0].toUpperCase()}
+                  <div className="relative flex-shrink-0">
+                    {channel.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={channel.avatarUrl}
+                        alt={channel.name}
+                        className="h-6 w-6 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-6 w-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-semibold">
+                        {getChannelName(channel.name, channel.nameLocalized)[0].toUpperCase()}
+                      </div>
+                    )}
+                    {channel.isMain && (
+                      <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
+                    )}
                   </div>
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate flex-1">
-                    {channel.name}
+                    {getChannelName(channel.name, channel.nameLocalized)}
                   </span>
-                  {channel.isMain && (
-                    <Crown className="h-3 w-3 text-yellow-500 flex-shrink-0" />
-                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
@@ -400,9 +511,26 @@ export function UnifiedNavigation() {
                         role="menuitem"
                         disabled={isActive}
                       >
-                        <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                          {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
-                        </div>
+                        {/* Show account avatar from fetched profile if available, otherwise fallback */}
+                        {getAccountAvatar(account.userId) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={getAccountAvatar(account.userId)!}
+                            alt={account.displayName}
+                            className="h-8 w-8 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : account.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={account.avatarUrl}
+                            alt={account.displayName}
+                            className="h-8 w-8 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                            {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                             {account.displayName}
@@ -475,7 +603,7 @@ export function UnifiedNavigation() {
                                 />
                               ) : (
                                 <div className="h-6 w-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-semibold">
-                                  {ch.name[0].toUpperCase()}
+                                  {getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}
                                 </div>
                               )}
                               {ch.isMain && (
@@ -484,7 +612,7 @@ export function UnifiedNavigation() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
-                                {ch.name}
+                                {getChannelName(ch.name, ch.nameLocalized)}
                               </div>
                             </div>
                             {channel?.id === ch.id && (
@@ -584,7 +712,7 @@ export function UnifiedNavigation() {
                   <LogOut className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {t.navigation.signOutOf} {user.displayName}
+                  {t.navigation.signOutOf} {getDisplayName()}
                 </span>
               </button>
 

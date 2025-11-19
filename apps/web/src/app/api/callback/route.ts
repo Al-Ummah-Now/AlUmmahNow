@@ -84,12 +84,14 @@ export async function GET(req: NextRequest) {
       const profileCheck = await shouldRedirectToProfileCreation(result.user);
       if (profileCheck.shouldRedirect && profileCheck.redirectPath) {
         logger.info("Redirecting new user to profile creation", profileCheck.redirectPath);
-        return NextResponse.redirect(`${url.origin}${profileCheck.redirectPath}`);
+        // Add query param to trigger session reload
+        return NextResponse.redirect(`${url.origin}${profileCheck.redirectPath}?session_updated=true`);
       }
     }
 
     logger.debug("[redirect]", `${url.origin}/`)
-    return NextResponse.redirect(`${url.origin}/`);
+    // Add query param to trigger session reload after login
+    return NextResponse.redirect(`${url.origin}/?session_updated=true`);
   }
   return NextResponse.json(result.error, { status: 400 });
 
