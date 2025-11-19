@@ -35,6 +35,11 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
     // Save to SessionManager (multi-account system)
     try {
       if (user) {
+        logger.info("[Multi-Account Callback] Adding account to session:", {
+          userId: user.id,
+          email: user.email,
+        });
+
         // OpenAuth JWT only includes id and email (see subjects.ts)
         await SessionManager.addAccount(
           {
@@ -49,7 +54,19 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
             updatedAt: new Date().toISOString(),
           }
         );
-        logger.info("[Multi-Account Callback] Added account to session:", user.id);
+        logger.info("[Multi-Account Callback] Successfully added account to session:", user.id);
+
+        // Verify the session was actually saved
+        const verifySession = await SessionManager.getActiveSession();
+        if (verifySession) {
+          logger.info("[Multi-Account Callback] Session verified:", {
+            userId: verifySession.userId,
+            email: verifySession.email,
+            accountsCount: verifySession.availableAccounts.length,
+          });
+        } else {
+          logger.error("[Multi-Account Callback] Session verification failed - no active session found!");
+        }
       }
     } catch (sessionError) {
       logger.error("[Multi-Account Callback] Failed to add account:", sessionError);

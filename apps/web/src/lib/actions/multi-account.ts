@@ -349,11 +349,22 @@ export async function cleanupExpiredSessions(): Promise<void> {
  * Get active session info for client components
  */
 export async function getActiveSessionInfo() {
+  logger.info('[getActiveSessionInfo] Called - fetching active session');
+
   const session = await SessionManager.getActiveSession();
 
   if (!session) {
+    logger.warn('[getActiveSessionInfo] No active session found');
     return null;
   }
+
+  logger.info('[getActiveSessionInfo] Session found:', {
+    userId: session.userId,
+    email: session.email,
+    hasChannel: !!session.channel,
+    channelsCount: session.availableChannels.length,
+    accountsCount: session.availableAccounts.length,
+  });
 
   // Filter channels to only include those belonging to the active user
   const userChannels = session.availableChannels.filter(ch => ch.userId === session.userId);
@@ -375,7 +386,7 @@ export async function getActiveSessionInfo() {
     userChannelsCount: userChannels.length,
   });
 
-  return {
+  const result = {
     user: {
       id: session.userId,
       email: session.email,
@@ -399,6 +410,9 @@ export async function getActiveSessionInfo() {
       isActive: acc.isActive,
     })),
   };
+
+  logger.info('[getActiveSessionInfo] Returning session info successfully');
+  return result;
 }
 
 /**
