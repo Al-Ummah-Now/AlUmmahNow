@@ -34,10 +34,11 @@ al-ummah-now/
 
 | App | Description | Port | Docs |
 |-----|-------------|------|------|
-| **web** | Next.js frontend with bilingual support | 3000 | [README](apps/web/README.md) |
-| **api-videos** | Hono API backend with OpenAPI/Swagger | 8686 | [CLAUDE.md](apps/api-videos/CLAUDE.md) |
-| **processor** | Cloudflare Queue consumer | 8787 | [README](apps/processor/README.md) |
-| **websocket-server** | Real-time WebSocket server (Durable Objects) | 8787 | [DOCUMENTATION.md](apps/websocket-server/DOCUMENTATION.md) |
+| **web** | Next.js frontend with bilingual support | 3001 | [README](apps/web/README.md) |
+| **api-videos** | Hono API backend with OpenAPI/Swagger | 3086 | [CLAUDE.md](apps/api-videos/CLAUDE.md) |
+| **processor** | Cloudflare Queue consumer | 3088 | [README](apps/processor/README.md) |
+| **websocket-server** | Real-time WebSocket server (Durable Objects) | 3087 | [DOCUMENTATION.md](apps/websocket-server/DOCUMENTATION.md) |
+| **log-service** | Centralized logging service | 3089 | - |
 | **shared-types** | Shared TypeScript types | - | Built package |
 
 ## 🚀 Quick Start
@@ -69,10 +70,10 @@ pnpm --filter @al-ummah/shared-types build
 pnpm dev
 
 # Or run individual apps
-pnpm web:dev          # Frontend: http://localhost:3000
-pnpm api:dev          # API: http://127.0.0.1:8686 (Swagger UI at root)
-pnpm processor:dev    # Processor: http://localhost:8787
-pnpm websocket:dev    # WebSocket: http://localhost:8787
+pnpm web:dev          # Frontend: http://localhost:3001
+pnpm api:dev          # API: http://127.0.0.1:3086 (Swagger UI at root)
+pnpm processor:dev    # Processor: http://localhost:3088
+pnpm websocket:dev    # WebSocket: http://localhost:3087
 ```
 
 ### Build & Test

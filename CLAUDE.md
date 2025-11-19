@@ -121,10 +121,10 @@ pnpm --filter @al-ummah/shared-types build # Build shared types (required first)
 ### Development
 ```bash
 pnpm dev                 # Run all apps in parallel
-pnpm web:dev             # Web app: http://localhost:3000
-pnpm api:dev             # API: http://127.0.0.1:8686
-pnpm processor:dev       # Processor: http://localhost:8787
-pnpm websocket:dev       # WebSocket server: http://localhost:8787
+pnpm web:dev             # Web app: http://localhost:3001
+pnpm api:dev             # API: http://127.0.0.1:3086
+pnpm processor:dev       # Processor: http://localhost:3088
+pnpm websocket:dev       # WebSocket server: http://localhost:3087
 ```
 
 ### Build & Validation
@@ -450,7 +450,7 @@ Each app has its own detailed documentation:
 2. Register in `apps/api-videos/src/index.ts`
 3. Add authentication middleware if needed
 4. Use `addAuthToSchema()` helper for OpenAPI docs
-5. Test with Swagger UI at http://127.0.0.1:8686/
+5. Test with Swagger UI at http://127.0.0.1:3086/
 
 ### Adding a New Page (Bilingual)
 
@@ -458,7 +458,7 @@ Each app has its own detailed documentation:
 2. Create Arabic version in `apps/web/src/app/ar/{route}/page.tsx`
 3. Create component in `apps/web/src/components/{name}/index.tsx` (LTR)
 4. Create RTL variant in `apps/web/src/components/{name}/rtl/index.tsx`
-5. Test both routes: http://localhost:3000/en/{route} and /ar/{route}
+5. Test both routes: http://localhost:3001/en/{route} and /ar/{route}
 
 ### Deploying to Production
 
@@ -691,13 +691,13 @@ For current information, always refer to:
   working on.
   2. Always use port-specific killing:
   # Target ONLY the specific ports for this project
-  lsof -ti:3000,3001,3086,3087,3088 | xargs kill -9
+  lsof -ti:3001,3086,3087,3088,3089 | xargs kill -9
   3. Prefer the project's own restart script when available:
   bash /home/meywd/AlUmmahNow/restart-dev.sh
   4. Always ask before restarting services if I'm uncertain about what's
   running.
   5. Check what's running first before killing anything:
-  lsof -i:3000,3001,3086,3087,3088  # See what's on these ports
+  lsof -i:3001,3086,3087,3088,3089  # See what's on these ports
 
   Why I Made This Mistake:
 
