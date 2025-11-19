@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addUserAccount,
@@ -80,14 +80,34 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Load initial session data
   const loadSessionData = useCallback(async () => {
+    // Prevent concurrent loads
+    if (loadingRef.current) {
+      console.log('[MultiAccountProvider] Already loading, skipping duplicate call');
+      return;
+    }
+
     try {
-      setLoading(true);
-      setError(null);
+      loadingRef.current = true;
+      if (mountedRef.current) {
+        setLoading(true);
+        setError(null);
+      }
 
       const sessionInfo = await getActiveSessionInfo();
+
+      if (!mountedRef.current) return;
 
       if (sessionInfo) {
         setUser(sessionInfo.user);
@@ -102,10 +122,14 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         window.dispatchEvent(new CustomEvent('session-updated'));
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       console.error('[MultiAccountProvider] Failed to load session:', err);
       setError('Failed to load session data');
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -297,18 +321,43 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     try {
       setError(null);
 
-      await logoutCurrentAccount();
+      // Check if this is the last account BEFORE logging out
+      const isLastAccount = accounts.length <= 1;
+      console.log('[MultiAccountProvider] Logging out, is last account:', isLastAccount);
 
-      // Reload session data to get updated accounts list
-      await loadSessionData();
+      try {
+        await logoutCurrentAccount();
+      } catch (serverError) {
+        // Next.js redirect errors are expected - they indicate successful server-side redirect
+        const isRedirectError = serverError instanceof Error &&
+          (serverError.message === 'NEXT_REDIRECT' ||
+           (serverError as any).digest?.startsWith?.('NEXT_REDIRECT'));
 
-      // Router.refresh will handle updating the UI
-      router.refresh();
+        if (!isRedirectError) {
+          throw serverError;
+        }
+        console.log('[MultiAccountProvider] Server redirect detected (expected behavior)');
+      }
+
+      // Clear local state immediately
+      setUser(null);
+      setAccounts([]);
+
+      // If this was the last account, force navigation to home
+      if (isLastAccount) {
+        console.log('[MultiAccountProvider] Last account logged out, navigating to home');
+        const locale = window.location.pathname.includes('/ar') ? 'ar' : 'en';
+        router.push(`/${locale}`);
+      } else {
+        // Reload session data to get updated accounts list
+        await loadSessionData();
+        router.refresh();
+      }
     } catch (err) {
       console.error('[MultiAccountProvider] Failed to logout:', err);
       setError('Failed to logout');
     }
-  }, [loadSessionData, router]);
+  }, [accounts, loadSessionData, router]);
 
   // Logout all accounts
   const logoutAll = useCallback(async () => {
@@ -318,18 +367,33 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const confirmed = window.confirm('Logout from all accounts?');
       if (!confirmed) return;
 
-      await logoutAllAccounts();
+      try {
+        await logoutAllAccounts();
+      } catch (serverError) {
+        // Next.js redirect errors are expected - they indicate successful server-side redirect
+        const isRedirectError = serverError instanceof Error &&
+          (serverError.message === 'NEXT_REDIRECT' ||
+           (serverError as any).digest?.startsWith?.('NEXT_REDIRECT'));
 
-      // Reload session data (should be empty now)
-      await loadSessionData();
+        if (!isRedirectError) {
+          throw serverError;
+        }
+        console.log('[MultiAccountProvider] Server redirect detected (expected behavior)');
+      }
 
-      // Refresh will redirect to home
-      router.refresh();
+      // Clear local state immediately
+      setUser(null);
+      setAccounts([]);
+
+      // Force navigation to home
+      console.log('[MultiAccountProvider] All accounts logged out, navigating to home');
+      const locale = window.location.pathname.includes('/ar') ? 'ar' : 'en';
+      router.push(`/${locale}`);
     } catch (err) {
       console.error('[MultiAccountProvider] Failed to logout all:', err);
       setError('Failed to logout');
     }
-  }, [loadSessionData, router]);
+  }, [router]);
 
   // Refresh session data
   const refresh = useCallback(async () => {
