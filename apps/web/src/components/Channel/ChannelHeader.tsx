@@ -14,10 +14,10 @@ export function ChannelHeader({ channel, locale }: ChannelHeaderProps) {
   const displayDescription = channel.descriptionLocalized?.[locale] || channel.description;
 
   return (
-    <div className="bg-white border-b border-gray-200">
+    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
       {/* Channel Cover/Banner */}
       {channel.coverUrl && (
-        <div className="relative w-full h-48 md:h-64 lg:h-80 bg-gray-200">
+        <div className="relative w-full h-48 md:h-64 lg:h-80 bg-gray-200 dark:bg-gray-800">
           <Image
             src={channel.coverUrl}
             alt={`${displayName} cover`}
@@ -35,7 +35,7 @@ export function ChannelHeader({ channel, locale }: ChannelHeaderProps) {
           isRTL ? 'flex-row-reverse' : 'flex-row'
         )}>
           {/* Channel Avatar */}
-          <div className="relative w-20 h-20 md:w-32 md:h-32 rounded-full overflow-hidden bg-gray-300 flex-shrink-0">
+          <div className="relative w-20 h-20 md:w-32 md:h-32 rounded-full overflow-hidden bg-gray-300 dark:bg-gray-700 flex-shrink-0">
             {channel.avatarUrl ? (
               <Image
                 src={channel.avatarUrl}
@@ -44,7 +44,7 @@ export function ChannelHeader({ channel, locale }: ChannelHeaderProps) {
                 className="object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-3xl md:text-5xl font-bold text-gray-600">
+              <div className="w-full h-full flex items-center justify-center text-3xl md:text-5xl font-bold text-gray-600 dark:text-gray-300">
                 {displayName.charAt(0).toUpperCase()}
               </div>
             )}
@@ -56,7 +56,7 @@ export function ChannelHeader({ channel, locale }: ChannelHeaderProps) {
             isRTL ? 'text-right' : 'text-left'
           )}>
             <div className="flex items-center gap-2 mb-2">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 truncate">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white truncate">
                 {displayName}
               </h1>
               {channel.isVerified && (
@@ -75,7 +75,7 @@ export function ChannelHeader({ channel, locale }: ChannelHeaderProps) {
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2 text-sm text-gray-600 mb-3">
+            <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
               {channel.subscribersCount !== undefined && (
                 <span>
                   {formatSubscriberCount(channel.subscribersCount)} {isRTL ? 'مشترك' : 'subscribers'}
@@ -92,7 +92,7 @@ export function ChannelHeader({ channel, locale }: ChannelHeaderProps) {
             </div>
 
             {displayDescription && (
-              <p className="text-sm text-gray-700 line-clamp-2 mb-4">
+              <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 mb-4">
                 {displayDescription}
               </p>
             )}

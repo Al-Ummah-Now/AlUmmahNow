@@ -16,7 +16,7 @@ export function ChannelTabs({ channel, locale }: ChannelTabsProps) {
   const tabs = getVisibleTabs(channel);
 
   return (
-    <div className="border-b border-gray-200 bg-white sticky top-0 z-10" dir="rtl">
+    <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 sticky top-0 z-10" dir="rtl">
       <div className="container mx-auto px-4">
         <nav className="flex gap-6 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => {
@@ -30,8 +30,8 @@ export function ChannelTabs({ channel, locale }: ChannelTabsProps) {
                 className={cn(
                   'py-4 px-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors',
                   isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                    ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500'
+                    : 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
                 )}
               >
                 {tab.labelAr}

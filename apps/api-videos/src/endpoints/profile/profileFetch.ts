@@ -62,50 +62,58 @@ export class ProfileFetch extends OpenAPIRoute {
 	};
 
 	async handle(c) {
-		// Get validated data
-		const request = await this.getValidatedData<typeof this.schema>();
+		try {
+			// Get validated data
+			const request = await this.getValidatedData<typeof this.schema>();
 
-		// Retrieve the validated id
-		const { id } = request.params;
-		
-		// Get user from auth context (optional for GET endpoints)
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId || request.headers?.userId;
-		const channelId = request.headers?.channelId;
+			// Retrieve the validated id
+			const { id } = request.params;
 
-		// Get profile from storage
-		const bucket = c.env.profiles;
-		type ProfileType = z.infer<typeof BusinessProfile>;
-		const repository = new R2Repository<ProfileType>(bucket);
-		const profile = await repository.getObject(id);
+			// Get user from auth context (optional for GET endpoints)
+			const authContext = getAuthContext(c);
+			const userId = authContext?.userId || request.headers?.userId;
+			const channelId = request.headers?.channelId;
 
-		if (!profile) {
-			return c.json(
-				{
-					success: false,
-					error: "Profile not found",
+			// Get profile from storage
+			const bucket = c.env.profiles;
+			type ProfileType = z.infer<typeof BusinessProfile>;
+			const repository = new R2Repository<ProfileType>(bucket);
+			const profile = await repository.getObject(id);
+
+			if (!profile) {
+				return c.json(
+					{
+						success: false,
+						error: "Profile not found",
+					},
+					404
+				);
+			}
+
+			// Send queue message for profile view analytics
+			const queue = new Queue();
+			await queue.send(MessageType.ProfileView, {
+				profileId: id,
+				userId: userId,
+				channelId: channelId,
+				timestamp: new Date().toISOString(),
+			});
+
+			// Transform to view model for response
+			const profileView = transformProfileToView(profile);
+
+			return {
+				success: true,
+				result: {
+					profile: profileView,
 				},
-				404
-			);
+			};
+		} catch (error) {
+			// Add context to error before re-throwing
+			const enrichedError = error instanceof Error ? error : new Error(String(error));
+			enrichedError.message = `[ProfileFetch] ${enrichedError.message}`;
+			(enrichedError as any).profileId = (await this.getValidatedData<typeof this.schema>()).params.id;
+			throw enrichedError;
 		}
-
-		// Send queue message for profile view analytics
-		const queue = new Queue();
-		await queue.send(MessageType.ProfileView, {
-			profileId: id,
-			userId: userId,
-			channelId: channelId,
-			timestamp: new Date().toISOString(),
-		});
-
-		// Transform to view model for response
-		const profileView = transformProfileToView(profile);
-
-		return {
-			success: true,
-			result: {
-				profile: profileView,
-			},
-		};
 	}
 }

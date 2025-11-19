@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth";
 import { loggingMiddleware } from "./middleware/logging";
+import { errorHandler } from "./middleware/error-handler";
 import { VideoCreate } from "./endpoints/video/videoCreate";
 import { VideoUpdate } from "./endpoints/video/videoUpdate";
 import { VideoDelete } from "./endpoints/video/videoDelete";
@@ -63,6 +64,7 @@ import { DislikeDelete } from "./endpoints/video/videoDislikeDelete";
 import { AuthTest } from "./endpoints/auth/authTest";
 import { HealthCheck } from "./endpoints/monitoring/healthCheck";
 import { TestRunner } from "./endpoints/monitoring/testRunner";
+import { TestError } from "./endpoints/monitoring/test-error";
 import { Metrics } from "./endpoints/monitoring/metrics";
 import { StatusPage } from "./endpoints/monitoring/statusPage";
 import { SyncR2Buckets } from "./endpoints/monitoring/sync-r2";
@@ -99,6 +101,9 @@ import { UploadCommunityPostGif } from "./endpoints/community/upload-gif";
 
 // Start a Hono app - testing reload
 const app = new Hono();
+
+// Register global error handler (catches all unhandled errors)
+app.onError(errorHandler);
 
 // Setup CORS for all routes
 app.use('*', cors({
@@ -204,6 +209,7 @@ openapi.get("/api/analytics", AnalyticsGet);
 openapi.get("/health", HealthCheck);
 openapi.get("/metrics", Metrics);
 openapi.get("/test", TestRunner);
+openapi.get("/test-error", TestError);
 openapi.get("/status", StatusPage);
 
 // Internal sync endpoint (dev only)

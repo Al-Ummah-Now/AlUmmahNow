@@ -57,43 +57,51 @@ export class ChannelFetch extends OpenAPIRoute {
 	};
 
 	async handle(c) {
-		// Get validated data
-		const request = await this.getValidatedData<typeof this.schema>();
+		try {
+			// Get validated data
+			const request = await this.getValidatedData<typeof this.schema>();
 
-		// Retrieve the validated id
-		const { id } = request.params;
-		const { channelId, userId } = request.headers;
+			// Retrieve the validated id
+			const { id } = request.params;
+			const { channelId, userId } = request.headers;
 
-		// Implement your own object fetch here
-        const bucket = env.channels;
-		type ChannelType = z.infer<typeof BusinessChannel>;
-		const repository = new R2Repository<ChannelType>(bucket);
-		let channel = await repository.getObject(id);
+			// Implement your own object fetch here
+			const bucket = env.channels;
+			type ChannelType = z.infer<typeof BusinessChannel>;
+			const repository = new R2Repository<ChannelType>(bucket);
+			let channel = await repository.getObject(id);
 
-		const exists = channel !== null;
+			const exists = channel !== null;
 
-		if (!exists) {
-			return c.json(
-				{
-					success: false,
-					error: "Object not found",
-				},
-				404
-			);
+			if (!exists) {
+				return c.json(
+					{
+						success: false,
+						error: "Object not found",
+					},
+					404
+				);
+			}
+
+			// Transform to view model for response
+			const channelView = transformChannelToView(channel);
+
+			// Send queue message for channel view analytics
+			const queue = new Queue();
+			await queue.send(MessageType.ChannelView, {
+				channelId: channel.id,
+				userId,
+				requestChannelId: channelId,
+				timestamp: new Date().toISOString(),
+			});
+
+			return channelView;
+		} catch (error) {
+			// Add context to error before re-throwing
+			const enrichedError = error instanceof Error ? error : new Error(String(error));
+			enrichedError.message = `[ChannelFetch] ${enrichedError.message}`;
+			(enrichedError as any).channelId = (await this.getValidatedData<typeof this.schema>()).params.id;
+			throw enrichedError;
 		}
-
-		// Transform to view model for response
-		const channelView = transformChannelToView(channel);
-
-		// Send queue message for channel view analytics
-		const queue = new Queue();
-		await queue.send(MessageType.ChannelView, { 
-			channelId: channel.id, 
-			userId, 
-			requestChannelId: channelId,
-			timestamp: new Date().toISOString(),
-		});
-
-		return channelView;
 	}
 }

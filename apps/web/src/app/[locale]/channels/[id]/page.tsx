@@ -24,12 +24,12 @@ export default async function ChannelHomePage({ params }: ChannelHomePageProps) 
   return (
     <div className="space-y-8">
       {/* Channel Trailer Section */}
-      <section className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className={`text-xl font-semibold mb-4 ${isRTL ? 'text-right' : 'text-left'}`}>
+      <section className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6">
+        <h2 className={`text-xl font-semibold text-gray-900 dark:text-white mb-4 ${isRTL ? 'text-right' : 'text-left'}`}>
           {t.channel.channelTrailer}
         </h2>
-        <div className="aspect-video bg-gray-200 rounded-lg flex items-center justify-center">
-          <p className="text-gray-500">
+        <div className="aspect-video bg-gray-200 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+          <p className="text-gray-500 dark:text-gray-400">
             {t.channel.noChannelTrailer}
           </p>
         </div>
@@ -37,22 +37,22 @@ export default async function ChannelHomePage({ params }: ChannelHomePageProps) 
 
       {/* About Section */}
       {displayDescription && (
-        <section className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className={`text-xl font-semibold mb-4 ${isRTL ? 'text-right' : 'text-left'}`}>
+        <section className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6">
+          <h2 className={`text-xl font-semibold text-gray-900 dark:text-white mb-4 ${isRTL ? 'text-right' : 'text-left'}`}>
             {t.channel.about}
           </h2>
-          <p className={`text-gray-700 whitespace-pre-wrap ${isRTL ? 'text-right' : 'text-left'}`}>
+          <p className={`text-gray-700 dark:text-gray-300 whitespace-pre-wrap ${isRTL ? 'text-right' : 'text-left'}`}>
             {displayDescription}
           </p>
         </section>
       )}
 
       {/* Channel Sections - Placeholder for future implementation */}
-      <section className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className={`text-xl font-semibold mb-4 ${isRTL ? 'text-right' : 'text-left'}`}>
+      <section className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6">
+        <h2 className={`text-xl font-semibold text-gray-900 dark:text-white mb-4 ${isRTL ? 'text-right' : 'text-left'}`}>
           {t.channel.content}
         </h2>
-        <p className={`text-gray-500 ${isRTL ? 'text-right' : 'text-left'}`}>
+        <p className={`text-gray-500 dark:text-gray-400 ${isRTL ? 'text-right' : 'text-left'}`}>
           {t.channel.channelSectionsPlaceholder}
         </p>
       </section>

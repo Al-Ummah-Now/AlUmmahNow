@@ -44,7 +44,7 @@ export default async function ChannelLayout({
   const ChannelTabs = isRTL ? ChannelTabsRTL : ChannelTabsLTR;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Channel Header (banner, avatar, name, subscribe) */}
       <ChannelHeader channel={channel} locale={locale} />
 
