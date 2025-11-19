@@ -382,7 +382,11 @@ export function UnifiedNavigationRTL() {
 
               {/* Active Channel Display */}
               {channel ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
+                <Link
+                  href={`/ar/channels/${channel.id}`}
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md hover:bg-white/80 dark:hover:bg-gray-800/80 transition-colors cursor-pointer"
+                >
                   <div className="relative flex-shrink-0">
                     {channel.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -403,7 +407,7 @@ export function UnifiedNavigationRTL() {
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate flex-1">
                     {getChannelName(channel.name, channel.nameLocalized)}
                   </span>
-                </div>
+                </Link>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
                   <Tv className="h-4 w-4 text-gray-500" />
