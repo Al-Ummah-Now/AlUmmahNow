@@ -90,6 +90,84 @@ export async function getProfileCurrent(): Promise<Profile | null> {
 }
 
 /**
+ * Get a profile by userId
+ * GET /api/profiles/{userId}
+ * Server action that fetches any user's profile by their userId
+ * Uses current user's authentication for the request
+ */
+export async function getProfileById(userId: string): Promise<Profile | null> {
+  const fnName = 'getProfileById';
+
+  const authContext = await getServerAuthContext();
+  if (!authContext) {
+    logApiError(fnName, 'Not authenticated');
+    return null;
+  }
+
+  console.log(`[${fnName}] 🔐 Authentication:`);
+  console.log(`[${fnName}]   Requesting User ID: ${authContext.userId}`);
+  console.log(`[${fnName}]   Target User ID: ${userId}`);
+  console.log(`[${fnName}]   Has Token: true`);
+  console.log(`[${fnName}]   Token Length: ${authContext.accessToken?.length} chars`);
+
+  const result = await apiRequestServer<unknown>(
+    {
+      method: 'GET',
+      url: buildApiUrl(`/api/profiles/${userId}`),
+      functionName: fnName
+    },
+    getServerAuthContext,
+    true // require auth
+  );
+
+  if (!result) {
+    return null;
+  }
+
+  // Handle different response formats
+  let profile: Profile | null = null;
+
+  if (result && typeof result === 'object') {
+    const response = result as Record<string, unknown>;
+
+    // If it's already a Profile object
+    if ('id' in response && 'email' in response) {
+      logApiSuccess(fnName, 'Response format: Direct Profile object');
+      profile = response as unknown as Profile;
+    }
+    // If it's wrapped in a success/result structure
+    else if ('success' in response && 'result' in response) {
+      const resultObj = response.result as Record<string, unknown>;
+      if (resultObj && 'profile' in resultObj) {
+        logApiSuccess(fnName, 'Response format: Wrapped in success/result structure');
+        profile = resultObj.profile as Profile;
+      }
+    }
+    // If it's wrapped differently
+    else if ('profile' in response) {
+      logApiSuccess(fnName, 'Response format: Wrapped in profile property');
+      profile = response.profile as Profile;
+    }
+    else {
+      logApiError(fnName, 'Response format not recognized', { responseKeys: Object.keys(response) });
+    }
+  }
+
+  if (profile) {
+    logApiSuccess(fnName, 'Profile retrieved successfully', {
+      id: profile.id,
+      email: profile.email,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      hasAvatar: !!profile.avatarUrl,
+      hasCover: !!profile.coverUrl
+    });
+  }
+
+  return profile;
+}
+
+/**
  * Create a new profile for the current authenticated user
  * POST /api/profiles
  * Server action that properly handles HttpOnly cookies
@@ -226,6 +304,97 @@ export async function createProfile(data: {
   email: string;
 }) {
   return createProfileAPI(data);
+}
+
+/**
+ * Upload avatar photo for the current authenticated user
+ * PUT /api/profiles/{id}/avatar
+ * Server action that handles FormData upload with proper authentication
+ */
+export async function uploadProfileAvatar(formData: FormData): Promise<Profile | null> {
+  const fnName = 'uploadProfileAvatar';
+
+  const authContext = await getServerAuthContext();
+  if (!authContext) {
+    logApiError(fnName, 'Not authenticated');
+    return null;
+  }
+
+  const userId = authContext.userId!;
+  logApiAuth(fnName, { userId, hasToken: true });
+
+  // FormData is handled differently - we need to make the request directly
+  // instead of using apiRequestServer which expects JSON
+  const apiUrl = buildApiUrl(`/api/profiles/${userId}/avatar`);
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${authContext.accessToken || ''}`,
+        'userId': userId,
+        'channelId': authContext.channelId || '',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      logApiError(fnName, `HTTP ${response.status}: ${response.statusText}`);
+      return null;
+    }
+
+    const result = await response.json();
+    logApiSuccess(fnName, 'Avatar uploaded successfully');
+    return result as Profile;
+  } catch (error) {
+    logApiError(fnName, 'Upload failed', error);
+    return null;
+  }
+}
+
+/**
+ * Upload cover photo for the current authenticated user
+ * PUT /api/profiles/{id}/cover
+ * Server action that handles FormData upload with proper authentication
+ */
+export async function uploadProfileCover(formData: FormData): Promise<Profile | null> {
+  const fnName = 'uploadProfileCover';
+
+  const authContext = await getServerAuthContext();
+  if (!authContext) {
+    logApiError(fnName, 'Not authenticated');
+    return null;
+  }
+
+  const userId = authContext.userId!;
+  logApiAuth(fnName, { userId, hasToken: true });
+
+  // FormData is handled differently - we need to make the request directly
+  const apiUrl = buildApiUrl(`/api/profiles/${userId}/cover`);
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${authContext.accessToken || ''}`,
+        'userId': userId,
+        'channelId': authContext.channelId || '',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      logApiError(fnName, `HTTP ${response.status}: ${response.statusText}`);
+      return null;
+    }
+
+    const result = await response.json();
+    logApiSuccess(fnName, 'Cover uploaded successfully');
+    return result as Profile;
+  } catch (error) {
+    logApiError(fnName, 'Upload failed', error);
+    return null;
+  }
 }
 
 // Note: Functions that call client-side callbacks (like setProfile)

@@ -177,23 +177,25 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     const params = new URLSearchParams(window.location.search);
     const hasSessionUpdate = params.get('session_updated') === 'true';
 
-    if (hasSessionUpdate) {
-      logger.info('[MultiAccountProvider] Session updated parameter detected');
-
-      // Clean up URL immediately
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.delete('session_updated');
-      window.history.replaceState({}, '', newUrl.toString());
-
-      // The session will load via the normal loadSessionData on mount
-      // Just trigger a router refresh after a short delay to ensure everything is ready
-      const timeoutId = setTimeout(() => {
-        logger.info('[MultiAccountProvider] Calling router.refresh() after OAuth callback');
-        router.refresh();
-      }, 200);
-
-      return () => clearTimeout(timeoutId);
+    if (!hasSessionUpdate) {
+      return;
     }
+
+    logger.info('[MultiAccountProvider] Session updated parameter detected');
+
+    // Clean up URL immediately
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.delete('session_updated');
+    window.history.replaceState({}, '', newUrl.toString());
+
+    // The session will load via the normal loadSessionData on mount
+    // Just trigger a router refresh after a short delay to ensure everything is ready
+    const timeoutId = setTimeout(() => {
+      logger.info('[MultiAccountProvider] Calling router.refresh() after OAuth callback');
+      router.refresh();
+    }, 200);
+
+    return () => clearTimeout(timeoutId);
   }, [router]);
 
   // Add a new account

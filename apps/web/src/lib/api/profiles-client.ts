@@ -1,6 +1,6 @@
 import { Profile } from "@/interfaces";
 import { User } from "@/interfaces";
-import { getProfileCurrent, createProfileAPI, updateProfileAPI } from "./profiles";
+import { getProfileCurrent, getProfileById, createProfileAPI, updateProfileAPI, uploadProfileAvatar, uploadProfileCover } from "./profiles";
 import { getApiUrl } from "@/lib/runtime-config";
 
 const baseUrl = getApiUrl();
@@ -28,9 +28,10 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
     }
 
     try {
-        console.log('[fetchProfile] Step 1: Calling server action getProfileCurrent()...');
-        // Call the server action (uses auth session automatically)
-        const profile = await getProfileCurrent();
+        console.log('[fetchProfile] Step 1: Calling server action getProfileById()...');
+        console.log('[fetchProfile] Target userId:', user.id);
+        // Call the server action to fetch the specific user's profile
+        const profile = await getProfileById(user.id);
 
         console.log('[fetchProfile] Step 2: Server action returned:', {
             hasProfile: !!profile,
@@ -254,56 +255,50 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
 
 /**
  * Client-side helper function for updating profile photo
+ * Uses server action with proper authentication
  */
 export const updateProfilePhoto = async (profile: Profile, file: File, setProfile: (profile: Profile) => void) => {
-    if (!profile || !file) return;
+    if (!profile || !file) return false;
     try {
         const formData = new FormData();
         formData.append("photo", file);
 
-        const response = await fetch(
-            `${baseUrl}/api/profiles/${profile.id}/avatar`,
-            {
-                method: "PUT",
-                body: formData,
-            }
-        );
-        if (!response.ok) {
-            throw new Error(`Error updating profile photo: ${response.statusText}`);
+        // Call server action which handles authentication
+        const updatedProfile = await uploadProfileAvatar(formData);
+
+        if (updatedProfile) {
+            setProfile(updatedProfile);
+            return true;
         }
-        const updatedProfile: Profile = await response.json();
-        setProfile(updatedProfile);
-        return true;
+
+        throw new Error('Failed to upload profile photo');
     } catch (error) {
-        console.error(error);
+        console.error('[updateProfilePhoto] Error:', error);
         return false;
     }
 };
 
 /**
  * Client-side helper function for updating cover photo
+ * Uses server action with proper authentication
  */
 export const updateCoverPhoto = async (profile: Profile, file: File, setProfile: (profile: Profile) => void) => {
-    if (!profile || !file) return;
+    if (!profile || !file) return false;
     try {
         const formData = new FormData();
         formData.append("photo", file);
 
-        const response = await fetch(
-            `${baseUrl}/api/profiles/${profile.id}/cover`,
-            {
-                method: "PUT",
-                body: formData,
-            }
-        );
-        if (!response.ok) {
-            throw new Error(`Error updating cover photo: ${response.statusText}`);
+        // Call server action which handles authentication
+        const updatedProfile = await uploadProfileCover(formData);
+
+        if (updatedProfile) {
+            setProfile(updatedProfile);
+            return true;
         }
-        const updatedProfile: Profile = await response.json();
-        setProfile(updatedProfile);
-        return true;
+
+        throw new Error('Failed to upload cover photo');
     } catch (error) {
-        console.error(error);
+        console.error('[updateCoverPhoto] Error:', error);
         return false;
     }
 };
