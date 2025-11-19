@@ -359,7 +359,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                   required
                   maxLength={100}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Channel name in English"
+                  placeholder={t.channel.channelNameEnglish || 'Channel name in English'}
                 />
               )}
               {activeTab === 'ar' && (
@@ -369,7 +369,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                   onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
                   maxLength={100}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="اسم القناة بالعربية"
+                  placeholder={t.channel.channelNameArabic || 'اسم القناة بالعربية'}
                   dir="rtl"
                 />
               )}
@@ -388,7 +388,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                     rows={4}
                     maxLength={500}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Describe your channel in English"
+                    placeholder={t.channel.channelDescriptionEnglish || 'Describe your channel in English'}
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                     {formData.descriptionEn.length}/500 {t.channel.charactersRemaining}
@@ -403,7 +403,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                     rows={4}
                     maxLength={500}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="وصف قناتك بالعربية"
+                    placeholder={t.channel.channelDescriptionArabic || 'وصف قناتك بالعربية'}
                     dir="rtl"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">

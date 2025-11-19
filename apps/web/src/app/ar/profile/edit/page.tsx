@@ -126,8 +126,8 @@ const ProfilePage = () => {
               />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-12">{`مرحبًا ${profile?.firstName ?? ""} ${profile?.lastName ?? ""}!`}</h1>
-          <p className="text-gray-600 dark:text-gray-400">قم بتعديل معلومات ملفك الشخصي أدناه.</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-12">{`${t.profile.welcome} ${profile?.firstName ?? ""} ${profile?.lastName ?? ""}!`}</h1>
+          <p className="text-gray-600 dark:text-gray-400">{t.profile.editInstructions}</p>
         </section>
 
         {/* Edit Profile Section */}
@@ -137,23 +137,23 @@ const ProfilePage = () => {
 
             <div className="space-y-3">
               <label className="block">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">الاسم الأول</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">{t.profile.firstName}</span>
                 <input
                   type="text"
                   name="firstName"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder="اسمك الأول"
+                  placeholder={t.profile.yourFirstName}
                   defaultValue={profile?.firstName || ''}
                   dir="rtl"
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">الاسم الأخير</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">{t.profile.lastName}</span>
                 <input
                   type="text"
                   name="lastName"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder="اسمك الأخير"
+                  placeholder={t.profile.yourLastName}
                   defaultValue={profile?.lastName || ''}
                   dir="rtl"
                 />
@@ -173,7 +173,7 @@ const ProfilePage = () => {
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                   }`}
                 >
-                  العربية
+                  {t.languages.arabic}
                 </button>
                 <button
                   type="button"
@@ -184,7 +184,7 @@ const ProfilePage = () => {
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                   }`}
                 >
-                  English
+                  {t.languages.english}
                 </button>
               </div>
               {activeTab === 'en' && (
@@ -201,7 +201,7 @@ const ProfilePage = () => {
                   type="text"
                   name="displayNameAr"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder="الاسم المعروض بالعربية"
+                  placeholder={t.profile.displayNameArabic}
                   defaultValue={profile?.displayNameLocalized?.ar || ''}
                   dir="rtl"
                 />
@@ -210,13 +210,13 @@ const ProfilePage = () => {
 
             {/* Bio with Language Tabs */}
             <div className="block">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">السيرة الذاتية</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.bio}</span>
               {activeTab === 'en' && (
                 <textarea
                   name="bioEn"
                   rows={4}
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors resize-y"
-                  placeholder="Tell us about yourself"
+                  placeholder={t.profile.bioOptional}
                   defaultValue={profile?.bioLocalized?.en || profile?.bio || ''}
                 />
               )}
@@ -225,7 +225,7 @@ const ProfilePage = () => {
                   name="bioAr"
                   rows={4}
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors resize-y"
-                  placeholder="أخبرنا عن نفسك"
+                  placeholder={t.profile.bioArabic}
                   defaultValue={profile?.bioLocalized?.ar || ''}
                   dir="rtl"
                 />
@@ -242,7 +242,7 @@ const ProfilePage = () => {
                 readOnly
                 dir="ltr"
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">لا يمكن تغيير البريد الإلكتروني</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.profile.emailCannotBeChanged}</p>
             </label>
             <button
               type="submit"

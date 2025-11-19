@@ -10,8 +10,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createApiHeaders } from "@/lib/utility";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const ReportDetailPage: React.FC = () => {
+  const { t } = useLanguage();
   const [report, setReport] = useState<ContentReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,15 +46,15 @@ const ReportDetailPage: React.FC = () => {
 
       setReport(reportData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load report');
+      setError(err instanceof Error ? err.message : t.errors.genericError);
     } finally {
       setLoading(false);
     }
-  }, [auth, reportId]);
+  }, [auth, reportId, t]);
 
   useEffect(() => {
     if (!isAuthorized) {
-      setError("Access denied. You need moderator or admin privileges to access this page.");
+      setError(t.errors.unauthorized);
       setLoading(false);
       return;
     }
@@ -84,9 +86,9 @@ const ReportDetailPage: React.FC = () => {
       await loadReport();
       setShowActionForm(false);
       setActionForm({ actionType: '', reason: '', notes: '' });
-      
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to take action');
+      setError(err instanceof Error ? err.message : t.errors.genericError);
     } finally {
       setActionLoading(false);
     }
@@ -118,7 +120,7 @@ const ReportDetailPage: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <Alert className="border-red-200 bg-red-50">
           <AlertDescription className="text-red-800">
-            Access denied. You need moderator or admin privileges to access this page.
+            {t.errors.unauthorized}
           </AlertDescription>
         </Alert>
       </div>
@@ -142,9 +144,9 @@ const ReportDetailPage: React.FC = () => {
           <AlertDescription className="text-red-800">{error}</AlertDescription>
         </Alert>
         <div className="flex gap-4 mt-4">
-          <Button onClick={loadReport}>Retry</Button>
+          <Button onClick={loadReport}>{t.common.retry}</Button>
           <Link href="/en/moderation">
-            <Button variant="outline">Back to Dashboard</Button>
+            <Button variant="outline">{t.common.back}</Button>
           </Link>
         </div>
       </div>
@@ -155,10 +157,10 @@ const ReportDetailPage: React.FC = () => {
     return (
       <div className="container mx-auto px-4 py-8">
         <Alert>
-          <AlertDescription>Report not found.</AlertDescription>
+          <AlertDescription>{t.errors.notFound}</AlertDescription>
         </Alert>
         <Link href="/en/moderation" className="mt-4 inline-block">
-          <Button variant="outline">Back to Dashboard</Button>
+          <Button variant="outline">{t.common.back}</Button>
         </Link>
       </div>
     );
@@ -171,13 +173,13 @@ const ReportDetailPage: React.FC = () => {
         <div className="flex items-center gap-4 mb-4">
           <Link href="/en/moderation">
             <Button variant="outline" size="sm">
-              ← Back to Dashboard
+              ← {t.common.back}
             </Button>
           </Link>
         </div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Report Details</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t.moderation.reportDetails}</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Review and take action on this content report
+          {t.moderation.reviewReportMessage}
         </p>
       </div>
 
@@ -206,49 +208,49 @@ const ReportDetailPage: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">Report Reason</h3>
+                <h3 className="font-semibold mb-2">{t.moderation.reportReason}</h3>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {report.reason.replace('_', ' ')} 
+                  {report.reason.replace('_', ' ')}
                   {report.customReason && ` (${report.customReason})`}
                 </p>
               </div>
-              
+
               {report.description && (
                 <div>
-                  <h3 className="font-semibold mb-2">Description</h3>
+                  <h3 className="font-semibold mb-2">{t.moderation.descriptionLabel}</h3>
                   <p className="text-gray-600 dark:text-gray-400">
                     {report.description}
                   </p>
                 </div>
               )}
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="font-medium mb-1">Reported by</h4>
+                  <h4 className="font-medium mb-1">{t.moderation.reportedBy}</h4>
                   <p className="text-gray-600 dark:text-gray-400">
                     {report.reporterName || report.reporterId}
                   </p>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-1">Report Date</h4>
+                  <h4 className="font-medium mb-1">{t.moderation.reportDate}</h4>
                   <p className="text-gray-600 dark:text-gray-400">
                     {new Date(report.dateCreated).toLocaleString()}
                   </p>
                 </div>
               </div>
-              
+
               {report.assignedToName && (
                 <div>
-                  <h4 className="font-medium mb-1">Assigned to</h4>
+                  <h4 className="font-medium mb-1">{t.moderation.assignedToLabel}</h4>
                   <p className="text-gray-600 dark:text-gray-400">
                     {report.assignedToName}
                   </p>
                 </div>
               )}
-              
+
               {report.resolutionNotes && (
                 <div>
-                  <h3 className="font-semibold mb-2">Resolution Notes</h3>
+                  <h3 className="font-semibold mb-2">{t.moderation.resolutionNotesLabel}</h3>
                   <p className="text-gray-600 dark:text-gray-400">
                     {report.resolutionNotes}
                   </p>
@@ -260,7 +262,7 @@ const ReportDetailPage: React.FC = () => {
           {/* Content Preview */}
           <Card>
             <CardHeader>
-              <CardTitle>Reported Content</CardTitle>
+              <CardTitle>{t.moderation.reportedContentLabel}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md">
@@ -270,7 +272,7 @@ const ReportDetailPage: React.FC = () => {
                 {report.contentUrl && (
                   <p className="text-sm">
                     <Link href={report.contentUrl} className="text-blue-600 hover:underline">
-                      View Original Content →
+                      {t.moderation.viewOriginalContent} →
                     </Link>
                   </p>
                 )}
@@ -283,77 +285,77 @@ const ReportDetailPage: React.FC = () => {
         <div className="lg:col-span-1">
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Take Action</CardTitle>
+              <CardTitle>{t.moderation.takeAction}</CardTitle>
               <CardDescription>
-                Choose an appropriate moderation action
+                {t.moderation.chooseAction}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {!showActionForm ? (
                 <div className="space-y-2">
-                  <Button 
+                  <Button
                     onClick={() => setShowActionForm(true)}
                     className="w-full"
                     disabled={report.status === 'resolved' || report.status === 'dismissed'}
                   >
-                    Take Moderation Action
+                    {t.moderation.takeModerationAction}
                   </Button>
                   {(report.status === 'resolved' || report.status === 'dismissed') && (
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      This report has already been resolved.
+                      {t.moderation.alreadyResolved}
                     </p>
                   )}
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Action Type</label>
+                    <label className="block text-sm font-medium mb-1">{t.moderation.actionType}</label>
                     <select
                       value={actionForm.actionType}
                       onChange={(e) => setActionForm({...actionForm, actionType: e.target.value})}
                       className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-600"
                     >
-                      <option value="">Select action...</option>
-                      <option value="approve">Approve Content</option>
-                      <option value="remove">Remove Content</option>
-                      <option value="hide">Hide Content</option>
-                      <option value="warn_user">Warn User</option>
-                      <option value="restrict_user">Restrict User</option>
-                      <option value="ban_user">Ban User</option>
-                      <option value="dismiss_report">Dismiss Report</option>
-                      <option value="flag_for_review">Flag for Further Review</option>
+                      <option value="">{t.moderation.selectAction}</option>
+                      <option value="approve">{t.moderation.approveContent}</option>
+                      <option value="remove">{t.moderation.removeContent}</option>
+                      <option value="hide">{t.moderation.hideContent}</option>
+                      <option value="warn_user">{t.moderation.warnUser}</option>
+                      <option value="restrict_user">{t.moderation.restrictUser}</option>
+                      <option value="ban_user">{t.moderation.banUser}</option>
+                      <option value="dismiss_report">{t.moderation.dismissReport}</option>
+                      <option value="flag_for_review">{t.moderation.flagForReview}</option>
                     </select>
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium mb-1">Reason</label>
+                    <label className="block text-sm font-medium mb-1">{t.moderation.reportReason}</label>
                     <input
                       type="text"
                       value={actionForm.reason}
                       onChange={(e) => setActionForm({...actionForm, reason: e.target.value})}
-                      placeholder="Brief reason for action"
+                      placeholder={t.moderation.briefReason}
                       className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-600"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+                    <label className="block text-sm font-medium mb-1">{t.moderation.notesOptional}</label>
                     <textarea
                       value={actionForm.notes}
                       onChange={(e) => setActionForm({...actionForm, notes: e.target.value})}
-                      placeholder="Additional notes or context"
+                      placeholder={t.moderation.additionalNotes}
                       rows={3}
                       className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-600"
                     />
                   </div>
-                  
+
                   <div className="flex gap-2">
                     <Button
                       onClick={handleModerationAction}
                       disabled={!actionForm.actionType || actionLoading}
                       className="flex-1"
                     >
-                      {actionLoading ? 'Taking Action...' : 'Take Action'}
+                      {actionLoading ? t.moderation.takingAction : t.moderation.takeAction}
                     </Button>
                     <Button
                       variant="outline"
@@ -362,7 +364,7 @@ const ReportDetailPage: React.FC = () => {
                         setActionForm({ actionType: '', reason: '', notes: '' });
                       }}
                     >
-                      Cancel
+                      {t.common.cancel}
                     </Button>
                   </div>
                 </div>
@@ -374,7 +376,7 @@ const ReportDetailPage: React.FC = () => {
           {report.moderationActions && report.moderationActions.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Action History</CardTitle>
+                <CardTitle>{t.moderation.actionHistory}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">

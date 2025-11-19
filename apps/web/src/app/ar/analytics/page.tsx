@@ -57,10 +57,10 @@ const AnalyticsPage = () => {
         <div className="container mx-auto px-4 py-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
-              {t.analytics.analyticsTitle} (وضع التجريبي)
+              {t.analytics.analyticsTitle} ({t.analytics.demoMode})
             </h1>
             <p className="text-gray-600 dark:text-gray-300">
-              هذه لوحة تحليلات تجريبية. يرجى تسجيل الدخول لعرض التحليلات الفعلية الخاصة بك.
+              {t.analytics.demoMessage}
             </p>
           </div>
 
@@ -106,7 +106,7 @@ const AnalyticsPage = () => {
             {t.analytics.analyticsTitle}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            تتبع أداء الفيديو والتفاعل مع الجمهور
+            {t.analytics.trackPerformance}
           </p>
         </div>
 

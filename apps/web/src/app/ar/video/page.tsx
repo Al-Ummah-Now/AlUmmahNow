@@ -12,8 +12,10 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useRealTimeNotifications } from "@/hooks/useRealTimeNotifications";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 
 export default function Home() {
+  const { t } = useI18n('ar');
   const [isMounted, setIsMounted] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
@@ -21,7 +23,7 @@ export default function Home() {
   const path = usePathname();
   const rtl = path.indexOf('/ar') > -1;
   const { user } = useAuth();
-  
+
   // Real-time notifications for demonstration
   const { addNotification } = useRealTimeNotifications({ userId: user?.id });
 
@@ -86,20 +88,20 @@ export default function Home() {
       <main className="flex flex-1 flex-col items-center justify-center p-8" style={{ direction: rtl ? "rtl" : "ltr" }}>
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">
-            {rtl ? 'لم يتم اختيار فيديو' : 'No Video Selected'}
+            {t.video.noVideoSelected}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            {rtl ? 'يرجى اختيار فيديو للمشاهدة أو إضافة معرف فيديو إلى الرابط.' : 'Please select a video to watch or add a video ID to the URL.'}
+            {t.video.selectVideoMessage}
           </p>
-          
+
           {/* Demo notification button */}
           {user && process.env.NODE_ENV === 'development' && (
             <div className="space-y-2">
               <p className="text-sm text-gray-500">
-                {rtl ? 'تجريب الميزات الفورية:' : 'Demo Real-time Features:'}
+                تجريب الميزات الفورية:
               </p>
               <Button onClick={testNotification} variant="outline">
-                {rtl ? 'اختبار الإشعار' : 'Test Notification'}
+                اختبار الإشعار
               </Button>
             </div>
           )}
@@ -135,12 +137,12 @@ export default function Home() {
               {process.env.NODE_ENV === 'development' && user && (
                 <div className="w-full max-w-4xl mt-2 px-4">
                   <div className="flex gap-2 justify-center">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={testNotification}
                     >
-                      {rtl ? 'اختبار الإشعار' : 'Test Notification'}
+                      اختبار الإشعار
                     </Button>
                   </div>
                 </div>

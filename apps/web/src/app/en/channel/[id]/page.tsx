@@ -79,7 +79,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-2">{t.errors.notFound}</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">The channel you&apos;re looking for doesn&apos;t exist or has been removed.</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">{t.channel.channelNotFoundMessage || "The channel you're looking for doesn't exist or has been removed."}</p>
           <Link href="/en/" className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
             {t.feed.home}
           </Link>
@@ -179,7 +179,7 @@ function ChannelPage({params}: {  params: Promise<{ id: string }> }) {
         {/* Navigation Tabs */}
         <div className="flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-5 py-2">
           <button className="mr-5 px-4 py-2 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 font-semibold">
-            Home
+            {t.feed.home}
           </button>
           <button className="mr-5 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-medium">
             {t.channel.videos}

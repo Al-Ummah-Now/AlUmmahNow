@@ -89,10 +89,10 @@ const ProfilePage = () => {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">
-                    My Playlists
+                    {t.profile.myPlaylists || 'My Playlists'}
                   </h2>
                   <p className="text-gray-600 dark:text-gray-400 mt-1">
-                    Organize your favorite videos into playlists
+                    {t.profile.playlistsDescription || 'Organize your favorite videos into playlists'}
                   </p>
                 </div>
                 <button
@@ -107,7 +107,7 @@ const ProfilePage = () => {
                       d="M12 4v16m8-8H4"
                     />
                   </svg>
-                  New Playlist
+                  {t.profile.newPlaylist || 'New Playlist'}
                 </button>
               </div>
 
@@ -132,7 +132,7 @@ const ProfilePage = () => {
                     {t.common.noResults}
                   </p>
                   <p className="text-gray-500 dark:text-gray-500 text-sm mb-4">
-                    Create your first playlist to organize your videos
+                    {t.profile.firstPlaylistMessage || 'Create your first playlist to organize your videos'}
                   </p>
                   <button
                     onClick={() => router.push('/en/playlist/create')}

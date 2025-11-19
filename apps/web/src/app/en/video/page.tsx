@@ -10,9 +10,11 @@ import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useRealTimeNotifications } from "@/hooks/useRealTimeNotifications";
+import { useLanguage } from "@/hooks/useLanguage";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
+  const { t } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
@@ -66,17 +68,17 @@ export default function Home() {
     return (
       <main className="flex flex-1 flex-col items-center justify-center p-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">No Video Selected</h1>
+          <h1 className="text-2xl font-bold mb-4">{t.video.noVideoSelected}</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Please select a video to watch or add a video ID to the URL.
+            {t.video.selectVideoMessage || 'Please select a video to watch or add a video ID to the URL.'}
           </p>
           
           {/* Demo notification button */}
           {user && process.env.NODE_ENV === 'development' && (
             <div className="space-y-2">
-              <p className="text-sm text-gray-500">Demo Real-time Features:</p>
+              <p className="text-sm text-gray-500">{t.notifications?.demoFeatures || 'Demo Real-time Features'}:</p>
               <Button onClick={testNotification} variant="outline">
-                Test Notification
+                {t.notifications?.testNotification || 'Test Notification'}
               </Button>
             </div>
           )}
@@ -112,12 +114,12 @@ export default function Home() {
               {process.env.NODE_ENV === 'development' && user && (
                 <div className="w-full max-w-4xl mt-2 px-4">
                   <div className="flex gap-2 justify-center">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={testNotification}
                     >
-                      Test Notification
+                      {t.notifications?.testNotification || 'Test Notification'}
                     </Button>
                   </div>
                 </div>

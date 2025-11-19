@@ -102,7 +102,7 @@ const AnalyticsPage = () => {
             {t.analytics.analyticsTitle}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Track your video performance and audience engagement
+            {t.analytics.trackPerformance || 'Track your video performance and audience engagement'}
           </p>
         </div>
 

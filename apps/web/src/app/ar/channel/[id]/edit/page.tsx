@@ -331,7 +331,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                     : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
               >
-                العربية
+                {t.languages.arabic}
               </button>
               <button
                 type="button"
@@ -342,7 +342,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                     : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
               >
-                English
+                {t.languages.english}
               </button>
             </div>
 
@@ -358,7 +358,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                   onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
                   maxLength={100}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="اسم القناة بالعربية"
+                  placeholder={t.channel.channelNameArabic}
                   dir="rtl"
                 />
               )}
@@ -370,7 +370,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                   required
                   maxLength={100}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-                  placeholder="Channel name in English"
+                  placeholder={t.channel.channelNameEnglish}
                   dir="ltr"
                 />
               )}
@@ -389,7 +389,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                     rows={4}
                     maxLength={500}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="وصف قناتك بالعربية"
+                    placeholder={t.channel.channelDescriptionArabic}
                     dir="rtl"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -405,7 +405,7 @@ function ChannelEditPage({ params }: { params: Promise<{ id: string }> }) {
                     rows={4}
                     maxLength={500}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-                    placeholder="Describe your channel in English"
+                    placeholder={t.channel.channelDescriptionEnglish}
                     dir="ltr"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">

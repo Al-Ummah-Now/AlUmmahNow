@@ -96,7 +96,7 @@ const ProfileCreatePage = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">{t.profile.createProfile}</h1>
-            <p className="text-gray-600 dark:text-gray-400">مرحباً بك في {t.common.appName}! دعنا ننشئ ملفك الشخصي للبدء.</p>
+            <p className="text-gray-600 dark:text-gray-400">{t.profile.welcomeMessage}</p>
           </div>
 
           {error && (
@@ -116,32 +116,32 @@ const ProfileCreatePage = () => {
                 disabled
                 className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md text-gray-600 dark:text-gray-400"
               />
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">لا يمكن تغيير عنوان بريدك الإلكتروني</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t.profile.emailCannotBeChanged}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                  الاسم الأول <span className="text-red-500 dark:text-red-400">*</span>
+                  {t.profile.firstName} <span className="text-red-500 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   name="firstName"
                   required
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                  placeholder="اسمك الأول"
+                  placeholder={t.profile.yourFirstName}
                 />
               </div>
 
               <div>
                 <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                  الاسم الأخير
+                  {t.profile.lastName}
                 </label>
                 <input
                   type="text"
                   name="lastName"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                  placeholder="اسمك الأخير"
+                  placeholder={t.profile.yourLastName}
                 />
               </div>
             </div>
@@ -180,7 +180,7 @@ const ProfileCreatePage = () => {
                   type="text"
                   name="displayNameEn"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                  placeholder="How others will see your name (optional)"
+                  placeholder={t.profile.displayNameOptional}
                 />
               )}
               {activeTab === 'ar' && (
@@ -188,24 +188,24 @@ const ProfileCreatePage = () => {
                   type="text"
                   name="displayNameAr"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                  placeholder="كيف سيراك الآخرون (اختياري)"
+                  placeholder={t.profile.displayNameArabic}
                   dir="rtl"
                 />
               )}
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">إذا تُرك فارغاً، سنستخدم اسمك الأول والأخير</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t.profile.displayNameEmpty}</p>
             </div>
 
             {/* Bio with Language Tabs */}
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                السيرة الذاتية
+                {t.profile.bio}
               </label>
               {activeTab === 'en' && (
                 <textarea
                   name="bioEn"
                   rows={3}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                  placeholder="Tell us about yourself (optional)"
+                  placeholder={t.profile.bioOptional}
                 />
               )}
               {activeTab === 'ar' && (
@@ -213,17 +213,16 @@ const ProfileCreatePage = () => {
                   name="bioAr"
                   rows={3}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                  placeholder="أخبرنا عن نفسك (اختياري)"
+                  placeholder={t.profile.bioArabic}
                   dir="rtl"
                 />
               )}
             </div>
 
             <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-              <h3 className="font-medium text-blue-900 dark:text-blue-300 mb-2">إشعار الخصوصية</h3>
+              <h3 className="font-medium text-blue-900 dark:text-blue-300 mb-2">{t.profile.privacyNotice}</h3>
               <p className="text-sm text-blue-800 dark:text-blue-400">
-                ستُستخدم معلومات ملفك الشخصي لتخصيص تجربتك على {t.common.appName}.
-                يمكنك تحديث معلومات ملفك الشخصي في أي وقت في إعدادات الملف الشخصي.
+                {t.profile.privacyNoticeText}
               </p>
             </div>
 

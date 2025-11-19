@@ -30,6 +30,41 @@ const ModerationDashboard: React.FC = () => {
   // Check if user has moderation privileges
   const isAuthorized = auth?.user && (auth.user.role === 'admin' || auth.user.role === 'moderator');
 
+  // Translation maps for moderation values
+  const statusTranslations: Record<string, string> = {
+    pending: 'في الانتظار',
+    in_review: 'قيد المراجعة',
+    resolved: 'تم الحل',
+    dismissed: 'مرفوض',
+    escalated: 'مُصعَّد',
+  };
+
+  const priorityTranslations: Record<string, string> = {
+    urgent: 'عاجل',
+    high: 'عالي',
+    medium: 'متوسط',
+    low: 'منخفض',
+  };
+
+  const contentTypeTranslations: Record<string, string> = {
+    video: 'فيديو',
+    comment: 'تعليق',
+    channel: 'قناة',
+    playlist: 'قائمة تشغيل',
+  };
+
+  const reasonTranslations: Record<string, string> = {
+    inappropriate_content: 'محتوى غير مناسب',
+    spam: 'رسائل مزعجة',
+    harassment: 'تحرش',
+    copyright: 'انتهاك حقوق النشر',
+    violence: 'عنف',
+    hate_speech: 'خطاب كراهية',
+    nudity: 'عري',
+    misinformation: 'معلومات خاطئة',
+    other: 'أخرى',
+  };
+
   const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
@@ -88,52 +123,6 @@ const ModerationDashboard: React.FC = () => {
     }
   };
 
-  const getStatusTextAr = (status: string) => {
-    switch (status) {
-      case 'pending': return 'في الانتظار';
-      case 'in_review': return 'قيد المراجعة';
-      case 'resolved': return 'تم الحل';
-      case 'dismissed': return 'مرفوض';
-      case 'escalated': return 'مُصعَّد';
-      default: return status;
-    }
-  };
-
-  const getPriorityTextAr = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'عاجل';
-      case 'high': return 'عالي';
-      case 'medium': return 'متوسط';
-      case 'low': return 'منخفض';
-      default: return priority;
-    }
-  };
-
-  const getContentTypeTextAr = (contentType: string) => {
-    switch (contentType) {
-      case 'video': return 'فيديو';
-      case 'comment': return 'تعليق';
-      case 'channel': return 'قناة';
-      case 'playlist': return 'قائمة تشغيل';
-      default: return contentType;
-    }
-  };
-
-  const getReasonTextAr = (reason: string) => {
-    switch (reason) {
-      case 'inappropriate_content': return 'محتوى غير مناسب';
-      case 'spam': return 'رسائل مزعجة';
-      case 'harassment': return 'تحرش';
-      case 'copyright': return 'انتهاك حقوق النشر';
-      case 'violence': return 'عنف';
-      case 'hate_speech': return 'خطاب كراهية';
-      case 'nudity': return 'عري';
-      case 'misinformation': return 'معلومات خاطئة';
-      case 'other': return 'أخرى';
-      default: return reason;
-    }
-  };
-
   if (!isAuthorized) {
     return (
       <div className="container mx-auto px-4 py-8" dir="rtl">
@@ -163,7 +152,7 @@ const ModerationDashboard: React.FC = () => {
           <AlertDescription className="text-red-800">{error}</AlertDescription>
         </Alert>
         <Button onClick={loadDashboardData} className="mt-4">
-          إعادة المحاولة
+          حاول مرة أخرى
         </Button>
       </div>
     );
@@ -298,22 +287,22 @@ const ModerationDashboard: React.FC = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <Badge className={`${getPriorityColor(report.priority)} text-white`}>
-                          {getPriorityTextAr(report.priority)}
+                          {priorityTranslations[report.priority] || report.priority}
                         </Badge>
                         <Badge className={`${getStatusColor(report.status)} text-white`}>
-                          {getStatusTextAr(report.status)}
+                          {statusTranslations[report.status] || report.status}
                         </Badge>
                         <Badge variant="outline">
-                          {getContentTypeTextAr(report.contentType)}
+                          {contentTypeTranslations[report.contentType] || report.contentType}
                         </Badge>
                       </div>
-                      
+
                       <h3 className="font-semibold text-lg mb-1">
-                        {report.contentTitle || `${getContentTypeTextAr(report.contentType)} ${report.contentId}`}
+                        {report.contentTitle || `${contentTypeTranslations[report.contentType] || report.contentType} ${report.contentId}`}
                       </h3>
-                      
+
                       <p className="text-gray-600 dark:text-gray-400 mb-2">
-                        <strong>السبب:</strong> {getReasonTextAr(report.reason)}
+                        <strong>السبب:</strong> {reasonTranslations[report.reason] || report.reason}
                       </p>
                       
                       {report.description && (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ChannelSection } from '@al-ummah/shared-types';
 import { ChannelSectionRenderer } from './ChannelSectionRenderer';
+import { listChannelSections } from '@/lib/api/channel-sections';
 
 interface ChannelSectionsProps {
   channelId: string;
@@ -18,16 +19,15 @@ export function ChannelSections({ channelId }: ChannelSectionsProps) {
 
     async function fetchSections() {
       try {
-        const response = await fetch(`/api/channels/${channelId}/sections`);
-        const data = await response.json();
+        const result = await listChannelSections(channelId);
 
-        console.log('[ChannelSections] API response:', JSON.stringify(data, null, 2));
+        console.log('[ChannelSections] API response:', JSON.stringify(result, null, 2));
 
-        if (data.success) {
-          console.log('[ChannelSections] Loaded sections:', data.sections.length);
-          setSections(data.sections);
+        if (result.success && result.data) {
+          console.log('[ChannelSections] Loaded sections:', result.data.length);
+          setSections(result.data);
         } else {
-          console.error('[ChannelSections] Failed to load sections:', data.error);
+          console.error('[ChannelSections] Failed to load sections:', result.error);
           setError('Failed to load channel sections');
         }
       } catch (err) {

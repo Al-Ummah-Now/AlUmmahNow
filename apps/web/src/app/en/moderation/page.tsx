@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const ModerationDashboard: React.FC = () => {
-  const { t } = useI18n('en');
+  const { t } = useLanguage();
   const [reports, setReports] = useState<ContentReport[]>([]);
   const [stats, setStats] = useState<ModerationStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,15 +52,15 @@ const ModerationDashboard: React.FC = () => {
       setReports(reportsData || []);
       setStats(statsData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load moderation data');
+      setError(err instanceof Error ? err.message : t.errors.genericError);
     } finally {
       setLoading(false);
     }
-  }, [auth, filter]);
+  }, [auth, filter, t]);
 
   useEffect(() => {
     if (!isAuthorized) {
-      setError("Access denied. You need moderator or admin privileges to access this page.");
+      setError(t.errors.unauthorized);
       setLoading(false);
       return;
     }
@@ -94,7 +94,7 @@ const ModerationDashboard: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <Alert className="border-red-200 bg-red-50">
           <AlertDescription className="text-red-800">
-            Access denied. You need moderator or admin privileges to access this page.
+            {t.errors.unauthorized}
           </AlertDescription>
         </Alert>
       </div>
@@ -118,7 +118,7 @@ const ModerationDashboard: React.FC = () => {
           <AlertDescription className="text-red-800">{error}</AlertDescription>
         </Alert>
         <Button onClick={loadDashboardData} className="mt-4">
-          Retry
+          {t.common.retry}
         </Button>
       </div>
     );
@@ -129,7 +129,7 @@ const ModerationDashboard: React.FC = () => {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t.moderation.moderationTitle}</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Review reported content and manage community standards
+          {t.moderation.dashboardSubtitle}
         </p>
       </div>
 
@@ -138,41 +138,41 @@ const ModerationDashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
+              <CardTitle className="text-sm font-medium">{t.moderation.totalReports}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalReports}</div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">All time</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t.moderation.allTime || t.time?.allTime || 'All time'}</p>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Pending Reports</CardTitle>
+              <CardTitle className="text-sm font-medium">{t.moderation.pendingReports}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">{stats.pendingReports}</div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Needs attention</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t.moderation.needsAttention}</p>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Actions (24h)</CardTitle>
+              <CardTitle className="text-sm font-medium">{t.moderation.actions24h}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">{stats.actionsLast24h}</div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Recent activity</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t.moderation.recentActivity}</p>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Avg Response Time</CardTitle>
+              <CardTitle className="text-sm font-medium">{t.moderation.avgResponseTime}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{stats.averageResponseTime}h</div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Mean resolution</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t.moderation.meanResolution}</p>
             </CardContent>
           </Card>
         </div>
@@ -181,53 +181,53 @@ const ModerationDashboard: React.FC = () => {
       {/* Filters */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Filter Reports</CardTitle>
+          <CardTitle>{t.moderation.filterReports}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
-              <select 
+              <label className="block text-sm font-medium mb-1">{t.moderation.reportStatus}</label>
+              <select
                 value={filter.status}
                 onChange={(e) => setFilter({...filter, status: e.target.value})}
                 className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-600"
               >
                 <option value="">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="in_review">In Review</option>
-                <option value="resolved">Resolved</option>
+                <option value="pending">{t.moderation.status.pending}</option>
+                <option value="in_review">{t.moderation.status.inReview}</option>
+                <option value="resolved">{t.moderation.status.resolved}</option>
                 <option value="dismissed">Dismissed</option>
-                <option value="escalated">Escalated</option>
+                <option value="escalated">{t.moderation.status.escalated}</option>
               </select>
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium mb-1">Priority</label>
-              <select 
+              <label className="block text-sm font-medium mb-1">{t.moderation.priority}</label>
+              <select
                 value={filter.priority}
                 onChange={(e) => setFilter({...filter, priority: e.target.value})}
                 className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-600"
               >
-                <option value="">All Priorities</option>
-                <option value="urgent">Urgent</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
+                <option value="">{t.moderation.priorityEnum.allPriorities}</option>
+                <option value="urgent">{t.moderation.priorityEnum.urgent}</option>
+                <option value="high">{t.moderation.priorityEnum.high}</option>
+                <option value="medium">{t.moderation.priorityEnum.medium}</option>
+                <option value="low">{t.moderation.priorityEnum.low}</option>
               </select>
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium mb-1">Content Type</label>
-              <select 
+              <label className="block text-sm font-medium mb-1">{t.moderation.contentType}</label>
+              <select
                 value={filter.contentType}
                 onChange={(e) => setFilter({...filter, contentType: e.target.value})}
                 className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-600"
               >
-                <option value="">All Types</option>
-                <option value="video">Videos</option>
-                <option value="comment">Comments</option>
-                <option value="channel">Channels</option>
-                <option value="playlist">Playlists</option>
+                <option value="">{t.moderation.contentTypeEnum.allTypes}</option>
+                <option value="video">{t.moderation.contentTypeEnum.video}</option>
+                <option value="comment">{t.moderation.contentTypeEnum.comment}</option>
+                <option value="channel">{t.moderation.contentTypeEnum.channel}</option>
+                <option value="playlist">{t.moderation.contentTypeEnum.playlist}</option>
               </select>
             </div>
           </div>
@@ -237,13 +237,13 @@ const ModerationDashboard: React.FC = () => {
       {/* Reports List */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Reports</CardTitle>
-          <CardDescription>Content reports awaiting moderation action</CardDescription>
+          <CardTitle>{t.moderation.recentReports}</CardTitle>
+          <CardDescription>{t.moderation.reportsPendingAction}</CardDescription>
         </CardHeader>
         <CardContent>
           {reports.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              No reports found matching the current filters.
+              {t.moderation.noReportsMatch}
             </div>
           ) : (
             <div className="space-y-4">
@@ -293,7 +293,7 @@ const ModerationDashboard: React.FC = () => {
                     <div className="flex gap-2 ml-4">
                       <Link href={`/en/moderation/reports/${report.id}`}>
                         <Button variant="outline" size="sm">
-                          Review
+                          {t.moderation.reviewReport}
                         </Button>
                       </Link>
                     </div>
@@ -308,13 +308,13 @@ const ModerationDashboard: React.FC = () => {
       {/* Quick Actions */}
       <div className="mt-8 flex gap-4">
         <Link href="/en/moderation/reports">
-          <Button>View All Reports</Button>
+          <Button>{t.moderation.viewAllReports}</Button>
         </Link>
         <Link href="/en/moderation/actions">
-          <Button variant="outline">Action History</Button>
+          <Button variant="outline">{t.moderation.actionHistory}</Button>
         </Link>
         <Link href="/en/moderation/users">
-          <Button variant="outline">User Management</Button>
+          <Button variant="outline">{t.moderation.userManagement}</Button>
         </Link>
       </div>
     </div>

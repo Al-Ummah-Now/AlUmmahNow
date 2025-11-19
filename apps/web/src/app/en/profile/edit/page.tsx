@@ -79,7 +79,7 @@ const ProfileEditPage = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <span className="text-sm font-medium">Click to change cover</span>
+                <span className="text-sm font-medium">{t.channel.clickToChangeCover || 'Click to change cover'}</span>
               </div>
               {/* Hover overlay */}
               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -136,22 +136,22 @@ const ProfileEditPage = () => {
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-3">
               <label className="block">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">First Name</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">{t.profile.firstName}</span>
                 <input
                   type="text"
                   name="firstName"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder="Your first name"
+                  placeholder={t.profile.yourFirstName || 'Your first name'}
                   defaultValue={profile?.firstName || ''}
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Last Name</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">{t.profile.lastName}</span>
                 <input
                   type="text"
                   name="lastName"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder="Your last name"
+                  placeholder={t.profile.yourLastName || 'Your last name'}
                   defaultValue={profile?.lastName || ''}
                 />
               </label>
@@ -189,7 +189,7 @@ const ProfileEditPage = () => {
                   type="text"
                   name="displayNameEn"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder="Display name in English"
+                  placeholder={t.profile.displayNameOptional || 'Display name in English'}
                   defaultValue={profile?.displayNameLocalized?.en || profile?.displayName || ''}
                 />
               )}
@@ -198,7 +198,7 @@ const ProfileEditPage = () => {
                   type="text"
                   name="displayNameAr"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder="الاسم المعروض بالعربية"
+                  placeholder={t.profile.displayNameArabic}
                   defaultValue={profile?.displayNameLocalized?.ar || ''}
                   dir="rtl"
                 />
@@ -213,7 +213,7 @@ const ProfileEditPage = () => {
                   name="bioEn"
                   rows={4}
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors resize-y"
-                  placeholder="Tell us about yourself"
+                  placeholder={t.profile.bioOptional || 'Tell us about yourself'}
                   defaultValue={profile?.bioLocalized?.en || profile?.bio || ''}
                 />
               )}
@@ -222,7 +222,7 @@ const ProfileEditPage = () => {
                   name="bioAr"
                   rows={4}
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors resize-y"
-                  placeholder="أخبرنا عن نفسك"
+                  placeholder={t.profile.bioArabic}
                   defaultValue={profile?.bioLocalized?.ar || ''}
                   dir="rtl"
                 />
@@ -238,7 +238,7 @@ const ProfileEditPage = () => {
                 value={profile?.email ?? auth.user?.email ?? ""}
                 readOnly
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Email cannot be changed</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.profile.emailCannotBeChanged}</p>
             </label>
             <button
               type="submit"

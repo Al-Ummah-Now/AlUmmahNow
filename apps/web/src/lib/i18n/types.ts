@@ -40,6 +40,16 @@ export interface AppTranslations {
     noResults: string;
     viewAll: string;
     learnMore: string;
+    retry: string;
+    demo: string;
+  };
+
+  /**
+   * Languages
+   */
+  languages: {
+    english: string;
+    arabic: string;
   };
 
   /**
@@ -110,6 +120,11 @@ export interface AppTranslations {
     channelNotFoundMessage: string;
     charactersRemaining: string;
     saveChanges: string;
+    channelNotFound: string;
+    channelNameEnglish: string;
+    channelNameArabic: string;
+    channelDescriptionEnglish: string;
+    channelDescriptionArabic: string;
   };
 
   /**
@@ -141,6 +156,12 @@ export interface AppTranslations {
     bioArabic: string;
     privacyNotice: string;
     privacyNoticeText: string;
+    welcome: string;
+    editInstructions: string;
+    myPlaylists: string;
+    playlistsDescription: string;
+    newPlaylist: string;
+    firstPlaylistMessage: string;
   };
 
   /**
@@ -162,6 +183,8 @@ export interface AppTranslations {
     relatedVideos: string;
     watchLater: string;
     addToPlaylist: string;
+    noVideoSelected: string;
+    selectVideoMessage: string;
   };
 
   /**
@@ -245,6 +268,19 @@ export interface AppTranslations {
     dropHere: string;
     supports: string;
     max: string;
+    shareDescription: string;
+    videoUploadedMessage: string;
+    viewVideo: string;
+    uploadAnother: string;
+    waitingMessage: string;
+    percentComplete: string;
+    guidelines: string;
+    guidelineIslamicValues: string;
+    guidelineMaxSize: string;
+    guidelineFormats: string;
+    guidelineCopyright: string;
+    guidelineProcessing: string;
+    guidelineThumbnails: string;
   };
 
   /**
@@ -264,6 +300,18 @@ export interface AppTranslations {
     last28Days: string;
     last7Days: string;
     today: string;
+    demoMode: string;
+    demoMessage: string;
+    trackPerformance: string;
+  };
+
+  /**
+   * Time related
+   */
+  time: {
+    allTime: string;
+    hours: string;
+    minutes: string;
   };
 
   /**
@@ -316,6 +364,86 @@ export interface AppTranslations {
     reportStatus: string;
     reportedBy: string;
     reportDate: string;
+    moderationDashboard: string;
+    dashboardSubtitle: string;
+    totalReports: string;
+    pendingReports: string;
+    allTime: string;
+    needsAttention: string;
+    actions24h: string;
+    recentActivity: string;
+    avgResponseTime: string;
+    meanResolution: string;
+    filterReports: string;
+    priority: string;
+    contentType: string;
+    recentReports: string;
+    reportsPendingAction: string;
+    noReportsMatch: string;
+    accessDenied: string;
+    backToDashboard: string;
+    reportDetails: string;
+    reviewReportMessage: string;
+    reportReasonLabel: string;
+    descriptionLabel: string;
+    reportedByLabel: string;
+    reportDateLabel: string;
+    assignedToLabel: string;
+    resolutionNotesLabel: string;
+    reportedContentLabel: string;
+    viewOriginalContent: string;
+    chooseAction: string;
+    takeModerationAction: string;
+    alreadyResolved: string;
+    actionType: string;
+    selectAction: string;
+    approveContent: string;
+    removeContent: string;
+    hideContent: string;
+    warnUser: string;
+    restrictUser: string;
+    banUser: string;
+    dismissReport: string;
+    flagForReview: string;
+    briefReason: string;
+    notesOptional: string;
+    additionalNotes: string;
+    takingAction: string;
+    actionHistory: string;
+    viewAllReports: string;
+    userManagement: string;
+    status: {
+      pending: string;
+      inReview: string;
+      resolved: string;
+      rejected: string;
+      escalated: string;
+    };
+    priorityEnum: {
+      urgent: string;
+      high: string;
+      medium: string;
+      low: string;
+      allPriorities: string;
+    };
+    contentTypeEnum: {
+      video: string;
+      comment: string;
+      channel: string;
+      playlist: string;
+      allTypes: string;
+    };
+    reportReasonEnum: {
+      inappropriateContent: string;
+      spam: string;
+      harassment: string;
+      violence: string;
+      hateSpeech: string;
+      falseInformation: string;
+      copyright: string;
+      privacyViolation: string;
+      other: string;
+    };
   };
 
   /**
@@ -402,6 +530,18 @@ export interface AppTranslations {
     markAllAsRead: string;
     noNotifications: string;
     viewAll: string;
+    testNotification: string;
+    demoFeatures: string;
+    likeNotification: string;
+    commentNotification: string;
+    subscriptionNotification: string;
+    uploadNotification: string;
+    systemNotification: string;
+    likeMessage: string;
+    commentMessage: string;
+    subscriptionMessage: string;
+    uploadMessage: string;
+    systemMessage: string;
   };
 }
 
