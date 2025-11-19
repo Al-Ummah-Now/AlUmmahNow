@@ -48,6 +48,7 @@ interface AccountInfo {
   displayName: string;
   avatarUrl?: string;
   isActive: boolean;
+  channelsCount: number;
 }
 
 interface MultiAccountContextValue {

@@ -408,6 +408,7 @@ export async function getActiveSessionInfo() {
       displayName: acc.displayName,
       avatarUrl: acc.avatarUrl,
       isActive: acc.isActive,
+      channelsCount: acc.channelsCount,
     })),
   };
 

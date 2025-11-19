@@ -469,204 +469,203 @@ export function UnifiedNavigationRTL() {
               })}
             </div>
 
-            {/* Channels Section */}
-            {channels.length > 0 && (
-              <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-                  قنواتك ({channels.length})
-                </div>
-
-                {/* No Channel Option */}
-                <button
-                  onClick={() => {
-                    switchToChannel(null);
-                  }}
-                  className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-right"
-                  role="menuitem"
-                >
-                  <div className="h-8 w-8 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
-                    <Tv className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      بدون قناة
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      التصفح بدون قناة
-                    </div>
-                  </div>
-                  {!channel && (
-                    <Check className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
-                  )}
-                </button>
-
-                {/* User's Channels */}
-                {channels.map((ch) => (
-                  <button
-                    key={ch.id}
-                    onClick={() => {
-                      switchToChannel(ch.id);
-                    }}
-                    className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-right"
-                    role="menuitem"
-                  >
-                    <div className="relative flex-shrink-0">
-                      {ch.avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={ch.avatarUrl}
-                          alt={getChannelName(ch.name, ch.nameLocalized)}
-                          className="h-8 w-8 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm font-semibold">
-                          {getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}
-                        </div>
-                      )}
-                      {ch.isMain && (
-                        <Crown className="absolute -bottom-1 -right-1 h-3 w-3 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {getChannelName(ch.name, ch.nameLocalized)}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {ch.isMain ? 'القناة الرئيسية' : 'قناة'}
-                      </div>
-                    </div>
-                    {channel?.id === ch.id && (
-                      <Check className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
-                    )}
-                  </button>
-                ))}
-
-                {/* Create Channel */}
-                {!isCreatingChannel ? (
-                  <button
-                    onClick={() => setIsCreatingChannel(true)}
-                    className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-right mt-1"
-                    role="menuitem"
-                  >
-                    <div className="h-8 w-8 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
-                      <Plus className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                    </div>
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      إنشاء قناة جديدة
-                    </span>
-                  </button>
-                ) : (
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mt-1">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      اسم القناة
-                    </label>
-                    <input
-                      type="text"
-                      value={newChannelName}
-                      onChange={(e) => setNewChannelName(e.target.value)}
-                      placeholder="أدخل اسم القناة"
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 text-right"
-                      autoFocus
-                      dir="rtl"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleCreateChannel();
-                        }
-                      }}
-                    />
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={handleCreateChannel}
-                        disabled={!newChannelName.trim()}
-                        className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
-                      >
-                        إنشاء
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsCreatingChannel(false);
-                          setNewChannelName('');
-                        }}
-                        className="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md transition-colors"
-                      >
-                        إلغاء
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Account Management */}
+            {/* Account Management with Nested Channels */}
             <div className="p-2 border-b border-gray-200 dark:border-gray-700">
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
                 الحسابات {accounts.length > 1 && `(${accounts.length})`}
               </div>
 
-              {accounts.map((account) => (
-                  <div
-                    key={account.userId}
-                    className="group relative rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <button
-                      onClick={() => {
-                        if (!account.isActive) {
-                          switchAccount(account.userId);
-                          setIsOpen(false);
-                        }
-                      }}
-                      className="flex items-center gap-3 w-full px-3 py-2 text-right"
-                      role="menuitem"
-                      disabled={account.isActive}
-                    >
-                      {/* Show account avatar from fetched profile, with fallback */}
-                      {getAccountAvatar(account.userId) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={getAccountAvatar(account.userId)!}
-                          alt={account.displayName}
-                          className="h-8 w-8 rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : account.avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={account.avatarUrl}
-                          alt={account.displayName}
-                          className="h-8 w-8 rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                          {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {account.displayName}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                          {account.email}
-                        </div>
-                      </div>
-                      {account.isActive && (
-                        <Check className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
-                      )}
-                    </button>
+              {accounts.map((account) => {
+                // For active account, use channels from local state (filtered in useEffect)
+                // For inactive accounts, we can't show individual channels (only count)
+                const accountChannels = account.isActive ? channels.filter(ch => ch.userId === account.userId) : [];
+                const isActive = account.isActive;
+                // Use channelsCount from AccountInfo which is accurate for all accounts
+                const channelCount = account.channelsCount || 0;
 
-                    {/* Remove Account (hover only, not for active) */}
-                    {!account.isActive && accounts.length > 1 && (
+                return (
+                  <div key={account.userId} className="mb-2">
+                    {/* Account Header */}
+                    <div className="group relative rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeAccount(account.userId);
+                        onClick={() => {
+                          if (!isActive) {
+                            switchAccount(account.userId);
+                            setIsOpen(false);
+                          }
                         }}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label="إزالة الحساب"
+                        className="flex items-center gap-3 w-full px-3 py-2 text-right"
+                        role="menuitem"
+                        disabled={isActive}
                       >
-                        <LogOut className="h-4 w-4 text-red-600 dark:text-red-400" />
+                        {isActive && (
+                          <Check className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {account.displayName}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {channelCount} {channelCount === 1 ? 'قناة' : 'قنوات'}
+                          </div>
+                        </div>
+                        {/* Show account avatar from fetched profile, with fallback */}
+                        {getAccountAvatar(account.userId) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={getAccountAvatar(account.userId)!}
+                            alt={account.displayName}
+                            className="h-8 w-8 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : account.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={account.avatarUrl}
+                            alt={account.displayName}
+                            className="h-8 w-8 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                            {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
+                          </div>
+                        )}
                       </button>
+
+                      {/* Remove Account (hover only, not for active) */}
+                      {!isActive && accounts.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeAccount(account.userId);
+                          }}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label="إزالة الحساب"
+                        >
+                          <LogOut className="h-4 w-4 text-red-600 dark:text-red-400" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Nested Channels for Active Account Only */}
+                    {isActive && (
+                      <div className="mr-6 mt-1 border-r-2 border-gray-200 dark:border-gray-700 pr-2">
+                        {/* No Channel Option */}
+                        <button
+                          onClick={() => {
+                            switchToChannel(null);
+                          }}
+                          className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-right"
+                          role="menuitem"
+                        >
+                          {!channel && (
+                            <Check className="h-3 w-3 text-green-600 dark:text-green-400 flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                              بدون قناة
+                            </div>
+                          </div>
+                          <div className="h-6 w-6 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
+                            <Tv className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+                          </div>
+                        </button>
+
+                        {/* Account's Channels */}
+                        {accountChannels.map((ch) => (
+                          <button
+                            key={ch.id}
+                            onClick={() => {
+                              switchToChannel(ch.id);
+                            }}
+                            className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-right"
+                            role="menuitem"
+                          >
+                            {channel?.id === ch.id && (
+                              <Check className="h-3 w-3 text-green-600 dark:text-green-400 flex-shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
+                                {getChannelName(ch.name, ch.nameLocalized)}
+                              </div>
+                            </div>
+                            <div className="relative flex-shrink-0">
+                              {ch.avatarUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={ch.avatarUrl}
+                                  alt={ch.name}
+                                  className="h-6 w-6 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-6 w-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-semibold">
+                                  {getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}
+                                </div>
+                              )}
+                              {ch.isMain && (
+                                <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
+                              )}
+                            </div>
+                          </button>
+                        ))}
+
+                        {/* Create Channel - Only for Active Account */}
+                        {!isCreatingChannel ? (
+                          <button
+                            onClick={() => setIsCreatingChannel(true)}
+                            className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-right mt-1"
+                            role="menuitem"
+                          >
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                              إنشاء قناة
+                            </span>
+                            <div className="h-6 w-6 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
+                              <Plus className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+                            </div>
+                          </button>
+                        ) : (
+                          <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg mt-1">
+                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              اسم القناة
+                            </label>
+                            <input
+                              type="text"
+                              value={newChannelName}
+                              onChange={(e) => setNewChannelName(e.target.value)}
+                              placeholder="أدخل اسم القناة"
+                              className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 text-right"
+                              autoFocus
+                              dir="rtl"
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleCreateChannel();
+                                }
+                              }}
+                            />
+                            <div className="flex gap-1.5 mt-2">
+                              <button
+                                onClick={handleCreateChannel}
+                                disabled={!newChannelName.trim()}
+                                className="flex-1 px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
+                              >
+                                إنشاء
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setIsCreatingChannel(false);
+                                  setNewChannelName('');
+                                }}
+                                className="flex-1 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md transition-colors"
+                              >
+                                إلغاء
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
-                ))}
+                );
+              })}
             </div>
 
             {/* Add Account & Sign Out */}

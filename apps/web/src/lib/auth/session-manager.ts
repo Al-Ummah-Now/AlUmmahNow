@@ -531,14 +531,19 @@ export class SessionManager {
     const sessionData = await this.getSessionData();
     if (!sessionData) return [];
 
-    return Object.values(sessionData.accounts).map(account => ({
-      userId: account.userId,
-      email: account.email,
-      displayName: account.displayName,
-      avatarUrl: account.avatarUrl,
-      isActive: account.userId === sessionData.activeUserId,
-      channelsCount: account.channels.length,
-    }));
+    return Object.values(sessionData.accounts).map(account => {
+      // Filter channels to only those belonging to this account (same as getActiveSession)
+      const accountChannels = account.channels.filter(c => c.userId === account.userId);
+
+      return {
+        userId: account.userId,
+        email: account.email,
+        displayName: account.displayName,
+        avatarUrl: account.avatarUrl,
+        isActive: account.userId === sessionData.activeUserId,
+        channelsCount: accountChannels.length,
+      };
+    });
   }
 
   /**

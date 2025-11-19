@@ -493,9 +493,12 @@ export function UnifiedNavigation() {
               </div>
 
               {accounts.map((account) => {
-                // Filter channels belonging to this account
-                const accountChannels = channels.filter(ch => ch.userId === account.userId);
+                // For active account, use channels from local state (filtered in useEffect)
+                // For inactive accounts, we can't show individual channels (only count)
+                const accountChannels = account.isActive ? channels.filter(ch => ch.userId === account.userId) : [];
                 const isActive = account.isActive;
+                // Use channelsCount from AccountInfo which is accurate for all accounts
+                const channelCount = account.channelsCount || 0;
 
                 return (
                   <div key={account.userId} className="mb-2">
@@ -537,7 +540,7 @@ export function UnifiedNavigation() {
                             {account.displayName}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {accountChannels.length} {accountChannels.length === 1 ? t.navigation.channel : t.navigation.channels}
+                            {channelCount} {channelCount === 1 ? t.navigation.channel : t.navigation.channels}
                           </div>
                         </div>
                         {isActive && (
