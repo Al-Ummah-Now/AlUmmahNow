@@ -1,31 +1,32 @@
 /**
  * RTL Detection Utility
  *
- * Determines if a language uses right-to-left text direction.
+ * Determines if a locale uses right-to-left text direction.
  */
 
-import type { SupportedLanguage } from '../types';
+import { LOCALES, DEFAULT_LOCALE } from '../locales';
 
 /**
- * Check if a language uses RTL (right-to-left) text direction
- *
- * @param lang - Language code to check
- * @returns True if language is RTL
- *
- * @example
- * ```typescript
- * isRTL('ar'); // true
- * isRTL('en'); // false
- * ```
+ * Check if a locale uses RTL text direction
+ * @param locale - The locale code to check (e.g., 'ar', 'en')
+ * @returns true if the locale is RTL, false otherwise
  */
-export function isRTL(lang: SupportedLanguage): boolean {
-  return lang === 'ar';
+export function isRTL(locale: string): boolean {
+  const localeConfig = LOCALES.find((l) => l.code === locale);
+
+  if (!localeConfig) {
+    // If locale not found, fall back to default locale
+    const defaultConfig = LOCALES.find((l) => l.code === DEFAULT_LOCALE);
+    return defaultConfig?.isRTL ?? false;
+  }
+
+  return localeConfig.isRTL;
 }
 
 /**
- * Get text direction for a language
+ * Get text direction for a locale
  *
- * @param lang - Language code
+ * @param locale - Locale code
  * @returns 'rtl' or 'ltr'
  *
  * @example
@@ -34,6 +35,6 @@ export function isRTL(lang: SupportedLanguage): boolean {
  * getDirection('en'); // 'ltr'
  * ```
  */
-export function getDirection(lang: SupportedLanguage): 'ltr' | 'rtl' {
-  return isRTL(lang) ? 'rtl' : 'ltr';
+export function getDirection(locale: string): 'ltr' | 'rtl' {
+  return isRTL(locale) ? 'rtl' : 'ltr';
 }

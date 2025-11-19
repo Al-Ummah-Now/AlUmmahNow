@@ -7,6 +7,12 @@
 
 /**
  * Supported languages
+ * Import from locales.ts to keep single source of truth
+ */
+export type { SupportedLocale } from './locales';
+
+/**
+ * Keep the old type for backward compatibility
  */
 export type SupportedLanguage = 'en' | 'ar';
 
@@ -42,6 +48,8 @@ export interface AppTranslations {
     learnMore: string;
     retry: string;
     demo: string;
+    backTo: string;
+    welcome: string;
   };
 
   /**
@@ -125,6 +133,12 @@ export interface AppTranslations {
     channelNameArabic: string;
     channelDescriptionEnglish: string;
     channelDescriptionArabic: string;
+    channelBanner: string;
+    channelTrailer: string;
+    noChannelTrailer: string;
+    about: string;
+    content: string;
+    channelSectionsPlaceholder: string;
   };
 
   /**
@@ -162,6 +176,8 @@ export interface AppTranslations {
     playlistsDescription: string;
     newPlaylist: string;
     firstPlaylistMessage: string;
+    welcomeUser: string;
+    editProfileDescription: string;
   };
 
   /**
@@ -281,6 +297,7 @@ export interface AppTranslations {
     guidelineCopyright: string;
     guidelineProcessing: string;
     guidelineThumbnails: string;
+    shareWithCommunity: string;
   };
 
   /**
@@ -303,6 +320,7 @@ export interface AppTranslations {
     demoMode: string;
     demoMessage: string;
     trackPerformance: string;
+    demoModeMessage: string;
   };
 
   /**
@@ -412,12 +430,17 @@ export interface AppTranslations {
     actionHistory: string;
     viewAllReports: string;
     userManagement: string;
+    reason: string;
+    description: string;
+    assignedTo: string;
     status: {
       pending: string;
       inReview: string;
       resolved: string;
       rejected: string;
       escalated: string;
+      allStatuses: string;
+      dismissed: string;
     };
     priorityEnum: {
       urgent: string;
@@ -477,6 +500,7 @@ export interface AppTranslations {
     validationError: string;
     uploadError: string;
     sessionExpired: string;
+    uploadFailed: string;
   };
 
   /**
@@ -517,6 +541,27 @@ export interface AppTranslations {
     liveUpdates: string;
     live: string;
     offline: string;
+  };
+
+  /**
+   * Community related
+   */
+  community: {
+    managePosts: string;
+    newPost: string;
+    searchPosts: string;
+    allTypes: string;
+    text: string;
+    image: string;
+    poll: string;
+    quiz: string;
+    video: string;
+    published: string;
+    scheduled: string;
+    drafts: string;
+    noResultsFound: string;
+    noPostsYet: string;
+    createFirstPost: string;
   };
 
   /**

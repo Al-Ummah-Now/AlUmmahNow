@@ -3,20 +3,21 @@ import { notFound } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 interface ChannelLivePageProps {
-  params: {
+  params: Promise<{
     locale: string;
     id: string;
-  };
+  }>;
 }
 
 export default async function ChannelLivePage({ params }: ChannelLivePageProps) {
-  const channel = await getChannelById(params.id);
+  const { locale, id } = await params;
+  const channel = await getChannelById(id);
 
   if (!channel) {
     notFound();
   }
 
-  const isRTL = params.locale === 'ar';
+  const isRTL = locale === 'ar';
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-12 text-center">

@@ -1,12 +1,10 @@
 /**
- * Next.js Middleware for Content Security Policy
- * 
- * Implements strict CSP headers to prevent XSS attacks and enhance security.
- * Specifically configured for video player requirements including Video.js CDN,
- * Bunny CDN for media, and WebSocket connections.
- * 
+ * Next.js Middleware for Content Security Policy and Locale Routing
+ *
  * Features:
- * - Strict CSP policy with minimal permissions
+ * - Content Security Policy (CSP) headers
+ * - Locale validation and routing for dynamic [locale] routes
+ * - RTL/LTR direction headers
  * - Video.js CDN whitelisting with integrity checks
  * - Bunny CDN media source allowance
  * - WebSocket secure connection support
@@ -14,6 +12,12 @@
  */
 
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import {
+  getValidLocale,
+  getTextDirection,
+  getSupportedLocaleCodes
+} from '@/lib/i18n/utils';
 
 /**
  * Generate CSP policy based on environment variables
@@ -90,13 +94,67 @@ const SECURITY_HEADERS = {
 };
 
 /**
- * Middleware function to add security headers
+ * Middleware function to handle locale validation and security headers
  */
-export function middleware() {
-  const response = NextResponse.next();
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
 
   // Determine environment
   const isDevelopment = process.env.NODE_ENV === 'development';
+
+  // Handle dynamic [locale] routes
+  // Skip static locale routes (/ar/*, /en/*) and non-locale routes
+  const dynamicLocaleMatch = pathname.match(/^\/([^\/]+)/);
+
+  if (dynamicLocaleMatch) {
+    const potentialLocale = dynamicLocaleMatch[1];
+    const supportedLocaleCodes = getSupportedLocaleCodes();
+
+    // Check if this is a dynamic [locale] route (not /ar or /en, which are static)
+    // Also skip Next.js internals (_next), API routes (api), and static files
+    const isStaticLocaleRoute = ['ar', 'en'].includes(potentialLocale);
+    const isNextInternal = potentialLocale.startsWith('_next');
+    const isApiRoute = potentialLocale === 'api';
+    const isPublicFile = potentialLocale === 'public' || pathname.includes('.');
+
+    if (!isStaticLocaleRoute && !isNextInternal && !isApiRoute && !isPublicFile) {
+      // This might be a dynamic [locale] route
+      // Check if the locale is valid but not one of our static routes
+      if (supportedLocaleCodes.includes(potentialLocale) && !['ar', 'en'].includes(potentialLocale)) {
+        // Valid dynamic locale - continue processing
+        const response = NextResponse.next();
+
+        // Add locale and direction headers for the response
+        const direction = getTextDirection(potentialLocale);
+        response.headers.set('X-Locale', potentialLocale);
+        response.headers.set('X-Text-Direction', direction);
+
+        // Add CSP and security headers
+        const csp = generateCSP(isDevelopment);
+        response.headers.set('Content-Security-Policy', csp);
+
+        Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
+          response.headers.set(header, value);
+        });
+
+        if (isDevelopment) {
+          response.headers.set('X-CSP-Debug', 'development-mode');
+          response.headers.set('X-Security-Headers', 'enabled');
+        }
+
+        return response;
+      } else if (potentialLocale.length === 2 && !supportedLocaleCodes.includes(potentialLocale)) {
+        // Looks like a locale code but not supported - redirect to default locale
+        const defaultLocale = getValidLocale(potentialLocale);
+        const redirectPath = pathname.replace(`/${potentialLocale}`, `/${defaultLocale}`);
+
+        return NextResponse.redirect(new URL(redirectPath, request.url));
+      }
+    }
+  }
+
+  // Default response for all other routes (including static /ar/* and /en/*)
+  const response = NextResponse.next();
 
   // Generate and add Content Security Policy
   const csp = generateCSP(isDevelopment);

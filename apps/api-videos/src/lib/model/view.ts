@@ -98,6 +98,9 @@ export const ProfileView = z.object({
     firstName: Str().optional(),
     lastName: Str().optional(),
     displayName: Str().optional(), // Computed field (firstName + lastName or userName)
+    displayNameLocalized: z.record(z.string()).optional().describe("Multi-language display names"),
+    bio: Str().optional(),
+    bioLocalized: z.record(z.string()).optional().describe("Multi-language bios"),
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     dateCreated: DateTime(),

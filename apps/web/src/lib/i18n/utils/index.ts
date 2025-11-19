@@ -11,3 +11,24 @@ export {
 } from './getTranslations';
 
 export { isRTL, getDirection } from './isRTL';
+
+export {
+  getLocaleConfig,
+  getSupportedLocales,
+  getSupportedLocaleCodes,
+  isLocaleSupported,
+  getValidLocale,
+  getTextDirection,
+  getRTLLocales,
+  getLTRLocales,
+  // Migration-specific helpers
+  getLocaleComponent,
+  getLocalizedPath,
+  getDirectionalClasses,
+  getDirectionalStyles,
+  swapDirectional,
+  getStartEnd,
+  parseLocaleFromPath,
+  toDynamicRoute,
+  getFallbackLocale,
+} from './localeHelpers';

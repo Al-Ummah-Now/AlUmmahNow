@@ -26,7 +26,8 @@ interface NewPostPageProps {
 
 export default function NewPostPage({ params }: NewPostPageProps) {
   const router = useRouter();
-  const isRTL = params.locale === 'ar';
+  const { locale, id } = params;
+  const isRTL = locale === 'ar';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
@@ -163,12 +164,12 @@ export default function NewPostPage({ params }: NewPostPageProps) {
       }
 
       const result = await createCommunityPost(baseData, {
-        channelId: params.id,
+        channelId: id,
         userId: ''
       });
 
       if (result?.success) {
-        router.push(`/${params.locale}/channels/${params.id}/settings/community`);
+        router.push(`/${locale}/channels/${id}/settings/community`);
       } else {
         setError(isRTL ? 'فشل النشر' : 'Failed to publish');
       }
@@ -255,7 +256,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
               <PostTypeSelector
                 selected={selectedType}
                 onSelect={setSelectedType}
-                locale={params.locale}
+                locale={locale}
               />
             </Card>
 
@@ -269,7 +270,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
                   <TextPostForm
                     content={textContent}
                     onChange={setTextContent}
-                    locale={params.locale}
+                    locale={locale}
                     error={error}
                   />
                 )}
@@ -278,7 +279,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
                   <ImagePostForm
                     images={images}
                     onChange={setImages}
-                    locale={params.locale}
+                    locale={locale}
                     error={error}
                   />
                 )}
@@ -287,7 +288,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
                   <PollPostForm
                     data={pollData}
                     onChange={setPollData}
-                    locale={params.locale}
+                    locale={locale}
                     error={error}
                   />
                 )}
@@ -296,7 +297,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
                   <QuizPostForm
                     data={quizData}
                     onChange={setQuizData}
-                    locale={params.locale}
+                    locale={locale}
                     error={error}
                   />
                 )}
@@ -307,7 +308,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
                     content={videoContent}
                     onVideoIdChange={setVideoId}
                     onContentChange={setVideoContent}
-                    locale={params.locale}
+                    locale={locale}
                     error={error}
                   />
                 )}
@@ -316,7 +317,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
                   <GifPostForm
                     gif={gif}
                     onChange={setGif}
-                    locale={params.locale}
+                    locale={locale}
                     error={error}
                   />
                 )}

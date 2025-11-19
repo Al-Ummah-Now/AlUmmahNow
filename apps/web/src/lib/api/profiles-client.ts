@@ -153,6 +153,10 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
         const profileData = {
             firstName: profile.firstName,
             lastName: profile.lastName,
+            displayName: profile.displayName,
+            displayNameLocalized: profile.displayNameLocalized,
+            bio: profile.bio,
+            bioLocalized: profile.bioLocalized,
             avatarUrl: profile.avatarUrl,
             coverUrl: profile.coverUrl,
             email: profile.email,

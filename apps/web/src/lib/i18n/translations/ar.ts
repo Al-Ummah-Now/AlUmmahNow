@@ -22,6 +22,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     sort: 'ترتيب',
     close: 'إغلاق',
     back: 'رجوع',
+    backTo: 'العودة إلى {page}',
     next: 'التالي',
     previous: 'السابق',
     submit: 'إرسال',
@@ -31,6 +32,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     learnMore: 'اعرف المزيد',
     retry: 'إعادة المحاولة',
     demo: 'تجريبي',
+    welcome: 'مرحباً',
   },
 
   languages: {
@@ -79,6 +81,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     channelName: 'اسم القناة',
     channelDescription: 'وصف القناة',
     channelAvatar: 'صورة القناة',
+    channelBanner: 'غلاف القناة',
     mainChannel: 'القناة الرئيسية',
     subscribers: 'المشتركون',
     videos: 'الفيديوهات',
@@ -102,6 +105,11 @@ export const AR_TRANSLATIONS: AppTranslations = {
     channelNameArabic: 'اسم القناة (بالعربية)',
     channelDescriptionEnglish: 'وصف القناة (بالإنجليزية)',
     channelDescriptionArabic: 'وصف القناة (بالعربية)',
+    channelTrailer: 'إعلان القناة',
+    noChannelTrailer: 'لا يوجد إعلان للقناة',
+    about: 'حول القناة',
+    content: 'المحتوى',
+    channelSectionsPlaceholder: 'سيتم عرض أقسام القناة هنا',
   },
 
   profile: {
@@ -118,6 +126,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
     redirectingToProfileCreation: 'إعادة توجيه إلى إنشاء الملف الشخصي...',
     redirecting: 'إعادة التوجيه...',
     welcomeMessage: 'مرحباً بك في الأمة الآن! لنقم بإعداد ملفك الشخصي للبدء.',
+    welcomeUser: 'مرحباً {name}!',
+    editProfileDescription: 'قم بتعديل معلومات ملفك الشخصي أدناه.',
     emailCannotBeChanged: 'لا يمكن تغيير عنوان بريدك الإلكتروني',
     firstName: 'الاسم الأول',
     lastName: 'اسم العائلة',
@@ -234,6 +244,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     supports: 'يدعم',
     max: 'الحد الأقصى',
     shareDescription: 'شارك معرفتك وإلهامك مع الأمة',
+    shareWithCommunity: 'شارك محتواك مع مجتمع الأمة الآن',
     videoUploadedMessage: 'تم رفع الفيديو بنجاح!',
     viewVideo: 'عرض الفيديو',
     uploadAnother: 'رفع فيديو آخر',
@@ -264,6 +275,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     today: 'اليوم',
     demoMode: 'الوضع التجريبي',
     demoMessage: 'هذا عرض توضيحي للوحة التحليلات مع بيانات نموذجية',
+    demoModeMessage: 'هذا عرض توضيحي للوحة التحليلات. يرجى تسجيل الدخول لعرض تحليلاتك الفعلية.',
     trackPerformance: 'تتبع أداء قناتك وتفاعل جمهورك',
   },
 
@@ -362,12 +374,17 @@ export const AR_TRANSLATIONS: AppTranslations = {
     actionHistory: 'سجل الإجراءات',
     viewAllReports: 'عرض جميع البلاغات',
     userManagement: 'إدارة المستخدمين',
+    reason: 'السبب',
+    description: 'الوصف',
+    assignedTo: 'مُسند إلى',
     status: {
       pending: 'معلق',
       inReview: 'قيد المراجعة',
       resolved: 'تم الحل',
       rejected: 'مرفوض',
       escalated: 'تم التصعيد',
+      allStatuses: 'جميع الحالات',
+      dismissed: 'مرفوض',
     },
     priorityEnum: {
       urgent: 'عاجل',
@@ -420,6 +437,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     serverError: 'خطأ في الخادم. يرجى المحاولة لاحقاً.',
     validationError: 'خطأ في التحقق',
     uploadError: 'فشل الرفع. يرجى المحاولة مرة أخرى.',
+    uploadFailed: 'فشل الرفع',
     sessionExpired: 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.',
   },
 
@@ -452,6 +470,24 @@ export const AR_TRANSLATIONS: AppTranslations = {
     liveUpdates: 'تحديث التعليقات في الوقت الفعلي',
     live: 'مباشر',
     offline: 'غير متصل',
+  },
+
+  community: {
+    managePosts: 'إدارة المنشورات',
+    newPost: 'منشور جديد',
+    searchPosts: 'بحث في المنشورات...',
+    allTypes: 'جميع الأنواع',
+    text: 'نص',
+    image: 'صورة',
+    poll: 'استطلاع',
+    quiz: 'اختبار',
+    video: 'فيديو',
+    published: 'منشور',
+    scheduled: 'مجدول',
+    drafts: 'مسودات',
+    noResultsFound: 'لا توجد نتائج',
+    noPostsYet: 'لا توجد منشورات',
+    createFirstPost: 'إنشاء أول منشور',
   },
 
   notifications: {

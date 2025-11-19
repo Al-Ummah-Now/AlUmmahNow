@@ -14,6 +14,7 @@ import {
   deleteCommunityPost
 } from '@/lib/api/community-posts';
 import { Plus, Search, Filter } from 'lucide-react';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface CommunityManagementPageProps {
   params: {
@@ -24,7 +25,8 @@ interface CommunityManagementPageProps {
 
 export default function CommunityManagementPage({ params }: CommunityManagementPageProps) {
   const router = useRouter();
-  const isRTL = params.locale === 'ar';
+  const { locale, id } = params;
+  const { t, isRTL } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<PostStatus>(PostStatus.PUBLISHED);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -34,13 +36,13 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
 
   useEffect(() => {
     loadPosts();
-  }, [activeTab, params.id]);
+  }, [activeTab, id]);
 
   const loadPosts = async () => {
     setLoading(true);
     try {
       const response = await listCommunityPosts({
-        channelId: params.id,
+        channelId: id,
         status: activeTab,
         page: 1,
         limit: 50
@@ -57,16 +59,16 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   };
 
   const handleView = (post: CommunityPost) => {
-    router.push(`/${params.locale}/channels/${params.id}/community?post=${post.id}`);
+    router.push(`/${locale}/channels/${id}/community?post=${post.id}`);
   };
 
   const handleEdit = (post: CommunityPost) => {
-    router.push(`/${params.locale}/channels/${params.id}/settings/community/edit/${post.id}`);
+    router.push(`/${locale}/channels/${id}/settings/community/edit/${post.id}`);
   };
 
   const handleDelete = async (postId: string) => {
     const result = await deleteCommunityPost(postId, {
-      channelId: params.id,
+      channelId: id,
       userId: ''
     });
 
@@ -108,11 +110,11 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
         ">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-lg md:text-2xl font-bold">
-              {isRTL ? 'إدارة المنشورات' : 'Manage Posts'}
+              {t.community.managePosts}
             </h1>
-            <Button onClick={() => router.push(`/${params.locale}/channels/${params.id}/settings/community/new`)}>
+            <Button onClick={() => router.push(`/${locale}/channels/${id}/settings/community/new`)}>
               <Plus className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
-              {isRTL ? 'منشور جديد' : 'New Post'}
+              {t.community.newPost}
             </Button>
           </div>
 
@@ -131,7 +133,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                 text-muted-foreground
               " />
               <Input
-                placeholder={isRTL ? 'بحث في المنشورات...' : 'Search posts...'}
+                placeholder={t.community.searchPosts}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 rtl:pr-10 rtl:pl-3"
@@ -147,22 +149,22 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">
-                    {isRTL ? 'جميع الأنواع' : 'All Types'}
+                    {t.community.allTypes}
                   </SelectItem>
                   <SelectItem value={PostType.TEXT}>
-                    {isRTL ? 'نص' : 'Text'}
+                    {t.community.text}
                   </SelectItem>
                   <SelectItem value={PostType.IMAGE}>
-                    {isRTL ? 'صورة' : 'Image'}
+                    {t.community.image}
                   </SelectItem>
                   <SelectItem value={PostType.POLL}>
-                    {isRTL ? 'استطلاع' : 'Poll'}
+                    {t.community.poll}
                   </SelectItem>
                   <SelectItem value={PostType.QUIZ}>
-                    {isRTL ? 'اختبار' : 'Quiz'}
+                    {t.community.quiz}
                   </SelectItem>
                   <SelectItem value={PostType.VIDEO}>
-                    {isRTL ? 'فيديو' : 'Video'}
+                    {t.community.video}
                   </SelectItem>
                   <SelectItem value={PostType.GIF}>
                     GIF
@@ -183,7 +185,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as PostStatus)}>
           <TabsList className="grid w-full sm:w-auto grid-cols-3 mb-6">
             <TabsTrigger value={PostStatus.PUBLISHED}>
-              {isRTL ? 'منشور' : 'Published'}
+              {t.community.published}
               {tabCounts[PostStatus.PUBLISHED] > 0 && (
                 <span className="ml-2 rtl:mr-2 rtl:ml-0 text-xs bg-primary/20 px-2 py-0.5 rounded-full">
                   {tabCounts[PostStatus.PUBLISHED]}
@@ -191,7 +193,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
               )}
             </TabsTrigger>
             <TabsTrigger value={PostStatus.SCHEDULED}>
-              {isRTL ? 'مجدول' : 'Scheduled'}
+              {t.community.scheduled}
               {tabCounts[PostStatus.SCHEDULED] > 0 && (
                 <span className="ml-2 rtl:mr-2 rtl:ml-0 text-xs bg-primary/20 px-2 py-0.5 rounded-full">
                   {tabCounts[PostStatus.SCHEDULED]}
@@ -199,7 +201,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
               )}
             </TabsTrigger>
             <TabsTrigger value={PostStatus.DRAFT}>
-              {isRTL ? 'مسودات' : 'Drafts'}
+              {t.community.drafts}
               {tabCounts[PostStatus.DRAFT] > 0 && (
                 <span className="ml-2 rtl:mr-2 rtl:ml-0 text-xs bg-primary/20 px-2 py-0.5 rounded-full">
                   {tabCounts[PostStatus.DRAFT]}
@@ -223,17 +225,17 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
               ">
                 <p className="text-base md:text-lg">
                   {searchQuery || filterType !== 'all'
-                    ? (isRTL ? 'لا توجد نتائج' : 'No results found')
-                    : (isRTL ? 'لا توجد منشورات' : 'No posts yet')
+                    ? t.community.noResultsFound
+                    : t.community.noPostsYet
                   }
                 </p>
                 {!searchQuery && filterType === 'all' && (
                   <Button
                     className="mt-4"
-                    onClick={() => router.push(`/${params.locale}/channels/${params.id}/settings/community/new`)}
+                    onClick={() => router.push(`/${locale}/channels/${id}/settings/community/new`)}
                   >
                     <Plus className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
-                    {isRTL ? 'إنشاء أول منشور' : 'Create your first post'}
+                    {t.community.createFirstPost}
                   </Button>
                 )}
               </div>
@@ -243,7 +245,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                   <PostCard
                     key={post.id}
                     post={post}
-                    locale={params.locale}
+                    locale={locale}
                     onView={handleView}
                     onEdit={handleEdit}
                     onDelete={handleDelete}

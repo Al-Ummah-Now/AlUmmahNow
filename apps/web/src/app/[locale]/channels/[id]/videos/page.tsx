@@ -6,30 +6,33 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 interface ChannelVideosPageProps {
-  params: {
+  params: Promise<{
     locale: string;
     id: string;
-  };
-  searchParams: {
+  }>;
+  searchParams: Promise<{
     sort?: 'latest' | 'popular' | 'oldest';
-  };
+  }>;
 }
 
 export default async function ChannelVideosPage({
   params,
   searchParams,
 }: ChannelVideosPageProps) {
-  const channel = await getChannelById(params.id);
+  const { locale, id } = await params;
+  const { sort } = await searchParams;
+
+  const channel = await getChannelById(id);
 
   if (!channel) {
     notFound();
   }
 
-  const isRTL = params.locale === 'ar';
-  const sortParam = searchParams.sort || 'latest';
+  const isRTL = locale === 'ar';
+  const sortParam = sort || 'latest';
 
   const videosData = await listVideos({
-    channelId: params.id,
+    channelId: id,
     limit: 30,
   });
 
@@ -45,20 +48,20 @@ export default async function ChannelVideosPage({
         <SortButton
           sort="latest"
           currentSort={sortParam}
-          locale={params.locale}
-          channelId={params.id}
+          locale={locale}
+          channelId={id}
         />
         <SortButton
           sort="popular"
           currentSort={sortParam}
-          locale={params.locale}
-          channelId={params.id}
+          locale={locale}
+          channelId={id}
         />
         <SortButton
           sort="oldest"
           currentSort={sortParam}
-          locale={params.locale}
-          channelId={params.id}
+          locale={locale}
+          channelId={id}
         />
       </div>
 
@@ -74,7 +77,7 @@ export default async function ChannelVideosPage({
           {videos.map((video) => (
             <Link
               key={video.id}
-              href={`/${params.locale}/watch?v=${video.id}`}
+              href={`/${locale}/watch?v=${video.id}`}
               className="group"
             >
               <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">

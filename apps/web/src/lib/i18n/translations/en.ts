@@ -22,6 +22,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     sort: 'Sort',
     close: 'Close',
     back: 'Back',
+    backTo: 'Back to {page}',
     next: 'Next',
     previous: 'Previous',
     submit: 'Submit',
@@ -31,6 +32,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     learnMore: 'Learn More',
     retry: 'Retry',
     demo: 'Demo',
+    welcome: 'Welcome',
   },
 
   languages: {
@@ -79,6 +81,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     channelName: 'Channel Name',
     channelDescription: 'Channel Description',
     channelAvatar: 'Channel Avatar',
+    channelBanner: 'Channel Banner',
     mainChannel: 'Main Channel',
     subscribers: 'Subscribers',
     videos: 'Videos',
@@ -102,6 +105,11 @@ export const EN_TRANSLATIONS: AppTranslations = {
     channelNameArabic: 'Channel Name (Arabic)',
     channelDescriptionEnglish: 'Channel Description (English)',
     channelDescriptionArabic: 'Channel Description (Arabic)',
+    channelTrailer: 'Channel Trailer',
+    noChannelTrailer: 'No channel trailer available',
+    about: 'About',
+    content: 'Content',
+    channelSectionsPlaceholder: 'Channel sections will be displayed here',
   },
 
   profile: {
@@ -118,6 +126,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
     redirectingToProfileCreation: 'Redirecting to profile creation...',
     redirecting: 'Redirecting...',
     welcomeMessage: 'Welcome to Al Ummah Now! Let\'s set up your profile to get started.',
+    welcomeUser: 'Welcome {name}!',
+    editProfileDescription: 'Edit your profile information below.',
     emailCannotBeChanged: 'Your email address cannot be changed',
     firstName: 'First Name',
     lastName: 'Last Name',
@@ -234,6 +244,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     supports: 'Supports',
     max: 'Max',
     shareDescription: 'Share your knowledge and inspiration with the Ummah',
+    shareWithCommunity: 'Share your content with the Al Ummah Now community',
     videoUploadedMessage: 'Your video has been uploaded successfully!',
     viewVideo: 'View Video',
     uploadAnother: 'Upload Another',
@@ -264,6 +275,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     today: 'Today',
     demoMode: 'Demo Mode',
     demoMessage: 'This is a demonstration of the analytics dashboard with sample data',
+    demoModeMessage: 'This is a demonstration of the analytics dashboard. Please log in to view your actual analytics.',
     trackPerformance: 'Track your channel performance and audience engagement',
   },
 
@@ -339,6 +351,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
     reportedByLabel: 'Reported By',
     reportDateLabel: 'Report Date',
     assignedToLabel: 'Assigned To',
+    reason: 'Reason',
+    description: 'Description',
+    assignedTo: 'Assigned to',
     resolutionNotesLabel: 'Resolution Notes',
     reportedContentLabel: 'Reported Content',
     viewOriginalContent: 'View Original Content',
@@ -368,6 +383,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
       resolved: 'Resolved',
       rejected: 'Rejected',
       escalated: 'Escalated',
+      allStatuses: 'All Statuses',
+      dismissed: 'Dismissed',
     },
     priorityEnum: {
       urgent: 'Urgent',
@@ -420,6 +437,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     serverError: 'Server error. Please try again later.',
     validationError: 'Validation error',
     uploadError: 'Upload failed. Please try again.',
+    uploadFailed: 'Upload failed',
     sessionExpired: 'Session expired. Please login again.',
   },
 
@@ -452,6 +470,24 @@ export const EN_TRANSLATIONS: AppTranslations = {
     liveUpdates: 'Comments update in real-time',
     live: 'Live',
     offline: 'Offline',
+  },
+
+  community: {
+    managePosts: 'Manage Posts',
+    newPost: 'New Post',
+    searchPosts: 'Search posts...',
+    allTypes: 'All Types',
+    text: 'Text',
+    image: 'Image',
+    poll: 'Poll',
+    quiz: 'Quiz',
+    video: 'Video',
+    published: 'Published',
+    scheduled: 'Scheduled',
+    drafts: 'Drafts',
+    noResultsFound: 'No results found',
+    noPostsYet: 'No posts yet',
+    createFirstPost: 'Create your first post',
   },
 
   notifications: {

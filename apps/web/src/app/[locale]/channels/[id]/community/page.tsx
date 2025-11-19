@@ -5,10 +5,10 @@ import CommunityPosts from '@/components/Community/CommunityPosts';
 import { Suspense } from 'react';
 
 interface ChannelCommunityPageProps {
-  params: {
+  params: Promise<{
     locale: string;
     id: string;
-  };
+  }>;
 }
 
 function CommunityPostsSkeleton({ isRTL }: { isRTL: boolean }) {
@@ -37,13 +37,14 @@ function CommunityPostsSkeleton({ isRTL }: { isRTL: boolean }) {
 }
 
 export default async function ChannelCommunityPage({ params }: ChannelCommunityPageProps) {
-  const channel = await getChannelById(params.id);
+  const { locale, id } = await params;
+  const channel = await getChannelById(id);
 
   if (!channel) {
     notFound();
   }
 
-  const isRTL = params.locale === 'ar';
+  const isRTL = locale === 'ar';
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -72,9 +73,9 @@ export default async function ChannelCommunityPage({ params }: ChannelCommunityP
 
       <Suspense fallback={<CommunityPostsSkeleton isRTL={isRTL} />}>
         <CommunityPosts
-          channelId={params.id}
+          channelId={id}
           isRTL={isRTL}
-          locale={params.locale}
+          locale={locale}
         />
       </Suspense>
     </div>

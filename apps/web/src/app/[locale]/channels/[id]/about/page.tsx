@@ -3,21 +3,22 @@ import { notFound } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 interface ChannelAboutPageProps {
-  params: {
+  params: Promise<{
     locale: string;
     id: string;
-  };
+  }>;
 }
 
 export default async function ChannelAboutPage({ params }: ChannelAboutPageProps) {
-  const channel = await getChannelById(params.id);
+  const { locale, id } = await params;
+  const channel = await getChannelById(id);
 
   if (!channel) {
     notFound();
   }
 
-  const isRTL = params.locale === 'ar';
-  const displayDescription = channel.descriptionLocalized?.[params.locale] || channel.description;
+  const isRTL = locale === 'ar';
+  const displayDescription = channel.descriptionLocalized?.[locale] || channel.description;
 
   return (
     <div className={cn(
@@ -68,7 +69,7 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
           />
           <StatCard
             label={isRTL ? 'تاريخ الانضمام' : 'Joined'}
-            value={formatDate(channel.dateCreated, params.locale)}
+            value={formatDate(channel.dateCreated, locale)}
             isRTL={isRTL}
           />
         </div>

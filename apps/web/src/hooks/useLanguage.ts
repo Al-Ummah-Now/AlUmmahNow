@@ -13,6 +13,7 @@
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { parseLocaleFromPath } from '@/lib/i18n/utils';
 import type { SupportedLanguage } from '@/lib/i18n/types';
 
 /**
@@ -38,20 +39,15 @@ const LANGUAGE_CONFIG: Record<SupportedLanguage, {
 
 /**
  * Extract language code from pathname
- * Supports patterns like /en/*, /ar/*, etc.
+ * Supports both static patterns (/en/*, /ar/*) and dynamic patterns (/[locale]/*)
+ * Uses the centralized parseLocaleFromPath utility for consistency
  */
 function extractLanguageFromPathname(pathname: string | null): SupportedLanguage {
   if (!pathname) return 'en'; // Default to English
 
-  // Match /en or /ar at the start of the path
-  const match = pathname.match(/^\/(en|ar)(\/|$)/);
-
-  if (match && match[1]) {
-    return match[1] as SupportedLanguage;
-  }
-
-  // Default to English if no language prefix found
-  return 'en';
+  // Use centralized locale parsing logic
+  // This supports both /ar|en/* and /[locale]/* patterns
+  return parseLocaleFromPath(pathname) as SupportedLanguage;
 }
 
 /**
