@@ -1,6 +1,7 @@
 import { getChannelById } from '@/lib/api/channels';
 import { notFound } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { getTranslations } from '@/lib/i18n';
 
 interface ChannelAboutPageProps {
   params: Promise<{
@@ -18,6 +19,7 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
   }
 
   const isRTL = locale === 'ar';
+  const t = getTranslations(locale as 'en' | 'ar');
   const displayDescription = channel.descriptionLocalized?.[locale] || channel.description;
 
   return (
@@ -31,14 +33,14 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
           'text-xl font-semibold mb-4',
           isRTL ? 'text-right' : 'text-left'
         )}>
-          {isRTL ? 'الوصف' : 'Description'}
+          {t.channel.description}
         </h2>
         <div className="bg-white rounded-lg shadow-sm p-6">
           <p className={cn(
             'text-gray-700 whitespace-pre-wrap',
             isRTL ? 'text-right' : 'text-left'
           )}>
-            {displayDescription || (isRTL ? 'لا يوجد وصف متاح' : 'No description provided.')}
+            {displayDescription || t.channel.noDescription}
           </p>
         </div>
       </section>
@@ -49,26 +51,26 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
           'text-xl font-semibold mb-4',
           isRTL ? 'text-right' : 'text-left'
         )}>
-          {isRTL ? 'الإحصائيات' : 'Statistics'}
+          {t.channel.statistics}
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
-            label={isRTL ? 'المشتركون' : 'Subscribers'}
+            label={t.channel.subscribers}
             value={formatNumber(channel.subscribersCount ?? 0)}
             isRTL={isRTL}
           />
           <StatCard
-            label={isRTL ? 'الفيديوهات' : 'Videos'}
+            label={t.video.videos}
             value={formatNumber(channel.videosCount ?? 0)}
             isRTL={isRTL}
           />
           <StatCard
-            label={isRTL ? 'المشاهدات' : 'Views'}
+            label={t.analytics.views}
             value={formatNumber(channel.totalViews ?? 0)}
             isRTL={isRTL}
           />
           <StatCard
-            label={isRTL ? 'تاريخ الانضمام' : 'Joined'}
+            label={t.channel.joined}
             value={formatDate(channel.dateCreated, locale)}
             isRTL={isRTL}
           />
@@ -82,7 +84,7 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
             'text-xl font-semibold mb-4',
             isRTL ? 'text-right' : 'text-left'
           )}>
-            {isRTL ? 'الروابط' : 'Links'}
+            {t.channel.links}
           </h2>
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className={cn(
@@ -106,7 +108,7 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline block"
                 >
-                  {isRTL ? 'تويتر' : 'Twitter'}: {channel.socialLinks.twitter}
+                  {t.channel.twitter}: {channel.socialLinks.twitter}
                 </a>
               )}
               {channel.socialLinks?.facebook && (
@@ -116,7 +118,7 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline block"
                 >
-                  {isRTL ? 'فيسبوك' : 'Facebook'}: {channel.socialLinks.facebook}
+                  {t.channel.facebook}: {channel.socialLinks.facebook}
                 </a>
               )}
               {channel.socialLinks?.instagram && (
@@ -126,7 +128,7 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline block"
                 >
-                  {isRTL ? 'إنستغرام' : 'Instagram'}: {channel.socialLinks.instagram}
+                  {t.channel.instagram}: {channel.socialLinks.instagram}
                 </a>
               )}
             </div>
@@ -140,7 +142,7 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
           'text-xl font-semibold mb-4',
           isRTL ? 'text-right' : 'text-left'
         )}>
-          {isRTL ? 'تفاصيل القناة' : 'Channel Details'}
+          {t.channel.channelDetails}
         </h2>
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className={cn(
@@ -148,13 +150,13 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
             isRTL ? 'text-right' : 'text-left'
           )}>
             <DetailRow
-              label={isRTL ? 'المعرف' : 'Channel ID'}
+              label={t.channel.channelId}
               value={channel.id}
               isRTL={isRTL}
             />
             {channel.category && (
               <DetailRow
-                label={isRTL ? 'الفئة' : 'Category'}
+                label={t.channel.category}
                 value={channel.category}
                 isRTL={isRTL}
               />
@@ -165,7 +167,7 @@ export default async function ChannelAboutPage({ params }: ChannelAboutPageProps
                 isRTL ? 'flex-row-reverse' : 'flex-row'
               )}>
                 <span className="font-medium text-gray-700">
-                  {isRTL ? 'الوسوم:' : 'Tags:'}
+                  {t.channel.tags}:
                 </span>
                 <div className={cn(
                   'flex flex-wrap gap-2',

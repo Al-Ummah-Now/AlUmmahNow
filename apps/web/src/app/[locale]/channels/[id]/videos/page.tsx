@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import { getTranslations } from '@/lib/i18n';
 
 interface ChannelVideosPageProps {
   params: Promise<{
@@ -30,6 +31,7 @@ export default async function ChannelVideosPage({
 
   const isRTL = locale === 'ar';
   const sortParam = sort || 'latest';
+  const t = getTranslations(locale as 'en' | 'ar');
 
   const videosData = await listVideos({
     channelId: id,
@@ -50,18 +52,21 @@ export default async function ChannelVideosPage({
           currentSort={sortParam}
           locale={locale}
           channelId={id}
+          t={t}
         />
         <SortButton
           sort="popular"
           currentSort={sortParam}
           locale={locale}
           channelId={id}
+          t={t}
         />
         <SortButton
           sort="oldest"
           currentSort={sortParam}
           locale={locale}
           channelId={id}
+          t={t}
         />
       </div>
 
@@ -69,7 +74,7 @@ export default async function ChannelVideosPage({
       {videos.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm p-12 text-center">
           <p className="text-gray-500 text-lg">
-            {isRTL ? 'لا توجد فيديوهات' : 'No videos available'}
+            {t.video.noVideosAvailable}
           </p>
         </div>
       ) : (
@@ -111,8 +116,8 @@ export default async function ChannelVideosPage({
                     'text-xs text-gray-600 space-y-1',
                     isRTL ? 'text-right' : 'text-left'
                   )}>
-                    <p>{formatViews(video.views || 0, isRTL)}</p>
-                    <p>{formatDate(video.dateCreated, isRTL)}</p>
+                    <p>{formatViews(video.views || 0, t)}</p>
+                    <p>{formatDate(video.dateCreated, t)}</p>
                   </div>
                 </div>
               </div>
@@ -129,24 +134,18 @@ interface SortButtonProps {
   currentSort: string;
   locale: string;
   channelId: string;
+  t: ReturnType<typeof getTranslations>;
 }
 
-function SortButton({ sort, currentSort, locale, channelId }: SortButtonProps) {
+function SortButton({ sort, currentSort, locale, channelId, t }: SortButtonProps) {
   const isActive = currentSort === sort;
-  const labels = {
-    en: {
-      latest: 'Latest',
-      popular: 'Popular',
-      oldest: 'Oldest',
-    },
-    ar: {
-      latest: 'الأحدث',
-      popular: 'الأكثر شعبية',
-      oldest: 'الأقدم',
-    },
+  const labelMap = {
+    latest: t.video.latest,
+    popular: t.video.popular,
+    oldest: t.video.oldest,
   };
 
-  const label = labels[locale as 'en' | 'ar']?.[sort] || labels.en[sort];
+  const label = labelMap[sort];
 
   return (
     <Link
@@ -163,30 +162,22 @@ function SortButton({ sort, currentSort, locale, channelId }: SortButtonProps) {
   );
 }
 
-function formatViews(views: number, isRTL: boolean): string {
+function formatViews(views: number, t: ReturnType<typeof getTranslations>): string {
   const formatted = views.toLocaleString();
-  return isRTL ? `${formatted} مشاهدة` : `${formatted} views`;
+  const viewText = views === 1 ? t.video.view : t.video.views;
+  return `${formatted} ${viewText}`;
 }
 
-function formatDate(dateStr: string, isRTL: boolean): string {
+function formatDate(dateStr: string, t: ReturnType<typeof getTranslations>): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (isRTL) {
-    if (diffDays === 0) return 'اليوم';
-    if (diffDays === 1) return 'أمس';
-    if (diffDays < 7) return `منذ ${diffDays} أيام`;
-    if (diffDays < 30) return `منذ ${Math.floor(diffDays / 7)} أسابيع`;
-    if (diffDays < 365) return `منذ ${Math.floor(diffDays / 30)} أشهر`;
-    return `منذ ${Math.floor(diffDays / 365)} سنوات`;
-  }
-
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-  return `${Math.floor(diffDays / 365)} years ago`;
+  if (diffDays === 0) return t.video.today;
+  if (diffDays === 1) return t.video.yesterday;
+  if (diffDays < 7) return t.video.daysAgo.replace('{count}', diffDays.toString());
+  if (diffDays < 30) return t.video.weeksAgo.replace('{count}', Math.floor(diffDays / 7).toString());
+  if (diffDays < 365) return t.video.monthsAgo.replace('{count}', Math.floor(diffDays / 30).toString());
+  return t.video.yearsAgo.replace('{count}', Math.floor(diffDays / 365).toString());
 }

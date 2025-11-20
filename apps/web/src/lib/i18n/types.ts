@@ -139,6 +139,65 @@ export interface AppTranslations {
     about: string;
     content: string;
     channelSectionsPlaceholder: string;
+    description: string;
+    noDescription: string;
+    statistics: string;
+    joined: string;
+    links: string;
+    twitter: string;
+    facebook: string;
+    instagram: string;
+    channelDetails: string;
+    channelId: string;
+    category: string;
+    tags: string;
+    home: string;
+    shorts: string;
+    live: string;
+    playlists: string;
+    seeAll: string;
+    recentUploads: string;
+    recentUploadsDescription: string;
+    popularUploads: string;
+    popularUploadsDescription: string;
+    allPlaylists: string;
+    allPlaylistsDescription: string;
+    latestLive: string;
+    featuredPlaylists: string;
+    featuredPlaylistsDescription: string;
+    singlePlaylist: string;
+    singlePlaylistDescription: string;
+    liveNow: string;
+    liveNowDescription: string;
+    pastLiveStreams: string;
+    pastLiveStreamsDescription: string;
+    upcomingLiveStreams: string;
+    upcomingLiveStreamsDescription: string;
+    featuredChannels: string;
+    featuredChannelsDescription: string;
+    subscriptionsSection: string;
+    subscriptionsSectionDescription: string;
+    addSection: string;
+    configureSection: string;
+    addChannelSection: string;
+    sectionTitle: string;
+    enterSectionTitle: string;
+    charactersCount: string;
+    playlistIds: string;
+    enterOnePlaylistId: string;
+    enterPlaylistIds: string;
+    enterExactlyOnePlaylistId: string;
+    separatePlaylistIds: string;
+    channelIds: string;
+    enterChannelIds: string;
+    separateChannelIds: string;
+    automaticContentMessage: string;
+    creating: string;
+    createSection: string;
+    automaticContent: string;
+    playlist: string;
+    aboutChannel: string;
+    forYou: string;
   };
 
   /**
@@ -178,6 +237,7 @@ export interface AppTranslations {
     firstPlaylistMessage: string;
     welcomeUser: string;
     editProfileDescription: string;
+    noPlaylistsAvailable: string;
   };
 
   /**
@@ -201,6 +261,18 @@ export interface AppTranslations {
     addToPlaylist: string;
     noVideoSelected: string;
     selectVideoMessage: string;
+    noVideosAvailable: string;
+    latest: string;
+    popular: string;
+    oldest: string;
+    views: string;
+    view: string;
+    today: string;
+    yesterday: string;
+    daysAgo: string;
+    weeksAgo: string;
+    monthsAgo: string;
+    yearsAgo: string;
   };
 
   /**
@@ -562,6 +634,7 @@ export interface AppTranslations {
     noResultsFound: string;
     noPostsYet: string;
     createFirstPost: string;
+    community: string;
   };
 
   /**

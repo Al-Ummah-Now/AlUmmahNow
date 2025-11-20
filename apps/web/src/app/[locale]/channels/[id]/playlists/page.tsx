@@ -1,6 +1,7 @@
 import { getChannelById } from '@/lib/api/channels';
 import { notFound } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { getTranslations } from '@/lib/i18n';
 
 interface ChannelPlaylistsPageProps {
   params: Promise<{
@@ -18,6 +19,7 @@ export default async function ChannelPlaylistsPage({ params }: ChannelPlaylistsP
   }
 
   const isRTL = locale === 'ar';
+  const t = getTranslations(locale as 'en' | 'ar');
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-12 text-center">
@@ -33,15 +35,13 @@ export default async function ChannelPlaylistsPage({ params }: ChannelPlaylistsP
           'text-2xl font-semibold text-gray-900',
           isRTL ? 'text-right' : 'text-left'
         )}>
-          {isRTL ? 'قوائم التشغيل' : 'Playlists'}
+          {t.channel.playlists}
         </h2>
         <p className={cn(
           'text-gray-600',
           isRTL ? 'text-right' : 'text-left'
         )}>
-          {isRTL
-            ? 'لا توجد قوائم تشغيل متاحة حاليًا'
-            : 'No playlists available at this time'}
+          {t.profile.noPlaylistsAvailable}
         </p>
       </div>
     </div>

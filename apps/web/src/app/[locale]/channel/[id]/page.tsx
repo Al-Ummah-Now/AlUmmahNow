@@ -44,6 +44,15 @@ function ChannelPage() {
         // Fetch channel info (the channel being viewed)
         const channelData = await getChannelById(id);
         if (channelData) {
+          // Check if user is the owner
+          const isOwner = user?.id === channelData.userId;
+
+          // Redirect non-owners to public channel view
+          if (!isOwner) {
+            router.push(`/${locale}/channels/${id}`);
+            return;
+          }
+
           setChannel(channelData);
         }
       } catch (error) {
@@ -54,7 +63,7 @@ function ChannelPage() {
     };
 
     fetchChannelData();
-  }, [id, user?.id, profile]);
+  }, [id, user?.id, profile, router, locale]);
 
   if (!id || isLoading) {
     return (

@@ -1,5 +1,6 @@
 import { getChannelById } from '@/lib/api/channels';
-import { ChannelHeader } from '@/components/Channel/ChannelHeader';
+import { ChannelHeader as ChannelHeaderLTR } from '@/components/Channel/ChannelHeader';
+import { ChannelHeader as ChannelHeaderRTL } from '@/components/Channel/rtl/ChannelHeader';
 import { ChannelTabs as ChannelTabsLTR } from '@/components/Channel/ChannelTabs';
 import { ChannelTabs as ChannelTabsRTL } from '@/components/Channel/rtl/ChannelTabs';
 import { notFound } from 'next/navigation';
@@ -41,6 +42,7 @@ export default async function ChannelLayout({
   // Determine text direction and component variant
   const direction = getTextDirection(locale);
   const isRTL = direction === 'rtl';
+  const ChannelHeader = isRTL ? ChannelHeaderRTL : ChannelHeaderLTR;
   const ChannelTabs = isRTL ? ChannelTabsRTL : ChannelTabsLTR;
 
   return (

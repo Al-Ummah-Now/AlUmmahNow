@@ -169,7 +169,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
       });
 
       if (result?.success) {
-        router.push(`/${locale}/channels/${id}/settings/community`);
+        router.push(`/${locale}/channel/${id}/settings/community`);
       } else {
         setError(isRTL ? 'فشل النشر' : 'Failed to publish');
       }

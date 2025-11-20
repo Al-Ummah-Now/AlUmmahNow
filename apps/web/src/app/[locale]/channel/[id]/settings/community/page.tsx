@@ -63,7 +63,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   };
 
   const handleEdit = (post: CommunityPost) => {
-    router.push(`/${locale}/channels/${id}/settings/community/edit/${post.id}`);
+    router.push(`/${locale}/channel/${id}/settings/community/edit/${post.id}`);
   };
 
   const handleDelete = async (postId: string) => {
@@ -112,7 +112,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
             <h1 className="text-lg md:text-2xl font-bold">
               {t.community.managePosts}
             </h1>
-            <Button onClick={() => router.push(`/${locale}/channels/${id}/settings/community/new`)}>
+            <Button onClick={() => router.push(`/${locale}/channel/${id}/settings/community/new`)}>
               <Plus className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
               {t.community.newPost}
             </Button>
@@ -232,7 +232,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                 {!searchQuery && filterType === 'all' && (
                   <Button
                     className="mt-4"
-                    onClick={() => router.push(`/${locale}/channels/${id}/settings/community/new`)}
+                    onClick={() => router.push(`/${locale}/channel/${id}/settings/community/new`)}
                   >
                     <Plus className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
                     {t.community.createFirstPost}
