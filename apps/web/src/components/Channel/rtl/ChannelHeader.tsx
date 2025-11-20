@@ -2,7 +2,7 @@
 
 import { Channel } from '@al-ummah/shared-types';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
@@ -19,10 +19,42 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
   const { user } = useMultiAccount();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
 
   const t = getTranslations(locale as 'en' | 'ar');
   const displayName = channel.nameLocalized?.[locale] || channel.name;
   const displayDescription = channel.descriptionLocalized?.[locale] || channel.description;
+
+  // Check initial subscription status
+  useEffect(() => {
+    async function checkSubscription() {
+      if (!user || isOwner) {
+        setCheckingSubscription(false);
+        return;
+      }
+
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3086';
+        const response = await fetch(`${apiUrl}/api/channels/${channel.id}/subscriptions/check`, {
+          headers: {
+            'userId': user.id,
+            'channelId': user.channel?.id || '',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setIsSubscribed(data.isSubscribed || false);
+        }
+      } catch (error) {
+        logger.error('[ChannelHeader RTL] Error checking subscription status:', error);
+      } finally {
+        setCheckingSubscription(false);
+      }
+    }
+
+    checkSubscription();
+  }, [user, channel.id, isOwner]);
 
   const handleSubscribe = async () => {
     if (!user) {
@@ -156,33 +188,35 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                 )}
               </div>
 
-              {/* Subscribe Button - Opposite Side */}
-              <button
-                onClick={handleSubscribe}
-                disabled={isLoading}
-                className={cn(
-                  'px-4 py-1.5 text-sm font-semibold rounded-lg transition-all shadow-md hover:shadow-lg flex-shrink-0',
-                  'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500',
-                  isSubscribed
-                    ? 'bg-gray-200 hover:bg-gray-300 text-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white'
-                    : 'bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-gray-900',
-                  isLoading && 'opacity-50 cursor-not-allowed'
-                )}
-              >
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {t.common.loading}
-                  </span>
-                ) : (
-                  <>
-                    {isSubscribed ? t.channel.subscribed : t.channel.subscribe}
-                  </>
-                )}
-              </button>
+              {/* Subscribe Button - Only show if not owner */}
+              {!isOwner && (
+                <button
+                  onClick={handleSubscribe}
+                  disabled={isLoading || checkingSubscription}
+                  className={cn(
+                    'px-4 py-1.5 text-sm font-semibold rounded-lg transition-all shadow-md hover:shadow-lg flex-shrink-0',
+                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500',
+                    isSubscribed
+                      ? 'bg-gray-200 hover:bg-gray-300 text-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white'
+                      : 'bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-gray-900',
+                    (isLoading || checkingSubscription) && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  {isLoading || checkingSubscription ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {t.common.loading}
+                    </span>
+                  ) : (
+                    <>
+                      {isSubscribed ? t.channel.subscribed : t.channel.subscribe}
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
