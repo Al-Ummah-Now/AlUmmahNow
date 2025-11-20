@@ -1,4 +1,4 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
@@ -7,12 +7,13 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
+import { generateTUSConfig } from "../../lib/bunny/tus";
 
 export class UploadInitiateEndpoint extends OpenAPIRoute {
 	schema = {
 		tags: ["Videos"],
-		summary: "Initiate Video Upload",
-		description: "🔒 **Authentication Required**: Create a video record in Bunny.net Stream and get upload URL for direct upload.",
+		summary: "Initiate Video Upload with TUS Support",
+		description: "🔒 **Authentication Required**: Create a video record in Bunny.net Stream and get TUS configuration for resumable upload.",
 		request: {
 			body: {
 				content: {
@@ -20,6 +21,8 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 						schema: z.object({
 							title: Str({ description: "Video title" }),
 							description: Str({ description: "Video description" }).optional(),
+							fileSize: Num({ description: "File size in bytes", required: true }),
+							mimeType: Str({ description: "MIME type of the video file", required: true }),
 							isPublic: z.boolean().optional().default(true),
 							tags: z.string().optional().describe("Comma-separated tags"),
 						}),
@@ -32,17 +35,28 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 		},
 		responses: {
 			"200": {
-				description: "Upload initiated successfully",
+				description: "Upload initiated successfully with TUS configuration",
 				content: {
 					"application/json": {
 						schema: z.object({
 							success: z.boolean(),
 							result: z.object({
-								videoId: z.string(),
-								uploadUrl: z.string(),
-								libraryId: z.number(),
-								status: z.string(),
-								message: z.string(),
+								videoId: z.string().describe("Video GUID for upload"),
+								tusEndpoint: z.string().describe("TUS upload endpoint"),
+								tusHeaders: z.object({
+									AuthorizationSignature: z.string().describe("TUS authorization signature"),
+									AuthorizationExpire: z.string().describe("Unix timestamp when signature expires"),
+									LibraryId: z.string().describe("Bunny.net Stream library ID"),
+									VideoId: z.string().describe("Video GUID"),
+								}).describe("Headers required for TUS upload"),
+								expiresAt: z.string().describe("ISO 8601 datetime when authorization expires"),
+								chunkSize: z.number().describe("Recommended chunk size in bytes"),
+								resumable: z.boolean().describe("Whether upload supports resume"),
+								// Legacy fields for backward compatibility
+								uploadUrl: z.string().optional().describe("Legacy upload URL (deprecated)"),
+								libraryId: z.number().optional().describe("Library ID (deprecated)"),
+								status: z.string().optional().describe("Upload status"),
+								message: z.string().optional().describe("Status message"),
 							}),
 						}),
 					},
@@ -82,7 +96,22 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { title, description, isPublic, tags } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, tags } = request.body;
+
+			// Validate required fields
+			if (!fileSize || fileSize <= 0) {
+				return c.json({
+					success: false,
+					error: "Invalid file size: must be a positive number"
+				}, 400);
+			}
+
+			if (!mimeType || !mimeType.startsWith('video/')) {
+				return c.json({
+					success: false,
+					error: "Invalid MIME type: must be a video format (e.g., video/mp4)"
+				}, 400);
+			}
 
 			const channelId = c.req.header('channelId') || userId;
 
@@ -125,7 +154,9 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 				isPublic: isPublic ?? true,
 				isLive: false,
 				tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-				uploadStatus: 'initiated' as const,
+				uploadStatus: 'uploading' as const,
+				fileSize: fileSize,  // Store file size directly
+				originalFormat: mimeType,  // Store MIME type as original format
 			};
 
 			// Save metadata to R2
@@ -141,20 +172,34 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 				userId,
 				channelId,
 				title,
+				fileSize,
+				mimeType,
 				timestamp: new Date().toISOString(),
 			});
 
-			// Return upload URL for direct upload to Bunny Stream
-			const uploadUrl = `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`;
+			// Generate TUS configuration for resumable upload
+			const tusConfig = await generateTUSConfig(
+				libraryId,
+				bunnyKey,
+				videoId,
+				1 // 1 hour expiration
+			);
 
+			// Return TUS configuration for direct upload to Bunny Stream
 			return c.json({
 				success: true,
 				result: {
 					videoId,
-					uploadUrl,
+					tusEndpoint: tusConfig.tusEndpoint,
+					tusHeaders: tusConfig.tusHeaders,
+					expiresAt: tusConfig.expiresAt,
+					chunkSize: tusConfig.chunkSize,
+					resumable: tusConfig.resumable,
+					// Legacy fields for backward compatibility
+					uploadUrl: `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
 					libraryId,
-					status: 'initiated',
-					message: 'Upload initiated successfully. Use the uploadUrl to upload your video file.',
+					status: 'uploading',
+					message: 'Upload initiated successfully. Use the TUS configuration for resumable upload.',
 				},
 			});
 

@@ -2,16 +2,22 @@
 import React from "react";
 import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
-import { redirect } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { HeaderProps } from "./interfaces";
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { useI18n } from '@/lib/i18n';
+import { useAuth } from "@/components/AuthProvider/authContext";
+import { UploadButton } from '@/components/UploadButton';
 
 const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
-  const { t } = useI18n('en');
+  const router = useRouter();
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t } = useI18n(locale);
+  const { user } = useAuth();
 
   const handleClick = () => {
-    redirect('/en/');
+    router.push(`/${locale}/`);
   };
 
   return (
@@ -38,8 +44,16 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
         </div>
       </div>
 
-      {/* Unified Navigation - combines AccountSwitcher, ChannelSelector, and AccountNavigation */}
+      {/* Unified Navigation and Upload Button */}
       <div className="flex items-center gap-2">
+        {user && (
+          <UploadButton
+            href={`/${locale}/upload`}
+            text={t.upload.uploadVideo}
+            hideTextOnMobile
+            size="sm"
+          />
+        )}
         <UnifiedNavigation />
       </div>
     </header>

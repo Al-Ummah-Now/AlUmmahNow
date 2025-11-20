@@ -3,6 +3,8 @@ import { z } from 'zod';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { validateImageMagicBytes, readFileHeader } from '../../lib/security/magic-bytes';
+import { generateUniqueFilename } from '../../lib/security/filename-sanitize';
 
 const MAX_IMAGES = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
@@ -114,11 +116,40 @@ export class UploadCommunityPostImages extends OpenAPIRoute {
 
       // Upload each image
       for (const file of files) {
-        // Validate file type
-        if (!ALLOWED_TYPES.includes(file.type)) {
+        // SECURITY: Validate file type using magic bytes
+        try {
+          const fileHeader = await readFileHeader(file, 12);
+          const magicByteResult = validateImageMagicBytes(fileHeader, file.type);
+
+          if (!magicByteResult.isValid) {
+            console.warn('[SECURITY] Image upload rejected: invalid file signature', {
+              userId,
+              channelId,
+              providedType: file.type,
+              fileName: file.name,
+              error: magicByteResult.error,
+            });
+
+            return c.json({
+              error: magicByteResult.error || 'Invalid image file format'
+            }, 400);
+          }
+
+          // Log if Content-Type header doesn't match detected format
+          if (magicByteResult.mimeTypeMismatch) {
+            console.warn('[SECURITY] Image upload: MIME type mismatch', {
+              userId,
+              channelId,
+              providedType: file.type,
+              detectedType: magicByteResult.detectedMimeType,
+              fileName: file.name,
+            });
+          }
+        } catch (error) {
+          console.error('[SECURITY] Magic byte validation error', { error, userId, channelId });
           return c.json({
-            error: `Invalid file type: ${file.type}. Allowed: ${ALLOWED_TYPES.join(', ')}`
-          }, 400);
+            error: 'Failed to validate image file'
+          }, 500);
         }
 
         // Validate file size
@@ -128,10 +159,21 @@ export class UploadCommunityPostImages extends OpenAPIRoute {
           }, 400);
         }
 
-        // Generate unique filename
-        const imageId = crypto.randomUUID();
-        const extension = file.type.split('/')[1];
-        const path = `/community-posts/${channelId}/${imageId}.${extension}`;
+        // SECURITY: Sanitize filename to prevent path traversal attacks
+        const sanitizedFilename = generateUniqueFilename(file.name, {
+          allowedExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
+          toLowerCase: true,
+        });
+
+        const path = `/community-posts/${channelId}/${sanitizedFilename}`;
+
+        console.log('[SECURITY] Image file validated and sanitized', {
+          userId,
+          channelId,
+          originalName: file.name,
+          sanitizedName: sanitizedFilename,
+          fileSize: file.size,
+        });
 
         // Upload to Bunny.net
         const stream = file.stream() as ReadableStream;

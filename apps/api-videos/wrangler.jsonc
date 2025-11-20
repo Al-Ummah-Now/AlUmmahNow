@@ -85,6 +85,11 @@
 			"binding": "AUTH_STORAGE",
 			"id": "ff057deb522f4b2bb81006b42462f20e",
 			"preview_id": "966e04e43b904ddeb26453291bf6c22d"
+		},
+		{
+			"binding": "RATE_LIMIT_KV",
+			"id": "PLACEHOLDER_RATE_LIMIT_KV_ID",
+			"preview_id": "PLACEHOLDER_RATE_LIMIT_KV_PREVIEW_ID"
 		}
 	],
 	"queues": {

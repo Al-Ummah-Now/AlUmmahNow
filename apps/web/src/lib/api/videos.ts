@@ -15,6 +15,8 @@ import {
   RecommendationRequest
 } from "./types";
 import { getApiUrl } from "@/lib/runtime-config";
+import { apiRequestServer, buildApiUrl } from "./api-client";
+import { getServerAuthContext } from "./server-auth";
 
 const baseUrl = getApiUrl();
 
@@ -129,6 +131,41 @@ export async function createVideo(
 }
 
 /**
+ * Update a Video
+ * PUT /api/videos/{id}
+ */
+export async function updateVideo(
+  videoId: string,
+  data: Partial<VideoCreateRequest>,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<ApiResponse<{ video: VideoObject }> | null> {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/videos/${videoId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+
+          'channelId': headers.channelId,
+          'userId': headers.userId,
+        },
+        body: JSON.stringify(data),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Error updating video: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('updateVideo error:', error);
+    return null;
+  }
+}
+
+/**
  * Delete a Video
  * DELETE /api/videos/{id}
  */
@@ -157,6 +194,42 @@ export async function deleteVideo(
     return await response.json();
   } catch (error) {
     console.error('deleteVideo error:', error);
+    return null;
+  }
+}
+
+/**
+ * Upload custom thumbnail for a video
+ * POST /api/videos/{id}/thumbnail
+ */
+export async function uploadVideoThumbnail(
+  videoId: string,
+  file: File,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<ApiResponse<{ thumbnailUrl: string }> | null> {
+  try {
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+
+    const response = await fetch(
+      `${baseUrl}/api/videos/${videoId}/thumbnail`,
+      {
+        method: 'POST',
+        headers: {
+          'channelId': headers.channelId,
+          'userId': headers.userId,
+        },
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Error uploading thumbnail: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('uploadVideoThumbnail error:', error);
     return null;
   }
 }
@@ -933,63 +1006,83 @@ export async function uploadVideo(
 }
 
 /**
- * Initiate video upload - Create video record and get upload URL
+ * Initiate video upload - Create video record and get upload URL with TUS support
  * POST /api/videos/upload/initiate
  */
-export async function initiateVideoUpload(
+export async function initiateVideoUploadApi(
   metadata: {
     title: string;
+    titleLocalized?: Record<string, string>;
     description?: string;
+    descriptionLocalized?: Record<string, string>;
     isPublic?: boolean;
     tags?: string;
+    fileSize: number;
+    mimeType: string;
   },
-  authToken: string
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
 ): Promise<{
   success: boolean;
   result?: {
     videoId: string;
-    uploadUrl: string;
-    libraryId: number;
-    status: string;
-    message: string;
+    tusEndpoint: string;
+    tusHeaders: {
+      AuthorizationSignature: string;
+      AuthorizationExpire: string;
+      LibraryId: string;
+      VideoId: string;
+    };
+    expiresAt: string;
+    chunkSize: number;
+    resumable: boolean;
+    uploadUrl?: string;
+    libraryId?: number;
+    status?: string;
+    message?: string;
   };
   error?: string;
 } | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/upload/initiate`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(metadata),
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      return { success: false, error: errorData.error || 'Failed to initiate upload' };
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('initiateVideoUpload error:', error);
-    return { success: false, error: 'Network error' };
-  }
+  return apiRequestServer<{
+    success: boolean;
+    result?: {
+      videoId: string;
+      tusEndpoint: string;
+      tusHeaders: {
+        AuthorizationSignature: string;
+        AuthorizationExpire: string;
+        LibraryId: string;
+        VideoId: string;
+      };
+      expiresAt: string;
+      chunkSize: number;
+      resumable: boolean;
+      uploadUrl?: string;
+      libraryId?: number;
+      status?: string;
+      message?: string;
+    };
+    error?: string;
+  }>({
+    method: 'POST',
+    url: buildApiUrl('/api/videos/upload/initiate'),
+    body: metadata,
+    functionName: 'initiateVideoUploadApi'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
 }
 
 /**
  * Complete video upload after file has been uploaded to Bunny.net
  * POST /api/videos/upload/complete
  */
-export async function completeVideoUpload(
+export async function completeVideoUploadApi(
   videoId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>,
   fileSize?: number,
-  duration?: number,
-  authToken?: string
+  duration?: number
 ): Promise<{
   success: boolean;
   result?: {
@@ -999,39 +1092,33 @@ export async function completeVideoUpload(
   };
   error?: string;
 } | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/upload/complete`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
-        },
-        body: JSON.stringify({ videoId, fileSize, duration }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      return { success: false, error: errorData.error || 'Failed to complete upload' };
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('completeVideoUpload error:', error);
-    return { success: false, error: 'Network error' };
-  }
+  return apiRequestServer<{
+    success: boolean;
+    result?: {
+      videoId: string;
+      status: string;
+      message: string;
+    };
+    error?: string;
+  }>({
+    method: 'POST',
+    url: buildApiUrl('/api/videos/upload/complete'),
+    body: { videoId, fileSize, duration },
+    functionName: 'completeVideoUploadApi'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
 }
 
 /**
  * Get video upload status
  * GET /api/videos/{id}/upload-status
  */
-export async function getVideoUploadStatus(
+export async function getVideoUploadStatusApi(
   videoId: string,
-  authToken: string
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
 ): Promise<{
   success: boolean;
   result?: {
@@ -1047,28 +1134,29 @@ export async function getVideoUploadStatus(
   };
   error?: string;
 } | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/upload-status`,
-      {
-        method: 'GET',
-        headers: {
-
-          'Authorization': `Bearer ${authToken}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      return { success: false, error: errorData.error || 'Failed to get upload status' };
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('getVideoUploadStatus error:', error);
-    return { success: false, error: 'Network error' };
-  }
+  return apiRequestServer<{
+    success: boolean;
+    result?: {
+      videoId: string;
+      status: 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
+      progress: number;
+      message?: string;
+      encodingStatus?: {
+        isProcessing: boolean;
+        encodingProgress: number;
+        availableResolutions: string[];
+      };
+    };
+    error?: string;
+  }>({
+    method: 'GET',
+    url: buildApiUrl(`/api/videos/${videoId}/upload-status`),
+    functionName: 'getVideoUploadStatusApi'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
 }
 
 // Helper functions that use the video API functions

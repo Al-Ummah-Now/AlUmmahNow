@@ -6,9 +6,12 @@ import { redirect } from "next/navigation";
 import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { useI18n } from '@/lib/i18n';
+import { useAuth } from "@/components/AuthProvider/authContext";
+import { UploadButton } from '@/components/UploadButton';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
   const { t } = useI18n('ar');
+  const { user } = useAuth();
   const handleClick = () => {
     redirect('/ar/');
   };
@@ -37,8 +40,16 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
         </div>
       </div>
 
-      {/* Unified Navigation - combines AccountSwitcher, ChannelSelector, and AccountNavigation */}
+      {/* Unified Navigation and Upload Button */}
       <div className="flex items-center gap-2">
+        {user && (
+          <UploadButton
+            href="/ar/upload"
+            text={t.upload.uploadVideo}
+            hideTextOnMobile
+            size="sm"
+          />
+        )}
         <UnifiedNavigationRTL />
       </div>
     </header>

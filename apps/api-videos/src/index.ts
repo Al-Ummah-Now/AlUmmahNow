@@ -4,6 +4,7 @@ import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth";
 import { loggingMiddleware } from "./middleware/logging";
 import { errorHandler } from "./middleware/error-handler";
+import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { VideoCreate } from "./endpoints/video/videoCreate";
 import { VideoUpdate } from "./endpoints/video/videoUpdate";
 import { VideoDelete } from "./endpoints/video/videoDelete";
@@ -15,6 +16,7 @@ import { VideoUploadStatus } from "./endpoints/video/videoUploadStatus";
 import { VideoUpload } from "./endpoints/video/videoUpload";
 import { UploadInitiateEndpoint } from "./endpoints/video/uploadInitiate";
 import { UploadCompleteEndpoint } from "./endpoints/video/uploadComplete";
+import { UploadResumeEndpoint } from "./endpoints/video/uploadResume";
 import { ProfileCreate } from "./endpoints/profile/profileCreate";
 import { ProfileDelete } from "./endpoints/profile/profileDelete";
 import { ProfileFetch } from "./endpoints/profile/profileFetch";
@@ -225,10 +227,19 @@ openapi.get("/auth-test", AuthTest);
 // Apply authentication middleware to routes that require login
 app.use('/auth-test', authMiddleware);
 
+// SECURITY: Apply rate limiting to video upload endpoints
+app.use('/api/videos/upload', rateLimitMiddleware('video_upload'));
+app.use('/api/videos/upload/initiate', rateLimitMiddleware('video_upload'));
+app.use('/api/videos/upload/complete', rateLimitMiddleware('video_upload'));
+app.use('/api/videos/upload/resume/:videoId', rateLimitMiddleware('video_upload'));
+
 app.use('/api/videos', (c, next) => {
 	// Allow GET requests and POST to /:id/view (view tracking) without authentication
-	if (c.req.method === 'GET' || 
-		(c.req.method === 'POST' && c.req.path.endsWith('/view'))) {
+	// Exception: GET /api/videos/upload/resume/:videoId requires auth
+	if (c.req.method === 'GET' && !c.req.path.includes('/upload/resume/')) {
+		return next();
+	}
+	if (c.req.method === 'POST' && c.req.path.endsWith('/view')) {
 		return next();
 	}
 	return authMiddleware(c, next);
@@ -306,11 +317,16 @@ app.use('/api/community/posts/:postId/comments', (c, next) => {
 app.use('/api/community/posts/:postId/comments/:commentId', authMiddleware);
 app.use('/api/community/posts/:postId/comments/:commentId/like', authMiddleware);
 
+// SECURITY: Apply rate limiting to community media uploads
+app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
+app.use('/api/community/media/upload/gif', rateLimitMiddleware('image_upload'));
+
 // AUTHENTICATED endpoints (require valid JWT token)
 openapi.post("/api/videos", VideoCreate);
 openapi.post("/api/videos/upload", VideoUpload);
 openapi.post("/api/videos/upload/initiate", UploadInitiateEndpoint);
 openapi.post("/api/videos/upload/complete", UploadCompleteEndpoint);
+openapi.get("/api/videos/upload/resume/:videoId", UploadResumeEndpoint);
 openapi.put("/api/videos/:id", VideoUpdate);
 openapi.delete("/api/videos/:id", VideoDelete);
 openapi.get("/api/videos/:id/upload-status", VideoUploadStatus);
@@ -468,6 +484,7 @@ app.get("/openapi.json", async (c) => {
 		'/api/videos', // POST
 		'/api/videos/upload/initiate', // POST
 		'/api/videos/upload/complete', // POST
+		'/api/videos/upload/resume/{videoId}', // GET
 		'/api/videos/{id}', // PUT, DELETE
 		'/api/videos/{id}/likes', // POST, DELETE
 		'/api/videos/{id}/dislikes', // POST, DELETE

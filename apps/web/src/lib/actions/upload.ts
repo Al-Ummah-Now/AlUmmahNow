@@ -1,69 +1,46 @@
 "use server";
 
-import { cookies } from "next/headers";
-
-const baseUrl = process.env.API_URL;
-
-if (!baseUrl) {
-  throw new Error("API base URL is not configured. Please set API_URL in your environment.");
-}
+import { initiateVideoUploadApi, completeVideoUploadApi, getVideoUploadStatusApi } from "@/lib/api/videos";
 
 /**
- * Get the access token from cookies (server-side only)
+ * Initiate video upload - Server action with TUS support
  */
-async function getAccessToken(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get("access_token");
-  return accessToken?.value || null;
-}
-
-/**
- * Initiate video upload - Server action
- */
-export async function initiateVideoUpload(metadata: {
-  title: string;
-  titleLocalized?: Record<string, string>;
-  description?: string;
-  descriptionLocalized?: Record<string, string>;
-  isPublic?: boolean;
-  tags?: string;
-}): Promise<{
+export async function initiateVideoUpload(
+  metadata: {
+    title: string;
+    titleLocalized?: Record<string, string>;
+    description?: string;
+    descriptionLocalized?: Record<string, string>;
+    isPublic?: boolean;
+    tags?: string;
+    fileSize: number;
+    mimeType: string;
+  },
+  userId: string,
+  channelId: string
+): Promise<{
   success: boolean;
   result?: {
     videoId: string;
-    uploadUrl: string;
-    libraryId: number;
-    status: string;
-    message: string;
+    tusEndpoint: string;
+    tusHeaders: {
+      AuthorizationSignature: string;
+      AuthorizationExpire: string;
+      LibraryId: string;
+      VideoId: string;
+    };
+    expiresAt: string;
+    chunkSize: number;
+    resumable: boolean;
+    uploadUrl?: string;
+    libraryId?: number;
+    status?: string;
+    message?: string;
   };
   error?: string;
 }> {
-  const token = await getAccessToken();
-  
-  if (!token) {
-    return { success: false, error: "Authentication required" };
-  }
-
-  try {
-    const response = await fetch(`${baseUrl}/api/videos/upload/initiate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify(metadata),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-      return { success: false, error: errorData.error || "Failed to initiate upload" };
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("initiateVideoUpload error:", error);
-    return { success: false, error: "Network error" };
-  }
+  const result = await initiateVideoUploadApi(metadata, { userId, channelId });
+  return result || { success: false, error: "Failed to initiate upload" };
 }
 
 /**
@@ -71,6 +48,8 @@ export async function initiateVideoUpload(metadata: {
  */
 export async function completeVideoUpload(
   videoId: string,
+  userId: string,
+  channelId: string,
   fileSize?: number,
   duration?: number
 ): Promise<{
@@ -82,38 +61,18 @@ export async function completeVideoUpload(
   };
   error?: string;
 }> {
-  const token = await getAccessToken();
-  
-  if (!token) {
-    return { success: false, error: "Authentication required" };
-  }
-
-  try {
-    const response = await fetch(`${baseUrl}/api/videos/upload/complete`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify({ videoId, fileSize, duration }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-      return { success: false, error: errorData.error || "Failed to complete upload" };
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("completeVideoUpload error:", error);
-    return { success: false, error: "Network error" };
-  }
+  const result = await completeVideoUploadApi(videoId, { userId, channelId }, fileSize, duration);
+  return result || { success: false, error: "Failed to complete upload" };
 }
 
 /**
  * Get video upload status - Server action
  */
-export async function getVideoUploadStatus(videoId: string): Promise<{
+export async function getVideoUploadStatus(
+  videoId: string,
+  userId: string,
+  channelId: string
+): Promise<{
   success: boolean;
   result?: {
     videoId: string;
@@ -128,48 +87,12 @@ export async function getVideoUploadStatus(videoId: string): Promise<{
   };
   error?: string;
 }> {
-  const token = await getAccessToken();
-  
-  if (!token) {
-    return { success: false, error: "Authentication required" };
-  }
-
-  try {
-    const response = await fetch(`${baseUrl}/api/videos/${videoId}/upload-status`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-      return { success: false, error: errorData.error || "Failed to get upload status" };
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("getVideoUploadStatus error:", error);
-    return { success: false, error: "Network error" };
-  }
+  const result = await getVideoUploadStatusApi(videoId, { userId, channelId });
+  return result || { success: false, error: "Failed to get upload status" };
 }
 
 /**
- * Get Bunny.net access key for direct uploads (server-side only)
- * This allows the client to upload directly to Bunny.net with proper authentication
+ * SECURITY NOTE: The getBunnyAccessKey() function has been removed.
+ * API keys should NEVER be exposed to client-side code.
+ * Video uploads are now handled server-side via the API backend.
  */
-export async function getBunnyAccessKey(): Promise<{ success: boolean; accessKey?: string; error?: string }> {
-  try {
-    // Get the Bunny Stream key from environment (server-side only)
-    const accessKey = process.env.BUNNY_STREAM_KEY;
-    
-    if (!accessKey) {
-      return { success: false, error: "Bunny Stream key not configured" };
-    }
-
-    return { success: true, accessKey };
-  } catch (error) {
-    console.error("getBunnyAccessKey error:", error);
-    return { success: false, error: "Failed to get access key" };
-  }
-}

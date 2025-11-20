@@ -13,16 +13,19 @@ import { useRealTimeNotifications } from "@/hooks/useRealTimeNotifications";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Button } from "@/components/ui/button";
 import { useParams } from "next/navigation";
+import Link from "next/link";
+import { Edit } from "lucide-react";
 
 export default function Home() {
   const params = useParams();
   const locale = params.locale as string;
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
   const [vid, _setVid] = useQueryState("vid", { shallow: false });
   const { user } = useAuth();
+  const [videoOwner, setVideoOwner] = useState<string | null>(null);
 
   // Real-time notifications for demonstration
   const { addNotification } = useRealTimeNotifications({ userId: user?.id });
@@ -38,6 +41,14 @@ export default function Home() {
 
       const details = await fetchVideoById(vid);
       setVideoDetails(details || null);
+
+      // Fetch full video object to get owner info
+      if (vid) {
+        const videoData = await fetchVideoById(vid);
+        // Store video owner ID for ownership check
+        // Assuming video has userId field
+        setVideoOwner((videoData as any)?.userId || null);
+      }
     };
 
     fetchVideoDetails();
@@ -112,6 +123,19 @@ export default function Home() {
                   }}
                 />
               </div>
+
+              {/* Edit button for video owner */}
+              {user && videoOwner && user.id === videoOwner && (
+                <div className="w-full max-w-4xl mt-4 px-4">
+                  <Link
+                    href={`/${lang}/video/${vid}/edit`}
+                    className="inline-flex items-center gap-2 px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors dark:text-white"
+                  >
+                    <Edit size={20} />
+                    <span>{t.video.editVideo}</span>
+                  </Link>
+                </div>
+              )}
 
               {/* Demo buttons for testing (development only) */}
               {process.env.NODE_ENV === 'development' && user && (

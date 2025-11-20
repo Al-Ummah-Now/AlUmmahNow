@@ -1,12 +1,14 @@
 "use client";
 import React, { useState, useRef, useCallback } from "react";
+import * as tus from "tus-js-client";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
-import { Upload, X, AlertCircle } from "lucide-react";
-import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus, getBunnyAccessKey } from "@/lib/actions/upload";
+import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
+import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus } from "@/lib/actions/upload";
 import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n";
+import { UploadButton } from "@/components/UploadButton";
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -26,10 +28,16 @@ interface VideoMetadata {
   isPublic: boolean;
 }
 
+type UploadState = 'idle' | 'uploading' | 'paused' | 'processing' | 'complete' | 'error';
+
 interface UploadProgress {
   percentage: number;
-  stage: 'preparing' | 'uploading' | 'processing' | 'complete';
+  state: UploadState;
   error?: string;
+  speed?: number; // bytes per second
+  bytesUploaded?: number;
+  bytesTotal?: number;
+  timeRemaining?: number; // seconds
 }
 
 const VideoUpload: React.FC<VideoUploadProps> = ({
@@ -57,8 +65,15 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   });
   const [showMetadataForm, setShowMetadataForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const tusUploadRef = useRef<tus.Upload | null>(null);
+  const uploadStartTimeRef = useRef<number>(0);
+  const lastProgressTimeRef = useRef<number>(0);
+  const lastBytesUploadedRef = useRef<number>(0);
+  const videoIdRef = useRef<string>('');
+  const libraryIdRef = useRef<number>(0);
+
   const auth = useAuth();
 
   // File validation
@@ -72,7 +87,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       return VIDEO_UPLOAD_ERRORS.FILE_TOO_LARGE;
     }
 
-    // TODO: Add duration validation when we can read video metadata
     return null;
   };
 
@@ -96,7 +110,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     }
 
     setSelectedFile(file);
-    const defaultTitle = file.name.replace(/\.[^/.]+$/, ""); // Remove extension for default title
+    const defaultTitle = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
     setMetadata(prev => ({
       ...prev,
       title: defaultTitle,
@@ -124,6 +138,21 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     }
   };
 
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
+  const formatTime = (seconds: number): string => {
+    if (!isFinite(seconds) || seconds < 0) return '--:--';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const uploadVideo = async () => {
     if (!selectedFile) return;
 
@@ -133,209 +162,236 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       return;
     }
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
+    // Extract userId and channelId after auth check
+    const userId = auth.user.id;
+    const channelId = auth.user.id;
 
     try {
-      // Step 1: Initiate upload
-      setUploadProgress({ percentage: 5, stage: 'preparing' });
+      // Step 1: Initiate upload and get TUS configuration
+      setUploadProgress({ percentage: 5, state: 'uploading' });
       onProgress(5);
 
       const tagsString = metadata.tags?.join(',') || '';
-      const initiateResult = await initiateVideoUpload({
-        title: metadata.titleEn || metadata.title, // Legacy field (English)
-        titleLocalized: {
-          en: metadata.titleEn,
-          ar: metadata.titleAr
+      const initiateResult = await initiateVideoUpload(
+        {
+          title: metadata.titleEn || metadata.title,
+          titleLocalized: {
+            en: metadata.titleEn,
+            ar: metadata.titleAr
+          },
+          description: metadata.descriptionEn || metadata.description,
+          descriptionLocalized: {
+            en: metadata.descriptionEn || '',
+            ar: metadata.descriptionAr || ''
+          },
+          isPublic: metadata.isPublic,
+          tags: tagsString,
+          fileSize: selectedFile.size,
+          mimeType: selectedFile.type,
         },
-        description: metadata.descriptionEn || metadata.description,
-        descriptionLocalized: {
-          en: metadata.descriptionEn || '',
-          ar: metadata.descriptionAr || ''
-        },
-        isPublic: metadata.isPublic,
-        tags: tagsString,
-      });
+        userId,
+        channelId
+      );
 
       if (!initiateResult.success || !initiateResult.result) {
         throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
       }
 
-      const { videoId, uploadUrl, libraryId } = initiateResult.result;
+      const { videoId, tusEndpoint, tusHeaders, chunkSize, libraryId } = initiateResult.result;
+      videoIdRef.current = videoId;
+      libraryIdRef.current = libraryId || 0;
 
-      // Step 2: Upload file directly to Bunny.net
-      setUploadProgress({ percentage: 10, stage: 'uploading' });
-      onProgress(10);
+      // Step 2: Create TUS upload
+      uploadStartTimeRef.current = Date.now();
+      lastProgressTimeRef.current = Date.now();
+      lastBytesUploadedRef.current = 0;
 
-      // Get Bunny.net access key from server
-      const keyResult = await getBunnyAccessKey();
-      
-      if (!keyResult.success || !keyResult.accessKey) {
-        throw new Error(keyResult.error || "Failed to get Bunny access key");
-      }
+      const upload = new tus.Upload(selectedFile, {
+        endpoint: tusEndpoint,
+        retryDelays: [0, 3000, 5000, 10000, 20000],
+        chunkSize: chunkSize,
+        headers: tusHeaders,
+        storeFingerprintForResuming: true,
+        removeFingerprintOnSuccess: true,
+        metadata: {
+          filename: selectedFile.name,
+          filetype: selectedFile.type,
+          videoId: videoId,
+        },
+        onError: (error) => {
+          console.error('TUS upload error:', error);
+          setUploadProgress({
+            percentage: uploadProgress?.percentage || 0,
+            state: 'error',
+            error: error.message || 'Upload failed',
+          });
+          onError(error.message || 'Upload failed');
+        },
+        onProgress: (bytesUploaded, bytesTotal) => {
+          const percent = Math.round((bytesUploaded / bytesTotal) * 100);
+          const adjustedPercent = Math.min(percent * 0.7, 70); // Map to 0-70%
 
-      const bunnyKey = keyResult.accessKey;
+          // Calculate upload speed
+          const now = Date.now();
+          const timeDelta = (now - lastProgressTimeRef.current) / 1000; // seconds
+          const bytesDelta = bytesUploaded - lastBytesUploadedRef.current;
 
-      // Upload directly to Bunny.net with progress tracking
-      const xhr = new XMLHttpRequest();
-      
-      const uploadPromise = new Promise<void>((resolve, reject) => {
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const percentComplete = Math.round((e.loaded / e.total) * 100);
-            const adjustedPercent = 10 + (percentComplete * 0.6); // Map to 10-70%
-            setUploadProgress({ percentage: adjustedPercent, stage: 'uploading' });
-            onProgress(adjustedPercent);
-          }
-        });
+          let speed = 0;
+          let timeRemaining = 0;
 
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
+          if (timeDelta > 0.5) { // Update every 0.5 seconds
+            speed = bytesDelta / timeDelta; // bytes per second
+            const bytesRemaining = bytesTotal - bytesUploaded;
+            timeRemaining = speed > 0 ? bytesRemaining / speed : 0;
+
+            lastProgressTimeRef.current = now;
+            lastBytesUploadedRef.current = bytesUploaded;
           } else {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
+            // Use previous speed calculation
+            const totalTime = (now - uploadStartTimeRef.current) / 1000;
+            speed = totalTime > 0 ? bytesUploaded / totalTime : 0;
+            const bytesRemaining = bytesTotal - bytesUploaded;
+            timeRemaining = speed > 0 ? bytesRemaining / speed : 0;
           }
-        });
 
-        xhr.addEventListener('error', () => {
-          reject(new Error('Network error during upload'));
-        });
+          setUploadProgress({
+            percentage: adjustedPercent,
+            state: 'uploading',
+            speed,
+            bytesUploaded,
+            bytesTotal,
+            timeRemaining,
+          });
+          onProgress(adjustedPercent);
+        },
+        onSuccess: async () => {
+          setUploadProgress({ percentage: 75, state: 'processing' });
+          onProgress(75);
 
-        xhr.addEventListener('abort', () => {
-          reject(new Error('Upload cancelled'));
-        });
+          // Step 3: Complete upload
+          const completeResult = await completeVideoUpload(
+            videoId,
+            userId,
+            channelId,
+            selectedFile.size,
+            undefined // Duration will be detected by Bunny.net
+          );
 
-        xhr.open('PUT', uploadUrl);
-        xhr.setRequestHeader('AccessKey', bunnyKey);
-        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-        xhr.send(selectedFile);
-      });
-
-      // Handle abort
-      controller.signal.addEventListener('abort', () => {
-        xhr.abort();
-      });
-
-      await uploadPromise;
-
-      // Step 3: Complete upload
-      setUploadProgress({ percentage: 75, stage: 'processing' });
-      onProgress(75);
-
-      const completeResult = await completeVideoUpload(
-        videoId,
-        selectedFile.size,
-        undefined // Duration will be detected by Bunny.net
-      );
-
-      if (!completeResult.success) {
-        throw new Error(completeResult.error || 'Failed to complete upload');
-      }
-
-      // Step 4: Poll for processing status
-      setUploadProgress({ percentage: 85, stage: 'processing' });
-      onProgress(85);
-
-      // Poll status until ready or timeout
-      let pollCount = 0;
-      const maxPolls = VIDEO_UPLOAD_CONFIG.POLLING.MAX_POLLS;
-
-      while (pollCount < maxPolls) {
-        const statusResult = await getVideoUploadStatus(videoId);
-        
-        if (statusResult.success && statusResult.result) {
-          const { status, progress: encodingProgress } = statusResult.result;
-          
-          // Update progress based on encoding status
-          const overallProgress = 85 + (encodingProgress * 0.15);
-          setUploadProgress({ percentage: overallProgress, stage: 'processing' });
-          onProgress(overallProgress);
-
-          if (status === 'ready') {
-            break;
-          } else if (status === 'failed') {
-            throw new Error('Video processing failed');
+          if (!completeResult.success) {
+            throw new Error(completeResult.error || 'Failed to complete upload');
           }
-        }
 
-        // Wait before next poll
-        await new Promise(resolve => setTimeout(resolve, VIDEO_UPLOAD_CONFIG.POLLING.INTERVAL_MS));
-        pollCount++;
-      }
+          // Step 4: Poll for processing status
+          let pollCount = 0;
+          const maxPolls = VIDEO_UPLOAD_CONFIG.POLLING.MAX_POLLS;
 
-      setUploadProgress({ percentage: 100, stage: 'complete' });
-      onProgress(100);
+          while (pollCount < maxPolls) {
+            const statusResult = await getVideoUploadStatus(videoId, userId, channelId);
 
-      // Reset form
-      setSelectedFile(null);
-      setShowMetadataForm(false);
-      setUploadProgress(null);
-      setMetadata({
-        title: '',
-        titleEn: '',
-        titleAr: '',
-        description: '',
-        descriptionEn: '',
-        descriptionAr: '',
-        tags: [],
-        isPublic: true
+            if (statusResult.success && statusResult.result) {
+              const { status, progress: encodingProgress } = statusResult.result;
+
+              const overallProgress = 75 + (encodingProgress * 0.25);
+              setUploadProgress({ percentage: overallProgress, state: 'processing' });
+              onProgress(overallProgress);
+
+              if (status === 'ready') {
+                break;
+              } else if (status === 'failed') {
+                throw new Error('Video processing failed');
+              }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, VIDEO_UPLOAD_CONFIG.POLLING.INTERVAL_MS));
+            pollCount++;
+          }
+
+          setUploadProgress({ percentage: 100, state: 'complete' });
+          onProgress(100);
+
+          // Create video object for callback
+          const videoData: VideoObject = {
+            id: videoId,
+            title: metadata.title,
+            description: metadata.description || null,
+            thumbnailUrl: '',
+            videoUrl: `${VIDEO_UPLOAD_CONFIG.BUNNY_CDN_BASE_URL}/library/${libraryIdRef.current}/videos/${videoId}`,
+            userId: userId,
+            channel: channelId,
+            channelId: channelId,
+            channelAvatarUrl: '',
+            channelName: auth.user?.email || 'Unknown',
+            dateCreated: new Date().toISOString(),
+            dateModified: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            views: 0,
+            availableResolutions: [],
+            likesCount: 0,
+            dislikesCount: 0,
+            commentsCount: 0,
+            comments: [],
+            likes: [],
+            dislikes: [],
+            isPublic: metadata.isPublic,
+            isLive: false,
+          };
+
+          // Reset form
+          resetForm();
+          onUploadComplete(videoData);
+        },
       });
 
-      // Create a video object for the callback
-      const videoData: VideoObject = {
-        id: videoId,
-        title: metadata.title,
-        description: metadata.description || null,
-        thumbnailUrl: '',
-        videoUrl: `${VIDEO_UPLOAD_CONFIG.BUNNY_CDN_BASE_URL}/library/${libraryId}/videos/${videoId}`,
-        userId: auth.user.id,
-        channel: auth.user.id, // Using user ID as channel for now
-        channelId: auth.user.id,
-        channelAvatarUrl: '',
-        channelName: auth.user.email || 'Unknown',
-        dateCreated: new Date().toISOString(),
-        dateModified: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        views: 0,
-        availableResolutions: [],
-        likesCount: 0,
-        dislikesCount: 0,
-        commentsCount: 0,
-        comments: [],
-        likes: [],
-        dislikes: [],
-        isPublic: metadata.isPublic,
-        isLive: false,
-      };
+      tusUploadRef.current = upload;
+      upload.start();
 
-      onUploadComplete(videoData);
     } catch (error: unknown) {
-      const err = error as { name?: string; message?: string };
-      if (err.name === 'AbortError' || err.message === 'Upload cancelled') {
-        setUploadProgress(null);
-        return;
-      }
-
+      const err = error as { message?: string };
       const errorMessage = err.message || 'Upload failed. Please try again.';
-      setUploadProgress({ percentage: 0, stage: 'preparing', error: errorMessage });
+      setUploadProgress({
+        percentage: uploadProgress?.percentage || 0,
+        state: 'error',
+        error: errorMessage
+      });
       onError(errorMessage);
     }
   };
 
-  const cancelUpload = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+  const pauseUpload = () => {
+    if (tusUploadRef.current) {
+      tusUploadRef.current.abort();
+      setUploadProgress(prev => prev ? { ...prev, state: 'paused' } : null);
     }
+  };
+
+  const resumeUpload = () => {
+    if (tusUploadRef.current) {
+      tusUploadRef.current.start();
+      setUploadProgress(prev => prev ? { ...prev, state: 'uploading' } : null);
+    }
+  };
+
+  const cancelUpload = () => {
+    if (tusUploadRef.current) {
+      tusUploadRef.current.abort(true); // Remove fingerprint
+      tusUploadRef.current = null;
+    }
+    resetForm();
+  };
+
+  const retryUpload = () => {
     setUploadProgress(null);
-    setSelectedFile(null);
-    setShowMetadataForm(false);
+    uploadVideo();
   };
 
   const resetForm = () => {
     setSelectedFile(null);
     setShowMetadataForm(false);
     setUploadProgress(null);
+    tusUploadRef.current = null;
+    videoIdRef.current = '';
+    libraryIdRef.current = 0;
     setMetadata({
       title: '',
       titleEn: '',
@@ -358,6 +414,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           <button
             onClick={resetForm}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            disabled={uploadProgress?.state === 'uploading'}
           >
             <X size={20} />
           </button>
@@ -367,7 +424,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t.upload.selectFile}:</p>
           <p className="font-medium text-gray-900 dark:text-white">{selectedFile.name}</p>
           <p className="text-sm text-gray-500">
-            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+            {formatBytes(selectedFile.size)}
           </p>
         </div>
 
@@ -375,19 +432,49 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {uploadProgress.stage === 'preparing' && t.upload.preparing}
-                {uploadProgress.stage === 'uploading' && t.upload.uploading}
-                {uploadProgress.stage === 'processing' && t.upload.processingVideo}
-                {uploadProgress.stage === 'complete' && t.upload.uploadComplete}
+                {uploadProgress.state === 'uploading' && t.upload.uploading}
+                {uploadProgress.state === 'paused' && t.upload.paused}
+                {uploadProgress.state === 'processing' && t.upload.processingVideo}
+                {uploadProgress.state === 'complete' && t.upload.uploadComplete}
+                {uploadProgress.state === 'error' && t.upload.uploadFailed}
               </span>
-              <span className="text-sm text-gray-500">{uploadProgress.percentage}%</span>
+              <span className="text-sm text-gray-500">{uploadProgress.percentage.toFixed(0)}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
               <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  uploadProgress.state === 'error'
+                    ? 'bg-red-600'
+                    : uploadProgress.state === 'complete'
+                    ? 'bg-green-600'
+                    : uploadProgress.state === 'paused'
+                    ? 'bg-yellow-600'
+                    : 'bg-blue-600'
+                }`}
                 style={{ width: `${uploadProgress.percentage}%` }}
               ></div>
             </div>
+
+            {/* Upload stats */}
+            {uploadProgress.state === 'uploading' && uploadProgress.bytesUploaded && uploadProgress.bytesTotal && (
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>
+                  {t.upload.bytesUploaded}: {formatBytes(uploadProgress.bytesUploaded)} / {formatBytes(uploadProgress.bytesTotal)}
+                </span>
+                {uploadProgress.speed && (
+                  <span>
+                    {t.upload.speed}: {formatBytes(uploadProgress.speed)}/s
+                  </span>
+                )}
+                {uploadProgress.timeRemaining && (
+                  <span>
+                    {t.upload.timeRemaining}: {formatTime(uploadProgress.timeRemaining)}
+                  </span>
+                )}
+              </div>
+            )}
+
             {uploadProgress.error && (
               <div className="flex items-center mt-2 text-red-600">
                 <AlertCircle size={16} className="mr-1" />
@@ -412,7 +499,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                 }`}
-                disabled={!!uploadProgress}
+                disabled={uploadProgress?.state === 'uploading'}
               >
                 English
               </button>
@@ -424,7 +511,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                 }`}
-                disabled={!!uploadProgress}
+                disabled={uploadProgress?.state === 'uploading'}
               >
                 العربية
               </button>
@@ -437,7 +524,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="Title in English"
                 required
-                disabled={!!uploadProgress}
+                disabled={uploadProgress?.state === 'uploading'}
               />
             )}
             {activeTab === 'ar' && (
@@ -448,7 +535,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="العنوان بالعربية"
                 dir="rtl"
-                disabled={!!uploadProgress}
+                disabled={uploadProgress?.state === 'uploading'}
               />
             )}
           </div>
@@ -465,7 +552,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="Description in English"
-                disabled={!!uploadProgress}
+                disabled={uploadProgress?.state === 'uploading'}
               />
             )}
             {activeTab === 'ar' && (
@@ -476,7 +563,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="الوصف بالعربية"
                 dir="rtl"
-                disabled={!!uploadProgress}
+                disabled={uploadProgress?.state === 'uploading'}
               />
             )}
           </div>
@@ -488,7 +575,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               checked={metadata.isPublic}
               onChange={(e) => setMetadata(prev => ({ ...prev, isPublic: e.target.checked }))}
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              disabled={!!uploadProgress}
+              disabled={uploadProgress?.state === 'uploading'}
             />
             <label htmlFor="isPublic" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
               {t.upload.makePublic}
@@ -497,14 +584,62 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         </div>
 
         <div className="flex space-x-3">
-          {!uploadProgress ? (
+          {!uploadProgress || uploadProgress.state === 'idle' ? (
+            <>
+              <UploadButton
+                onClick={uploadVideo}
+                text={t.upload.uploadTitle}
+                disabled={!metadata.titleEn.trim()}
+                className="flex-1"
+                showIcon={false}
+              />
+              <button
+                onClick={resetForm}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                {t.common.cancel}
+              </button>
+            </>
+          ) : uploadProgress.state === 'uploading' ? (
             <>
               <button
-                onClick={uploadVideo}
-                disabled={!metadata.titleEn.trim()}
-                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                onClick={pauseUpload}
+                className="flex-1 bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 font-medium flex items-center justify-center gap-2"
               >
-                {t.upload.uploadTitle}
+                <Pause size={16} />
+                {t.upload.pause}
+              </button>
+              <button
+                onClick={cancelUpload}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium"
+              >
+                {t.upload.cancel}
+              </button>
+            </>
+          ) : uploadProgress.state === 'paused' ? (
+            <>
+              <button
+                onClick={resumeUpload}
+                className="flex-1 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 font-medium flex items-center justify-center gap-2"
+              >
+                <Play size={16} />
+                {t.upload.resume}
+              </button>
+              <button
+                onClick={cancelUpload}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium"
+              >
+                {t.upload.cancel}
+              </button>
+            </>
+          ) : uploadProgress.state === 'error' ? (
+            <>
+              <button
+                onClick={retryUpload}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium flex items-center justify-center gap-2"
+              >
+                <RotateCcw size={16} />
+                {t.upload.retry}
               </button>
               <button
                 onClick={resetForm}
@@ -515,10 +650,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             </>
           ) : (
             <button
-              onClick={cancelUpload}
-              className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium"
+              onClick={resetForm}
+              disabled={uploadProgress.state === 'processing'}
+              className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {t.upload.cancelUpload}
+              {t.common.close}
             </button>
           )}
         </div>

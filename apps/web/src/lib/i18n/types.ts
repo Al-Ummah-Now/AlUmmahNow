@@ -384,6 +384,7 @@ export interface AppTranslations {
    */
   upload: {
     uploadTitle: string;
+    uploadVideo: string;
     selectFile: string;
     dragDropFiles: string;
     videoDetails: string;
@@ -412,6 +413,18 @@ export interface AppTranslations {
     guidelineProcessing: string;
     guidelineThumbnails: string;
     shareWithCommunity: string;
+    // TUS upload states
+    paused: string;
+    processing: string;
+    complete: string;
+    failed: string;
+    pause: string;
+    resume: string;
+    cancel: string;
+    retry: string;
+    speed: string;
+    timeRemaining: string;
+    bytesUploaded: string;
   };
 
   /**
