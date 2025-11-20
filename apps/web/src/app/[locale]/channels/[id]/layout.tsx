@@ -1,10 +1,10 @@
 import { getChannelById } from '@/lib/api/channels';
 import { ChannelHeader as ChannelHeaderLTR } from '@/components/Channel/ChannelHeader';
 import { ChannelHeader as ChannelHeaderRTL } from '@/components/Channel/rtl/ChannelHeader';
-import { ChannelTabs as ChannelTabsLTR } from '@/components/Channel/ChannelTabs';
-import { ChannelTabs as ChannelTabsRTL } from '@/components/Channel/rtl/ChannelTabs';
+import { ChannelTabBar } from '@/components/ChannelTabs';
 import { notFound } from 'next/navigation';
 import { isLocaleSupported, getTextDirection } from '@/lib/i18n/utils';
+import { isChannelOwner } from '@/lib/channel-utils';
 
 interface ChannelLayoutProps {
   children: React.ReactNode;
@@ -18,7 +18,7 @@ interface ChannelLayoutProps {
  * Channel Layout for Dynamic Locale Routes
  *
  * Displays channel header, tabs, and content with proper locale support.
- * Uses RTL/LTR components based on the locale's text direction.
+ * Uses query param-based tabs with database-driven configuration.
  */
 export default async function ChannelLayout({
   children,
@@ -39,19 +39,21 @@ export default async function ChannelLayout({
     notFound();
   }
 
+  // Check if current user is the channel owner
+  const isOwner = await isChannelOwner(id);
+
   // Determine text direction and component variant
   const direction = getTextDirection(locale);
   const isRTL = direction === 'rtl';
   const ChannelHeader = isRTL ? ChannelHeaderRTL : ChannelHeaderLTR;
-  const ChannelTabs = isRTL ? ChannelTabsRTL : ChannelTabsLTR;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Channel Header (banner, avatar, name, subscribe) */}
-      <ChannelHeader channel={channel} locale={locale} />
+      <ChannelHeader channel={channel} locale={locale} isOwner={isOwner} />
 
-      {/* Channel Tabs */}
-      <ChannelTabs channel={channel} locale={locale} />
+      {/* Channel Tabs - Query param-based with database config */}
+      <ChannelTabBar channelId={id} isOwner={isOwner} />
 
       {/* Tab Content */}
       <div className="container mx-auto px-4 py-6">

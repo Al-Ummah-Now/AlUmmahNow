@@ -49,6 +49,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     settings: 'Settings',
     darkMode: 'Dark Mode',
     lightMode: 'Light Mode',
+    viewChannel: 'View Channel',
   },
 
   navigation: {
@@ -139,6 +140,23 @@ export const EN_TRANSLATIONS: AppTranslations = {
     addCustomTab: 'Add Custom Tab',
     tabName: 'Tab Name',
     tabContent: 'Tab Content',
+    tabs: {
+      manage_tabs: 'Manage Channel Tabs',
+      manage_tabs_description: 'Customize which tabs appear on your channel and set the default view',
+      toggle_visibility: 'Show/hide this tab',
+      set_as_default: 'Set as default tab',
+      cannot_hide_last_tab: 'Cannot hide the last visible tab',
+      cannot_hide_default_tab: 'Cannot hide the default tab. Please set another tab as default first.',
+      default_tab: 'Default Tab',
+      visible: 'Visible',
+      hidden: 'Hidden',
+      save_changes: 'Save Changes',
+      changes_saved: 'Tab configuration saved successfully',
+      save_failed: 'Failed to save tab configuration',
+      drag_to_reorder: 'Drag to reorder tabs',
+      at_least_one_visible: 'At least one tab must be visible',
+      default_must_be_visible: 'Default tab must be visible',
+    },
     // Channel Sections
     seeAll: 'See all',
     recentUploads: 'Recent uploads',
@@ -193,6 +211,11 @@ export const EN_TRANSLATIONS: AppTranslations = {
     customizeChannelLayout: 'Customize your channel layout',
     communitySettings: 'Community Posts',
     manageCommunityPosts: 'Manage community posts',
+    // Settings
+    channelSettings: 'Channel Settings',
+    generalSettings: 'General Settings',
+    editChannelDetails: 'Edit channel name, description, and branding',
+    backToChannel: 'Back to Channel',
   },
 
   profile: {

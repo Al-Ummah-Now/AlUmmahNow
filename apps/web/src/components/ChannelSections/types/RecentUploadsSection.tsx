@@ -53,7 +53,7 @@ export function RecentUploadsSection({ channelId }: RecentUploadsSectionProps) {
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.recentUploads}
-        viewAllHref={videos.length > 0 ? `/en/channel/${channelId}` : undefined}
+        viewAllHref={videos.length > 0 ? `/en/channels/${channelId}` : undefined}
       />
 
       {videos.length === 0 ? (

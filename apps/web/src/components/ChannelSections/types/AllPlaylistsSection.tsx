@@ -52,7 +52,7 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.allPlaylists}
-        viewAllHref={playlists.length > 0 ? `/en/channel/${channelId}/playlists` : undefined}
+        viewAllHref={playlists.length > 0 ? `/en/channels/${channelId}/playlists` : undefined}
       />
 
       {playlists.length === 0 ? (

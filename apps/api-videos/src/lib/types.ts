@@ -137,6 +137,39 @@ export const Channel = z.object({
     likes: z.array(Like).default([]),
 });
 
+// Channel Tab Configuration
+export const ChannelTab = z.object({
+    id: Str({ description: "Tab identifier (home, videos, shorts, etc.)" }),
+    name: Str({ description: "Default display name" }),
+    nameLocalized: z.record(z.string()).optional(),
+    icon: Str().optional(),
+    type: z.enum(['system', 'custom']),
+    visible: Bool({ description: "Whether the tab is visible" }),
+    position: z.number().int().min(0),
+    url: Str().optional(),
+    metadata: z.record(z.any()).optional(),
+});
+
+export const ChannelTabConfig = z.object({
+    channelId: Str(),
+    defaultTab: Str({ description: "Default tab ID when visiting channel" }),
+    tabs: z.array(ChannelTab),
+    version: z.number().int().default(1),
+    lastModifiedBy: Str().optional(),
+    dateCreated: DateTime(),
+    dateModified: DateTime(),
+});
+
+export const ChannelTabConfigUpdateInput = z.object({
+    defaultTab: Str().optional(),
+    tabs: z.array(z.object({
+        id: Str(),
+        visible: Bool().optional(),
+        position: z.number().int().min(0).optional(),
+        nameLocalized: z.record(z.string()).optional(),
+    })).optional(),
+});
+
 // Phase 2: Live Streaming models
 export const LiveStream = z.object({
     id: Str(),

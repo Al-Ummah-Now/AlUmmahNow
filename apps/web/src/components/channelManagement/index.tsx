@@ -75,7 +75,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const handleEditChannel = (channel: Channel) => {
     console.log('ChannelManagementSection: Edit channel:', channel);
     // Navigate to channel edit page
-    router.push(`/${locale}/channel/${channel.id}/edit`);
+    router.push(`/${locale}/settings/channel/${channel.id}/edit`);
   };
 
   // Handle delete channel
@@ -95,7 +95,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const handleViewChannel = (channelId: string) => {
     console.log('ChannelManagementSection: View channel:', channelId);
     // Navigate to channel page
-    router.push(`/${locale}/channel/${channelId}`);
+    router.push(`/${locale}/channels/${channelId}`);
   };
 
   return (

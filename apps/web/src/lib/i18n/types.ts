@@ -72,6 +72,7 @@ export interface AppTranslations {
     settings: string;
     darkMode: string;
     lightMode: string;
+    viewChannel: string;
   };
 
   /**
@@ -219,6 +220,26 @@ export interface AppTranslations {
     customizeChannelLayout: string;
     communitySettings: string;
     manageCommunityPosts: string;
+    channelSettings: string;
+    generalSettings: string;
+    editChannelDetails: string;
+    backToChannel: string;
+    tabs: {
+      manage_tabs: string;
+      manage_tabs_description: string;
+      toggle_visibility: string;
+      set_as_default: string;
+      cannot_hide_last_tab: string;
+      default_tab: string;
+      visible: string;
+      hidden: string;
+      save_changes: string;
+      changes_saved: string;
+      save_failed: string;
+      drag_to_reorder: string;
+      at_least_one_visible: string;
+      default_must_be_visible: string;
+    };
   };
 
   /**

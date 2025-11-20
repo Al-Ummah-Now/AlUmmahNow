@@ -23,9 +23,9 @@ export function ChannelSections({ channelId }: ChannelSectionsProps) {
 
         console.log('[ChannelSections RTL] API response:', JSON.stringify(result, null, 2));
 
-        if (result && result.sections) {
-          console.log('[ChannelSections RTL] Loaded sections:', result.sections.length);
-          setSections(result.sections);
+        if (result && Array.isArray(result)) {
+          console.log('[ChannelSections RTL] Loaded sections:', result.length);
+          setSections(result);
         } else {
           console.error('[ChannelSections RTL] Failed to load sections');
           setError('Failed to load channel sections');

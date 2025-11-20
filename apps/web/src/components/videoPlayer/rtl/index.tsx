@@ -49,7 +49,7 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
       {/* Video Details */}
       <div className="flex space-x-4 mt-4 justify-start items-center w-full" dir="rtl">
         <Link
-          href={`/ar/channel/${options.channel}`}
+          href={`/ar/channels/${options.channel}`}
           className="w-10 h-10 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
         >
           <Image

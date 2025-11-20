@@ -49,6 +49,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     settings: 'الإعدادات',
     darkMode: 'الوضع الداكن',
     lightMode: 'الوضع الفاتح',
+    viewChannel: 'عرض القناة',
   },
 
   navigation: {
@@ -139,6 +140,23 @@ export const AR_TRANSLATIONS: AppTranslations = {
     addCustomTab: 'إضافة تبويب مخصص',
     tabName: 'اسم التبويب',
     tabContent: 'محتوى التبويب',
+    tabs: {
+      manage_tabs: 'إدارة تبويبات القناة',
+      manage_tabs_description: 'قم بتخصيص التبويبات التي تظهر في قناتك وتعيين العرض الافتراضي',
+      toggle_visibility: 'إظهار/إخفاء هذا التبويب',
+      set_as_default: 'تعيين كتبويب افتراضي',
+      cannot_hide_last_tab: 'لا يمكن إخفاء التبويب الأخير المرئي',
+      cannot_hide_default_tab: 'لا يمكن إخفاء التبويب الافتراضي. يرجى تعيين تبويب آخر كافتراضي أولاً.',
+      default_tab: 'التبويب الافتراضي',
+      visible: 'مرئي',
+      hidden: 'مخفي',
+      save_changes: 'حفظ التغييرات',
+      changes_saved: 'تم حفظ إعدادات التبويبات بنجاح',
+      save_failed: 'فشل في حفظ إعدادات التبويبات',
+      drag_to_reorder: 'اسحب لإعادة الترتيب',
+      at_least_one_visible: 'يجب أن يكون تبويب واحد على الأقل مرئياً',
+      default_must_be_visible: 'يجب أن يكون التبويب الافتراضي مرئياً',
+    },
     // Channel Sections
     seeAll: 'عرض الكل',
     recentUploads: 'أحدث الفيديوهات',
@@ -193,6 +211,11 @@ export const AR_TRANSLATIONS: AppTranslations = {
     customizeChannelLayout: 'تخصيص تخطيط قناتك',
     communitySettings: 'منشورات المجتمع',
     manageCommunityPosts: 'إدارة منشورات المجتمع',
+    // Settings
+    channelSettings: 'إعدادات القناة',
+    generalSettings: 'الإعدادات العامة',
+    editChannelDetails: 'تعديل اسم القناة والوصف والعلامة التجارية',
+    backToChannel: 'العودة إلى القناة',
   },
 
   profile: {

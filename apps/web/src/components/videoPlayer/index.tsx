@@ -61,7 +61,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
       {/* Video Details */}
       <div className="flex space-x-4 mt-4 justify-start items-center w-full">
         <Link
-          href={`/${lang}/channel/${options.channel}`}
+          href={`/${lang}/channels/${options.channel}`}
           className="w-10 h-10 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
         >
           <Image

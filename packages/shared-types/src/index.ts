@@ -2,6 +2,7 @@
 export * from './video';
 export * from './channel';
 export * from './channel-section';
+export * from './channel-tabs';
 export * from './user';
 export * from './playlist';
 export * from './comment';

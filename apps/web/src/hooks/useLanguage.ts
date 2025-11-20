@@ -60,6 +60,11 @@ export interface UseLanguageResult {
   lang: SupportedLanguage;
 
   /**
+   * Current language code (alias for lang)
+   */
+  locale: SupportedLanguage;
+
+  /**
    * Complete translation object for current language
    */
   t: ReturnType<typeof useI18n>['t'];
@@ -134,6 +139,7 @@ export function useLanguage(): UseLanguageResult {
 
   return {
     lang,
+    locale: lang, // Alias for lang (for compatibility)
     t,
     dir: config.direction,
     isRTL: config.isRTL,

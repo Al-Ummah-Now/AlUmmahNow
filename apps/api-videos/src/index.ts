@@ -54,6 +54,9 @@ import { ChannelSectionCreate } from "./endpoints/channel-section/channelSection
 import { ChannelSectionUpdate } from "./endpoints/channel-section/channelSectionUpdate";
 import { ChannelSectionDelete } from "./endpoints/channel-section/channelSectionDelete";
 import { ChannelSectionReorder } from "./endpoints/channel-section/channelSectionReorder";
+// Channel Tabs endpoints
+import { ChannelTabsFetch } from "./endpoints/channel/channelTabsFetch";
+import { ChannelTabsUpdate } from "./endpoints/channel/channelTabsUpdate";
 import { CommentCreate } from "./endpoints/video/commentCreate";
 import { CommentUpdate } from "./endpoints/video/commentUpdate";
 import { CommentDelete } from "./endpoints/video/commentDelete";
@@ -194,6 +197,7 @@ openapi.get("/api/playlists", PlaylistsList);
 openapi.get("/api/playlists/:id", PlaylistFetch);
 openapi.get("/api/channels", ChannelsList);
 openapi.get("/api/channels/:id", ChannelFetch);
+openapi.get("/api/channels/:id/tabs", ChannelTabsFetch); // Channel tabs configuration (public)
 // Community Posts endpoints (public)
 openapi.get("/api/community/posts", ListCommunityPosts);
 openapi.get("/api/community/posts/:postId", GetCommunityPost);
@@ -246,6 +250,14 @@ app.use('/api/playlists', (c, next) => {
 
 app.use('/api/channels', (c, next) => {
 	if (c.req.method !== 'GET') {
+		return authMiddleware(c, next);
+	}
+	return next();
+});
+
+// Channel Tabs - GET is public, PUT requires auth
+app.use('/api/channels/:id/tabs', (c, next) => {
+	if (c.req.method === 'PUT') {
 		return authMiddleware(c, next);
 	}
 	return next();
@@ -342,6 +354,9 @@ openapi.delete("/api/channels/:id", ChannelDelete);
 // Subscription management (require auth)
 openapi.post("/api/channels/:id/subscriptions", SubscriptionCreate);
 openapi.delete("/api/channels/:id/subscriptions", SubscriptionDelete);
+
+// Channel Tabs management (require auth for PUT)
+openapi.put("/api/channels/:id/tabs", ChannelTabsUpdate);
 
 // Channel Sections management
 openapi.get("/api/channels/:channelId/sections", ChannelSectionsList); // Public: list sections
@@ -471,6 +486,7 @@ app.get("/openapi.json", async (c) => {
 		'/api/channels/{id}/avatar', // PUT
 		'/api/channels/{id}/cover', // PUT
 		'/api/channels/{id}/subscriptions', // POST, DELETE
+		'/api/channels/{id}/tabs', // PUT (update tabs)
 		// Channel Sections management
 		'/api/channels/{channelId}/sections', // POST (create)
 		'/api/channels/{channelId}/sections/{sectionId}', // PUT, DELETE

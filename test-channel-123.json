@@ -1,0 +1,19 @@
+{
+  "id": "test-channel-123",
+  "userId": "test-user-456",
+  "email": "test@example.com",
+  "name": "Test Channel",
+  "nameLocalized": {
+    "en": "Test Channel",
+    "ar": "قناة اختبار"
+  },
+  "description": "A test channel for tab management testing",
+  "isMain": true,
+  "dateCreated": "2025-11-20T00:00:00.000Z",
+  "dateModified": "2025-11-20T00:00:00.000Z",
+  "playlists": [],
+  "videos": [],
+  "subscribers": [],
+  "subscriptions": [],
+  "likes": []
+}

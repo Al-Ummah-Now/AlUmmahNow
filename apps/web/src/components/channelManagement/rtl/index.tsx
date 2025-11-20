@@ -73,7 +73,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const handleEditChannel = (channel: Channel) => {
     console.log('ChannelManagementSection (RTL): Edit channel:', channel);
     // Navigate to channel edit page (Arabic route)
-    router.push(`/ar/channel/${channel.id}/edit`);
+    router.push(`/ar/settings/channel/${channel.id}/edit`);
   };
 
   // Handle delete channel
@@ -93,7 +93,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const handleViewChannel = (channelId: string) => {
     console.log('ChannelManagementSection (RTL): View channel:', channelId);
     // Navigate to channel page (Arabic route)
-    router.push(`/ar/channel/${channelId}`);
+    router.push(`/ar/channels/${channelId}`);
   };
 
   return (

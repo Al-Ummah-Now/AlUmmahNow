@@ -66,7 +66,7 @@ export function FeaturedVideosSection({ videoIds, channelId }: FeaturedVideosSec
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.featuredVideos}
-        viewAllHref={channelId && videos.length > 0 ? `/en/channel/${channelId}` : undefined}
+        viewAllHref={channelId && videos.length > 0 ? `/en/channels/${channelId}` : undefined}
       />
 
       {videos.length === 0 ? (

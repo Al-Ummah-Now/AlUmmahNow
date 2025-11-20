@@ -4,6 +4,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
+import { getChannelTabConfig } from '@/lib/api/channel-tabs';
+import type { ChannelTabConfig } from '@al-ummah/shared-types';
 
 export type ChannelTab =
   | 'home'
@@ -38,19 +40,66 @@ export function ChannelTabBar({
   defaultTab = 'home',
   hiddenTabs = [],
 }: ChannelTabBarProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, locale } = useLanguage();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tabBarRef = useRef<HTMLDivElement>(null);
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
+  const [tabConfig, setTabConfig] = useState<ChannelTabConfig | null>(null);
+
+  // Fetch tab configuration from API on mount
+  useEffect(() => {
+    const fetchTabConfig = async () => {
+      try {
+        logger.info('[ChannelTabBar] Fetching tab configuration', { channelId });
+        const config = await getChannelTabConfig(channelId);
+        setTabConfig(config);
+        logger.info('[ChannelTabBar] Tab configuration loaded', {
+          channelId,
+          defaultTab: config?.defaultTab,
+          visibleCount: config?.tabs.filter(t => t.visible).length
+        });
+      } catch (error) {
+        logger.error('[ChannelTabBar] Failed to fetch tab configuration', { channelId, error });
+        // P2 fix: Better error messaging - log warning about fallback
+        logger.warn('[ChannelTabBar] Using default tab configuration due to fetch failure', {
+          channelId,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        // Fall back to default configuration
+        setTabConfig(null);
+      }
+    };
+
+    fetchTabConfig();
+  }, [channelId]);
+
+  // Determine visible tabs from API config or fall back to props
+  const visibleTabs: ChannelTab[] = React.useMemo(() => {
+    if (tabConfig) {
+      // Use API configuration
+      return tabConfig.tabs
+        .filter(tab => tab.visible)
+        .sort((a, b) => a.position - b.position)
+        .map(tab => tab.id as ChannelTab);
+    } else {
+      // Fall back to prop-based configuration
+      return DEFAULT_TABS.filter(tab => !hiddenTabs.includes(tab));
+    }
+  }, [tabConfig, hiddenTabs]);
+
+  // Determine default tab from API config or fall back to props
+  const effectiveDefaultTab: ChannelTab = React.useMemo(() => {
+    if (tabConfig?.defaultTab) {
+      return tabConfig.defaultTab as ChannelTab;
+    }
+    return defaultTab;
+  }, [tabConfig, defaultTab]);
 
   // Get active tab from URL or use default
-  const activeTab = (searchParams.get('tab') as ChannelTab) || defaultTab;
-
-  // Filter visible tabs
-  const visibleTabs = DEFAULT_TABS.filter(tab => !hiddenTabs.includes(tab));
+  const activeTab = (searchParams.get('tab') as ChannelTab) || effectiveDefaultTab;
 
   // Check if scroll buttons should be shown
   useEffect(() => {
@@ -82,7 +131,7 @@ export function ChannelTabBar({
 
     // Build new URL with tab parameter
     const params = new URLSearchParams(searchParams);
-    if (tab === defaultTab) {
+    if (tab === effectiveDefaultTab) {
       params.delete('tab');
     } else {
       params.set('tab', tab);
@@ -110,6 +159,18 @@ export function ChannelTabBar({
   };
 
   const getTabLabel = (tab: ChannelTab): string => {
+    // Try to get localized name from API config first (P2 fix: improved fallback logic)
+    if (tabConfig) {
+      const tabData = tabConfig.tabs.find(t => t.id === tab);
+      if (tabData?.nameLocalized) {
+        // Try current locale first, then fallback to 'en', then default name
+        return tabData.nameLocalized[locale]
+          || tabData.nameLocalized['en']
+          || tabData.name;
+      }
+    }
+
+    // Fall back to default i18n translations
     switch (tab) {
       case 'home': return t.channel.home;
       case 'videos': return t.channel.videos;

@@ -71,7 +71,7 @@ export function FeaturedVideosSection({ videoIds, title, channelId }: FeaturedVi
     <section className="space-y-4" dir="rtl">
       <SectionHeader
         title={title || 'الفيديوهات المميزة'}
-        viewAllHref={channelId ? `/ar/channel/${channelId}` : undefined}
+        viewAllHref={channelId ? `/ar/channels/${channelId}` : undefined}
       />
 
       <div className="relative">

@@ -53,7 +53,7 @@ export function PopularUploadsSection({ channelId }: PopularUploadsSectionProps)
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.popularUploads}
-        viewAllHref={videos.length > 0 ? `/en/channel/${channelId}` : undefined}
+        viewAllHref={videos.length > 0 ? `/en/channels/${channelId}` : undefined}
       />
 
       {videos.length === 0 ? (

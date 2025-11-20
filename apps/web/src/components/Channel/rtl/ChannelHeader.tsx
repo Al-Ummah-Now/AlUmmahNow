@@ -7,13 +7,15 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
 import { getTranslations } from '@/lib/i18n';
+import Link from 'next/link';
 
 interface ChannelHeaderProps {
   channel: Channel;
   locale: string;
+  isOwner?: boolean;
 }
 
-export function ChannelHeader({ channel, locale }: ChannelHeaderProps) {
+export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeaderProps) {
   const { user } = useMultiAccount();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,6 +87,30 @@ export function ChannelHeader({ channel, locale }: ChannelHeaderProps) {
             className="object-cover"
             priority
           />
+          {/* Edit Button - Top Left on Cover (RTL) */}
+          {isOwner && (
+            <div className="absolute top-4 left-4">
+              <Link
+                href={`/${locale}/settings/channel/${channel.id}/edit`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                  />
+                </svg>
+                {t.common.edit}
+              </Link>
+            </div>
+          )}
         </div>
       )}
 

@@ -89,7 +89,7 @@ import { ChannelTabContent } from '@/components/ChannelTabs/ChannelTabContent';
 
 ## Usage in Channel Pages
 
-### English (LTR) - `/app/[locale]/channel/[id]/page.tsx`
+### English (LTR) - `/app/[locale]/channels/[id]/page.tsx`
 
 ```tsx
 import { ChannelTabBar } from '@/components/ChannelTabs';

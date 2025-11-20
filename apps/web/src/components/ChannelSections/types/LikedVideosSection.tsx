@@ -56,7 +56,7 @@ export function LikedVideosSection({ channelId }: LikedVideosSectionProps) {
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.likedVideos}
-        viewAllHref={videos.length > 0 ? `/en/channel/${channelId}/liked` : undefined}
+        viewAllHref={videos.length > 0 ? `/en/channels/${channelId}/liked` : undefined}
       />
 
       {videos.length === 0 ? (

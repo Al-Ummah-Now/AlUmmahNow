@@ -72,6 +72,12 @@
 			"bucket_name": "community-posts",
 			"preview_bucket_name": "community-posts-preview",
 			"remote": true
+		},
+		{
+			"binding": "channel_tabs",
+			"bucket_name": "channel-tabs",
+			"preview_bucket_name": "channel-tabs-preview",
+			"remote": true
 		}
 	],
 	"kv_namespaces": [
