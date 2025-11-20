@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { CommunityPost } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import { voteOnPoll } from '@/lib/api/community-posts';
@@ -137,11 +138,15 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
                 {/* Option Text/Image */}
                 {option.image ? (
                   <div className="flex-1 min-w-0">
-                    <img
-                      src={option.image.url}
-                      alt={option.image.caption || option.text || 'Poll option'}
-                      className="w-full h-32 object-cover rounded"
-                    />
+                    <div className="relative w-full h-32">
+                      <Image
+                        src={option.image.url}
+                        alt={option.image.caption || option.text || 'Poll option'}
+                        fill
+                        className="object-cover rounded"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      />
+                    </div>
                     {option.image.caption && (
                       <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
                         {option.image.caption}

@@ -1,5 +1,8 @@
 import { AlUmmahMessage, ProcessingResult, MessageType, QueueEnvironment } from './types';
 import { Logger } from '@al-ummah/logger';
+import { handleChannelSectionEvent } from './handlers/channel-section';
+// Channel tabs are frontend-only, no backend processing needed
+// import { handleChannelTabEvent } from './handlers/channel-tab';
 
 export class MessageProcessor {
   private logger: Logger;
@@ -22,8 +25,8 @@ export class MessageProcessor {
       await this.saveMessageToR2(message, env);
 
       // Process based on message type
-      await this.processByType(message);
-      
+      await this.processByType(message, env);
+
       const processingTime = Date.now() - startTime;
       this.logger.info(`Successfully processed message ${message.id} in ${processingTime}ms`);
       
@@ -54,7 +57,7 @@ export class MessageProcessor {
     );
   }
 
-  private async processByType(message: AlUmmahMessage): Promise<void> {
+  private async processByType(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
     switch (message.type) {
       // Profile-related messages
       case MessageType.ProfileCreate:
@@ -132,6 +135,24 @@ export class MessageProcessor {
       case MessageType.PollVoted:
         await this.processCommunityPostMessage(message);
         break;
+
+      // Channel section events
+      case MessageType.ChannelSectionCreate:
+      case MessageType.ChannelSectionUpdate:
+      case MessageType.ChannelSectionDelete:
+      case MessageType.ChannelSectionReorder:
+      case MessageType.ChannelSectionView:
+        await handleChannelSectionEvent(message, env, this.logger);
+        break;
+
+      // Channel tab events - REMOVED: tabs are frontend-only, no backend processing
+      // case MessageType.ChannelTabCreate:
+      // case MessageType.ChannelTabUpdate:
+      // case MessageType.ChannelTabDelete:
+      // case MessageType.ChannelTabReorder:
+      // case MessageType.ChannelTabSwitch:
+      //   await handleChannelTabEvent(message, env, this.logger);
+      //   break;
 
       default:
         throw new Error(`Unknown message type: ${message.type}`);

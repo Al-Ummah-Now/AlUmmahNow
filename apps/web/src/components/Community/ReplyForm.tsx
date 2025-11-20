@@ -1,4 +1,5 @@
 'use client';
+import { PostComment } from "@al-ummah/shared-types";
 
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
@@ -18,7 +19,7 @@ interface ReplyFormProps {
   locale?: string;
   channelId?: string;
   userId?: string;
-  onReplyCreated?: (reply: any) => void;
+  onReplyCreated?: (reply: PostComment) => void;
   onCancel?: () => void;
 }
 

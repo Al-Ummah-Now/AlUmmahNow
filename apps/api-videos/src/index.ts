@@ -48,12 +48,12 @@ import { ChannelsList } from "./endpoints/channel/channelList";
 import { SubscriptionCreate } from "./endpoints/channel/SubscriptionCreate";
 import { SubscriptionDelete } from "./endpoints/channel/SubscriptionDelete";
 // Channel Sections endpoints
-import { ChannelSectionsList } from "./endpoints/channel/channelSectionsList";
-import { ChannelSectionsGet } from "./endpoints/channel/channelSectionsGet";
-import { ChannelSectionCreate } from "./endpoints/channel/channelSectionCreate";
-import { ChannelSectionUpdate } from "./endpoints/channel/channelSectionUpdate";
-import { ChannelSectionDelete } from "./endpoints/channel/channelSectionDelete";
-import { ChannelSectionsReorder } from "./endpoints/channel/channelSectionsReorder";
+import { ChannelSectionsList } from "./endpoints/channel-section/channelSectionList";
+import { ChannelSectionFetch } from "./endpoints/channel-section/channelSectionFetch";
+import { ChannelSectionCreate } from "./endpoints/channel-section/channelSectionCreate";
+import { ChannelSectionUpdate } from "./endpoints/channel-section/channelSectionUpdate";
+import { ChannelSectionDelete } from "./endpoints/channel-section/channelSectionDelete";
+import { ChannelSectionReorder } from "./endpoints/channel-section/channelSectionReorder";
 import { CommentCreate } from "./endpoints/video/commentCreate";
 import { CommentUpdate } from "./endpoints/video/commentUpdate";
 import { CommentDelete } from "./endpoints/video/commentDelete";
@@ -251,6 +251,14 @@ app.use('/api/channels', (c, next) => {
 	return next();
 });
 
+// Channel Sections - GET is public, CUD operations require auth
+app.use('/api/channels/:channelId/sections', (c, next) => {
+	if (c.req.method !== 'GET') {
+		return authMiddleware(c, next);
+	}
+	return next();
+});
+
 // Phase 2: Apply authentication middleware to new endpoints
 app.use('/api/live-streams', (c, next) => {
 	if (c.req.method !== 'GET') {
@@ -337,11 +345,11 @@ openapi.delete("/api/channels/:id/subscriptions", SubscriptionDelete);
 
 // Channel Sections management
 openapi.get("/api/channels/:channelId/sections", ChannelSectionsList); // Public: list sections
-openapi.get("/api/channels/:channelId/sections/:sectionId", ChannelSectionsGet); // Public: get section
+openapi.get("/api/channels/:channelId/sections/:sectionId", ChannelSectionFetch); // Public: get section
 openapi.post("/api/channels/:channelId/sections", ChannelSectionCreate); // Auth required: create
 openapi.put("/api/channels/:channelId/sections/:sectionId", ChannelSectionUpdate); // Auth required: update
 openapi.delete("/api/channels/:channelId/sections/:sectionId", ChannelSectionDelete); // Auth required: delete
-openapi.post("/api/channels/:channelId/sections/reorder", ChannelSectionsReorder); // Auth required: reorder
+openapi.patch("/api/channels/:channelId/sections/reorder", ChannelSectionReorder); // Auth required: reorder (PATCH)
 
 // Comment management (require auth)
 openapi.post("/api/videos/:id/comments", CommentCreate);
@@ -466,7 +474,7 @@ app.get("/openapi.json", async (c) => {
 		// Channel Sections management
 		'/api/channels/{channelId}/sections', // POST (create)
 		'/api/channels/{channelId}/sections/{sectionId}', // PUT, DELETE
-		'/api/channels/{channelId}/sections/reorder', // POST
+		'/api/channels/{channelId}/sections/reorder', // PATCH
 		// Playlist management
 		'/api/playlists', // POST
 		'/api/playlists/{id}', // PUT, DELETE

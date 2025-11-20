@@ -13,16 +13,13 @@ interface SortableSectionItemProps {
 }
 
 const SECTION_TYPE_LABELS: Record<ChannelSectionType, string> = {
-  recentUploads: 'Recent uploads',
-  popularUploads: 'Popular uploads',
-  allPlaylists: 'All playlists',
-  multiplePlaylists: 'Featured playlists',
-  singlePlaylist: 'Playlist',
-  liveEvents: 'Live now',
-  completedEvents: 'Past live streams',
-  upcomingEvents: 'Upcoming live streams',
-  multipleChannels: 'Featured channels',
-  subscriptions: 'Subscriptions',
+  featured_videos: 'Featured videos',
+  recent_uploads: 'Recent uploads',
+  popular_uploads: 'Popular uploads',
+  single_playlist: 'Single playlist',
+  multiple_playlists: 'Featured playlists',
+  subscribed_channels: 'Subscribed channels',
+  liked_videos: 'Liked videos',
 };
 
 function getSectionTypeLabel(type: ChannelSectionType): string {
@@ -30,12 +27,20 @@ function getSectionTypeLabel(type: ChannelSectionType): string {
 }
 
 function getSectionContentSummary(section: ChannelSection): string {
-  if (section.playlists && section.playlists.length > 0) {
-    return `${section.playlists.length} playlist${section.playlists.length > 1 ? 's' : ''}`;
+  if (section.videoIds && section.videoIds.length > 0) {
+    return `${section.videoIds.length} video${section.videoIds.length > 1 ? 's' : ''}`;
   }
 
-  if (section.channels && section.channels.length > 0) {
-    return `${section.channels.length} channel${section.channels.length > 1 ? 's' : ''}`;
+  if (section.playlistIds && section.playlistIds.length > 0) {
+    return `${section.playlistIds.length} playlist${section.playlistIds.length > 1 ? 's' : ''}`;
+  }
+
+  if (section.playlistId) {
+    return '1 playlist';
+  }
+
+  if (section.channelIds && section.channelIds.length > 0) {
+    return `${section.channelIds.length} channel${section.channelIds.length > 1 ? 's' : ''}`;
   }
 
   return 'Automatic content';

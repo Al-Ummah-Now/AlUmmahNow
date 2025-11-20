@@ -19,19 +19,19 @@ export function ChannelSections({ channelId }: ChannelSectionsProps) {
 
     async function fetchSections() {
       try {
-        const result = await listChannelSections(channelId);
+        const sections = await listChannelSections(channelId);
 
-        console.log('[ChannelSections] API response:', JSON.stringify(result, null, 2));
+        console.log('[ChannelSections] API response:', JSON.stringify(sections, null, 2));
 
-        if (result.success && result.data) {
-          console.log('[ChannelSections] Loaded sections:', result.data.length);
-          setSections(result.data);
+        if (sections && sections.length >= 0) {
+          console.log('[ChannelSections] Loaded sections:', sections.length);
+          setSections(sections);
         } else {
-          console.error('[ChannelSections] Failed to load sections:', result.error);
+          console.error('[ChannelSections] Failed to load sections');
           setError('Failed to load channel sections');
         }
       } catch (err) {
-        console.error('[ChannelSections] Network error:', JSON.stringify(err, null, 2));
+        console.error('[ChannelSections] Network error:', err);
         setError('Network error loading sections');
       } finally {
         setLoading(false);

@@ -5,12 +5,15 @@ import { Playlist } from '@al-ummah/shared-types';
 import Link from 'next/link';
 import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
+import { getPlaylistById } from '@/lib/api/playlists';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface SinglePlaylistSectionProps {
   playlistId: string;
 }
 
 export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps) {
+  const { t } = useLanguage();
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -19,13 +22,12 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
 
     async function fetchPlaylist() {
       try {
-        const response = await fetch(`/api/playlists/${playlistId}`);
-        const data = await response.json();
+        const result = await getPlaylistById(playlistId);
 
-        console.log('[SinglePlaylistSection] API response:', JSON.stringify(data, null, 2));
+        console.log('[SinglePlaylistSection] API response:', JSON.stringify(result, null, 2));
 
-        if (data.success) {
-          setPlaylist(data.playlist);
+        if (result) {
+          setPlaylist(result);
         }
       } catch (err) {
         console.error('[SinglePlaylistSection] Error fetching playlist:', JSON.stringify(err, null, 2));
@@ -45,18 +47,20 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
     return <SectionSkeleton />;
   }
 
-  if (!playlist) {
-    console.log('[SinglePlaylistSection] No playlist to display');
-    return null;
-  }
-
   return (
     <section className="space-y-4">
       <SectionHeader
-        title={playlist.name}
-        viewAllHref={`/en/playlist/${playlist.id}`}
+        title={playlist?.name || t.channel.playlist}
+        viewAllHref={playlist ? `/en/playlist/${playlist.id}` : undefined}
       />
 
+      {!playlist ? (
+        <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t.channel.playlistNotFound}
+          </p>
+        </div>
+      ) : (
       <Link
         href={`/en/playlist/${playlist.id}`}
         className="block max-w-md group"
@@ -87,6 +91,7 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
           </div>
         </div>
       </Link>
+      )}
     </section>
   );
 }

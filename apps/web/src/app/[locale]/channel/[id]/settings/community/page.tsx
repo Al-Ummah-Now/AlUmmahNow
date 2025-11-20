@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CommunityPost, PostType, PostStatus } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
@@ -34,11 +34,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<PostType | 'all'>('all');
 
-  useEffect(() => {
-    loadPosts();
-  }, [activeTab, id]);
-
-  const loadPosts = async () => {
+  const loadPosts = useCallback(async () => {
     setLoading(true);
     try {
       const response = await listCommunityPosts({
@@ -56,7 +52,11 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, id]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
 
   const handleView = (post: CommunityPost) => {
     router.push(`/${locale}/channels/${id}/community?post=${post.id}`);

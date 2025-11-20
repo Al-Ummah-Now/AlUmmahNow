@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { PostComment } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import CommentForm from './CommentForm';
@@ -44,11 +44,7 @@ export default function CommentsSection({
 
   const isPostOwner = userId === postOwnerId;
 
-  useEffect(() => {
-    loadComments(true);
-  }, [postId, sortBy]);
-
-  const loadComments = async (reset = false) => {
+  const loadComments = useCallback(async (reset = false) => {
     if (reset) {
       setLoading(true);
       setComments([]);
@@ -79,7 +75,11 @@ export default function CommentsSection({
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [postId, sortBy, cursor]);
+
+  useEffect(() => {
+    loadComments(true);
+  }, [loadComments]);
 
   const handleCommentCreated = (comment: PostComment) => {
     setComments((prev) => [comment, ...prev]);

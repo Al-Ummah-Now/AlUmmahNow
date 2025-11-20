@@ -5,12 +5,15 @@ import { Playlist } from '@al-ummah/shared-types';
 import Link from 'next/link';
 import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
+import { listPlaylists } from '@/lib/api/playlists';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface AllPlaylistsSectionProps {
   channelId: string;
 }
 
 export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
+  const { t } = useLanguage();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,16 +22,17 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
 
     async function fetchPlaylists() {
       try {
-        const response = await fetch(
-          `/api/playlists?channelId=${channelId}&limit=12&isPublic=true`
-        );
-        const data = await response.json();
+        const result = await listPlaylists({
+          channelId,
+          limit: 12,
+          isPublic: true
+        });
 
-        console.log('[AllPlaylistsSection] API response:', JSON.stringify(data, null, 2));
+        console.log('[AllPlaylistsSection] API response:', JSON.stringify(result, null, 2));
 
-        if (data.success) {
-          console.log('[AllPlaylistsSection] Loaded playlists:', data.playlists?.length || 0);
-          setPlaylists(data.playlists || []);
+        if (result && result.data) {
+          console.log('[AllPlaylistsSection] Loaded playlists:', result.data.length);
+          setPlaylists(result.data);
         }
       } catch (err) {
         console.error('[AllPlaylistsSection] Error fetching playlists:', JSON.stringify(err, null, 2));
@@ -44,18 +48,20 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
     return <SectionSkeleton />;
   }
 
-  if (playlists.length === 0) {
-    console.log('[AllPlaylistsSection] No playlists to display');
-    return null;
-  }
-
   return (
     <section className="space-y-4">
       <SectionHeader
-        title="All playlists"
-        viewAllHref={`/en/channel/${channelId}/playlists`}
+        title={t.channel.allPlaylists}
+        viewAllHref={playlists.length > 0 ? `/en/channel/${channelId}/playlists` : undefined}
       />
 
+      {playlists.length === 0 ? (
+        <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t.channel.allPlaylistsDescription}
+          </p>
+        </div>
+      ) : (
       <div className="relative">
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-4 pb-2">
@@ -99,6 +105,7 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
           <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-white dark:from-gray-900 to-transparent pointer-events-none" />
         )}
       </div>
+      )}
     </section>
   );
 }

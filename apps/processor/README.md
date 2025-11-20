@@ -82,6 +82,20 @@ The worker supports processing various types of video platform messages:
 - `WatchHistoryUpdate` - Update watch progress and history
 - `WatchHistoryDelete` - Delete watch history entry
 
+### Channel Section Messages
+- `ChannelSectionCreate` - Channel section creation
+- `ChannelSectionUpdate` - Channel section updates
+- `ChannelSectionDelete` - Channel section deletion
+- `ChannelSectionReorder` - Channel section reordering
+- `ChannelSectionView` - Channel section view tracking
+
+### Channel Tab Messages
+- `ChannelTabCreate` - Channel tab creation
+- `ChannelTabUpdate` - Channel tab updates
+- `ChannelTabDelete` - Channel tab deletion
+- `ChannelTabReorder` - Channel tab reordering
+- `ChannelTabSwitch` - Channel tab switching/engagement
+
 ### Example Messages
 
 #### Video View Message
@@ -124,6 +138,41 @@ The worker supports processing various types of video platform messages:
     videoId: "video-789"
   },
   priority: "normal"
+}
+```
+
+#### Channel Section View Message
+```typescript
+{
+  id: "msg-section-001",
+  type: MessageType.ChannelSectionView,
+  timestamp: "2025-01-18T10:30:00Z",
+  payload: {
+    channelId: "channel-456",
+    sectionId: "section-789",
+    userId: "user-123",
+    sectionType: "featured_videos",
+    position: 0
+  },
+  priority: "low"
+}
+```
+
+#### Channel Tab Switch Message
+```typescript
+{
+  id: "msg-tab-001",
+  type: MessageType.ChannelTabSwitch,
+  timestamp: "2025-01-18T10:32:00Z",
+  payload: {
+    channelId: "channel-456",
+    tabId: "tab-community",
+    userId: "user-123",
+    tabType: "community",
+    previousTabId: "tab-videos",
+    sessionDuration: 180  // seconds spent on previous tab
+  },
+  priority: "low"
 }
 ```
 

@@ -7,6 +7,20 @@ export { MessageType, QueueMessage };
 // Legacy Message type alias (deprecated - use QueueMessage instead)
 export type Message<T> = QueueMessage<T>;
 
+// Helper function for channel section events
+export async function queueChannelSectionEvent(queue: any, type: MessageType, payload: any) {
+    try {
+        await queue.send({
+            id: crypto.randomUUID(),
+            type: type,
+            payload: payload,
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error("Error sending channel section event to queue:", error);
+    }
+}
+
 export default class Queue {
     async send<T>(type: MessageType, payload: T) {
         try {

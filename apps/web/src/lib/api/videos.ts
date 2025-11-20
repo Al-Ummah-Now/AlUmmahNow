@@ -23,7 +23,10 @@ const baseUrl = getApiUrl();
  * GET /api/videos
  */
 export async function listVideos(
-  params?: ListQueryParams,
+  params?: ListQueryParams & {
+    sortBy?: 'date' | 'views' | 'likes' | 'relevance';
+    sortOrder?: 'asc' | 'desc';
+  },
   headers?: ApiHeaders
 ): Promise<PaginationResponse<VideoObject> | null> {
   try {
@@ -31,6 +34,8 @@ export async function listVideos(
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.cursor) queryParams.append('cursor', params.cursor);
     if (params?.channelId) queryParams.append('channelId', params.channelId);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
 
     const response = await fetch(
       `${baseUrl}/api/videos?${queryParams.toString()}`,

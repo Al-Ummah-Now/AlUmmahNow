@@ -72,6 +72,20 @@ export enum MessageType {
   CommunityPostLiked,
   CommunityPostDeleted,
   PollVoted,
+
+  // Channel section events
+  ChannelSectionCreate,
+  ChannelSectionUpdate,
+  ChannelSectionDelete,
+  ChannelSectionReorder,
+  ChannelSectionView,
+
+  // Channel tab events
+  ChannelTabCreate,
+  ChannelTabUpdate,
+  ChannelTabDelete,
+  ChannelTabReorder,
+  ChannelTabSwitch,
 }
 
 // Generic message structure for queue messages

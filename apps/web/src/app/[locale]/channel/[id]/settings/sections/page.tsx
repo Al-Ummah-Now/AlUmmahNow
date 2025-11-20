@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   DndContext,
   closestCenter,
@@ -15,28 +16,45 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ChannelSection } from '@al-ummah/shared-types';
+import { ChannelSection, ChannelSectionCreateInput } from '@al-ummah/shared-types';
 import { SortableSectionItem } from '@/components/ChannelSections/management/SortableSectionItem';
 import { AddSectionDialog } from '@/components/ChannelSections/management/AddSectionDialog';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   listChannelSections,
   createChannelSection,
   deleteChannelSection,
   reorderChannelSections,
 } from '@/lib/api/channel-sections';
+import { logger } from '@/lib/logger-client';
+import { ArrowLeft, Eye } from 'lucide-react';
 
 const MAX_SECTIONS = 10;
 
 export default function ChannelSectionsManagement() {
   const params = useParams();
+  const router = useRouter();
   const channelId = params.id as string;
+  const locale = (params.locale as string) || 'en';
 
   const [sections, setSections] = useState<ChannelSection[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
 
   // Configure sensors for better mobile experience
   const sensors = useSensors(
@@ -54,18 +72,38 @@ export default function ChannelSectionsManagement() {
       setError(null);
 
       try {
-        const result = await listChannelSections(channelId);
+        logger.info('ChannelSectionsManagement: Fetching sections', { channelId });
+        const sections = await listChannelSections(channelId);
 
-        if (result.success && result.data) {
+        logger.info('ChannelSectionsManagement: API response received', {
+          channelId,
+          hasSections: !!sections,
+          sectionsCount: sections?.length || 0
+        });
+
+        if (sections) {
           // Sort by position
-          const sorted = result.data.sort((a, b) => a.position - b.position);
+          const sorted = sections.sort((a, b) => a.position - b.position);
+          logger.info('ChannelSectionsManagement: Sections loaded successfully', {
+            channelId,
+            count: sorted.length
+          });
           setSections(sorted);
         } else {
-          setError(result.error || 'Failed to load sections');
+          logger.warn('ChannelSectionsManagement: No sections returned', { channelId });
+          setError('Failed to load sections');
         }
       } catch (err) {
-        console.error('Error fetching sections:', err);
-        setError('Network error loading sections');
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : undefined;
+        logger.error('ChannelSectionsManagement: Error fetching sections', {
+          error: err,
+          errorMessage,
+          errorStack,
+          channelId,
+          errorType: err?.constructor?.name
+        });
+        setError(`Network error: ${errorMessage}`);
       } finally {
         setLoading(false);
       }
@@ -96,18 +134,26 @@ export default function ChannelSectionsManagement() {
     }
   }
 
+  // Open delete confirmation dialog
+  function openDeleteDialog(sectionId: string) {
+    setSectionToDelete(sectionId);
+    setDeleteDialogOpen(true);
+  }
+
   // Handle delete section
-  async function handleDelete(sectionId: string) {
-    if (!confirm('Are you sure you want to delete this section?')) {
-      return;
-    }
+  async function confirmDelete() {
+    if (!sectionToDelete) return;
+
+    setDeleteDialogOpen(false);
+    setError(null);
+    setSuccess(null);
 
     try {
-      const result = await deleteChannelSection(channelId, sectionId, 'AUTH_TOKEN');
+      const result = await deleteChannelSection(channelId, sectionToDelete);
 
-      if (result.success) {
+      if (result && result.success) {
         setSections((prev) => {
-          const filtered = prev.filter((s) => s.id !== sectionId);
+          const filtered = prev.filter((s) => s.id !== sectionToDelete);
           // Re-adjust positions
           return filtered.map((section, index) => ({
             ...section,
@@ -115,29 +161,38 @@ export default function ChannelSectionsManagement() {
           }));
         });
         setHasChanges(true);
+        setSuccess('Section deleted successfully');
+        setTimeout(() => setSuccess(null), 3000);
       } else {
-        alert(`Error deleting section: ${result.error}`);
+        setError('Error deleting section');
       }
     } catch (err) {
-      console.error('Error deleting section:', err);
-      alert('Network error deleting section');
+      logger.error('ChannelSectionsManagement: Error deleting section', { error: err, sectionId: sectionToDelete, channelId });
+      setError('Network error deleting section');
+    } finally {
+      setSectionToDelete(null);
     }
   }
 
   // Handle add section
-  async function handleAdd(data: any) {
-    try {
-      const result = await createChannelSection(channelId, data, 'AUTH_TOKEN');
+  async function handleAdd(data: ChannelSectionCreateInput) {
+    setError(null);
+    setSuccess(null);
 
-      if (result.success && result.data) {
-        setSections((prev) => [...prev, result.data!]);
+    try {
+      const section = await createChannelSection(channelId, data);
+
+      if (section) {
+        setSections((prev) => [...prev, section]);
         setHasChanges(true);
+        setSuccess('Section created successfully');
+        setTimeout(() => setSuccess(null), 3000);
       } else {
-        alert(`Error creating section: ${result.error}`);
+        setError('Error creating section');
       }
     } catch (err) {
-      console.error('Error creating section:', err);
-      alert('Network error creating section');
+      logger.error('ChannelSectionsManagement: Error creating section', { error: err, data, channelId });
+      setError('Network error creating section');
     }
   }
 
@@ -145,30 +200,27 @@ export default function ChannelSectionsManagement() {
   async function handlePublish() {
     setSaving(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      // Send reorder requests for all sections
-      for (const section of sections) {
-        const result = await reorderChannelSections(
-          channelId,
-          {
-            sectionId: section.id,
-            newPosition: section.position,
-          } as any, // Type will be fixed once API is implemented
-          'AUTH_TOKEN'
-        );
+      // Send single reorder request with all section IDs in order
+      const sectionIds = sections.map(s => s.id);
 
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to reorder sections');
-        }
+      const result = await reorderChannelSections(
+        channelId,
+        { sectionIds }
+      );
+
+      if (!result) {
+        throw new Error('Failed to reorder sections');
       }
 
       setHasChanges(false);
-      alert('Sections published successfully!');
+      setSuccess('Sections published successfully!');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      console.error('Error publishing sections:', err);
+      logger.error('ChannelSectionsManagement: Error publishing sections', { error: err, channelId, sections });
       setError(err instanceof Error ? err.message : 'Failed to publish sections');
-      alert('Error publishing sections. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -205,6 +257,59 @@ export default function ChannelSectionsManagement() {
       space-y-4
       md:space-y-6
     ">
+      {/* Navigation Bar */}
+      <div className="
+        flex
+        items-center
+        justify-between
+        pb-4
+        border-b
+        border-gray-200
+        dark:border-gray-700
+      ">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.back()}
+          className="
+            flex
+            items-center
+            gap-2
+            text-gray-600
+            dark:text-gray-400
+            hover:text-gray-900
+            dark:hover:text-gray-100
+          "
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="hidden sm:inline">Back</span>
+        </Button>
+
+        <Link
+          href={`/${locale}/channel/${channelId}`}
+          className="
+            flex
+            items-center
+            gap-2
+            px-3
+            py-2
+            text-sm
+            font-medium
+            text-blue-600
+            dark:text-blue-400
+            hover:text-blue-700
+            dark:hover:text-blue-300
+            hover:bg-blue-50
+            dark:hover:bg-blue-900/20
+            rounded-lg
+            transition-colors
+          "
+        >
+          <Eye className="w-4 h-4" />
+          <span>View Channel</span>
+        </Link>
+      </div>
+
       {/* Header */}
       <div className="
         flex
@@ -250,6 +355,24 @@ export default function ChannelSectionsManagement() {
           {saving ? 'Publishing...' : 'Publish'}
         </Button>
       </div>
+
+      {/* Success message */}
+      {success && (
+        <div className="
+          p-3
+          bg-green-50
+          dark:bg-green-900/20
+          border
+          border-green-200
+          dark:border-green-800
+          rounded-lg
+          text-sm
+          text-green-800
+          dark:text-green-300
+        ">
+          {success}
+        </div>
+      )}
 
       {/* Error message */}
       {error && (
@@ -322,7 +445,7 @@ export default function ChannelSectionsManagement() {
                 <SortableSectionItem
                   key={section.id}
                   section={section}
-                  onDelete={() => handleDelete(section.id)}
+                  onDelete={() => openDeleteDialog(section.id)}
                 />
               ))
             )}
@@ -358,6 +481,27 @@ export default function ChannelSectionsManagement() {
           Maximum number of sections reached. Delete a section to add a new one.
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Section</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this section? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

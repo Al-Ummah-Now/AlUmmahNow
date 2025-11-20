@@ -51,7 +51,7 @@ const ReportDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [auth, reportId, t]);
+  }, [auth, reportId, t.errors.genericError]); // t.errors.genericError is stable (memoized by useI18n)
 
   useEffect(() => {
     if (!isAuthorized) {
@@ -61,7 +61,7 @@ const ReportDetailPage: React.FC = () => {
     }
 
     loadReport();
-  }, [isAuthorized, reportId, loadReport]);
+  }, [isAuthorized, loadReport, t.errors.unauthorized]); // t.errors.unauthorized is stable (memoized by useI18n)
 
   const handleModerationAction = async () => {
     if (!report || !actionForm.actionType) return;

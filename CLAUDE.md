@@ -91,6 +91,199 @@ function fetchData() {
 
 **Enforcement**: Code reviews will reject PRs containing TODO comments.
 
+### Logging Standards
+
+**CRITICAL**: Use ONLY the centralized logger libraries. NEVER use `console.log`, `console.error`, or other console methods.
+
+**Rationale**: Centralized logging provides structured log aggregation, filtering, and viewing through the log service. Console logging bypasses this system and creates maintenance issues.
+
+#### Server-Side Logging (API, Processor, WebSocket)
+
+Use the server logger library for all backend applications:
+
+```typescript
+import { logger } from '@/lib/logger'; // or appropriate path
+
+// Structured logging with context
+logger.info('Video created', { videoId, userId, channelId });
+logger.error('Failed to process queue message', { error, messageId });
+logger.warn('Rate limit approaching', { userId, requestCount });
+logger.debug('Cache hit', { key, ttl });
+```
+
+#### Client-Side Logging (Web App)
+
+Use the client logger library for all frontend code:
+
+```typescript
+import { logger } from '@/lib/logger-client'; // or appropriate path
+
+// Client-side structured logging
+logger.info('Page viewed', { route, userId });
+logger.error('API request failed', { endpoint, status, error });
+logger.warn('Slow network detected', { latency });
+```
+
+#### Viewing Logs
+
+**All logs are accessible at:** http://localhost:3089/
+
+- Real-time log streaming
+- Filter by level (info, warn, error, debug)
+- Search by context fields
+- Export logs for analysis
+
+#### Enforcement
+
+❌ **WRONG - Never do this:**
+```typescript
+console.log('User logged in');
+console.error('Something went wrong', error);
+console.warn('Deprecated feature used');
+```
+
+✅ **CORRECT - Always do this:**
+```typescript
+logger.info('User logged in', { userId, timestamp });
+logger.error('Authentication failed', { error, userId, attempt });
+logger.warn('Deprecated API endpoint accessed', { endpoint, userId });
+```
+
+### Internationalization (i18n) Standards
+
+**CRITICAL**: Always use i18n for all user-facing text. NEVER hardcode strings.
+
+**Rationale**: The platform supports bilingual content (English/Arabic) with RTL support. All text must be translatable.
+
+#### Server-Side i18n (API Responses)
+
+Use i18n for API error messages and user-facing responses:
+
+```typescript
+import { t } from '@/lib/i18n';
+
+// Error messages
+return c.json({
+  success: false,
+  error: t('errors.video_not_found'),
+  details: t('errors.video_not_found_description', { videoId })
+});
+
+// Success messages
+return c.json({
+  success: true,
+  message: t('success.video_created')
+});
+```
+
+#### Client-Side i18n (React Components)
+
+**MANDATORY**: Use the `useLanguage()` hook in ALL client pages and components:
+
+```typescript
+import { useLanguage } from '@/hooks/useLanguage';
+
+export default function VideoPage() {
+  const { t, locale, isRTL } = useLanguage();
+
+  return (
+    <div dir={isRTL ? 'rtl' : 'ltr'}>
+      <h1>{t('video.title')}</h1>
+      <p>{t('video.description')}</p>
+      <button>{t('common.save')}</button>
+    </div>
+  );
+}
+```
+
+#### Translation Keys
+
+Organize translation keys by feature:
+
+```typescript
+// en/common.json
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "video": {
+    "title": "Video Title",
+    "description": "Description",
+    "upload": "Upload Video"
+  },
+  "errors": {
+    "video_not_found": "Video not found",
+    "unauthorized": "You are not authorized"
+  }
+}
+
+// ar/common.json
+{
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف"
+  },
+  "video": {
+    "title": "عنوان الفيديو",
+    "description": "الوصف",
+    "upload": "رفع فيديو"
+  },
+  "errors": {
+    "video_not_found": "الفيديو غير موجود",
+    "unauthorized": "غير مصرح لك"
+  }
+}
+```
+
+#### Enforcement
+
+❌ **WRONG - Never do this:**
+```typescript
+// Hardcoded strings
+<h1>Featured Videos</h1>
+<button>Save</button>
+return c.json({ error: 'Video not found' });
+```
+
+✅ **CORRECT - Always do this:**
+```typescript
+// Using i18n
+const { t } = useLanguage();
+<h1>{t('video.featured_videos')}</h1>
+<button>{t('common.save')}</button>
+return c.json({ error: t('errors.video_not_found') });
+```
+
+#### Special Cases
+
+**Dynamic content with placeholders:**
+```typescript
+// English: "Video {title} was created by {author}"
+// Arabic: "تم إنشاء الفيديو {title} بواسطة {author}"
+t('video.created_by', { title: video.title, author: video.author })
+```
+
+**RTL-aware styling:**
+```typescript
+const { isRTL } = useLanguage();
+
+// Adjust layout for RTL
+<div className={isRTL ? 'flex-row-reverse' : 'flex-row'}>
+  {/* Content */}
+</div>
+```
+
+**Date and number formatting:**
+```typescript
+import { formatDate, formatNumber } from '@/lib/i18n-helpers';
+
+const formattedDate = formatDate(date, locale); // Locale-aware formatting
+const formattedCount = formatNumber(count, locale); // e.g., "١٢٣" in Arabic
+```
+
 ## Monorepo Structure
 
 ```

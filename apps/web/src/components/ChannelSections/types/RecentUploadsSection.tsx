@@ -4,13 +4,16 @@ import { useEffect, useState } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import VideoCard from '../../videoCard';
 import { SectionHeader } from '../SectionHeader';
+import { listVideos } from '@/lib/api/videos';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface RecentUploadsSectionProps {
   channelId: string;
   title?: string;
 }
 
-export function RecentUploadsSection({ channelId, title }: RecentUploadsSectionProps) {
+export function RecentUploadsSection({ channelId }: RecentUploadsSectionProps) {
+  const { t } = useLanguage();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,16 +22,18 @@ export function RecentUploadsSection({ channelId, title }: RecentUploadsSectionP
 
     async function fetchVideos() {
       try {
-        const response = await fetch(
-          `/api/videos?channelId=${channelId}&limit=12&sortBy=dateCreated&sortOrder=desc`
-        );
-        const data = await response.json();
+        const result = await listVideos({
+          channelId,
+          limit: 12,
+          sortBy: 'date',
+          sortOrder: 'desc'
+        });
 
-        console.log('[RecentUploadsSection] API response:', JSON.stringify(data, null, 2));
+        console.log('[RecentUploadsSection] API response:', JSON.stringify(result, null, 2));
 
-        if (data.success) {
-          console.log('[RecentUploadsSection] Loaded videos:', data.videos?.length || 0);
-          setVideos(data.videos || []);
+        if (result && result.data) {
+          console.log('[RecentUploadsSection] Loaded videos:', result.data.length);
+          setVideos(result.data);
         }
       } catch (err) {
         console.error('[RecentUploadsSection] Error fetching videos:', JSON.stringify(err, null, 2));
@@ -44,18 +49,20 @@ export function RecentUploadsSection({ channelId, title }: RecentUploadsSectionP
     return <SectionSkeleton />;
   }
 
-  if (videos.length === 0) {
-    console.log('[RecentUploadsSection] No videos to display');
-    return null;
-  }
-
   return (
     <section className="space-y-4">
       <SectionHeader
-        title={title || 'Recent uploads'}
-        viewAllHref={`/en/channel/${channelId}`}
+        title={t.channel.recentUploads}
+        viewAllHref={videos.length > 0 ? `/en/channel/${channelId}` : undefined}
       />
 
+      {videos.length === 0 ? (
+        <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t.channel.recentUploadsDescription}
+          </p>
+        </div>
+      ) : (
       <div className="relative">
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-4 pb-2">
@@ -71,6 +78,7 @@ export function RecentUploadsSection({ channelId, title }: RecentUploadsSectionP
           <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-white dark:from-gray-900 to-transparent pointer-events-none" />
         )}
       </div>
+      )}
     </section>
   );
 }

@@ -93,7 +93,7 @@ export function UnifiedNavigation() {
               resolve();
             }).catch(() => resolve()); // Silently fail for individual accounts
           });
-        } catch (err) {
+        } catch (_err) {
           console.error(`[UnifiedNavigation] Failed to load profile for ${account.userId}`);
         }
       }

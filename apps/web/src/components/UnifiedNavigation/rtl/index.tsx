@@ -86,7 +86,7 @@ export function UnifiedNavigationRTL() {
               resolve();
             }).catch(() => resolve()); // Silently fail for individual profiles
           });
-        } catch (err) {
+        } catch (_err) {
           console.error(`[UnifiedNavigation RTL] Failed to load profile for ${account.userId}`);
         }
       }

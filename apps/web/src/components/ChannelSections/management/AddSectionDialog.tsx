@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChannelSectionType } from '@al-ummah/shared-types';
+import { ChannelSectionType, ChannelSectionCreateInput } from '@al-ummah/shared-types';
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,7 @@ import { SectionForm } from './SectionForm';
 
 interface AddSectionDialogProps {
   channelId: string;
-  onAdd: (section: any) => void;
+  onAdd: (section: ChannelSectionCreateInput) => void;
   disabled?: boolean;
 }
 
@@ -27,54 +27,39 @@ interface SectionTypeOption {
 
 const SECTION_TYPES: SectionTypeOption[] = [
   {
-    type: 'recentUploads',
+    type: 'featured_videos',
+    label: 'Featured videos',
+    description: 'Specific videos you choose',
+  },
+  {
+    type: 'recent_uploads',
     label: 'Recent uploads',
     description: 'Your latest videos',
   },
   {
-    type: 'popularUploads',
+    type: 'popular_uploads',
     label: 'Popular uploads',
     description: 'Your most-viewed videos',
   },
   {
-    type: 'allPlaylists',
-    label: 'All playlists',
-    description: 'All your public playlists',
-  },
-  {
-    type: 'multiplePlaylists',
-    label: 'Featured playlists',
-    description: 'Specific playlists you choose',
-  },
-  {
-    type: 'singlePlaylist',
+    type: 'single_playlist',
     label: 'Single playlist',
     description: 'One featured playlist',
   },
   {
-    type: 'liveEvents',
-    label: 'Live now',
-    description: 'Current live streams',
+    type: 'multiple_playlists',
+    label: 'Featured playlists',
+    description: 'Specific playlists you choose',
   },
   {
-    type: 'completedEvents',
-    label: 'Past live streams',
-    description: 'Previous broadcasts',
-  },
-  {
-    type: 'upcomingEvents',
-    label: 'Upcoming',
-    description: 'Scheduled live streams',
-  },
-  {
-    type: 'multipleChannels',
-    label: 'Featured channels',
-    description: 'Channels you recommend',
-  },
-  {
-    type: 'subscriptions',
-    label: 'Subscriptions',
+    type: 'subscribed_channels',
+    label: 'Subscribed channels',
     description: 'Channels you subscribe to',
+  },
+  {
+    type: 'liked_videos',
+    label: 'Liked videos',
+    description: 'Videos you liked',
   },
 ];
 
@@ -97,13 +82,13 @@ export function AddSectionDialog({ channelId, onAdd, disabled }: AddSectionDialo
     setIsCreating(false);
   };
 
-  const handleFormSubmit = async (data: any) => {
+  const handleFormSubmit = async (data: ChannelSectionCreateInput) => {
     setIsCreating(true);
     try {
       await onAdd(data);
       handleClose();
-    } catch (error) {
-      console.error('Error creating section:', error);
+    } catch (_error) {
+      // Error already logged by parent component
     } finally {
       setIsCreating(false);
     }

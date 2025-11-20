@@ -19,13 +19,17 @@ const baseUrl = getApiUrl();
  * GET /api/playlists
  */
 export async function listPlaylists(
-  params?: ListQueryParams,
+  params?: ListQueryParams & {
+    isPublic?: boolean;
+  },
   headers?: ApiHeaders
 ): Promise<PaginationResponse<Playlist> | null> {
   try {
     const queryParams = new URLSearchParams();
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.cursor) queryParams.append('cursor', params.cursor);
+    if (params?.channelId) queryParams.append('channelId', params.channelId);
+    if (params?.isPublic !== undefined) queryParams.append('isPublic', String(params.isPublic));
 
     const response = await fetch(
       `${baseUrl}/api/playlists?${queryParams.toString()}`,

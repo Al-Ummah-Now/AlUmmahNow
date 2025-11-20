@@ -23,11 +23,11 @@ export function ChannelSections({ channelId }: ChannelSectionsProps) {
 
         console.log('[ChannelSections RTL] API response:', JSON.stringify(result, null, 2));
 
-        if (result.success && result.data) {
-          console.log('[ChannelSections RTL] Loaded sections:', result.data.length);
-          setSections(result.data);
+        if (result && result.sections) {
+          console.log('[ChannelSections RTL] Loaded sections:', result.sections.length);
+          setSections(result.sections);
         } else {
-          console.error('[ChannelSections RTL] Failed to load sections:', result.error);
+          console.error('[ChannelSections RTL] Failed to load sections');
           setError('Failed to load channel sections');
         }
       } catch (err) {

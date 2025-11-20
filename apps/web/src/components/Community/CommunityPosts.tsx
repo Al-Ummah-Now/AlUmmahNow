@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CommunityPost } from '@al-ummah/shared-types';
 import { listCommunityPosts } from '@/lib/api/community-posts';
 import PostCard from './PostCard';
@@ -20,11 +20,7 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    loadPosts(1);
-  }, [channelId]);
-
-  const loadPosts = async (pageNumber: number) => {
+  const loadPosts = useCallback(async (pageNumber: number) => {
     try {
       if (pageNumber === 1) {
         setLoading(true);
@@ -56,7 +52,11 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [channelId, isRTL]);
+
+  useEffect(() => {
+    loadPosts(1);
+  }, [loadPosts]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {

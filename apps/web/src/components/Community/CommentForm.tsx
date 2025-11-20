@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { createPostComment } from '@/lib/api/post-comments';
+import { PostComment } from '@al-ummah/shared-types';
 
 const MAX_COMMENT_LENGTH = 10000;
 const SHOW_COUNTER_THRESHOLD = 500;
@@ -16,7 +17,7 @@ interface CommentFormProps {
   locale?: string;
   channelId?: string;
   userId?: string;
-  onCommentCreated?: (comment: any) => void;
+  onCommentCreated?: (comment: PostComment) => void;
   onCancel?: () => void;
   autoFocus?: boolean;
 }

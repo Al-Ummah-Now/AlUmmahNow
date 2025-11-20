@@ -1,22 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { ChannelSectionType, ChannelSectionCreateRequest } from '@al-ummah/shared-types';
+import { ChannelSectionType, ChannelSectionCreateInput } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 interface SectionFormProps {
   channelId: string;
   sectionType: ChannelSectionType;
-  onSubmit: (data: ChannelSectionCreateRequest) => void;
+  onSubmit: (data: ChannelSectionCreateInput) => void;
   onCancel: () => void;
   isLoading?: boolean;
-  initialData?: Partial<ChannelSectionCreateRequest>;
+  initialData?: Partial<ChannelSectionCreateInput>;
 }
 
-const TITLE_REQUIRED_TYPES: ChannelSectionType[] = ['multiplePlaylists', 'multipleChannels'];
-const PLAYLISTS_REQUIRED_TYPES: ChannelSectionType[] = ['singlePlaylist', 'multiplePlaylists'];
-const CHANNELS_REQUIRED_TYPES: ChannelSectionType[] = ['multipleChannels'];
+const TITLE_REQUIRED_TYPES: ChannelSectionType[] = ['multiple_playlists'];
+const PLAYLISTS_REQUIRED_TYPES: ChannelSectionType[] = ['single_playlist', 'multiple_playlists'];
+const VIDEO_IDS_REQUIRED_TYPES: ChannelSectionType[] = ['featured_videos'];
 
 export function SectionForm({
   sectionType,
@@ -27,16 +27,16 @@ export function SectionForm({
 }: SectionFormProps) {
   const [title, setTitle] = useState(initialData?.title || '');
   const [playlistIds, setPlaylistIds] = useState(
-    initialData?.playlists?.join(', ') || ''
+    initialData?.playlistIds?.join(', ') || initialData?.playlistId || ''
   );
-  const [channelIds, setChannelIds] = useState(
-    initialData?.channels?.join(', ') || ''
+  const [videoIds, setVideoIds] = useState(
+    initialData?.videoIds?.join(', ') || ''
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const needsTitle = TITLE_REQUIRED_TYPES.includes(sectionType);
   const needsPlaylists = PLAYLISTS_REQUIRED_TYPES.includes(sectionType);
-  const needsChannels = CHANNELS_REQUIRED_TYPES.includes(sectionType);
+  const needsVideoIds = VIDEO_IDS_REQUIRED_TYPES.includes(sectionType);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -53,16 +53,16 @@ export function SectionForm({
     // Playlist validation
     if (needsPlaylists && !playlistIds.trim()) {
       newErrors.playlists = 'At least one playlist is required';
-    } else if (sectionType === 'singlePlaylist') {
+    } else if (sectionType === 'single_playlist') {
       const ids = playlistIds.split(',').map((id) => id.trim()).filter(Boolean);
       if (ids.length !== 1) {
         newErrors.playlists = 'Single playlist section requires exactly one playlist ID';
       }
     }
 
-    // Channel validation
-    if (needsChannels && !channelIds.trim()) {
-      newErrors.channels = 'At least one channel is required';
+    // Video IDs validation
+    if (needsVideoIds && !videoIds.trim()) {
+      newErrors.videoIds = 'At least one video ID is required';
     }
 
     setErrors(newErrors);
@@ -76,23 +76,24 @@ export function SectionForm({
       return;
     }
 
-    const data: ChannelSectionCreateRequest = {
+    const data: ChannelSectionCreateInput = {
       type: sectionType,
+      title: title.trim() || `${sectionType} section`,
     };
 
-    if (needsTitle || title.trim()) {
-      data.title = title.trim();
-    }
-
     if (needsPlaylists && playlistIds.trim()) {
-      data.playlists = playlistIds
-        .split(',')
-        .map((id) => id.trim())
-        .filter(Boolean);
+      if (sectionType === 'single_playlist') {
+        data.playlistId = playlistIds.trim();
+      } else {
+        data.playlistIds = playlistIds
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean);
+      }
     }
 
-    if (needsChannels && channelIds.trim()) {
-      data.channels = channelIds
+    if (needsVideoIds && videoIds.trim()) {
+      data.videoIds = videoIds
         .split(',')
         .map((id) => id.trim())
         .filter(Boolean);
@@ -103,8 +104,8 @@ export function SectionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Title input (for multiplePlaylists and multipleChannels) */}
-      {(needsTitle || sectionType === 'singlePlaylist') && (
+      {/* Title input (for multiple_playlists and featured_videos) */}
+      {(needsTitle || sectionType === 'single_playlist' || sectionType === 'featured_videos') && (
         <div>
           <label
             htmlFor="section-title"
@@ -163,7 +164,7 @@ export function SectionForm({
             value={playlistIds}
             onChange={(e) => setPlaylistIds(e.target.value)}
             placeholder={
-              sectionType === 'singlePlaylist'
+              sectionType === 'single_playlist'
                 ? 'Enter one playlist ID'
                 : 'Enter playlist IDs separated by commas'
             }
@@ -177,18 +178,18 @@ export function SectionForm({
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {sectionType === 'singlePlaylist'
+            {sectionType === 'single_playlist'
               ? 'Enter exactly one playlist ID'
               : 'Separate multiple playlist IDs with commas'}
           </p>
         </div>
       )}
 
-      {/* Channel picker (for multipleChannels) */}
-      {needsChannels && (
+      {/* Video IDs picker (for featured_videos) */}
+      {needsVideoIds && (
         <div>
           <label
-            htmlFor="channel-ids"
+            htmlFor="video-ids"
             className="
               block
               text-sm
@@ -198,31 +199,31 @@ export function SectionForm({
               mb-2
             "
           >
-            Channel IDs <span className="text-red-500">*</span>
+            Video IDs <span className="text-red-500">*</span>
           </label>
           <Input
-            id="channel-ids"
+            id="video-ids"
             type="text"
-            value={channelIds}
-            onChange={(e) => setChannelIds(e.target.value)}
-            placeholder="Enter channel IDs separated by commas"
-            className={errors.channels ? 'border-red-500' : ''}
-            aria-invalid={!!errors.channels}
-            aria-describedby={errors.channels ? 'channels-error' : undefined}
+            value={videoIds}
+            onChange={(e) => setVideoIds(e.target.value)}
+            placeholder="Enter video IDs separated by commas"
+            className={errors.videoIds ? 'border-red-500' : ''}
+            aria-invalid={!!errors.videoIds}
+            aria-describedby={errors.videoIds ? 'videoIds-error' : undefined}
           />
-          {errors.channels && (
-            <p id="channels-error" className="text-sm text-red-500 mt-1">
-              {errors.channels}
+          {errors.videoIds && (
+            <p id="videoIds-error" className="text-sm text-red-500 mt-1">
+              {errors.videoIds}
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Separate multiple channel IDs with commas
+            Separate multiple video IDs with commas (max 20)
           </p>
         </div>
       )}
 
       {/* Info message for automatic sections */}
-      {!needsTitle && !needsPlaylists && !needsChannels && (
+      {!needsTitle && !needsPlaylists && !needsVideoIds && (
         <div className="
           p-3
           bg-blue-50

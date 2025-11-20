@@ -2,52 +2,56 @@
 
 import {
   ChannelSection,
-  ChannelSectionCreateRequest,
-  ChannelSectionUpdateRequest,
-  ChannelSectionReorderRequest,
+  ChannelSectionCreateInput,
+  ChannelSectionUpdateInput,
+  ChannelSectionReorderInput,
 } from '@al-ummah/shared-types';
-import { getApiUrl } from '@/lib/runtime-config';
-
-const baseUrl = getApiUrl();
-
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+import { apiRequestServer, buildApiUrl } from './api-client';
+import { getServerAuthContext } from './server-auth';
+import { logger } from '@/lib/logger';
 
 /**
  * List all sections for a channel
  * GET /api/channels/{channelId}/sections
  */
 export async function listChannelSections(
-  channelId: string,
-  authToken?: string
-): Promise<ApiResponse<ChannelSection[]>> {
+  channelId: string
+): Promise<ChannelSection[] | null> {
   try {
-    const response = await fetch(`${baseUrl}/api/channels/${channelId}/sections`, {
+    logger.info('listChannelSections: Starting request', { channelId });
+
+    const response = await apiRequestServer<{
+      success: boolean;
+      result: {
+        sections: ChannelSection[];
+        pagination: { cursor: string; hasMore: boolean; total: number };
+      }
+    }>({
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authToken && { Authorization: `Bearer ${authToken}` }),
-      },
+      url: buildApiUrl(`/api/channels/${channelId}/sections`),
+      functionName: 'listChannelSections'
+    }, getServerAuthContext, false);
+
+    logger.info('listChannelSections: Response received', {
+      channelId,
+      hasResponse: !!response,
+      responseType: typeof response,
+      success: response?.success,
+      hasResult: !!response?.result,
+      hasSections: !!(response?.result?.sections),
+      sectionsCount: response?.result?.sections?.length || 0
     });
 
-    if (!response.ok) {
-      throw new Error(`Error fetching sections: ${response.statusText}`);
+    if (!response || !response.success || !response.result) {
+      logger.warn('listChannelSections: Invalid response', { channelId, response });
+      return null;
     }
 
-    const data = await response.json();
-    return {
-      success: true,
-      data: data.sections || [],
-    };
+    // Return just the sections array for simpler serialization
+    return response.result.sections;
   } catch (error) {
-    console.error('listChannelSections error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    logger.error('listChannelSections: Exception', { channelId, error });
+    throw error; // Re-throw so the caller can handle it
   }
 }
 
@@ -57,37 +61,22 @@ export async function listChannelSections(
  */
 export async function getChannelSection(
   channelId: string,
-  sectionId: string,
-  authToken?: string
-): Promise<ApiResponse<ChannelSection>> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/channels/${channelId}/sections/${sectionId}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken && { Authorization: `Bearer ${authToken}` }),
-        },
-      }
-    );
+  sectionId: string
+): Promise<{ section: ChannelSection } | null> {
+  const response = await apiRequestServer<{
+    success: boolean;
+    result: { section: ChannelSection };
+  }>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/sections/${sectionId}`),
+    functionName: 'getChannelSection'
+  }, getServerAuthContext, false);
 
-    if (!response.ok) {
-      throw new Error(`Error fetching section: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return {
-      success: true,
-      data: data.section,
-    };
-  } catch (error) {
-    console.error('getChannelSection error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+  if (!response || !response.success) {
+    return null;
   }
+
+  return { section: response.result.section };
 }
 
 /**
@@ -96,36 +85,23 @@ export async function getChannelSection(
  */
 export async function createChannelSection(
   channelId: string,
-  data: ChannelSectionCreateRequest,
-  authToken: string
-): Promise<ApiResponse<ChannelSection>> {
-  try {
-    const response = await fetch(`${baseUrl}/api/channels/${channelId}/sections`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify(data),
-    });
+  data: ChannelSectionCreateInput
+): Promise<ChannelSection | null> {
+  const response = await apiRequestServer<{
+    success: boolean;
+    result: { section: ChannelSection };
+  }>({
+    method: 'POST',
+    url: buildApiUrl(`/api/channels/${channelId}/sections`),
+    body: data,
+    functionName: 'createChannelSection'
+  }, getServerAuthContext, true);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Error creating section: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    return {
-      success: true,
-      data: result.section,
-    };
-  } catch (error) {
-    console.error('createChannelSection error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+  if (!response || !response.success || !response.result) {
+    return null;
   }
+
+  return response.result.section;
 }
 
 /**
@@ -135,39 +111,23 @@ export async function createChannelSection(
 export async function updateChannelSection(
   channelId: string,
   sectionId: string,
-  data: ChannelSectionUpdateRequest,
-  authToken: string
-): Promise<ApiResponse<ChannelSection>> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/channels/${channelId}/sections/${sectionId}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(data),
-      }
-    );
+  data: ChannelSectionUpdateInput
+): Promise<{ section: ChannelSection } | null> {
+  const response = await apiRequestServer<{
+    success: boolean;
+    result: { section: ChannelSection };
+  }>({
+    method: 'PUT',
+    url: buildApiUrl(`/api/channels/${channelId}/sections/${sectionId}`),
+    body: data,
+    functionName: 'updateChannelSection'
+  }, getServerAuthContext, true);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Error updating section: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    return {
-      success: true,
-      data: result.section,
-    };
-  } catch (error) {
-    console.error('updateChannelSection error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+  if (!response || !response.success) {
+    return null;
   }
+
+  return { section: response.result.section };
 }
 
 /**
@@ -176,75 +136,45 @@ export async function updateChannelSection(
  */
 export async function deleteChannelSection(
   channelId: string,
-  sectionId: string,
-  authToken: string
-): Promise<ApiResponse<void>> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/channels/${channelId}/sections/${sectionId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-      }
-    );
+  sectionId: string
+): Promise<{ success: boolean } | null> {
+  const response = await apiRequestServer<{
+    success: boolean;
+    result?: { message: string };
+  }>({
+    method: 'DELETE',
+    url: buildApiUrl(`/api/channels/${channelId}/sections/${sectionId}`),
+    functionName: 'deleteChannelSection'
+  }, getServerAuthContext, true);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Error deleting section: ${response.statusText}`);
-    }
-
-    return {
-      success: true,
-    };
-  } catch (error) {
-    console.error('deleteChannelSection error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+  if (!response || !response.success) {
+    return null;
   }
+
+  return { success: true };
 }
 
 /**
  * Reorder sections
- * POST /api/channels/{channelId}/sections/reorder
+ * PATCH /api/channels/{channelId}/sections/reorder
  */
 export async function reorderChannelSections(
   channelId: string,
-  data: ChannelSectionReorderRequest,
-  authToken: string
-): Promise<ApiResponse<ChannelSection[]>> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/channels/${channelId}/sections/reorder`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(data),
-      }
-    );
+  data: ChannelSectionReorderInput
+): Promise<ChannelSection[] | null> {
+  const response = await apiRequestServer<{
+    success: boolean;
+    result: { sections: ChannelSection[] };
+  }>({
+    method: 'PATCH',
+    url: buildApiUrl(`/api/channels/${channelId}/sections/reorder`),
+    body: data,
+    functionName: 'reorderChannelSections'
+  }, getServerAuthContext, true);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Error reordering sections: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    return {
-      success: true,
-      data: result.sections,
-    };
-  } catch (error) {
-    console.error('reorderChannelSections error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+  if (!response || !response.success || !response.result) {
+    return null;
   }
+
+  return response.result.sections;
 }

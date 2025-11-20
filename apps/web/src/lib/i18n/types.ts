@@ -173,11 +173,16 @@ export interface AppTranslations {
     popularUploadsDescription: string;
     allPlaylists: string;
     allPlaylistsDescription: string;
+    featuredVideos: string;
+    featuredVideosDescription: string;
+    likedVideos: string;
     latestLive: string;
     featuredPlaylists: string;
     featuredPlaylistsDescription: string;
     singlePlaylist: string;
     singlePlaylistDescription: string;
+    playlistNotFound: string;
+    noPlaylistsFound: string;
     liveNow: string;
     liveNowDescription: string;
     pastLiveStreams: string;
@@ -209,6 +214,11 @@ export interface AppTranslations {
     playlist: string;
     aboutChannel: string;
     forYou: string;
+    additionalSettings: string;
+    manageSections: string;
+    customizeChannelLayout: string;
+    communitySettings: string;
+    manageCommunityPosts: string;
   };
 
   /**

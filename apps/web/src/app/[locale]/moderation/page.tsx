@@ -59,7 +59,7 @@ const ModerationDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [auth, filter, t]);
+  }, [auth, filter, t.errors.genericError]); // t.errors.genericError is stable (memoized by useI18n)
 
   useEffect(() => {
     if (!isAuthorized) {
@@ -69,7 +69,7 @@ const ModerationDashboard: React.FC = () => {
     }
 
     loadDashboardData();
-  }, [isAuthorized, filter, loadDashboardData]);
+  }, [isAuthorized, loadDashboardData, t.errors.unauthorized]); // t.errors.unauthorized is stable (memoized by useI18n)
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {

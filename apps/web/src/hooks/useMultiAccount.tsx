@@ -147,7 +147,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
       logger.info('[MultiAccountProvider] Loading complete, loading state set to false');
     }
-  }, [router]);
+  }, []); // router is stable from useRouter() and doesn't need to be a dependency
 
   // Load data on mount
   useEffect(() => {

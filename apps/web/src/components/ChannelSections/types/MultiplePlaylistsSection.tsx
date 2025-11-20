@@ -5,6 +5,7 @@ import { Playlist } from '@al-ummah/shared-types';
 import Link from 'next/link';
 import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface MultiplePlaylistsSectionProps {
   title: string;
@@ -12,6 +13,7 @@ interface MultiplePlaylistsSectionProps {
 }
 
 export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylistsSectionProps) {
+  const { t } = useLanguage();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,15 +51,17 @@ export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylis
     return <SectionSkeleton />;
   }
 
-  if (playlists.length === 0) {
-    console.log('[MultiplePlaylistsSection] No playlists to display');
-    return null;
-  }
-
   return (
     <section className="space-y-4">
       <SectionHeader title={title} />
 
+      {playlists.length === 0 ? (
+        <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t.channel.noPlaylistsFound}
+          </p>
+        </div>
+      ) : (
       <div className="relative">
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex gap-4 pb-2">
@@ -101,6 +105,7 @@ export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylis
           <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-white dark:from-gray-900 to-transparent pointer-events-none" />
         )}
       </div>
+      )}
     </section>
   );
 }

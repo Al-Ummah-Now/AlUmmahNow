@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PostType, PostVisibility } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
@@ -18,15 +18,15 @@ import { createCommunityPost } from '@/lib/api/community-posts';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
 interface NewPostPageProps {
-  params: {
+  params: Promise<{
     locale: string;
     id: string;
-  };
+  }>;
 }
 
 export default function NewPostPage({ params }: NewPostPageProps) {
   const router = useRouter();
-  const { locale, id } = params;
+  const { locale, id } = use(params);
   const isRTL = locale === 'ar';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -108,7 +108,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
     setError('');
 
     try {
-      const baseData: any = {
+      const baseData: Record<string, unknown> = {
         type: selectedType!,
         visibility,
         commentsEnabled

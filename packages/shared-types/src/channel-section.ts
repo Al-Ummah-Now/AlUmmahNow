@@ -1,84 +1,163 @@
-import { Timestamps } from './common';
-
 /**
- * Channel Section - Matches YouTube Data API v3 structure
+ * Channel Section Types
+ *
+ * Types for channel sections feature - organizing channel content
+ * into sections like featured videos, playlists, recent uploads, etc.
  */
-export interface ChannelSection extends Timestamps {
+
+// ============================================================================
+// Business Model - stored in R2
+// ============================================================================
+
+export interface ChannelSection {
   id: string;
   channelId: string;
+  userId: string;
 
-  // Snippet (basic metadata)
+  // Section configuration
   type: ChannelSectionType;
-  title?: string; // Required only for multiplePlaylists, multipleChannels
-  position: number; // Zero-based ordering
 
-  // Content Details
-  playlists?: string[]; // Playlist IDs (for singlePlaylist, multiplePlaylists)
-  channels?: string[]; // Channel IDs (for multipleChannels)
+  // Localized content
+  title: string;
+  titleLocalized?: Record<string, string>;
+
+  // Display settings
+  position: number; // Zero-based ordering
+  style: DisplayStyle;
+
+  // Content references (populated based on type)
+  videoIds?: string[];
+  playlistId?: string;
+  playlistIds?: string[];
+  channelIds?: string[];
+
+  // Item display settings
+  itemCount: number;
+  showTimestamp: boolean;
+  showChannelName: boolean;
 
   // Timestamps
+  dateCreated: string; // ISO string
+  dateModified: string; // ISO string
+}
+
+// ============================================================================
+// View Model - returned in API responses
+// ============================================================================
+
+export interface ChannelSectionView {
+  id: string;
+  channelId: string;
+  type: string;
+  title: string;
+  titleLocalized?: Record<string, string>;
+  position: number;
+  style: string;
+  itemCount: number;
+  showTimestamp: boolean;
+  showChannelName: boolean;
+  content: {
+    videoIds?: string[];
+    playlistId?: string;
+    playlistIds?: string[];
+    channelIds?: string[];
+  };
   dateCreated: string;
   dateModified: string;
 }
 
-/**
- * YouTube's exact 10 section types
- */
-export type ChannelSectionType =
-  | 'allPlaylists'
-  | 'completedEvents'
-  | 'liveEvents'
-  | 'multipleChannels'
-  | 'multiplePlaylists'
-  | 'popularUploads'
-  | 'recentUploads'
-  | 'singlePlaylist'
-  | 'subscriptions'
-  | 'upcomingEvents';
+// ============================================================================
+// Input Models
+// ============================================================================
 
-/**
- * Create channel section request
- */
-export interface ChannelSectionCreateRequest {
+export interface ChannelSectionCreateInput {
   type: ChannelSectionType;
-  title?: string; // Max 100 chars, required for multiplePlaylists/multipleChannels
-  position?: number; // If omitted, add to end
-  playlists?: string[]; // Required for singlePlaylist (exactly 1), multiplePlaylists (1+)
-  channels?: string[]; // Required for multipleChannels (1+)
+  title: string; // Min 1, max 100 chars
+  titleLocalized?: Record<string, string>;
+  style?: DisplayStyle;
+  videoIds?: string[]; // Max 20
+  playlistId?: string;
+  playlistIds?: string[]; // Max 10
+  channelIds?: string[]; // Max 20
+  itemCount?: number; // Min 1, max 20, default 12
+  showTimestamp?: boolean;
+  showChannelName?: boolean;
 }
 
-/**
- * Update channel section request
- */
-export interface ChannelSectionUpdateRequest {
-  title?: string;
-  playlists?: string[];
-  channels?: string[];
+export interface ChannelSectionUpdateInput {
+  title?: string; // Min 1, max 100 chars
+  titleLocalized?: Record<string, string>;
+  style?: DisplayStyle;
+  videoIds?: string[]; // Max 20
+  playlistId?: string;
+  playlistIds?: string[]; // Max 10
+  channelIds?: string[]; // Max 20
+  itemCount?: number; // Min 1, max 20
+  showTimestamp?: boolean;
+  showChannelName?: boolean;
 }
 
-/**
- * Reorder sections request
- */
-export interface ChannelSectionReorderRequest {
-  sectionId: string;
-  newPosition: number;
+export interface ChannelSectionReorderInput {
+  sectionIds: string[]; // Min 1, max 50
 }
 
-/**
- * List channel sections params
- */
-export interface ChannelSectionListParams {
-  channelId: string;
-}
+// ============================================================================
+// Type Definitions
+// ============================================================================
 
-/**
- * Validation rules matching YouTube's constraints
- */
+export type ChannelSectionType =
+  | 'featured_videos'
+  | 'recent_uploads'
+  | 'popular_uploads'
+  | 'single_playlist'
+  | 'multiple_playlists'
+  | 'subscribed_channels'
+  | 'liked_videos';
+
+export type DisplayStyle = 'horizontal_row' | 'vertical_list';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+export const SectionTypes = {
+  FEATURED_VIDEOS: 'featured_videos',
+  RECENT_UPLOADS: 'recent_uploads',
+  POPULAR_UPLOADS: 'popular_uploads',
+  SINGLE_PLAYLIST: 'single_playlist',
+  MULTIPLE_PLAYLISTS: 'multiple_playlists',
+  SUBSCRIBED_CHANNELS: 'subscribed_channels',
+  LIKED_VIDEOS: 'liked_videos',
+} as const;
+
+export const DisplayStyles = {
+  HORIZONTAL_ROW: 'horizontal_row',
+  VERTICAL_LIST: 'vertical_list',
+} as const;
+
+// Auto-populated section types (content is automatically generated)
+export const AUTO_POPULATED_TYPES: ChannelSectionType[] = [
+  'recent_uploads',
+  'popular_uploads',
+  'subscribed_channels',
+  'liked_videos',
+];
+
+// Section types requiring specific content fields
+export const CONTENT_REQUIRED_TYPES: Record<string, string[]> = {
+  featured_videos: ['videoIds'],
+  single_playlist: ['playlistId'],
+  multiple_playlists: ['playlistIds'],
+};
+
+// Validation constraints
 export const CHANNEL_SECTION_CONSTRAINTS = {
-  MAX_SECTIONS_PER_CHANNEL: 10,
+  MAX_SECTIONS_PER_CHANNEL: 50,
   MAX_TITLE_LENGTH: 100,
-  TITLE_REQUIRED_FOR_TYPES: ['multiplePlaylists', 'multipleChannels'] as const,
-  PLAYLISTS_REQUIRED_FOR_TYPES: ['singlePlaylist', 'multiplePlaylists'] as const,
-  CHANNELS_REQUIRED_FOR_TYPES: ['multipleChannels'] as const,
-  SINGLE_PLAYLIST_EXACT_COUNT: 1, // singlePlaylist must have exactly 1 playlist
+  MAX_VIDEO_IDS: 20,
+  MAX_PLAYLIST_IDS: 10,
+  MAX_CHANNEL_IDS: 20,
+  MIN_ITEM_COUNT: 1,
+  MAX_ITEM_COUNT: 20,
+  DEFAULT_ITEM_COUNT: 12,
 } as const;

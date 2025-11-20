@@ -11,7 +11,7 @@ import { getLocalizedValue } from "@al-ummah/shared-types";
 const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { user } = useAuth();
 
-  const title = getLocalizedValue((options as any).titleLocalized, options.title, 'ar');
+  const title = getLocalizedValue((options as PlayerOptions & { titleLocalized?: Record<string, string> }).titleLocalized, options.title, 'ar');
 
   // Convert PlayerOptions to CustomVideoPlayer props
   const videoSources = [
