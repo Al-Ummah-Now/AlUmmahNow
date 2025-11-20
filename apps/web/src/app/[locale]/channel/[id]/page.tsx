@@ -9,7 +9,9 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useRouter, useParams } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
-import { ChannelSections } from '@/components/ChannelSections';
+import { ChannelTabBar } from '@/components/ChannelTabs';
+import { ChannelTabBar as ChannelTabBarRTL } from '@/components/ChannelTabs/rtl';
+import { ChannelTabContent } from '@/components/ChannelTabs/ChannelTabContent';
 
 interface ChannelData {
   id: string;
@@ -24,7 +26,7 @@ interface ChannelData {
 }
 
 function ChannelPage() {
-  const { t, lang } = useLanguage();
+  const { t, lang, isRTL } = useLanguage();
   const router = useRouter();
   const params = useParams();
   const locale = params.locale as string;
@@ -181,20 +183,15 @@ function ChannelPage() {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-5 py-2">
-          <button className="mr-5 px-4 py-2 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 font-semibold">
-            {t.feed.home}
-          </button>
-          <button className="mr-5 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-medium">
-            {t.channel.videos}
-          </button>
-        </div>
+        {/* Channel Tabs Navigation */}
+        {isRTL ? (
+          <ChannelTabBarRTL channelId={id} isOwner={isOwner} />
+        ) : (
+          <ChannelTabBar channelId={id} isOwner={isOwner} />
+        )}
 
-        {/* Channel Sections (Home Tab) */}
-        <div className="p-5 bg-white dark:bg-gray-800">
-          <ChannelSections channelId={id} />
-        </div>
+        {/* Tab Content */}
+        <ChannelTabContent channelId={id} />
       </div>
     </div>
   );

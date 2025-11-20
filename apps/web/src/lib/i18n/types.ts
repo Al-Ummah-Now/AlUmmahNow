@@ -155,6 +155,17 @@ export interface AppTranslations {
     shorts: string;
     live: string;
     playlists: string;
+    community: string;
+    channels: string;
+    manageTabs: string;
+    setAsDefault: string;
+    hideTab: string;
+    showTab: string;
+    reorderTabs: string;
+    customTab: string;
+    addCustomTab: string;
+    tabName: string;
+    tabContent: string;
     seeAll: string;
     recentUploads: string;
     recentUploadsDescription: string;
