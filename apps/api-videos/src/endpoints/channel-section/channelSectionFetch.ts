@@ -19,6 +19,10 @@ export class ChannelSectionFetch extends OpenAPIRoute {
         - Private channels: Only visible to channel owner (requires auth)
       `,
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           channelId: Str({ description: 'Channel ID' }),
           sectionId: Str({ description: 'Section ID' }),

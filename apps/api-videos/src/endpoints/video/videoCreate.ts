@@ -18,6 +18,7 @@ export class VideoCreate extends OpenAPIRoute {
 		description: "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
 		request: {
 			headers: z.object({
+				userId: Str({ description: "User ID" }).optional().nullable(),
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 			body: {
@@ -73,13 +74,14 @@ export class VideoCreate extends OpenAPIRoute {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
-		const { channelId } = request.headers;
+		const { userId, channelId } = request.headers;
 		const inputVideo = request.body;
 
-		if (!userId) {
+		// Get auth context for user information (fallback)
+		const authContext = getAuthContext(c);
+		const effectiveUserId = userId || authContext?.userId;
+
+		if (!effectiveUserId) {
 			return c.json({
 				success: false,
 				error: "Authentication required"
@@ -90,7 +92,7 @@ export class VideoCreate extends OpenAPIRoute {
 		const video = {
 			...inputVideo,
 			id: crypto.randomUUID(), // Generate a unique ID for the video
-			userId,
+			userId: effectiveUserId,
 			channelId,
 			dateCreated: new Date().toISOString(),
 			dateModified: new Date().toISOString(),
@@ -150,7 +152,7 @@ export class VideoCreate extends OpenAPIRoute {
 		const queue = new Queue();
 		await queue.send(MessageType.VideoCreate, {
 			videoId: video.id,
-			userId: userId,
+			userId: effectiveUserId,
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});

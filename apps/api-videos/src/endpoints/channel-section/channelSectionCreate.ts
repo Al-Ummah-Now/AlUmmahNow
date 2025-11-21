@@ -63,6 +63,10 @@ export class ChannelSectionCreate extends OpenAPIRoute {
         - Content validation based on type
       `,
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           channelId: Str({ description: 'Channel ID' }),
         }),

@@ -444,10 +444,11 @@ export class MessageProcessor {
       case MessageType.CommunityPostDeleted:
         this.logger.info(`Community post ${postId} deleted from channel ${channelId}`);
         break;
-      case MessageType.PollVoted:
+      case MessageType.PollVoted: {
         const { optionIds } = message.payload as { optionIds?: string[] };
         this.logger.info(`User ${userId} voted on poll ${postId} (${optionIds?.length || 0} options selected)`);
         break;
+      }
     }
   }
 

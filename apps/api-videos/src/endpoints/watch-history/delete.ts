@@ -24,6 +24,10 @@ export class DeleteWatchHistory extends OpenAPIRoute {
       description:
         "Removes a specific video from the authenticated user's watch history.",
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: DeleteWatchHistoryParams,
       },
       responses: {
@@ -45,8 +49,15 @@ export class DeleteWatchHistory extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { userId, channelId } = request.headers;
+
     const auth = c.get("auth");
-    const userId = auth.userId;
+    const effectiveUserId = userId || auth?.userId;
+
+    if (!effectiveUserId) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
 
     // Get videoId from path params
     const { videoId } = c.req.param();
@@ -61,7 +72,7 @@ export class DeleteWatchHistory extends OpenAPIRoute {
       );
 
       // Generate entry ID (userId:videoId)
-      const entryId = `${userId}:${videoId}`;
+      const entryId = `${effectiveUserId}:${videoId}`;
 
       // Check if entry exists
       const existingEntry = await watchHistoryRepo.getObject(entryId);

@@ -4,6 +4,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
 import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
+import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata } from '@al-ummah/shared-types';
 
 const VideoScheduleUpdateResponseSchema = z.object({
@@ -20,6 +21,10 @@ export class VideoScheduleUpdate extends OpenAPIRoute {
       summary: 'Update (reschedule) a scheduled video publication',
       description: 'Reschedule a video to a new date and time. Cannot update if already publishing or published.',
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           id: Str({ description: 'Video ID' }),
         }),
@@ -270,6 +275,18 @@ export class VideoScheduleUpdate extends OpenAPIRoute {
       });
 
       console.log(`Rescheduled video ${videoId} from ${previousSchedule} to ${video.scheduledPublishDate}`);
+
+      // Send queue message for schedule update
+      const queue = new Queue();
+      await queue.send(MessageType.VideoEdit, {
+        videoId,
+        userId,
+        channelId: video.channelId,
+        timestamp: new Date().toISOString(),
+        action: 'reschedule',
+        previousSchedule,
+        newSchedule: video.scheduledPublishDate,
+      });
 
       return c.json({
         success: true,

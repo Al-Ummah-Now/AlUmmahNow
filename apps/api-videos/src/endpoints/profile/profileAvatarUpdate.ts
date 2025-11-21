@@ -5,6 +5,7 @@ import { Profile as BusinessProfile } from "../../lib/types";
 import { z } from "zod";
 import { env } from 'cloudflare:workers';
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
+import Queue, { MessageType } from "../../lib/queue";
 
 const app = new Hono();
 
@@ -12,6 +13,10 @@ const handleAvatarUpdate = async (c) => {
     try {
         // Extract the `id` parameter
         const id = c.req.param("id");
+
+        // Extract headers for queue message
+        const userId = c.req.header('userId');
+        const channelId = c.req.header('channelId');
 
         // Validate the `id`
         if (!id) {
@@ -74,6 +79,16 @@ const handleAvatarUpdate = async (c) => {
         //Update the profile's avatar URL
         profile.avatarUrl = `https://images.alummahnow.net${path}`;
         await repository.putObject(id, profile);
+
+        // Send queue message for avatar update
+        const queue = new Queue();
+        await queue.send(MessageType.ProfileUpdate, {
+            profileId: id,
+            userId,
+            channelId,
+            timestamp: new Date().toISOString(),
+            action: 'avatar_update',
+        });
 
         return c.json(profile, 200);
     } catch (error) {

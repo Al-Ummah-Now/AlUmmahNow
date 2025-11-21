@@ -4,6 +4,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
 import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
+import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
 
 const VideoScheduleCancelResponseSchema = z.object({
@@ -19,6 +20,10 @@ export class VideoScheduleDelete extends OpenAPIRoute {
       summary: 'Cancel a scheduled video publication',
       description: 'Cancel the scheduled publication of a video. Video will remain in draft/private status.',
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           id: Str({ description: 'Video ID' }),
         }),
@@ -174,6 +179,16 @@ export class VideoScheduleDelete extends OpenAPIRoute {
       }
 
       console.log(`Cancelled schedule for video ${videoId}`);
+
+      // Send queue message for schedule cancellation
+      const queue = new Queue();
+      await queue.send(MessageType.VideoEdit, {
+        videoId,
+        userId,
+        channelId: video.channelId,
+        timestamp: new Date().toISOString(),
+        action: 'cancel_schedule',
+      });
 
       return c.json({
         success: true,

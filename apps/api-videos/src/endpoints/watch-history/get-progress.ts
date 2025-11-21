@@ -34,6 +34,10 @@ export class GetWatchProgress extends OpenAPIRoute {
       description:
         "Retrieves the current playback progress for a video. Used to resume playback from where the user left off.",
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: ProgressParams,
       },
       responses: {
@@ -60,8 +64,15 @@ export class GetWatchProgress extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { userId, channelId } = request.headers;
+
     const auth = c.get("auth");
-    const userId = auth.userId;
+    const effectiveUserId = userId || auth?.userId;
+
+    if (!effectiveUserId) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
 
     // Get videoId from path params
     const { videoId } = c.req.param();
@@ -76,7 +87,7 @@ export class GetWatchProgress extends OpenAPIRoute {
       );
 
       // Generate entry ID
-      const entryId = `${userId}:${videoId}`;
+      const entryId = `${effectiveUserId}:${videoId}`;
 
       // Get watch history entry
       const entry = await watchHistoryRepo.getObject(entryId);

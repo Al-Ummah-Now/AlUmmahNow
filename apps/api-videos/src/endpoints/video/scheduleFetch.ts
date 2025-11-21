@@ -24,6 +24,10 @@ export class VideoScheduleFetch extends OpenAPIRoute {
       summary: 'Get schedule status for a video',
       description: 'Retrieve the scheduling information and status for a video.',
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           id: Str({ description: 'Video ID' }),
         }),

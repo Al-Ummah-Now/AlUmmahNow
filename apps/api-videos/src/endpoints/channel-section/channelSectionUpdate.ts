@@ -51,6 +51,10 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
         - Cannot change position (use PATCH /sections/reorder)
       `,
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           channelId: Str({ description: 'Channel ID' }),
           sectionId: Str({ description: 'Section ID' }),

@@ -6,6 +6,7 @@ import { ReportView } from "../../lib/model/view";
 import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import Queue, { MessageType } from "../../lib/queue";
 
 export class ModerationAction extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -152,6 +153,17 @@ export class ModerationAction extends OpenAPIRoute {
 
 			// Save the updated report
 			await repository.putObject(reportKey, updatedReport);
+
+			// Send queue message for moderation action
+			const queue = new Queue();
+			await queue.send(MessageType.VideoEdit, {
+				reportId: updatedReport.id,
+				entityType: updatedReport.entityType,
+				entityId: updatedReport.entityId,
+				moderatorId: userId,
+				action,
+				timestamp: new Date().toISOString(),
+			});
 
 			// Perform content action based on moderation decision
 			const contentAction = await this.performContentAction(

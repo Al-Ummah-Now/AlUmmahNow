@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
 import { SubtitleService } from '../../lib/subtitles';
+import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleTrack, SubtitleMetadata } from '@al-ummah/shared-types';
 
 export class SubtitlesUpload extends OpenAPIRoute {
@@ -17,6 +18,10 @@ export class SubtitlesUpload extends OpenAPIRoute {
       description:
         'Upload a subtitle file (.srt, .vtt, .sbv) for a video. Converts to WebVTT format automatically.',
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           videoId: Str({ description: 'Video ID' }),
         }),
@@ -224,6 +229,17 @@ export class SubtitlesUpload extends OpenAPIRoute {
       };
 
       await videoRepo.putObject(videoId, updatedVideo);
+
+      // Send queue message for subtitle upload
+      const queue = new Queue();
+      await queue.send(MessageType.VideoEdit, {
+        videoId,
+        userId,
+        channelId: video.channelId,
+        timestamp: new Date().toISOString(),
+        action: 'subtitle_upload',
+        language,
+      });
 
       return c.json({
         success: true,

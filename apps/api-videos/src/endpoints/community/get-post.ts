@@ -7,7 +7,11 @@ export class GetCommunityPost extends OpenAPIRoute {
     tags: ['Community'],
     summary: 'Get a single community post',
     request: {
-      params: z.object({
+      headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
+        params: z.object({
         postId: z.string(),
       }),
     },

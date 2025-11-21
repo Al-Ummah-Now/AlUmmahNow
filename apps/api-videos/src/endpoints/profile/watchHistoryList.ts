@@ -21,7 +21,10 @@ export class WatchHistoryList extends OpenAPIRoute {
 		summary: "Get Watch History",
 		description: "🔒 **Authentication Required**: Get the user's watch history with pagination.",
 		request: {
-			query: z.object({
+			headers: z.object({
+          userId: z.string().optional().nullable(),
+        }),
+        query: z.object({
 				limit: Num({
 					description: "Limit the number of history entries to return",
 					default: 20,

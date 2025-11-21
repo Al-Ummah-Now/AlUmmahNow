@@ -70,6 +70,10 @@ export class ListWatchHistory extends OpenAPIRoute {
       description:
         "Returns paginated list of videos watched by the authenticated user, sorted by most recent by default.",
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         query: ListWatchHistoryQuery,
       },
       responses: {
@@ -96,8 +100,15 @@ export class ListWatchHistory extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { userId, channelId } = request.headers;
+
     const auth = c.get("auth");
-    const userId = auth.userId;
+    const effectiveUserId = userId || auth?.userId;
+
+    if (!effectiveUserId) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
 
     // Parse and validate query parameters
     const query = c.req.query();
@@ -117,7 +128,7 @@ export class ListWatchHistory extends OpenAPIRoute {
 
       // Filter entries for this user only
       let userEntries = allEntriesResponse.items.filter(
-        (entry) => entry.userId === userId
+        (entry) => entry.userId === effectiveUserId
       );
 
       // Apply completed filter if specified

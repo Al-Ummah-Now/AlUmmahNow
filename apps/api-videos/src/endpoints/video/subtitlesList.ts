@@ -12,7 +12,11 @@ export class SubtitlesList extends OpenAPIRoute {
     summary: 'List subtitle tracks for a video',
     description: 'Get all available subtitle tracks for a video',
     request: {
-      params: z.object({
+      headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
+        params: z.object({
         videoId: Str({ description: 'Video ID' }),
       }),
     },

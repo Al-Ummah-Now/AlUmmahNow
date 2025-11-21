@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { Playlist, ResponseError } from "../../lib/types";
+import Queue, { MessageType } from "../../lib/queue";
 
 export class PlaylistDelete extends OpenAPIRoute {
     schema = {
@@ -83,6 +84,15 @@ export class PlaylistDelete extends OpenAPIRoute {
                 error: "Unauthorized",
             }, 403);
         }
+
+        // Send queue message for playlist deletion
+        const queue = new Queue();
+        await queue.send(MessageType.PlaylistDelete, {
+            playlistId: id,
+            userId: userId,
+            channelId: channelId,
+            timestamp: new Date().toISOString(),
+        });
 
         // Delete the playlist from the R2 bucket
         await repository.deleteObject(id);

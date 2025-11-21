@@ -40,6 +40,10 @@ export class ChannelSectionReorder extends OpenAPIRoute {
         - Either all sections reorder or none (rollback on error)
       `,
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           channelId: Str({ description: 'Channel ID' }),
         }),

@@ -21,6 +21,7 @@ export class VideoUpdate extends OpenAPIRoute {
 				id: Str({ description: "Video id" }),
 			}),
 			headers: z.object({
+				userId: Str({ description: "User ID" }).optional().nullable(),
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 			body: {
@@ -93,13 +94,14 @@ export class VideoUpdate extends OpenAPIRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
-		const { channelId } = request.headers;
+		const { userId, channelId } = request.headers;
 		const videoUpdateInput = request.body;
 
-		if (!userId) {
+		// Get auth context for user information (fallback)
+		const authContext = getAuthContext(c);
+		const effectiveUserId = userId || authContext?.userId;
+
+		if (!effectiveUserId) {
 			return c.json({
 				success: false,
 				error: "Authentication required"
@@ -123,7 +125,7 @@ export class VideoUpdate extends OpenAPIRoute {
 		}
 
 		// Check ownership - user must own the video to update it
-		if (existingVideo.userId !== userId) {
+		if (existingVideo.userId !== effectiveUserId) {
 			return c.json(
 				{
 					success: false,
@@ -167,7 +169,7 @@ export class VideoUpdate extends OpenAPIRoute {
 		const queue = new Queue();
 		await queue.send(MessageType.VideoEdit, {
 			videoId: id,
-			userId: userId,
+			userId: effectiveUserId,
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});

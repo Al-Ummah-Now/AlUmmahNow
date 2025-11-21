@@ -97,6 +97,15 @@ export class ProfileUpdate extends OpenAPIRoute {
 
         await repository.putObject(id, updatedProfile);
 
+        // Send queue message for profile update
+        const queue = new Queue();
+        await queue.send(MessageType.ProfileUpdate, {
+            profileId: id,
+            userId: userId,
+            channelId: channelId,
+            timestamp: new Date().toISOString(),
+        });
+
         // Transform to view model for response
         const profileView = transformProfileToView(updatedProfile);
 

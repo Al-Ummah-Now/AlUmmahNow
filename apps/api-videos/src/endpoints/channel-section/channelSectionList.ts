@@ -25,6 +25,10 @@ export class ChannelSectionsList extends OpenAPIRoute {
         - Cursor-based pagination with configurable limit (default: 20, max: 50)
       `,
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           channelId: Str({ description: 'Channel ID' }),
         }),

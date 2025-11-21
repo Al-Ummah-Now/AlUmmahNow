@@ -31,7 +31,11 @@ export class UploadBatchInitiateEndpoint extends OpenAPIRoute {
 		summary: "Initiate Batch Video Upload",
 		description: "🔒 **Authentication Required**: Initiate upload for multiple videos (up to 15) with TUS support for concurrent resumable uploads.",
 		request: {
-			body: {
+			headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
+        body: {
 				content: {
 					"application/json": {
 						schema: z.object({

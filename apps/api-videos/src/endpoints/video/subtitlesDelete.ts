@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
 import { SubtitleService } from '../../lib/subtitles';
+import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleMetadata } from '@al-ummah/shared-types';
 
 export class SubtitlesDelete extends OpenAPIRoute {
@@ -16,6 +17,10 @@ export class SubtitlesDelete extends OpenAPIRoute {
       summary: 'Delete subtitle track',
       description: 'Delete a subtitle track for a specific language',
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           videoId: Str({ description: 'Video ID' }),
           language: Str({ description: 'ISO 639-1 language code (e.g., en, ar, ur)' }),
@@ -209,6 +214,17 @@ export class SubtitlesDelete extends OpenAPIRoute {
 
         await videoRepo.putObject(videoId, updatedVideo);
       }
+
+      // Send queue message for subtitle deletion
+      const queue = new Queue();
+      await queue.send(MessageType.VideoEdit, {
+        videoId,
+        userId,
+        channelId: video.channelId,
+        timestamp: new Date().toISOString(),
+        action: 'subtitle_delete',
+        language,
+      });
 
       return c.json({
         success: true,

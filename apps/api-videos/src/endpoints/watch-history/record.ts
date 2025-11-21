@@ -48,6 +48,10 @@ export class RecordWatchHistory extends OpenAPIRoute {
       description:
         "Records a video view for the authenticated user. Creates a new entry or updates existing watch history for this video.",
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         body: {
           content: {
             "application/json": {
@@ -83,8 +87,15 @@ export class RecordWatchHistory extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { userId, channelId } = request.headers;
+
     const auth = c.get("auth");
-    const userId = auth.userId;
+    const effectiveUserId = userId || auth?.userId;
+
+    if (!effectiveUserId) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
 
     // Parse and validate request body
     const body = await c.req.json<RecordWatchRequest>();
@@ -103,8 +114,8 @@ export class RecordWatchHistory extends OpenAPIRoute {
         return c.json({ error: "Video not found" }, 404);
       }
 
-      // Generate watch history entry ID (userId:videoId)
-      const entryId = `${userId}:${videoId}`;
+      // Generate watch history entry ID (effectiveUserId:videoId)
+      const entryId = `${effectiveUserId}:${videoId}`;
 
       // Check if watch history entry already exists
       const existingEntry = await watchHistoryRepo.getObject(entryId);
@@ -133,7 +144,7 @@ export class RecordWatchHistory extends OpenAPIRoute {
         // Create new entry
         watchEntry = {
           id: entryId,
-          userId,
+          userId: effectiveUserId,
           videoId,
           videoTitle: video.title || "Untitled",
           videoThumbnail: video.thumbnailUrl || video.thumbnail,
@@ -155,7 +166,7 @@ export class RecordWatchHistory extends OpenAPIRoute {
       // Queue analytics event
       const event: WatchHistoryEvent = {
         type: "watch_started",
-        userId,
+        userId: effectiveUserId,
         videoId,
         progress,
         duration,

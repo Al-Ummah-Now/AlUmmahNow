@@ -41,6 +41,10 @@ export class VideoUploadStatus extends OpenAPIRoute {
 			params: z.object({
 				id: Str({ description: "Video id" }),
 			}),
+			headers: z.object({
+				userId: Str({ description: "User ID" }).optional().nullable(),
+				channelId: Str({ description: "Channel ID" }).optional().nullable(),
+			}),
 		},
 		responses: {
 			"200": {
@@ -94,11 +98,12 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		// Get auth context for user information
+		const { userId, channelId } = request.headers;
+		// Get auth context for user information (fallback)
 		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
+		const effectiveUserId = userId || authContext?.userId;
 
-		if (!userId) {
+		if (!effectiveUserId) {
 			return c.json({
 				success: false,
 				error: "Authentication required"
@@ -119,7 +124,7 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		}
 
 		// Check ownership - user must own the video to check status
-		if (video.userId !== userId) {
+		if (video.userId !== effectiveUserId) {
 			return c.json({
 				success: false,
 				error: "Forbidden - you can only check status of your own videos",

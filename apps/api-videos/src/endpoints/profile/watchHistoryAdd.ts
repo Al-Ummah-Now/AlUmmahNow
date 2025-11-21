@@ -22,7 +22,10 @@ export class WatchHistoryAdd extends OpenAPIRoute {
 		summary: "Add Video to Watch History",
 		description: "🔒 **Authentication Required**: Add a video to the user's watch history.",
 		request: {
-			body: {
+			headers: z.object({
+          userId: z.string().optional().nullable(),
+        }),
+        body: {
 				content: {
 					"application/json": {
 						schema: z.object({

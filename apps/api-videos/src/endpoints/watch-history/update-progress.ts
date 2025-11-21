@@ -44,6 +44,10 @@ export class UpdateWatchProgress extends OpenAPIRoute {
       description:
         "Updates the current playback position for a video. Should be called periodically (every 10 seconds) during video playback.",
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: ProgressParams,
         body: {
           content: {
@@ -80,8 +84,15 @@ export class UpdateWatchProgress extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { userId, channelId } = request.headers;
+
     const auth = c.get("auth");
-    const userId = auth.userId;
+    const effectiveUserId = userId || auth?.userId;
+
+    if (!effectiveUserId) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
 
     // Get videoId from path params
     const { videoId } = c.req.param();
@@ -100,7 +111,7 @@ export class UpdateWatchProgress extends OpenAPIRoute {
       );
 
       // Generate entry ID
-      const entryId = `${userId}:${videoId}`;
+      const entryId = `${effectiveUserId}:${videoId}`;
 
       // Check if watch history entry exists
       const existingEntry = await watchHistoryRepo.getObject(entryId);
@@ -136,7 +147,7 @@ export class UpdateWatchProgress extends OpenAPIRoute {
       // Queue progress event
       const event: WatchHistoryEvent = {
         type: completed ? "watch_completed" : "watch_progress",
-        userId,
+        userId: effectiveUserId,
         videoId,
         progress,
         duration,

@@ -23,6 +23,10 @@ export class ChannelSectionDelete extends OpenAPIRoute {
         - Other sections' positions are automatically updated
       `,
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           channelId: Str({ description: 'Channel ID' }),
           sectionId: Str({ description: 'Section ID' }),

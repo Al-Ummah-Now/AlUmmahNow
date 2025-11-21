@@ -11,7 +11,11 @@ export class SubtitlesGet extends OpenAPIRoute {
     summary: 'Get specific subtitle track',
     description: 'Get subtitle content for a specific language. Returns WebVTT format by default.',
     request: {
-      params: z.object({
+      headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
+        params: z.object({
         videoId: Str({ description: 'Video ID' }),
         language: Str({ description: 'ISO 639-1 language code (e.g., en, ar, ur)' }),
       }),

@@ -11,7 +11,11 @@ export class LiveStreamsList extends OpenAPIRoute {
 		summary: "List Live Streams",
 		description: "Get a paginated list of live streams. Public endpoint that returns both scheduled and active streams.",
 		request: {
-			query: z.object({
+			headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
+        query: z.object({
 				cursor: z.string().optional().openapi({ example: "" }),
 				limit: Num({ default: 9 }).openapi({ example: 9 }),
 				status: z.enum(['scheduled', 'live', 'ended', 'cancelled']).optional().describe("Filter by stream status"),

@@ -32,6 +32,10 @@ export class VideoScheduleList extends OpenAPIRoute {
       summary: 'List scheduled videos',
       description: 'Get a list of all videos scheduled for publication by the authenticated user.',
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         query: z.object({
           channelId: Str({ description: 'Filter by channel ID' }).optional(),
           startDate: Str({ description: 'Filter by start date (ISO 8601)' }).optional(),

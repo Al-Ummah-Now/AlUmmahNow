@@ -44,8 +44,15 @@ export class ClearWatchHistory extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { userId, channelId } = request.headers;
+
     const auth = c.get("auth");
-    const userId = auth.userId;
+    const effectiveUserId = userId || auth?.userId;
+
+    if (!effectiveUserId) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
 
     try {
       const watchHistoryRepo = new R2Repository<WatchHistoryEntry>(
@@ -57,7 +64,7 @@ export class ClearWatchHistory extends OpenAPIRoute {
 
       // Filter entries for this user
       const userEntries = allEntriesResponse.items.filter(
-        (entry) => entry.userId === userId
+        (entry) => entry.userId === effectiveUserId
       );
 
       // Delete all user's entries

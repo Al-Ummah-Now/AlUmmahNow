@@ -6,6 +6,7 @@ import { LiveStreamView } from "../../lib/model/view";
 import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import Queue, { MessageType } from "../../lib/queue";
 
 export class LiveStreamUpdate extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -146,6 +147,16 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 
 			// Save updated stream
 			await repository.putObject(`livestream:${id}`, updatedStream);
+
+			// Send queue message for live stream update
+			const queue = new Queue();
+			await queue.send(MessageType.LiveStreamUpdate, {
+				liveStreamId: id,
+				userId,
+				channelId,
+				timestamp: new Date().toISOString(),
+				status: updatedStream.status,
+			});
 
 			// Transform to view model for response
 			const streamView = {

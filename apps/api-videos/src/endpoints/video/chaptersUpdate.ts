@@ -12,6 +12,7 @@ import { VideoChapterSchema, VideoChapterDataSchema } from '@al-ummah/shared-typ
 import { ResponseError } from '../../lib/types';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
 
 export class VideoChaptersUpdate extends OpenAPIRoute {
@@ -20,7 +21,11 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
     summary: 'Update video chapters (manual edit)',
     description: 'Manually update chapters for a video. Requires authentication and video ownership.',
     request: {
-      params: z.object({
+      headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
+        params: z.object({
         id: Str({ description: 'Video ID' }),
       }),
       body: {
@@ -171,6 +176,17 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
       console.log('Chapters manually updated', {
         videoId,
         userId: auth.userId,
+        chapterCount: chapters.length,
+      });
+
+      // Send queue message for chapter update
+      const queue = new Queue();
+      await queue.send(MessageType.VideoEdit, {
+        videoId,
+        userId: auth.userId,
+        channelId: video.channelId,
+        timestamp: new Date().toISOString(),
+        action: 'chapters_update',
         chapterCount: chapters.length,
       });
 

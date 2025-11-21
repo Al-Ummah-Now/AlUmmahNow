@@ -4,6 +4,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
 import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
+import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata, VideoScheduleResponse } from '@al-ummah/shared-types';
 
 const VideoScheduleResponseSchema = z.object({
@@ -22,6 +23,10 @@ export class VideoScheduleCreate extends OpenAPIRoute {
       description:
         'Schedule a video to be automatically published at a specified date and time. Video must be in draft/private status.',
       request: {
+        headers: z.object({
+          userId: z.string().optional().nullable(),
+          channelId: z.string().optional().nullable(),
+        }),
         params: z.object({
           id: Str({ description: 'Video ID' }),
         }),
@@ -267,6 +272,17 @@ export class VideoScheduleCreate extends OpenAPIRoute {
       });
 
       console.log(`Scheduled video ${videoId} for ${scheduledDate.toISOString()}`);
+
+      // Send queue message for video scheduling
+      const queue = new Queue();
+      await queue.send(MessageType.VideoEdit, {
+        videoId,
+        userId,
+        channelId: video.channelId,
+        timestamp: new Date().toISOString(),
+        action: 'schedule',
+        scheduledDate: scheduledDate.toISOString(),
+      });
 
       // Return response
       const response: VideoScheduleResponse = {
