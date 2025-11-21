@@ -3,7 +3,6 @@ import { z } from "zod";
 import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import { PlaylistView } from "../../lib/model/view";
 import { transformPlaylistToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -71,7 +70,7 @@ export class PlaylistRemoveVideo extends OpenAPIRoute {
         const { channelId, userId } = request.headers;
 
         // Get existing playlist
-        const bucket = env.playlists;
+        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof BusinessPlaylist>;
         const repository = new R2Repository<PlaylistType>(bucket);
         
@@ -110,7 +109,7 @@ export class PlaylistRemoveVideo extends OpenAPIRoute {
         await repository.putObject(id, updatedPlaylist);
 
         // Send queue message for playlist remove
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.PlaylistRemove, {
             playlistId: id,
             videoId: videoId,

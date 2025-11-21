@@ -1,7 +1,6 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { ChannelTabConfig as BusinessChannelTabConfig, Channel as BusinessChannel, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
 
@@ -56,7 +55,7 @@ export class ChannelTabsFetch extends OpenAPIRoute {
 			const { id } = request.params;
 
 			// Verify channel exists
-			const channelsBucket = env.channels;
+			const channelsBucket = c.env.channels;
 			type ChannelType = z.infer<typeof BusinessChannel>;
 			const channelRepository = new R2Repository<ChannelType>(channelsBucket);
 			const channel = await channelRepository.getObject(id);
@@ -72,7 +71,7 @@ export class ChannelTabsFetch extends OpenAPIRoute {
 			}
 
 			// Fetch tab configuration
-			const tabsBucket = env.channel_tabs;
+			const tabsBucket = c.env.channel_tabs;
 			type ChannelTabConfigType = z.infer<typeof BusinessChannelTabConfig>;
 			const tabsRepository = new R2Repository<ChannelTabConfigType>(tabsBucket);
 			let config = await tabsRepository.getObject(`channel-tabs/${id}`);

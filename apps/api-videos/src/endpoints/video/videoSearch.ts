@@ -3,7 +3,6 @@ import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -90,7 +89,7 @@ export class VideoSearch extends OpenAPIRoute {
 		}
 
 		// Get videos from storage
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		
@@ -175,7 +174,7 @@ export class VideoSearch extends OpenAPIRoute {
 		});
 
 		// Send analytics event for search
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoView, {
 			searchQuery: query,
 			searchFilter: filter,

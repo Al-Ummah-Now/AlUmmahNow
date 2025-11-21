@@ -1,7 +1,6 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Channel, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -65,7 +64,7 @@ export class SubscriptionDelete extends OpenAPIRoute {
 
 		// Implement your own object insertion here
 		try {
-			const bucket = env.channels;
+			const bucket = c.env.channels;
 			type ChannelType = z.infer<typeof Channel>;
 			const repository = new R2Repository<ChannelType>(bucket);
 			let channel = await repository.getObject(id);
@@ -91,7 +90,7 @@ export class SubscriptionDelete extends OpenAPIRoute {
 			const subscription = channel.subscriptions.find(s => s.channelId === channelId);
 			channel.subscriptions = channel.subscriptions.filter(s => s.channelId !== channelId);
 						
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.Unsubscribe, {
 				subscriptionId: subscription.id,
 				targetChannelId: id,

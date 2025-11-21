@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str, Num } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import type { VideoObject, ScheduledVideoInfo } from '@al-ummah/shared-types';
 
@@ -110,7 +109,7 @@ export class VideoScheduleList extends OpenAPIRoute {
       const validLimit = Math.min(Math.max(1, limit), 100);
 
       // Fetch all videos for user
-      const videoRepo = new R2Repository<VideoObject>(env.videos);
+      const videoRepo = new R2Repository<VideoObject>(c.env.videos);
       const allVideos = await videoRepo.listObjects(1000); // Get up to 1000 videos
 
       // Filter videos

@@ -2,7 +2,6 @@ import { Bool, OpenAPIRoute, Str } from "chanfana";
 import R2Repository from "../../lib/r2Repo";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import Queue, { MessageType } from "../../lib/queue";
 
 export class ChannelDelete extends OpenAPIRoute {
@@ -57,7 +56,7 @@ export class ChannelDelete extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Get the channel before deletion
-		const bucket = env.channels;
+		const bucket = c.env.channels;
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
 		
@@ -70,7 +69,7 @@ export class ChannelDelete extends OpenAPIRoute {
 		}
 
 		// Send queue message for channel deletion
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ChannelDelete, {
 			channelId: id,
 			userId: userId,

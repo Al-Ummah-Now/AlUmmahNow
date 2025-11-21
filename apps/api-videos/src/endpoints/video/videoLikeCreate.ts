@@ -1,7 +1,6 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -57,7 +56,7 @@ export class LikeCreate extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
         // Implement your own object fetch here
-        const bucket = env.videos;
+        const bucket = c.env.videos;
         type VideoType = z.infer<typeof Video>;
         const repository = new R2Repository<VideoType>(bucket);
         let video = await repository.getObject(id);
@@ -82,7 +81,7 @@ export class LikeCreate extends OpenAPIRoute {
             dateCreated: new Date().toISOString(),
         }
 
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoLike, {
 			likeId: like.id,
 			videoId: id,

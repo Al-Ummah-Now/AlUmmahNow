@@ -3,7 +3,6 @@ import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamUpdateInput } from "../../lib/model/input";
 import { LiveStreamView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
@@ -95,7 +94,7 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 		const updateData = request.body;
 
 		try {
-			const bucket = env.videos;
+			const bucket = c.env.videos;
 			type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 			const repository = new R2Repository<LiveStreamType>(bucket);
 
@@ -149,7 +148,7 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 			await repository.putObject(`livestream:${id}`, updatedStream);
 
 			// Send queue message for live stream update
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.LiveStreamUpdate, {
 				liveStreamId: id,
 				userId,

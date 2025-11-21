@@ -5,7 +5,6 @@
 
 import { OpenAPIRoute, Str, Bool, Num } from 'chanfana';
 import { z } from 'zod';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { getAuthContext } from '../../middleware/auth';
@@ -41,10 +40,7 @@ export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
           cursor: Str({
             description: 'Pagination cursor from previous response',
           }).optional(),
-          includeInactive: Bool({
-            description: 'Include inactive templates',
-            default: false,
-          }),
+          includeInactive: z.boolean().default(false).optional().describe('Include inactive templates'),
           channelId: Str({
             description: 'Filter by channel ID',
           }).optional(),
@@ -93,10 +89,10 @@ export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
 
       // Get validated data
       const data = await this.getValidatedData<typeof this.schema>();
-      const { limit, cursor, includeInactive, channelId } = data.query;
+      const { limit, cursor, includeInactive = false, channelId } = data.query;
 
       // Get bucket
-      const bucket = env['upload-defaults'];
+      const bucket = c.env['upload-defaults'];
       const repo = new R2Repository<UploadTemplate>(bucket);
 
       // Build prefix for listing
@@ -109,6 +105,8 @@ export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
         cursor: cursor || undefined,
         prefix,
       });
+
+      logger.info('Upload defaults query:', { userId, channelId, prefix, objectCount: result.objects.length });
 
       // Fetch and parse templates
       const templates: UploadTemplate[] = [];
@@ -130,20 +128,31 @@ export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
       // Find default template
       const defaultTemplate = templates.find((t) => t.isDefault);
 
-      return c.json({
+      const response = {
         success: true,
         result: {
           templates,
           defaultTemplateId: defaultTemplate?.id,
           cursor: result.truncated ? result.cursor : undefined,
         },
+      };
+
+      logger.info('Upload defaults response:', {
+        templatesCount: templates.length,
+        hasDefault: !!defaultTemplate,
+        hasCursor: !!response.result.cursor
       });
+
+      return c.json(response);
     } catch (error) {
       console.error('List upload defaults error:', error);
+      console.error('Bucket binding:', c.env['upload-defaults'] ? 'exists' : 'undefined');
+      console.error('Error details:', error instanceof Error ? error.message : String(error));
       return c.json(
         {
           success: false,
           error: 'Failed to list upload templates',
+          debug: error instanceof Error ? error.message : String(error),
         },
         500
       );
@@ -257,7 +266,7 @@ export class CreateUploadDefaultEndpoint extends OpenAPIRoute {
       }
 
       // Get bucket
-      const bucket = env['upload-defaults'];
+      const bucket = c.env['upload-defaults'];
       const repo = new R2Repository<UploadTemplate>(bucket);
 
       // Generate template ID

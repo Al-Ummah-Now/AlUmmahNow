@@ -5,7 +5,6 @@
 
 import { OpenAPIRoute, Str, Bool } from 'chanfana';
 import { z } from 'zod';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { getAuthContext } from '../../middleware/auth';
@@ -91,7 +90,7 @@ export class GetUploadDefaultEndpoint extends OpenAPIRoute {
       const { id } = data.params;
 
       // Get bucket
-      const bucket = env['upload-defaults'];
+      const bucket = c.env['upload-defaults'];
 
       // Find template
       const template = await this.findTemplateById(userId, id, bucket);
@@ -283,7 +282,7 @@ export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
       }
 
       // Get bucket
-      const bucket = env['upload-defaults'];
+      const bucket = c.env['upload-defaults'];
 
       // Find template and its key
       const { template, key } = await this.findTemplateByIdWithKey(
@@ -515,7 +514,7 @@ export class DeleteUploadDefaultEndpoint extends OpenAPIRoute {
       const { id } = data.params;
 
       // Get bucket
-      const bucket = env['upload-defaults'];
+      const bucket = c.env['upload-defaults'];
 
       // Find template and its key
       const { template, key } = await this.findTemplateByIdWithKey(
@@ -666,7 +665,7 @@ export class SetDefaultTemplateEndpoint extends OpenAPIRoute {
       const { id } = data.params;
 
       // Get bucket
-      const bucket = env['upload-defaults'];
+      const bucket = c.env['upload-defaults'];
 
       // Find template and its key
       const { template, key } = await this.findTemplateByIdWithKey(

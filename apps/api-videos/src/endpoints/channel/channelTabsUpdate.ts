@@ -6,7 +6,6 @@ import {
 	Channel as BusinessChannel,
 	ResponseError
 } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
@@ -101,7 +100,7 @@ export class ChannelTabsUpdate extends OpenAPIRoute {
 		const tabsUpdateInput = request.body;
 
 		// Verify channel exists and ownership
-		const channelsBucket = env.channels;
+		const channelsBucket = c.env.channels;
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const channelRepository = new R2Repository<ChannelType>(channelsBucket);
 		const channel = await channelRepository.getObject(id);
@@ -122,7 +121,7 @@ export class ChannelTabsUpdate extends OpenAPIRoute {
 		}
 
 		// Get existing configuration or create default
-		const tabsBucket = env.channel_tabs;
+		const tabsBucket = c.env.channel_tabs;
 		type ChannelTabConfigType = z.infer<typeof BusinessChannelTabConfig>;
 		const tabsRepository = new R2Repository<ChannelTabConfigType>(tabsBucket);
 		let config = await tabsRepository.getObject(`channel-tabs/${id}`);
@@ -232,7 +231,7 @@ export class ChannelTabsUpdate extends OpenAPIRoute {
 		}
 
 		// Send queue message for analytics
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ChannelTabUpdate, {
 			channelId: id,
 			userId,

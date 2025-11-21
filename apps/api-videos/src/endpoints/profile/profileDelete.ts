@@ -2,7 +2,6 @@ import { Bool, OpenAPIRoute, Str } from "chanfana";
 import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import Queue, { MessageType } from "../../lib/queue";
 
 export class ProfileDelete extends OpenAPIRoute {
@@ -57,13 +56,13 @@ export class ProfileDelete extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Delete profile from storage
-        const bucket = env.profiles;
+        const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
 		await repository.deleteObject(id);
 
 		// Send queue message for profile deletion
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ProfileDelete, {
 			profileId: id,
 			userId: userId,

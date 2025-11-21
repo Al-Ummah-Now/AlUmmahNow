@@ -3,7 +3,6 @@ import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamInput } from "../../lib/model/input";
 import { LiveStreamView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -105,9 +104,9 @@ export class LiveStreamCreate extends OpenAPIRoute {
 
 		// Create the live stream in Bunny Stream if possible
 		try {
-			const key = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
+			const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 			if (key) {
-				const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
 				
@@ -125,13 +124,13 @@ export class LiveStreamCreate extends OpenAPIRoute {
 		}
 
 		// Save the live stream to the repository
-		const bucket = env.videos; // Using videos bucket for now, could be separate livestreams bucket
+		const bucket = c.env.videos; // Using videos bucket for now, could be separate livestreams bucket
 		type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 		const repository = new R2Repository<LiveStreamType>(bucket);
 		await repository.putObject(`livestream:${liveStream.id}`, liveStream);
 
 		// Send queue message for live stream creation
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.LiveStreamCreate, { // Using dedicated LiveStreamCreate message type
 			liveStreamId: liveStream.id,
 			userId: userId,

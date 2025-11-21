@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata, VideoScheduleResponse } from '@al-ummah/shared-types';
@@ -180,7 +179,7 @@ export class VideoScheduleCreate extends OpenAPIRoute {
       }
 
       // Fetch video from R2
-      const videoRepo = new R2Repository<VideoObject>(env.videos);
+      const videoRepo = new R2Repository<VideoObject>(c.env.videos);
       const video = await videoRepo.getObject(videoId);
 
       if (!video) {
@@ -253,7 +252,7 @@ export class VideoScheduleCreate extends OpenAPIRoute {
       };
 
       // Save to scheduled videos bucket
-      const scheduledBucket = env.SCHEDULED_VIDEOS || env['scheduled-videos'];
+      const scheduledBucket = c.env.SCHEDULED_VIDEOS || c.env['scheduled-videos'];
       if (!scheduledBucket) {
         throw new Error('Scheduled videos bucket not configured');
       }
@@ -271,10 +270,10 @@ export class VideoScheduleCreate extends OpenAPIRoute {
         },
       });
 
-      console.log(`Scheduled video ${videoId} for ${scheduledDate.toISOString()}`);
+      logger.info(`Scheduled video ${videoId} for ${scheduledDate.toISOString()}`);
 
       // Send queue message for video scheduling
-      const queue = new Queue();
+      const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {
         videoId,
         userId,

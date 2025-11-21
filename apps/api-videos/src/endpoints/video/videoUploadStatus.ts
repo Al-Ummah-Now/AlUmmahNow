@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import { requireSecret } from "../../lib/env-helpers";
@@ -111,7 +110,7 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		}
 
 		// Get video from storage
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		const video = await repository.getObject(id);
@@ -134,9 +133,9 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		// Get status from Bunny Stream if possible
 		let bunnyStreamStatus = null;
 		try {
-			const key = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
+			const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 			if (key) {
-				const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
 				

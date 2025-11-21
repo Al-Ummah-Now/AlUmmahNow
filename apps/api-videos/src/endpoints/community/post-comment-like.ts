@@ -117,7 +117,7 @@ export class LikePostComment extends OpenAPIRoute {
     await bucket.put(commentKey, JSON.stringify(comment));
 
     // 6. Send queue event
-    const queue = new Queue();
+    const queue = new Queue(c.env.queue);
     await queue.send(MessageType.PostCommentLiked, {
       postId,
       commentId,

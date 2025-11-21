@@ -1,6 +1,5 @@
 import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 
 export class HealthCheck extends OpenAPIRoute {
 	schema = {

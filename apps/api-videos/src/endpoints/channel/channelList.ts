@@ -3,7 +3,6 @@ import { string, z } from "zod";
 import { Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelsToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -63,7 +62,7 @@ export class ChannelsList extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Implement your own object list here
-		const bucket = env.channels;
+		const bucket = c.env.channels;
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
 		let Channels = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);

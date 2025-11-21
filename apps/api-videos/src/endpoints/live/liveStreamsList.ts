@@ -2,7 +2,6 @@ import { OpenAPIRoute, Num } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
 import { LiveStreamView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 
 export class LiveStreamsList extends OpenAPIRoute {
@@ -60,7 +59,7 @@ export class LiveStreamsList extends OpenAPIRoute {
 		const { cursor = "", limit = 9, status, channelId } = request.query;
 
 		try {
-			const bucket = env.videos;
+			const bucket = c.env.videos;
 			type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 			const repository = new R2Repository<LiveStreamType>(bucket);
 

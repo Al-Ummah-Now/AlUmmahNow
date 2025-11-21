@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, FileText, Edit3 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { VideoObject } from '@/interfaces';
 import { updateVideo } from '@/lib/api/videos';
+import { updateChapters, type Chapter } from '@/lib/api/chapters';
 import VideoPreview from '@/components/videoPreview/index';
 import VideoPreviewRTL from '@/components/videoPreview/rtl/index';
 import ThumbnailSelector from './ThumbnailSelector';
 import SubtitleUploadSection from './SubtitleUploadSection';
+import ChapterEditor from './ChapterEditor';
+import ChapterUpload from './ChapterUpload';
 
 interface VideoEditProps {
   video: VideoObject;
@@ -46,6 +49,8 @@ export default function VideoEdit({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState('');
+  const [chapterMode, setChapterMode] = useState<'none' | 'manual' | 'upload'>('none');
+  const [chapters, setChapters] = useState<Chapter[]>([]);
 
   const [formData, setFormData] = useState<EditFormData>({
     titleEn: video.titleLocalized?.en || video.title || '',
@@ -356,6 +361,121 @@ export default function VideoEdit({
           userId={userId}
           channelId={channelId}
         />
+
+        {/* Video Chapters Section */}
+        <div>
+          <label className="block text-sm font-medium mb-2 dark:text-white">
+            {t.video.chapters}
+          </label>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t.video.chapterParserHelp}
+          </p>
+
+          {/* Chapter Mode Selector */}
+          {chapterMode === 'none' && (
+            <div className="flex gap-3">
+              <button
+                onClick={() => setChapterMode('manual')}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-4 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                <Edit3 size={20} className="text-blue-500" />
+                <div className="text-left">
+                  <div className="font-medium dark:text-white">{t.video.manualChapters}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Create chapters manually
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => setChapterMode('upload')}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-4 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                <FileText size={20} className="text-green-500" />
+                <div className="text-left">
+                  <div className="font-medium dark:text-white">{t.video.importedChapters}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Upload chapter file
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* Manual Chapter Editor */}
+          {chapterMode === 'manual' && (
+            <div className="border dark:border-gray-600 rounded-lg p-4">
+              <ChapterEditor
+                videoId={video.id}
+                videoDuration={video.duration || 0}
+                initialChapters={chapters}
+                onSave={async (newChapters) => {
+                  try {
+                    const result = await updateChapters(video.id, newChapters, 'manual');
+                    if (result?.success) {
+                      setChapters(newChapters);
+                      setSuccess(t.video.chaptersParsed);
+                      setChapterMode('none');
+                    } else {
+                      setError(result?.error || t.errors.genericError);
+                    }
+                  } catch (err) {
+                    console.error('Error saving chapters:', err);
+                    setError(t.errors.genericError);
+                  }
+                }}
+                onCancel={() => setChapterMode('none')}
+              />
+            </div>
+          )}
+
+          {/* Chapter Upload */}
+          {chapterMode === 'upload' && (
+            <div className="border dark:border-gray-600 rounded-lg p-4">
+              <ChapterUpload
+                videoId={video.id}
+                videoDuration={video.duration || 0}
+                onChaptersParsed={async (parsedChapters) => {
+                  try {
+                    const result = await updateChapters(video.id, parsedChapters, 'imported');
+                    if (result?.success) {
+                      setChapters(parsedChapters);
+                      setSuccess(`${parsedChapters.length} ${t.video.chaptersDetected}`);
+                      setChapterMode('none');
+                    } else {
+                      setError(result?.error || t.errors.genericError);
+                    }
+                  } catch (err) {
+                    console.error('Error saving chapters:', err);
+                    setError(t.errors.genericError);
+                  }
+                }}
+                onCancel={() => setChapterMode('none')}
+              />
+            </div>
+          )}
+
+          {/* Show current chapters if they exist */}
+          {chapters.length > 0 && chapterMode === 'none' && (
+            <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                    {chapters.length} {t.video.chaptersDetected}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+                    Click button to edit chapters
+                  </p>
+                </div>
+                <button
+                  onClick={() => setChapterMode('manual')}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  {t.video.editChapter}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Error/Success Messages */}
         {error && (

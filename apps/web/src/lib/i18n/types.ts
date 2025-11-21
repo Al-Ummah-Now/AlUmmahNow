@@ -847,8 +847,10 @@ export interface AppTranslations {
   /**
    * Subtitles/Captions related
    */
-  subtitle?: {
+  subtitle: {
     title: string;
+    subtitles: string;
+    subtitlesDescription: string;
     upload: string;
     language: string;
     default: string;
@@ -863,17 +865,37 @@ export interface AppTranslations {
     noIssues: string;
     uploadSubtitle: string;
     selectLanguage: string;
+    chooseLanguage: string;
     selectFile: string;
+    subtitleFile: string;
     uploadProgress: string;
+    uploading: string;
     uploadSuccess: string;
     uploadError: string;
+    uploadFailed: string;
     setAsDefault: string;
+    setDefault: string;
     fileSize: string;
     status: string;
     uploadedAt: string;
     actions: string;
     noSubtitles: string;
+    noSubtitlesDescription: string;
+    uploadFirstSubtitle: string;
+    addSubtitle: string;
     validationErrors: string;
+    validating: string;
+    validationFailed: string;
+    completeAllFields: string;
+    dragDropOrClick: string;
+    supportedFormats: string;
+    uploadFileArea: string;
+    confirmDelete: string;
+    confirmDeleteDescription: string;
+    deleteSubtitle: string;
+    statusActive: string;
+    statusProcessing: string;
+    statusFailed: string;
   };
 
   /**

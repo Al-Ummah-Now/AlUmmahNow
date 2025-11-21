@@ -4,7 +4,6 @@ import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { ChannelUpdateInput } from "../../lib/model/input";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -73,7 +72,7 @@ export class ChannelUpdate extends OpenAPIRoute {
         const channelUpdateInput = request.body;
 
         // Implement your own object update here
-        const bucket = env.channels;
+        const bucket = c.env.channels;
         type ChannelType = z.infer<typeof BusinessChannel>;
         const repository = new R2Repository<ChannelType>(bucket);
         
@@ -99,7 +98,7 @@ export class ChannelUpdate extends OpenAPIRoute {
         await repository.putObject(id, updatedChannel);
         
         // Send queue message for channel update
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ChannelUpdate, {
 			channelId: id,
 			userId: userId,

@@ -1,7 +1,6 @@
 import { Num, OpenAPIRoute, Str } from "chanfana";
 import { string, z } from "zod";
 import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 
 export class PlaylistsList extends OpenAPIRoute {
@@ -60,7 +59,7 @@ export class PlaylistsList extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
         // Implement your own object list here
-        const bucket = env.playlists;
+        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof Playlist>;
         const repository = new R2Repository<PlaylistType>(bucket);
         let playlists = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);

@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -106,7 +105,7 @@ export class WatchHistoryAdd extends OpenAPIRoute {
 		const { videoId, watchTime, totalDuration, completed } = request.body;
 
 		// Get user profile from storage
-		const bucket = env.profiles;
+		const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
 		let profile = await repository.getObject(userId);
@@ -153,7 +152,7 @@ export class WatchHistoryAdd extends OpenAPIRoute {
 		await repository.putObject(userId, profile);
 
 		// Send analytics event
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ProfileUpdate, {
 			userId: userId,
 			action: "watch_history_add",

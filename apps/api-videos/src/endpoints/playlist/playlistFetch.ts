@@ -1,7 +1,6 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Playlist, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 
 export class PlaylistFetch extends OpenAPIRoute {
@@ -62,7 +61,7 @@ export class PlaylistFetch extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
         // Implement your own object fetch here
-        const bucket = env.playlists;
+        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof Playlist>;
         const repository = new R2Repository<PlaylistType>(bucket);
         let playlist = await repository.getObject(id);

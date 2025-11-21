@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -101,7 +100,7 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 			const { fileSize, duration } = request.body;
 
 			// Get video from storage to verify ownership
-			const bucket = env.videos;
+			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
 			const video = await repository.getObject(videoId);
@@ -133,7 +132,7 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 			await repository.putObject(videoId, updatedVideo);
 
 			// Send analytics event for completed upload
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.VideoUploadCompleted, {
 				videoId,
 				userId,
@@ -159,7 +158,7 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 			// Try to update video status to failed if we have the videoId
 			if (videoId) {
 				try {
-					const bucket = env.videos;
+					const bucket = c.env.videos;
 					type VideoType = z.infer<typeof BusinessVideo>;
 					const repository = new R2Repository<VideoType>(bucket);
 					const video = await repository.getObject(videoId);
@@ -172,7 +171,7 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 						});
 
 						// Send failure event
-						const queue = new Queue();
+						const queue = new Queue(c.env.queue);
 						await queue.send(MessageType.VideoUploadFailed, {
 							videoId,
 							userId,

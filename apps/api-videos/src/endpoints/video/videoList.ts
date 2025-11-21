@@ -3,6 +3,7 @@ import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
+import { VideoCategory } from "@al-ummah/shared-types";
 
 export class VideosList extends OpenAPIRoute {
 	schema = {
@@ -17,11 +18,12 @@ export class VideosList extends OpenAPIRoute {
 				}),
 				cursor: string({
 					description: "The last cursor returned from the previous request",
-					
+
 				}).optional(),
 				sort: z.enum(["date", "views", "title", "likes"]).optional().default("date").describe("Sort order for videos"),
 				filter: z.enum(["all", "public", "private", "live"]).optional().default("all").describe("Filter videos by type"),
 				channelId: Str({ description: "Filter by specific channel ID" }).optional(),
+				category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
@@ -61,7 +63,7 @@ export class VideosList extends OpenAPIRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated parameters
-		const { limit, cursor, sort, filter, channelId: queryChannelId } = request.query;
+		const { limit, cursor, sort, filter, channelId: queryChannelId, category } = request.query;
 		const { channelId, userId } = request.headers;
 
 		// Use channelId from query parameter if provided, otherwise from headers
@@ -81,17 +83,22 @@ export class VideosList extends OpenAPIRoute {
 			if (filterChannelId && video.channelId !== filterChannelId) {
 				return false;
 			}
-			
+
+			// Apply category filter if specified
+			if (category && video.category !== category) {
+				return false;
+			}
+
 			// Apply type filter
 			if (filter === "public" && video.isPublic === false) return false;
 			if (filter === "private" && video.isPublic !== false) return false;
 			if (filter === "live" && !video.isLive) return false;
-			
+
 			// If video is explicitly private (false), only show if user owns it
 			if (video.isPublic === false) {
 				return userId && video.userId === userId;
 			}
-			
+
 			// If video is public (true) or undefined/null (default to public), always show it
 			return true;
 		});

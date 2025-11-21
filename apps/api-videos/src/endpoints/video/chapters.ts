@@ -5,7 +5,6 @@
 
 import { OpenAPIRoute, Str, Bool } from 'chanfana';
 import { z } from 'zod';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import { parseChapters } from '../../lib/chapters/parser';
 import { VideoChapterDataSchema } from '@al-ummah/shared-types';
@@ -75,7 +74,7 @@ export class VideoChaptersGet extends OpenAPIRoute {
       const { id: videoId } = request.params;
       const { regenerate } = request.query;
 
-      const bucket = env.videos;
+      const bucket = c.env.videos;
       const videoRepo = new R2Repository<VideoObject>(bucket);
 
       // Fetch video
@@ -93,7 +92,7 @@ export class VideoChaptersGet extends OpenAPIRoute {
 
       // Check if chapters exist and not regenerating
       if (video.chapters && !regenerate) {
-        console.log('Returning cached chapters', {
+        logger.info('Returning cached chapters', {
           videoId,
           chapterCount: video.chapters.chapters.length,
         });
@@ -105,7 +104,7 @@ export class VideoChaptersGet extends OpenAPIRoute {
 
       // Parse chapters from description
       if (!video.description) {
-        console.log('No description to parse chapters from', { videoId });
+        logger.info('No description to parse chapters from', { videoId });
         return c.json(
           {
             success: false,
@@ -121,7 +120,7 @@ export class VideoChaptersGet extends OpenAPIRoute {
       );
 
       if (!parseResult.success || parseResult.chapters.length === 0) {
-        console.log('No valid chapters found in description', {
+        logger.info('No valid chapters found in description', {
           videoId,
           errors: parseResult.errors,
         });
@@ -146,7 +145,7 @@ export class VideoChaptersGet extends OpenAPIRoute {
         hasChapters: true,
       });
 
-      console.log('Chapters parsed and saved', {
+      logger.info('Chapters parsed and saved', {
         videoId,
         chapterCount: parseResult.chapters.length,
       });

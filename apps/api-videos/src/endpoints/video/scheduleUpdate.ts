@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata } from '@al-ummah/shared-types';
@@ -135,7 +134,7 @@ export class VideoScheduleUpdate extends OpenAPIRoute {
       const { scheduledPublishDate, timezone, notifyOnPublish } = request.body;
 
       // Fetch video from R2
-      const videoRepo = new R2Repository<VideoObject>(env.videos);
+      const videoRepo = new R2Repository<VideoObject>(c.env.videos);
       const video = await videoRepo.getObject(videoId);
 
       if (!video) {
@@ -222,7 +221,7 @@ export class VideoScheduleUpdate extends OpenAPIRoute {
       await videoRepo.putObject(videoId, video);
 
       // Update scheduled metadata in bucket
-      const scheduledBucket = env.SCHEDULED_VIDEOS || env['scheduled-videos'];
+      const scheduledBucket = c.env.SCHEDULED_VIDEOS || c.env['scheduled-videos'];
       if (!scheduledBucket) {
         throw new Error('Scheduled videos bucket not configured');
       }
@@ -274,10 +273,10 @@ export class VideoScheduleUpdate extends OpenAPIRoute {
         },
       });
 
-      console.log(`Rescheduled video ${videoId} from ${previousSchedule} to ${video.scheduledPublishDate}`);
+      logger.info(`Rescheduled video ${videoId} from ${previousSchedule} to ${video.scheduledPublishDate}`);
 
       // Send queue message for schedule update
-      const queue = new Queue();
+      const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {
         videoId,
         userId,

@@ -4,7 +4,6 @@ import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import { PlaylistInput } from "../../lib/model/input";
 import { PlaylistView } from "../../lib/model/view";
 import { transformPlaylistToView, createEntityDefaults } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -81,13 +80,13 @@ export class PlaylistCreate extends OpenAPIRoute {
         };
 
         // Save the playlist to the R2 bucket
-        const bucket = env.playlists;
+        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof BusinessPlaylist>;
         const repository = new R2Repository<PlaylistType>(bucket);
         await repository.putObject(businessPlaylist.id, businessPlaylist);
 
         // Send queue message for playlist creation
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.PlaylistCreate, {
             playlistId: businessPlaylist.id,
             userId: userId,

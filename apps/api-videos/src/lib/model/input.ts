@@ -1,5 +1,6 @@
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
+import { VideoCategory } from "@al-ummah/shared-types";
 
 // Input validation schemas - only fields that users can submit
 
@@ -19,6 +20,9 @@ export const VideoInput = z.object({
     availableResolutions: z.array(z.string()).optional(),
     isPublic: z.boolean().optional(),
     isLive: z.boolean().optional(),
+    category: z.nativeEnum(VideoCategory).optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies')"),
+    tags: z.array(z.string()).optional().describe("Video tags for search and categorization"),
+    language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
 });
 
 export const PlaylistInput = z.object({
@@ -61,6 +65,9 @@ export const VideoUpdateInput = z.object({
     availableResolutions: z.array(z.string()).optional(),
     isPublic: z.boolean().optional(),
     isLive: z.boolean().optional(),
+    category: z.nativeEnum(VideoCategory).optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies')"),
+    tags: z.array(z.string()).optional().describe("Video tags for search and categorization"),
+    language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
 });
 
 export const PlaylistUpdateInput = z.object({

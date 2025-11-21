@@ -159,7 +159,7 @@ export class DeletePostComment extends OpenAPIRoute {
     await bucket.put(postKey, JSON.stringify(post));
 
     // 7. Send queue event
-    const queue = new Queue();
+    const queue = new Queue(c.env.queue);
     await queue.send(MessageType.PostCommentDeleted, {
       postId,
       commentId,

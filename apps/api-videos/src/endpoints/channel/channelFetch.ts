@@ -3,7 +3,6 @@ import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -66,7 +65,7 @@ export class ChannelFetch extends OpenAPIRoute {
 			const { channelId, userId } = request.headers;
 
 			// Implement your own object fetch here
-			const bucket = env.channels;
+			const bucket = c.env.channels;
 			type ChannelType = z.infer<typeof BusinessChannel>;
 			const repository = new R2Repository<ChannelType>(bucket);
 			let channel = await repository.getObject(id);
@@ -87,7 +86,7 @@ export class ChannelFetch extends OpenAPIRoute {
 			const channelView = transformChannelToView(channel);
 
 			// Send queue message for channel view analytics
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.ChannelView, {
 				channelId: channel.id,
 				userId,

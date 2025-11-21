@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -131,8 +130,8 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 			const channelId = c.req.header('channelId') || userId;
 
 			// Create video in Bunny Stream first to get video ID
-			const bunnyKey = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
-			const libraryIdRaw = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+			const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 			const libraryId = parseInt(libraryIdRaw, 10);
 
 			if (isNaN(libraryId)) {
@@ -172,7 +171,7 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 							videoId,
 							processed.original,
 							processed.mimeType,
-							env.videos,
+							c.env.videos,
 							cdnBaseUrl
 						);
 
@@ -217,13 +216,13 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 			};
 
 			// Save metadata to R2
-			const bucket = env.videos;
+			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
 			await repository.putObject(videoId, video);
 
 			// Send analytics event for upload initiation
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.VideoUploadStarted, {
 				videoId,
 				userId,

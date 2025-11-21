@@ -190,7 +190,7 @@ export class CreateCommunityPost extends OpenAPIRoute {
 
       // Send to processor queue for notifications (if published)
       if (post.status === PostStatus.PUBLISHED) {
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.CommunityPostCreated, {
           postId: post.id,
           channelId: channelId,

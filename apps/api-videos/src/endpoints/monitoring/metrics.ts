@@ -1,6 +1,5 @@
 import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 
 export class Metrics extends OpenAPIRoute {
@@ -61,10 +60,10 @@ const startTime = Date.now();
 
 try {
 // Get storage metrics
-const videosRepository = new R2Repository(env.videos);
-const profilesRepository = new R2Repository(env.profiles);
-const channelsRepository = new R2Repository(env.channels);
-const playlistsRepository = new R2Repository(env.playlists);
+const videosRepository = new R2Repository(c.env.videos);
+const profilesRepository = new R2Repository(c.env.profiles);
+const channelsRepository = new R2Repository(c.env.channels);
+const playlistsRepository = new R2Repository(c.env.playlists);
 
 // Get basic counts (limit to avoid performance issues)
 const videosResult = await videosRepository.listObjects(1000);

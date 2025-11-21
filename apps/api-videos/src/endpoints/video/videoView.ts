@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -90,7 +89,7 @@ export class VideoView extends OpenAPIRoute {
 		const viewData = request.body;
 
 		// Get video from storage
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		const video = await repository.getObject(id);
@@ -121,7 +120,7 @@ export class VideoView extends OpenAPIRoute {
 		await repository.putObject(id, updatedVideo);
 
 		// Send detailed analytics event
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoView, {
 			videoId: id,
 			videoTitle: video.title,

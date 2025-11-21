@@ -1,7 +1,6 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -57,7 +56,7 @@ export class DislikeDelete extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Implement your own object fetch here
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof Video>;
 		const repository = new R2Repository<VideoType>(bucket);
 		let video = await repository.getObject(id);
@@ -78,7 +77,7 @@ export class DislikeDelete extends OpenAPIRoute {
 
         const dislike = video.dislikes.find((dislike) => dislike.channelId === channelId && dislike.entityId === id);		
 
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoUndislike, {
 			dislikeId: dislike.id,
 			videoId: id,

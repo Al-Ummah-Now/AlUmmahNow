@@ -3,7 +3,6 @@ import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -65,7 +64,7 @@ export class VideoFetch extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Implement your own object fetch here
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		let video = await repository.getObject(id);
@@ -97,7 +96,7 @@ export class VideoFetch extends OpenAPIRoute {
 		const videoView = transformVideoToView(video);
 
 		// Send queue message for video view analytics
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoView, { 
 			videoId: video.id, 
 			userId, 

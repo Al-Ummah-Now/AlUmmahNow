@@ -1,5 +1,6 @@
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
+import { VideoCategory } from "@al-ummah/shared-types";
 
 // Pure business/database models - represent data as stored in R2
 
@@ -68,6 +69,8 @@ export const Video = z.object({
     originalFormat: z.string().optional(),
     uploadStatus: z.enum(['initiated', 'uploading', 'processing', 'ready', 'failed']).optional(),
     tags: z.array(z.string()).default([]),
+    category: z.nativeEnum(VideoCategory).optional(),
+    language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),
     availableResolutions: z.array(z.string()).default([]),
     comments: z.array(Comment).default([]),
     likes: z.array(Like).default([]),

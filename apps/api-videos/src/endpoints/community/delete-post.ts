@@ -100,7 +100,7 @@ export class DeleteCommunityPost extends OpenAPIRoute {
       await this.removeFromChannelIndex(c, channelId, postId);
 
       // Send deletion event to queue
-      const queue = new Queue();
+      const queue = new Queue(c.env.queue);
       await queue.send(MessageType.CommunityPostDeleted, {
         postId: postId,
         channelId: channelId,

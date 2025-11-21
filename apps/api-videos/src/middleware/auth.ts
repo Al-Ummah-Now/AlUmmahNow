@@ -1,5 +1,4 @@
 import { Context, Next } from 'hono';
-import { env } from 'cloudflare:workers';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 
@@ -146,7 +145,7 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
       };
 
       // Additional validation with environment config
-      console.log(`JWT validated for issuer: ${authConfig.JWT.ISSUER}, audience: ${authConfig.JWT.AUDIENCE}`);
+      logger.info(`JWT validated for issuer: ${authConfig.JWT.ISSUER}, audience: ${authConfig.JWT.AUDIENCE}`);
       
       return payload;
     }

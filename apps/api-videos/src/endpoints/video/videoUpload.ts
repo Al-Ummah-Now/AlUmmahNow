@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -150,7 +149,7 @@ export class VideoUpload extends OpenAPIRoute {
                     });
                 }
 
-                console.log('[SECURITY] Video file validated', {
+                logger.info('[SECURITY] Video file validated', {
                     userId,
                     detectedFormat: magicByteResult.detectedFormat,
                     detectedMimeType: magicByteResult.detectedMimeType,
@@ -199,7 +198,7 @@ export class VideoUpload extends OpenAPIRoute {
             };
 
             // Save metadata to R2
-            const bucket = env.videos;
+            const bucket = c.env.videos;
             type VideoType = z.infer<typeof BusinessVideo>;
             const repository = new R2Repository<VideoType>(bucket);
             await repository.putObject(videoId, video);
@@ -209,9 +208,9 @@ export class VideoUpload extends OpenAPIRoute {
             let uploadUrl = null;
 
             try {
-                const bunnyKey = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
+                const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
                 if (bunnyKey) {
-                    const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+                    const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
                     const libraryId = parseInt(libraryIdStr);
                     const bunnyStream = new stream(bunnyKey);
 
@@ -234,7 +233,7 @@ export class VideoUpload extends OpenAPIRoute {
             }
 
             // Send analytics event
-            const queue = new Queue();
+            const queue = new Queue(c.env.queue);
             await queue.send(MessageType.VideoCreate, {
                 videoId,
                 userId,

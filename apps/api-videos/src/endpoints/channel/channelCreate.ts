@@ -4,7 +4,6 @@ import { Channel as BusinessChannel, Profile as BusinessProfile, ResponseError }
 import { ChannelInput } from "../../lib/model/input";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelToView, createEntityDefaults } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -67,7 +66,7 @@ export class ChannelCreate extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Get user's email from profile
-		const profileBucket = env.profiles;
+		const profileBucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const profileRepository = new R2Repository<ProfileType>(profileBucket);
 		const userProfile = await profileRepository.getObject(userId);
@@ -101,13 +100,13 @@ export class ChannelCreate extends OpenAPIRoute {
 		};
 
 		// Implement your own object insertion here
-        const bucket = env.channels;
+        const bucket = c.env.channels;
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
 		await repository.putObject(businessChannel.id, businessChannel);
 
 		// Send queue message for channel creation
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ChannelCreate, {
 			channelId: businessChannel.id,
 			userId: userId,

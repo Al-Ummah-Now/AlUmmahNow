@@ -2,7 +2,6 @@ import { Num, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 
 // Watch history entry type for response
@@ -109,7 +108,7 @@ export class WatchHistoryList extends OpenAPIRoute {
 		const { limit, offset, filter } = request.query;
 
 		// Get user profile from storage
-		const bucket = env.profiles;
+		const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
 		const profile = await repository.getObject(userId);

@@ -5,7 +5,6 @@
 
 import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import { validateChapters } from '../../lib/chapters/parser';
 import { VideoChapterSchema, VideoChapterDataSchema } from '@al-ummah/shared-types';
@@ -111,7 +110,7 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
       const { id: videoId } = request.params;
       const { chapters } = request.body;
 
-      const bucket = env.videos;
+      const bucket = c.env.videos;
       const videoRepo = new R2Repository<VideoObject>(bucket);
 
       // Fetch video and check ownership
@@ -173,14 +172,14 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
         hasChapters: true,
       });
 
-      console.log('Chapters manually updated', {
+      logger.info('Chapters manually updated', {
         videoId,
         userId: auth.userId,
         chapterCount: chapters.length,
       });
 
       // Send queue message for chapter update
-      const queue = new Queue();
+      const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {
         videoId,
         userId: auth.userId,

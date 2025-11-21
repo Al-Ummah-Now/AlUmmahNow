@@ -1,7 +1,6 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Channel, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -64,7 +63,7 @@ export class SubscriptionCreate extends OpenAPIRoute {
 
 		// Implement your own object insertion here
 		try {
-			const bucket = env.channels;
+			const bucket = c.env.channels;
 			type ChannelType = z.infer<typeof Channel>;
 			const repository = new R2Repository<ChannelType>(bucket);
 			let channel = await repository.getObject(channelId);
@@ -94,7 +93,7 @@ export class SubscriptionCreate extends OpenAPIRoute {
 				dateCreated: new Date().toISOString(),
 			};
 			
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.Subscribe, {
 				subscriptionId: subscription.id,
 				targetChannelId: id,

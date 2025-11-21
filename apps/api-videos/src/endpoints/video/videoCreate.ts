@@ -5,7 +5,6 @@ import { VideoInput } from "../../lib/model/input";
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
 import { getAuthContext, getUserId } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -109,8 +108,8 @@ export class VideoCreate extends OpenAPIRoute {
 		};
 
 		// create the video in Bunny Stream
-		const key = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
-		const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+		const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+		const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 		const libraryId = parseInt(libraryIdStr);
 		const bunnyStream = new stream(key);
 
@@ -143,13 +142,13 @@ export class VideoCreate extends OpenAPIRoute {
 		});
 
 		// Save the video to the repository
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		await repository.putObject(video.id, video);
 
 		// Send queue message for video creation
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoCreate, {
 			videoId: video.id,
 			userId: effectiveUserId,

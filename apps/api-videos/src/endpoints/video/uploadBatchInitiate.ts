@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -130,8 +129,8 @@ export class UploadBatchInitiateEndpoint extends OpenAPIRoute {
 			}
 
 			// Get Bunny.net credentials
-			const bunnyKey = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
-			const libraryIdRaw = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+			const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 			const libraryId = parseInt(libraryIdRaw, 10);
 
 			if (isNaN(libraryId)) {
@@ -142,10 +141,10 @@ export class UploadBatchInitiateEndpoint extends OpenAPIRoute {
 			}
 
 			const bunnyStream = new stream(bunnyKey);
-			const bucket = env.videos;
+			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 
 			// Process each video in parallel
 			const initiatePromises = videos.map(async (videoData) => {

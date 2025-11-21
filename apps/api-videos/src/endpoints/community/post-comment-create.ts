@@ -228,7 +228,7 @@ export class CreatePostComment extends OpenAPIRoute {
     await bucket.put(postKey, JSON.stringify(post));
 
     // 6. Send queue event for notification
-    const queue = new Queue();
+    const queue = new Queue(c.env.queue);
     await queue.send(MessageType.PostCommentCreated, {
       postId,
       commentId: comment.id,

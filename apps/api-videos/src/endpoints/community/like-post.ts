@@ -91,7 +91,7 @@ export class LikeCommunityPost extends OpenAPIRoute {
         await c.env.community_posts.put(postKey, JSON.stringify(post));
 
         // Send to queue for notifications
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.CommunityPostLiked, {
           postId,
           channelId: post.channelId,

@@ -91,7 +91,7 @@ export class ProfileFetch extends OpenAPIRoute {
 			}
 
 			// Send queue message for profile view analytics
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.ProfileView, {
 				profileId: id,
 				userId: userId,

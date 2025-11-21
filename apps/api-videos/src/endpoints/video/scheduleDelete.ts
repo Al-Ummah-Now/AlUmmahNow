@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
@@ -114,7 +113,7 @@ export class VideoScheduleDelete extends OpenAPIRoute {
       const { id: videoId } = request.params;
 
       // Fetch video from R2
-      const videoRepo = new R2Repository<VideoObject>(env.videos);
+      const videoRepo = new R2Repository<VideoObject>(c.env.videos);
       const video = await videoRepo.getObject(videoId);
 
       if (!video) {
@@ -169,19 +168,19 @@ export class VideoScheduleDelete extends OpenAPIRoute {
 
       // Remove from scheduled bucket
       if (previousSchedule) {
-        const scheduledBucket = env.SCHEDULED_VIDEOS || env['scheduled-videos'];
+        const scheduledBucket = c.env.SCHEDULED_VIDEOS || c.env['scheduled-videos'];
         if (scheduledBucket) {
           const scheduledDate = new Date(previousSchedule);
           const key = buildScheduleKey(scheduledDate, videoId);
           await scheduledBucket.delete(key);
-          console.log(`Removed scheduled entry for video ${videoId}: ${key}`);
+          logger.info(`Removed scheduled entry for video ${videoId}: ${key}`);
         }
       }
 
-      console.log(`Cancelled schedule for video ${videoId}`);
+      logger.info(`Cancelled schedule for video ${videoId}`);
 
       // Send queue message for schedule cancellation
-      const queue = new Queue();
+      const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {
         videoId,
         userId,

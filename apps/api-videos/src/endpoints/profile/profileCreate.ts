@@ -4,7 +4,6 @@ import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileInput } from "../../lib/model/input";
 import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView, createEntityDefaults } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -77,13 +76,13 @@ export class ProfileCreate extends OpenAPIRoute {
 		};
 
 		// Implement your own object insertion here
-        const bucket = env.profiles;
+        const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
 		await repository.putObject(businessProfile.id, businessProfile);
 
 		// Send queue message for profile creation
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ProfileCreate, {
 			profileId: businessProfile.id,
 			userId: userId,

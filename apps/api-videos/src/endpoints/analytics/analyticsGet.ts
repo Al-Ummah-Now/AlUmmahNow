@@ -3,7 +3,6 @@ import { z } from "zod";
 import { AnalyticsData as BusinessAnalyticsData, ResponseError } from "../../lib/types";
 import { AnalyticsQueryInput } from "../../lib/model/input";
 import { AnalyticsSummaryView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient } from "../../lib/bunny/stream";
 import { addAuthToSchema } from "../../lib/openapi-auth";
@@ -89,6 +88,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 
 			// Get analytics data from Bunny and built-in metrics
 			const analyticsData = await this.getAnalyticsData(
+				c,
 				entityType,
 				entityId,
 				userId,
@@ -117,6 +117,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 	}
 
 	private async getAnalyticsData(
+		c: any,
 		entityType: string,
 		entityId: string | undefined,
 		userId: string,
@@ -125,16 +126,16 @@ export class AnalyticsGet extends OpenAPIRoute {
 		metrics: string[],
 		granularity: string
 	) {
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		
 		try {
 			// Try to get analytics from Bunny.net first
 			let bunnyAnalytics = null;
 			try {
-				const bunnyKey = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
+				const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 				if (bunnyKey) {
 					const { BunnyStreamClient } = await import("../../lib/bunny/stream");
-					const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+					const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 					const libraryId = parseInt(libraryIdStr);
 					const bunnyStream = new BunnyStreamClient(bunnyKey);
 					

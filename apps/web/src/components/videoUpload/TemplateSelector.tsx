@@ -46,13 +46,16 @@ export function TemplateSelector({
       try {
         const response = await listTemplates();
         if (response) {
-          setTemplates(response.templates);
-          setDefaultTemplateId(response.defaultTemplateId || null);
+          // API returns { success: true, result: { templates, defaultTemplateId } }
+          // But apiRequest returns the full response, so we need to access .result
+          const data = (response as any).result || response;
+          setTemplates(data.templates || []);
+          setDefaultTemplateId(data.defaultTemplateId || null);
 
           // Auto-select default template if exists
-          if (response.defaultTemplateId) {
-            setSelectedTemplateId(response.defaultTemplateId);
-            const defaultTemplate = response.templates.find((t) => t.id === response.defaultTemplateId);
+          if (data.defaultTemplateId) {
+            setSelectedTemplateId(data.defaultTemplateId);
+            const defaultTemplate = data.templates?.find((t: any) => t.id === data.defaultTemplateId);
             if (defaultTemplate) {
               applyTemplate(defaultTemplate);
             }
@@ -214,7 +217,7 @@ export function TemplateSelector({
             <option value="">
               {isRTL ? 'بدون قالب (إدخال يدوي)' : 'None (Manual Entry)'}
             </option>
-            {templates.map((template) => (
+            {templates?.map((template) => (
               <option key={template.id} value={template.id}>
                 {isRTL
                   ? template.nameLocalized?.ar || template.name

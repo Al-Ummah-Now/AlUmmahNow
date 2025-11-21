@@ -1,6 +1,11 @@
 "use server";
 
-import { initiateVideoUploadApi, completeVideoUploadApi, getVideoUploadStatusApi } from "@/lib/api/videos";
+import {
+  initiateVideoUploadApi,
+  completeVideoUploadApi,
+  getVideoUploadStatusApi,
+  initiateBatchUploadApi
+} from "@/lib/api/videos";
 
 /**
  * Initiate video upload - Server action with TUS support
@@ -97,6 +102,47 @@ export async function getVideoUploadStatus(
 }> {
   const result = await getVideoUploadStatusApi(videoId, { userId, channelId });
   return result || { success: false, error: "Failed to get upload status" };
+}
+
+/**
+ * Initiate batch video upload - Server action for multiple videos
+ */
+export async function initiateBatchUpload(
+  videos: Array<{
+    title: string;
+    description?: string;
+    fileSize: number;
+    mimeType: string;
+    isPublic: boolean;
+    tags?: string;
+  }>,
+  userId: string,
+  channelId: string,
+  sharedMetadata?: {
+    channelId?: string;
+    category?: string;
+    isPublic?: boolean;
+  }
+): Promise<{
+  success: boolean;
+  result?: Array<{
+    videoId: string;
+    tusEndpoint: string;
+    tusHeaders: {
+      AuthorizationSignature: string;
+      AuthorizationExpire: string;
+      LibraryId: string;
+      VideoId: string;
+    };
+    expiresAt: string;
+  }>;
+  error?: string;
+}> {
+  const result = await initiateBatchUploadApi(
+    { videos, sharedMetadata },
+    { userId, channelId }
+  );
+  return result || { success: false, error: "Failed to initiate batch upload" };
 }
 
 /**

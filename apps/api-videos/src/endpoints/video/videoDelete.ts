@@ -1,7 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -59,7 +58,7 @@ export class VideoDelete extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Get the video before deletion
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		let video = await repository.getObject(videoId);
@@ -72,7 +71,7 @@ export class VideoDelete extends OpenAPIRoute {
 		}
 
 		// Send queue message for video deletion
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoDelete, {
 			videoId: videoId,
 			userId: userId,

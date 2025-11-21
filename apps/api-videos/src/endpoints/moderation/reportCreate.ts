@@ -3,7 +3,6 @@ import { z } from "zod";
 import { Report as BusinessReport, ResponseError } from "../../lib/types";
 import { ReportInput } from "../../lib/model/input";
 import { ReportView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 
@@ -83,7 +82,7 @@ export class ReportCreate extends OpenAPIRoute {
 
 		try {
 			// Check if user has already reported this entity (prevent spam)
-			const bucket = env.reports; // Use dedicated reports bucket for reports storage
+			const bucket = c.env.reports; // Use dedicated reports bucket for reports storage
 			type ReportType = z.infer<typeof BusinessReport>;
 			const repository = new R2Repository<ReportType>(bucket);
 

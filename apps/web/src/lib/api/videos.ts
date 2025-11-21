@@ -1113,6 +1113,68 @@ export async function completeVideoUploadApi(
 }
 
 /**
+ * Initiate batch video upload - Create multiple video records and get upload configurations
+ * POST /api/videos/upload/batch-initiate
+ */
+export async function initiateBatchUploadApi(
+  request: {
+    videos: Array<{
+      title: string;
+      description?: string;
+      fileSize: number;
+      mimeType: string;
+      isPublic: boolean;
+      tags?: string;
+    }>;
+    sharedMetadata?: {
+      channelId?: string;
+      category?: string;
+      isPublic?: boolean;
+    };
+  },
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<{
+  success: boolean;
+  result?: Array<{
+    videoId: string;
+    tusEndpoint: string;
+    tusHeaders: {
+      AuthorizationSignature: string;
+      AuthorizationExpire: string;
+      LibraryId: string;
+      VideoId: string;
+    };
+    expiresAt: string;
+  }>;
+  error?: string;
+} | null> {
+  return apiRequestServer<{
+    success: boolean;
+    result?: Array<{
+      videoId: string;
+      tusEndpoint: string;
+      tusHeaders: {
+        AuthorizationSignature: string;
+        AuthorizationExpire: string;
+        LibraryId: string;
+        VideoId: string;
+      };
+      expiresAt: string;
+    }>;
+    error?: string;
+  }>({
+    method: 'POST',
+    url: buildApiUrl('/api/videos/upload/batch-initiate'),
+    body: request,
+    functionName: 'initiateBatchUploadApi'
+  }, async () => ({
+    userId: headers.userId,
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
+
+/**
  * Get video upload status
  * GET /api/videos/{id}/upload-status
  */

@@ -5,7 +5,6 @@ import { VideoUpdateInput } from "../../lib/model/input";
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
 import { getAuthContext, getUserId } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -109,7 +108,7 @@ export class VideoUpdate extends OpenAPIRoute {
 		}
 
 		// Get existing video from storage
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		const existingVideo = await repository.getObject(id);
@@ -148,8 +147,8 @@ export class VideoUpdate extends OpenAPIRoute {
 		// Update the video in Bunny Stream if title changed
 		if (videoUpdateInput.title && videoUpdateInput.title !== existingVideo.title) {
 			try {
-				const key = await requireSecret(env["bunny-stream-key"], 'bunny-stream-key');
-				const libraryIdStr = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
 
@@ -166,7 +165,7 @@ export class VideoUpdate extends OpenAPIRoute {
 		await repository.putObject(id, updatedVideo);
 
 		// Send queue message for video update
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoEdit, {
 			videoId: id,
 			userId: effectiveUserId,

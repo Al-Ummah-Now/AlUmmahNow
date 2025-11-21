@@ -1,6 +1,5 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { Playlist, ResponseError } from "../../lib/types";
 import Queue, { MessageType } from "../../lib/queue";
@@ -57,7 +56,7 @@ export class PlaylistDelete extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
         // Fetch the playlist first to check ownership and privacy
-        const bucket = env.playlists;
+        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof Playlist>;
         const repository = new R2Repository<PlaylistType>(bucket);
         const playlist = await repository.getObject(id);
@@ -86,7 +85,7 @@ export class PlaylistDelete extends OpenAPIRoute {
         }
 
         // Send queue message for playlist deletion
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.PlaylistDelete, {
             playlistId: id,
             userId: userId,

@@ -231,7 +231,7 @@ export class SubtitlesUpload extends OpenAPIRoute {
       await videoRepo.putObject(videoId, updatedVideo);
 
       // Send queue message for subtitle upload
-      const queue = new Queue();
+      const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {
         videoId,
         userId,

@@ -3,7 +3,6 @@ import { string, z } from "zod";
 import { Profile as BusinessProfile, PaginationResponse, ResponseError } from "../../lib/types";
 import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 
 export class ProfilesList extends OpenAPIRoute {
@@ -72,7 +71,7 @@ export class ProfilesList extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Get profiles from storage
-        const bucket = env.profiles;
+        const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
 		const profiles = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);

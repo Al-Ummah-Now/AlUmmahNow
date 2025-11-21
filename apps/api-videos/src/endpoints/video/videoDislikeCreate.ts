@@ -1,7 +1,6 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -58,7 +57,7 @@ export class DislikeCreate extends OpenAPIRoute {
 		const { channelId, userId } = request.headers;
 
 		// Fetch the video object
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof Video>;
 		const repository = new R2Repository<VideoType>(bucket);
 		let video = await repository.getObject(id);
@@ -84,7 +83,7 @@ export class DislikeCreate extends OpenAPIRoute {
 			dateCreated: new Date().toISOString(),
 		};
 
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoDislike, {
 			dislikeId: dislike.id,
 			videoId: id,

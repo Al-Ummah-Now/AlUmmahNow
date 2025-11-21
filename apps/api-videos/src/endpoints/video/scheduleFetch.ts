@@ -2,7 +2,6 @@ import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
-import { env } from 'cloudflare:workers';
 import R2Repository from '../../lib/r2Repo';
 import type { VideoObject } from '@al-ummah/shared-types';
 
@@ -102,7 +101,7 @@ export class VideoScheduleFetch extends OpenAPIRoute {
       const { id: videoId } = request.params;
 
       // Fetch video from R2
-      const videoRepo = new R2Repository<VideoObject>(env.videos);
+      const videoRepo = new R2Repository<VideoObject>(c.env.videos);
       const video = await videoRepo.getObject(videoId);
 
       if (!video) {

@@ -160,7 +160,7 @@ export class VoteOnPoll extends OpenAPIRoute {
       await c.env.community_posts.put(postKey, JSON.stringify(post));
 
       // Send to queue for analytics
-      const queue = new Queue();
+      const queue = new Queue(c.env.queue);
       await queue.send(MessageType.PollVoted, {
         postId,
         channelId: post.channelId,

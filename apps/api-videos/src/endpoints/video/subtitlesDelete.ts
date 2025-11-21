@@ -216,7 +216,7 @@ export class SubtitlesDelete extends OpenAPIRoute {
       }
 
       // Send queue message for subtitle deletion
-      const queue = new Queue();
+      const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {
         videoId,
         userId,

@@ -5,6 +5,10 @@
 
 import { Timestamps } from './common';
 import { SubtitleTrack } from './subtitle';
+import { VideoCategory } from './upload-defaults';
+
+// Re-export VideoCategory for convenience
+export { VideoCategory };
 
 export interface VideoChapter {
   id: string;           // UUID for chapter
@@ -68,7 +72,7 @@ export interface VideoObject extends Timestamps {
 
   // SEO and categorization
   tags?: string[];
-  category?: string;
+  category?: VideoCategory;
   language?: string;
 
   // Chapter support
@@ -124,7 +128,7 @@ export interface VideoCreateRequest {
   videoUrl: string;
   isPublic?: boolean;
   tags?: string[];
-  category?: string;
+  category?: VideoCategory;
   language?: string;
 }
 
@@ -136,7 +140,7 @@ export interface VideoUpdateRequest {
   thumbnailUrl?: string;
   isPublic?: boolean;
   tags?: string[];
-  category?: string;
+  category?: VideoCategory;
   language?: string;
 }
 
@@ -145,7 +149,7 @@ export interface VideoListParams {
   cursor?: string;
   channelId?: string;
   userId?: string;
-  category?: string;
+  category?: VideoCategory;
   tags?: string[];
   isPublic?: boolean;
   isFeatured?: boolean;
@@ -158,7 +162,7 @@ export interface VideoUploadMetadata {
   description?: string;
   channelId?: string;
   tags?: string[];
-  category?: string;
+  category?: VideoCategory;
   language?: string;
   isPublic?: boolean;
   thumbnail?: {

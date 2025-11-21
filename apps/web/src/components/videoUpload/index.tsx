@@ -10,6 +10,12 @@ import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n";
 import { UploadButton } from "@/components/UploadButton";
 import { ThumbnailUploadSection, ThumbnailData } from "./ThumbnailUploadSection";
+import { CategorySelector } from "./CategorySelector";
+import { TemplateSelector } from "./TemplateSelector";
+import { ScheduleDateTimeSelector, ScheduleData } from "./ScheduleDateTimeSelector";
+import { VideoCategory } from "@al-ummah/shared-types";
+import type { ProcessedMetadata } from "@/lib/upload/template-variables";
+import { scheduleVideo } from "@/lib/api/scheduling";
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -26,6 +32,7 @@ interface VideoMetadata {
   descriptionEn?: string;
   descriptionAr?: string;
   tags?: string[];
+  category?: VideoCategory;
   isPublic: boolean;
 }
 
@@ -67,6 +74,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const [showMetadataForm, setShowMetadataForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
+  const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<tus.Upload | null>(null);
@@ -188,6 +196,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           },
           isPublic: metadata.isPublic,
           tags: tagsString,
+          category: metadata.category,
           fileSize: selectedFile.size,
           mimeType: selectedFile.type,
           thumbnail: selectedThumbnail ? {
@@ -317,6 +326,27 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           setUploadProgress({ percentage: 100, state: 'complete' });
           onProgress(100);
 
+          // If scheduled, create schedule after upload
+          if (scheduleData) {
+            try {
+              const scheduleResult = await scheduleVideo(
+                videoId,
+                scheduleData.scheduledPublishDate,
+                scheduleData.timezone,
+                scheduleData.notifyOnPublish,
+                { userId, channelId }
+              );
+
+              if (!scheduleResult?.success) {
+                console.warn('Failed to schedule video:', scheduleResult?.error);
+                // Continue anyway - video is uploaded successfully
+              }
+            } catch (schedError) {
+              console.warn('Error scheduling video:', schedError);
+              // Continue anyway - video is uploaded successfully
+            }
+          }
+
           // Create video object for callback
           const videoData: VideoObject = {
             id: videoId,
@@ -401,6 +431,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     videoIdRef.current = '';
     libraryIdRef.current = 0;
     setSelectedThumbnail(null);
+    setScheduleData(null);
     setMetadata({
       title: '',
       titleEn: '',
@@ -411,6 +442,21 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       tags: [],
       isPublic: true
     });
+  };
+
+  const handleTemplateApply = (processedMetadata: ProcessedMetadata) => {
+    setMetadata(prev => ({
+      ...prev,
+      titleEn: processedMetadata.titleLocalized?.en || processedMetadata.title || prev.titleEn,
+      titleAr: processedMetadata.titleLocalized?.ar || prev.titleAr,
+      title: processedMetadata.title || prev.title,
+      descriptionEn: processedMetadata.descriptionLocalized?.en || processedMetadata.description || prev.descriptionEn,
+      descriptionAr: processedMetadata.descriptionLocalized?.ar || prev.descriptionAr,
+      description: processedMetadata.description || prev.description,
+      tags: processedMetadata.tags || prev.tags,
+      category: processedMetadata.category || prev.category,
+      isPublic: processedMetadata.visibility === 'public' ? true : processedMetadata.visibility === 'private' ? false : prev.isPublic,
+    }));
   };
 
   if (showMetadataForm && selectedFile) {
@@ -494,6 +540,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         )}
 
         <div className="space-y-4 mb-6">
+          {/* Template Selector */}
+          <TemplateSelector
+            onTemplateApply={handleTemplateApply}
+            channelName={auth.user?.channelName || auth.user?.email}
+            uploaderName={auth.user?.name || auth.user?.email}
+          />
+
           {/* Title with Language Tabs */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -577,6 +630,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             )}
           </div>
 
+          {/* Category Selector */}
+          <CategorySelector
+            value={metadata.category}
+            onChange={(category) => setMetadata(prev => ({ ...prev, category }))}
+            disabled={uploadProgress?.state === 'uploading'}
+          />
+
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -597,6 +657,14 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             onThumbnailSelect={setSelectedThumbnail}
             disabled={uploadProgress?.state === 'uploading'}
           />
+
+          {/* Schedule Selector - Only show when NOT public */}
+          {!metadata.isPublic && (
+            <ScheduleDateTimeSelector
+              onScheduleChange={setScheduleData}
+              disabled={uploadProgress?.state === 'uploading'}
+            />
+          )}
         </div>
 
         <div className="flex space-x-3">

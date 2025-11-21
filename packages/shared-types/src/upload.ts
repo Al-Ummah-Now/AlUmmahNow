@@ -3,7 +3,7 @@
  * These types are shared between frontend and backend
  */
 
-import { VideoUploadMetadata } from './video';
+import { VideoUploadMetadata, VideoCategory } from './video';
 
 /**
  * Upload status for individual videos in a batch
@@ -74,7 +74,7 @@ export interface BatchUploadInitiateRequest {
   }>;
   sharedMetadata?: {
     channelId?: string;
-    category?: string;
+    category?: VideoCategory;
     isPublic?: boolean;
   };
 }

@@ -3,7 +3,6 @@ import { z } from "zod";
 import { Playlist as BusinessPlaylist, Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { PlaylistView } from "../../lib/model/view";
 import { transformPlaylistToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -80,7 +79,7 @@ export class PlaylistAddVideo extends OpenAPIRoute {
         const { videoId } = request.body;
 
         // Get existing playlist
-        const playlistsBucket = env.playlists;
+        const playlistsBucket = c.env.playlists;
         type PlaylistType = z.infer<typeof BusinessPlaylist>;
         const playlistRepository = new R2Repository<PlaylistType>(playlistsBucket);
         
@@ -101,7 +100,7 @@ export class PlaylistAddVideo extends OpenAPIRoute {
         }
 
         // Verify video exists
-        const videosBucket = env.videos;
+        const videosBucket = c.env.videos;
         type VideoType = z.infer<typeof BusinessVideo>;
         const videoRepository = new R2Repository<VideoType>(videosBucket);
         
@@ -132,7 +131,7 @@ export class PlaylistAddVideo extends OpenAPIRoute {
         await playlistRepository.putObject(id, updatedPlaylist);
 
         // Send queue message for playlist add
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.PlaylistAdd, {
             playlistId: id,
             videoId: videoId,

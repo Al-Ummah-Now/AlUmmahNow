@@ -3,7 +3,6 @@ import { z } from "zod";
 import { Report as BusinessReport, ResponseError } from "../../lib/types";
 import { ModerationActionInput } from "../../lib/model/input";
 import { ReportView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
@@ -101,7 +100,7 @@ export class ModerationAction extends OpenAPIRoute {
 
 		try {
 			// Check if user has moderator permissions
-			const hasModeratorRole = await this.checkModeratorRole(userId);
+			const hasModeratorRole = await this.checkModeratorRole(c, userId);
 			if (!hasModeratorRole) {
 				return c.json(
 					{
@@ -112,7 +111,7 @@ export class ModerationAction extends OpenAPIRoute {
 				);
 			}
 
-			const bucket = env.videos;
+			const bucket = c.env.videos;
 			type ReportType = z.infer<typeof BusinessReport>;
 			const repository = new R2Repository<ReportType>(bucket);
 
@@ -155,7 +154,7 @@ export class ModerationAction extends OpenAPIRoute {
 			await repository.putObject(reportKey, updatedReport);
 
 			// Send queue message for moderation action
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.VideoEdit, {
 				reportId: updatedReport.id,
 				entityType: updatedReport.entityType,
@@ -233,7 +232,7 @@ export class ModerationAction extends OpenAPIRoute {
 		// This would implement actual content actions in production
 		// For now, we'll just log the action and return success
 
-		console.log(`Moderation action: ${action} on ${entityType}:${entityId}`);
+		logger.info(`Moderation action: ${action} on ${entityType}:${entityId}`);
 
 		switch (action) {
 			case 'remove':
@@ -292,11 +291,11 @@ export class ModerationAction extends OpenAPIRoute {
 		}
 	}
 
-	private async checkModeratorRole(userId: string): Promise<boolean> {
+	private async checkModeratorRole(c: any, userId: string): Promise<boolean> {
 		try {
 			// For now, use a simple role check based on user profiles
 			// In a full implementation, this would query a dedicated user management system
-			const bucket = env.profiles;
+			const bucket = c.env.profiles;
 			const repository = new R2Repository<any>(bucket);
 			
 			// Check if user profile exists and has moderator role

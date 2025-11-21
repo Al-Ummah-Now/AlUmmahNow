@@ -4,7 +4,6 @@ import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileUpdateInput } from "../../lib/model/input";
 import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
@@ -73,7 +72,7 @@ export class ProfileUpdate extends OpenAPIRoute {
         const profileUpdateInput = request.body;
 
         // Get existing profile from storage
-        const bucket = env.profiles;
+        const bucket = c.env.profiles;
         type ProfileType = z.infer<typeof BusinessProfile>;
         const repository = new R2Repository<ProfileType>(bucket);
         const existingProfile = await repository.getObject(id);
@@ -98,7 +97,7 @@ export class ProfileUpdate extends OpenAPIRoute {
         await repository.putObject(id, updatedProfile);
 
         // Send queue message for profile update
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ProfileUpdate, {
             profileId: id,
             userId: userId,
