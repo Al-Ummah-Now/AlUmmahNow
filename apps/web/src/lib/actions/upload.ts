@@ -15,6 +15,12 @@ export async function initiateVideoUpload(
     tags?: string;
     fileSize: number;
     mimeType: string;
+    thumbnail?: {
+      type: 'auto' | 'custom';
+      data?: string;
+      position?: number;
+      filename?: string;
+    };
   },
   userId: string,
   channelId: string
@@ -32,6 +38,8 @@ export async function initiateVideoUpload(
     expiresAt: string;
     chunkSize: number;
     resumable: boolean;
+    thumbnailUrl?: string;
+    thumbnailSizes?: Record<string, string>;
     uploadUrl?: string;
     libraryId?: number;
     status?: string;

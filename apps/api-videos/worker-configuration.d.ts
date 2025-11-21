@@ -23,6 +23,8 @@ declare namespace Cloudflare {
 		channel_sections: R2Bucket;
 		community_posts: R2Bucket;
 		channel_tabs: R2Bucket;
+		SCHEDULED_VIDEOS: R2Bucket;
+		"scheduled-videos": R2Bucket;
 		image_storage_key: SecretsStoreSecret;
 		"bunny-stream-key": SecretsStoreSecret;
 		bunny_stream_library_id: SecretsStoreSecret;

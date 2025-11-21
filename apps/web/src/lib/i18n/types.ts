@@ -230,6 +230,7 @@ export interface AppTranslations {
       toggle_visibility: string;
       set_as_default: string;
       cannot_hide_last_tab: string;
+      cannot_hide_default_tab: string;
       default_tab: string;
       visible: string;
       hidden: string;
@@ -315,6 +316,81 @@ export interface AppTranslations {
     weeksAgo: string;
     monthsAgo: string;
     yearsAgo: string;
+    // Video chapters (flat properties)
+    chapters?: string;
+    chapter?: string;
+    noChapters?: string;
+    currentChapter?: string;
+    nextChapter?: string;
+    previousChapter?: string;
+    addChapter?: string;
+    editChapter?: string;
+    deleteChapter?: string;
+    chapterTitle?: string;
+    chapterTimestamp?: string;
+    parseFromDescription?: string;
+    showChapters?: string;
+    hideChapters?: string;
+    chapterList?: string;
+    parseChapters?: string;
+    chapterParserHelp?: string;
+    chapterParserExample?: string;
+    chaptersDetected?: string;
+    chaptersParsed?: string;
+    invalidChapterFormat?: string;
+    firstChapterMustBeZero?: string;
+    chapterTooClose?: string;
+    maxChaptersReached?: string;
+    duplicateTimestamp?: string;
+    chapterTitleRequired?: string;
+    chapterTitleMaxLength?: string;
+    moveChapterUp?: string;
+    moveChapterDown?: string;
+    previewChapters?: string;
+    autoParseChapters?: string;
+    manualChapters?: string;
+    importedChapters?: string;
+    // Video management dashboard
+    myVideos?: string;
+    manageVideos?: string;
+    videoManagement?: string;
+    allVideos?: string;
+    uploadedVideos?: string;
+    searchVideos?: string;
+    filterByStatus?: string;
+    filterByPrivacy?: string;
+    sortVideos?: string;
+    allStatus?: string;
+    ready?: string;
+    processing?: string;
+    uploading?: string;
+    failed?: string;
+    public?: string;
+    private?: string;
+    makePublic?: string;
+    makePrivate?: string;
+    sortByDate?: string;
+    sortByViews?: string;
+    sortByTitle?: string;
+    bulkActions?: string;
+    selectAll?: string;
+    deselectAll?: string;
+    deleteSelected?: string;
+    changePrivacy?: string;
+    videosSelected?: string;
+    confirmDelete?: string;
+    confirmDeleteMultiple?: string;
+    deleteSuccess?: string;
+    deleteMultipleSuccess?: string;
+    noVideosFound?: string;
+    uploadFirstVideo?: string;
+    // Video player controls
+    play?: string;
+    pause?: string;
+    mute?: string;
+    unmute?: string;
+    fullscreen?: string;
+    exitFullscreen?: string;
   };
 
   /**
@@ -425,6 +501,57 @@ export interface AppTranslations {
     speed: string;
     timeRemaining: string;
     bytesUploaded: string;
+  };
+
+  /**
+   * Batch upload related
+   */
+  batch: {
+    batchUpload: string;
+    selectFiles: string;
+    selectedFiles: string;
+    filesSelected: string;
+    dragDropMultiple: string;
+    clickToBrowse: string;
+    fileLimit: string;
+    removeFile: string;
+    sharedMetadata: string;
+    individualMetadata: string;
+    applyToAll: string;
+    copyToAll: string;
+    resetToShared: string;
+    autoNumbering: string;
+    enableAutoNumbering: string;
+    numberingPattern: string;
+    uploadQueue: string;
+    queueEmpty: string;
+    addVideos: string;
+    startUploads: string;
+    pauseAll: string;
+    resumeAll: string;
+    cancelAll: string;
+    retryFailed: string;
+    overallProgress: string;
+    completed: string;
+    pending: string;
+    uploading: string;
+    paused: string;
+    cancelled: string;
+    eta: string;
+    overallEta: string;
+    concurrency: string;
+    concurrentUploads: string;
+    uploadSpeed: string;
+    totalProgress: string;
+    ofCompleted: string;
+    errors: {
+      tooFewFiles: string;
+      tooManyFiles: string;
+      invalidFileType: string;
+      fileTooLarge: string;
+      initiateFailed: string;
+      uploadFailed: string;
+    };
   };
 
   /**
@@ -715,6 +842,106 @@ export interface AppTranslations {
     subscriptionMessage: string;
     uploadMessage: string;
     systemMessage: string;
+  };
+
+  /**
+   * Subtitles/Captions related
+   */
+  subtitle?: {
+    title: string;
+    upload: string;
+    language: string;
+    default: string;
+    delete: string;
+    settings: string;
+    fontSize: string;
+    off: string;
+    preview: string;
+    showingFirst5: string;
+    warnings: string;
+    moreCues: string;
+    noIssues: string;
+    uploadSubtitle: string;
+    selectLanguage: string;
+    selectFile: string;
+    uploadProgress: string;
+    uploadSuccess: string;
+    uploadError: string;
+    setAsDefault: string;
+    fileSize: string;
+    status: string;
+    uploadedAt: string;
+    actions: string;
+    noSubtitles: string;
+    validationErrors: string;
+  };
+
+  /**
+   * Upload Defaults/Templates related
+   */
+  uploadDefaults?: {
+    title: string;
+    subtitle: string;
+    createTemplate: string;
+    createFirstTemplate: string;
+    noTemplates: string;
+    noTemplatesMessage: string;
+    templateName: string;
+    templateNameEn: string;
+    templateNameAr: string;
+    templateTitle: string;
+    templateDescription: string;
+    tags: string;
+    category: string;
+    visibility: string;
+    setAsDefault: string;
+    isDefault: string;
+    defaultTemplate: string;
+    editTemplate: string;
+    deleteTemplate: string;
+    saveTemplate: string;
+    cancel: string;
+    creating: string;
+    updating: string;
+    deleting: string;
+    templateCreated: string;
+    templateUpdated: string;
+    templateDeleted: string;
+    confirmDelete: string;
+    confirmDeleteMessage: string;
+    variables?: {
+      [key: string]: string;
+    };
+    [key: string]: string | { [key: string]: string } | undefined;
+  };
+
+  /**
+   * Scheduling related
+   */
+  schedule?: {
+    title?: string;
+    schedulingOptions?: string;
+    publishImmediately?: string;
+    scheduleLater?: string;
+    selectDate?: string;
+    selectTime?: string;
+    selectDateTime?: string;
+    timezone?: string;
+    selectTimezone?: string;
+    notifyOnPublish?: string;
+    schedulePreview?: string;
+    willBePublishedOn?: string;
+    minimumScheduleTime?: string;
+    maximumScheduleTime?: string;
+    scheduled?: string;
+    cancel?: string;
+    publishNow?: string;
+    scheduledVideos?: string;
+    noScheduledVideos?: string;
+    scheduleVideo?: string;
+    reschedule?: string;
+    cancelSchedule?: string;
+    [key: string]: string | undefined;
   };
 }
 

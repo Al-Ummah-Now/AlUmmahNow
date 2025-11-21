@@ -17,6 +17,19 @@ import { VideoUpload } from "./endpoints/video/videoUpload";
 import { UploadInitiateEndpoint } from "./endpoints/video/uploadInitiate";
 import { UploadCompleteEndpoint } from "./endpoints/video/uploadComplete";
 import { UploadResumeEndpoint } from "./endpoints/video/uploadResume";
+import { UploadBatchInitiateEndpoint } from "./endpoints/video/uploadBatchInitiate";
+import { VideoChaptersGet } from "./endpoints/video/chapters";
+import { VideoChaptersUpdate } from "./endpoints/video/chaptersUpdate";
+import { SubtitlesUpload } from "./endpoints/video/subtitlesUpload";
+import { SubtitlesList } from "./endpoints/video/subtitlesList";
+import { SubtitlesGet } from "./endpoints/video/subtitlesGet";
+import { SubtitlesDelete } from "./endpoints/video/subtitlesDelete";
+// Video Scheduling imports
+import { VideoScheduleCreate } from "./endpoints/video/scheduleCreate";
+import { VideoScheduleUpdate } from "./endpoints/video/scheduleUpdate";
+import { VideoScheduleDelete } from "./endpoints/video/scheduleDelete";
+import { VideoScheduleFetch } from "./endpoints/video/scheduleFetch";
+import { VideoScheduleList } from "./endpoints/video/scheduleList";
 import { ProfileCreate } from "./endpoints/profile/profileCreate";
 import { ProfileDelete } from "./endpoints/profile/profileDelete";
 import { ProfileFetch } from "./endpoints/profile/profileFetch";
@@ -102,6 +115,9 @@ import { UnlikePostComment } from "./endpoints/community/post-comment-unlike";
 // Community Posts - Media Upload imports
 import { UploadCommunityPostImages } from "./endpoints/community/upload-images";
 import { UploadCommunityPostGif } from "./endpoints/community/upload-gif";
+// Upload Defaults (Templates) imports
+import { ListUploadDefaultsEndpoint, CreateUploadDefaultEndpoint } from "./endpoints/settings/uploadDefaults";
+import { GetUploadDefaultEndpoint, UpdateUploadDefaultEndpoint, DeleteUploadDefaultEndpoint, SetDefaultTemplateEndpoint } from "./endpoints/settings/uploadDefaultsById";
 
 
 // Start a Hono app - testing reload
@@ -193,6 +209,9 @@ openapi.get("/api/videos", VideosList);
 openapi.get("/api/videos/search", VideoSearch);
 openapi.get("/api/videos/:id", VideoFetch);
 openapi.post("/api/videos/:id/view", VideoView); // View tracking (analytics)
+openapi.get("/api/videos/:id/chapters", VideoChaptersGet); // Get video chapters
+openapi.get("/api/videos/:videoId/subtitles", SubtitlesList); // List subtitle tracks
+openapi.get("/api/videos/:videoId/subtitles/:language", SubtitlesGet); // Get specific subtitle
 openapi.get("/api/profiles", ProfilesList);
 openapi.get("/api/profiles/:id", ProfileFetch);
 openapi.get("/api/playlists", PlaylistsList);
@@ -230,6 +249,7 @@ app.use('/auth-test', authMiddleware);
 // SECURITY: Apply rate limiting to video upload endpoints
 app.use('/api/videos/upload', rateLimitMiddleware('video_upload'));
 app.use('/api/videos/upload/initiate', rateLimitMiddleware('video_upload'));
+app.use('/api/videos/upload/batch/initiate', rateLimitMiddleware('video_upload'));
 app.use('/api/videos/upload/complete', rateLimitMiddleware('video_upload'));
 app.use('/api/videos/upload/resume/:videoId', rateLimitMiddleware('video_upload'));
 
@@ -321,15 +341,30 @@ app.use('/api/community/posts/:postId/comments/:commentId/like', authMiddleware)
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
 app.use('/api/community/media/upload/gif', rateLimitMiddleware('image_upload'));
 
+// Upload Defaults (Templates) - All operations require auth
+app.use('/api/upload-defaults/*', authMiddleware);
+app.use('/api/upload-defaults', authMiddleware);
+
 // AUTHENTICATED endpoints (require valid JWT token)
 openapi.post("/api/videos", VideoCreate);
 openapi.post("/api/videos/upload", VideoUpload);
 openapi.post("/api/videos/upload/initiate", UploadInitiateEndpoint);
+openapi.post("/api/videos/upload/batch/initiate", UploadBatchInitiateEndpoint);
 openapi.post("/api/videos/upload/complete", UploadCompleteEndpoint);
 openapi.get("/api/videos/upload/resume/:videoId", UploadResumeEndpoint);
 openapi.put("/api/videos/:id", VideoUpdate);
 openapi.delete("/api/videos/:id", VideoDelete);
 openapi.get("/api/videos/:id/upload-status", VideoUploadStatus);
+openapi.put("/api/videos/:id/chapters", VideoChaptersUpdate); // Update video chapters (manual edit)
+openapi.post("/api/videos/:videoId/subtitles", SubtitlesUpload); // Upload subtitle track
+openapi.delete("/api/videos/:videoId/subtitles/:language", SubtitlesDelete); // Delete subtitle track
+
+// Video Scheduling (require auth)
+openapi.post("/api/videos/:id/schedule", VideoScheduleCreate); // Schedule video publication
+openapi.patch("/api/videos/:id/schedule", VideoScheduleUpdate); // Reschedule video publication
+openapi.delete("/api/videos/:id/schedule", VideoScheduleDelete); // Cancel scheduled publication
+openapi.get("/api/videos/:id/schedule", VideoScheduleFetch); // Get schedule status
+openapi.get("/api/videos/scheduled", VideoScheduleList); // List all scheduled videos
 
 openapi.post("/api/profiles", ProfileCreate);
 openapi.put("/api/profiles/:id", ProfileUpdate);
@@ -425,6 +460,14 @@ openapi.delete("/api/community/posts/:postId/comments/:commentId/like", UnlikePo
 openapi.post("/api/community/media/upload/images", UploadCommunityPostImages);
 openapi.post("/api/community/media/upload/gif", UploadCommunityPostGif);
 
+// Upload Defaults (Templates) management (require auth)
+openapi.get("/api/upload-defaults", ListUploadDefaultsEndpoint);
+openapi.post("/api/upload-defaults", CreateUploadDefaultEndpoint);
+openapi.get("/api/upload-defaults/:id", GetUploadDefaultEndpoint);
+openapi.put("/api/upload-defaults/:id", UpdateUploadDefaultEndpoint);
+openapi.delete("/api/upload-defaults/:id", DeleteUploadDefaultEndpoint);
+openapi.put("/api/upload-defaults/:id/default", SetDefaultTemplateEndpoint);
+
 // Override the default OpenAPI document to include authentication
 app.get("/openapi.json", async (c) => {
 	// Get the original OpenAPI document from Chanfana
@@ -483,9 +526,16 @@ app.get("/openapi.json", async (c) => {
 		// Video management
 		'/api/videos', // POST
 		'/api/videos/upload/initiate', // POST
+		'/api/videos/upload/batch/initiate', // POST
 		'/api/videos/upload/complete', // POST
 		'/api/videos/upload/resume/{videoId}', // GET
 		'/api/videos/{id}', // PUT, DELETE
+		'/api/videos/{id}/chapters', // PUT (manual edit)
+		'/api/videos/{videoId}/subtitles', // POST (upload)
+		'/api/videos/{videoId}/subtitles/{language}', // DELETE
+		// Video Scheduling
+		'/api/videos/{id}/schedule', // POST, PATCH, DELETE, GET
+		'/api/videos/scheduled', // GET
 		'/api/videos/{id}/likes', // POST, DELETE
 		'/api/videos/{id}/dislikes', // POST, DELETE
 		'/api/videos/{id}/comments', // POST
@@ -536,6 +586,10 @@ app.get("/openapi.json", async (c) => {
 		// Community Posts - Media Upload
 		'/api/community/media/upload/images', // POST
 		'/api/community/media/upload/gif', // POST
+		// Upload Defaults (Templates) management
+		'/api/upload-defaults', // GET, POST
+		'/api/upload-defaults/{id}', // GET, PUT, DELETE
+		'/api/upload-defaults/{id}/default', // PUT
 	];
 
 	// Add security requirements to authenticated endpoints

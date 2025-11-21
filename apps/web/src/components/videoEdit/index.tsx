@@ -8,6 +8,7 @@ import { updateVideo } from '@/lib/api/videos';
 import VideoPreview from '@/components/videoPreview/index';
 import VideoPreviewRTL from '@/components/videoPreview/rtl/index';
 import ThumbnailSelector from './ThumbnailSelector';
+import SubtitleUploadSection from './SubtitleUploadSection';
 
 interface VideoEditProps {
   video: VideoObject;
@@ -348,6 +349,13 @@ export default function VideoEdit({
             </label>
           </div>
         </div>
+
+        {/* Subtitles/Captions Section */}
+        <SubtitleUploadSection
+          videoId={video.id}
+          userId={userId}
+          channelId={channelId}
+        />
 
         {/* Error/Success Messages */}
         {error && (

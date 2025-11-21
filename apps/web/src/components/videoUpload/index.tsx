@@ -9,6 +9,7 @@ import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus } from "
 import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n";
 import { UploadButton } from "@/components/UploadButton";
+import { ThumbnailUploadSection, ThumbnailData } from "./ThumbnailUploadSection";
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -65,6 +66,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   });
   const [showMetadataForm, setShowMetadataForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
+  const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<tus.Upload | null>(null);
@@ -188,6 +190,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           tags: tagsString,
           fileSize: selectedFile.size,
           mimeType: selectedFile.type,
+          thumbnail: selectedThumbnail ? {
+            type: selectedThumbnail.type,
+            data: selectedThumbnail.data,
+            position: selectedThumbnail.position,
+            filename: selectedThumbnail.filename,
+          } : undefined,
         },
         userId,
         channelId
@@ -392,6 +400,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     tusUploadRef.current = null;
     videoIdRef.current = '';
     libraryIdRef.current = 0;
+    setSelectedThumbnail(null);
     setMetadata({
       title: '',
       titleEn: '',
@@ -581,6 +590,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               {t.upload.makePublic}
             </label>
           </div>
+
+          {/* Thumbnail Upload Section */}
+          <ThumbnailUploadSection
+            videoFile={selectedFile}
+            onThumbnailSelect={setSelectedThumbnail}
+            disabled={uploadProgress?.state === 'uploading'}
+          />
         </div>
 
         <div className="flex space-x-3">

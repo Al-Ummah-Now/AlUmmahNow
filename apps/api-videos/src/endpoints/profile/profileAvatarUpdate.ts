@@ -4,6 +4,7 @@ import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile } from "../../lib/types";
 import { z } from "zod";
 import { env } from 'cloudflare:workers';
+import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 
 const app = new Hono();
 
@@ -47,9 +48,11 @@ const handleAvatarUpdate = async (c) => {
         const photoId = crypto.randomUUID();
         const path = `/${photoId}_avatar.${file.type.split("/")[1]}`;
 
-        // Mocked file storage logic
-        var key = await env.image_storage_key.get();
-        const bunnyStorageClient = new BunnyStorageClient(env.ZONE, key);
+        // Get Bunny.net storage key and zone from environment
+        const key = await requireSecret(c.env.image_storage_key, 'image_storage_key');
+        const zone = requireEnvVar(c.env, 'ZONE');
+
+        const bunnyStorageClient = new BunnyStorageClient(zone, key);
         const stream: ReadableStream = new ReadableStream({
             start(controller) {
                 const reader = file.stream().getReader();

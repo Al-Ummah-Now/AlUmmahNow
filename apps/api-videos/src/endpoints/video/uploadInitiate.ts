@@ -8,6 +8,7 @@ import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { generateTUSConfig } from "../../lib/bunny/tus";
+import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 
 export class UploadInitiateEndpoint extends OpenAPIRoute {
 	schema = {
@@ -25,6 +26,12 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 							mimeType: Str({ description: "MIME type of the video file", required: true }),
 							isPublic: z.boolean().optional().default(true),
 							tags: z.string().optional().describe("Comma-separated tags"),
+							thumbnail: z.object({
+								type: z.enum(['auto', 'custom']).describe("Thumbnail type: auto-generated or custom"),
+								data: z.string().optional().describe("Base64 encoded image data for custom thumbnails"),
+								position: z.number().min(0).max(100).optional().describe("Frame position (0-100%) for auto-generated thumbnails"),
+								filename: z.string().optional().describe("Original filename"),
+							}).optional().describe("Thumbnail configuration"),
 						}),
 					},
 				},
@@ -52,6 +59,14 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 								expiresAt: z.string().describe("ISO 8601 datetime when authorization expires"),
 								chunkSize: z.number().describe("Recommended chunk size in bytes"),
 								resumable: z.boolean().describe("Whether upload supports resume"),
+								// Thumbnail fields
+								thumbnailUrl: z.string().optional().describe("Primary thumbnail URL"),
+								thumbnailSizes: z.object({
+									hd: z.string().optional(),
+									sd: z.string().optional(),
+									mobile: z.string().optional(),
+									thumb: z.string().optional(),
+								}).optional().describe("Thumbnail URLs for different sizes"),
 								// Legacy fields for backward compatibility
 								uploadUrl: z.string().optional().describe("Legacy upload URL (deprecated)"),
 								libraryId: z.number().optional().describe("Library ID (deprecated)"),
@@ -96,7 +111,7 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { title, description, fileSize, mimeType, isPublic, tags } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -137,6 +152,45 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 
 			const videoId = bunnyVideo.guid;
 
+			// Process thumbnail if provided
+			let thumbnailUrl = '';
+			let thumbnailType: 'auto' | 'custom' = 'auto';
+			let thumbnailSizes: Record<string, string> | undefined;
+
+			if (thumbnail) {
+				if (thumbnail.type === 'custom' && thumbnail.data) {
+					try {
+						// Process custom thumbnail
+						const processed = await thumbnailProcessor.processBase64(
+							thumbnail.data,
+							thumbnail.filename || 'thumbnail.jpg'
+						);
+
+						// Store in R2 (using videos bucket for now, should be separate thumbnail bucket)
+						const cdnBaseUrl = 'https://cdn.alummahnow.net'; // Configure as environment variable
+						const storageResult = await thumbnailStorage.storeInR2(
+							videoId,
+							processed.original,
+							processed.mimeType,
+							env.videos,
+							cdnBaseUrl
+						);
+
+						thumbnailUrl = storageResult.cdnUrl;
+						thumbnailType = 'custom';
+						thumbnailSizes = storageResult.thumbnailSizes;
+					} catch (error) {
+						console.error('Thumbnail processing failed:', error);
+						// Continue without custom thumbnail, will fall back to auto-generated
+					}
+				} else if (thumbnail.type === 'auto' && thumbnail.position !== undefined) {
+					// Store auto-thumbnail preference for later use
+					thumbnailType = 'auto';
+					// Note: Bunny.net will generate thumbnail based on thumbnailTime set during video creation
+					// The position preference will be stored in metadata for later processing
+				}
+			}
+
 			// Create video metadata for R2 storage
 			const video = {
 				id: videoId,
@@ -144,6 +198,9 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 				description: description || '',
 				userId,
 				channelId,
+				thumbnailUrl,
+				thumbnailType,
+				thumbnailSizes,
 				dateCreated: new Date().toISOString(),
 				dateModified: new Date().toISOString(),
 				views: 0,
@@ -195,6 +252,9 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 					expiresAt: tusConfig.expiresAt,
 					chunkSize: tusConfig.chunkSize,
 					resumable: tusConfig.resumable,
+					// Thumbnail fields
+					thumbnailUrl,
+					thumbnailSizes,
 					// Legacy fields for backward compatibility
 					uploadUrl: `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
 					libraryId,
