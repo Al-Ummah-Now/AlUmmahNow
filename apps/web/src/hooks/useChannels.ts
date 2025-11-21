@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Channel } from '@al-ummah/shared-types';
 import { listChannels, createChannel as createChannelAPI, updateChannel as updateChannelAPI, deleteChannel as deleteChannelAPI } from '@/lib/api/channels';
 import { ChannelCreateRequest, ChannelUpdateRequest, ApiHeaders } from '@/lib/api/types';
+import { logger } from '@/lib/logger-client';
+
 
 interface UseChannelsOptions {
   channelId?: string;
@@ -33,7 +35,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
   const refetch = useCallback(async () => {
     // Skip if no auth headers
     if (!channelId || !userId) {
-      console.log('useChannels: Skipping fetch - missing channelId or userId');
+      logger.info('useChannels: Skipping fetch - missing channelId or userId');
       setChannels([]);
       setError(null);
       setIsLoading(false);
@@ -44,7 +46,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      console.log('useChannels: Fetching channels with headers:', { channelId, userId });
+      logger.info('useChannels: Fetching channels with headers:', { channelId, userId });
 
       const response = await listChannels(
         { limit: 100 }, // Get up to 100 channels
@@ -55,32 +57,32 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         throw new Error('Failed to fetch channels');
       }
 
-      console.log('useChannels: API response:', response);
+      logger.info('useChannels: API response:', response);
 
       // Handle different response formats
       if ('data' in response && Array.isArray(response.data)) {
         const channelData = response.data as Channel[];
         setChannels(channelData);
-        console.log('useChannels: Set channels:', channelData);
+        logger.info('useChannels: Set channels:', channelData);
       } else if ('result' in response) {
         const resultObj = response.result as Record<string, unknown>;
         if (resultObj && 'channels' in resultObj && Array.isArray(resultObj.channels)) {
           const channelData = resultObj.channels as Channel[];
           setChannels(channelData);
-          console.log('useChannels: Set channels:', channelData);
+          logger.info('useChannels: Set channels:', channelData);
         } else {
           setChannels([]);
         }
       } else if ('channels' in response && Array.isArray(response.channels)) {
         const channelData = response.channels as Channel[];
         setChannels(channelData);
-        console.log('useChannels: Set channels:', channelData);
+        logger.info('useChannels: Set channels:', channelData);
       } else {
         setChannels([]);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch channels';
-      console.error('useChannels: Error fetching channels:', err);
+      logger.error('useChannels: Error fetching channels:', err);
       setError(errorMessage);
       setChannels([]);
     } finally {
@@ -97,7 +99,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
 
   const createChannel = useCallback(async (data: ChannelCreateRequest): Promise<boolean> => {
     if (!channelId || !userId) {
-      console.error('useChannels.createChannel: Missing channelId or userId');
+      logger.error('useChannels.createChannel: Missing channelId or userId');
       setError('Authentication required');
       return false;
     }
@@ -106,7 +108,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      console.log('useChannels: Creating channel with data:', data);
+      logger.info('useChannels: Creating channel with data:', data);
 
       const headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>> = {
         channelId,
@@ -119,14 +121,14 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         throw new Error('Failed to create channel');
       }
 
-      console.log('useChannels: Channel created successfully:', response);
+      logger.info('useChannels: Channel created successfully:', response);
 
       // Refetch channels after creation
       await refetch();
       return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create channel';
-      console.error('useChannels: Error creating channel:', err);
+      logger.error('useChannels: Error creating channel:', err);
       setError(errorMessage);
       return false;
     } finally {
@@ -139,7 +141,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     data: ChannelUpdateRequest
   ): Promise<boolean> => {
     if (!channelId || !userId) {
-      console.error('useChannels.updateChannel: Missing channelId or userId');
+      logger.error('useChannels.updateChannel: Missing channelId or userId');
       setError('Authentication required');
       return false;
     }
@@ -148,7 +150,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      console.log('useChannels: Updating channel', id, 'with data:', data);
+      logger.info('useChannels: Updating channel', id, 'with data:', data);
 
       const headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>> = {
         channelId,
@@ -161,14 +163,14 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         throw new Error('Failed to update channel');
       }
 
-      console.log('useChannels: Channel updated successfully:', response);
+      logger.info('useChannels: Channel updated successfully:', response);
 
       // Refetch channels after update
       await refetch();
       return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update channel';
-      console.error('useChannels: Error updating channel:', err);
+      logger.error('useChannels: Error updating channel:', err);
       setError(errorMessage);
       return false;
     } finally {
@@ -178,7 +180,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
 
   const deleteChannel = useCallback(async (id: string): Promise<boolean> => {
     if (!channelId || !userId) {
-      console.error('useChannels.deleteChannel: Missing channelId or userId');
+      logger.error('useChannels.deleteChannel: Missing channelId or userId');
       setError('Authentication required');
       return false;
     }
@@ -187,7 +189,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      console.log('useChannels: Deleting channel', id);
+      logger.info('useChannels: Deleting channel', id);
 
       const headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>> = {
         channelId,
@@ -200,14 +202,14 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         throw new Error('Failed to delete channel');
       }
 
-      console.log('useChannels: Channel deleted successfully:', response);
+      logger.info('useChannels: Channel deleted successfully:', response);
 
       // Refetch channels after deletion
       await refetch();
       return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete channel';
-      console.error('useChannels: Error deleting channel:', err);
+      logger.error('useChannels: Error deleting channel:', err);
       setError(errorMessage);
       return false;
     } finally {

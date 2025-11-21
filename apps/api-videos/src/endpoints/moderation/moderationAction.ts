@@ -6,6 +6,7 @@ import { ReportView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
 
 export class ModerationAction extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -196,7 +197,7 @@ export class ModerationAction extends OpenAPIRoute {
 				},
 			};
 		} catch (error) {
-			console.error("Error processing moderation action:", error);
+			logger.error("Error processing moderation action:", error);
 			return c.json(
 				{
 					success: false,
@@ -307,7 +308,7 @@ export class ModerationAction extends OpenAPIRoute {
 			// Default: no moderator access
 			return false;
 		} catch (error) {
-			console.error("Error checking moderator role:", error);
+			logger.error("Error checking moderator role:", error);
 			return false;
 		}
 	}

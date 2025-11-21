@@ -6,6 +6,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import R2Repository from "../../lib/r2Repo";
 import { generateTUSConfig } from "../../lib/bunny/tus";
 import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
 /**
  * Upload Resume Endpoint
@@ -203,7 +204,7 @@ export class UploadResumeEndpoint extends OpenAPIRoute {
 			});
 
 		} catch (error) {
-			console.error("Upload resume error:", error);
+			logger.error("Upload resume error:", error);
 			return c.json({
 				success: false,
 				error: "Failed to generate resume configuration"

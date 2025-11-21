@@ -5,6 +5,7 @@ import { Profile as BusinessProfile } from '../../lib/types';
 import { z } from "zod";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
 
 const app = new Hono();
 
@@ -91,7 +92,7 @@ const handleCoverUpdate = async (c) => {
 
         return c.json(profile, 200);
     } catch (error) {
-        console.error("Error updating avatar photo:", error);
+        logger.error("Error updating avatar photo:", error);
         return c.json(
             {
                 success: false,

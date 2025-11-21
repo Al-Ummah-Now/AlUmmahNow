@@ -5,6 +5,7 @@ import { ResponseError } from '../../lib/types';
 import R2Repository from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata, VideoScheduleResponse } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 const VideoScheduleResponseSchema = z.object({
   videoId: Str({ description: 'Video ID' }),
@@ -297,7 +298,7 @@ export class VideoScheduleCreate extends OpenAPIRoute {
         result: response,
       });
     } catch (error) {
-      console.error('Failed to schedule video:', error);
+      logger.error('Failed to schedule video:', error);
       return c.json(
         {
           success: false,

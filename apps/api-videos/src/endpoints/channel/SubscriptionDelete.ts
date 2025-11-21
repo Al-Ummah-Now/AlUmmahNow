@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Channel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
 
 export class SubscriptionDelete extends OpenAPIRoute {
 	schema = {
@@ -104,7 +105,7 @@ export class SubscriptionDelete extends OpenAPIRoute {
 			return channel;
 		}
 		catch (error) {
-			console.error("Error fetching Profile:", error);
+			logger.error("Error fetching Profile:", error);
 			return Response.json(
 				{
 					success: false,

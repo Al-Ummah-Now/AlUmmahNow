@@ -13,6 +13,8 @@
  */
 
 import type { ExtendedPlayer } from './videojs';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Screen Orientation Lock type
@@ -82,7 +84,7 @@ export async function lockOrientationLandscape(isFullscreen: boolean): Promise<v
     // - Device doesn't support orientation lock
     // - Already locked
     // This is non-critical, so we just log and continue
-    console.debug('[FullscreenPiP] Orientation lock failed:', error);
+    logger.debug('[FullscreenPiP] Orientation lock failed:', error);
   }
 }
 

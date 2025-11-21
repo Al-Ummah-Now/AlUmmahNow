@@ -1,5 +1,7 @@
 import * as tus from 'tus-js-client';
 import { TusConfig, TusCallbacks } from '@al-ummah/shared-types';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Manages parallel TUS uploads with concurrency control
@@ -152,7 +154,7 @@ export class TusParallelManager {
       const nextId = this.pendingQueue.shift();
       if (nextId) {
         this.start(nextId).catch(error => {
-          console.error(`Failed to start queued upload ${nextId}:`, error);
+          logger.error(`Failed to start queued upload ${nextId}:`, error);
         });
       }
     }

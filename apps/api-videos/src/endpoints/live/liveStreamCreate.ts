@@ -8,6 +8,7 @@ import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
 export class LiveStreamCreate extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -119,7 +120,7 @@ export class LiveStreamCreate extends OpenAPIRoute {
 				liveStream.streamUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}`;
 			}
 		} catch (error) {
-			console.error("Error creating Bunny stream:", error);
+			logger.error("Error creating Bunny stream:", error);
 			// Continue without Bunny integration - the stream will still work with basic functionality
 		}
 

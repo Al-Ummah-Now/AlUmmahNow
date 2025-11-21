@@ -14,6 +14,7 @@ import type {
   WatchHistoryResponse,
   WatchHistoryListRequest
 } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Request query parameters schema
 const ListWatchHistoryQuery = z.object({
@@ -177,7 +178,7 @@ export class ListWatchHistory extends OpenAPIRoute {
 
       return c.json(response, 200);
     } catch (error) {
-      console.error("Error listing watch history:", error);
+      logger.error("Error listing watch history:", error);
       return c.json(
         {
           error: "Failed to retrieve watch history",

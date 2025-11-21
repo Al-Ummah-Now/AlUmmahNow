@@ -17,6 +17,8 @@ import {
 import { getApiUrl } from "@/lib/runtime-config";
 import { apiRequestServer, buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
+import { logger } from '@/lib/logger-server';
+
 
 const baseUrl = getApiUrl();
 
@@ -58,7 +60,7 @@ export async function listVideos(
 
     return await response.json();
   } catch (error) {
-    console.error('listVideos error:', error);
+    logger.error('listVideos error:', error);
     return null;
   }
 }
@@ -91,7 +93,7 @@ export async function getVideoById(
 
     return await response.json();
   } catch (error) {
-    console.error('getVideoById error:', error);
+    logger.error('getVideoById error:', error);
     return null;
   }
 }
@@ -125,7 +127,7 @@ export async function createVideo(
 
     return await response.json();
   } catch (error) {
-    console.error('createVideo error:', error);
+    logger.error('createVideo error:', error);
     return null;
   }
 }
@@ -160,7 +162,7 @@ export async function updateVideo(
 
     return await response.json();
   } catch (error) {
-    console.error('updateVideo error:', error);
+    logger.error('updateVideo error:', error);
     return null;
   }
 }
@@ -193,7 +195,7 @@ export async function deleteVideo(
 
     return await response.json();
   } catch (error) {
-    console.error('deleteVideo error:', error);
+    logger.error('deleteVideo error:', error);
     return null;
   }
 }
@@ -229,7 +231,7 @@ export async function uploadVideoThumbnail(
 
     return await response.json();
   } catch (error) {
-    console.error('uploadVideoThumbnail error:', error);
+    logger.error('uploadVideoThumbnail error:', error);
     return null;
   }
 }
@@ -264,7 +266,7 @@ export async function createVideoComment(
 
     return await response.json();
   } catch (error) {
-    console.error('createVideoComment error:', error);
+    logger.error('createVideoComment error:', error);
     return null;
   }
 }
@@ -300,7 +302,7 @@ export async function updateVideoComment(
 
     return await response.json();
   } catch (error) {
-    console.error('updateVideoComment error:', error);
+    logger.error('updateVideoComment error:', error);
     return null;
   }
 }
@@ -334,7 +336,7 @@ export async function deleteVideoComment(
 
     return await response.json();
   } catch (error) {
-    console.error('deleteVideoComment error:', error);
+    logger.error('deleteVideoComment error:', error);
     return null;
   }
 }
@@ -367,7 +369,7 @@ export async function likeVideo(
 
     return await response.json();
   } catch (error) {
-    console.error('likeVideo error:', error);
+    logger.error('likeVideo error:', error);
     return null;
   }
 }
@@ -400,7 +402,7 @@ export async function unlikeVideo(
 
     return await response.json();
   } catch (error) {
-    console.error('unlikeVideo error:', error);
+    logger.error('unlikeVideo error:', error);
     return null;
   }
 }
@@ -433,7 +435,7 @@ export async function dislikeVideo(
 
     return await response.json();
   } catch (error) {
-    console.error('dislikeVideo error:', error);
+    logger.error('dislikeVideo error:', error);
     return null;
   }
 }
@@ -466,7 +468,7 @@ export async function removeVideoDislike(
 
     return await response.json();
   } catch (error) {
-    console.error('removeVideoDislike error:', error);
+    logger.error('removeVideoDislike error:', error);
     return null;
   }
 }
@@ -500,7 +502,7 @@ export async function likeVideoComment(
 
     return await response.json();
   } catch (error) {
-    console.error('likeVideoComment error:', error);
+    logger.error('likeVideoComment error:', error);
     return null;
   }
 }
@@ -534,7 +536,7 @@ export async function unlikeVideoComment(
 
     return await response.json();
   } catch (error) {
-    console.error('unlikeVideoComment error:', error);
+    logger.error('unlikeVideoComment error:', error);
     return null;
   }
 }
@@ -568,7 +570,7 @@ export async function dislikeVideoComment(
 
     return await response.json();
   } catch (error) {
-    console.error('dislikeVideoComment error:', error);
+    logger.error('dislikeVideoComment error:', error);
     return null;
   }
 }
@@ -629,7 +631,7 @@ export async function searchVideos(
 
     return await response.json();
   } catch (error) {
-    console.error('searchVideos error:', error);
+    logger.error('searchVideos error:', error);
 
     // Fallback to basic search for backward compatibility
     if (query.trim()) {
@@ -849,7 +851,7 @@ export async function getSearchSuggestions(
 
     return await response.json();
   } catch (error) {
-    console.error('getSearchSuggestions error:', error);
+    logger.error('getSearchSuggestions error:', error);
     return getMockSuggestions(query);
   }
 }
@@ -897,7 +899,7 @@ export async function getTrendingVideos(
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
     return data.videos || data.data || [];
   } catch (error) {
-    console.error('getTrendingVideos error:', error);
+    logger.error('getTrendingVideos error:', error);
     return getMockTrendingVideos();
   }
 }
@@ -938,7 +940,7 @@ export async function getRecommendedVideos(
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
     return data.videos || data.data || [];
   } catch (error) {
-    console.error('getRecommendedVideos error:', error);
+    logger.error('getRecommendedVideos error:', error);
     return getMockRecommendations();
   }
 }
@@ -1000,7 +1002,7 @@ export async function uploadVideo(
 
     return await response.json();
   } catch (error) {
-    console.error('uploadVideo error:', error);
+    logger.error('uploadVideo error:', error);
     return null;
   }
 }
@@ -1227,9 +1229,9 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
     if (!vid) return undefined;
 
     try {
-        console.log('[fetchVideoById] Fetching video:', vid);
+        logger.info('[fetchVideoById] Fetching video:', vid);
         const video = await getVideoById(vid);
-        console.log('[fetchVideoById] API response:', video);
+        logger.info('[fetchVideoById] API response:', video);
 
         if (!video) {
             throw new Error('Video not found');
@@ -1255,10 +1257,10 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             commentsCount: video.commentsCount,
         };
 
-        console.log('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
+        logger.info('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
         return playerOptions;
     } catch (error) {
-        console.error('[fetchVideoById] Error:', error);
+        logger.error('[fetchVideoById] Error:', error);
         return undefined;
     }
 }
@@ -1295,7 +1297,7 @@ export async function fetchVideos(cursor: string | null = null, userId?: string)
         }));
 
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         return undefined;
     }
 }
@@ -1308,7 +1310,7 @@ export async function fetchVideosWithPagination(cursor: string | null = null, us
         }, userId ? { userId } : undefined);
         return result;
     } catch (error) {
-        console.error(error);
+        logger.error(error);
         return null;
     }
 }

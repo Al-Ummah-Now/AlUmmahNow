@@ -3,6 +3,7 @@ import { z } from 'zod';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { logger } from '../../lib/logger';
 
 const MAX_GIF_SIZE = 10 * 1024 * 1024; // 10MB for GIFs
 
@@ -128,7 +129,7 @@ export class UploadCommunityPostGif extends OpenAPIRoute {
       });
 
     } catch (error) {
-      console.error('Error uploading community post GIF:', error);
+      logger.error('Error uploading community post GIF:', error);
       return c.json({
         error: error instanceof Error ? error.message : 'Failed to upload GIF',
       }, 500);

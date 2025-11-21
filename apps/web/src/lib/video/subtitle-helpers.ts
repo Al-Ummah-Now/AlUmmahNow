@@ -6,6 +6,8 @@
 
 import type { Player } from 'video.js';
 import { SubtitleTrack } from '@/lib/api/subtitles';
+import { logger } from '@/lib/logger-server';
+
 
 export interface SubtitleSettings {
   fontSize: 'small' | 'medium' | 'large';
@@ -209,7 +211,7 @@ export function saveSubtitleSettings(settings: SubtitleSettings): void {
   try {
     localStorage.setItem('subtitle-settings', JSON.stringify(settings));
   } catch (error) {
-    console.error('Failed to save subtitle settings:', error);
+    logger.error('Failed to save subtitle settings:', error);
   }
 }
 
@@ -223,7 +225,7 @@ export function loadSubtitleSettings(): SubtitleSettings {
       return { ...DEFAULT_SUBTITLE_SETTINGS, ...JSON.parse(stored) };
     }
   } catch (error) {
-    console.error('Failed to load subtitle settings:', error);
+    logger.error('Failed to load subtitle settings:', error);
   }
   return DEFAULT_SUBTITLE_SETTINGS;
 }
@@ -239,7 +241,7 @@ export function saveLastSubtitleTrack(language: string | null): void {
       localStorage.removeItem('last-subtitle-track');
     }
   } catch (error) {
-    console.error('Failed to save last subtitle track:', error);
+    logger.error('Failed to save last subtitle track:', error);
   }
 }
 
@@ -250,7 +252,7 @@ export function loadLastSubtitleTrack(): string | null {
   try {
     return localStorage.getItem('last-subtitle-track');
   } catch (error) {
-    console.error('Failed to load last subtitle track:', error);
+    logger.error('Failed to load last subtitle track:', error);
     return null;
   }
 }

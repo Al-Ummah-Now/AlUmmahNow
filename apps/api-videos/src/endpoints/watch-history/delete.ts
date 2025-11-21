@@ -10,6 +10,7 @@ import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type { WatchHistoryEntry } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Path parameter schema
 const DeleteWatchHistoryParams = z.object({
@@ -90,7 +91,7 @@ export class DeleteWatchHistory extends OpenAPIRoute {
 
       return c.body(null, 204);
     } catch (error) {
-      console.error("Error deleting watch history:", error);
+      logger.error("Error deleting watch history:", error);
       return c.json(
         {
           error: "Failed to delete watch history entry",

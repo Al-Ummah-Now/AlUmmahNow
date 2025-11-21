@@ -4,6 +4,7 @@
 
 import { OpenAPIRoute, Str, Enumeration } from 'chanfana';
 import { z } from 'zod';
+import { logger } from '../../lib/logger';
 
 export class SubtitlesGet extends OpenAPIRoute {
   schema = {
@@ -108,7 +109,7 @@ export class SubtitlesGet extends OpenAPIRoute {
         },
       });
     } catch (error: any) {
-      console.error('Failed to get subtitle:', error);
+      logger.error('Failed to get subtitle:', error);
       return c.json(
         {
           success: false,

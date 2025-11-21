@@ -2,6 +2,8 @@ import videojs, { type Player, type PlayerOptions } from 'video.js';
 import '@videojs/http-streaming';
 import 'videojs-contrib-quality-levels';
 import 'videojs-hls-quality-selector';
+import { logger } from '@/lib/logger-server';
+
 
 export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
   responsive: true,
@@ -77,8 +79,8 @@ export function createVideoPlayer(
   let player: Player | null = null;
 
   try {
-    console.log('[createVideoPlayer] Options received:', options);
-    console.log('[createVideoPlayer] Poster URL:', options.poster);
+    logger.info('[createVideoPlayer] Options received:', options);
+    logger.info('[createVideoPlayer] Poster URL:', options.poster);
 
     player = videojs(element, {
       ...VIDEO_JS_OPTIONS,
@@ -93,10 +95,10 @@ export function createVideoPlayer(
             displayCurrentQuality: true
           });
         } catch (error) {
-          console.warn('HLS quality selector plugin failed to initialize:', error);
+          logger.warn('HLS quality selector plugin failed to initialize:', error);
         }
       } else {
-        console.warn('HLS quality selector plugin not available');
+        logger.warn('HLS quality selector plugin not available');
       }
     });
 
@@ -106,7 +108,7 @@ export function createVideoPlayer(
     if (player && !player.isDisposed()) {
       player.dispose();
     }
-    console.error('Failed to create video player:', error);
+    logger.error('Failed to create video player:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Video player initialization failed: ${errorMessage}`);
   }

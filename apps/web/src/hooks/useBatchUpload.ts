@@ -5,6 +5,8 @@ import { UploadQueueItem, VideoUploadMetadata, TusConfig } from '@al-ummah/share
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { initiateBatchUpload } from '@/lib/actions/upload';
+import { logger } from '@/lib/logger-client';
+
 
 interface UseBatchUploadOptions {
   userId: string;
@@ -128,7 +130,7 @@ export function useBatchUpload({
       const queueState = batchManagerRef.current.getQueueState();
       setFiles(Array.from(queueState.values()));
     } catch (error) {
-      console.error('Failed to add files:', error);
+      logger.error('Failed to add files:', error);
       onError?.(error instanceof Error ? error.message : 'Failed to add files to queue');
     } finally {
       setIsInitiating(false);
@@ -161,7 +163,7 @@ export function useBatchUpload({
     try {
       await batchManagerRef.current.startUploads();
     } catch (error) {
-      console.error('Failed to start uploads:', error);
+      logger.error('Failed to start uploads:', error);
       onError?.(error instanceof Error ? error.message : 'Failed to start uploads');
     }
   }, [onError]);
@@ -175,7 +177,7 @@ export function useBatchUpload({
     try {
       await batchManagerRef.current.pauseUpload(fileId);
     } catch (error) {
-      console.error('Failed to pause upload:', error);
+      logger.error('Failed to pause upload:', error);
     }
   }, []);
 
@@ -188,7 +190,7 @@ export function useBatchUpload({
     try {
       await batchManagerRef.current.resumeUpload(fileId);
     } catch (error) {
-      console.error('Failed to resume upload:', error);
+      logger.error('Failed to resume upload:', error);
     }
   }, []);
 
@@ -201,7 +203,7 @@ export function useBatchUpload({
     try {
       await batchManagerRef.current.cancelUpload(fileId);
     } catch (error) {
-      console.error('Failed to cancel upload:', error);
+      logger.error('Failed to cancel upload:', error);
     }
   }, []);
 
@@ -214,7 +216,7 @@ export function useBatchUpload({
     try {
       await batchManagerRef.current.retryUpload(fileId);
     } catch (error) {
-      console.error('Failed to retry upload:', error);
+      logger.error('Failed to retry upload:', error);
       onError?.(error instanceof Error ? error.message : 'Failed to retry upload');
     }
   }, [onError]);
@@ -236,7 +238,7 @@ export function useBatchUpload({
     try {
       await batchManagerRef.current.resumeAll();
     } catch (error) {
-      console.error('Failed to resume all uploads:', error);
+      logger.error('Failed to resume all uploads:', error);
     }
   }, []);
 

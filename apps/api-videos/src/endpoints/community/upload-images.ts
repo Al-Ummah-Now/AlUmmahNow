@@ -5,6 +5,7 @@ import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateImageMagicBytes, readFileHeader } from '../../lib/security/magic-bytes';
 import { generateUniqueFilename } from '../../lib/security/filename-sanitize';
+import { logger } from '../../lib/logger';
 
 const MAX_IMAGES = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
@@ -122,7 +123,7 @@ export class UploadCommunityPostImages extends OpenAPIRoute {
           const magicByteResult = validateImageMagicBytes(fileHeader, file.type);
 
           if (!magicByteResult.isValid) {
-            console.warn('[SECURITY] Image upload rejected: invalid file signature', {
+            logger.warn('[SECURITY] Image upload rejected: invalid file signature', {
               userId,
               channelId,
               providedType: file.type,
@@ -137,7 +138,7 @@ export class UploadCommunityPostImages extends OpenAPIRoute {
 
           // Log if Content-Type header doesn't match detected format
           if (magicByteResult.mimeTypeMismatch) {
-            console.warn('[SECURITY] Image upload: MIME type mismatch', {
+            logger.warn('[SECURITY] Image upload: MIME type mismatch', {
               userId,
               channelId,
               providedType: file.type,
@@ -146,7 +147,7 @@ export class UploadCommunityPostImages extends OpenAPIRoute {
             });
           }
         } catch (error) {
-          console.error('[SECURITY] Magic byte validation error', { error, userId, channelId });
+          logger.error('[SECURITY] Magic byte validation error', { error, userId, channelId });
           return c.json({
             error: 'Failed to validate image file'
           }, 500);
@@ -167,7 +168,7 @@ export class UploadCommunityPostImages extends OpenAPIRoute {
 
         const path = `/community-posts/${channelId}/${sanitizedFilename}`;
 
-        console.log('[SECURITY] Image file validated and sanitized', {
+        logger.info('[SECURITY] Image file validated and sanitized', {
           userId,
           channelId,
           originalName: file.name,
@@ -219,7 +220,7 @@ export class UploadCommunityPostImages extends OpenAPIRoute {
       });
 
     } catch (error) {
-      console.error('Error uploading community post images:', error);
+      logger.error('Error uploading community post images:', error);
       return c.json({
         error: error instanceof Error ? error.message : 'Failed to upload images',
       }, 500);

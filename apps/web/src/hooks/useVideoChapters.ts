@@ -6,6 +6,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { VideoChapter, VideoChapterData } from '@al-ummah/shared-types';
 import type { Player } from 'video.js';
+import { logger } from '@/lib/logger-client';
+
 
 interface UseVideoChaptersOptions {
   videoId: string;
@@ -61,7 +63,7 @@ export function useVideoChapters({
           setChapterData(null);
         }
       } catch (err) {
-        console.error('Failed to fetch chapters:', err);
+        logger.error('Failed to fetch chapters:', err);
         setError(err instanceof Error ? err.message : 'Unknown error');
         setChapterData(null);
       } finally {
@@ -118,7 +120,7 @@ export function useVideoChapters({
     player.currentTime(chapter.startTime);
     if (player.paused()) {
       player.play().catch(err => {
-        console.error('Failed to play after chapter seek:', err);
+        logger.error('Failed to play after chapter seek:', err);
       });
     }
   }, [player]);

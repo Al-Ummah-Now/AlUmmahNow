@@ -13,6 +13,7 @@ import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 export class VideoChaptersUpdate extends OpenAPIRoute {
   schema = addAuthToSchema({
@@ -116,7 +117,7 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
       // Fetch video and check ownership
       const video = await videoRepo.getObject(videoId);
       if (!video) {
-        console.warn('Video not found for chapter update', { videoId });
+        logger.warn('Video not found for chapter update', { videoId });
         return c.json(
           {
             success: false,
@@ -127,7 +128,7 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
       }
 
       if (video.userId !== auth.userId) {
-        console.warn('User not authorized to edit video chapters', {
+        logger.warn('User not authorized to edit video chapters', {
           videoId,
           userId: auth.userId,
           ownerId: video.userId,
@@ -144,7 +145,7 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
       // Validate chapters
       const validation = validateChapters(chapters, video.duration || 0);
       if (!validation.valid) {
-        console.warn('Invalid chapters provided', {
+        logger.warn('Invalid chapters provided', {
           videoId,
           errors: validation.errors,
         });
@@ -194,7 +195,7 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
         chapters: chapterData,
       });
     } catch (error) {
-      console.error('Error updating chapters', {
+      logger.error('Error updating chapters', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });

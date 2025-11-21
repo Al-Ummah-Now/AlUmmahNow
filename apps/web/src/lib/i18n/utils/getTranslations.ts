@@ -6,6 +6,8 @@
 
 import type { AppTranslations, SupportedLanguage } from '../types';
 import { EN_TRANSLATIONS, AR_TRANSLATIONS } from '../translations';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Get translations for the specified language
@@ -16,7 +18,7 @@ import { EN_TRANSLATIONS, AR_TRANSLATIONS } from '../translations';
  * @example
  * ```typescript
  * const translations = getTranslations('ar');
- * console.log(translations.common.appName); // 'الأمة الآن'
+ * logger.info(translations.common.appName); // 'الأمة الآن'
  * ```
  */
 export function getTranslations(lang: SupportedLanguage): AppTranslations {

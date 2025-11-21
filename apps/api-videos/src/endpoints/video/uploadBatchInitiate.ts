@@ -8,6 +8,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { generateTUSConfig } from "../../lib/bunny/tus";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { logger } from '../../lib/logger';
 
 const BatchVideoSchema = z.object({
 	title: Str({ description: "Video title" }),
@@ -242,7 +243,7 @@ export class UploadBatchInitiateEndpoint extends OpenAPIRoute {
 			});
 
 		} catch (error) {
-			console.error("Batch upload initiate error:", error);
+			logger.error("Batch upload initiate error:", error);
 			return c.json({
 				success: false,
 				error: error instanceof Error ? error.message : "Failed to initiate batch upload"

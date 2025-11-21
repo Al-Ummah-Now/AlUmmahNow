@@ -6,6 +6,7 @@ import { LiveStreamView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
 
 export class LiveStreamUpdate extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -176,7 +177,7 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 				result: { stream: streamView },
 			};
 		} catch (error) {
-			console.error("Error updating live stream:", error);
+			logger.error("Error updating live stream:", error);
 			return c.json(
 				{
 					success: false,

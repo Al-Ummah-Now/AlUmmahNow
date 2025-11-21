@@ -1,3 +1,4 @@
+import { logger } from './logger';
 
 
 export interface PaginationResponse<T> {
@@ -49,7 +50,7 @@ class R2Repository<T> {
       const bodyContent = await object.json<T>();
       return bodyContent;
     } catch (error) {
-      console.error(`Failed to parse object ${id} as JSON:`, error);
+      logger.error(`Failed to parse object ${id} as JSON:`, error);
       return null;
     }
   }

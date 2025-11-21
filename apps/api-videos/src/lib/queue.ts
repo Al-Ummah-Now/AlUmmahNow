@@ -1,4 +1,5 @@
 import { MessageType, QueueMessage } from '@al-ummah/shared-types';
+import { logger } from './logger';
 
 // Re-export for backward compatibility
 export { MessageType, QueueMessage };
@@ -16,7 +17,7 @@ export async function queueChannelSectionEvent(queue: any, type: MessageType, pa
             timestamp: Date.now()
         });
     } catch (error) {
-        console.error("Error sending channel section event to queue:", error);
+        logger.error("Error sending channel section event to queue:", error);
     }
 }
 
@@ -30,7 +31,7 @@ export default class Queue {
     async send<T>(type: MessageType, payload: T) {
         try {
             if (!this.queue) {
-                console.warn("Queue binding not provided, skipping send");
+                logger.warn("Queue binding not provided, skipping send");
                 return;
             }
             await this.queue.send({
@@ -41,27 +42,27 @@ export default class Queue {
             });
         }
         catch (error) {
-            console.error("Error sending message to queue:", error);
+            logger.error("Error sending message to queue:", error);
         }
     }
 
     async sendMessage<T>(message: Message<T>) {
         try {
             if (!this.queue) {
-                console.warn("Queue binding not provided, skipping send");
+                logger.warn("Queue binding not provided, skipping send");
                 return;
             }
             await this.queue.send(message);
         }
         catch (error) {
-            console.error("Error sending message to queue:", error);
+            logger.error("Error sending message to queue:", error);
         }
     }
 
     async sendBatch<T>(messages: Message<T>[]) {
         try {
             if (!this.queue) {
-                console.warn("Queue binding not provided, skipping sendBatch");
+                logger.warn("Queue binding not provided, skipping sendBatch");
                 return;
             }
             const chunkSize = 100;
@@ -73,7 +74,7 @@ export default class Queue {
             }
         }
         catch (error) {
-            console.error("Error sending message to queue:", error);
+            logger.error("Error sending message to queue:", error);
         }
     }
 };

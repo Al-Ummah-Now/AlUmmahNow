@@ -12,7 +12,8 @@ import {
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { Channel } from "@al-ummah/shared-types";
-import { logger } from "@/lib/logger";
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * List channels

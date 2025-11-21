@@ -1,6 +1,7 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 export class GetCommunityPost extends OpenAPIRoute {
   static schema = {
@@ -80,7 +81,7 @@ export class GetCommunityPost extends OpenAPIRoute {
 
       return c.json({ error: 'Post not found' }, 404);
     } catch (error) {
-      console.error('Error getting community post:', error);
+      logger.error('Error getting community post:', error);
       return c.json({ error: 'Failed to get post' }, 500);
     }
   }

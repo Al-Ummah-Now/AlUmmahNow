@@ -5,6 +5,7 @@ import { ResponseError } from '../../lib/types';
 import R2Repository from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 const VideoScheduleCancelResponseSchema = z.object({
   videoId: Str({ description: 'Video ID' }),
@@ -198,7 +199,7 @@ export class VideoScheduleDelete extends OpenAPIRoute {
         },
       });
     } catch (error) {
-      console.error('Failed to cancel video schedule:', error);
+      logger.error('Failed to cancel video schedule:', error);
       return c.json(
         {
           success: false,

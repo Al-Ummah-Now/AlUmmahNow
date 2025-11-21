@@ -162,8 +162,8 @@ export class Logger {
     if (!this.fileLogging) return;
 
     try {
-      const { appendFile } = await import('node:fs/promises');
-      const { join } = await import('node:path');
+      const { appendFile } = await import('fs/promises');
+      const { join } = await import('path');
 
       const timestamp = new Date().toISOString();
       const dataStr = data ? ` ${JSON.stringify(data)}` : '';

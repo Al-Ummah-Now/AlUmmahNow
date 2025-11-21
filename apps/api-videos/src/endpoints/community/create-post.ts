@@ -11,6 +11,7 @@ import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateCreatePost } from '../../validation/community-posts';
 import Queue, { MessageType } from '../../lib/queue';
+import { logger } from '../../lib/logger';
 
 const createPostSchema = z.object({
   type: z.nativeEnum(PostType),
@@ -201,7 +202,7 @@ export class CreateCommunityPost extends OpenAPIRoute {
 
       return c.json({ success: true, post });
     } catch (error) {
-      console.error('Error creating community post:', error);
+      logger.error('Error creating community post:', error);
       return c.json({ error: 'Failed to create post' }, 500);
     }
   }

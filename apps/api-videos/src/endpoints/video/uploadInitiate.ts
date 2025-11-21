@@ -8,6 +8,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { generateTUSConfig } from "../../lib/bunny/tus";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
+import { logger } from '../../lib/logger';
 
 export class UploadInitiateEndpoint extends OpenAPIRoute {
 	schema = {
@@ -179,7 +180,7 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 						thumbnailType = 'custom';
 						thumbnailSizes = storageResult.thumbnailSizes;
 					} catch (error) {
-						console.error('Thumbnail processing failed:', error);
+						logger.error('Thumbnail processing failed:', error);
 						// Continue without custom thumbnail, will fall back to auto-generated
 					}
 				} else if (thumbnail.type === 'auto' && thumbnail.position !== undefined) {
@@ -263,7 +264,7 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 			});
 
 		} catch (error) {
-			console.error("Upload initiate error:", error);
+			logger.error("Upload initiate error:", error);
 			return c.json({
 				success: false,
 				error: "Failed to initiate upload"

@@ -1,7 +1,5 @@
 import { Context } from 'hono';
-import { createLogger } from '@al-ummah/logger';
-
-const logger = createLogger('api-videos:error-handler', { logLevel: 'info' });
+import { logger } from '../lib/logger';
 
 /**
  * Detect if we're running in development mode

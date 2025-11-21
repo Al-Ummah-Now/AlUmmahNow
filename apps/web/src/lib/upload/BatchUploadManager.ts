@@ -7,6 +7,8 @@ import {
 } from '@al-ummah/shared-types';
 import { TusParallelManager } from './TusParallelManager';
 import { UploadOptimizer } from './UploadOptimizer';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Batch progress state
@@ -72,7 +74,7 @@ export class BatchUploadManager {
       const config = tusConfigs.get(file.name);
 
       if (!config) {
-        console.error(`No TUS config found for file: ${file.name}`);
+        logger.error(`No TUS config found for file: ${file.name}`);
         continue;
       }
 
@@ -118,7 +120,7 @@ export class BatchUploadManager {
         await this.tusManager.start(item.id);
         this.updateStatus(item.id, 'uploading');
       } catch (error) {
-        console.error(`Failed to start upload ${item.id}:`, error);
+        logger.error(`Failed to start upload ${item.id}:`, error);
         this.updateStatus(item.id, 'failed');
         const queueItem = this.queue.get(item.id);
         if (queueItem) {
@@ -171,7 +173,7 @@ export class BatchUploadManager {
       await this.tusManager.start(videoId);
       this.updateStatus(videoId, 'uploading');
     } catch (error) {
-      console.error(`Retry failed for ${videoId}:`, error);
+      logger.error(`Retry failed for ${videoId}:`, error);
       this.updateStatus(videoId, 'failed');
       item.error = error instanceof Error ? error.message : 'Retry failed';
     }

@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger-server';
+
 /**
  * Video Error Handler
  *
@@ -174,7 +176,7 @@ export class VideoErrorHandler {
   ): Promise<void> {
     // Safety guard: prevent infinite recursion from buggy error categorization
     if (depth > 10) {
-      console.error('[VideoErrorHandler] Max retry recursion depth exceeded');
+      logger.error('[VideoErrorHandler] Max retry recursion depth exceeded');
       throw new Error('Max retry recursion depth exceeded');
     }
 
@@ -254,7 +256,7 @@ export class VideoErrorHandler {
       try {
         return Promise.resolve(reporter(error));
       } catch (err) {
-        console.error('Error reporter failed:', err);
+        logger.error('Error reporter failed:', err);
         return Promise.resolve();
       }
     });

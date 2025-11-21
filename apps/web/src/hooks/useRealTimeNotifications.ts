@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { NotificationEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
+import { logger } from '@/lib/logger-client';
+
 
 export interface Notification {
   id: string;
@@ -62,7 +64,7 @@ export function useRealTimeNotifications(
     }
 
     const event = eventData as NotificationEvent;
-    console.log('📥 Real-time notification:', event);
+    logger.info('📥 Real-time notification:', event);
 
     if (event.type === 'notification') {
       const notification: Notification = {
@@ -156,7 +158,7 @@ export function useRealTimeNotifications(
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().then(permission => {
-        console.log('Notification permission:', permission);
+        logger.info('Notification permission:', permission);
       });
     }
   }, []);

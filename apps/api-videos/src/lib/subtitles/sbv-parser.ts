@@ -16,6 +16,7 @@ import {
   isValidTiming,
   findTimingOverlaps,
 } from './parser';
+import { logger } from '../logger';
 
 export class SBVParser implements SubtitleParser {
   parse(content: string): SubtitleData {
@@ -48,7 +49,7 @@ export class SBVParser implements SubtitleParser {
             currentCue.startTime = this.parseSBVTimestamp(parts[0]);
             currentCue.endTime = this.parseSBVTimestamp(parts[1]);
           } catch (error) {
-            console.error(`Failed to parse timestamp at line ${i + 1}:`, error);
+            logger.error(`Failed to parse timestamp at line ${i + 1}:`, error);
             // Skip malformed timestamp
           }
         }

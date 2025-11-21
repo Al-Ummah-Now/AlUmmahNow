@@ -2,6 +2,8 @@ import { Profile } from "@/interfaces";
 import { User } from "@/interfaces";
 import { getProfileCurrent, getProfileById, createProfileAPI, updateProfileAPI, uploadProfileAvatar, uploadProfileCover } from "./profiles";
 import { getApiUrl } from "@/lib/runtime-config";
+import { logger } from '@/lib/logger-client';
+
 
 const baseUrl = getApiUrl();
 
@@ -11,9 +13,9 @@ const baseUrl = getApiUrl();
  * Uses server session automatically - no need to pass user data
  */
 export const fetchProfile = async (user: User | null | undefined, setProfile: (profile: Profile) => void): Promise<boolean> => {
-    console.log('[fetchProfile] ========== START (CLIENT) ==========');
-    console.log('[fetchProfile] Timestamp:', new Date().toISOString());
-    console.log('[fetchProfile] Input user:', {
+    logger.info('[fetchProfile] ========== START (CLIENT) ==========');
+    logger.info('[fetchProfile] Timestamp:', new Date().toISOString());
+    logger.info('[fetchProfile] Input user:', {
         hasUser: !!user,
         userId: user?.id,
         userEmail: user?.email,
@@ -22,26 +24,26 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
 
     // Early return for any invalid input
     if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
-        console.log('[fetchProfile] ❌ Invalid user input - early return');
-        console.log('[fetchProfile] ========== END (INVALID) ==========');
+        logger.info('[fetchProfile] ❌ Invalid user input - early return');
+        logger.info('[fetchProfile] ========== END (INVALID) ==========');
         return false;
     }
 
     try {
-        console.log('[fetchProfile] Step 1: Calling server action getProfileById()...');
-        console.log('[fetchProfile] Target userId:', user.id);
+        logger.info('[fetchProfile] Step 1: Calling server action getProfileById()...');
+        logger.info('[fetchProfile] Target userId:', user.id);
         // Call the server action to fetch the specific user's profile
         const profile = await getProfileById(user.id);
 
-        console.log('[fetchProfile] Step 2: Server action returned:', {
+        logger.info('[fetchProfile] Step 2: Server action returned:', {
             hasProfile: !!profile,
             profileId: profile?.id,
             profileEmail: profile?.email
         });
 
         if (profile) {
-            console.log('[fetchProfile] ✅ Success - API returned profile');
-            console.log('[fetchProfile] Profile data:', {
+            logger.info('[fetchProfile] ✅ Success - API returned profile');
+            logger.info('[fetchProfile] Profile data:', {
                 id: profile.id,
                 email: profile.email,
                 firstName: profile.firstName,
@@ -49,12 +51,12 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
                 hasAvatar: !!profile.avatarUrl,
                 hasCover: !!profile.coverUrl
             });
-            console.log('[fetchProfile] Step 3: Setting profile in React state...');
+            logger.info('[fetchProfile] Step 3: Setting profile in React state...');
             setProfile(profile);
-            console.log('[fetchProfile] ========== END (SUCCESS) ==========');
+            logger.info('[fetchProfile] ========== END (SUCCESS) ==========');
             return true;
         } else {
-            console.log('[fetchProfile] ⚠️ API returned null, creating default profile');
+            logger.info('[fetchProfile] ⚠️ API returned null, creating default profile');
             const defaultProfile = {
                 id: user.id,
                 email: user.email,
@@ -63,19 +65,19 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
                 avatarUrl: '/avatar.png',
                 coverUrl: undefined
             };
-            console.log('[fetchProfile] Default profile:', defaultProfile);
-            console.log('[fetchProfile] Step 3: Setting default profile in React state...');
+            logger.info('[fetchProfile] Default profile:', defaultProfile);
+            logger.info('[fetchProfile] Step 3: Setting default profile in React state...');
             setProfile(defaultProfile);
-            console.log('[fetchProfile] ========== END (DEFAULT) ==========');
+            logger.info('[fetchProfile] ========== END (DEFAULT) ==========');
             return true;
         }
     } catch (error) {
-        console.error('[fetchProfile] ❌ Exception caught:', {
+        logger.error('[fetchProfile] ❌ Exception caught:', {
             error,
             message: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined
         });
-        console.log('[fetchProfile] ========== END (EXCEPTION) ==========');
+        logger.info('[fetchProfile] ========== END (EXCEPTION) ==========');
         return false;
     }
 };
@@ -86,8 +88,8 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
  * Returns true if profile exists, false if definitely doesn't exist, or true on error (fail-safe)
  */
 export const checkProfileExists = async (user: User | null | undefined): Promise<boolean> => {
-    console.log('[checkProfileExists] ========== START ==========');
-    console.log('[checkProfileExists] User input:', {
+    logger.info('[checkProfileExists] ========== START ==========');
+    logger.info('[checkProfileExists] User input:', {
         hasUser: !!user,
         userId: user?.id,
         userEmail: user?.email
@@ -95,17 +97,17 @@ export const checkProfileExists = async (user: User | null | undefined): Promise
 
     // Early return for any invalid input
     if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
-        console.log('[checkProfileExists] ❌ Invalid user input - returning false');
-        console.log('[checkProfileExists] ========== END (INVALID) ==========');
+        logger.info('[checkProfileExists] ❌ Invalid user input - returning false');
+        logger.info('[checkProfileExists] ========== END (INVALID) ==========');
         return false;
     }
 
     try {
-        console.log('[checkProfileExists] Calling getProfileCurrent()...');
+        logger.info('[checkProfileExists] Calling getProfileCurrent()...');
         // Call the server action (uses auth session automatically)
         const profile = await getProfileCurrent();
 
-        console.log('[checkProfileExists] getProfileCurrent() returned:', {
+        logger.info('[checkProfileExists] getProfileCurrent() returned:', {
             isNull: profile === null,
             hasProfile: !!profile,
             profileId: profile?.id,
@@ -114,18 +116,18 @@ export const checkProfileExists = async (user: User | null | undefined): Promise
         });
 
         const exists = profile !== null;
-        console.log('[checkProfileExists] Result: exists =', exists);
-        console.log('[checkProfileExists] ========== END (SUCCESS) ==========');
+        logger.info('[checkProfileExists] Result: exists =', exists);
+        logger.info('[checkProfileExists] ========== END (SUCCESS) ==========');
         return exists;
     } catch (error) {
-        console.error('[checkProfileExists] ❌ EXCEPTION during profile check:');
-        console.error('[checkProfileExists] Error:', error);
-        console.error('[checkProfileExists] Error message:', error instanceof Error ? error.message : 'Unknown');
-        console.error('[checkProfileExists] Error stack:', error instanceof Error ? error.stack : 'N/A');
+        logger.error('[checkProfileExists] ❌ EXCEPTION during profile check:');
+        logger.error('[checkProfileExists] Error:', error);
+        logger.error('[checkProfileExists] Error message:', error instanceof Error ? error.message : 'Unknown');
+        logger.error('[checkProfileExists] Error stack:', error instanceof Error ? error.stack : 'N/A');
         // On error, assume profile exists to avoid false redirects
         // This is safer during session updates or network issues
-        console.log('[checkProfileExists] Returning TRUE (fail-safe) due to error');
-        console.log('[checkProfileExists] ========== END (ERROR) ==========');
+        logger.info('[checkProfileExists] Returning TRUE (fail-safe) due to error');
+        logger.info('[checkProfileExists] ========== END (ERROR) ==========');
         return true;
     }
 };
@@ -135,9 +137,9 @@ export const checkProfileExists = async (user: User | null | undefined): Promise
  * Uses server session automatically for userId
  */
 export const updateProfile = async (profile: Profile, setProfile: (profile: Profile) => void) => {
-    console.log('[updateProfile] ========== START (CLIENT) ==========');
-    console.log('[updateProfile] Timestamp:', new Date().toISOString());
-    console.log('[updateProfile] Input profile:', {
+    logger.info('[updateProfile] ========== START (CLIENT) ==========');
+    logger.info('[updateProfile] Timestamp:', new Date().toISOString());
+    logger.info('[updateProfile] Input profile:', {
         id: profile?.id,
         email: profile?.email,
         firstName: profile?.firstName,
@@ -145,8 +147,8 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
     });
 
     if (!profile) {
-        console.log('[updateProfile] ❌ No profile provided - early return');
-        console.log('[updateProfile] ========== END (INVALID) ==========');
+        logger.info('[updateProfile] ❌ No profile provided - early return');
+        logger.info('[updateProfile] ========== END (INVALID) ==========');
         return;
     }
 
@@ -163,60 +165,60 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
             email: profile.email,
         };
 
-        console.log('[updateProfile] Step 1: Prepared profile data for API:', JSON.stringify(profileData, null, 2));
+        logger.info('[updateProfile] Step 1: Prepared profile data for API:', JSON.stringify(profileData, null, 2));
 
         // First, check if profile exists (uses auth session automatically)
-        console.log('[updateProfile] Step 2: Checking if profile exists...');
+        logger.info('[updateProfile] Step 2: Checking if profile exists...');
         const existingProfile = await getProfileCurrent();
 
-        console.log('[updateProfile] Step 3: Profile existence check result:', {
+        logger.info('[updateProfile] Step 3: Profile existence check result:', {
             exists: !!existingProfile,
             existingId: existingProfile?.id
         });
 
         // If profile doesn't exist (404), create it with POST
         if (!existingProfile) {
-            console.log('[updateProfile] ⚠️ Profile not found, creating with POST');
+            logger.info('[updateProfile] ⚠️ Profile not found, creating with POST');
             const createResult = await createProfileAPI(profileData);
 
-            console.log('[updateProfile] Create result:', {
+            logger.info('[updateProfile] Create result:', {
                 hasResult: !!createResult,
                 hasProfile: !!createResult?.result?.profile,
                 profile: createResult?.result?.profile
             });
 
             if (createResult?.result?.profile) {
-                console.log('[updateProfile] ✅ Profile created successfully');
-                console.log('[updateProfile] Step 4: Setting created profile in React state...');
+                logger.info('[updateProfile] ✅ Profile created successfully');
+                logger.info('[updateProfile] Step 4: Setting created profile in React state...');
                 setProfile(createResult.result.profile);
-                console.log('[updateProfile] ========== END (CREATED) ==========');
+                logger.info('[updateProfile] ========== END (CREATED) ==========');
                 return true;
             }
         } else {
             // Profile exists, update it with PUT
-            console.log('[updateProfile] ✅ Profile exists, updating with PUT');
+            logger.info('[updateProfile] ✅ Profile exists, updating with PUT');
             const updateResult = await updateProfileAPI(profileData);
 
-            console.log('[updateProfile] Update result:', {
+            logger.info('[updateProfile] Update result:', {
                 hasResult: !!updateResult,
                 hasProfile: !!updateResult?.result?.profile,
                 profile: updateResult?.result?.profile
             });
 
             if (updateResult?.result?.profile) {
-                console.log('[updateProfile] ✅ Profile updated successfully');
-                console.log('[updateProfile] Step 4: Setting updated profile in React state...');
+                logger.info('[updateProfile] ✅ Profile updated successfully');
+                logger.info('[updateProfile] Step 4: Setting updated profile in React state...');
                 setProfile(updateResult.result.profile);
-                console.log('[updateProfile] ========== END (UPDATED) ==========');
+                logger.info('[updateProfile] ========== END (UPDATED) ==========');
                 return true;
             }
         }
 
         // Fallback to old API with PUT
-        console.log('[updateProfile] ⚠️ Falling back to old API');
+        logger.info('[updateProfile] ⚠️ Falling back to old API');
         const fallbackUrl = `${baseUrl}/api/profiles/${profile.id}`;
-        console.log('[updateProfile] Fallback URL:', fallbackUrl);
-        console.log('[updateProfile] Fallback body:', JSON.stringify(profile, null, 2));
+        logger.info('[updateProfile] Fallback URL:', fallbackUrl);
+        logger.info('[updateProfile] Fallback body:', JSON.stringify(profile, null, 2));
 
         const response = await fetch(fallbackUrl, {
             method: "PUT",
@@ -226,7 +228,7 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
             body: JSON.stringify(profile),
         });
 
-        console.log('[updateProfile] Fallback response:', {
+        logger.info('[updateProfile] Fallback response:', {
             status: response.status,
             statusText: response.statusText,
             ok: response.ok
@@ -237,18 +239,18 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
         }
 
         const updatedProfile: Profile = await response.json();
-        console.log('[updateProfile] ✅ Fallback successful, profile:', updatedProfile);
-        console.log('[updateProfile] Step 5: Setting profile in React state...');
+        logger.info('[updateProfile] ✅ Fallback successful, profile:', updatedProfile);
+        logger.info('[updateProfile] Step 5: Setting profile in React state...');
         setProfile(updatedProfile);
-        console.log('[updateProfile] ========== END (FALLBACK) ==========');
+        logger.info('[updateProfile] ========== END (FALLBACK) ==========');
         return true;
     } catch (error) {
-        console.error('[updateProfile] ❌ Exception caught:', {
+        logger.error('[updateProfile] ❌ Exception caught:', {
             error,
             message: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined
         });
-        console.log('[updateProfile] ========== END (EXCEPTION) ==========');
+        logger.info('[updateProfile] ========== END (EXCEPTION) ==========');
         return false;
     }
 };
@@ -273,7 +275,7 @@ export const updateProfilePhoto = async (profile: Profile, file: File, setProfil
 
         throw new Error('Failed to upload profile photo');
     } catch (error) {
-        console.error('[updateProfilePhoto] Error:', error);
+        logger.error('[updateProfilePhoto] Error:', error);
         return false;
     }
 };
@@ -298,7 +300,7 @@ export const updateCoverPhoto = async (profile: Profile, file: File, setProfile:
 
         throw new Error('Failed to upload cover photo');
     } catch (error) {
-        console.error('[updateCoverPhoto] Error:', error);
+        logger.error('[updateCoverPhoto] Error:', error);
         return false;
     }
 };

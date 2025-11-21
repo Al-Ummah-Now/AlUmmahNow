@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Channel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
 
 export class SubscriptionCreate extends OpenAPIRoute {
 	schema = {
@@ -120,7 +121,7 @@ export class SubscriptionCreate extends OpenAPIRoute {
 			return channel;
 		}
 		catch (error) {
-			console.error("Error fetching Channel:", error);
+			logger.error("Error fetching Channel:", error);
 			return c.json(
 				{
 					success: false,

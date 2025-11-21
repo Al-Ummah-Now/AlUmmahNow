@@ -23,6 +23,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { PresenceEvent } from '@/interfaces/websocket';
 import { getWebSocketUrl } from '@/lib/runtime-config';
+import { logger } from '@/lib/logger-client';
+
 
 export interface VideoWebSocketOptions {
   videoId: string;
@@ -109,10 +111,10 @@ export function useVideoWebSocket({
       });
       lastHeartbeatRef.current = now;
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[useVideoWebSocket] Sent viewing heartbeat');
+        logger.info('[useVideoWebSocket] Sent viewing heartbeat');
       }
     } catch (error) {
-      console.error('[useVideoWebSocket] Error sending heartbeat:', error);
+      logger.error('[useVideoWebSocket] Error sending heartbeat:', error);
       if (onErrorRef.current) {
         onErrorRef.current(error instanceof Error ? error : new Error('Failed to send heartbeat'));
       }
@@ -132,7 +134,7 @@ export function useVideoWebSocket({
     const data = eventData as PresenceEvent | { type: 'viewer_count'; viewerCount: number };
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[useVideoWebSocket] Received update:', data);
+      logger.info('[useVideoWebSocket] Received update:', data);
     }
 
     if (data.type === 'presence_update' && 'viewerCount' in data && typeof data.viewerCount === 'number') {
@@ -177,7 +179,7 @@ export function useVideoWebSocket({
     const wsUrl = getWebSocketUrl();
 
     if (!wsUrl) {
-      console.warn('[useVideoWebSocket] WEBSOCKET_URL not configured, WebSocket disabled');
+      logger.warn('[useVideoWebSocket] WEBSOCKET_URL not configured, WebSocket disabled');
       return undefined;
     }
 
@@ -185,7 +187,7 @@ export function useVideoWebSocket({
     const token = authToken || getAuthTokenFromCookies();
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[useVideoWebSocket] Initializing WebSocket for video:', videoId);
+      logger.info('[useVideoWebSocket] Initializing WebSocket for video:', videoId);
     }
 
     try {
@@ -204,7 +206,7 @@ export function useVideoWebSocket({
       let lastStatus: string | null = null;
       const unsubscribeState = wsManager.current.onStateChange((state) => {
         if (process.env.NODE_ENV !== 'production') {
-          console.log('[useVideoWebSocket] State changed:', state.status);
+          logger.info('[useVideoWebSocket] State changed:', state.status);
         }
 
         // Only update state if status actually changed
@@ -221,7 +223,7 @@ export function useVideoWebSocket({
 
       // Connect to WebSocket
       wsManager.current.connect(userId).catch((error) => {
-        console.error('[useVideoWebSocket] Connection failed:', error);
+        logger.error('[useVideoWebSocket] Connection failed:', error);
         if (onErrorRef.current) {
           onErrorRef.current(error instanceof Error ? error : new Error('Failed to connect to WebSocket'));
         }
@@ -236,7 +238,7 @@ export function useVideoWebSocket({
       // Cleanup on unmount
       return () => {
         if (process.env.NODE_ENV !== 'production') {
-          console.log('[useVideoWebSocket] Cleaning up');
+          logger.info('[useVideoWebSocket] Cleaning up');
         }
 
         // Clear heartbeat interval
@@ -264,7 +266,7 @@ export function useVideoWebSocket({
         setIsConnected(false);
       };
     } catch (error) {
-      console.error('[useVideoWebSocket] Initialization error:', error);
+      logger.error('[useVideoWebSocket] Initialization error:', error);
       if (onErrorRef.current) {
         onErrorRef.current(error instanceof Error ? error : new Error('Failed to initialize WebSocket'));
       }

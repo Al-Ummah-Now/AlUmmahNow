@@ -5,6 +5,7 @@ import { ReportInput } from "../../lib/model/input";
 import { ReportView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { logger } from '../../lib/logger';
 
 export class ReportCreate extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -147,7 +148,7 @@ export class ReportCreate extends OpenAPIRoute {
 				result: { report: reportView },
 			};
 		} catch (error) {
-			console.error("Error creating report:", error);
+			logger.error("Error creating report:", error);
 			return c.json(
 				{
 					success: false,

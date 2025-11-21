@@ -6,6 +6,8 @@ import {
   ListQueryParams
 } from "./types";
 import { getApiUrl } from "@/lib/runtime-config";
+import { logger } from '@/lib/logger-server';
+
 
 const baseUrl = getApiUrl();
 
@@ -137,7 +139,7 @@ export async function getReports(
     const data: ApiResponse<ContentReport[]> = await response.json();
     return data.result || getMockReports();
   } catch (error) {
-    console.warn('getReports: using mock data:', error);
+    logger.warn('getReports: using mock data:', error);
     return getMockReports();
   }
 }
@@ -170,7 +172,7 @@ export async function getReportById(
     const data: ApiResponse<ContentReport> = await response.json();
     return data.result || getMockReports()[0];
   } catch (error) {
-    console.warn('getReportById: using mock data:', error);
+    logger.warn('getReportById: using mock data:', error);
     return getMockReports()[0];
   }
 }
@@ -204,7 +206,7 @@ export async function createReport(
     const data: ApiResponse<ContentReport> = await response.json();
     return data.result || getMockReports()[0];
   } catch (error) {
-    console.warn('createReport: mock creation:', error);
+    logger.warn('createReport: mock creation:', error);
     return getMockReports()[0];
   }
 }
@@ -238,7 +240,7 @@ export async function takeModerationAction(
     const data: ApiResponse<ModerationAction> = await response.json();
     return data.result || getMockActions()[0];
   } catch (error) {
-    console.warn('takeModerationAction: mock action:', error);
+    logger.warn('takeModerationAction: mock action:', error);
     return getMockActions()[0];
   }
 }
@@ -268,7 +270,7 @@ export async function getStats(headers?: ApiHeaders): Promise<ModerationStats | 
     const data: ApiResponse<ModerationStats> = await response.json();
     return data.result || getMockStats();
   } catch (error) {
-    console.warn('getStats: using mock stats:', error);
+    logger.warn('getStats: using mock stats:', error);
     return getMockStats();
   }
 }
@@ -301,7 +303,7 @@ export async function getUserModeration(
     const data: ApiResponse<UserModeration> = await response.json();
     return data.result || getMockUserModeration();
   } catch (error) {
-    console.warn('getUserModeration: using mock data:', error);
+    logger.warn('getUserModeration: using mock data:', error);
     return getMockUserModeration();
   }
 }

@@ -1,6 +1,7 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { CommunityPost, PostType, VoteResults } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 export class GetPollResults extends OpenAPIRoute {
   static schema = {
@@ -120,7 +121,7 @@ export class GetPollResults extends OpenAPIRoute {
         showResults,
       });
     } catch (error) {
-      console.error('Error getting poll results:', error);
+      logger.error('Error getting poll results:', error);
       return c.json({ error: 'Failed to get results' }, 500);
     }
   }

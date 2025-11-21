@@ -16,6 +16,7 @@ import {
   isValidTiming,
   findTimingOverlaps,
 } from './parser';
+import { logger } from '../logger';
 
 export class VTTParser implements SubtitleParser {
   parse(content: string): SubtitleData {
@@ -90,7 +91,7 @@ export class VTTParser implements SubtitleParser {
               });
             }
           } catch (error) {
-            console.error(`Failed to parse timestamp at line ${i + 1}:`, error);
+            logger.error(`Failed to parse timestamp at line ${i + 1}:`, error);
             // Skip malformed timestamp
           }
         }

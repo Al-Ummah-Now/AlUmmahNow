@@ -4,6 +4,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { transformChannelSectionToView } from '../../lib/transformations';
+import { logger } from '../../lib/logger';
 // Using console logging as per project pattern
 
 export class ChannelSectionFetch extends OpenAPIRoute {
@@ -62,7 +63,7 @@ export class ChannelSectionFetch extends OpenAPIRoute {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId, sectionId } = request.params;
 
-    console.log(`Fetching section ${sectionId} for channel ${channelId}`);
+    logger.info(`Fetching section ${sectionId} for channel ${channelId}`);
 
     // Get auth context (optional)
     const auth = c.get('auth');
@@ -72,7 +73,7 @@ export class ChannelSectionFetch extends OpenAPIRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      console.warn(`Channel not found: ${channelId}`);
+      logger.warn(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -90,7 +91,7 @@ export class ChannelSectionFetch extends OpenAPIRoute {
     const section = await sectionsRepo.getObject(`${channelId}/${sectionId}`);
 
     if (!section) {
-      console.warn(`Section not found: ${sectionId} in channel ${channelId}`);
+      logger.warn(`Section not found: ${sectionId} in channel ${channelId}`);
       return c.json(
         {
           success: false,
@@ -103,7 +104,7 @@ export class ChannelSectionFetch extends OpenAPIRoute {
     // Transform to view model
     const sectionView = transformChannelSectionToView(section);
 
-    console.log(`Successfully fetched section ${sectionId} for channel ${channelId}`);
+    logger.info(`Successfully fetched section ${sectionId} for channel ${channelId}`);
 
     return c.json({
       success: true,

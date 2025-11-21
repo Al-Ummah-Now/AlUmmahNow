@@ -14,6 +14,7 @@ import type {
   RecordWatchRequest,
   WatchHistoryEvent
 } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Request schema
 const RecordWatchRequestSchema = z.object({
@@ -180,7 +181,7 @@ export class RecordWatchHistory extends OpenAPIRoute {
 
       return c.json(watchEntry, 201);
     } catch (error) {
-      console.error("Error recording watch history:", error);
+      logger.error("Error recording watch history:", error);
       return c.json(
         {
           error: "Failed to record watch history",

@@ -14,6 +14,7 @@ import type {
   WatchProgressUpdate,
   WatchHistoryEvent
 } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Path parameter schema
 const ProgressParams = z.object({
@@ -171,7 +172,7 @@ export class UpdateWatchProgress extends OpenAPIRoute {
         200
       );
     } catch (error) {
-      console.error("Error updating watch progress:", error);
+      logger.error("Error updating watch progress:", error);
       return c.json(
         {
           error: "Failed to update watch progress",

@@ -10,6 +10,7 @@ import {
 } from '@al-ummah/shared-types';
 import { transformChannelSectionsToView } from '../../lib/transformations';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
+import { logger } from '../../lib/logger';
 // Using console logging as per project pattern
 
 // Zod schema for the input
@@ -124,7 +125,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
     // Get auth context
     const auth = c.get('auth');
     if (!auth) {
-      console.warn('Unauthorized attempt to reorder channel sections');
+      logger.warn('Unauthorized attempt to reorder channel sections');
       return c.json(
         {
           success: false,
@@ -134,7 +135,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
       );
     }
 
-    console.log(`Reordering sections for channel ${channelId} by user ${auth.userId}`, {
+    logger.info(`Reordering sections for channel ${channelId} by user ${auth.userId}`, {
       sectionCount: sectionIds.length,
     });
 
@@ -143,7 +144,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      console.warn(`Channel not found: ${channelId}`);
+      logger.warn(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -154,7 +155,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
     }
 
     if (channel.userId !== auth.userId) {
-      console.warn(`User ${auth.userId} attempted to reorder sections for channel ${channelId} owned by ${channel.userId}`);
+      logger.warn(`User ${auth.userId} attempted to reorder sections for channel ${channelId} owned by ${channel.userId}`);
       return c.json(
         {
           success: false,
@@ -186,7 +187,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
       const missing = [...existingIds].filter((id) => !providedIds.has(id));
       const extra = [...providedIds].filter((id) => !existingIds.has(id));
 
-      console.warn('Section count mismatch in reorder', {
+      logger.warn('Section count mismatch in reorder', {
         expected: filteredSections.length,
         provided: sectionIds.length,
         missing,
@@ -211,7 +212,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
     // Validate: no duplicates
     const uniqueIds = new Set(sectionIds);
     if (uniqueIds.size !== sectionIds.length) {
-      console.warn('Duplicate section IDs in reorder request');
+      logger.warn('Duplicate section IDs in reorder request');
       return c.json(
         {
           success: false,
@@ -225,7 +226,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
     const existingIds = new Set(filteredSections.map((s) => s.id));
     const invalidIds = sectionIds.filter((id) => !existingIds.has(id));
     if (invalidIds.length > 0) {
-      console.warn('Invalid section IDs in reorder', { invalidIds });
+      logger.warn('Invalid section IDs in reorder', { invalidIds });
       return c.json(
         {
           success: false,
@@ -258,7 +259,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
         )
       );
     } catch (error) {
-      console.error('Failed to save reordered sections', { error });
+      logger.error('Failed to save reordered sections', { error });
       return c.json(
         {
           success: false,
@@ -282,7 +283,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
     // Transform to view models
     const sectionViews = transformChannelSectionsToView(updatedSections);
 
-    console.log(`Successfully reordered ${updatedSections.length} sections for channel ${channelId}`);
+    logger.info(`Successfully reordered ${updatedSections.length} sections for channel ${channelId}`);
 
     return c.json({
       success: true,

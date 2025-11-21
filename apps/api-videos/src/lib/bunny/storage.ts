@@ -1,4 +1,5 @@
 import * as BunnyStorageSDK from "@bunny.net/storage-sdk";
+import { logger } from '../logger';
 
 class BunnyStorageClient {
     readonly sz: BunnyStorageSDK.StorageZone;
@@ -24,7 +25,7 @@ class BunnyStorageClient {
             return await BunnyStorageSDK.file.upload(this.sz, `${path}`, data);
         }
         catch (error) {
-            console.error("Error uploading file:", error);
+            logger.error("Error uploading file:", error);
             return false;
         }
     }

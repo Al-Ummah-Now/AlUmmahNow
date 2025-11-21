@@ -12,6 +12,8 @@
 
 import type { Player } from 'video.js';
 import type { ExtendedPlayer } from './videojs';
+import { logger } from '@/lib/logger-server';
+
 
 const STORAGE_KEY = 'videoPlayerVolume';
 const VOLUME_STEP = 0.1; // 10% steps
@@ -37,7 +39,7 @@ export function saveVolumeState(volume: number, muted: boolean): void {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
-    console.error('[VolumeControl] Failed to save volume state:', error);
+    logger.error('[VolumeControl] Failed to save volume state:', error);
   }
 }
 
@@ -62,11 +64,11 @@ export function loadVolumeState(): VolumeState | null {
     }
 
     // Invalid data format
-    console.warn('[VolumeControl] Invalid volume state format, clearing');
+    logger.warn('[VolumeControl] Invalid volume state format, clearing');
     localStorage.removeItem(STORAGE_KEY);
     return null;
   } catch (error) {
-    console.error('[VolumeControl] Failed to load volume state:', error);
+    logger.error('[VolumeControl] Failed to load volume state:', error);
     // Clear corrupted data
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -88,7 +90,7 @@ export function applySavedVolume(player: Player | ExtendedPlayer): void {
     if (savedState) {
       extPlayer.volume(savedState.volume);
       extPlayer.muted(savedState.muted);
-      console.log('[VolumeControl] Restored volume:', savedState);
+      logger.info('[VolumeControl] Restored volume:', savedState);
     } else {
       // Fallback: Set reasonable defaults if no saved state
       const fallbackVolume = 0.7; // 70% volume as reasonable default
@@ -97,20 +99,20 @@ export function applySavedVolume(player: Player | ExtendedPlayer): void {
       extPlayer.volume(fallbackVolume);
       extPlayer.muted(fallbackMuted);
 
-      console.log('[VolumeControl] Applied fallback volume:', { volume: fallbackVolume, muted: fallbackMuted });
+      logger.info('[VolumeControl] Applied fallback volume:', { volume: fallbackVolume, muted: fallbackMuted });
 
       // Save the fallback state for future use
       saveVolumeState(fallbackVolume, fallbackMuted);
     }
   } catch (error) {
-    console.error('[VolumeControl] Failed to apply saved volume, using fallback:', error);
+    logger.error('[VolumeControl] Failed to apply saved volume, using fallback:', error);
 
     // Emergency fallback: Set safe defaults even if everything fails
     try {
       extPlayer.volume(0.5); // 50% volume as safe default
       extPlayer.muted(false);
     } catch (fallbackError) {
-      console.error('[VolumeControl] Even fallback failed:', fallbackError);
+      logger.error('[VolumeControl] Even fallback failed:', fallbackError);
     }
   }
 }
@@ -217,7 +219,7 @@ export function setupScrollWheelControl(player: Player | ExtendedPlayer): () => 
       extPlayer.muted(false);
     }
 
-    console.log('[VolumeControl] Scroll wheel:', { currentVolume, newVolume, muted: extPlayer.muted() });
+    logger.info('[VolumeControl] Scroll wheel:', { currentVolume, newVolume, muted: extPlayer.muted() });
   };
 
   // Add event listener with passive: false to allow preventDefault
@@ -243,7 +245,7 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
   const volumeBar = playerElement.querySelector('.vjs-volume-bar') as HTMLElement;
 
   if (!volumePanel || !muteButton || !volumeBar) {
-    console.warn('[VolumeControl] Volume control elements not found');
+    logger.warn('[VolumeControl] Volume control elements not found');
     return () => {};
   }
 
@@ -320,7 +322,7 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
     // Update ARIA values
     updateAriaValues();
 
-    console.log('[VolumeControl] Keyboard control:', { 
+    logger.info('[VolumeControl] Keyboard control:', { 
       key: event.key, 
       newVolume, 
       newMuted 
@@ -375,13 +377,13 @@ export function setupVolumeChangeListener(player: Player | ExtendedPlayer): () =
     try {
       saveVolumeState(volume, muted);
     } catch (error) {
-      console.error('[VolumeControl] Failed to save volume state:', error);
+      logger.error('[VolumeControl] Failed to save volume state:', error);
     }
 
     // Show visual feedback
     showVolumeIndicator(player, volume, muted);
 
-    console.log('[VolumeControl] Volume changed:', { volume, muted });
+    logger.info('[VolumeControl] Volume changed:', { volume, muted });
   };
 
   player.on('volumechange', handleVolumeChange);
@@ -402,7 +404,7 @@ export function initializeVolumeControls(player: Player | ExtendedPlayer): () =>
   try {
     applySavedVolume(player);
   } catch (error) {
-    console.error('[VolumeControl] Failed to apply saved volume:', error);
+    logger.error('[VolumeControl] Failed to apply saved volume:', error);
   }
 
   // Setup scroll wheel control

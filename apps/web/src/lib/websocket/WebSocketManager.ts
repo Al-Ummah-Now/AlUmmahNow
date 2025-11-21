@@ -5,6 +5,7 @@ import {
   WebSocketSubscription,
   WebSocketEventType
 } from '@/interfaces/websocket';
+import { logger } from '@/lib/logger-client';
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -60,12 +61,12 @@ export class WebSocketManager {
           wsUrl += `?${params.toString()}`;
         }
 
-        console.log('🔌 Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+        logger.info('🔌 Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
 
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          console.log('✅ WebSocket connected');
+          logger.info('✅ WebSocket connected');
           this.state.status = 'connected';
           this.state.lastConnected = new Date();
           this.state.reconnectAttempts = 0;
@@ -82,12 +83,12 @@ export class WebSocketManager {
             const message: WebSocketMessage = JSON.parse(event.data);
             this.handleMessage(message);
           } catch (error) {
-            console.error('❌ Error parsing WebSocket message:', error);
+            logger.error('❌ Error parsing WebSocket message:', error);
           }
         };
 
         this.ws.onclose = (event) => {
-          console.log('🔌 WebSocket closed:', event.code, event.reason);
+          logger.info('🔌 WebSocket closed', { code: event.code, reason: event.reason });
           this.state.status = 'disconnected';
           this.stopHeartbeat();
           this.notifyStateChange();
@@ -98,7 +99,7 @@ export class WebSocketManager {
         };
 
         this.ws.onerror = (error) => {
-          console.error('❌ WebSocket error:', error);
+          logger.error('❌ WebSocket error:', error);
           this.state.status = 'error';
           this.notifyStateChange();
           reject(error);
@@ -148,7 +149,7 @@ export class WebSocketManager {
       this.sendMessage('subscribe', { channel });
     }
 
-    console.log(`📡 Subscribed to channel: ${channel}`);
+    logger.info(`📡 Subscribed to channel: ${channel}`);
 
     // Return unsubscribe function
     return () => {
@@ -157,7 +158,7 @@ export class WebSocketManager {
         const index = channelSubs.findIndex(sub => sub === subscription);
         if (index !== -1) {
           channelSubs.splice(index, 1);
-          console.log(`📡 Unsubscribed from channel: ${channel}`);
+          logger.info(`📡 Unsubscribed from channel: ${channel}`);
 
           if (channelSubs.length === 0) {
             this.subscriptions.delete(channel);
@@ -184,14 +185,14 @@ export class WebSocketManager {
     if (this.state.status === 'connected' && this.ws) {
       try {
         this.ws.send(JSON.stringify(message));
-        console.log('📤 Sent message:', type, data);
+        logger.info('📤 Sent message', { type, data });
       } catch (error) {
-        console.error('❌ Error sending message:', error);
+        logger.error('❌ Error sending message:', error);
         this.messageQueue.push(message);
       }
     } else {
       this.messageQueue.push(message);
-      console.log('📤 Message queued:', type, data);
+      logger.info('📤 Message queued', { type, data });
     }
   }
 
@@ -223,11 +224,11 @@ export class WebSocketManager {
   }
 
   private handleMessage(message: WebSocketMessage): void {
-    console.log('📥 Received message:', message.type, message.data);
+    logger.info('📥 Received message', { type: message.type, data: message.data });
 
     // Handle connection acknowledgment
     if (message.type === 'connection_acknowledged') {
-      console.log('✅ Connection acknowledged by server');
+      logger.info('✅ Connection acknowledged by server');
       return;
     }
 
@@ -246,7 +247,7 @@ export class WebSocketManager {
           try {
             sub.callback(message.data);
           } catch (error) {
-            console.error('❌ Error in subscription callback:', error);
+            logger.error('❌ Error in subscription callback:', error);
           }
         });
       }
@@ -259,7 +260,7 @@ export class WebSocketManager {
           try {
             sub.callback(message.data);
           } catch (error) {
-            console.error('❌ Error in broadcast callback:', error);
+            logger.error('❌ Error in broadcast callback:', error);
           }
         });
       });
@@ -305,12 +306,12 @@ export class WebSocketManager {
       30000 // Max 30 seconds
     );
 
-    console.log(`🔄 Scheduling reconnect attempt ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`);
+    logger.info(`🔄 Scheduling reconnect attempt ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`);
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect().catch(error => {
-        console.error('❌ Reconnect failed:', error);
+        logger.error('❌ Reconnect failed:', error);
         if (this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
           this.scheduleReconnect();
         }
@@ -341,9 +342,9 @@ export class WebSocketManager {
       if (message && this.ws) {
         try {
           this.ws.send(JSON.stringify(message));
-          console.log('📤 Sent queued message:', message.type, message.data);
+          logger.info('📤 Sent queued message', { type: message.type, data: message.data });
         } catch (error) {
-          console.error('❌ Error sending queued message:', error);
+          logger.error('❌ Error sending queued message:', error);
           this.messageQueue.unshift(message);
           break;
         }
@@ -358,7 +359,7 @@ export class WebSocketManager {
         try {
           callback(this.state);
         } catch (error) {
-          console.error('❌ Error in state change callback:', error);
+          logger.error('❌ Error in state change callback:', error);
         }
       });
     }

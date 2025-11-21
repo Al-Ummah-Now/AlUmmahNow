@@ -14,6 +14,7 @@ import {
   validateUpdateTemplateRequest,
   validateTemplateSize,
 } from '../../lib/templates/validator';
+import { logger } from '../../lib/logger';
 
 /**
  * Get Upload Template Endpoint
@@ -123,7 +124,7 @@ export class GetUploadDefaultEndpoint extends OpenAPIRoute {
         },
       });
     } catch (error) {
-      console.error('Get upload default error:', error);
+      logger.error('Get upload default error:', error);
       return c.json(
         {
           success: false,
@@ -371,7 +372,7 @@ export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
         },
       });
     } catch (error) {
-      console.error('Update upload default error:', error);
+      logger.error('Update upload default error:', error);
       return c.json(
         {
           success: false,
@@ -447,7 +448,7 @@ export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
         }
       }
     } catch (error) {
-      console.error('Error unsetting other defaults:', error);
+      logger.error('Error unsetting other defaults:', error);
       // Don't fail the request if this fails
     }
   }
@@ -550,7 +551,7 @@ export class DeleteUploadDefaultEndpoint extends OpenAPIRoute {
 
       return new Response(null, { status: 204 });
     } catch (error) {
-      console.error('Delete upload default error:', error);
+      logger.error('Delete upload default error:', error);
       return c.json(
         {
           success: false,
@@ -709,7 +710,7 @@ export class SetDefaultTemplateEndpoint extends OpenAPIRoute {
         success: true,
       });
     } catch (error) {
-      console.error('Set default template error:', error);
+      logger.error('Set default template error:', error);
       return c.json(
         {
           success: false,
@@ -785,7 +786,7 @@ export class SetDefaultTemplateEndpoint extends OpenAPIRoute {
         }
       }
     } catch (error) {
-      console.error('Error unsetting other defaults:', error);
+      logger.error('Error unsetting other defaults:', error);
       // Don't fail the request if this fails
     }
   }

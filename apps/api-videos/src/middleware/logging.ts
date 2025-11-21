@@ -1,8 +1,5 @@
 import { Context, Next } from 'hono';
-import { createLogger } from '@al-ummah/logger';
-
-// Create logger instance
-const logger = createLogger('api-videos', { logLevel: 'info', forceHttpLogging: true });
+import { logger } from '../lib/logger';
 
 /**
  * Sanitize sensitive headers

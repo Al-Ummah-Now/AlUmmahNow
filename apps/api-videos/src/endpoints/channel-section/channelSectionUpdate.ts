@@ -13,6 +13,7 @@ import {
   validateSectionContent
 } from '../../lib/transformations';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
+import { logger } from '../../lib/logger';
 // Using console logging as per project pattern
 
 // Zod schema for the input
@@ -135,7 +136,7 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
     // Get auth context
     const auth = c.get('auth');
     if (!auth) {
-      console.warn('Unauthorized attempt to update channel section');
+      logger.warn('Unauthorized attempt to update channel section');
       return c.json(
         {
           success: false,
@@ -145,7 +146,7 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
       );
     }
 
-    console.log(`Updating section ${sectionId} for channel ${channelId} by user ${auth.userId}`, {
+    logger.info(`Updating section ${sectionId} for channel ${channelId} by user ${auth.userId}`, {
       updates: Object.keys(input),
     });
 
@@ -154,7 +155,7 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      console.warn(`Channel not found: ${channelId}`);
+      logger.warn(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -165,7 +166,7 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
     }
 
     if (channel.userId !== auth.userId) {
-      console.warn(`User ${auth.userId} attempted to update section for channel ${channelId} owned by ${channel.userId}`);
+      logger.warn(`User ${auth.userId} attempted to update section for channel ${channelId} owned by ${channel.userId}`);
       return c.json(
         {
           success: false,
@@ -180,7 +181,7 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
     const section = await sectionsRepo.getObject(`${channelId}/${sectionId}`);
 
     if (!section) {
-      console.warn(`Section not found: ${sectionId} in channel ${channelId}`);
+      logger.warn(`Section not found: ${sectionId} in channel ${channelId}`);
       return c.json(
         {
           success: false,
@@ -193,7 +194,7 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
     // Validate content if being updated
     const validation = validateSectionContent(section.type, input);
     if (!validation.valid) {
-      console.warn('Section content validation failed', { errors: validation.errors });
+      logger.warn('Section content validation failed', { errors: validation.errors });
       return c.json(
         {
           success: false,
@@ -237,7 +238,7 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
     // Transform to view model
     const sectionView = transformChannelSectionToView(updatedSection);
 
-    console.log(`Successfully updated section ${sectionId} for channel ${channelId}`);
+    logger.info(`Successfully updated section ${sectionId} for channel ${channelId}`);
 
     return c.json({
       success: true,

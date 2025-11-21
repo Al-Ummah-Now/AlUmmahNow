@@ -44,12 +44,17 @@ export default function UploadDefaultsPage() {
     try {
       const response = await listTemplates();
       if (response) {
-        setTemplates(response.templates);
+        // Ensure templates is always an array, even if response.templates is undefined
+        setTemplates(response.templates || []);
         setDefaultTemplateId(response.defaultTemplateId || null);
       } else {
+        // API returned null - set empty array and show error
+        setTemplates([]);
         setError(isRTL ? 'فشل في تحميل القوالب' : 'Failed to load templates');
       }
     } catch (err) {
+      // Exception occurred - set empty array and show error
+      setTemplates([]);
       setError(isRTL ? 'حدث خطأ أثناء التحميل' : 'An error occurred while loading');
     } finally {
       setLoading(false);
@@ -141,13 +146,16 @@ export default function UploadDefaultsPage() {
               items-center
               gap-2
               px-4
-              py-2
+              py-2.5
               bg-primary
+              text-primary-foreground
               hover:bg-primary/90
-              text-white
               rounded-lg
               font-medium
-              transition-colors
+              shadow-sm
+              hover:shadow-md
+              transition-all
+              duration-200
             "
           >
             <Plus className="w-5 h-5" />
@@ -171,7 +179,7 @@ export default function UploadDefaultsPage() {
         )}
 
         {/* Empty State */}
-        {!loading && !error && templates.length === 0 && (
+        {!loading && !error && templates && templates.length === 0 && (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
             <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
@@ -191,11 +199,14 @@ export default function UploadDefaultsPage() {
                 px-6
                 py-3
                 bg-primary
+                text-primary-foreground
                 hover:bg-primary/90
-                text-white
                 rounded-lg
                 font-medium
-                transition-colors
+                shadow-md
+                hover:shadow-lg
+                transition-all
+                duration-200
               "
             >
               <Plus className="w-5 h-5" />
@@ -205,7 +216,7 @@ export default function UploadDefaultsPage() {
         )}
 
         {/* Templates List */}
-        {!loading && !error && templates.length > 0 && (
+        {!loading && !error && templates && templates.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {templates.map((template) => {
               const isDefault = template.id === defaultTemplateId;
@@ -302,14 +313,15 @@ export default function UploadDefaultsPage() {
                           py-2
                           text-sm
                           font-medium
-                          text-gray-700
-                          dark:text-gray-300
-                          bg-gray-100
-                          dark:bg-gray-700
-                          hover:bg-gray-200
-                          dark:hover:bg-gray-600
+                          bg-secondary
+                          text-secondary-foreground
+                          hover:bg-secondary/80
+                          border
+                          border-border
                           rounded-lg
-                          transition-colors
+                          shadow-xs
+                          transition-all
+                          duration-200
                         "
                       >
                         <Edit2 className="w-4 h-4" />
@@ -322,14 +334,15 @@ export default function UploadDefaultsPage() {
                           onClick={() => setActiveMenu(activeMenu === template.id ? null : template.id)}
                           className="
                             p-2
-                            text-gray-700
-                            dark:text-gray-300
-                            bg-gray-100
-                            dark:bg-gray-700
-                            hover:bg-gray-200
-                            dark:hover:bg-gray-600
+                            bg-secondary
+                            text-secondary-foreground
+                            hover:bg-secondary/80
+                            border
+                            border-border
                             rounded-lg
-                            transition-colors
+                            shadow-xs
+                            transition-all
+                            duration-200
                           "
                         >
                           <MoreVertical className="w-4 h-4" />
@@ -351,13 +364,12 @@ export default function UploadDefaultsPage() {
                               rtl:right-auto
                               mt-2
                               w-48
-                              bg-white
-                              dark:bg-gray-800
+                              bg-popover
+                              text-popover-foreground
                               rounded-lg
                               shadow-lg
                               border
-                              border-gray-200
-                              dark:border-gray-700
+                              border-border
                               py-1
                               z-20
                             ">
@@ -372,11 +384,11 @@ export default function UploadDefaultsPage() {
                                     px-4
                                     py-2
                                     text-sm
-                                    text-gray-700
-                                    dark:text-gray-300
-                                    hover:bg-gray-100
-                                    dark:hover:bg-gray-700
-                                    transition-colors
+                                    text-foreground
+                                    hover:bg-accent
+                                    hover:text-accent-foreground
+                                    transition-all
+                                    duration-150
                                   "
                                 >
                                   <Star className="w-4 h-4" />
@@ -393,11 +405,11 @@ export default function UploadDefaultsPage() {
                                   px-4
                                   py-2
                                   text-sm
-                                  text-red-600
-                                  dark:text-red-400
-                                  hover:bg-red-50
-                                  dark:hover:bg-red-900/20
-                                  transition-colors
+                                  text-destructive
+                                  hover:bg-destructive/10
+                                  dark:hover:bg-destructive/20
+                                  transition-all
+                                  duration-150
                                 "
                               >
                                 <Trash2 className="w-4 h-4" />

@@ -5,6 +5,7 @@ import { ResponseError } from '../../lib/types';
 import R2Repository from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 const VideoScheduleUpdateResponseSchema = z.object({
   videoId: Str({ description: 'Video ID' }),
@@ -297,7 +298,7 @@ export class VideoScheduleUpdate extends OpenAPIRoute {
         },
       });
     } catch (error) {
-      console.error('Failed to update video schedule:', error);
+      logger.error('Failed to update video schedule:', error);
       return c.json(
         {
           success: false,

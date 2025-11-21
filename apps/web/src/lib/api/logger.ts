@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger-server';
+
 /**
  * API Logging Utility
  *
@@ -36,12 +38,12 @@ function formatMessage(level: LogLevel, functionName: string, message: string): 
 export function logApiStart(context: ApiLogContext): void {
   const { functionName, method, url } = context;
 
-  console.log(`[${functionName}] ${'='.repeat(50)}`);
-  console.log(`[${functionName}] START`);
-  console.log(`[${functionName}] Timestamp: ${new Date().toISOString()}`);
+  logger.info(`[${functionName}] ${'='.repeat(50)}`);
+  logger.info(`[${functionName}] START`);
+  logger.info(`[${functionName}] Timestamp: ${new Date().toISOString()}`);
 
   if (method && url) {
-    console.log(`[${functionName}] 📡 ${method} ${url}`);
+    logger.info(`[${functionName}] 📡 ${method} ${url}`);
   }
 }
 
@@ -52,8 +54,8 @@ export function logApiEnd(functionName: string, success: boolean = true): void {
   const status = success ? 'SUCCESS' : 'FAILURE';
   const emoji = success ? '✅' : '❌';
 
-  console.log(`[${functionName}] ${emoji} END (${status})`);
-  console.log(`[${functionName}] ${'='.repeat(50)}`);
+  logger.info(`[${functionName}] ${emoji} END (${status})`);
+  logger.info(`[${functionName}] ${'='.repeat(50)}`);
 }
 
 /**
@@ -62,10 +64,10 @@ export function logApiEnd(functionName: string, success: boolean = true): void {
 export function logApiStep(context: ApiLogContext): void {
   const { functionName, step, data } = context;
 
-  console.log(`[${functionName}] 📝 ${step || 'Processing...'}`);
+  logger.info(`[${functionName}] 📝 ${step || 'Processing...'}`);
 
   if (data !== undefined) {
-    console.log(`[${functionName}] Data:`, data);
+    logger.info(`[${functionName}] Data:`, data);
   }
 }
 
@@ -73,10 +75,10 @@ export function logApiStep(context: ApiLogContext): void {
  * Log successful operation
  */
 export function logApiSuccess(functionName: string, message: string, data?: unknown): void {
-  console.log(formatMessage('success', functionName, message));
+  logger.info(formatMessage('success', functionName, message));
 
   if (data !== undefined) {
-    console.log(`[${functionName}] Response:`, data);
+    logger.info(`[${functionName}] Response:`, data);
   }
 }
 
@@ -84,16 +86,16 @@ export function logApiSuccess(functionName: string, message: string, data?: unkn
  * Log error
  */
 export function logApiError(functionName: string, message: string, error?: unknown): void {
-  console.error(formatMessage('error', functionName, message));
+  logger.error(formatMessage('error', functionName, message));
 
   if (error) {
     if (error instanceof Error) {
-      console.error(`[${functionName}] Error message:`, error.message);
+      logger.error(`[${functionName}] Error message:`, error.message);
       if (error.stack) {
-        console.error(`[${functionName}] Stack trace:`, error.stack);
+        logger.error(`[${functionName}] Stack trace:`, error.stack);
       }
     } else {
-      console.error(`[${functionName}] Error details:`, error);
+      logger.error(`[${functionName}] Error details:`, error);
     }
   }
 }
@@ -102,10 +104,10 @@ export function logApiError(functionName: string, message: string, error?: unkno
  * Log warning
  */
 export function logApiWarn(functionName: string, message: string, data?: unknown): void {
-  console.warn(formatMessage('warn', functionName, message));
+  logger.warn(formatMessage('warn', functionName, message));
 
   if (data !== undefined) {
-    console.warn(`[${functionName}] Details:`, data);
+    logger.warn(`[${functionName}] Details:`, data);
   }
 }
 
@@ -119,15 +121,15 @@ export function logApiRequest(context: ApiLogContext & {
 }): void {
   const { functionName, method, url, headers, body, params } = context;
 
-  console.log(`[${functionName}] 📤 Request Details:`);
+  logger.info(`[${functionName}] 📤 Request Details:`);
 
   if (method && url) {
-    console.log(`[${functionName}]   Method: ${method}`);
-    console.log(`[${functionName}]   URL: ${url}`);
+    logger.info(`[${functionName}]   Method: ${method}`);
+    logger.info(`[${functionName}]   URL: ${url}`);
   }
 
   if (params && Object.keys(params).length > 0) {
-    console.log(`[${functionName}]   Query Params:`, params);
+    logger.info(`[${functionName}]   Query Params:`, params);
   }
 
   if (headers) {
@@ -137,11 +139,11 @@ export function logApiRequest(context: ApiLogContext & {
       const token = sanitizedHeaders.Authorization.replace('Bearer ', '');
       sanitizedHeaders.Authorization = `Bearer ${token.substring(0, 20)}...${token.substring(token.length - 5)}`;
     }
-    console.log(`[${functionName}]   Headers:`, sanitizedHeaders);
+    logger.info(`[${functionName}]   Headers:`, sanitizedHeaders);
   }
 
   if (body !== undefined) {
-    console.log(`[${functionName}]   Body:`, body);
+    logger.info(`[${functionName}]   Body:`, body);
   }
 }
 
@@ -158,14 +160,14 @@ export function logApiResponse(context: ApiLogContext & {
   const { functionName, status, statusText, ok, headers, body } = context;
 
   const emoji = ok ? '✅' : '❌';
-  console.log(`[${functionName}] 📥 Response: ${emoji} ${status} ${statusText}`);
+  logger.info(`[${functionName}] 📥 Response: ${emoji} ${status} ${statusText}`);
 
   if (headers) {
-    console.log(`[${functionName}]   Headers:`, Object.fromEntries(headers.entries()));
+    logger.info(`[${functionName}]   Headers:`, Object.fromEntries(headers.entries()));
   }
 
   if (body !== undefined) {
-    console.log(`[${functionName}]   Body:`, body);
+    logger.info(`[${functionName}]   Body:`, body);
   }
 }
 
@@ -177,18 +179,18 @@ export function logApiAuth(functionName: string, context: {
   hasToken?: boolean;
   tokenLength?: number;
 }): void {
-  console.log(`[${functionName}] 🔐 Authentication:`);
+  logger.info(`[${functionName}] 🔐 Authentication:`);
 
   if (context.userId) {
-    console.log(`[${functionName}]   User ID: ${context.userId}`);
+    logger.info(`[${functionName}]   User ID: ${context.userId}`);
   }
 
   if (context.hasToken !== undefined) {
-    console.log(`[${functionName}]   Has Token: ${context.hasToken}`);
+    logger.info(`[${functionName}]   Has Token: ${context.hasToken}`);
   }
 
   if (context.tokenLength) {
-    console.log(`[${functionName}]   Token Length: ${context.tokenLength} chars`);
+    logger.info(`[${functionName}]   Token Length: ${context.tokenLength} chars`);
   }
 }
 

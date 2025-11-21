@@ -9,6 +9,7 @@ import {
   logApiError,
   logApiAuth
 } from "./logger";
+import { logger } from '@/lib/logger-server';
 
 /**
  * Get the current authenticated user's profile
@@ -104,11 +105,11 @@ export async function getProfileById(userId: string): Promise<Profile | null> {
     return null;
   }
 
-  console.log(`[${fnName}] 🔐 Authentication:`);
-  console.log(`[${fnName}]   Requesting User ID: ${authContext.userId}`);
-  console.log(`[${fnName}]   Target User ID: ${userId}`);
-  console.log(`[${fnName}]   Has Token: true`);
-  console.log(`[${fnName}]   Token Length: ${authContext.accessToken?.length} chars`);
+  logger.info(`[${fnName}] 🔐 Authentication:`);
+  logger.info(`[${fnName}]   Requesting User ID: ${authContext.userId}`);
+  logger.info(`[${fnName}]   Target User ID: ${userId}`);
+  logger.info(`[${fnName}]   Has Token: true`);
+  logger.info(`[${fnName}]   Token Length: ${authContext.accessToken?.length} chars`);
 
   const result = await apiRequestServer<unknown>(
     {

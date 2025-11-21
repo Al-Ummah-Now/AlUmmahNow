@@ -3,7 +3,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getClient } from "@/lib/actions";
 import { User } from "@/interfaces";
 import { SessionManager } from "@/lib/auth/session-manager";
-import { logger } from "@/lib/logger";
+import { logger } from '@/lib/logger-server';
+
 
 // Discriminated union type for clearer type safety
 type ValidationResult =

@@ -4,6 +4,7 @@ import { CommunityPost, LikePostResponse } from '@al-ummah/shared-types';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
+import { logger } from '../../lib/logger';
 
 export class LikeCommunityPost extends OpenAPIRoute {
   static schema = addAuthToSchema({
@@ -114,7 +115,7 @@ export class LikeCommunityPost extends OpenAPIRoute {
         });
       }
     } catch (error) {
-      console.error('Error liking community post:', error);
+      logger.error('Error liking community post:', error);
       return c.json({ error: 'Failed to like post' }, 500);
     }
   }

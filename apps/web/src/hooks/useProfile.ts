@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Profile, User } from '@/interfaces';
 import { fetchProfile } from '@/lib/api/profiles-client';
+import { logger } from '@/lib/logger-client';
+
 
 export const useProfile = (user: User | null) => {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -35,11 +37,11 @@ export const useProfile = (user: User | null) => {
 
     // Call the actual API
     fetchProfile(user, (newProfile) => {
-      console.log('useProfile: ✅ Profile received from API');
+      logger.info('useProfile: ✅ Profile received from API');
       setProfile(newProfile);
     }).then(success => {
       if (!success) {
-        console.log('useProfile: ⚠️ API call failed, creating fallback profile');
+        logger.info('useProfile: ⚠️ API call failed, creating fallback profile');
         // Create fallback profile if API fails
         setProfile({
           id: user.id,
@@ -52,7 +54,7 @@ export const useProfile = (user: User | null) => {
         setError(null); // Don't show error, just use fallback
       }
     }).catch(err => {
-      console.error('useProfile: ❌ Error calling API:', err);
+      logger.error('useProfile: ❌ Error calling API:', err);
       // Create fallback profile on error
       setProfile({
         id: user.id,

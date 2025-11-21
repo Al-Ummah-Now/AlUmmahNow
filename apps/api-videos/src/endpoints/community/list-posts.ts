@@ -7,6 +7,7 @@ import {
   PostStatus,
   ListCommunityPostsResponse
 } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 const querySchema = z.object({
   channelId: z.string(),
@@ -139,7 +140,7 @@ export class ListCommunityPosts extends OpenAPIRoute {
         },
       });
     } catch (error) {
-      console.error('Error listing community posts:', error);
+      logger.error('Error listing community posts:', error);
       return c.json({ error: 'Failed to list posts' }, 500);
     }
   }

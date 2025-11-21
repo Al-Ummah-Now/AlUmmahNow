@@ -6,6 +6,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { VideoChapter } from '@al-ummah/shared-types';
+import { logger } from '../logger';
 
 export interface ParseOptions {
   minDuration?: number;      // Minimum chapter duration (default: 10)
@@ -83,7 +84,7 @@ export function parseChapters(
         if (seconds <= videoDuration && title) {
           timestampLines.push({ time: seconds, title, line: i + 1 });
         } else if (seconds > videoDuration) {
-          console.warn('Chapter timestamp exceeds video duration', {
+          logger.warn('Chapter timestamp exceeds video duration', {
             timestamp: seconds,
             videoDuration,
             line: i + 1
@@ -133,7 +134,7 @@ export function parseChapters(
     });
   }
 
-  console.log('Chapters parsed', {
+  logger.info('Chapters parsed', {
     totalLines: lines.length,
     foundTimestamps: timestampLines.length,
     validChapters: chapters.length,

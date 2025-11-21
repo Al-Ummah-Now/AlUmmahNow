@@ -10,6 +10,7 @@ import { parseChapters } from '../../lib/chapters/parser';
 import { VideoChapterDataSchema } from '@al-ummah/shared-types';
 import { ResponseError } from '../../lib/types';
 import type { VideoObject } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 export class VideoChaptersGet extends OpenAPIRoute {
   schema = {
@@ -80,7 +81,7 @@ export class VideoChaptersGet extends OpenAPIRoute {
       // Fetch video
       const video = await videoRepo.getObject(videoId);
       if (!video) {
-        console.warn('Video not found for chapters', { videoId });
+        logger.warn('Video not found for chapters', { videoId });
         return c.json(
           {
             success: false,
@@ -155,7 +156,7 @@ export class VideoChaptersGet extends OpenAPIRoute {
         chapters: chapterData,
       });
     } catch (error) {
-      console.error('Error fetching/parsing chapters', {
+      logger.error('Error fetching/parsing chapters', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });

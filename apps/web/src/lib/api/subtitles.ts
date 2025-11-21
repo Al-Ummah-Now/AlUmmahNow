@@ -2,6 +2,8 @@
 
 import { getApiUrl } from "@/lib/runtime-config";
 import { ApiResponse, ApiHeaders } from "./types";
+import { logger } from '@/lib/logger-server';
+
 
 const baseUrl = getApiUrl();
 
@@ -73,7 +75,7 @@ export async function uploadSubtitle(
 
     return await response.json();
   } catch (error) {
-    console.error('uploadSubtitle error:', error);
+    logger.error('uploadSubtitle error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to upload subtitle'
@@ -109,7 +111,7 @@ export async function listSubtitles(
     const data = await response.json();
     return data.subtitles || [];
   } catch (error) {
-    console.error('listSubtitles error:', error);
+    logger.error('listSubtitles error:', error);
     return [];
   }
 }
@@ -142,7 +144,7 @@ export async function getSubtitle(
 
     return await response.text();
   } catch (error) {
-    console.error('getSubtitle error:', error);
+    logger.error('getSubtitle error:', error);
     return null;
   }
 }
@@ -175,7 +177,7 @@ export async function deleteSubtitle(
 
     return await response.json();
   } catch (error) {
-    console.error('deleteSubtitle error:', error);
+    logger.error('deleteSubtitle error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to delete subtitle'
@@ -211,7 +213,7 @@ export async function setDefaultSubtitle(
 
     return await response.json();
   } catch (error) {
-    console.error('setDefaultSubtitle error:', error);
+    logger.error('setDefaultSubtitle error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to set default subtitle'

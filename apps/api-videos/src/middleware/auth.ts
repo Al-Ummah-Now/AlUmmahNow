@@ -1,6 +1,7 @@
 import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
+import { logger } from '../lib/logger';
 
 // Type for the decoded JWT payload from OpenAuth
 interface AuthPayload {
@@ -69,7 +70,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     return await next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    logger.error('Auth middleware error:', error);
     return c.json({
       success: false,
       error: 'Authentication failed'
@@ -103,7 +104,7 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
     
     return payload;
   } catch (error) {
-    console.error('JWT validation error:', error);
+    logger.error('JWT validation error:', error);
     return null;
   }
 }
@@ -115,7 +116,7 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
 async function validateJWTWithSignature(token: string, env?: any): Promise<AuthPayload | null> {
   try {
     if (!env) {
-      console.error('Environment not provided for JWT signature validation');
+      logger.error('Environment not provided for JWT signature validation');
       return null;
     }
 
@@ -152,12 +153,12 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     
     // If result is an error, log it
     if ('error' in result) {
-      console.error('OpenAuth verification error:', result.error);
+      logger.error('OpenAuth verification error:', result.error);
     }
     
     return null;
   } catch (error) {
-    console.error('JWT signature validation error:', error);
+    logger.error('JWT signature validation error:', error);
     return null;
   }
 }
@@ -191,7 +192,7 @@ export async function optionalAuthMiddleware(c: Context, next: Next) {
     return await next();
   } catch (error) {
     // Log error but don't fail the request for optional auth
-    console.error('Optional auth middleware error:', error);
+    logger.error('Optional auth middleware error:', error);
     return await next();
   }
 }

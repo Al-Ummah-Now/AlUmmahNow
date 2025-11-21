@@ -8,6 +8,7 @@ import {
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateUpdatePost } from '../../validation/community-posts';
+import { logger } from '../../lib/logger';
 
 const updatePostSchema = z.object({
   content: z.string().max(5000).optional(),
@@ -155,7 +156,7 @@ export class UpdateCommunityPost extends OpenAPIRoute {
 
       return c.json({ success: true, post });
     } catch (error) {
-      console.error('Error updating community post:', error);
+      logger.error('Error updating community post:', error);
       return c.json({ error: 'Failed to update post' }, 500);
     }
   }

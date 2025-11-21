@@ -4,6 +4,7 @@ import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
+import { logger } from '../../lib/logger';
 
 export class DeleteCommunityPost extends OpenAPIRoute {
   static schema = addAuthToSchema({
@@ -112,7 +113,7 @@ export class DeleteCommunityPost extends OpenAPIRoute {
         message: 'Post deleted successfully'
       });
     } catch (error) {
-      console.error('Error deleting community post:', error);
+      logger.error('Error deleting community post:', error);
       return c.json({ error: 'Failed to delete post' }, 500);
     }
   }

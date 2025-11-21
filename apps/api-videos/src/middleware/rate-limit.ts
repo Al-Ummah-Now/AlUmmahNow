@@ -14,6 +14,7 @@
  */
 
 import { Context } from 'hono';
+import { logger } from '../lib/logger';
 
 /**
  * Rate limit tiers with different quotas
@@ -239,7 +240,7 @@ export async function checkRateLimit(
 
     return result;
   } catch (error) {
-    console.error('[SECURITY] Rate limit check failed', { error, userId, operation });
+    logger.error('[SECURITY] Rate limit check failed', { error, userId, operation });
 
     // Graceful degradation: allow request if KV is unavailable
     // This prevents KV outages from blocking all uploads
@@ -282,7 +283,7 @@ export async function releaseRateLimit(
       expirationTtl: TIME_WINDOWS.day + 3600,
     });
   } catch (error) {
-    console.error('[SECURITY] Failed to release rate limit', { error, userId, operation });
+    logger.error('[SECURITY] Failed to release rate limit', { error, userId, operation });
   }
 }
 
@@ -319,7 +320,7 @@ export function rateLimitMiddleware(operation: string) {
     const kv = c.env.RATE_LIMIT_KV as KVNamespace;
 
     if (!kv) {
-      console.warn('[SECURITY] RATE_LIMIT_KV not configured, skipping rate limit check');
+      logger.warn('[SECURITY] RATE_LIMIT_KV not configured, skipping rate limit check');
       return next();
     }
 
@@ -327,7 +328,7 @@ export function rateLimitMiddleware(operation: string) {
     const result = await checkRateLimit(kv, userId, operation);
 
     if (!result.allowed) {
-      console.warn('[SECURITY] Rate limit exceeded', {
+      logger.warn('[SECURITY] Rate limit exceeded', {
         userId,
         operation,
         limitExceeded: result.limitExceeded,

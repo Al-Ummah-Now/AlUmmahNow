@@ -13,6 +13,7 @@ import {
   validateSectionContent
 } from '../../lib/transformations';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
+import { logger } from '../../lib/logger';
 // Using console logging as per project pattern
 
 // Zod schema for the input
@@ -146,7 +147,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
     // Get auth context
     const auth = c.get('auth');
     if (!auth) {
-      console.warn('Unauthorized attempt to create channel section');
+      logger.warn('Unauthorized attempt to create channel section');
       return c.json(
         {
           success: false,
@@ -156,7 +157,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
       );
     }
 
-    console.log(`Creating section for channel ${channelId} by user ${auth.userId}`, {
+    logger.info(`Creating section for channel ${channelId} by user ${auth.userId}`, {
       type: input.type,
       title: input.title,
     });
@@ -166,7 +167,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      console.warn(`Channel not found: ${channelId}`);
+      logger.warn(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -177,7 +178,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
     }
 
     if (channel.userId !== auth.userId) {
-      console.warn(`User ${auth.userId} attempted to create section for channel ${channelId} owned by ${channel.userId}`);
+      logger.warn(`User ${auth.userId} attempted to create section for channel ${channelId} owned by ${channel.userId}`);
       return c.json(
         {
           success: false,
@@ -190,7 +191,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
     // Validate content based on type
     const validation = validateSectionContent(input.type, input);
     if (!validation.valid) {
-      console.warn('Section content validation failed', { errors: validation.errors });
+      logger.warn('Section content validation failed', { errors: validation.errors });
       return c.json(
         {
           success: false,
@@ -213,7 +214,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
 
     // Check max sections limit
     if (nextPosition >= CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL) {
-      console.warn(`Maximum sections limit reached for channel ${channelId}`);
+      logger.warn(`Maximum sections limit reached for channel ${channelId}`);
       return c.json(
         {
           success: false,
@@ -259,7 +260,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
     // Transform to view model
     const sectionView = transformChannelSectionToView(section);
 
-    console.log(`Successfully created section ${section.id} for channel ${channelId}`, {
+    logger.info(`Successfully created section ${section.id} for channel ${channelId}`, {
       type: section.type,
       position: section.position,
     });

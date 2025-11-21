@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { CommunityPost, LikePostResponse } from '@al-ummah/shared-types';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { logger } from '../../lib/logger';
 
 export class UnlikeCommunityPost extends OpenAPIRoute {
   static schema = addAuthToSchema({
@@ -97,7 +98,7 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
         });
       }
     } catch (error) {
-      console.error('Error unliking community post:', error);
+      logger.error('Error unliking community post:', error);
       return c.json({ error: 'Failed to unlike post' }, 500);
     }
   }

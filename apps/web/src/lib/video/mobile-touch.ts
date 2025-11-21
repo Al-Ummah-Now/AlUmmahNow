@@ -24,6 +24,8 @@
  */
 
 import type { ExtendedPlayer } from './videojs';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Configuration options for mobile touch controls
@@ -119,7 +121,7 @@ export function setupMobileTouchControls(
   // Get player element
   const playerElement = player.el();
   if (!playerElement) {
-    console.warn('[MobileTouchControls] Player element not found');
+    logger.warn('[MobileTouchControls] Player element not found');
     return () => {};
   }
 

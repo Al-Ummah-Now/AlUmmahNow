@@ -10,6 +10,8 @@ import {
   ApiHeaders,
 } from "./types";
 import { getApiUrl } from "@/lib/runtime-config";
+import { logger } from '@/lib/logger-server';
+
 
 const baseUrl = getApiUrl();
 
@@ -47,7 +49,7 @@ export async function listLiveStreams(
 
     return await response.json();
   } catch (error) {
-    console.error('listLiveStreams error:', error);
+    logger.error('listLiveStreams error:', error);
     return null;
   }
 }
@@ -62,11 +64,11 @@ export async function createLiveStream(
 ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
   // Input validation
   if (!authToken || authToken.trim() === '') {
-    console.error('createLiveStream: authToken is required');
+    logger.error('createLiveStream: authToken is required');
     return null;
   }
   if (!data || typeof data !== 'object') {
-    console.error('createLiveStream: data is required and must be an object');
+    logger.error('createLiveStream: data is required and must be an object');
     return null;
   }
 
@@ -91,7 +93,7 @@ export async function createLiveStream(
 
     return await response.json();
   } catch (error) {
-    console.error('createLiveStream error:', error);
+    logger.error('createLiveStream error:', error);
     return null;
   }
 }
@@ -107,15 +109,15 @@ export async function updateLiveStream(
 ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
   // Input validation
   if (!streamId || streamId.trim() === '') {
-    console.error('updateLiveStream: streamId is required');
+    logger.error('updateLiveStream: streamId is required');
     return null;
   }
   if (!authToken || authToken.trim() === '') {
-    console.error('updateLiveStream: authToken is required');
+    logger.error('updateLiveStream: authToken is required');
     return null;
   }
   if (!data || typeof data !== 'object') {
-    console.error('updateLiveStream: data is required and must be an object');
+    logger.error('updateLiveStream: data is required and must be an object');
     return null;
   }
 
@@ -140,7 +142,7 @@ export async function updateLiveStream(
 
     return await response.json();
   } catch (error) {
-    console.error('updateLiveStream error:', error);
+    logger.error('updateLiveStream error:', error);
     return null;
   }
 }
@@ -205,7 +207,7 @@ export async function getLiveNow(
 
     return response.result.data || [];
   } catch (error) {
-    console.error('getLiveNow error:', error);
+    logger.error('getLiveNow error:', error);
     return [];
   }
 }
@@ -228,7 +230,7 @@ export async function getScheduledStreams(
 
     return response.result.data || [];
   } catch (error) {
-    console.error('getScheduledStreams error:', error);
+    logger.error('getScheduledStreams error:', error);
     return [];
   }
 }
@@ -243,7 +245,7 @@ export async function getStreamsByChannel(
 ): Promise<LiveStream[]> {
   // Input validation
   if (!channelId || channelId.trim() === '') {
-    console.error('getStreamsByChannel: channelId is required');
+    logger.error('getStreamsByChannel: channelId is required');
     return [];
   }
 
@@ -260,7 +262,7 @@ export async function getStreamsByChannel(
 
     return response.result.data || [];
   } catch (error) {
-    console.error('getStreamsByChannel error:', error);
+    logger.error('getStreamsByChannel error:', error);
     return [];
   }
 }

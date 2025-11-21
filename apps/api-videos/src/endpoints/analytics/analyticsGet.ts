@@ -7,6 +7,7 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient } from "../../lib/bunny/stream";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
 export class AnalyticsGet extends OpenAPIRoute {
 	schema = addAuthToSchema({
@@ -105,7 +106,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 				},
 			};
 		} catch (error) {
-			console.error("Error fetching analytics:", error);
+			logger.error("Error fetching analytics:", error);
 			return c.json(
 				{
 					success: false,
@@ -152,7 +153,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 					}
 				}
 			} catch (bunnyError) {
-				console.warn("Failed to fetch Bunny analytics, falling back to local data:", bunnyError);
+				logger.warn("Failed to fetch Bunny analytics, falling back to local data:", bunnyError);
 			}
 
 			// Get built-in view metrics from R2 storage
@@ -163,7 +164,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 			
 			return combinedMetrics;
 		} catch (error) {
-			console.error("Error fetching analytics:", error);
+			logger.error("Error fetching analytics:", error);
 			// Fall back to mock data if all else fails
 			return this.generateMockAnalyticsData(entityType, entityId, userId, startDate, endDate, metrics, granularity);
 		}
@@ -213,7 +214,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 				}
 			}
 		} catch (error) {
-			console.warn("Failed to get local metrics:", error);
+			logger.warn("Failed to get local metrics:", error);
 		}
 
 		return localMetrics;

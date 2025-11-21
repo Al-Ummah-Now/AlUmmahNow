@@ -9,6 +9,7 @@ import R2Repository from '../../lib/r2Repo';
 import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleTrack, SubtitleMetadata } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 export class SubtitlesUpload extends OpenAPIRoute {
   schema = addAuthToSchema(
@@ -249,7 +250,7 @@ export class SubtitlesUpload extends OpenAPIRoute {
         },
       });
     } catch (error: any) {
-      console.error('Subtitle upload failed:', error);
+      logger.error('Subtitle upload failed:', error);
       return c.json(
         {
           success: false,

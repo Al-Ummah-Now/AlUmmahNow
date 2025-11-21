@@ -118,6 +118,7 @@ import { UploadCommunityPostGif } from "./endpoints/community/upload-gif";
 // Upload Defaults (Templates) imports
 import { ListUploadDefaultsEndpoint, CreateUploadDefaultEndpoint } from "./endpoints/settings/uploadDefaults";
 import { GetUploadDefaultEndpoint, UpdateUploadDefaultEndpoint, DeleteUploadDefaultEndpoint, SetDefaultTemplateEndpoint } from "./endpoints/settings/uploadDefaultsById";
+import { logger } from './lib/logger';
 
 
 // Start a Hono app - testing reload
@@ -697,7 +698,7 @@ app.get("/", async (c) => {
 					useBasicAuthenticationWithAccessCodeGrant: false,
 					usePkceWithAuthorizationCodeGrant: true
 				});
-				console.log("OAuth2 initialized for Swagger UI");
+				logger.info("OAuth2 initialized for Swagger UI");
 			}
 		}, 1000);
 	});

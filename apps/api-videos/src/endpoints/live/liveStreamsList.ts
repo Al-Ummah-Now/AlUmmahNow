@@ -3,6 +3,7 @@ import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
 import { LiveStreamView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
+import { logger } from '../../lib/logger';
 
 export class LiveStreamsList extends OpenAPIRoute {
 	schema = {
@@ -83,7 +84,7 @@ export class LiveStreamsList extends OpenAPIRoute {
 								streams.push(stream);
 							}
 						} catch (error) {
-							console.error(`Error loading stream ${obj.key}:`, error);
+							logger.error(`Error loading stream ${obj.key}:`, error);
 							// Continue with other streams
 						}
 					}
@@ -142,7 +143,7 @@ export class LiveStreamsList extends OpenAPIRoute {
 				},
 			};
 		} catch (error) {
-			console.error("Error listing live streams:", error);
+			logger.error("Error listing live streams:", error);
 			return c.json(
 				{
 					success: false,

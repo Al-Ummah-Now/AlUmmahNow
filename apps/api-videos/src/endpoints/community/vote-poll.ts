@@ -11,6 +11,7 @@ import {
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
+import { logger } from '../../lib/logger';
 
 const voteSchema = z.object({
   optionIds: z.array(z.string()).min(1).max(5),
@@ -181,7 +182,7 @@ export class VoteOnPoll extends OpenAPIRoute {
         },
       });
     } catch (error) {
-      console.error('Error voting on poll:', error);
+      logger.error('Error voting on poll:', error);
       return c.json({ error: 'Failed to record vote' }, 500);
     }
   }

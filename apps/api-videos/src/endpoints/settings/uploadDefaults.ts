@@ -18,6 +18,7 @@ import {
   validateCreateTemplateRequest,
   validateTemplateSize,
 } from '../../lib/templates/validator';
+import { logger } from '../../lib/logger';
 
 /**
  * List Upload Templates Endpoint
@@ -145,9 +146,9 @@ export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
 
       return c.json(response);
     } catch (error) {
-      console.error('List upload defaults error:', error);
-      console.error('Bucket binding:', c.env['upload-defaults'] ? 'exists' : 'undefined');
-      console.error('Error details:', error instanceof Error ? error.message : String(error));
+      logger.error('List upload defaults error:', error);
+      logger.error('Bucket binding:', c.env['upload-defaults'] ? 'exists' : 'undefined');
+      logger.error('Error details:', error instanceof Error ? error.message : String(error));
       return c.json(
         {
           success: false,
@@ -313,7 +314,7 @@ export class CreateUploadDefaultEndpoint extends OpenAPIRoute {
         201
       );
     } catch (error) {
-      console.error('Create upload default error:', error);
+      logger.error('Create upload default error:', error);
       return c.json(
         {
           success: false,
@@ -349,7 +350,7 @@ export class CreateUploadDefaultEndpoint extends OpenAPIRoute {
         }
       }
     } catch (error) {
-      console.error('Error unsetting other defaults:', error);
+      logger.error('Error unsetting other defaults:', error);
       // Don't fail the request if this fails
     }
   }

@@ -9,6 +9,7 @@ import R2Repository from '../../lib/r2Repo';
 import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleMetadata } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 export class SubtitlesDelete extends OpenAPIRoute {
   schema = addAuthToSchema(
@@ -231,7 +232,7 @@ export class SubtitlesDelete extends OpenAPIRoute {
         message: `Subtitle for language ${language} deleted successfully`,
       });
     } catch (error: any) {
-      console.error('Failed to delete subtitle:', error);
+      logger.error('Failed to delete subtitle:', error);
       return c.json(
         {
           success: false,

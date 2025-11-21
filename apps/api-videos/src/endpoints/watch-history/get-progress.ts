@@ -10,6 +10,7 @@ import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type { WatchHistoryEntry } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Path parameter schema
 const ProgressParams = z.object({
@@ -112,7 +113,7 @@ export class GetWatchProgress extends OpenAPIRoute {
         200
       );
     } catch (error) {
-      console.error("Error getting watch progress:", error);
+      logger.error("Error getting watch progress:", error);
       return c.json(
         {
           error: "Failed to retrieve watch progress",

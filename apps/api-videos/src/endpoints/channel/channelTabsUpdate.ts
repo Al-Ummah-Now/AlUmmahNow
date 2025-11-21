@@ -9,6 +9,7 @@ import {
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 export class ChannelTabsUpdate extends OpenAPIRoute {
 	schema = {
@@ -213,7 +214,7 @@ export class ChannelTabsUpdate extends OpenAPIRoute {
 		try {
 			await tabsRepository.putObject(`channel-tabs/${id}`, config);
 		} catch (error) {
-			console.error(`[ChannelTabsUpdate] Failed to save tab config for channel ${id}:`, error);
+			logger.error(`[ChannelTabsUpdate] Failed to save tab config for channel ${id}:`, error);
 			return c.json({
 				success: false,
 				error: 'Failed to save tab configuration. Please try again.',

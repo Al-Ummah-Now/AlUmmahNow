@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger-server';
+
 /**
  * Cryptographic utilities for secure data storage
  * 
@@ -143,7 +145,7 @@ export async function encryptData(data: string): Promise<string> {
   try {
     if (!isWebCryptoAvailable()) {
       // Fallback: return base64 encoded data (not encrypted, but obfuscated)
-      console.warn('[Crypto] Web Crypto API not available, using fallback');
+      logger.warn('[Crypto] Web Crypto API not available, using fallback');
       return btoa(data);
     }
 
@@ -184,7 +186,7 @@ export async function decryptData(encryptedData: string): Promise<string> {
   try {
     if (!isWebCryptoAvailable()) {
       // Fallback: decode base64 data
-      console.warn('[Crypto] Web Crypto API not available, using fallback');
+      logger.warn('[Crypto] Web Crypto API not available, using fallback');
       return atob(encryptedData);
     }
 

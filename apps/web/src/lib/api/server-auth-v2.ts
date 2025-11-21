@@ -9,6 +9,8 @@
 
 import { SessionManager, type SessionContext } from '../auth/session-manager';
 import { AuthContext } from './api-client';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Get authentication context from server-side session
@@ -37,7 +39,7 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
       channelId: session.channelId, // Now includes active channel
     };
   } catch (error) {
-    console.error('[getServerAuthContext] Error:', error);
+    logger.error('[getServerAuthContext] Error:', error);
     return null;
   }
 }
@@ -112,7 +114,7 @@ async function migrateLegacyAuth(): Promise<boolean> {
 
     return true;
   } catch (error) {
-    console.error('[migrateLegacyAuth] Migration failed:', error);
+    logger.error('[migrateLegacyAuth] Migration failed:', error);
     return false;
   }
 }

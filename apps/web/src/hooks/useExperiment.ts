@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { abTestingEngine, ExperimentResult } from '@/services/experiments/ab-testing';
 import { getExperiment, isUserInTargetAudience, Experiment } from '@/services/experiments/feature-flags';
+import { logger } from '@/lib/logger-client';
+
 
 interface UseExperimentOptions {
   autoTrack?: boolean;
@@ -122,7 +124,7 @@ export function useExperiment(
     try {
       abTestingEngine.trackConversion(experimentId, value);
     } catch (error) {
-      console.error('Failed to track conversion:', error);
+      logger.error('Failed to track conversion:', error);
     }
   }, [enableConversionTracking, state.isInExperiment, experimentId]);
 

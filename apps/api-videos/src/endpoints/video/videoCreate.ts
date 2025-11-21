@@ -9,6 +9,7 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
 export class VideoCreate extends OpenAPIRoute {
 	schema = {
@@ -125,7 +126,7 @@ export class VideoCreate extends OpenAPIRoute {
 				collectionId = result.guid;
 			} else {
 				// Handle other errors
-				console.error("Error fetching collection:", e);
+				logger.error("Error fetching collection:", e);
 				return c.json(
 					{
 						success: false,

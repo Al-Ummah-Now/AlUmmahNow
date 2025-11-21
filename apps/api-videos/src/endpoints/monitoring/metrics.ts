@@ -1,6 +1,7 @@
 import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import R2Repository from "../../lib/r2Repo";
+import { logger } from '../../lib/logger';
 
 export class Metrics extends OpenAPIRoute {
 schema = {
@@ -118,7 +119,7 @@ responseTime,
 });
 
 } catch (error) {
-console.error("Metrics error:", error);
+logger.error("Metrics error:", error);
 return c.json({
 timestamp: new Date().toISOString(),
 error: "Failed to retrieve metrics",

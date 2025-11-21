@@ -13,6 +13,8 @@ import { cookies } from 'next/headers';
 import type { Channel, User } from '@al-ummah/shared-types';
 import { createClient } from "@openauthjs/openauth/client";
 import { subjects } from '../auth';
+import { logger } from '@/lib/logger-server';
+
 
 // Session configuration
 const SESSION_COOKIE_NAME = 'al_ummah_session';
@@ -95,7 +97,7 @@ export class SessionManager {
       const sessionData = JSON.parse(sessionCookie.value) as SessionData;
       return sessionData;
     } catch (error) {
-      console.error('[SessionManager] Failed to get session data:', error);
+      logger.error('[SessionManager] Failed to get session data:', error);
       return null;
     }
   }
@@ -138,24 +140,22 @@ export class SessionManager {
     const usagePercent = ((sizeInBytes / COOKIE_SIZE_MAX) * 100).toFixed(1);
 
     // Always log size for monitoring
-    console.log(`[SessionManager] Cookie size: ${sizeInKB} KB (${usagePercent}% of 4KB limit) | Accounts: ${accountCount}`);
+    logger.info(`[SessionManager] Cookie size: ${sizeInKB} KB (${usagePercent}% of 4KB limit) | Accounts: ${accountCount}`);
 
     // Warn if approaching limit
     if (sizeInBytes >= COOKIE_SIZE_WARNING_THRESHOLD) {
-      console.warn(
-        `[SessionManager] ⚠️  Cookie size warning: ${sizeInKB} KB / 4 KB (${usagePercent}%)`,
-        '\nConsider reducing data or implementing server-side session storage.',
-        '\nCurrent accounts:', accountCount
+      logger.warn(
+        `[SessionManager] ⚠️  Cookie size warning: ${sizeInKB} KB / 4 KB (${usagePercent}%)\nConsider reducing data or implementing server-side session storage.`,
+        { accountCount }
       );
     }
 
     // Error if exceeding limit
     if (sizeInBytes >= COOKIE_SIZE_MAX) {
       const breakdown = this.getCookieSizeBreakdown(data);
-      console.error(
-        `[SessionManager] 🚨 Cookie size EXCEEDED: ${sizeInKB} KB / 4 KB`,
-        '\nBrowser may reject this cookie!',
-        '\nSize breakdown:', breakdown
+      logger.error(
+        `[SessionManager] 🚨 Cookie size EXCEEDED: ${sizeInKB} KB / 4 KB\nBrowser may reject this cookie!`,
+        { breakdown }
       );
       throw new Error(
         `Session cookie size (${sizeInKB} KB) exceeds browser limit (4 KB). ` +
@@ -272,15 +272,15 @@ export class SessionManager {
 
       // Load profile and channels in background (don't await to speed up migration)
       this.loadUserProfile(userId).catch(err =>
-        console.error('[SessionManager] Background profile load failed:', err)
+        logger.error('[SessionManager] Background profile load failed:', err)
       );
       this.loadUserChannels(userId).catch(err =>
-        console.error('[SessionManager] Background channels load failed:', err)
+        logger.error('[SessionManager] Background channels load failed:', err)
       );
 
       return sessionData;
     } catch (error) {
-      console.error('[SessionManager] Migration failed:', error);
+      logger.error('[SessionManager] Migration failed:', error);
       return null;
     }
   }
@@ -398,7 +398,7 @@ export class SessionManager {
 
     // Refresh profile in background to ensure latest data
     this.loadUserProfile(userId).catch(err =>
-      console.error('[SessionManager] Background profile refresh failed on account switch:', err)
+      logger.error('[SessionManager] Background profile refresh failed on account switch:', err)
     );
   }
 
@@ -438,7 +438,7 @@ export class SessionManager {
     const activeAccount = sessionData.accounts[sessionData.activeUserId];
     if (!activeAccount) return null;
 
-    console.log('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
+    logger.info('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
       userId: activeAccount.userId,
       email: activeAccount.email,
       'sessionData.activeChannelId': sessionData.activeChannelId,
@@ -454,7 +454,7 @@ export class SessionManager {
       const accountChannels = account.channels.filter(c => c.userId === account.userId);
 
       if (accountChannels.length !== account.channels.length) {
-        console.log('[SessionManager] Cleaning channels for user:', {
+        logger.info('[SessionManager] Cleaning channels for user:', {
           userId: account.userId,
           email: account.email,
           before: account.channels.length,
@@ -473,7 +473,7 @@ export class SessionManager {
 
     // If activeChannelId doesn't match any channel for this user, clear it
     if (sessionData.activeChannelId && !activeChannel) {
-      console.log('[SessionManager] Active channel ID does not belong to current user, clearing it');
+      logger.info('[SessionManager] Active channel ID does not belong to current user, clearing it');
       sessionData.activeChannelId = null;
       activeAccount.activeChannelId = null;
       sessionNeedsUpdate = true;
@@ -484,7 +484,7 @@ export class SessionManager {
       await this.setSessionData(sessionData);
     }
 
-    console.log('[SessionManager.getActiveSession] TRACE AFTER FILTER:', {
+    logger.info('[SessionManager.getActiveSession] TRACE AFTER FILTER:', {
       userId: activeAccount.userId,
       email: activeAccount.email,
       'sessionData.activeChannelId': sessionData.activeChannelId,
@@ -612,7 +612,7 @@ export class SessionManager {
         return account.channels;
       }
     } catch (error) {
-      console.error('[SessionManager] Failed to load channels:', error);
+      logger.error('[SessionManager] Failed to load channels:', error);
     }
 
     return [];
@@ -624,7 +624,7 @@ export class SessionManager {
   static async loadUserProfile(userId: string): Promise<void> {
     const sessionData = await this.getSessionData();
     if (!sessionData || !sessionData.accounts[userId]) {
-      console.error('[SessionManager] User session not found for profile load');
+      logger.error('[SessionManager] User session not found for profile load');
       return;
     }
 
@@ -659,13 +659,14 @@ export class SessionManager {
         account.displayName = (profileData.displayName as string) || (profileData.email as string) || account.email;
         account.avatarUrl = profileData.avatarUrl as string | undefined;
         await this.setSessionData(sessionData);
-        console.log('[SessionManager] Updated profile for user:', userId, {
+        logger.info('[SessionManager] Updated profile for user', {
+          userId,
           displayName: account.displayName,
           hasAvatar: !!account.avatarUrl
         });
       }
     } catch (error) {
-      console.error('[SessionManager] Failed to load profile:', error);
+      logger.error('[SessionManager] Failed to load profile:', error);
       // Keep using email as displayName fallback
     }
   }
@@ -696,7 +697,7 @@ export class SessionManager {
         return true;
       }
     } catch (error) {
-      console.error(`[SessionManager] Token refresh failed for user ${userId}:`, error);
+      logger.error(`[SessionManager] Token refresh failed for user ${userId}:`, error);
     }
 
     return false;

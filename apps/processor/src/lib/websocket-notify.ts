@@ -3,6 +3,8 @@
  * Utility to send video processing status updates to the WebSocket server
  */
 
+import { logger } from './logger';
+
 /**
  * Send a notification to the WebSocket server
  */
@@ -25,7 +27,7 @@ export async function sendWebSocketNotification(
 
     return response.ok;
   } catch (error) {
-    console.error('Failed to send WebSocket notification:', error);
+    logger.error('Failed to send WebSocket notification:', error);
     return false;
   }
 }

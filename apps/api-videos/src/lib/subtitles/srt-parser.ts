@@ -16,6 +16,7 @@ import {
   isValidTiming,
   findTimingOverlaps,
 } from './parser';
+import { logger } from '../logger';
 
 export class SRTParser implements SubtitleParser {
   parse(content: string): SubtitleData {
@@ -61,7 +62,7 @@ export class SRTParser implements SubtitleParser {
             currentCue.startTime = parseTimestamp(startTimestamp);
             currentCue.endTime = parseTimestamp(endTimestamp);
           } catch (error) {
-            console.error(`Failed to parse timestamp at line ${i + 1}:`, error);
+            logger.error(`Failed to parse timestamp at line ${i + 1}:`, error);
             // Skip malformed timestamp
           }
         }

@@ -11,6 +11,8 @@ import {
   PaginationResponse
 } from "./types";
 import { getApiUrl } from "@/lib/runtime-config";
+import { logger } from '@/lib/logger-server';
+
 
 const baseUrl = getApiUrl();
 
@@ -50,7 +52,7 @@ export async function listPlaylists(
 
     return await response.json();
   } catch (error) {
-    console.error('listPlaylists error:', error);
+    logger.error('listPlaylists error:', error);
     return null;
   }
 }
@@ -83,7 +85,7 @@ export async function getPlaylistById(
 
     return await response.json();
   } catch (error) {
-    console.error('getPlaylistById error:', error);
+    logger.error('getPlaylistById error:', error);
     return null;
   }
 }
@@ -117,7 +119,7 @@ export async function createPlaylist(
 
     return await response.json();
   } catch (error) {
-    console.error('createPlaylist error:', error);
+    logger.error('createPlaylist error:', error);
     return null;
   }
 }
@@ -152,7 +154,7 @@ export async function updatePlaylist(
 
     return await response.json();
   } catch (error) {
-    console.error('updatePlaylist error:', error);
+    logger.error('updatePlaylist error:', error);
     return null;
   }
 }
@@ -185,7 +187,7 @@ export async function deletePlaylist(
 
     return await response.json();
   } catch (error) {
-    console.error('deletePlaylist error:', error);
+    logger.error('deletePlaylist error:', error);
     return null;
   }
 }
@@ -220,7 +222,7 @@ export async function addVideoToPlaylist(
 
     return await response.json();
   } catch (error) {
-    console.error('addVideoToPlaylist error:', error);
+    logger.error('addVideoToPlaylist error:', error);
     return null;
   }
 }
@@ -254,7 +256,7 @@ export async function removeVideoFromPlaylist(
 
     return await response.json();
   } catch (error) {
-    console.error('removeVideoFromPlaylist error:', error);
+    logger.error('removeVideoFromPlaylist error:', error);
     return null;
   }
 }

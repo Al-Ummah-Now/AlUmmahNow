@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Comments } from '@/interfaces';
 import { CommentEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
+import { logger } from '@/lib/logger-client';
+
 
 export interface UseRealTimeCommentsOptions {
   videoId: string;
@@ -43,7 +45,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     }
 
     const event = eventData as CommentEvent;
-    console.log('📥 Real-time comment update:', event);
+    logger.info('📥 Real-time comment update:', event);
 
     switch (event.type) {
       case 'comment_added':
@@ -114,7 +116,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     
     // TODO: Send comment to API
     // The API should broadcast the real comment via WebSocket
-    console.log('📤 Adding comment:', optimisticComment);
+    logger.info('📤 Adding comment:', optimisticComment);
   }, []);
   
   // Optimistic comment update
@@ -128,7 +130,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     );
     
     // TODO: Send update to API
-    console.log('📤 Updating comment:', commentId, updates);
+    logger.info('📤 Updating comment:', commentId, updates);
   }, []);
   
   // Optimistic comment deletion
@@ -138,7 +140,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     );
     
     // TODO: Send deletion to API
-    console.log('📤 Deleting comment:', commentId);
+    logger.info('📤 Deleting comment:', commentId);
   }, []);
   
   return {

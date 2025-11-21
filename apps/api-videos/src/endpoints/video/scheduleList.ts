@@ -4,6 +4,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
 import R2Repository from '../../lib/r2Repo';
 import type { VideoObject, ScheduledVideoInfo } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 const ScheduledVideoInfoSchema = z.object({
   videoId: Str(),
@@ -205,7 +206,7 @@ export class VideoScheduleList extends OpenAPIRoute {
         },
       });
     } catch (error) {
-      console.error('Failed to list scheduled videos:', error);
+      logger.error('Failed to list scheduled videos:', error);
       return c.json(
         {
           success: false,

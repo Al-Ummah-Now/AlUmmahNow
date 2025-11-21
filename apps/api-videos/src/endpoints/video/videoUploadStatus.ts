@@ -5,6 +5,7 @@ import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
 // Upload status type
 const UploadStatus = z.object({
@@ -143,7 +144,7 @@ export class VideoUploadStatus extends OpenAPIRoute {
 				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);
 			}
 		} catch (error) {
-			console.warn("Could not fetch Bunny Stream status:", error);
+			logger.warn("Could not fetch Bunny Stream status:", error);
 		}
 
 		// Determine status based on video data and Bunny Stream info

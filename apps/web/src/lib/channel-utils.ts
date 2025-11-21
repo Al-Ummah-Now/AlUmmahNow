@@ -2,7 +2,8 @@
 
 import { getServerAuthContext } from './api/server-auth';
 import { getChannelById } from './api/channels';
-import { logger } from './logger';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Verify if the current authenticated user is the owner of the specified channel

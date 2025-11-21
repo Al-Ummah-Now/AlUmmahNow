@@ -9,6 +9,8 @@ import {
   AnalyticsMetrics
 } from "./types";
 import { getApiUrl } from "@/lib/runtime-config";
+import { logger } from '@/lib/logger-server';
+
 
 const baseUrl = getApiUrl();
 
@@ -44,7 +46,7 @@ export async function getSummary(
 
     return await response.json();
   } catch (error) {
-    console.error('getSummary error:', error);
+    logger.error('getSummary error:', error);
     return getMockSummary(); // Return mock data for development
   }
 }
@@ -81,7 +83,7 @@ export async function getChannelAnalytics(
 
     return await response.json();
   } catch (error) {
-    console.error('getChannelAnalytics error:', error);
+    logger.error('getChannelAnalytics error:', error);
     return getMockChannelAnalytics(channelId);
   }
 }
@@ -118,7 +120,7 @@ export async function getVideoAnalytics(
 
     return await response.json();
   } catch (error) {
-    console.error('getVideoAnalytics error:', error);
+    logger.error('getVideoAnalytics error:', error);
     return getMockVideoAnalytics(videoId);
   }
 }
@@ -156,7 +158,7 @@ export async function getMetrics(
 
     return await response.json();
   } catch (error) {
-    console.error('getMetrics error:', error);
+    logger.error('getMetrics error:', error);
     return getMockMetrics();
   }
 }

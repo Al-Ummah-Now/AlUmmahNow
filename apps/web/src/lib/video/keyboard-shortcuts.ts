@@ -38,6 +38,8 @@
 
 import type { ExtendedPlayer } from './videojs';
 import { getTranslations, isRTL, type SupportedLanguage } from './i18n';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Constants for keyboard shortcuts behavior
@@ -322,7 +324,7 @@ export function addHelpButton(
   // Find control bar
   const controlBar = playerElement.querySelector('.vjs-control-bar') as HTMLElement;
   if (!controlBar) {
-    console.warn('[KeyboardShortcuts] Control bar not found, cannot add help button');
+    logger.warn('[KeyboardShortcuts] Control bar not found, cannot add help button');
     return () => {};
   }
 
@@ -348,7 +350,7 @@ export function addHelpButton(
     controlBar.appendChild(helpButton);
   }
 
-  console.log('[KeyboardShortcuts] Help button added to control bar');
+  logger.info('[KeyboardShortcuts] Help button added to control bar');
 
   // Return cleanup function
   return () => {
@@ -401,7 +403,7 @@ export function setupKeyboardShortcuts(
 
       // Security: Validate event is trusted (prevents event injection)
       if (!event.isTrusted) {
-        console.warn('[KeyboardShortcuts] Ignoring untrusted event');
+        logger.warn('[KeyboardShortcuts] Ignoring untrusted event');
         return;
       }
 
@@ -565,7 +567,7 @@ export function setupKeyboardShortcuts(
       }
     } catch (error) {
       // Log error but prevent propagation to global scope
-      console.error('[KeyboardShortcuts] Error handling keyboard event:', error);
+      logger.error('[KeyboardShortcuts] Error handling keyboard event:', error);
       // Optionally notify user of error (silent failure for better UX)
       // Could show error feedback here if desired
     }
@@ -574,7 +576,7 @@ export function setupKeyboardShortcuts(
   // Get player element for scoped event listening
   const playerElement = player.el();
   if (!playerElement) {
-    console.error('[KeyboardShortcuts] Player element not found');
+    logger.error('[KeyboardShortcuts] Player element not found');
     return () => {}; // Return no-op cleanup
   }
 

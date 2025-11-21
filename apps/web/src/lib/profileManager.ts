@@ -1,5 +1,7 @@
 import { Profile, User } from '@/interfaces';
 import { getProfileCurrent } from './api';
+import { logger } from '@/lib/logger-server';
+
 
 class ProfileManager {
   private currentUserId: string | null = null;
@@ -23,7 +25,7 @@ class ProfileManager {
   }
 
   async loadProfile(user: User | null) {
-    console.log('ProfileManager.loadProfile called with:', { 
+    logger.info('ProfileManager.loadProfile called with:', { 
       user: !!user, 
       userId: user?.id,
       userIdType: typeof user?.id,
@@ -70,11 +72,11 @@ class ProfileManager {
       if (profile) {
         this.profile = profile;
       } else {
-        console.log('ProfileManager: ⚠️ API returned null/undefined');
+        logger.info('ProfileManager: ⚠️ API returned null/undefined');
         this.profile = null;
       }
     } catch (error) {
-      console.error('ProfileManager: ❌ API call failed:', error);
+      logger.error('ProfileManager: ❌ API call failed:', error);
       this.profile = null;
     } finally {
       this.isLoading = false;

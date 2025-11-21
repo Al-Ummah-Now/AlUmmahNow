@@ -12,6 +12,8 @@
 
 import type { Player } from 'video.js';
 import type { ExtendedPlayer } from './videojs';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * localStorage key for persisting playback rate
@@ -48,13 +50,13 @@ export function loadPlaybackRate(): number {
 
     // Validate rate is a valid number and within available rates
     if (isNaN(rate) || !AVAILABLE_RATES.includes(rate)) {
-      console.warn('[PlaybackSpeed] Invalid saved rate:', saved);
+      logger.warn('[PlaybackSpeed] Invalid saved rate:', saved);
       return DEFAULT_PLAYBACK_RATE;
     }
 
     return rate;
   } catch (error) {
-    console.error('[PlaybackSpeed] Failed to load playback rate:', error);
+    logger.error('[PlaybackSpeed] Failed to load playback rate:', error);
     return DEFAULT_PLAYBACK_RATE;
   }
 }
@@ -72,13 +74,13 @@ export function savePlaybackRate(rate: number): void {
 
     // Validate rate
     if (isNaN(rate) || !AVAILABLE_RATES.includes(rate)) {
-      console.warn('[PlaybackSpeed] Invalid rate, not saving:', rate);
+      logger.warn('[PlaybackSpeed] Invalid rate, not saving:', rate);
       return;
     }
 
     localStorage.setItem(PLAYBACK_RATE_KEY, rate.toString());
   } catch (error) {
-    console.error('[PlaybackSpeed] Failed to save playback rate:', error);
+    logger.error('[PlaybackSpeed] Failed to save playback rate:', error);
   }
 }
 
@@ -121,7 +123,7 @@ function getPreviousRate(currentRate: number): number {
  */
 export function setupPlaybackSpeedKeyboardShortcuts(player: Player | ExtendedPlayer): void {
   if (!player) {
-    console.warn('[PlaybackSpeed] Cannot setup keyboard shortcuts: player is null');
+    logger.warn('[PlaybackSpeed] Cannot setup keyboard shortcuts: player is null');
     return;
   }
 
@@ -203,7 +205,7 @@ export function initializePlaybackSpeed(
   onSpeedChange?: (rate: number, previousRate: number) => void
 ): void {
   if (!player) {
-    console.warn('[PlaybackSpeed] Cannot initialize: player is null');
+    logger.warn('[PlaybackSpeed] Cannot initialize: player is null');
     return;
   }
 

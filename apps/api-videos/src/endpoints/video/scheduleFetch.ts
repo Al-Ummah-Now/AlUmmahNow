@@ -4,6 +4,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
 import R2Repository from '../../lib/r2Repo';
 import type { VideoObject } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 const VideoScheduleStatusResponseSchema = z.object({
   isScheduled: z.boolean(),
@@ -162,7 +163,7 @@ export class VideoScheduleFetch extends OpenAPIRoute {
         result: response,
       });
     } catch (error) {
-      console.error('Failed to fetch video schedule:', error);
+      logger.error('Failed to fetch video schedule:', error);
       return c.json(
         {
           success: false,

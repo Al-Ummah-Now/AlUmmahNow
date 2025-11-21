@@ -4,6 +4,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
 import { transformChannelSectionToView, transformChannelSectionsToView } from '../../lib/transformations';
+import { logger } from '../../lib/logger';
 // Using console logging as per project pattern
 
 export class ChannelSectionsList extends OpenAPIRoute {
@@ -98,7 +99,7 @@ export class ChannelSectionsList extends OpenAPIRoute {
     const { channelId } = request.params;
     const { limit, cursor, type } = request.query;
 
-    console.log(`Listing channel sections for channel ${channelId}`, {
+    logger.info(`Listing channel sections for channel ${channelId}`, {
       limit,
       cursor,
       type,
@@ -112,7 +113,7 @@ export class ChannelSectionsList extends OpenAPIRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      console.warn(`Channel not found: ${channelId}`);
+      logger.warn(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -155,7 +156,7 @@ export class ChannelSectionsList extends OpenAPIRoute {
     // Transform to view models
     const sectionViews = transformChannelSectionsToView(filteredSections);
 
-    console.log(`Found ${filteredSections.length} sections for channel ${channelId}`);
+    logger.info(`Found ${filteredSections.length} sections for channel ${channelId}`);
 
     return c.json({
       success: true,

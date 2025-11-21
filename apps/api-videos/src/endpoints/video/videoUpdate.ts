@@ -9,6 +9,7 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
 export class VideoUpdate extends OpenAPIRoute {
 	schema = {
@@ -156,7 +157,7 @@ export class VideoUpdate extends OpenAPIRoute {
 					title: videoUpdateInput.title,
 				});
 			} catch (error) {
-				console.error("Error updating video in Bunny Stream:", error);
+				logger.error("Error updating video in Bunny Stream:", error);
 				// Continue with local update even if Bunny Stream update fails
 			}
 		}

@@ -5,6 +5,7 @@
 import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
 import { SubtitleMetadata } from '@al-ummah/shared-types';
+import { logger } from '../../lib/logger';
 
 export class SubtitlesList extends OpenAPIRoute {
   schema = {
@@ -96,7 +97,7 @@ export class SubtitlesList extends OpenAPIRoute {
         },
       });
     } catch (error: any) {
-      console.error('Failed to list subtitles:', error);
+      logger.error('Failed to list subtitles:', error);
       return c.json(
         {
           success: false,

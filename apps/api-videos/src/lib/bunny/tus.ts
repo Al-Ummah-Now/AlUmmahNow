@@ -9,6 +9,8 @@
  * @see https://tus.io/protocols/resumable-upload.html
  */
 
+import { logger } from '../logger';
+
 /**
  * Generate a TUS authorization signature for Bunny.net video uploads
  *
@@ -74,7 +76,7 @@ export async function generateTUSSignature(
 
     return hashHex;
   } catch (error) {
-    console.error('Failed to generate TUS signature:', error);
+    logger.error('Failed to generate TUS signature:', error);
     throw new Error('Failed to generate TUS signature');
   }
 }

@@ -4,7 +4,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getClient } from "@/lib/actions";
 import { shouldRedirectToProfileCreation } from "@/lib/profile-helpers";
 import { User } from "@/interfaces";
-import { logger } from "@/lib/logger";
+import { logger } from '@/lib/logger-server';
+
 
 // Discriminated union type for clearer type safety
 type ValidationResult =

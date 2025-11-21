@@ -7,6 +7,7 @@ import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { validateVideoMagicBytes, readFileHeader } from "../../lib/security/magic-bytes";
+import { logger } from '../../lib/logger';
 
 export class VideoUpload extends OpenAPIRoute {
     schema = {
@@ -127,7 +128,7 @@ export class VideoUpload extends OpenAPIRoute {
                 const magicByteResult = validateVideoMagicBytes(fileHeader, file.type);
 
                 if (!magicByteResult.isValid) {
-                    console.warn('[SECURITY] Video upload rejected: invalid file signature', {
+                    logger.warn('[SECURITY] Video upload rejected: invalid file signature', {
                         userId,
                         providedType: file.type,
                         error: magicByteResult.error,
@@ -141,7 +142,7 @@ export class VideoUpload extends OpenAPIRoute {
 
                 // Log if Content-Type header doesn't match detected format
                 if (magicByteResult.mimeTypeMismatch) {
-                    console.warn('[SECURITY] Video upload: MIME type mismatch', {
+                    logger.warn('[SECURITY] Video upload: MIME type mismatch', {
                         userId,
                         providedType: file.type,
                         detectedType: magicByteResult.detectedMimeType,
@@ -156,7 +157,7 @@ export class VideoUpload extends OpenAPIRoute {
                     fileSize: file.size,
                 });
             } catch (error) {
-                console.error('[SECURITY] Magic byte validation error', { error, userId });
+                logger.error('[SECURITY] Magic byte validation error', { error, userId });
                 return c.json({
                     success: false,
                     error: 'Failed to validate video file'
@@ -228,7 +229,7 @@ export class VideoUpload extends OpenAPIRoute {
                     uploadUrl = `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`;
                 }
             } catch (error) {
-                console.error("Bunny Stream upload error:", error);
+                logger.error("Bunny Stream upload error:", error);
                 // Continue with local storage even if Bunny Stream fails
             }
 
@@ -257,7 +258,7 @@ export class VideoUpload extends OpenAPIRoute {
             });
 
         } catch (error) {
-            console.error("Video upload error:", error);
+            logger.error("Video upload error:", error);
             return c.json({
                 success: false,
                 error: "Upload failed"

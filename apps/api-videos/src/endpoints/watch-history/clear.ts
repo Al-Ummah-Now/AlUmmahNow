@@ -10,6 +10,7 @@ import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type { WatchHistoryEntry } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 const ClearResponseSchema = z.object({
   deleted: z.number().describe("Number of entries deleted"),
@@ -84,7 +85,7 @@ export class ClearWatchHistory extends OpenAPIRoute {
         200
       );
     } catch (error) {
-      console.error("Error clearing watch history:", error);
+      logger.error("Error clearing watch history:", error);
       return c.json(
         {
           error: "Failed to clear watch history",

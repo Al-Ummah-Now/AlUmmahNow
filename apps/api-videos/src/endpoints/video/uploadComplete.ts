@@ -5,6 +5,7 @@ import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
 
 export class UploadCompleteEndpoint extends OpenAPIRoute {
 	schema = {
@@ -153,7 +154,7 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 			});
 
 		} catch (error) {
-			console.error("Upload complete error:", error);
+			logger.error("Upload complete error:", error);
 
 			// Try to update video status to failed if we have the videoId
 			if (videoId) {
@@ -180,7 +181,7 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 						});
 					}
 				} catch (updateError) {
-					console.error("Failed to update video status:", updateError);
+					logger.error("Failed to update video status:", updateError);
 				}
 			}
 

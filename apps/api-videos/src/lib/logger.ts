@@ -5,6 +5,10 @@
 
 import { createLogger } from '@al-ummah/logger';
 
+// Type-safe access to environment variable
+// Cloudflare Workers with nodejs_compat have process.env available
+declare const process: { env: Record<string, string | undefined> };
+
 // Create logger instance for api-videos
 const apiLogger = createLogger('api-videos', {
   logLevel: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
