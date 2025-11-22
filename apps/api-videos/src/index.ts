@@ -15,6 +15,7 @@ import { VideoView } from "./endpoints/video/videoView";
 import { VideoUploadStatus } from "./endpoints/video/videoUploadStatus";
 import { VideoUpload } from "./endpoints/video/videoUpload";
 import { UploadInitiateEndpoint } from "./endpoints/video/uploadInitiate";
+import { UploadStreamEndpoint } from "./endpoints/video/uploadStream";
 import { UploadCompleteEndpoint } from "./endpoints/video/uploadComplete";
 import { UploadResumeEndpoint } from "./endpoints/video/uploadResume";
 import { UploadBatchInitiateEndpoint } from "./endpoints/video/uploadBatchInitiate";
@@ -118,6 +119,8 @@ import { UploadCommunityPostGif } from "./endpoints/community/upload-gif";
 // Upload Defaults (Templates) imports
 import { ListUploadDefaultsEndpoint, CreateUploadDefaultEndpoint } from "./endpoints/settings/uploadDefaults";
 import { GetUploadDefaultEndpoint, UpdateUploadDefaultEndpoint, DeleteUploadDefaultEndpoint, SetDefaultTemplateEndpoint } from "./endpoints/settings/uploadDefaultsById";
+// TUS Proxy import
+import { createTusRouter } from "./endpoints/video/tus";
 import { logger } from './lib/logger';
 
 
@@ -130,9 +133,9 @@ app.onError(errorHandler);
 // Setup CORS for all routes
 app.use('*', cors({
 	origin: '*',
-	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId'],
-	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow'],
+	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
+	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata'],
 	maxAge: 600,
 	credentials: false,
 }));
@@ -153,10 +156,11 @@ app.options('/api/profile*', (c) => {
 // Explicit OPTIONS handler for all API endpoints
 app.options('/api/*', (c) => {
 	c.header('Access-Control-Allow-Origin', '*');
-	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, channelId, userId');
+	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, channelId, userId, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Upload-Defer-Length, Upload-Concat');
+	c.header('Access-Control-Expose-Headers', 'Location, Tus-Resumable, Tus-Version, Tus-Max-Size, Tus-Extension, Upload-Offset, Upload-Length, Upload-Metadata');
 	c.header('Access-Control-Max-Age', '600');
-	c.header('Allow', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+	c.header('Allow', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
 	return new Response('', { status: 204 });
 });
 
@@ -254,6 +258,16 @@ app.use('/api/videos/upload/batch/initiate', rateLimitMiddleware('video_upload')
 app.use('/api/videos/upload/complete', rateLimitMiddleware('video_upload'));
 app.use('/api/videos/upload/resume/:videoId', rateLimitMiddleware('video_upload'));
 
+// TUS Proxy: Apply authentication and rate limiting
+app.use('/api/videos/tus', authMiddleware); // Require authentication for all TUS operations
+app.use('/api/videos/tus/*', authMiddleware);
+app.use('/api/videos/tus', rateLimitMiddleware('video_upload')); // Apply rate limiting
+app.use('/api/videos/tus/*', rateLimitMiddleware('video_upload'));
+
+// Mount the TUS proxy router
+const tusRouter = createTusRouter();
+app.route('/api/videos/tus', tusRouter);
+
 app.use('/api/videos', (c, next) => {
 	// Allow GET requests and POST to /:id/view (view tracking) without authentication
 	// Exception: GET /api/videos/upload/resume/:videoId requires auth
@@ -350,6 +364,7 @@ app.use('/api/upload-defaults', authMiddleware);
 openapi.post("/api/videos", VideoCreate);
 openapi.post("/api/videos/upload", VideoUpload);
 openapi.post("/api/videos/upload/initiate", UploadInitiateEndpoint);
+openapi.post("/api/videos/upload/stream", UploadStreamEndpoint);
 openapi.post("/api/videos/upload/batch/initiate", UploadBatchInitiateEndpoint);
 openapi.post("/api/videos/upload/complete", UploadCompleteEndpoint);
 openapi.get("/api/videos/upload/resume/:videoId", UploadResumeEndpoint);

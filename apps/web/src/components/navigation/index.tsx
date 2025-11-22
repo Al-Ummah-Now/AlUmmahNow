@@ -7,8 +7,7 @@ import { usePathname } from "next/navigation";
 import { Profile } from "@/interfaces";
 import { fetchProfile } from "@/lib/api/profiles-client";
 import { useAuth } from "../AuthProvider/authContext";
-import { ActiveChannelProvider } from "@/contexts/ActiveChannelContext";
-import { useChannels } from "@/hooks/useChannels";
+import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 
 // Lazy load navigation components for better FID
 const LeftNavigation = dynamic(() => import("@/components/LeftNavigation/index"), {
@@ -27,13 +26,6 @@ const Navigation: React.FC = memo(() => {
     const path = usePathname();
     const rtl = path.indexOf('/ar') > -1;
 
-    // Fetch user channels for the ActiveChannelProvider
-    const { channels } = useChannels({
-        channelId: profile?.id,
-        userId: auth?.user?.id,
-        autoFetch: !!profile?.id && !!auth?.user?.id
-    });
-
     const toggleCollapse = () => {
         setIsCollapsed(!isCollapsed);
     };
@@ -47,19 +39,17 @@ const Navigation: React.FC = memo(() => {
     }, [auth]);
 
     return (
-        <ActiveChannelProvider userChannels={channels} userId={auth?.user?.id}>
-            <div style={{ direction: rtl ? "rtl" : "ltr" }}>
-                {rtl
-                    ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} channels={channels} />
-                    : <Header profile={profile} toggleCollapse={toggleCollapse} channels={channels} />}
-                <div className="flex flex-1">
-                    {/* Left Navigation */}
-                    {path.indexOf('/ar') > -1
-                        ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
-                        : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
-                </div>
+        <div style={{ direction: rtl ? "rtl" : "ltr" }}>
+            {rtl
+                ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} />
+                : <Header profile={profile} toggleCollapse={toggleCollapse} />}
+            <div className="flex flex-1">
+                {/* Left Navigation */}
+                {path.indexOf('/ar') > -1
+                    ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
+                    : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
             </div>
-        </ActiveChannelProvider>
+        </div>
     );
 });
 

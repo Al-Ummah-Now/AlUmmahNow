@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Al Ummah Now - Real-time Logs</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+        }
+
+        .header {
+            background: #252526;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 20px;
+            color: #4ec9b0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status.connected {
+            background: #4ec9b0;
+            color: #1e1e1e;
+        }
+
+        .status.disconnected {
+            background: #f48771;
+            color: #1e1e1e;
+        }
+
+        select, button {
+            background: #3c3c3c;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #505050;
+        }
+
+        button.clear {
+            background: #f48771;
+            color: #1e1e1e;
+        }
+
+        .filters {
+            background: #252526;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .filter-group label {
+            font-size: 14px;
+            color: #9cdcfe;
+        }
+
+        .logs-container {
+            background: #252526;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: calc(100vh - 250px);
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            padding: 8px 12px;
+            margin-bottom: 4px;
+            border-left: 3px solid;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .log-entry.debug {
+            border-left-color: #858585;
+            background: #2d2d30;
+        }
+
+        .log-entry.info {
+            border-left-color: #4ec9b0;
+            background: #1e3a32;
+        }
+
+        .log-entry.warn {
+            border-left-color: #dcdcaa;
+            background: #3a3a1e;
+        }
+
+        .log-entry.error {
+            border-left-color: #f48771;
+            background: #3a1e1e;
+        }
+
+        .log-timestamp {
+            color: #858585;
+            margin-right: 10px;
+        }
+
+        .log-level {
+            font-weight: bold;
+            margin-right: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .log-level.DEBUG { background: #858585; color: #1e1e1e; }
+        .log-level.INFO { background: #4ec9b0; color: #1e1e1e; }
+        .log-level.WARN { background: #dcdcaa; color: #1e1e1e; }
+        .log-level.ERROR { background: #f48771; color: #1e1e1e; }
+
+        .log-app {
+            color: #9cdcfe;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .log-message {
+            color: #d4d4d4;
+        }
+
+        .no-logs {
+            text-align: center;
+            color: #858585;
+            padding: 40px;
+            font-style: italic;
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📝 Al Ummah Now - Real-time Logs</h1>
+        <div class="controls">
+            <span class="status disconnected" id="status">Disconnected</span>
+            <button onclick="toggleConnection()" id="toggleBtn">Connect</button>
+            <button class="clear" onclick="clearLogs()">Clear Logs</button>
+        </div>
+    </div>
+
+    <div class="filters">
+        <div class="filter-group">
+            <label for="levelFilter">Level:</label>
+            <select id="levelFilter" onchange="reconnect()">
+                <option value="">All Levels</option>
+                <option value="debug">DEBUG</option>
+                <option value="info">INFO</option>
+                <option value="warn">WARN</option>
+                <option value="error">ERROR</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="appFilter">App:</label>
+            <select id="appFilter" onchange="reconnect()">
+                <option value="">All Apps</option>
+                <option value="web">web</option>
+                <option value="api">api</option>
+                <option value="processor">processor</option>
+                <option value="websocket">websocket</option>
+                <option value="log-service">log-service</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>
+                <input type="checkbox" id="autoScroll" checked>
+                Auto-scroll
+            </label>
+        </div>
+    </div>
+
+    <div class="logs-container" id="logsContainer">
+        <div class="no-logs">No logs yet. Click "Connect" to start streaming...</div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let isConnected = false;
+        let logCount = 0;
+
+        function toggleConnection() {
+            if (isConnected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
+
+        function connect() {
+            const level = document.getElementById('levelFilter').value;
+            const app = document.getElementById('appFilter').value;
+
+            let url = 'http://localhost:3089/logs/stream/realtime';
+            const params = new URLSearchParams();
+            if (level) params.append('level', level);
+            if (app) params.append('app', app);
+            if (params.toString()) url += '?' + params.toString();
+
+            eventSource = new EventSource(url);
+
+            eventSource.onopen = () => {
+                isConnected = true;
+                updateStatus(true);
+                console.log('Connected to log stream');
+            };
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const logEntry = JSON.parse(event.data);
+                    addLogEntry(logEntry);
+                } catch (error) {
+                    console.error('Error parsing log entry:', error);
+                }
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('EventSource error:', error);
+                disconnect();
+            };
+        }
+
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            isConnected = false;
+            updateStatus(false);
+            console.log('Disconnected from log stream');
+        }
+
+        function reconnect() {
+            if (isConnected) {
+                disconnect();
+                setTimeout(connect, 100);
+            }
+        }
+
+        function updateStatus(connected) {
+            const statusEl = document.getElementById('status');
+            const toggleBtn = document.getElementById('toggleBtn');
+
+            if (connected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'status connected';
+                toggleBtn.textContent = 'Disconnect';
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+                toggleBtn.textContent = 'Connect';
+            }
+        }
+
+        function addLogEntry(entry) {
+            const container = document.getElementById('logsContainer');
+
+            // Remove "no logs" message
+            if (logCount === 0) {
+                container.innerHTML = '';
+            }
+
+            const logDiv = document.createElement('div');
+            logDiv.className = `log-entry ${entry.level.toLowerCase()}`;
+
+            const timestamp = new Date(entry.timestamp).toLocaleTimeString();
+
+            logDiv.innerHTML = `
+                <span class="log-timestamp">${timestamp}</span>
+                <span class="log-level ${entry.level.toUpperCase()}">${entry.level.toUpperCase()}</span>
+                <span class="log-app">[${entry.app}]</span>
+                <span class="log-message">${escapeHtml(entry.message)}</span>
+            `;
+
+            container.appendChild(logDiv);
+            logCount++;
+
+            // Auto-scroll if enabled
+            if (document.getElementById('autoScroll').checked) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function clearLogs() {
+            const container = document.getElementById('logsContainer');
+            container.innerHTML = '<div class="no-logs">Logs cleared. Waiting for new entries...</div>';
+            logCount = 0;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Auto-connect on page load
+        window.addEventListener('load', () => {
+            connect();
+        });
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            disconnect();
+        });
+    </script>
+</body>
+</html>

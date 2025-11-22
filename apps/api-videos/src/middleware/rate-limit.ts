@@ -308,6 +308,13 @@ export async function releaseRateLimit(
  */
 export function rateLimitMiddleware(operation: string) {
   return async (c: Context, next: () => Promise<void>) => {
+    // Skip rate limiting in development/preview environments
+    const environment = c.env.ENVIRONMENT || 'development';
+    if (environment === 'development' || environment === 'preview') {
+      logger.info('[SECURITY] Skipping rate limit check in development/preview mode');
+      return next();
+    }
+
     // Get user ID from auth context
     const userId = c.get('userId');
 

@@ -126,12 +126,47 @@ logger.warn('Slow network detected', { latency });
 
 #### Viewing Logs
 
-**All logs are accessible at:** http://localhost:3089/
+**Log Service** runs at http://localhost:3089/ and provides centralized log aggregation from all apps.
 
-- Real-time log streaming
-- Filter by level (info, warn, error, debug)
-- Search by context fields
-- Export logs for analysis
+**Real-Time Log Streaming (SSE)**:
+```bash
+# Stream all logs in real-time
+curl -N http://localhost:3089/logs/stream/realtime
+
+# Filter by log level
+curl -N "http://localhost:3089/logs/stream/realtime?level=error"
+
+# Filter by app
+curl -N "http://localhost:3089/logs/stream/realtime?app=api-videos"
+
+# Combine filters
+curl -N "http://localhost:3089/logs/stream/realtime?level=error&app=api-videos"
+```
+
+**Web Viewer** (recommended for visual monitoring):
+- URL: http://localhost:3089/viewer/viewer.html
+- Features: Real-time updates, color-coded levels, auto-scroll, filtering
+- Dark theme optimized for terminal aesthetics
+
+**Snapshot API** (for one-time queries):
+```bash
+# Get last 100 lines (all apps combined)
+curl "http://localhost:3089/logs/stream?lines=100&tail=true" | jq
+
+# Get last 50 ERROR logs
+curl "http://localhost:3089/logs/stream?lines=50&level=error&tail=true" | jq
+
+# Get logs from specific app
+curl "http://localhost:3089/logs/api-videos?lines=200" | jq
+```
+
+**Available Filters**:
+- `level`: debug, info, warn, error
+- `app`: web, api-videos, processor, websocket, log-service
+- `lines`: number of lines to return (default: 100)
+- `tail`: true (newest first) or false (oldest first)
+
+**API Documentation**: http://localhost:3089/ (Swagger UI)
 
 #### Enforcement
 

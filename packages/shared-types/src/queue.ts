@@ -54,6 +54,7 @@ export enum MessageType {
   // Video upload events
   VideoUploadStarted,
   VideoUploadCompleted,
+  VideoUploadCancelled,
   VideoProcessingCompleted,
   VideoUploadFailed,
 

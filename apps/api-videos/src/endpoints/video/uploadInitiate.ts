@@ -1,6 +1,7 @@
 import { OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
+import { Channel } from "@al-ummah/shared-types";
 import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
@@ -49,14 +50,7 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 							success: z.boolean(),
 							result: z.object({
 								videoId: z.string().describe("Video GUID for upload"),
-								tusEndpoint: z.string().describe("TUS upload endpoint"),
-								tusHeaders: z.object({
-									AuthorizationSignature: z.string().describe("TUS authorization signature"),
-									AuthorizationExpire: z.string().describe("Unix timestamp when signature expires"),
-									LibraryId: z.string().describe("Bunny.net Stream library ID"),
-									VideoId: z.string().describe("Video GUID"),
-								}).describe("Headers required for TUS upload"),
-								expiresAt: z.string().describe("ISO 8601 datetime when authorization expires"),
+								tusSessionId: z.string().describe("Secure session ID for TUS proxy (client sends this to /api/videos/tus)"),
 								chunkSize: z.number().describe("Recommended chunk size in bytes"),
 								resumable: z.boolean().describe("Whether upload supports resume"),
 								// Thumbnail fields
@@ -68,8 +62,7 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 									thumb: z.string().optional(),
 								}).optional().describe("Thumbnail URLs for different sizes"),
 								// Legacy fields for backward compatibility
-								uploadUrl: z.string().optional().describe("Legacy upload URL (deprecated)"),
-								libraryId: z.number().optional().describe("Library ID (deprecated)"),
+								libraryId: z.number().optional().describe("Library ID"),
 								status: z.string().optional().describe("Upload status"),
 								message: z.string().optional().describe("Status message"),
 							}),
@@ -131,8 +124,22 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 			const channelId = c.req.header('channelId') || userId;
 
 			// Create video in Bunny Stream first to get video ID
+			logger.info('[DEBUG] Extracting Bunny secrets...', {
+				hasKeyBinding: !!c.env["bunny-stream-key"],
+				keyBindingType: typeof c.env["bunny-stream-key"],
+				hasLibraryBinding: !!c.env.bunny_stream_library_id,
+				libraryBindingType: typeof c.env.bunny_stream_library_id,
+			});
+
 			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 			const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
+
+			logger.info('[DEBUG] Bunny secrets extracted', {
+				keyLength: bunnyKey?.length || 0,
+				keyPrefix: bunnyKey?.substring(0, 8) || 'none',
+				libraryId: libraryIdRaw,
+			});
+
 			const libraryId = parseInt(libraryIdRaw, 10);
 
 			if (isNaN(libraryId)) {
@@ -144,9 +151,66 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 
 			const bunnyStream = new stream(bunnyKey);
 
+			// Fetch channel and ensure it has a Bunny.net collection
+			let collectionId: string | undefined;
+
+			// Only create/check collection if channelId is not the userId (i.e., a real channel)
+			if (channelId !== userId) {
+				const channelBucket = c.env.channels;
+				const channelRepo = new R2Repository<Channel>(channelBucket);
+				const channel = await channelRepo.getObject(channelId);
+
+				if (!channel) {
+					logger.warn('[UploadInitiate] Channel not found, skipping collection', {
+						channelId,
+						userId,
+					});
+				} else {
+					collectionId = channel.bunnyCollectionId;
+
+					// Create collection if it doesn't exist
+					if (!collectionId) {
+						logger.info('[UploadInitiate] Creating Bunny.net collection for channel', {
+							channelId,
+							channelName: channel.name,
+						});
+
+						try {
+							const collection = await bunnyStream.createCollection(libraryId, {
+								name: channel.name || `Channel ${channelId}`,
+							});
+
+							collectionId = collection.guid;
+
+							// Save collection ID to channel object
+							channel.bunnyCollectionId = collectionId;
+							channel.dateModified = new Date().toISOString();
+							await channelRepo.putObject(channelId, channel);
+
+							logger.info('[UploadInitiate] Collection created and saved to channel', {
+								channelId,
+								collectionId,
+							});
+						} catch (error) {
+							logger.error('[UploadInitiate] Failed to create collection', {
+								channelId,
+								error: error instanceof Error ? error.message : String(error),
+							});
+							// Continue without collection - video will be created without collectionId
+						}
+					} else {
+						logger.info('[UploadInitiate] Using existing collection for channel', {
+							channelId,
+							collectionId,
+						});
+					}
+				}
+			}
+
 			// Create video in Bunny Stream
 			const bunnyVideo = await bunnyStream.createVideo(libraryId, {
 				title,
+				collectionId, // Add to collection if available
 				thumbnailTime: 0,
 			});
 
@@ -242,32 +306,68 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 				1 // 1 hour expiration
 			);
 
-			// Return TUS configuration for direct upload to Bunny Stream
+			// Generate UUID for TUS session
+			const tusSessionId = crypto.randomUUID();
+
+			// Store TUS session in KV with UUID as key
+			const tusSessionData = {
+				videoId,
+				userId,
+				channelId,
+				tusEndpoint: tusConfig.tusEndpoint,
+				tusHeaders: tusConfig.tusHeaders,
+				expiresAt: tusConfig.expiresAt,
+				createdAt: new Date().toISOString(),
+			};
+
+			await c.env.TUS_SESSIONS.put(
+				`tus:session:${tusSessionId}`,
+				JSON.stringify(tusSessionData),
+				{ expirationTtl: 3600 } // 1 hour expiration
+			);
+
+			logger.info('[UploadInitiate] TUS session created', {
+				tusSessionId,
+				videoId,
+				userId,
+			});
+
+			// Return session ID to client (no TUS credentials exposed)
 			return c.json({
 				success: true,
 				result: {
 					videoId,
-					tusEndpoint: tusConfig.tusEndpoint,
-					tusHeaders: tusConfig.tusHeaders,
-					expiresAt: tusConfig.expiresAt,
+					tusSessionId, // Client uses this to access TUS proxy
 					chunkSize: tusConfig.chunkSize,
 					resumable: tusConfig.resumable,
 					// Thumbnail fields
 					thumbnailUrl,
 					thumbnailSizes,
 					// Legacy fields for backward compatibility
-					uploadUrl: `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
 					libraryId,
 					status: 'uploading',
-					message: 'Upload initiated successfully. Use the TUS configuration for resumable upload.',
+					message: 'Upload initiated successfully. Use tusSessionId with TUS proxy.',
 				},
 			});
 
 		} catch (error) {
-			logger.error("Upload initiate error:", error);
+			// Enhanced error logging
+			logger.error("Upload initiate error:", {
+				message: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined,
+				name: error instanceof Error ? error.name : undefined,
+				errorObject: error,
+			});
+
+			// Return more detailed error message for debugging
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			const errorStack = error instanceof Error ? error.stack : undefined;
+
 			return c.json({
 				success: false,
-				error: "Failed to initiate upload"
+				error: "Failed to initiate upload",
+				details: errorMessage,
+				stack: errorStack,
 			}, 500);
 		}
 	}

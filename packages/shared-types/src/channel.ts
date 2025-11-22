@@ -31,6 +31,9 @@ export interface Channel extends Timestamps {
   websiteUrl?: string;
   socialLinks?: SocialLinks;
 
+  // Bunny.net Integration
+  bunnyCollectionId?: string; // Bunny.net Stream Collection ID for channel videos
+
   // Timestamps
   dateCreated: string;
   dateModified: string;

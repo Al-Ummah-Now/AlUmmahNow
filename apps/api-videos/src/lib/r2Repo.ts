@@ -39,19 +39,24 @@ class R2Repository<T> {
   }
 
   async getObject(id: string): Promise<T | null> {
-    const object = await this.bucket.get(id);
-
-    // Check if object exists before trying to parse it
-    if (!object) {
-      return null;
-    }
-
     try {
-      const bodyContent = await object.json<T>();
-      return bodyContent;
+      const object = await this.bucket.get(id);
+
+      // Check if object exists before trying to parse it
+      if (!object) {
+        return null;
+      }
+
+      try {
+        const bodyContent = await object.json<T>();
+        return bodyContent;
+      } catch (error) {
+        logger.error(`Failed to parse object ${id} as JSON:`, error);
+        return null;
+      }
     } catch (error) {
-      logger.error(`Failed to parse object ${id} as JSON:`, error);
-      return null;
+      logger.error(`Failed to fetch object ${id} from R2 bucket:`, error);
+      throw error;
     }
   }
 

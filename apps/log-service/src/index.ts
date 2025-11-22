@@ -12,6 +12,7 @@
 import { fromHono } from 'chanfana';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -21,6 +22,7 @@ import { BatchLogEntry } from './endpoints/batchLogEntry';
 import { ListLogFiles } from './endpoints/listLogFiles';
 import { GetLogs } from './endpoints/getLogs';
 import { StreamLogs } from './endpoints/streamLogs';
+import { StreamLogsRealtime } from './endpoints/streamLogsRealtime';
 
 // Log directory (relative to monorepo root)
 export const LOG_DIR = join(process.cwd(), '../../logs');
@@ -65,7 +67,11 @@ openapi.post('/log', LogEntry);
 openapi.post('/log/batch', BatchLogEntry);
 openapi.get('/logs', ListLogFiles);
 openapi.get('/logs/stream', StreamLogs);
+openapi.get('/logs/stream/realtime', StreamLogsRealtime);
 openapi.get('/logs/:appName', GetLogs);
+
+// Serve static files (log viewer HTML)
+app.use('/viewer', serveStatic({ root: './public' }));
 
 const PORT = 3089;
 
@@ -73,6 +79,7 @@ console.log(`📝 Log Service starting on http://localhost:${PORT}`);
 console.log(`📂 Writing logs to: ${LOG_DIR}`);
 console.log(`📖 API Docs available at: http://localhost:${PORT}/`);
 console.log(`📄 OpenAPI spec at: http://localhost:${PORT}/openapi.json`);
+console.log(`🖥️  Log Viewer at: http://localhost:${PORT}/viewer/viewer.html`);
 
 // Start Node.js HTTP server
 serve({

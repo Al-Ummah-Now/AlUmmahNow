@@ -1,14 +1,63 @@
 # E2E Test Suite - Video Upload System
 
-Comprehensive end-to-end testing for Al Ummah Now's video upload, management, and thumbnail functionality.
+Comprehensive end-to-end testing for Al Ummah Now's video upload, management, thumbnail functionality, and **secure TUS proxy**.
 
 ## Overview
 
-This directory contains **5 comprehensive test suites** covering all aspects of video upload, TUS resumable uploads, video management, editing, and thumbnail management.
+This directory contains **7 comprehensive test suites** covering all aspects of video upload, TUS resumable uploads, TUS proxy security, video management, editing, and thumbnail management.
+
+## ✨ NEW: TUS Proxy Security Tests
+
+**Critical security testing for the TUS proxy implementation** that hides Bunny.net credentials from clients while providing resumable uploads.
+
+See detailed documentation:
+- [TUS Proxy Test Documentation](./TUS_PROXY_TEST_DOCUMENTATION.md)
+- [TUS Proxy Execution Guide](./TUS_PROXY_TEST_EXECUTION_GUIDE.md)
 
 ## Test Files
 
-### 1. Video Upload Flow (`12-video-upload.spec.ts`)
+### NEW 1. TUS Proxy Security (`17-tus-proxy-upload.spec.ts`)
+
+**Coverage**:
+- ✅ **Security verification** - Network traffic analysis to ensure NO Bunny.net URLs exposed
+- ✅ **JWT Bearer token validation** - All TUS requests authenticated
+- ✅ **Credential protection** - Bunny.net credentials NEVER in client-side traffic
+- ✅ **Upload flow** - End-to-end upload through secure proxy
+- ✅ **Resumable uploads** - Pause, resume, retry functionality
+- ✅ **Error handling** - Network failures, auth errors, timeouts
+- ✅ **Metadata validation** - VideoId in TUS metadata headers
+- ✅ **Mobile & RTL support** - Responsive and bilingual
+
+**Test Count**: 18 tests
+
+**Critical Security Tests** (MUST pass for production):
+```typescript
+// Verify NO Bunny.net URLs in network traffic
+const bunnyNetRequests = networkRequests.filter(req =>
+  req.url.includes('bunnycdn.com') || req.url.includes('bunny.net')
+);
+expect(bunnyNetRequests.length).toBe(0); // MUST BE ZERO
+
+// Verify JWT tokens in ALL TUS requests
+for (const request of tusRequests) {
+  expect(request.headers['authorization']).toMatch(/^Bearer .+/);
+}
+```
+
+### NEW 2. TUS Proxy Logs (`18-tus-proxy-logs.spec.ts`)
+
+**Coverage**:
+- ✅ **Log verification** - TUS operations logged (POST, HEAD, PATCH, DELETE)
+- ✅ **Contextual logging** - userId, videoId, uploadId included
+- ✅ **Error logging** - Sufficient detail for debugging
+- ✅ **Performance metrics** - Duration, speed, bytes tracked
+- ✅ **Lifecycle tracking** - Create, progress, cancel/complete events
+- ✅ **Log service API** - http://localhost:3089/logs/stream/realtime
+- ✅ **Security check** - NO sensitive credentials in logs
+
+**Test Count**: 14 tests
+
+### 3. Video Upload Flow (`12-video-upload.spec.ts`)
 
 **Coverage**:
 - ✅ Complete upload flow with bilingual metadata (EN/AR)
@@ -36,7 +85,7 @@ await helpers.uploadTestVideo(page, {
 });
 ```
 
-### 2. TUS Resumable Upload (`13-video-upload-tus-resume.spec.ts`)
+### 4. TUS Resumable Upload (`13-video-upload-tus-resume.spec.ts`)
 
 **Coverage**:
 - ✅ Network interruption handling
@@ -58,7 +107,7 @@ await page.waitForTimeout(2000);
 await helpers.setNetworkCondition(page, false); // Online
 ```
 
-### 3. Video Management (`14-video-management.spec.ts`)
+### 5. Video Management (`14-video-management.spec.ts`)
 
 **Coverage**:
 - ✅ Video dashboard display
@@ -83,7 +132,7 @@ await expect(page.locator('text=Ready Public Video')).toBeVisible();
 await expect(page.locator('text=Processing Video')).not.toBeVisible();
 ```
 
-### 4. Video Editing (`15-video-edit.spec.ts`)
+### 6. Video Editing (`15-video-edit.spec.ts`)
 
 **Coverage**:
 - ✅ Load video edit page
@@ -111,7 +160,7 @@ await page.click('button:has-text("العربية")');
 await page.fill('input[placeholder*="العنوان بالعربية"]', 'عنوان جديد');
 ```
 
-### 5. Thumbnail Management (`16-thumbnail-management.spec.ts`)
+### 7. Thumbnail Management (`16-thumbnail-management.spec.ts`)
 
 **Coverage**:
 - ✅ Display thumbnail selector
@@ -187,8 +236,15 @@ pnpm exec playwright test
 
 ### Run Video Upload Tests Only
 ```bash
+# TUS proxy security tests (CRITICAL)
+pnpm exec playwright test 17-tus-proxy-upload
+pnpm exec playwright test 18-tus-proxy-logs
+
+# Upload flow tests
 pnpm exec playwright test 12-video-upload
 pnpm exec playwright test 13-video-upload-tus-resume
+
+# Management tests
 pnpm exec playwright test 14-video-management
 pnpm exec playwright test 15-video-edit
 pnpm exec playwright test 16-thumbnail-management
@@ -308,12 +364,14 @@ Tests run automatically on:
 
 | Feature                    | Tests | Status |
 |----------------------------|-------|--------|
+| **TUS Proxy Security**     | **18**| **✅**  |
+| **TUS Proxy Logs**         | **14**| **✅**  |
 | Video Upload (Complete)    | 15    | ✅     |
 | TUS Resumable Upload       | 12    | ✅     |
 | Video Management Dashboard | 18    | ✅     |
 | Video Editing              | 15    | ✅     |
 | Thumbnail Management       | 16    | ✅     |
-| **Total**                  | **76**| ✅     |
+| **Total**                  | **108**| ✅     |
 
 ### Scenario Coverage
 

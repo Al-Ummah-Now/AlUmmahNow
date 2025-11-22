@@ -114,6 +114,11 @@
 			"binding": "RATE_LIMIT_KV",
 			"id": "PLACEHOLDER_RATE_LIMIT_KV_ID",
 			"preview_id": "PLACEHOLDER_RATE_LIMIT_KV_PREVIEW_ID"
+		},
+		{
+			"binding": "TUS_SESSIONS",
+			"id": "a7f78b8bf0984994a2cd2f4c92169ae1",
+			"preview_id": "56c4fbe8aec04166b9256bf951655c3a"
 		}
 	],
 	"queues": {

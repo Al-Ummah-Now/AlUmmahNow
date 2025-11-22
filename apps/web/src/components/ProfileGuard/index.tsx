@@ -4,6 +4,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
 import { useI18n } from '@/lib/i18n';
+import { ActiveChannelProvider } from '@/contexts/ActiveChannelContext';
+import { useChannels } from '@/hooks/useChannels';
 
 interface ProfileGuardProps {
   children: React.ReactNode;
@@ -21,6 +23,13 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
   const [profileExists, setProfileExists] = useState<boolean | null>(null);
   const [hasChecked, setHasChecked] = useState(false);
   const [lastCheckedUserId, setLastCheckedUserId] = useState<string | null>(null);
+
+  // Fetch user channels for ActiveChannelProvider
+  const { channels } = useChannels({
+    channelId: user?.id,
+    userId: user?.id,
+    autoFetch: !!user?.id
+  });
 
   console.log('[ProfileGuard] State:', {
     hasUser: !!user,
@@ -117,51 +126,60 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     checkProfile();
   }, [user, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, router]);
 
-  if (shouldSkipCheck) {
-    console.log('[ProfileGuard] Rendering children (shouldSkipCheck)');
+  // Wrap all content with ActiveChannelProvider
+  const content = (() => {
+    if (shouldSkipCheck) {
+      console.log('[ProfileGuard] Rendering children (shouldSkipCheck)');
+      return <>{children}</>;
+    }
+
+    if (isCheckingProfile) {
+      console.log('[ProfileGuard] Rendering loading state');
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">{t.profile.checkingProfile}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // If on regular page and profile doesn't exist, show redirect message
+    if (!isProfileCreatePage && profileExists === false) {
+      console.log('[ProfileGuard] Rendering redirect message (regular page, no profile)');
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">{t.profile.redirectingToProfileCreation}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // If on create page and profile exists, show redirect message
+    if (isProfileCreatePage && profileExists === true) {
+      console.log('[ProfileGuard] Rendering redirect message (create page, profile exists)');
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">{t.profile.redirecting}</p>
+          </div>
+        </div>
+      );
+    }
+
+    console.log('[ProfileGuard] Rendering children (access allowed)');
     return <>{children}</>;
-  }
+  })();
 
-  if (isCheckingProfile) {
-    console.log('[ProfileGuard] Rendering loading state');
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">{t.profile.checkingProfile}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If on regular page and profile doesn't exist, show redirect message
-  if (!isProfileCreatePage && profileExists === false) {
-    console.log('[ProfileGuard] Rendering redirect message (regular page, no profile)');
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">{t.profile.redirectingToProfileCreation}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If on create page and profile exists, show redirect message
-  if (isProfileCreatePage && profileExists === true) {
-    console.log('[ProfileGuard] Rendering redirect message (create page, profile exists)');
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">{t.profile.redirecting}</p>
-        </div>
-      </div>
-    );
-  }
-
-  console.log('[ProfileGuard] Rendering children (access allowed)');
-  return <>{children}</>;
+  return (
+    <ActiveChannelProvider userChannels={channels} userId={user?.id}>
+      {content}
+    </ActiveChannelProvider>
+  );
 };
 
 export default ProfileGuard;

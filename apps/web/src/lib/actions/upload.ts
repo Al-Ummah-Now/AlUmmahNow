@@ -6,6 +6,7 @@ import {
   getVideoUploadStatusApi,
   initiateBatchUploadApi
 } from "@/lib/api/videos";
+import { getServerAuthContext } from "@/lib/api/server-auth-v2";
 
 /**
  * Initiate video upload - Server action with TUS support
@@ -18,6 +19,7 @@ export async function initiateVideoUpload(
     descriptionLocalized?: Record<string, string>;
     isPublic?: boolean;
     tags?: string;
+    category?: any;
     fileSize: number;
     mimeType: string;
     thumbnail?: {
@@ -33,26 +35,28 @@ export async function initiateVideoUpload(
   success: boolean;
   result?: {
     videoId: string;
-    tusEndpoint: string;
-    tusHeaders: {
-      AuthorizationSignature: string;
-      AuthorizationExpire: string;
-      LibraryId: string;
-      VideoId: string;
-    };
-    expiresAt: string;
+    tusSessionId?: string; // Secure session ID for TUS proxy
     chunkSize: number;
     resumable: boolean;
     thumbnailUrl?: string;
     thumbnailSizes?: Record<string, string>;
-    uploadUrl?: string;
     libraryId?: number;
     status?: string;
     message?: string;
+    authToken?: string; // JWT token for TUS authentication
   };
   error?: string;
 }> {
   const result = await initiateVideoUploadApi(metadata, { userId, channelId });
+
+  // Add auth token to result for client-side TUS upload
+  if (result?.success) {
+    const authContext = await getServerAuthContext();
+    if (result.result && authContext?.accessToken) {
+      result.result.authToken = authContext.accessToken;
+    }
+  }
+
   return result || { success: false, error: "Failed to initiate upload" };
 }
 
@@ -146,7 +150,9 @@ export async function initiateBatchUpload(
 }
 
 /**
- * SECURITY NOTE: The getBunnyAccessKey() function has been removed.
- * API keys should NEVER be exposed to client-side code.
- * Video uploads are now handled server-side via the API backend.
+ * SECURITY NOTE:
+ * - Auth tokens are retrieved via getServerAuthContext() which uses SessionManager
+ * - The getBunnyAccessKey() function has been removed
+ * - API keys should NEVER be exposed to client-side code
+ * - Video uploads are now handled server-side via the API backend
  */

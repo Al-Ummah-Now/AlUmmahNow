@@ -24,6 +24,7 @@
     "@openauthjs/openauth": "^0.4.3",
     "chanfana": "^2.8.0",
     "hono": "^4.10.4",
+    "tus-js-client": "^4.3.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

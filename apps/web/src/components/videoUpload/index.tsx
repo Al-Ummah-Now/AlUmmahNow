@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback } from "react";
 import * as tus from "tus-js-client";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus } from "@/lib/actions/upload";
@@ -85,6 +86,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const libraryIdRef = useRef<number>(0);
 
   const auth = useAuth();
+  const { activeChannel } = useActiveChannel();
 
   // File validation
   const validateFile = (file: File): string | null => {
@@ -172,9 +174,15 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       return;
     }
 
+    // Check active channel
+    if (!activeChannel) {
+      onError('No active channel selected. Please select a channel first.');
+      return;
+    }
+
     // Extract userId and channelId after auth check
     const userId = auth.user.id;
-    const channelId = auth.user.id;
+    const channelId = activeChannel.channelId;
 
     try {
       // Step 1: Initiate upload and get TUS configuration
@@ -214,26 +222,39 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
       }
 
-      const { videoId, tusEndpoint, tusHeaders, chunkSize, libraryId } = initiateResult.result;
+      const { videoId, tusSessionId, libraryId, authToken } = initiateResult.result;
       videoIdRef.current = videoId;
       libraryIdRef.current = libraryId || 0;
 
-      // Step 2: Create TUS upload
+      if (!tusSessionId) {
+        throw new Error('TUS session ID not received from server');
+      }
+
+      if (!authToken) {
+        throw new Error('Authentication token not found. Please log in again.');
+      }
+
+      // Step 2: Create TUS upload using secure proxy endpoint
       uploadStartTimeRef.current = Date.now();
       lastProgressTimeRef.current = Date.now();
       lastBytesUploadedRef.current = 0;
 
       const upload = new tus.Upload(selectedFile, {
-        endpoint: tusEndpoint,
+        // Use TUS proxy endpoint (NOT Bunny.net directly)
+        endpoint: `${process.env.NEXT_PUBLIC_API_URL}/api/videos/tus`,
         retryDelays: [0, 3000, 5000, 10000, 20000],
-        chunkSize: chunkSize,
-        headers: tusHeaders,
+        chunkSize: 5 * 1024 * 1024, // 5MB chunks
+        // Include Authorization header since cookies don't cross origins
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        },
         storeFingerprintForResuming: true,
         removeFingerprintOnSuccess: true,
         metadata: {
+          tusSessionId: tusSessionId, // Session ID for TUS proxy to retrieve credentials
+          videoId: videoId,
           filename: selectedFile.name,
           filetype: selectedFile.type,
-          videoId: videoId,
         },
         onError: (error) => {
           console.error('TUS upload error:', error);
@@ -357,8 +378,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             userId: userId,
             channel: channelId,
             channelId: channelId,
-            channelAvatarUrl: '',
-            channelName: auth.user?.email || 'Unknown',
+            channelAvatarUrl: activeChannel.avatarUrl || '',
+            channelName: activeChannel.name || auth.user?.email || 'Unknown',
             dateCreated: new Date().toISOString(),
             dateModified: new Date().toISOString(),
             createdAt: new Date().toISOString(),
