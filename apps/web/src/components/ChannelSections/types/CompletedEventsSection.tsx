@@ -1,13 +1,14 @@
 'use client';
 
 import { SectionHeader } from '../SectionHeader';
+import { logger } from '@/lib/logger-client';
 
 interface CompletedEventsSectionProps {
   channelId: string;
 }
 
 export function CompletedEventsSection({ channelId }: CompletedEventsSectionProps) {
-  console.log('[CompletedEventsSection] Placeholder for channel:', channelId);
+  logger.info('CompletedEventsSection: Rendering placeholder', { channelId });
 
   return (
     <section className="space-y-4">

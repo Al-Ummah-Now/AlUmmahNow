@@ -4,8 +4,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
 import { useI18n } from '@/lib/i18n';
-import { ActiveChannelProvider } from '@/contexts/ActiveChannelContext';
-import { useChannels } from '@/hooks/useChannels';
 
 interface ProfileGuardProps {
   children: React.ReactNode;
@@ -23,13 +21,6 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
   const [profileExists, setProfileExists] = useState<boolean | null>(null);
   const [hasChecked, setHasChecked] = useState(false);
   const [lastCheckedUserId, setLastCheckedUserId] = useState<string | null>(null);
-
-  // Fetch user channels for ActiveChannelProvider
-  const { channels } = useChannels({
-    channelId: user?.id,
-    userId: user?.id,
-    autoFetch: !!user?.id
-  });
 
   console.log('[ProfileGuard] State:', {
     hasUser: !!user,
@@ -126,7 +117,6 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     checkProfile();
   }, [user, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, router]);
 
-  // Wrap all content with ActiveChannelProvider
   const content = (() => {
     if (shouldSkipCheck) {
       console.log('[ProfileGuard] Rendering children (shouldSkipCheck)');
@@ -175,11 +165,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
     return <>{children}</>;
   })();
 
-  return (
-    <ActiveChannelProvider userChannels={channels} userId={user?.id}>
-      {content}
-    </ActiveChannelProvider>
-  );
+  return content;
 };
 
 export default ProfileGuard;

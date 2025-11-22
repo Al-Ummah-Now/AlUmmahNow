@@ -290,3 +290,84 @@ export async function updateChannelCover(
 
   return response.json();
 }
+
+/**
+ * Get channel videos
+ * GET /api/channels/{id}/videos
+ */
+export async function getChannelVideos(
+  channelId: string,
+  params?: ListQueryParams
+): Promise<PaginationResponse<any> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
+
+  return apiRequestServer<PaginationResponse<any>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/videos${queryString}`),
+    functionName: 'getChannelVideos'
+  }, getServerAuthContext, false);
+}
+
+/**
+ * Get channel shorts
+ * GET /api/channels/{id}/shorts
+ */
+export async function getChannelShorts(
+  channelId: string,
+  params?: ListQueryParams
+): Promise<PaginationResponse<any> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
+
+  return apiRequestServer<PaginationResponse<any>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/shorts${queryString}`),
+    functionName: 'getChannelShorts'
+  }, getServerAuthContext, false);
+}
+
+/**
+ * Get channel live streams
+ * GET /api/channels/{id}/live
+ */
+export async function getChannelLiveStreams(
+  channelId: string,
+  params?: ListQueryParams & { active?: boolean }
+): Promise<PaginationResponse<any> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor,
+    active: params?.active
+  });
+
+  return apiRequestServer<PaginationResponse<any>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/live${queryString}`),
+    functionName: 'getChannelLiveStreams'
+  }, getServerAuthContext, false);
+}
+
+/**
+ * Get channel playlists
+ * GET /api/channels/{id}/playlists
+ */
+export async function getChannelPlaylists(
+  channelId: string,
+  params?: ListQueryParams
+): Promise<PaginationResponse<any> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
+
+  return apiRequestServer<PaginationResponse<any>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/playlists${queryString}`),
+    functionName: 'getChannelPlaylists'
+  }, getServerAuthContext, false);
+}

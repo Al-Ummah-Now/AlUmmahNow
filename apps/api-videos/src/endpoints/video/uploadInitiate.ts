@@ -281,10 +281,38 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 			};
 
 			// Save metadata to R2
+			logger.info('[UploadInitiate] Preparing to save video metadata to R2', {
+				videoId,
+				bucketBinding: 'videos',
+				videoData: {
+					title: video.title,
+					userId: video.userId,
+					channelId: video.channelId,
+					uploadStatus: video.uploadStatus
+				}
+			});
+
 			const bucket = c.env.videos;
+
+			if (!bucket) {
+				logger.error('[UploadInitiate] R2 bucket binding not available', { videoId });
+				throw new Error('R2 bucket binding "videos" is not configured');
+			}
+
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
-			await repository.putObject(videoId, video);
+
+			try {
+				await repository.putObject(videoId, video);
+				logger.info('[UploadInitiate] Video metadata saved successfully to R2', { videoId });
+			} catch (error) {
+				logger.error('[UploadInitiate] Failed to save video metadata to R2', {
+					videoId,
+					error: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : undefined,
+				});
+				throw error; // Re-throw so the endpoint returns an error
+			}
 
 			// Send analytics event for upload initiation
 			const queue = new Queue(c.env.queue);

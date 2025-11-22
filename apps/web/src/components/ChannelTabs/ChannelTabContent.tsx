@@ -1,10 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ChannelTab } from './index';
 import { ChannelSections } from '@/components/ChannelSections';
+import { VideoGrid } from '@/components/VideoGrid';
+import { PlaylistGrid } from '@/components/PlaylistGrid';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getChannelVideos, getChannelShorts, getChannelLiveStreams, getChannelPlaylists } from '@/lib/api/channels';
+import { logger } from '@/lib/logger-client';
+import { VideoObject, Playlist } from '@al-ummah/shared-types';
 
 interface ChannelTabContentProps {
   channelId: string;
@@ -21,6 +26,134 @@ export function ChannelTabContent({
   // Get active tab from URL or use default
   const activeTab = (searchParams.get('tab') as ChannelTab) || defaultTab;
 
+  // State for videos tab
+  const [videos, setVideos] = useState<VideoObject[]>([]);
+  const [videosLoading, setVideosLoading] = useState(false);
+  const [videosError, setVideosError] = useState<string | null>(null);
+
+  // State for shorts tab
+  const [shorts, setShorts] = useState<VideoObject[]>([]);
+  const [shortsLoading, setShortsLoading] = useState(false);
+  const [shortsError, setShortsError] = useState<string | null>(null);
+
+  // State for live tab
+  const [liveStreams, setLiveStreams] = useState<VideoObject[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+
+  // State for playlists tab
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlistsLoading, setPlaylistsLoading] = useState(false);
+  const [playlistsError, setPlaylistsError] = useState<string | null>(null);
+
+  // Fetch videos when videos tab is active
+  useEffect(() => {
+    if (activeTab === 'videos' && videos.length === 0) {
+      setVideosLoading(true);
+      setVideosError(null);
+
+      logger.info('Fetching channel videos', { channelId });
+
+      getChannelVideos(channelId, { limit: 20 })
+        .then((response) => {
+          if (response && response.data) {
+            setVideos(response.data);
+            logger.info('Channel videos loaded', { count: response.data.length });
+          } else {
+            logger.warn('No videos response', { channelId });
+          }
+        })
+        .catch((error) => {
+          logger.error('Failed to fetch channel videos', { channelId, error });
+          setVideosError(t.common.errorOccurred || 'Failed to load videos');
+        })
+        .finally(() => {
+          setVideosLoading(false);
+        });
+    }
+  }, [activeTab, channelId, videos.length, t]);
+
+  // Fetch shorts when shorts tab is active
+  useEffect(() => {
+    if (activeTab === 'shorts' && shorts.length === 0) {
+      setShortsLoading(true);
+      setShortsError(null);
+
+      logger.info('Fetching channel shorts', { channelId });
+
+      getChannelShorts(channelId, { limit: 20 })
+        .then((response) => {
+          if (response && response.data) {
+            setShorts(response.data);
+            logger.info('Channel shorts loaded', { count: response.data.length });
+          } else {
+            logger.warn('No shorts response', { channelId });
+          }
+        })
+        .catch((error) => {
+          logger.error('Failed to fetch channel shorts', { channelId, error });
+          setShortsError(t.common.errorOccurred || 'Failed to load shorts');
+        })
+        .finally(() => {
+          setShortsLoading(false);
+        });
+    }
+  }, [activeTab, channelId, shorts.length, t]);
+
+  // Fetch live streams when live tab is active
+  useEffect(() => {
+    if (activeTab === 'live' && liveStreams.length === 0) {
+      setLiveLoading(true);
+      setLiveError(null);
+
+      logger.info('Fetching channel live streams', { channelId });
+
+      getChannelLiveStreams(channelId, { limit: 20 })
+        .then((response) => {
+          if (response && response.data) {
+            setLiveStreams(response.data);
+            logger.info('Channel live streams loaded', { count: response.data.length });
+          } else {
+            logger.warn('No live streams response', { channelId });
+          }
+        })
+        .catch((error) => {
+          logger.error('Failed to fetch channel live streams', { channelId, error });
+          setLiveError(t.common.errorOccurred || 'Failed to load live streams');
+        })
+        .finally(() => {
+          setLiveLoading(false);
+        });
+    }
+  }, [activeTab, channelId, liveStreams.length, t]);
+
+  // Fetch playlists when playlists tab is active
+  useEffect(() => {
+    if (activeTab === 'playlists' && playlists.length === 0) {
+      setPlaylistsLoading(true);
+      setPlaylistsError(null);
+
+      logger.info('Fetching channel playlists', { channelId });
+
+      getChannelPlaylists(channelId, { limit: 20 })
+        .then((response) => {
+          if (response && response.data) {
+            setPlaylists(response.data);
+            logger.info('Channel playlists loaded', { count: response.data.length });
+          } else {
+            logger.warn('No playlists response', { channelId });
+          }
+        })
+        .catch((error) => {
+          logger.error('Failed to fetch channel playlists', { channelId, error });
+          setPlaylistsError(t.common.errorOccurred || 'Failed to load playlists');
+        })
+        .finally(() => {
+          setPlaylistsLoading(false);
+        });
+    }
+  }, [activeTab, channelId, playlists.length, t]);
+
   return (
     <div className="p-5 bg-white dark:bg-gray-800">
       {/* Home Tab - Channel Sections */}
@@ -33,108 +166,69 @@ export function ChannelTabContent({
       {/* Videos Tab */}
       {activeTab === 'videos' && (
         <div role="tabpanel" id="tabpanel-videos" aria-labelledby="tab-videos">
-          <div className="text-center py-12">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {t.channel.videos}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              {t.video.noVideosAvailable}
-            </p>
-          </div>
+          {videosError ? (
+            <div className="text-center py-12 text-red-600 dark:text-red-400">
+              {videosError}
+            </div>
+          ) : (
+            <VideoGrid
+              videos={videos}
+              loading={videosLoading}
+              emptyMessage={t.video.noVideosAvailable}
+            />
+          )}
         </div>
       )}
 
       {/* Shorts Tab */}
       {activeTab === 'shorts' && (
         <div role="tabpanel" id="tabpanel-shorts" aria-labelledby="tab-shorts">
-          <div className="text-center py-12">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
-              />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {t.channel.shorts}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              {t.video.noVideosAvailable}
-            </p>
-          </div>
+          {shortsError ? (
+            <div className="text-center py-12 text-red-600 dark:text-red-400">
+              {shortsError}
+            </div>
+          ) : (
+            <VideoGrid
+              videos={shorts}
+              loading={shortsLoading}
+              emptyMessage={t.video.noVideosAvailable}
+              columns={{ mobile: 2, tablet: 3, desktop: 4 }}
+            />
+          )}
         </div>
       )}
 
       {/* Live Tab */}
       {activeTab === 'live' && (
         <div role="tabpanel" id="tabpanel-live" aria-labelledby="tab-live">
-          <div className="text-center py-12">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {t.channel.live}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              {t.channel.liveNowDescription}
-            </p>
-          </div>
+          {liveError ? (
+            <div className="text-center py-12 text-red-600 dark:text-red-400">
+              {liveError}
+            </div>
+          ) : (
+            <VideoGrid
+              videos={liveStreams}
+              loading={liveLoading}
+              emptyMessage={t.channel.liveNowDescription}
+            />
+          )}
         </div>
       )}
 
       {/* Playlists Tab */}
       {activeTab === 'playlists' && (
         <div role="tabpanel" id="tabpanel-playlists" aria-labelledby="tab-playlists">
-          <div className="text-center py-12">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-              />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {t.channel.playlists}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              {t.profile.noPlaylistsAvailable}
-            </p>
-          </div>
+          {playlistsError ? (
+            <div className="text-center py-12 text-red-600 dark:text-red-400">
+              {playlistsError}
+            </div>
+          ) : (
+            <PlaylistGrid
+              playlists={playlists}
+              loading={playlistsLoading}
+              emptyMessage={t.profile.noPlaylistsAvailable}
+            />
+          )}
         </div>
       )}
 

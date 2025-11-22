@@ -61,10 +61,15 @@ import { ChannelUpdate } from "./endpoints/channel/channelUpdate";
 import { ChannelFetch } from "./endpoints/channel/channelFetch";
 import { ChannelDelete } from "./endpoints/channel/channelDelete";
 import { ChannelsList } from "./endpoints/channel/channelList";
+import { ChannelVideosList } from "./endpoints/channel/channelVideosList";
+import { ChannelShortsList } from "./endpoints/channel/channelShortsList";
+import { ChannelLiveList } from "./endpoints/channel/channelLiveList";
+import { ChannelPlaylistsList } from "./endpoints/channel/channelPlaylistsList";
 import { SubscriptionCreate } from "./endpoints/channel/SubscriptionCreate";
 import { SubscriptionDelete } from "./endpoints/channel/SubscriptionDelete";
 // Channel Sections endpoints
 import { ChannelSectionsList } from "./endpoints/channel-section/channelSectionList";
+import { ChannelSectionsListPopulated } from "./endpoints/channel-section/channelSectionListPopulated";
 import { ChannelSectionFetch } from "./endpoints/channel-section/channelSectionFetch";
 import { ChannelSectionCreate } from "./endpoints/channel-section/channelSectionCreate";
 import { ChannelSectionUpdate } from "./endpoints/channel-section/channelSectionUpdate";
@@ -223,6 +228,10 @@ openapi.get("/api/playlists", PlaylistsList);
 openapi.get("/api/playlists/:id", PlaylistFetch);
 openapi.get("/api/channels", ChannelsList);
 openapi.get("/api/channels/:id", ChannelFetch);
+openapi.get("/api/channels/:id/videos", ChannelVideosList); // Channel videos (public)
+openapi.get("/api/channels/:id/shorts", ChannelShortsList); // Channel shorts (public)
+openapi.get("/api/channels/:id/live", ChannelLiveList); // Channel live streams (public)
+openapi.get("/api/channels/:id/playlists", ChannelPlaylistsList); // Channel playlists (public)
 openapi.get("/api/channels/:id/tabs", ChannelTabsFetch); // Channel tabs configuration (public)
 // Community Posts endpoints (public)
 openapi.get("/api/community/posts", ListCommunityPosts);
@@ -427,6 +436,7 @@ openapi.put("/api/channels/:id/tabs", ChannelTabsUpdate);
 
 // Channel Sections management
 openapi.get("/api/channels/:channelId/sections", ChannelSectionsList); // Public: list sections
+openapi.get("/api/channels/:channelId/sections/populated", ChannelSectionsListPopulated); // Public: list sections with populated content
 openapi.get("/api/channels/:channelId/sections/:sectionId", ChannelSectionFetch); // Public: get section
 openapi.post("/api/channels/:channelId/sections", ChannelSectionCreate); // Auth required: create
 openapi.put("/api/channels/:channelId/sections/:sectionId", ChannelSectionUpdate); // Auth required: update

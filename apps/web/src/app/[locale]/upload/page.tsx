@@ -4,11 +4,13 @@ import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { BatchUploadQueue } from "@/components/videoUpload/BatchUploadQueue";
 import { useRouter, useParams } from "next/navigation";
-import { CheckCircle, AlertCircle, Upload, FileVideo, FileStack } from "lucide-react";
+import { CheckCircle, AlertCircle, Upload, FileVideo, FileStack, ShieldAlert } from "lucide-react";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
+import { useActiveChannel } from "@/contexts/ActiveChannelContext";
+import Link from "next/link";
 
 type UploadMode = 'single' | 'batch';
 
@@ -18,6 +20,7 @@ const UploadPage: React.FC = () => {
   const locale = params.locale as string;
   const auth = useAuth();
   const router = useRouter();
+  const { activeChannel } = useActiveChannel();
 
   const [uploadMode, setUploadMode] = useState<UploadMode>('single');
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -46,7 +49,7 @@ const UploadPage: React.FC = () => {
     clearQueue,
   } = useBatchUpload({
     userId: auth.user?.id || '',
-    channelId: auth.user?.id || '',
+    channelId: activeChannel?.channelId || '',
     onUploadComplete: (videoId) => {
       console.log('Video uploaded:', videoId);
     },
@@ -132,6 +135,39 @@ const UploadPage: React.FC = () => {
       e.target.value = '';
     }
   }, [addFiles, t]);
+
+  // Show 403 error if user has no channel
+  if (!activeChannel) {
+    return (
+      <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-2xl mx-auto w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 md:p-12 text-center">
+            <ShieldAlert size={64} className="mx-auto mb-6 text-red-500" />
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              403 - Channel Required
+            </h1>
+            <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+              You need to create a channel before you can upload videos.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href={`/${locale}/profile/create`}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Create Channel
+              </Link>
+              <Link
+                href={`/${locale}`}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
+              >
+                Go to Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">

@@ -193,7 +193,7 @@ export function ChannelTabBar({
             <button
               type="button"
               onClick={() => scroll('left')}
-              className="absolute left-0 z-10 h-12 w-8 flex items-center justify-center bg-gradient-to-r from-white dark:from-gray-800 to-transparent"
+              className="absolute left-0 z-10 h-12 w-8 flex items-center justify-center bg-gradient-to-r from-white dark:from-gray-800 to-transparent cursor-pointer hover:opacity-75 transition-opacity"
               aria-label={isRTL ? 'Scroll right' : 'Scroll left'}
             >
               <svg
@@ -228,14 +228,28 @@ export function ChannelTabBar({
                 aria-selected={activeTab === tab}
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => handleTabClick(tab)}
-                className={`
-                  flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap
-                  border-b-2 transition-colors duration-200
-                  ${activeTab === tab
-                    ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-gray-300 dark:hover:border-gray-600'
+                className={
+                  activeTab === tab
+                    ? "flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer relative text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20"
+                    : "flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer relative text-gray-600 dark:text-gray-400"
+                }
+                style={
+                  activeTab === tab
+                    ? {
+                        borderBottom: '2px solid rgb(234, 179, 8)'
+                      }
+                    : undefined
+                }
+                onMouseEnter={(e) => {
+                  if (activeTab !== tab) {
+                    e.currentTarget.style.borderBottom = '2px solid rgb(234, 179, 8)';
                   }
-                `}
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== tab) {
+                    e.currentTarget.style.borderBottom = '';
+                  }
+                }}
               >
                 {getTabLabel(tab)}
               </button>
@@ -247,7 +261,7 @@ export function ChannelTabBar({
             <button
               type="button"
               onClick={() => scroll('right')}
-              className="absolute right-0 z-10 h-12 w-8 flex items-center justify-center bg-gradient-to-l from-white dark:from-gray-800 to-transparent"
+              className="absolute right-0 z-10 h-12 w-8 flex items-center justify-center bg-gradient-to-l from-white dark:from-gray-800 to-transparent cursor-pointer hover:opacity-75 transition-opacity"
               aria-label={isRTL ? 'Scroll left' : 'Scroll right'}
             >
               <svg

@@ -84,6 +84,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const lastBytesUploadedRef = useRef<number>(0);
   const videoIdRef = useRef<string>('');
   const libraryIdRef = useRef<number>(0);
+  const thumbnailUrlRef = useRef<string>('');
 
   const auth = useAuth();
   const { activeChannel } = useActiveChannel();
@@ -222,9 +223,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
       }
 
-      const { videoId, tusSessionId, libraryId, authToken } = initiateResult.result;
+      const { videoId, tusSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl, thumbnailSizes } = initiateResult.result;
       videoIdRef.current = videoId;
       libraryIdRef.current = libraryId || 0;
+      thumbnailUrlRef.current = returnedThumbnailUrl || '';
 
       if (!tusSessionId) {
         throw new Error('TUS session ID not received from server');

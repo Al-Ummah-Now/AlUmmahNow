@@ -1,7 +1,8 @@
 "use client";
 import React from "react";
 import IcoButton from "@/components/iconButton";
-import Link from 'next/link'
+import Link from 'next/link';
+import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 
 interface NavItems {
     label: string;
@@ -21,13 +22,20 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     onCollapse,
     withOverlay = false, // Default to no overlay
 }) => {
-    const navItems: NavItems[] = [
+    const { activeChannel } = useActiveChannel();
+
+    const allNavItems: NavItems[] = [
         { label: "Home", icon: "fa-house", href: "/en/" },
         { label: "Trending", icon: "fa-magnifying-glass", href: "/en/search" },
         { label: "Upload", icon: "fa-upload", href: "/en/upload" },
         { label: "Subscriptions", icon: "fa-tv", href: "#" },
         { label: "Library", icon: "fa-bookmark", href: "#" },
     ];
+
+    // Filter out Upload if user has no active channel
+    const navItems = activeChannel
+        ? allNavItems
+        : allNavItems.filter(item => item.label !== "Upload");
 
     return (
         <>

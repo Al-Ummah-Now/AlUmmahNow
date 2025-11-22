@@ -6,6 +6,7 @@ import VideoCard from '../../videoCard';
 import { SectionHeader } from '../SectionHeader';
 import { listVideos } from '@/lib/api/videos';
 import { useLanguage } from '@/hooks/useLanguage';
+import { logger } from '@/lib/logger-client';
 
 interface RecentUploadsSectionProps {
   channelId: string;
@@ -13,12 +14,12 @@ interface RecentUploadsSectionProps {
 }
 
 export function RecentUploadsSection({ channelId }: RecentUploadsSectionProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[RecentUploadsSection] Fetching recent videos for channel:', channelId);
+    logger.info('RecentUploadsSection: Fetching recent videos', { channelId });
 
     async function fetchVideos() {
       try {
@@ -29,14 +30,19 @@ export function RecentUploadsSection({ channelId }: RecentUploadsSectionProps) {
           sortOrder: 'desc'
         });
 
-        console.log('[RecentUploadsSection] API response:', JSON.stringify(result, null, 2));
+        logger.info('RecentUploadsSection: API response received', {
+          channelId,
+          videoCount: result?.data?.length || 0
+        });
 
         if (result && result.data) {
-          console.log('[RecentUploadsSection] Loaded videos:', result.data.length);
           setVideos(result.data);
         }
       } catch (err) {
-        console.error('[RecentUploadsSection] Error fetching videos:', JSON.stringify(err, null, 2));
+        logger.error('RecentUploadsSection: Error fetching videos', {
+          channelId,
+          error: err instanceof Error ? err.message : String(err)
+        });
       } finally {
         setLoading(false);
       }
@@ -53,7 +59,7 @@ export function RecentUploadsSection({ channelId }: RecentUploadsSectionProps) {
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.recentUploads}
-        viewAllHref={videos.length > 0 ? `/en/channels/${channelId}` : undefined}
+        viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}` : undefined}
       />
 
       {videos.length === 0 ? (

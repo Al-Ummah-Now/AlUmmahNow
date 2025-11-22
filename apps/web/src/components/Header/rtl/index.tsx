@@ -7,11 +7,13 @@ import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { UploadButton } from '@/components/UploadButton';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
   const { t } = useI18n('ar');
   const { user } = useAuth();
+  const { activeChannel } = useActiveChannel();
   const handleClick = () => {
     redirect('/ar/');
   };
@@ -42,7 +44,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
 
       {/* Unified Navigation and Upload Button */}
       <div className="flex items-center gap-2">
-        {user && (
+        {user && activeChannel && (
           <UploadButton
             href="/ar/upload"
             text={t.upload.uploadVideo}

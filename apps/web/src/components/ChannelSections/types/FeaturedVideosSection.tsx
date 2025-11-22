@@ -15,7 +15,7 @@ interface FeaturedVideosSectionProps {
 }
 
 export function FeaturedVideosSection({ videoIds, channelId }: FeaturedVideosSectionProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -66,7 +66,7 @@ export function FeaturedVideosSection({ videoIds, channelId }: FeaturedVideosSec
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.featuredVideos}
-        viewAllHref={channelId && videos.length > 0 ? `/en/channels/${channelId}` : undefined}
+        viewAllHref={channelId && videos.length > 0 ? `/${locale}/channels/${channelId}` : undefined}
       />
 
       {videos.length === 0 ? (

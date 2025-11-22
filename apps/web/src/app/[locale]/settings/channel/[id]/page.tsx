@@ -102,6 +102,38 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             </div>
           </Link>
 
+          {/* Manage Videos */}
+          <Link
+            href={`/${locale}/settings/channel/${id}/videos`}
+            className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
+          >
+            <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                <svg
+                  className="w-6 h-6 text-red-600 dark:text-red-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+              </div>
+              <div className={isRTL ? 'text-right' : ''}>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  {t.video.videoManagement}
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {t.video.manageVideosDescription || 'Manage your channel videos'}
+                </p>
+              </div>
+            </div>
+          </Link>
+
           {/* Channel Tabs */}
           <Link
             href={`/${locale}/settings/channel/${id}/tabs`}

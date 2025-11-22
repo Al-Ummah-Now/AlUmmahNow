@@ -1,6 +1,7 @@
 'use client';
 
 import { SectionHeader } from '../SectionHeader';
+import { logger } from '@/lib/logger-client';
 
 interface MultipleChannelsSectionProps {
   title: string;
@@ -8,7 +9,7 @@ interface MultipleChannelsSectionProps {
 }
 
 export function MultipleChannelsSection({ title, channelIds }: MultipleChannelsSectionProps) {
-  console.log('[MultipleChannelsSection] Placeholder for channels:', channelIds);
+  logger.info('MultipleChannelsSection: Rendering placeholder', { title, channelIds });
 
   return (
     <section className="space-y-4">

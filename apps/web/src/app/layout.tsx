@@ -11,6 +11,7 @@ import { WebSocketProvider } from "@/lib/websocket/WebSocketProvider";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { MultiAccountProvider } from "@/hooks/useMultiAccount";
 import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
+import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -92,16 +93,18 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
               disableTransitionOnChange>
               <MultiAccountProvider>
                 <AuthProvider>
-                  <WebSocketProvider user={user}>
-                    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
-                      {/* Header */}
-                      <Navigation></Navigation>
-                      {children}
+                  <ActiveChannelWrapper>
+                    <WebSocketProvider user={user}>
+                      <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                        {/* Header */}
+                        <Navigation></Navigation>
+                        {children}
 
-                      {/* Real-time notification center */}
-                      <NotificationCenter user={user} />
-                    </div>
-                  </WebSocketProvider>
+                        {/* Real-time notification center */}
+                        <NotificationCenter user={user} />
+                      </div>
+                    </WebSocketProvider>
+                  </ActiveChannelWrapper>
                 </AuthProvider>
                 {/* Cookie size monitor (dev mode only) */}
                 <CookieSizeMonitor />

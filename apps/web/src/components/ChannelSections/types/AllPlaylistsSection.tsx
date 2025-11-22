@@ -7,18 +7,19 @@ import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
 import { listPlaylists } from '@/lib/api/playlists';
 import { useLanguage } from '@/hooks/useLanguage';
+import { logger } from '@/lib/logger-client';
 
 interface AllPlaylistsSectionProps {
   channelId: string;
 }
 
 export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[AllPlaylistsSection] Fetching all playlists for channel:', channelId);
+    logger.info('AllPlaylistsSection: Fetching playlists', { channelId });
 
     async function fetchPlaylists() {
       try {
@@ -28,14 +29,19 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
           isPublic: true
         });
 
-        console.log('[AllPlaylistsSection] API response:', JSON.stringify(result, null, 2));
+        logger.info('AllPlaylistsSection: API response received', {
+          channelId,
+          playlistCount: result?.data?.length || 0
+        });
 
         if (result && result.data) {
-          console.log('[AllPlaylistsSection] Loaded playlists:', result.data.length);
           setPlaylists(result.data);
         }
       } catch (err) {
-        console.error('[AllPlaylistsSection] Error fetching playlists:', JSON.stringify(err, null, 2));
+        logger.error('AllPlaylistsSection: Error fetching playlists', {
+          channelId,
+          error: err instanceof Error ? err.message : String(err)
+        });
       } finally {
         setLoading(false);
       }
@@ -52,7 +58,7 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.allPlaylists}
-        viewAllHref={playlists.length > 0 ? `/en/channels/${channelId}/playlists` : undefined}
+        viewAllHref={playlists.length > 0 ? `/${locale}/channels/${channelId}/playlists` : undefined}
       />
 
       {playlists.length === 0 ? (
@@ -68,7 +74,7 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
             {playlists.map((playlist) => (
               <Link
                 key={playlist.id}
-                href={`/en/playlist/${playlist.id}`}
+                href={`/${locale}/playlist/${playlist.id}`}
                 className="flex-shrink-0 w-64 sm:w-72 md:w-80 group"
               >
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">

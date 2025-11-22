@@ -1,7 +1,8 @@
 "use client";
 import React from "react";
 import IcoButton from "@/components/iconButton";
-import Link from 'next/link'
+import Link from 'next/link';
+import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 
 interface NavItems {
     label: string;
@@ -21,13 +22,20 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     onCollapse,
     withOverlay = false, // Default to no overlay
 }) => {
-    const navItems: NavItems[] = [
+    const { activeChannel } = useActiveChannel();
+
+    const allNavItems: NavItems[] = [
         { label: "الرئيسية", icon: "fa-house", href: "/ar/" }, // Home
         { label: "الشائع", icon: "fa-magnifying-glass", href: "/ar/search" }, // Trending
         { label: "رفع فيديو", icon: "fa-upload", href: "/ar/upload" }, // Upload
         { label: "الاشتراكات", icon: "fa-tv", href: "#" }, // Subscriptions
         { label: "المكتبة", icon: "fa-bookmark", href: "#" }, // Library
     ];
+
+    // Filter out Upload if user has no active channel
+    const navItems = activeChannel
+        ? allNavItems
+        : allNavItems.filter(item => item.label !== "رفع فيديو");
 
     return (
         <>

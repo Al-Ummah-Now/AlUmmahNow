@@ -14,7 +14,7 @@ interface LikedVideosSectionProps {
 }
 
 export function LikedVideosSection({ channelId }: LikedVideosSectionProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,7 +56,7 @@ export function LikedVideosSection({ channelId }: LikedVideosSectionProps) {
     <section className="space-y-4">
       <SectionHeader
         title={t.channel.likedVideos}
-        viewAllHref={videos.length > 0 ? `/en/channels/${channelId}/liked` : undefined}
+        viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}/liked` : undefined}
       />
 
       {videos.length === 0 ? (

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
 import { useLanguage } from '@/hooks/useLanguage';
+import { logger } from '@/lib/logger-client';
 
 interface MultiplePlaylistsSectionProps {
   title: string;
@@ -13,12 +14,12 @@ interface MultiplePlaylistsSectionProps {
 }
 
 export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylistsSectionProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[MultiplePlaylistsSection] Fetching playlists:', playlistIds);
+    logger.info('MultiplePlaylistsSection: Fetching playlists', { playlistIds });
 
     async function fetchPlaylists() {
       try {
@@ -31,10 +32,16 @@ export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylis
         );
 
         const validPlaylists = fetchedPlaylists.filter((p): p is Playlist => p !== null);
-        console.log('[MultiplePlaylistsSection] Loaded playlists:', validPlaylists.length);
+        logger.info('MultiplePlaylistsSection: Loaded playlists', {
+          totalRequested: playlistIds.length,
+          totalLoaded: validPlaylists.length
+        });
         setPlaylists(validPlaylists);
       } catch (err) {
-        console.error('[MultiplePlaylistsSection] Error fetching playlists:', JSON.stringify(err, null, 2));
+        logger.error('MultiplePlaylistsSection: Error fetching playlists', {
+          playlistIds,
+          error: err instanceof Error ? err.message : String(err)
+        });
       } finally {
         setLoading(false);
       }
@@ -68,7 +75,7 @@ export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylis
             {playlists.map((playlist) => (
               <Link
                 key={playlist.id}
-                href={`/en/playlist/${playlist.id}`}
+                href={`/${locale}/playlist/${playlist.id}`}
                 className="flex-shrink-0 w-64 sm:w-72 md:w-80 group"
               >
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">

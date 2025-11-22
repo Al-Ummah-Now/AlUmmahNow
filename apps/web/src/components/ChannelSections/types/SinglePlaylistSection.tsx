@@ -7,30 +7,37 @@ import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
 import { getPlaylistById } from '@/lib/api/playlists';
 import { useLanguage } from '@/hooks/useLanguage';
+import { logger } from '@/lib/logger-client';
 
 interface SinglePlaylistSectionProps {
   playlistId: string;
 }
 
 export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[SinglePlaylistSection] Fetching playlist:', playlistId);
+    logger.info('SinglePlaylistSection: Fetching playlist', { playlistId });
 
     async function fetchPlaylist() {
       try {
         const result = await getPlaylistById(playlistId);
 
-        console.log('[SinglePlaylistSection] API response:', JSON.stringify(result, null, 2));
+        logger.info('SinglePlaylistSection: API response received', {
+          playlistId,
+          found: !!result
+        });
 
         if (result) {
           setPlaylist(result);
         }
       } catch (err) {
-        console.error('[SinglePlaylistSection] Error fetching playlist:', JSON.stringify(err, null, 2));
+        logger.error('SinglePlaylistSection: Error fetching playlist', {
+          playlistId,
+          error: err instanceof Error ? err.message : String(err)
+        });
       } finally {
         setLoading(false);
       }
@@ -51,7 +58,7 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
     <section className="space-y-4">
       <SectionHeader
         title={playlist?.name || t.channel.playlist}
-        viewAllHref={playlist ? `/en/playlist/${playlist.id}` : undefined}
+        viewAllHref={playlist ? `/${locale}/playlist/${playlist.id}` : undefined}
       />
 
       {!playlist ? (
@@ -62,7 +69,7 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
         </div>
       ) : (
       <Link
-        href={`/en/playlist/${playlist.id}`}
+        href={`/${locale}/playlist/${playlist.id}`}
         className="block max-w-md group"
       >
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">

@@ -139,9 +139,18 @@ export class VideoUploadStatus extends OpenAPIRoute {
 				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
-				
+
 				// Get video details from Bunny Stream
 				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);
+
+				// Log transcoding messages if video failed or has warnings
+				if (bunnyStreamStatus.status >= 4 || bunnyStreamStatus.transcodingMessages?.length) {
+					logger.warn('[VideoUploadStatus] Bunny.net transcoding messages', {
+						videoId: id,
+						status: bunnyStreamStatus.status,
+						messages: bunnyStreamStatus.transcodingMessages,
+					});
+				}
 			}
 		} catch (error) {
 			logger.warn("Could not fetch Bunny Stream status:", error);
@@ -199,6 +208,53 @@ export class VideoUploadStatus extends OpenAPIRoute {
 			status = "failed";
 			progress = 0;
 			message = "Upload or processing failed";
+		}
+
+		// Update R2 object if status changed or resolutions need updating
+		const needsUpdate = bunnyStreamStatus && (
+			video.uploadStatus !== status ||
+			(bunnyStreamStatus.availableResolutions && video.availableResolutions.length === 0) ||
+			(bunnyStreamStatus.length && !video.duration)
+		);
+
+		if (needsUpdate) {
+			try {
+				logger.info('[VideoUploadStatus] Updating video status in R2', {
+					videoId: id,
+					oldStatus: video.uploadStatus,
+					newStatus: status,
+					bunnyStatus: bunnyStreamStatus.status,
+				});
+
+				video.uploadStatus = status as any;
+				video.dateModified = new Date().toISOString();
+
+				// Update available resolutions if Bunny.net has them
+				if (bunnyStreamStatus.availableResolutions) {
+					video.availableResolutions = bunnyStreamStatus.availableResolutions
+						.split(',')
+						.map(r => r.trim())
+						.filter(r => r.length > 0);
+				}
+
+				// Update duration if available
+				if (bunnyStreamStatus.length) {
+					video.duration = bunnyStreamStatus.length;
+				}
+
+				// Update storage size if available
+				if (bunnyStreamStatus.storageSize) {
+					video.fileSize = bunnyStreamStatus.storageSize;
+				}
+
+				await repository.putObject(id, video);
+				logger.info('[VideoUploadStatus] Video status updated in R2', { videoId: id, status });
+			} catch (error) {
+				logger.error('[VideoUploadStatus] Failed to update video status in R2', {
+					videoId: id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 		}
 
 		// Build response

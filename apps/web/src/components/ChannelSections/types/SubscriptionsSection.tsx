@@ -1,13 +1,14 @@
 'use client';
 
 import { SectionHeader } from '../SectionHeader';
+import { logger } from '@/lib/logger-client';
 
 interface SubscriptionsSectionProps {
   channelId: string;
 }
 
 export function SubscriptionsSection({ channelId }: SubscriptionsSectionProps) {
-  console.log('[SubscriptionsSection] Placeholder for channel:', channelId);
+  logger.info('SubscriptionsSection: Rendering placeholder', { channelId });
 
   return (
     <section className="space-y-4">
