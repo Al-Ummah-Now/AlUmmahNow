@@ -48,6 +48,7 @@ export function ChannelTabBar({
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
   const [tabConfig, setTabConfig] = useState<ChannelTabConfig | null>(null);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
   // Fetch tab configuration from API on mount
   useEffect(() => {
@@ -70,6 +71,8 @@ export function ChannelTabBar({
         });
         // Fall back to default configuration
         setTabConfig(null);
+      } finally {
+        setIsLoadingConfig(false);
       }
     };
 
@@ -78,6 +81,11 @@ export function ChannelTabBar({
 
   // Determine visible tabs from API config or fall back to props
   const visibleTabs: ChannelTab[] = React.useMemo(() => {
+    // If still loading, show filtered tabs based on hiddenTabs to avoid flash
+    if (isLoadingConfig) {
+      return DEFAULT_TABS.filter(tab => !hiddenTabs.includes(tab));
+    }
+
     if (tabConfig) {
       // Use API configuration
       return tabConfig.tabs
@@ -88,7 +96,7 @@ export function ChannelTabBar({
       // Fall back to prop-based configuration
       return DEFAULT_TABS.filter(tab => !hiddenTabs.includes(tab));
     }
-  }, [tabConfig, hiddenTabs]);
+  }, [tabConfig, hiddenTabs, isLoadingConfig]);
 
   // Determine default tab from API config or fall back to props
   const effectiveDefaultTab: ChannelTab = React.useMemo(() => {
@@ -99,7 +107,27 @@ export function ChannelTabBar({
   }, [tabConfig, defaultTab]);
 
   // Get active tab from URL or use default
-  const activeTab = (searchParams.get('tab') as ChannelTab) || effectiveDefaultTab;
+  const requestedTab = searchParams.get('tab') as ChannelTab;
+  const activeTab = requestedTab || effectiveDefaultTab;
+
+  // Redirect to default tab if requested tab is not visible/allowed
+  useEffect(() => {
+    if (!isLoadingConfig && requestedTab && !visibleTabs.includes(activeTab)) {
+      logger.warn('[ChannelTabBar] Requested tab not visible, redirecting to default', {
+        requestedTab,
+        activeTab,
+        visibleTabs,
+        defaultTab: effectiveDefaultTab
+      });
+
+      // Remove invalid tab param and redirect to default
+      const params = new URLSearchParams(searchParams);
+      params.delete('tab');
+      const queryString = params.toString();
+      const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
+      router.replace(newUrl);
+    }
+  }, [isLoadingConfig, requestedTab, activeTab, visibleTabs, effectiveDefaultTab, pathname, searchParams, router]);
 
   // Check if scroll buttons should be shown
   useEffect(() => {
@@ -183,6 +211,25 @@ export function ChannelTabBar({
       default: return tab;
     }
   };
+
+  // Show loading skeleton while fetching tab config (prevents flash when API returns different tabs)
+  if (isLoadingConfig) {
+    return (
+      <div className="relative bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-6xl mx-auto px-5">
+          <div className="flex items-center gap-2 py-3">
+            {/* Loading skeletons for tabs */}
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="h-8 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">

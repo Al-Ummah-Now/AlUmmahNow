@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { getTranslations } from '@/lib/i18n';
 import Link from 'next/link';
 import Image from 'next/image';
+import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 
 interface ChannelSettingsPageProps {
   params: Promise<{
@@ -63,6 +64,13 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
 
       {/* Settings Grid */}
       <div className="container mx-auto px-4 py-8">
+        <ChannelSettingsBreadcrumb
+          channelId={id}
+          channelName={displayName}
+          locale={locale}
+          currentPage="overview"
+          className="mb-6"
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* General Settings */}
           <Link

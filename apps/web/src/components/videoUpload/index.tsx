@@ -375,7 +375,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             id: videoId,
             title: metadata.title,
             description: metadata.description || null,
-            thumbnailUrl: '',
+            thumbnailUrl: thumbnailUrlRef.current,
             videoUrl: `${VIDEO_UPLOAD_CONFIG.BUNNY_CDN_BASE_URL}/library/${libraryIdRef.current}/videos/${videoId}`,
             userId: userId,
             channel: channelId,

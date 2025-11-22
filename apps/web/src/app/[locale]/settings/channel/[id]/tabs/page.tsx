@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { ChannelTabConfig } from '@al-ummah/shared-types';
 import TabManagement from '@/components/TabManagement';
 import { Button } from '@/components/ui/button';
@@ -10,7 +9,7 @@ import { getChannelTabConfig, updateChannelTabConfig, verifyChannelOwnership } f
 import { getChannelById } from '@/lib/api/channels';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
-import { ArrowLeft, Eye } from 'lucide-react';
+import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 
 export default function ChannelTabsSettingsPage() {
   const params = useParams();
@@ -20,6 +19,7 @@ export default function ChannelTabsSettingsPage() {
   const locale = (params.locale as string) || 'en';
 
   const [config, setConfig] = useState<ChannelTabConfig | null>(null);
+  const [channelName, setChannelName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
@@ -42,6 +42,8 @@ export default function ChannelTabsSettingsPage() {
           setLoading(false);
           return;
         }
+
+        setChannelName(channel.name || '');
 
         // Verify ownership (P1 fix)
         const isChannelOwner = await verifyChannelOwnership(channelId);
@@ -182,26 +184,13 @@ export default function ChannelTabsSettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
-      {/* Navigation Bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="hidden sm:inline">{t.common.back}</span>
-        </Button>
-
-        <Link
-          href={`/${locale}/channels/${channelId}`}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-        >
-          <Eye className="w-4 h-4" />
-          <span>{t.header.viewChannel}</span>
-        </Link>
-      </div>
+      {/* Breadcrumb */}
+      <ChannelSettingsBreadcrumb
+        channelId={channelId}
+        channelName={channelName}
+        locale={locale}
+        currentPage="tabs"
+      />
 
       {/* Header */}
       <div>

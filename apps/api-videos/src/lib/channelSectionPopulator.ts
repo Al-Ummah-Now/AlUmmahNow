@@ -9,11 +9,11 @@
  */
 
 import R2Repository from './r2Repo';
-import { Video, ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
+import { VideoObject, ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
 export interface SectionContent {
-  videos?: Video[];
+  videos?: VideoObject[];
   playlists?: any[];
   channels?: any[];
 }
@@ -85,18 +85,18 @@ async function getRecentUploads(
   channelId: string,
   limit: number,
   env: any
-): Promise<Video[]> {
+): Promise<VideoObject[]> {
   try {
-    const videoRepo = new R2Repository<Video>(env.videos);
+    const videoRepo = new R2Repository<VideoObject>(env.videos);
 
     // List all videos with prefix (in R2, they're stored flat)
     const listResult = await env.videos.list({ limit: 1000 });
 
     // Fetch and filter videos for this channel
-    const videos: Video[] = [];
+    const videos: VideoObject[] = [];
     for (const obj of listResult.objects) {
       const video = await videoRepo.getObject(obj.key);
-      if (video && video.channelId === channelId && !video.isPrivate) {
+      if (video && video.channelId === channelId && video.isPublic) {
         videos.push(video);
       }
     }
@@ -120,24 +120,24 @@ async function getPopularUploads(
   channelId: string,
   limit: number,
   env: any
-): Promise<Video[]> {
+): Promise<VideoObject[]> {
   try {
-    const videoRepo = new R2Repository<Video>(env.videos);
+    const videoRepo = new R2Repository<VideoObject>(env.videos);
 
     // List all videos
     const listResult = await env.videos.list({ limit: 1000 });
 
     // Fetch and filter videos for this channel
-    const videos: Video[] = [];
+    const videos: VideoObject[] = [];
     for (const obj of listResult.objects) {
       const video = await videoRepo.getObject(obj.key);
-      if (video && video.channelId === channelId && !video.isPrivate) {
+      if (video && video.channelId === channelId && video.isPublic) {
         videos.push(video);
       }
     }
 
     // Sort by view count (highest first) and limit
-    videos.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0));
+    videos.sort((a, b) => (b.views || 0) - (a.views || 0));
 
     return videos.slice(0, limit);
   } catch (error) {
@@ -153,7 +153,7 @@ async function getLikedVideos(
   channelId: string,
   limit: number,
   env: any
-): Promise<Video[]> {
+): Promise<VideoObject[]> {
   try {
     // This would need to track likes in a separate bucket or index
     // For now, return empty array
@@ -190,14 +190,14 @@ async function getSubscribedChannels(
 async function getVideosByIds(
   videoIds: string[],
   env: any
-): Promise<Video[]> {
+): Promise<VideoObject[]> {
   try {
-    const videoRepo = new R2Repository<Video>(env.videos);
-    const videos: Video[] = [];
+    const videoRepo = new R2Repository<VideoObject>(env.videos);
+    const videos: VideoObject[] = [];
 
     for (const videoId of videoIds) {
       const video = await videoRepo.getObject(videoId);
-      if (video && !video.isPrivate) {
+      if (video && video.isPublic) {
         videos.push(video);
       }
     }

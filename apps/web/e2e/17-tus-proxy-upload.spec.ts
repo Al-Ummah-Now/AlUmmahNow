@@ -1,5 +1,4 @@
 import { test, expect, helpers } from './fixtures';
-import type { Page } from '@playwright/test';
 
 /**
  * TUS Proxy Security E2E Tests
@@ -467,9 +466,7 @@ test.describe('TUS Proxy - Metadata and Validation', () => {
 
     // Verify Upload-Metadata header includes videoId
     expect(tusMetadata).toBeTruthy();
-    if (tusMetadata) {
-      expect(tusMetadata).toContain('videoId');
-    }
+    expect(tusMetadata!).toContain('videoId');
   });
 
   test('should validate required fields before upload', async ({ page }) => {

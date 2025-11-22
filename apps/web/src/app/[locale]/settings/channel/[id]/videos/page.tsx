@@ -8,15 +8,18 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
 import { listVideos, deleteVideo } from '@/lib/api/videos';
 import { isChannelOwner } from '@/lib/channel-utils';
+import { getChannelById } from '@/lib/api/channels';
 import Image from 'next/image';
 import Link from 'next/link';
+import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
+import { logger } from '@/lib/logger-client';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
 type SortBy = 'date' | 'views' | 'title';
 
 export default function ChannelVideosPage() {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -25,6 +28,7 @@ export default function ChannelVideosPage() {
 
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [filteredVideos, setFilteredVideos] = useState<VideoObject[]>([]);
+  const [channelName, setChannelName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,29 +53,36 @@ export default function ChannelVideosPage() {
     }
   }, [channelId, router, locale]);
 
-  // Fetch videos for this channel
+  // Fetch videos and channel for this channel
   useEffect(() => {
-    const fetchVideos = async () => {
+    const fetchData = async () => {
       if (!user || !isOwner) return;
 
       setLoading(true);
       try {
-        const result = await listVideos({}, { userId: user.id, channelId });
+        // Fetch videos and channel in parallel
+        const [result, channel] = await Promise.all([
+          listVideos({ channelId }, { userId: user.id, channelId: channelId }),
+          getChannelById(channelId)
+        ]);
+
+        if (channel) {
+          setChannelName(channel.name || '');
+        }
+
         if (result) {
-          // Filter videos by channel ID
-          const channelVideos = result.data.filter(v => v.channelId === channelId);
-          setVideos(channelVideos);
-          setFilteredVideos(channelVideos);
+          setVideos(result.data);
+          setFilteredVideos(result.data);
         }
       } catch (error) {
-        console.error('Error fetching videos:', error);
+        logger.error('Error fetching videos and channel', { error, channelId, userId: user.id });
       } finally {
         setLoading(false);
       }
     };
 
     if (isOwner) {
-      fetchVideos();
+      fetchData();
     }
   }, [user, channelId, isOwner]);
 
@@ -84,14 +95,6 @@ export default function ChannelVideosPage() {
       filtered = filtered.filter((video) =>
         video.title.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    }
-
-    // Status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((video) => {
-        const status = video.uploadStatus || 'ready';
-        return status === statusFilter;
-      });
     }
 
     // Privacy filter
@@ -152,7 +155,7 @@ export default function ChannelVideosPage() {
         });
       }
     } catch (error) {
-      console.error('Error deleting video:', error);
+      logger.error('Error deleting video', { error, videoId, channelId, userId: user.id });
       alert(t.errors.genericError);
     }
   };
@@ -175,7 +178,7 @@ export default function ChannelVideosPage() {
       setVideos((prev) => prev.filter((v) => !selectedVideos.has(v.id)));
       setSelectedVideos(new Set());
     } catch (error) {
-      console.error('Error deleting videos:', error);
+      logger.error('Error deleting videos', { error, selectedVideos: Array.from(selectedVideos), channelId, userId: user.id });
       alert(t.errors.genericError);
     }
   };
@@ -201,18 +204,19 @@ export default function ChannelVideosPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Breadcrumb */}
+        <ChannelSettingsBreadcrumb
+          channelId={channelId}
+          channelName={channelName}
+          locale={locale}
+          currentPage="videos"
+          className="mb-6"
+        />
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold dark:text-white">{t.video.videoManagement}</h1>
-              <Link
-                href={`/${locale}/settings/channel/${channelId}`}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block"
-              >
-                ← {t.channel.backToSettings || 'Back to Channel Settings'}
-              </Link>
-            </div>
+            <h1 className="text-3xl font-bold dark:text-white">{t.video.videoManagement}</h1>
             <Link
               href={`/${locale}/upload`}
               className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"

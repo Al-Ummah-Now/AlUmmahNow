@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import {
   DndContext,
   closestCenter,
@@ -37,17 +36,18 @@ import {
   reorderChannelSections,
 } from '@/lib/api/channel-sections';
 import { logger } from '@/lib/logger-client';
-import { ArrowLeft, Eye } from 'lucide-react';
+import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
+import { getChannelById } from '@/lib/api/channels';
 
 const MAX_SECTIONS = 10;
 
 export default function ChannelSectionsManagement() {
   const params = useParams();
-  const router = useRouter();
   const channelId = params.id as string;
   const locale = (params.locale as string) || 'en';
 
   const [sections, setSections] = useState<ChannelSection[]>([]);
+  const [channelName, setChannelName] = useState<string>('');
   const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,21 +65,31 @@ export default function ChannelSectionsManagement() {
     })
   );
 
-  // Fetch sections on mount
+  // Fetch sections and channel on mount
   useEffect(() => {
-    async function fetchSections() {
+    async function fetchData() {
       setLoading(true);
       setError(null);
 
       try {
-        logger.info('ChannelSectionsManagement: Fetching sections', { channelId });
-        const sections = await listChannelSections(channelId);
+        logger.info('ChannelSectionsManagement: Fetching sections and channel', { channelId });
+
+        // Fetch both sections and channel in parallel
+        const [sections, channel] = await Promise.all([
+          listChannelSections(channelId),
+          getChannelById(channelId)
+        ]);
 
         logger.info('ChannelSectionsManagement: API response received', {
           channelId,
           hasSections: !!sections,
-          sectionsCount: sections?.length || 0
+          sectionsCount: sections?.length || 0,
+          hasChannel: !!channel
         });
+
+        if (channel) {
+          setChannelName(channel.name || '');
+        }
 
         if (sections) {
           // Sort by position
@@ -96,7 +106,7 @@ export default function ChannelSectionsManagement() {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         const errorStack = err instanceof Error ? err.stack : undefined;
-        logger.error('ChannelSectionsManagement: Error fetching sections', {
+        logger.error('ChannelSectionsManagement: Error fetching data', {
           error: err,
           errorMessage,
           errorStack,
@@ -109,7 +119,7 @@ export default function ChannelSectionsManagement() {
       }
     }
 
-    fetchSections();
+    fetchData();
   }, [channelId]);
 
   // Handle drag and drop
@@ -257,58 +267,14 @@ export default function ChannelSectionsManagement() {
       space-y-4
       md:space-y-6
     ">
-      {/* Navigation Bar */}
-      <div className="
-        flex
-        items-center
-        justify-between
-        pb-4
-        border-b
-        border-gray-200
-        dark:border-gray-700
-      ">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.back()}
-          className="
-            flex
-            items-center
-            gap-2
-            text-gray-600
-            dark:text-gray-400
-            hover:text-gray-900
-            dark:hover:text-gray-100
-          "
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="hidden sm:inline">Back</span>
-        </Button>
+      {/* Breadcrumb */}
+      <ChannelSettingsBreadcrumb
+        channelId={channelId}
+        channelName={channelName}
+        locale={locale}
+        currentPage="sections"
+      />
 
-        <Link
-          href={`/${locale}/channels/${channelId}`}
-          className="
-            flex
-            items-center
-            gap-2
-            px-3
-            py-2
-            text-sm
-            font-medium
-            text-blue-600
-            dark:text-blue-400
-            hover:text-blue-700
-            dark:hover:text-blue-300
-            hover:bg-blue-50
-            dark:hover:bg-blue-900/20
-            rounded-lg
-            transition-colors
-          "
-        >
-          <Eye className="w-4 h-4" />
-          <span>View Channel</span>
-        </Link>
-      </div>
 
       {/* Header */}
       <div className="

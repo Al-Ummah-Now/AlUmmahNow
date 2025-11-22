@@ -1,5 +1,4 @@
 import { test, expect, helpers } from './fixtures';
-import type { Page } from '@playwright/test';
 
 /**
  * TUS Proxy Log Verification Tests
@@ -15,7 +14,7 @@ import type { Page } from '@playwright/test';
  */
 
 // Helper function to fetch logs from log service
-async function fetchLogs(page: Page, filters?: { level?: string; search?: string }) {
+async function fetchLogs(page: any, filters?: { level?: string; search?: string }) {
   try {
     const response = await page.request.get('http://localhost:3089/logs/stream/realtime', {
       params: {
@@ -123,9 +122,6 @@ test.describe('TUS Proxy - Log Verification', () => {
     // Fetch logs
     const logs = await fetchLogs(page);
 
-    // Look for TUS HEAD request logs (offset checks for resume)
-    const tusHeadLogs = findLogsMatching(logs, /tus.*head|get offset/i);
-
     // HEAD requests might occur during resume attempts
     // At minimum, we should see TUS-related logs
     const tusLogs = findLogsMatching(logs, /tus/i);
@@ -145,9 +141,6 @@ test.describe('TUS Proxy - Log Verification', () => {
 
     // Fetch logs
     const logs = await fetchLogs(page);
-
-    // Look for upload completion logs
-    const completionLogs = findLogsMatching(logs, /upload.*complete|upload.*success/i);
 
     // Should have upload-related logs even if not fully complete
     const uploadLogs = findLogsMatching(logs, /upload/i);
@@ -176,9 +169,6 @@ test.describe('TUS Proxy - Log Verification', () => {
 
     // Fetch error logs
     const logs = await fetchLogs(page, { level: 'error' });
-
-    // Look for TUS-related errors
-    const tusErrorLogs = findLogsMatching(logs, /tus.*error|tus.*fail|upload.*fail/i);
 
     // Should have error logs
     // Note: Might be client-side errors, not server-side
@@ -283,15 +273,6 @@ test.describe('TUS Proxy - Log Analysis', () => {
 
     // Fetch logs
     const logs = await fetchLogs(page);
-
-    // Look for performance-related logs
-    const perfLogs = logs.filter((log: any) => {
-      const logStr = JSON.stringify(log).toLowerCase();
-      return logStr.includes('duration') ||
-             logStr.includes('speed') ||
-             logStr.includes('bytes') ||
-             logStr.includes('size');
-    });
 
     // Performance metrics might be logged
     // At minimum, verify upload logs exist

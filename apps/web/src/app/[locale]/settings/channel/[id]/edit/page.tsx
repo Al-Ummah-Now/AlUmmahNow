@@ -7,6 +7,8 @@ import { getChannelById, updateChannel, updateChannelAvatar, updateChannelCover 
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useLanguage } from '@/hooks/useLanguage';
+import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
+import { logger } from '@/lib/logger-client';
 
 interface ChannelData {
   id: string;
@@ -65,7 +67,7 @@ function ChannelEditPage() {
           });
         }
       } catch (error) {
-        console.error('Error fetching channel:', error);
+        logger.error('Error fetching channel', { error, channelId });
         setError(t.errors.genericError);
       } finally {
         setIsLoading(false);
@@ -105,7 +107,7 @@ function ChannelEditPage() {
 
       router.push(`/${locale}/channels/${channelId}`);
     } catch (error) {
-      console.error('Error updating channel:', error);
+      logger.error('Error updating channel', { error, channelId, userId: user.id });
       setError(t.errors.genericError);
       setIsSaving(false);
     }
@@ -151,7 +153,7 @@ function ChannelEditPage() {
         throw new Error(t.errors.uploadFailed || 'Upload failed');
       }
     } catch (error) {
-      console.error('Error uploading file:', error);
+      logger.error('Error uploading file', { error, type, channelId, userId: user.id });
       setError(t.errors.genericError);
 
       // Revert to original URL on error
@@ -283,24 +285,20 @@ function ChannelEditPage() {
 
         {/* Channel Info & Edit Form */}
         <div className="pt-16 pb-5 px-5 bg-white dark:bg-gray-800">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {t.channel.editChannel}
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                {t.channel.updateChannelInformation}
-              </p>
-            </div>
-            <Link
-              href={`/${locale}/channels/${channelId}`}
-              className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              {t.common.back}
-            </Link>
+          <ChannelSettingsBreadcrumb
+            channelId={channelId}
+            channelName={channel?.name || ''}
+            locale={locale}
+            currentPage="edit"
+            className="mb-6"
+          />
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {t.channel.editChannel}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              {t.channel.updateChannelInformation}
+            </p>
           </div>
 
           {/* Error Message */}
@@ -410,64 +408,6 @@ function ChannelEditPage() {
               )}
             </div>
 
-
-            {/* Additional Settings */}
-            <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                {t.channel.additionalSettings || 'Additional Settings'}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <Link
-                  href={`/${locale}/settings/channel/${channelId}/tabs`}
-                  className="flex items-center gap-3 p-4 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  <div>
-                    <div className="font-semibold text-gray-900 dark:text-white">
-                      {t.channel.tabs?.manage_tabs || 'Manage Channel Tabs'}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      {t.channel.tabs?.manage_tabs_description || 'Customize which tabs appear on your channel'}
-                    </div>
-                  </div>
-                </Link>
-                <Link
-                  href={`/${locale}/settings/channel/${channelId}/sections`}
-                  className="flex items-center gap-3 p-4 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                  <div>
-                    <div className="font-semibold text-gray-900 dark:text-white">
-                      {t.channel.manageSections || 'Manage Sections'}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      {t.channel.customizeChannelLayout || 'Customize your channel layout'}
-                    </div>
-                  </div>
-                </Link>
-                <Link
-                  href={`/${locale}/settings/channel/${channelId}/community`}
-                  className="flex items-center gap-3 p-4 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <div>
-                    <div className="font-semibold text-gray-900 dark:text-white">
-                      {t.channel.communitySettings || 'Community Posts'}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      {t.channel.manageCommunityPosts || 'Manage community posts'}
-                    </div>
-                  </div>
-                </Link>
-              </div>
-            </div>
-
             {/* Buttons */}
             <div className="flex gap-4 pt-4">
               <button
@@ -488,7 +428,7 @@ function ChannelEditPage() {
                 )}
               </button>
               <Link
-                href={`/${locale}/channels/${channelId}`}
+                href={`/${locale}/settings/channel/${channelId}`}
                 className="px-6 py-3 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold transition-colors text-center flex items-center justify-center"
               >
                 {t.common.cancel}

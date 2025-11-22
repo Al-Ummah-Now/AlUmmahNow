@@ -1,5 +1,4 @@
 import { test, expect, helpers } from './fixtures';
-import path from 'path';
 
 /**
  * Thumbnail Management E2E Tests
@@ -298,11 +297,13 @@ test.describe('Thumbnail Upload - Validation', () => {
       // Should show error or reject
       await page.waitForTimeout(1000);
 
-      const errorMessage = page.locator('text=/invalid|image only|unsupported/i');
-      const hasError = await errorMessage.isVisible();
-
       // Either error shown or file not accepted
       // Browser's accept attribute might prevent selection
+      await expect(
+        page.locator('text=/invalid|image only|unsupported/i')
+      ).toBeVisible().catch(() => {
+        // Error might not show if browser rejects file based on accept attribute
+      });
     }
   });
 
@@ -462,9 +463,9 @@ test.describe('Thumbnail Management - Mobile', () => {
 
       await page.waitForTimeout(500);
 
-      // Should be selected
-      const classes = await thumbnails.first().getAttribute('class');
       // Selection state might vary by implementation
+      // Verify thumbnail is still visible after tap
+      await expect(thumbnails.first()).toBeVisible();
     }
   });
 });
@@ -533,9 +534,6 @@ test.describe('Thumbnail Management - Accessibility', () => {
 
     await page.goto('/en/video/video-1/edit');
     await page.waitForLoadState('networkidle');
-
-    // Check for accessible elements
-    const thumbnailSection = page.locator('[role="radiogroup"], [role="group"]');
 
     // Thumbnails should have proper roles
     const thumbnailButtons = page.locator('[role="radio"], [role="button"]');

@@ -432,7 +432,6 @@ test.describe('Video Edit - Unsaved Changes', () => {
     // Make changes
     await page.click('button:has-text("English")');
     const titleInput = page.locator('input[placeholder*="Title in English"]');
-    const originalValue = await titleInput.inputValue();
     await titleInput.fill('Modified Title');
 
     // Click cancel/discard
