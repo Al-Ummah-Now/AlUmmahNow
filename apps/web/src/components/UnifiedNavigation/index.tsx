@@ -289,7 +289,8 @@ export function UnifiedNavigation() {
     }
   };
 
-  const navItems = [
+  // Only show video-related links if user has channels
+  const navItems = channels.length > 0 ? [
     {
       label: t.video.myVideos || 'My Videos',
       icon: Video,
@@ -300,7 +301,7 @@ export function UnifiedNavigation() {
       icon: Calendar,
       href: `/${lang}/scheduled-videos`,
     },
-  ];
+  ] : [];
 
   return (
     <div className="relative">

@@ -3,7 +3,7 @@ import React from "react";
 import IcoButton from "@/components/iconButton";
 import Link from 'next/link';
 import { usePathname } from "next/navigation";
-import { useActiveChannel } from "@/contexts/ActiveChannelContext";
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 
 interface NavItems {
     label: string;
@@ -25,7 +25,8 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
 }) => {
     const pathname = usePathname();
     const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-    const { activeChannel } = useActiveChannel();
+    const { user } = useMultiAccount();
+    const activeChannel = user?.channel;
 
     const allNavItems: NavItems[] = [
         { label: "Home", icon: "fa-house", href: `/${locale}/` },

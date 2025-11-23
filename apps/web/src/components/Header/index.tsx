@@ -7,7 +7,7 @@ import { HeaderProps } from "./interfaces";
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from "@/components/AuthProvider/authContext";
-import { useActiveChannel } from "@/contexts/ActiveChannelContext";
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { UploadButton } from '@/components/UploadButton';
 
 const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
@@ -16,7 +16,8 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
   const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
   const { t } = useI18n(locale);
   const { user } = useAuth();
-  const { activeChannel } = useActiveChannel();
+  const { user: multiAccountUser } = useMultiAccount();
+  const activeChannel = multiAccountUser?.channel;
 
   const handleClick = () => {
     router.push(`/${locale}/`);

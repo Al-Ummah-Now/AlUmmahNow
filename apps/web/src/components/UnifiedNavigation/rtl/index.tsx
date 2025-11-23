@@ -271,7 +271,8 @@ export function UnifiedNavigationRTL() {
     }
   };
 
-  const navItems = [
+  // Only show video-related links if user has channels
+  const navItems = channels.length > 0 ? [
     {
       label: 'فيديوهاتي',
       icon: Video,
@@ -282,7 +283,7 @@ export function UnifiedNavigationRTL() {
       icon: Calendar,
       href: '/ar/scheduled-videos',
     },
-  ];
+  ] : [];
 
   return (
     <div className="relative">
