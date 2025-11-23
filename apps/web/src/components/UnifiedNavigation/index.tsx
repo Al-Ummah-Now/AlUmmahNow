@@ -29,13 +29,13 @@ import {
   Plus,
   LogOut,
   User,
-  BarChart3,
-  Settings,
   Sun,
   Moon,
   Languages,
   Tv,
   Crown,
+  Video,
+  Calendar,
 } from 'lucide-react';
 
 export function UnifiedNavigation() {
@@ -291,19 +291,14 @@ export function UnifiedNavigation() {
 
   const navItems = [
     {
-      label: t.navigation.profile,
-      icon: User,
-      href: `/${lang}/profile`,
+      label: t.video.myVideos || 'My Videos',
+      icon: Video,
+      href: `/${lang}/dashboard/videos`,
     },
     {
-      label: t.navigation.analytics,
-      icon: BarChart3,
-      href: `/${lang}/analytics`,
-    },
-    {
-      label: t.header.settings,
-      icon: Settings,
-      href: `/${lang}/settings`,
+      label: t.schedule?.scheduledVideos || 'Scheduled Videos',
+      icon: Calendar,
+      href: `/${lang}/scheduled-videos`,
     },
   ];
 
@@ -373,7 +368,11 @@ export function UnifiedNavigation() {
           >
             {/* Active Context Card */}
             <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3 mb-3">
+              <Link
+                href={`/${lang}/profile`}
+                onClick={() => setIsOpen(false)}
+                className="flex items-center gap-3 mb-3 rounded-lg p-2 -m-2 hover:bg-white/60 dark:hover:bg-gray-800/60 transition-colors cursor-pointer"
+              >
                 {/* User Avatar (always user, never channel) */}
                 {getUserAvatar() ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -395,7 +394,7 @@ export function UnifiedNavigation() {
                     {user.email}
                   </div>
                 </div>
-              </div>
+              </Link>
 
               {/* Active Channel Display */}
               {channel ? (

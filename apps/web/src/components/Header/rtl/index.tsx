@@ -2,7 +2,7 @@
 import React from "react";
 import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
-import { redirect } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { useI18n } from '@/lib/i18n';
@@ -11,11 +11,14 @@ import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { UploadButton } from '@/components/UploadButton';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
-  const { t } = useI18n('ar');
+  const router = useRouter();
+  const pathname = usePathname();
+  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+  const { t } = useI18n(locale);
   const { user } = useAuth();
   const { activeChannel } = useActiveChannel();
   const handleClick = () => {
-    redirect('/ar/');
+    router.push(`/${locale}/`);
   };
 
   return (
@@ -46,7 +49,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
       <div className="flex items-center gap-2">
         {user && activeChannel && (
           <UploadButton
-            href="/ar/upload"
+            href={`/${locale}/upload`}
             text={t.upload.uploadVideo}
             hideTextOnMobile
             size="sm"

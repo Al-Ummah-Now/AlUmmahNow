@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { ChannelSection } from '@al-ummah/shared-types';
 import { ChannelSectionRenderer } from '../ChannelSectionRenderer';
-import { listChannelSections } from '@/lib/api/channel-sections';
+import { listChannelSectionsPopulated } from '@/lib/api/channel-sections';
+import { logger } from '@/lib/logger-client';
 
 interface ChannelSectionsProps {
   channelId: string;
@@ -15,23 +16,25 @@ export function ChannelSections({ channelId }: ChannelSectionsProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('[ChannelSections RTL] Fetching sections for channel:', channelId);
+    logger.info('ChannelSections RTL: Fetching sections', { channelId });
 
     async function fetchSections() {
       try {
-        const result = await listChannelSections(channelId);
+        const result = await listChannelSectionsPopulated(channelId);
 
-        console.log('[ChannelSections RTL] API response:', JSON.stringify(result, null, 2));
+        logger.info('ChannelSections RTL: Sections loaded', {
+          channelId,
+          sectionsCount: result?.length || 0
+        });
 
         if (result && Array.isArray(result)) {
-          console.log('[ChannelSections RTL] Loaded sections:', result.length);
           setSections(result);
         } else {
-          console.error('[ChannelSections RTL] Failed to load sections');
+          logger.error('ChannelSections RTL: Failed to load sections', { channelId });
           setError('Failed to load channel sections');
         }
       } catch (err) {
-        console.error('[ChannelSections RTL] Network error:', JSON.stringify(err, null, 2));
+        logger.error('ChannelSections RTL: Network error', { channelId, error: err });
         setError('Network error loading sections');
       } finally {
         setLoading(false);
@@ -46,16 +49,16 @@ export function ChannelSections({ channelId }: ChannelSectionsProps) {
   }
 
   if (error) {
-    console.error('[ChannelSections RTL] Error state:', error);
+    logger.error('ChannelSections RTL: Error state', { error, channelId });
     return null;
   }
 
   if (sections.length === 0) {
-    console.log('[ChannelSections RTL] No sections to display');
+    logger.info('ChannelSections RTL: No sections to display', { channelId });
     return null;
   }
 
-  console.log('[ChannelSections RTL] Rendering', sections.length, 'sections');
+  logger.info('ChannelSections RTL: Rendering sections', { channelId, sectionsCount: sections.length });
 
   return (
     <div className="space-y-8" dir="rtl">

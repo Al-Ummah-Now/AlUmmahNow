@@ -56,6 +56,51 @@ export async function listChannelSections(
 }
 
 /**
+ * List all sections for a channel with populated content
+ * GET /api/channels/{channelId}/sections/populated
+ */
+export async function listChannelSectionsPopulated(
+  channelId: string
+): Promise<ChannelSection[] | null> {
+  try {
+    logger.info('listChannelSectionsPopulated: Starting request', { channelId });
+
+    const response = await apiRequestServer<{
+      success: boolean;
+      result: {
+        sections: ChannelSection[];
+        pagination: { cursor: string; hasMore: boolean; total: number };
+      }
+    }>({
+      method: 'GET',
+      url: buildApiUrl(`/api/channels/${channelId}/sections/populated`),
+      functionName: 'listChannelSectionsPopulated'
+    }, getServerAuthContext, false);
+
+    logger.info('listChannelSectionsPopulated: Response received', {
+      channelId,
+      hasResponse: !!response,
+      responseType: typeof response,
+      success: response?.success,
+      hasResult: !!response?.result,
+      hasSections: !!(response?.result?.sections),
+      sectionsCount: response?.result?.sections?.length || 0
+    });
+
+    if (!response || !response.success || !response.result) {
+      logger.warn('listChannelSectionsPopulated: Invalid response', { channelId, response });
+      return null;
+    }
+
+    // Return just the sections array for simpler serialization
+    return response.result.sections;
+  } catch (error) {
+    logger.error('listChannelSectionsPopulated: Exception', { channelId, error });
+    throw error; // Re-throw so the caller can handle it
+  }
+}
+
+/**
  * Get a single section
  * GET /api/channels/{channelId}/sections/{sectionId}
  */

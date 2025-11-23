@@ -215,15 +215,8 @@ export default function ChannelVideosPage() {
 
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
             <h1 className="text-3xl font-bold dark:text-white">{t.video.videoManagement}</h1>
-            <Link
-              href={`/${locale}/upload`}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              <UploadCloud size={20} />
-              {t.video.uploadVideo}
-            </Link>
           </div>
 
           {/* Search and Filters */}
@@ -309,14 +302,7 @@ export default function ChannelVideosPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center">
             <UploadCloud size={64} className="mx-auto mb-4 text-gray-400" />
             <h2 className="text-2xl font-semibold mb-2 dark:text-white">{t.video.noVideosFound}</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">{t.video.uploadFirstVideo}</p>
-            <Link
-              href={`/${locale}/upload`}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              <UploadCloud size={20} />
-              {t.video.uploadVideo}
-            </Link>
+            <p className="text-gray-600 dark:text-gray-400">{t.video.uploadFirstVideo}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

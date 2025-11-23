@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Search, UploadCloud, Trash2, Eye, Edit } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VideoObject } from '@/interfaces';
 import { listVideos, deleteVideo } from '@/lib/api/videos';
 import Image from 'next/image';
@@ -17,6 +18,7 @@ type SortBy = 'date' | 'views' | 'title';
 export default function VideoDashboardPage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
+  const { user: multiAccountUser } = useMultiAccount();
   const router = useRouter();
 
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -35,18 +37,46 @@ export default function VideoDashboardPage() {
     }
   }, [user, router, lang]);
 
-  // Fetch videos
+  // Fetch videos from all channels the user owns
   useEffect(() => {
     const fetchVideos = async () => {
       if (!user) return;
 
       setLoading(true);
       try {
-        const result = await listVideos({}, { userId: user.id });
-        if (result) {
-          setVideos(result.data);
-          setFilteredVideos(result.data);
+        // Get all channels the user owns
+        const userChannels = multiAccountUser?.channels || [];
+        const channelIds = userChannels.map(ch => ch.id);
+
+        if (channelIds.length === 0) {
+          // User has no channels, show empty state
+          setVideos([]);
+          setFilteredVideos([]);
+          setLoading(false);
+          return;
         }
+
+        // Fetch videos from all user's channels
+        const videoPromises = channelIds.map(channelId =>
+          listVideos({ channelId }, { userId: user.id, channelId })
+        );
+
+        const results = await Promise.all(videoPromises);
+
+        // Combine all videos from all channels
+        const allVideos = results
+          .filter((result): result is NonNullable<typeof result> & { data: VideoObject[] } =>
+            result !== null && result !== undefined && !!result.data
+          )
+          .flatMap(result => result.data);
+
+        // Remove duplicates (in case a video appears in multiple results)
+        const uniqueVideos = Array.from(
+          new Map(allVideos.map(video => [video.id, video])).values()
+        );
+
+        setVideos(uniqueVideos);
+        setFilteredVideos(uniqueVideos);
       } catch (error) {
         console.error('Error fetching videos:', error);
       } finally {
@@ -55,7 +85,7 @@ export default function VideoDashboardPage() {
     };
 
     fetchVideos();
-  }, [user]);
+  }, [user, multiAccountUser?.channels]);
 
   // Apply filters and search
   useEffect(() => {
@@ -186,15 +216,8 @@ export default function VideoDashboardPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
             <h1 className="text-3xl font-bold dark:text-white">{t.video.videoManagement}</h1>
-            <Link
-              href={`/${lang}/upload`}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              <UploadCloud size={20} />
-              {t.video.uploadVideo}
-            </Link>
           </div>
 
           {/* Search and Filters */}
@@ -280,14 +303,7 @@ export default function VideoDashboardPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center">
             <UploadCloud size={64} className="mx-auto mb-4 text-gray-400" />
             <h2 className="text-2xl font-semibold mb-2 dark:text-white">{t.video.noVideosFound}</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">{t.video.uploadFirstVideo}</p>
-            <Link
-              href={`/${lang}/upload`}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              <UploadCloud size={20} />
-              {t.video.uploadVideo}
-            </Link>
+            <p className="text-gray-600 dark:text-gray-400">{t.video.uploadFirstVideo}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -307,13 +323,32 @@ export default function VideoDashboardPage() {
 
                   {/* Thumbnail */}
                   <div className="relative w-full aspect-video bg-gray-200 dark:bg-gray-700">
-                    <Image
-                      src={video.thumbnailUrl}
-                      alt={video.title}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                    />
+                    {video.thumbnailUrl ? (
+                      <Image
+                        src={video.thumbnailUrl}
+                        alt={video.title}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <svg
+                          className="w-16 h-16 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </div>
+                    )}
                   </div>
                 </div>
 

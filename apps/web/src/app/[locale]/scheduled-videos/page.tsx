@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useI18n } from '@/lib/i18n';
 import { listScheduledVideos, cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import type { ScheduledVideoInfo, ScheduledPublishStatus } from '@al-ummah/shared-types';
@@ -15,6 +16,7 @@ export default function ScheduledVideosPage() {
   const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
   const { t } = useI18n(locale);
   const auth = useAuth();
+  const { user: multiAccountUser } = useMultiAccount();
 
   const [videos, setVideos] = useState<ScheduledVideoInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,22 +35,46 @@ export default function ScheduledVideosPage() {
       setLoading(true);
       setError(null);
 
-      const result = await listScheduledVideos(
-        {
-          userId: auth.user.id,
-          channelId: auth.user.id,
-        },
-        {
-          limit: 50,
-          status: filterStatus === 'all' ? undefined : filterStatus,
-        }
+      // Get all channels the user owns
+      const userChannels = multiAccountUser?.channels || [];
+      const channelIds = userChannels.map(ch => ch.id);
+
+      if (channelIds.length === 0) {
+        // User has no channels, show empty state
+        setVideos([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch scheduled videos from all user's channels
+      const scheduledPromises = channelIds.map(channelId =>
+        listScheduledVideos(
+          {
+            userId: auth.user!.id,
+            channelId,
+          },
+          {
+            limit: 50,
+            status: filterStatus === 'all' ? undefined : filterStatus,
+          }
+        )
       );
 
-      if (result?.success && result.result) {
-        setVideos(result.result.videos);
-      } else {
-        setError(result?.error || 'Failed to fetch scheduled videos');
-      }
+      const results = await Promise.all(scheduledPromises);
+
+      // Combine all scheduled videos from all channels
+      const allVideos = results
+        .filter((result): result is NonNullable<typeof result> & { success: true; result: { videos: ScheduledVideoInfo[] } } =>
+          result !== null && result !== undefined && result.success === true && !!result.result?.videos
+        )
+        .flatMap(result => result.result.videos);
+
+      // Remove duplicates (in case a video appears in multiple results)
+      const uniqueVideos = Array.from(
+        new Map(allVideos.map(video => [video.videoId, video])).values()
+      );
+
+      setVideos(uniqueVideos);
     } catch (err) {
       console.error('Error fetching scheduled videos:', err);
       setError('An error occurred while fetching scheduled videos');
@@ -60,7 +86,7 @@ export default function ScheduledVideosPage() {
   useEffect(() => {
     fetchScheduledVideos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.user, filterStatus]);
+  }, [auth.user, multiAccountUser?.channels, filterStatus]);
 
   // Handle cancel schedule
   const handleCancelSchedule = async (videoId: string) => {
@@ -228,15 +254,9 @@ export default function ScheduledVideosPage() {
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             {t.schedule?.noScheduledVideos ?? 'No Scheduled Videos'}
           </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-gray-600 dark:text-gray-400">
             {t.schedule?.createFirstScheduledVideo ?? 'Create your first scheduled video to get started'}
           </p>
-          <Link
-            href={`/${locale}/upload`}
-            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            {t.schedule?.scheduleAVideo ?? 'Schedule a Video'}
-          </Link>
         </div>
       )}
 

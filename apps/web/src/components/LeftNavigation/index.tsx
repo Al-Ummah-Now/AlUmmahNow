@@ -2,6 +2,7 @@
 import React from "react";
 import IcoButton from "@/components/iconButton";
 import Link from 'next/link';
+import { usePathname } from "next/navigation";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 
 interface NavItems {
@@ -22,12 +23,14 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     onCollapse,
     withOverlay = false, // Default to no overlay
 }) => {
+    const pathname = usePathname();
+    const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
     const { activeChannel } = useActiveChannel();
 
     const allNavItems: NavItems[] = [
-        { label: "Home", icon: "fa-house", href: "/en/" },
-        { label: "Trending", icon: "fa-magnifying-glass", href: "/en/search" },
-        { label: "Upload", icon: "fa-upload", href: "/en/upload" },
+        { label: "Home", icon: "fa-house", href: `/${locale}/` },
+        { label: "Trending", icon: "fa-magnifying-glass", href: `/${locale}/search` },
+        { label: "Upload", icon: "fa-upload", href: `/${locale}/upload` },
         { label: "Subscriptions", icon: "fa-tv", href: "#" },
         { label: "Library", icon: "fa-bookmark", href: "#" },
     ];

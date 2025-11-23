@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
 import { getTranslations } from '@/lib/i18n';
 import Link from 'next/link';
-import { UploadButton } from '@/components/UploadButton';
 
 interface ChannelHeaderProps {
   channel: Channel;
@@ -122,12 +121,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
           />
           {/* Owner Buttons - Top Right on Cover */}
           {isOwner && (
-            <div className="absolute top-4 right-4 flex gap-2">
-              <UploadButton
-                href={`/${locale}/upload`}
-                text={t.upload.uploadVideo}
-                className="shadow-lg hover:shadow-xl"
-              />
+            <div className="absolute top-4 right-4">
               <Link
                 href={`/${locale}/settings/channel/${channel.id}/edit`}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg"

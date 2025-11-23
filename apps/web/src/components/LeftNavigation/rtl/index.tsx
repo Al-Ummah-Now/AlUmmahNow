@@ -2,6 +2,7 @@
 import React from "react";
 import IcoButton from "@/components/iconButton";
 import Link from 'next/link';
+import { usePathname } from "next/navigation";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 
 interface NavItems {
@@ -22,12 +23,14 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     onCollapse,
     withOverlay = false, // Default to no overlay
 }) => {
+    const pathname = usePathname();
+    const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
     const { activeChannel } = useActiveChannel();
 
     const allNavItems: NavItems[] = [
-        { label: "الرئيسية", icon: "fa-house", href: "/ar/" }, // Home
-        { label: "الشائع", icon: "fa-magnifying-glass", href: "/ar/search" }, // Trending
-        { label: "رفع فيديو", icon: "fa-upload", href: "/ar/upload" }, // Upload
+        { label: "الرئيسية", icon: "fa-house", href: `/${locale}/` }, // Home
+        { label: "الشائع", icon: "fa-magnifying-glass", href: `/${locale}/search` }, // Trending
+        { label: "رفع فيديو", icon: "fa-upload", href: `/${locale}/upload` }, // Upload
         { label: "الاشتراكات", icon: "fa-tv", href: "#" }, // Subscriptions
         { label: "المكتبة", icon: "fa-bookmark", href: "#" }, // Library
     ];

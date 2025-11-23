@@ -29,13 +29,13 @@ import {
   Plus,
   LogOut,
   User,
-  BarChart3,
-  Settings,
   Sun,
   Moon,
   Languages,
   Tv,
   Crown,
+  Video,
+  Calendar,
 } from 'lucide-react';
 
 export function UnifiedNavigationRTL() {
@@ -273,19 +273,14 @@ export function UnifiedNavigationRTL() {
 
   const navItems = [
     {
-      label: 'الملف الشخصي',
-      icon: User,
-      href: '/ar/profile',
+      label: 'فيديوهاتي',
+      icon: Video,
+      href: '/ar/dashboard/videos',
     },
     {
-      label: 'التحليلات',
-      icon: BarChart3,
-      href: '/ar/analytics',
-    },
-    {
-      label: 'الإعدادات',
-      icon: Settings,
-      href: '/ar/settings',
+      label: 'الفيديوهات المجدولة',
+      icon: Calendar,
+      href: '/ar/scheduled-videos',
     },
   ];
 
@@ -356,7 +351,11 @@ export function UnifiedNavigationRTL() {
           >
             {/* Active Context Card */}
             <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3 mb-3">
+              <Link
+                href="/ar/profile"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center gap-3 mb-3 rounded-lg p-2 -m-2 hover:bg-white/60 dark:hover:bg-gray-800/60 transition-colors cursor-pointer"
+              >
                 {/* User Avatar (always user, never channel) */}
                 {getUserAvatar() ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -378,7 +377,7 @@ export function UnifiedNavigationRTL() {
                     {user.email}
                   </div>
                 </div>
-              </div>
+              </Link>
 
               {/* Active Channel Display */}
               {channel ? (
