@@ -81,15 +81,15 @@ export default function ThumbnailSelector({
 
       if (result?.result?.thumbnailUrl) {
         const uploadedUrl = result.result.thumbnailUrl;
-        setCustomThumbnail(uploadedUrl);
-        setSelectedThumbnail(uploadedUrl);
+        setCustomThumbnail(uploadedUrl ?? null);
+        setSelectedThumbnail(uploadedUrl ?? null);
         onThumbnailChange(uploadedUrl);
       } else {
-        setUploadError(t.video.thumbnailUploadFailed);
+        setUploadError(t.video.thumbnailUploadFailed ?? 'Failed to upload thumbnail');
       }
     } catch (error) {
       console.error('Error uploading thumbnail:', error);
-      setUploadError(t.video.thumbnailUploadFailed);
+      setUploadError(t.video.thumbnailUploadFailed ?? 'Failed to upload thumbnail');
     } finally {
       setIsUploading(false);
     }

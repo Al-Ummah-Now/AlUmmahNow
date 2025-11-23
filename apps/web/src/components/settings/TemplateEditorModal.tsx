@@ -69,7 +69,9 @@ export function TemplateEditorModal({
       setTags(template.template.tags?.join(', ') || '');
       setCategory(template.template.category || '');
       setVisibility(template.template.visibility || 'public');
-      setLanguage(template.template.language || 'en');
+      // Only set language if it's 'en' or 'ar' (filter out other locales)
+      const validLanguage = template.template.language === 'ar' ? 'ar' : 'en';
+      setLanguage(validLanguage);
       setIsDefault(template.isDefault);
     }
   }, [mode, template]);

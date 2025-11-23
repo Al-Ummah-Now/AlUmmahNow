@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, X, AlertCircle, Info } from 'lucide-react';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export interface ScheduleData {
   scheduledPublishDate: string; // ISO 8601 UTC
@@ -27,7 +27,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
   maxDate,
   className = '',
 }) => {
-  const { t } = useI18n();
+  const { t } = useLanguage();
 
   const [isScheduled, setIsScheduled] = useState<boolean>(!!initialSchedule);
   const [dateTimeValue, setDateTimeValue] = useState<string>('');

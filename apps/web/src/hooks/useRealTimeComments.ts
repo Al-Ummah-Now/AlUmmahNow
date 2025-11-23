@@ -128,9 +128,9 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
           : comment
       )
     );
-    
+
     // TODO: Send update to API
-    logger.info('📤 Updating comment:', commentId, updates);
+    logger.info('📤 Updating comment:', { commentId, updates });
   }, []);
   
   // Optimistic comment deletion

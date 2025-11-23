@@ -1297,7 +1297,7 @@ export async function fetchVideos(cursor: string | null = null, userId?: string)
         }));
 
     } catch (error) {
-        logger.error(error);
+        logger.error('[fetchVideos] Error:', error instanceof Error ? error.message : String(error));
         return undefined;
     }
 }
@@ -1310,7 +1310,7 @@ export async function fetchVideosWithPagination(cursor: string | null = null, us
         }, userId ? { userId } : undefined);
         return result;
     } catch (error) {
-        logger.error(error);
+        logger.error('[fetchVideosWithPagination] Error:', error instanceof Error ? error.message : String(error));
         return null;
     }
 }

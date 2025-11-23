@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { use, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CommunityPost, PostType, PostStatus } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
@@ -20,15 +20,15 @@ import { getChannelById } from '@/lib/api/channels';
 import { logger } from '@/lib/logger-client';
 
 interface CommunityManagementPageProps {
-  params: {
+  params: Promise<{
     locale: string;
     id: string;
-  };
+  }>;
 }
 
 export default function CommunityManagementPage({ params }: CommunityManagementPageProps) {
   const router = useRouter();
-  const { locale, id } = params;
+  const { locale, id } = use(params);
   const { t, isRTL } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<PostStatus>(PostStatus.PUBLISHED);

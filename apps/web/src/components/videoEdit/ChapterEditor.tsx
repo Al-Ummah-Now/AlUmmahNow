@@ -86,6 +86,7 @@ export default function ChapterEditor({
       inputs[chapter.id] = formatTimestamp(chapter.startTime);
     });
     setTimestampInputs(inputs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Track changes
@@ -99,7 +100,7 @@ export default function ChapterEditor({
     const newStartTime = lastChapter ? lastChapter.endTime : 0;
 
     if (newStartTime >= videoDuration) {
-      setErrors({ global: t.video.maxChaptersReached });
+      setErrors({ global: t.video.maxChaptersReached ?? 'Maximum chapters reached' });
       return;
     }
 
@@ -121,7 +122,7 @@ export default function ChapterEditor({
 
   const removeChapter = (id: string) => {
     if (chapters.length === 1) {
-      setErrors({ global: t.video.firstChapterMustBeZero });
+      setErrors({ global: t.video.firstChapterMustBeZero ?? 'First chapter must start at 0:00' });
       return;
     }
 
@@ -169,18 +170,18 @@ export default function ChapterEditor({
 
     const seconds = parseTimestamp(value);
     if (seconds === null) {
-      setErrors({ ...errors, [id]: t.video.invalidChapterFormat });
+      setErrors({ ...errors, [id]: t.video.invalidChapterFormat ?? 'Invalid timestamp format' });
       return;
     }
 
     if (seconds < 0 || seconds > videoDuration) {
-      setErrors({ ...errors, [id]: t.video.invalidChapterFormat });
+      setErrors({ ...errors, [id]: t.video.invalidChapterFormat ?? 'Invalid timestamp format' });
       return;
     }
 
     const index = chapters.findIndex((ch) => ch.id === id);
     if (index === 0 && seconds !== 0) {
-      setErrors({ ...errors, [id]: t.video.firstChapterMustBeZero });
+      setErrors({ ...errors, [id]: t.video.firstChapterMustBeZero ?? 'First chapter must start at 0:00' });
       return;
     }
 
@@ -206,7 +207,7 @@ export default function ChapterEditor({
     });
 
     if (hasShortChapter) {
-      setErrors({ ...errors, [id]: t.video.chapterTooClose });
+      setErrors({ ...errors, [id]: t.video.chapterTooClose ?? 'Chapters must be at least 10 seconds apart' });
       return;
     }
 
@@ -239,13 +240,13 @@ export default function ChapterEditor({
 
     // Check first chapter starts at 0
     if (chapters.length > 0 && chapters[0].startTime !== 0) {
-      newErrors.global = t.video.firstChapterMustBeZero;
+      newErrors.global = t.video.firstChapterMustBeZero ?? 'First chapter must start at 0:00';
     }
 
     // Check all chapters have titles
     chapters.forEach((chapter) => {
       if (!chapter.title.trim()) {
-        newErrors[chapter.id] = t.video.chapterTitleRequired;
+        newErrors[chapter.id] = t.video.chapterTitleRequired ?? 'Chapter title is required';
       }
     });
 
@@ -253,7 +254,7 @@ export default function ChapterEditor({
     chapters.forEach((chapter) => {
       const duration = chapter.endTime - chapter.startTime;
       if (duration < 10) {
-        newErrors[chapter.id] = t.video.chapterTooClose;
+        newErrors[chapter.id] = t.video.chapterTooClose ?? 'Chapters must be at least 10 seconds apart';
       }
     });
 

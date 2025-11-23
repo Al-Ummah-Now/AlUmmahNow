@@ -2,7 +2,7 @@
 
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PostType, PostVisibility } from '@al-ummah/shared-types';
+import { PostType, PostVisibility, CreateCommunityPostRequest } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -163,7 +163,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
           break;
       }
 
-      const result = await createCommunityPost(baseData, {
+      const result = await createCommunityPost(baseData as unknown as CreateCommunityPostRequest, {
         channelId: id,
         userId: ''
       });

@@ -38,7 +38,7 @@ export function CurrentChapter({
   useEffect(() => {
     if (!enabled || !chapter) {
       setIsVisible(false);
-      return;
+      return undefined;
     }
 
     // Only show if chapter actually changed
@@ -53,6 +53,8 @@ export function CurrentChapter({
 
       return () => clearTimeout(hideTimer);
     }
+
+    return undefined;
   }, [chapter, previousChapterId, enabled, autoHideDelay]);
 
   // Show on hover (parent should handle this via prop)

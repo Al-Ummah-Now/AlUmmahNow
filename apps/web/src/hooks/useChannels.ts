@@ -150,7 +150,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      logger.info('useChannels: Updating channel', id, 'with data:', data);
+      logger.info('useChannels: Updating channel', { id, data });
 
       const headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>> = {
         channelId,

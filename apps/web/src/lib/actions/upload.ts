@@ -50,10 +50,17 @@ export async function initiateVideoUpload(
   const result = await initiateVideoUploadApi(metadata, { userId, channelId });
 
   // Add auth token to result for client-side TUS upload
-  if (result?.success) {
+  if (result?.success && result.result) {
     const authContext = await getServerAuthContext();
-    if (result.result && authContext?.accessToken) {
-      result.result.authToken = authContext.accessToken;
+    if (authContext?.accessToken) {
+      // Extend the result object with authToken
+      return {
+        ...result,
+        result: {
+          ...result.result,
+          authToken: authContext.accessToken,
+        }
+      };
     }
   }
 

@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import CustomVideoPlayer, { CustomVideoPlayerProps } from '../VideoPlayer/CustomVideoPlayer';
 import { ChapterMarkers } from './ChapterMarkers';
 import { ChapterList } from './ChapterList';
@@ -33,7 +33,7 @@ export function VideoPlayerWithChapters({
   showChapterOverlay = true,
   ...playerProps
 }: VideoPlayerWithChaptersProps) {
-  const [player, setPlayer] = useState<Player | null>(null);
+  const playerRef = useRef<Player | null>(null);
   const [isChapterListOpen, setIsChapterListOpen] = useState(false);
   const [duration, setDuration] = useState(0);
 
@@ -48,12 +48,13 @@ export function VideoPlayerWithChapters({
     hasChapters,
   } = useVideoChapters({
     videoId,
-    player,
+    player: playerRef.current,
     enabled: enableChapters,
   });
 
   // Track player duration
   useEffect(() => {
+    const player = playerRef.current;
     if (!player) return;
 
     const updateDuration = () => {
@@ -70,7 +71,7 @@ export function VideoPlayerWithChapters({
       player.off('loadedmetadata', updateDuration);
       player.off('durationchange', updateDuration);
     };
-  }, [player]);
+  }, []);
 
   // Keyboard shortcuts for chapters
   useEffect(() => {
@@ -115,13 +116,10 @@ export function VideoPlayerWithChapters({
       <CustomVideoPlayer
         {...playerProps}
         videoId={videoId}
-        onPlayerReady={(playerInstance: Player) => {
-          setPlayer(playerInstance);
-        }}
       />
 
       {/* Chapter Components (only if chapters exist) */}
-      {enableChapters && hasChapters && player && (
+      {enableChapters && hasChapters && playerRef.current && (
         <>
           {/* Chapter Markers on Progress Bar */}
           <ChapterMarkers

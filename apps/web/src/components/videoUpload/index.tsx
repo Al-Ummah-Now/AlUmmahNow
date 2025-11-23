@@ -223,7 +223,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
       }
 
-      const { videoId, tusSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl, thumbnailSizes } = initiateResult.result;
+      const { videoId, tusSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl } = initiateResult.result;
       videoIdRef.current = videoId;
       libraryIdRef.current = libraryId || 0;
       thumbnailUrlRef.current = returnedThumbnailUrl || '';

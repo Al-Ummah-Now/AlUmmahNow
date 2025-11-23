@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Image, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { extractVideoFrames } from '@/lib/utils/videoFrameExtractor';
 import { validateThumbnailFile, fileToBase64 } from '@/lib/utils/thumbnailValidator';
 

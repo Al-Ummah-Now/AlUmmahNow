@@ -145,12 +145,12 @@ export function TrendingVideosSection({
     </div>
   ) : undefined;
 
-  // Wrap videos with trending badges if enabled
+  // Wrap videos with trending badges if enabled - return array of JSX elements
   const videosWithBadges = showTrendingBadges
     ? videos.map((video) => (
         <TrendingVideoCard key={video.id} video={video} isRTL={isRTL} />
       ))
-    : videos;
+    : null; // Return null when not showing badges, VideoSection will render videos prop instead
 
   return (
     <VideoSection
@@ -182,7 +182,7 @@ export function TrendingVideosSection({
       viewAllHref={`/sections/trending?algorithm=${algorithm}&timeWindow=${timeWindow}`}
       headerActions={algorithmSelector}
     >
-      {showTrendingBadges && !loading && (
+      {showTrendingBadges && !loading && videosWithBadges && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" dir={isRTL ? 'rtl' : 'ltr'}>
           {videosWithBadges}
         </div>

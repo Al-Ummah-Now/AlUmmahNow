@@ -46,7 +46,6 @@ export function BatchUploadQueue({
     return { completed, uploading, failed, pending, paused, cancelled, total: files.length };
   }, [files]);
 
-  const /* hasUploadingOrPaused */ _unusedHasUploadingOrPaused = stats.uploading > 0 || stats.paused > 0;
   const hasActiveTasks = stats.uploading > 0 || stats.pending > 0 || stats.paused > 0;
 
   return (

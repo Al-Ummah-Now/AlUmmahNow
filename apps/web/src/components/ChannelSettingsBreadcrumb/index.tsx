@@ -60,7 +60,7 @@ export default function ChannelSettingsBreadcrumb({
 
   if (currentPage !== 'overview') {
     breadcrumbs.push({
-      label: pageLabels[currentPage],
+      label: pageLabels[currentPage] || '',
       icon: pageIcons[currentPage],
     });
   }

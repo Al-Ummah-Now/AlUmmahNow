@@ -129,11 +129,11 @@ export default function VideoEdit({
       const result = await updateVideo(video.id, updateData, { userId, channelId });
 
       if (result?.result?.video) {
-        setSuccess(t.video.updateSuccess);
+        setSuccess(t.video.updateSuccess ?? 'Video updated successfully');
         setHasUnsavedChanges(false);
         onSave?.(result.result.video);
       } else {
-        setError(t.video.updateFailed);
+        setError(t.video.updateFailed ?? 'Failed to update video');
       }
     } catch (err) {
       console.error('Error saving video:', err);
@@ -413,7 +413,7 @@ export default function VideoEdit({
                     const result = await updateChapters(video.id, newChapters, 'manual');
                     if (result?.success) {
                       setChapters(newChapters);
-                      setSuccess(t.video.chaptersParsed);
+                      setSuccess(t.video.chaptersParsed ?? 'Chapters saved successfully');
                       setChapterMode('none');
                     } else {
                       setError(result?.error || t.errors.genericError);

@@ -97,7 +97,7 @@ export default function VideoEditPage() {
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
             <ArrowLeft size={20} />
-            {t.common.backTo.replace('{page}', t.video.videos)}
+            {t.common.backTo ? t.common.backTo.replace('{page}', t.video.videos || '') : 'Back to videos'}
           </Link>
         </div>
       </div>
@@ -114,7 +114,7 @@ export default function VideoEditPage() {
             className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
           >
             <ArrowLeft size={20} />
-            {t.common.backTo.replace('{page}', t.video.myVideos)}
+            {t.common.backTo ? t.common.backTo.replace('{page}', t.video.myVideos || '') : 'Back to videos'}
           </Link>
         </div>
 
