@@ -7,9 +7,19 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VideoObject } from '@/interfaces';
-import { searchVideos, deleteVideo } from '@/lib/api/videos';
+import { searchVideos, deleteVideo, bulkDeleteVideos } from '@/lib/api/videos';
 import Image from 'next/image';
 import Link from 'next/link';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
@@ -32,12 +42,25 @@ export default function VideoDashboardPage() {
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
 
-  // Redirect if not authenticated
+  // Dialog states
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Redirect if not authenticated or no channels
   useEffect(() => {
     if (!user) {
       router.push(`/${lang}`);
+      return;
     }
-  }, [user, router, lang]);
+
+    // Redirect users without channels to main page
+    const userChannels = multiAccountUser?.channels || [];
+    if (userChannels.length === 0) {
+      router.push(`/${lang}`);
+    }
+  }, [user, multiAccountUser?.channels, router, lang]);
 
   // Fetch videos using single API call with filters
   useEffect(() => {
@@ -160,47 +183,95 @@ export default function VideoDashboardPage() {
     }
   };
 
-  const handleDeleteVideo = async (videoId: string) => {
-    if (!user) return;
+  const handleDeleteVideo = (videoId: string) => {
+    setVideoToDelete(videoId);
+    setDeleteDialogOpen(true);
+  };
 
-    if (!confirm(t.video.confirmDelete)) return;
+  const confirmDeleteVideo = async () => {
+    if (!user || !videoToDelete) return;
 
     try {
-      const result = await deleteVideo(videoId, { userId: user.id, channelId: user.id });
+      const result = await deleteVideo(videoToDelete, { userId: user.id, channelId: user.id });
       if (result) {
-        setVideos((prev) => prev.filter((v) => v.id !== videoId));
+        setVideos((prev) => prev.filter((v) => v.id !== videoToDelete));
         setSelectedVideos((prev) => {
           const newSet = new Set(prev);
-          newSet.delete(videoId);
+          newSet.delete(videoToDelete);
           return newSet;
         });
+        setDeleteDialogOpen(false);
+        setVideoToDelete(null);
+      } else {
+        setErrorMessage(t.errors?.genericError || 'An error occurred');
       }
     } catch (error) {
       console.error('Error deleting video:', error);
-      alert(t.errors.genericError);
+      setErrorMessage(t.errors?.genericError || 'An error occurred');
+      setDeleteDialogOpen(false);
     }
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (!user) return;
     if (selectedVideos.size === 0) return;
+    setBulkDeleteDialogOpen(true);
+  };
 
-    if (!confirm(t.video.confirmDeleteMultiple?.replace('{count}', selectedVideos.size.toString()) || 'Are you sure you want to delete selected videos?')) {
-      return;
-    }
+  const confirmBulkDelete = async () => {
+    if (!user) return;
 
     try {
-      const deletePromises = Array.from(selectedVideos).map((videoId) =>
-        deleteVideo(videoId, { userId: user.id, channelId: user.id })
-      );
+      const videoIdsArray = Array.from(selectedVideos);
 
-      await Promise.all(deletePromises);
+      // Call bulk delete API
+      const result = await bulkDeleteVideos(videoIdsArray, {
+        userId: user.id,
+        channelId: user.id
+      });
 
-      setVideos((prev) => prev.filter((v) => !selectedVideos.has(v.id)));
-      setSelectedVideos(new Set());
+      if (!result) {
+        setErrorMessage(t.errors?.genericError || 'Failed to delete videos');
+        setBulkDeleteDialogOpen(false);
+        return;
+      }
+
+      // Determine which videos were successfully deleted
+      const successfullyDeleted = new Set<string>();
+      const failedDeletes: string[] = [];
+
+      result.results.forEach((deleteResult) => {
+        if (deleteResult.success) {
+          successfullyDeleted.add(deleteResult.videoId);
+        } else {
+          failedDeletes.push(deleteResult.videoId);
+        }
+      });
+
+      // Only remove successfully deleted videos from UI
+      if (successfullyDeleted.size > 0) {
+        setVideos((prev) => prev.filter((v) => !successfullyDeleted.has(v.id)));
+        setSelectedVideos((prev) => {
+          const newSet = new Set(prev);
+          successfullyDeleted.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+      }
+
+      // Show appropriate message
+      if (result.summary.failed > 0) {
+        if (result.summary.succeeded > 0) {
+          setErrorMessage(`Deleted ${result.summary.succeeded} video(s), but ${result.summary.failed} failed to delete`);
+        } else {
+          setErrorMessage(t.errors?.genericError || 'Failed to delete videos');
+        }
+      }
+
+      setBulkDeleteDialogOpen(false);
     } catch (error) {
       console.error('Error deleting videos:', error);
-      alert(t.errors.genericError);
+      setErrorMessage(t.errors?.genericError || 'An error occurred');
+      setBulkDeleteDialogOpen(false);
     }
   };
 
@@ -341,7 +412,18 @@ export default function VideoDashboardPage() {
             {filteredVideos.map((video) => (
               <div
                 key={video.id}
-                className="video-card bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden"
+                onClick={(e) => {
+                  // Only toggle selection if clicking on the card itself, not buttons or links
+                  const target = e.target as HTMLElement;
+                  if (
+                    !target.closest('a') &&
+                    !target.closest('button') &&
+                    !target.closest('input[type="checkbox"]')
+                  ) {
+                    handleSelectVideo(video.id);
+                  }
+                }}
+                className="video-card bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
               >
                 {/* Thumbnail with Checkbox */}
                 <div className="relative w-full h-48 bg-gray-200 dark:bg-gray-700">
@@ -421,7 +503,7 @@ export default function VideoDashboardPage() {
                       className="flex-1 flex items-center justify-center gap-1 px-2 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
                     >
                       <Eye size={14} />
-                      <span className="text-xs">{t.common.viewAll}</span>
+                      <span className="text-xs">{t.common.view}</span>
                     </Link>
                     <Link
                       href={`/${lang}/video/${video.id}/edit`}
@@ -443,6 +525,75 @@ export default function VideoDashboardPage() {
             ))}
           </div>
         )}
+
+        {/* Error Message Banner */}
+        {errorMessage && (
+          <div className="fixed top-4 right-4 left-4 md:left-auto md:w-96 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 shadow-lg z-50">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                  {errorMessage}
+                </p>
+              </div>
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Single Video Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t.video?.confirmDeleteTitle || 'Delete Video?'}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t.video?.confirmDelete || 'Are you sure you want to delete this video? This action cannot be undone.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                setDeleteDialogOpen(false);
+                setVideoToDelete(null);
+              }}>
+                {t.common?.cancel || 'Cancel'}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteVideo}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {t.common?.delete || 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Bulk Delete Dialog */}
+        <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t.video?.confirmDeleteMultipleTitle || 'Delete Multiple Videos?'}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t.video?.confirmDeleteMultiple?.replace('{count}', selectedVideos.size.toString()) ||
+                  `Are you sure you want to delete ${selectedVideos.size} video${selectedVideos.size > 1 ? 's' : ''}? This action cannot be undone.`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setBulkDeleteDialogOpen(false)}>
+                {t.common?.cancel || 'Cancel'}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmBulkDelete}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {t.common?.delete || 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

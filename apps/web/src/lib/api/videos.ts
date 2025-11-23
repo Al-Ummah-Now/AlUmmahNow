@@ -176,6 +176,8 @@ export async function deleteVideo(
   headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
 ): Promise<ApiResponse<{ success: boolean }> | null> {
   try {
+    logger.info('[deleteVideo] Attempting to delete video:', { videoId, headers });
+
     const response = await fetch(
       `${baseUrl}/api/videos/${videoId}`,
       {
@@ -189,13 +191,72 @@ export async function deleteVideo(
       }
     );
 
+    logger.info('[deleteVideo] Response status:', response.status);
+
     if (!response.ok) {
-      throw new Error(`Error deleting video: ${response.statusText}`);
+      const errorText = await response.text();
+      logger.error('[deleteVideo] Error response:', { status: response.status, statusText: response.statusText, errorText });
+      throw new Error(`Error deleting video: ${response.statusText} - ${errorText}`);
     }
 
-    return await response.json();
+    const result = await response.json();
+    logger.info('[deleteVideo] Success response:', result);
+    return result;
   } catch (error) {
     logger.error('deleteVideo error:', error);
+    return null;
+  }
+}
+
+/**
+ * Bulk Delete Videos
+ * POST /api/videos/bulk-delete
+ */
+export async function bulkDeleteVideos(
+  videoIds: string[],
+  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+): Promise<{
+  success: boolean;
+  results: Array<{
+    videoId: string;
+    success: boolean;
+    error?: string;
+  }>;
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+} | null> {
+  try {
+    logger.info('[bulkDeleteVideos] Attempting to delete videos:', { count: videoIds.length, videoIds, headers });
+
+    const response = await fetch(
+      `${baseUrl}/api/videos/bulk-delete`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'channelId': headers.channelId,
+          'userId': headers.userId,
+        },
+        body: JSON.stringify({ videoIds }),
+      }
+    );
+
+    logger.info('[bulkDeleteVideos] Response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('[bulkDeleteVideos] Error response:', { status: response.status, statusText: response.statusText, errorText });
+      throw new Error(`Error bulk deleting videos: ${response.statusText} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    logger.info('[bulkDeleteVideos] Success response:', result);
+    return result;
+  } catch (error) {
+    logger.error('bulkDeleteVideos error:', error);
     return null;
   }
 }
@@ -631,24 +692,42 @@ export async function searchVideos(
       }
     }
 
-    const response = await fetch(
-      `${baseUrl}/api/videos/search?${queryParams.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
+    const fullUrl = `${baseUrl}/api/videos/search?${queryParams.toString()}`;
+    const requestHeaders = {
+      'Content-Type': 'application/json',
+      ...(headers?.channelId && { 'channelId': headers.channelId }),
+      ...(headers?.userId && { 'userId': headers.userId }),
+    };
 
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
-        },
-      }
-    );
+    logger.info('[searchVideos] Making request:', {
+      url: fullUrl,
+      baseUrl,
+      queryParams: queryParams.toString(),
+      headers: requestHeaders,
+      filters
+    });
+
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: requestHeaders,
+    });
+
+    logger.info('[searchVideos] Response status:', response.status);
 
     if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('[searchVideos] Error response:', errorText);
       throw new Error(`Error searching videos: ${response.statusText}`);
     }
 
-    return await response.json();
+    const result = await response.json();
+    logger.info('[searchVideos] Response data:', {
+      dataLength: result?.data?.length || 0,
+      cursor: result?.cursor,
+      fullResult: result
+    });
+
+    return result;
   } catch (error) {
     logger.error('searchVideos error:', error);
 

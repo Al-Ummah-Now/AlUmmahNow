@@ -11,10 +11,11 @@ import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
 import { Calendar, Clock, Edit, Trash2, PlayCircle, AlertCircle, Loader } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function ScheduledVideosPage() {
   const pathname = usePathname();
+  const router = useRouter();
   const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
   const { t } = useI18n(locale);
   const auth = useAuth();
@@ -25,6 +26,20 @@ export default function ScheduledVideosPage() {
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<ScheduledPublishStatus | 'all'>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Redirect if not authenticated or no channels
+  useEffect(() => {
+    if (!auth.user) {
+      router.push(`/${locale}`);
+      return;
+    }
+
+    // Redirect users without channels to main page
+    const userChannels = multiAccountUser?.channels || [];
+    if (userChannels.length === 0) {
+      router.push(`/${locale}`);
+    }
+  }, [auth.user, multiAccountUser?.channels, router, locale]);
 
   // Fetch scheduled videos using single API call
   const fetchScheduledVideos = async () => {

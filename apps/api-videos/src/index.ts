@@ -8,6 +8,7 @@ import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { VideoCreate } from "./endpoints/video/videoCreate";
 import { VideoUpdate } from "./endpoints/video/videoUpdate";
 import { VideoDelete } from "./endpoints/video/videoDelete";
+import { VideoBulkDelete } from "./endpoints/video/videoBulkDelete";
 import { VideoFetch } from "./endpoints/video/videoFetch";
 import { VideosList } from "./endpoints/video/videoList";
 import { VideoSearch } from "./endpoints/video/videoSearch";
@@ -393,6 +394,7 @@ openapi.post("/api/videos/upload/complete", UploadCompleteEndpoint);
 openapi.get("/api/videos/upload/resume/:videoId", UploadResumeEndpoint);
 openapi.put("/api/videos/:id", VideoUpdate);
 openapi.delete("/api/videos/:id", VideoDelete);
+openapi.post("/api/videos/bulk-delete", VideoBulkDelete);
 openapi.get("/api/videos/:id/upload-status", VideoUploadStatus);
 openapi.put("/api/videos/:id/chapters", VideoChaptersUpdate); // Update video chapters (manual edit)
 openapi.post("/api/videos/:videoId/subtitles", SubtitlesUpload); // Upload subtitle track
@@ -574,6 +576,7 @@ app.get("/openapi.json", async (c) => {
 		'/api/videos/upload/complete', // POST
 		'/api/videos/upload/resume/{videoId}', // GET
 		'/api/videos/{id}', // PUT, DELETE
+		'/api/videos/bulk-delete', // POST (bulk delete)
 		'/api/videos/{id}/chapters', // PUT (manual edit)
 		'/api/videos/{videoId}/subtitles', // POST (upload)
 		'/api/videos/{videoId}/subtitles/{language}', // DELETE
