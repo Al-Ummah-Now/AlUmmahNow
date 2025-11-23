@@ -6,7 +6,7 @@ import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
-import { requireSecret } from "../../lib/env-helpers";
+import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 import { generateTUSConfig } from "../../lib/bunny/tus";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 import { logger } from '../../lib/logger';
@@ -221,38 +221,62 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 			let thumbnailType: 'auto' | 'custom' = 'auto';
 			let thumbnailSizes: Record<string, string> | undefined;
 
-			if (thumbnail) {
-				if (thumbnail.type === 'custom' && thumbnail.data) {
-					try {
-						// Process custom thumbnail
-						const processed = await thumbnailProcessor.processBase64(
-							thumbnail.data,
-							thumbnail.filename || 'thumbnail.jpg'
-						);
+			if (thumbnail && thumbnail.data) {
+				try {
+					// Process both auto-generated (extracted video frames) and custom thumbnails
+					logger.info('[UploadInitiate] Processing thumbnail', {
+						videoId,
+						thumbnailType: thumbnail.type,
+						hasData: !!thumbnail.data,
+						position: thumbnail.position
+					});
 
-						// Store in R2 (using videos bucket for now, should be separate thumbnail bucket)
-						const cdnBaseUrl = 'https://cdn.alummahnow.net'; // Configure as environment variable
-						const storageResult = await thumbnailStorage.storeInR2(
-							videoId,
-							processed.original,
-							processed.mimeType,
-							c.env.videos,
-							cdnBaseUrl
-						);
+					// Process base64 thumbnail data (validates and converts to ArrayBuffer)
+					const processed = await thumbnailProcessor.processBase64(
+						thumbnail.data,
+						thumbnail.filename || 'thumbnail.jpg'
+					);
 
-						thumbnailUrl = storageResult.cdnUrl;
-						thumbnailType = 'custom';
-						thumbnailSizes = storageResult.thumbnailSizes;
-					} catch (error) {
-						logger.error('Thumbnail processing failed:', error);
-						// Continue without custom thumbnail, will fall back to auto-generated
-					}
-				} else if (thumbnail.type === 'auto' && thumbnail.position !== undefined) {
-					// Store auto-thumbnail preference for later use
-					thumbnailType = 'auto';
-					// Note: Bunny.net will generate thumbnail based on thumbnailTime set during video creation
-					// The position preference will be stored in metadata for later processing
+					// Get Bunny.net storage credentials
+					const imageStorageKey = await requireSecret(c.env.image_storage_key, 'image_storage_key');
+					const zone = requireEnvVar(c.env, 'ZONE');
+					const cdnBaseUrl = 'https://images.alummahnow.net';
+
+					// Store in Bunny.net with automatic multi-size generation
+					// Bunny.net Image Optimizer will resize on-the-fly using URL parameters
+					const storageResult = await thumbnailStorage.storeInBunny(
+						videoId,
+						processed.original,
+						zone,
+						imageStorageKey,
+						cdnBaseUrl
+					);
+
+					thumbnailUrl = storageResult.cdnUrl;  // HD version by default
+					thumbnailType = thumbnail.type;  // Preserve original type (auto or custom)
+					thumbnailSizes = storageResult.thumbnailSizes;  // HD, SD, mobile, thumb
+
+					logger.info('[UploadInitiate] Thumbnail saved successfully to Bunny.net', {
+						videoId,
+						thumbnailUrl,
+						thumbnailType,
+						sizes: Object.keys(thumbnailSizes)
+					});
+				} catch (error) {
+					logger.error('[UploadInitiate] Thumbnail processing failed', {
+						videoId,
+						thumbnailType: thumbnail.type,
+						error: error instanceof Error ? error.message : String(error)
+					});
+					// Continue without thumbnail, will fall back to Bunny.net auto-generated
 				}
+			} else if (thumbnail && !thumbnail.data && thumbnail.position !== undefined) {
+				// Only position specified without data - use Bunny.net auto-generation
+				thumbnailType = 'auto';
+				logger.info('[UploadInitiate] Using Bunny.net auto-generated thumbnail', {
+					videoId,
+					position: thumbnail.position
+				});
 			}
 
 			// Create video metadata for R2 storage
@@ -265,6 +289,7 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 				thumbnailUrl,
 				thumbnailType,
 				thumbnailSizes,
+				playUrl: `https://${c.env.bunny_hostname}/${videoId}/playlist.m3u8`,
 				dateCreated: new Date().toISOString(),
 				dateModified: new Date().toISOString(),
 				views: 0,

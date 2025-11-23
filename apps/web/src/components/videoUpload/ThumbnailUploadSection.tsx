@@ -103,7 +103,7 @@ export function ThumbnailUploadSection({
       setCustomThumbnail(file);
       setSelectedThumbnail(thumbnailData);
       onThumbnailSelect(thumbnailData);
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to process thumbnail image');
     }
   }, [disabled, onThumbnailSelect]);
@@ -250,6 +250,7 @@ export function ThumbnailUploadSection({
             Selected Thumbnail
           </h4>
           <div className="relative rounded-lg overflow-hidden border-2 border-blue-500 dark:border-blue-400">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={selectedThumbnail.preview}
               alt="Selected thumbnail"
@@ -299,6 +300,7 @@ function ThumbnailOption({ src, selected, onClick, disabled, label }: ThumbnailO
           : 'border-gray-300 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="Thumbnail option" className="w-full h-full object-cover" />
       {selected && (
         <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">

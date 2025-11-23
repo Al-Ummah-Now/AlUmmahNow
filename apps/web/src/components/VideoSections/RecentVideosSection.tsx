@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import { VideoSection } from './VideoSection';
 import { getRecentVideos, type RecentVideosParams } from '@/lib/api/sections';
@@ -36,14 +36,7 @@ export function RecentVideosSection({
   const [cursor, setCursor] = useState<string | undefined>();
   const [hasMore, setHasMore] = useState(true);
 
-  // Fetch recent videos on mount
-  useEffect(() => {
-    if (initialVideos.length === 0) {
-      fetchVideos();
-    }
-  }, []);
-
-  const fetchVideos = async (loadMore = false) => {
+  const fetchVideos = useCallback(async (loadMore = false) => {
     try {
       if (loadMore) {
         setLoadingMore(true);
@@ -93,7 +86,14 @@ export function RecentVideosSection({
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [limit, channelId, excludeChannels, cursor]);
+
+  // Fetch recent videos on mount
+  useEffect(() => {
+    if (initialVideos.length === 0) {
+      fetchVideos();
+    }
+  }, [initialVideos.length, fetchVideos]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {

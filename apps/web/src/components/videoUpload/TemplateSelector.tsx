@@ -7,7 +7,7 @@
  * Pre-fills metadata fields when a template is selected.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { FileText, ChevronDown, AlertCircle } from 'lucide-react';
 import { UploadTemplate } from '@al-ummah/shared-types';
@@ -37,44 +37,8 @@ export function TemplateSelector({
   const [variableContext, setVariableContext] = useState<Partial<VariableContext>>({});
   const [pendingTemplate, setPendingTemplate] = useState<UploadTemplate | null>(null);
 
-  // Load templates
-  useEffect(() => {
-    const loadTemplates = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await listTemplates();
-        if (response) {
-          // API returns { success: true, result: { templates, defaultTemplateId } }
-          // But apiRequest returns the full response, so we need to access .result
-          const data = (response as any).result || response;
-          setTemplates(data.templates || []);
-          setDefaultTemplateId(data.defaultTemplateId || null);
-
-          // Auto-select default template if exists
-          if (data.defaultTemplateId) {
-            setSelectedTemplateId(data.defaultTemplateId);
-            const defaultTemplate = data.templates?.find((t: any) => t.id === data.defaultTemplateId);
-            if (defaultTemplate) {
-              applyTemplate(defaultTemplate);
-            }
-          }
-        } else {
-          setError(isRTL ? 'فشل في تحميل القوالب' : 'Failed to load templates');
-        }
-      } catch (err) {
-        setError(isRTL ? 'حدث خطأ أثناء التحميل' : 'An error occurred while loading');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadTemplates();
-  }, []);
-
   // Check if template requires user input
-  const requiresUserInput = (template: UploadTemplate): boolean => {
+  const requiresUserInput = useCallback((template: UploadTemplate): boolean => {
     const text = `${template.template.title} ${template.template.titleLocalized?.en || ''} ${template.template.titleLocalized?.ar || ''} ${template.template.description || ''} ${template.template.descriptionLocalized?.en || ''} ${template.template.descriptionLocalized?.ar || ''}`;
 
     const inputVariables = [
@@ -88,10 +52,10 @@ export function TemplateSelector({
     ];
 
     return inputVariables.some((v) => text.includes(v));
-  };
+  }, []);
 
   // Apply template
-  const applyTemplate = (template: UploadTemplate) => {
+  const applyTemplate = useCallback((template: UploadTemplate) => {
     // Check if template requires user input
     if (requiresUserInput(template)) {
       setPendingTemplate(template);
@@ -108,7 +72,43 @@ export function TemplateSelector({
 
     const metadata = processTemplateVariables(template, context);
     onTemplateApply(metadata);
-  };
+  }, [requiresUserInput, channelName, uploaderName, onTemplateApply]);
+
+  // Load templates
+  useEffect(() => {
+    const loadTemplates = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await listTemplates();
+        if (response) {
+          // API returns { success: true, result: { templates, defaultTemplateId } }
+          // But apiRequest returns the full response, so we need to access .result
+          const data = (response as { result?: { templates: UploadTemplate[]; defaultTemplateId: string | null } }).result || response as { templates: UploadTemplate[]; defaultTemplateId: string | null };
+          setTemplates(data.templates || []);
+          setDefaultTemplateId(data.defaultTemplateId || null);
+
+          // Auto-select default template if exists
+          if (data.defaultTemplateId) {
+            setSelectedTemplateId(data.defaultTemplateId);
+            const defaultTemplate = data.templates?.find((t) => t.id === data.defaultTemplateId);
+            if (defaultTemplate) {
+              applyTemplate(defaultTemplate);
+            }
+          }
+        } else {
+          setError(isRTL ? 'فشل في تحميل القوالب' : 'Failed to load templates');
+        }
+      } catch (_err) {
+        setError(isRTL ? 'حدث خطأ أثناء التحميل' : 'An error occurred while loading');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTemplates();
+  }, [applyTemplate, isRTL]);
 
   // Handle template selection
   const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -337,7 +337,7 @@ export function TemplateSelector({
                     </label>
                     <input
                       type="text"
-                      value={(variableContext as any)[varKey] || ''}
+                      value={(variableContext as Record<string, string>)[varKey] || ''}
                       onChange={(e) =>
                         setVariableContext((prev) => ({
                           ...prev,

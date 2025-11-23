@@ -1,17 +1,22 @@
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'path';
 
 /**
- * Read environment variables from file.
+ * Read environment variables from .env.test.local file.
  * https://github.com/motdotla/dotenv
  */
-// import dotenv from 'dotenv';
-// dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '.env.test.local') });
 
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
   testDir: './e2e',
+
+  /* Run global setup before all tests */
+  globalSetup: require.resolve('./e2e/auth.setup'),
+
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -55,6 +60,39 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // Setup project - runs global setup to register users
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/,
+    },
+
+    // Authenticated user projects with saved storage state
+    {
+      name: 'single-channel-user',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'e2e/.auth/user-single.json',
+      },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'multi-channel-user',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'e2e/.auth/user-multi.json',
+      },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'no-channels-user',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'e2e/.auth/user-none.json',
+      },
+      dependencies: ['setup'],
+    },
+
+    // Standard browser projects (for tests that don't need authentication)
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },

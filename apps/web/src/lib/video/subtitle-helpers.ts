@@ -9,10 +9,25 @@ import { SubtitleTrack } from '@/lib/api/subtitles';
 import { logger } from '@/lib/logger-server';
 
 // Extend Player type to include methods not in type definitions
+interface TextTrack {
+  kind: string;
+  label?: string;
+  mode: 'disabled' | 'hidden' | 'showing';
+  language?: string;
+}
+
+interface TextTrackOptions {
+  kind: 'subtitles' | 'captions' | 'descriptions';
+  src: string;
+  srclang: string;
+  label: string;
+  default?: boolean;
+}
+
 interface ExtendedPlayer extends Player {
-  textTracks(): any;
-  removeRemoteTextTrack(track: any): void;
-  addRemoteTextTrack(options: any, manualCleanup?: boolean): any;
+  textTracks(): { length: number; [index: number]: TextTrack };
+  removeRemoteTextTrack(track: TextTrack): void;
+  addRemoteTextTrack(options: TextTrackOptions, manualCleanup?: boolean): { track: TextTrack };
   el(): HTMLElement;
 }
 
@@ -158,7 +173,7 @@ export function setActiveSubtitleTrack(
  */
 export function cycleSubtitleTrack(player: ExtendedPlayer): void {
   const textTracks = player.textTracks();
-  const subtitleTracks: any[] = [];
+  const subtitleTracks: TextTrack[] = [];
 
   // Collect all subtitle tracks
   for (let i = 0; i < textTracks.length; i++) {
@@ -187,7 +202,7 @@ export function cycleSubtitleTrack(player: ExtendedPlayer): void {
     setActiveSubtitleTrack(player, null);
   } else {
     // Enable next track
-    setActiveSubtitleTrack(player, subtitleTracks[nextIndex].language);
+    setActiveSubtitleTrack(player, subtitleTracks[nextIndex].language || null);
   }
 }
 
@@ -204,7 +219,7 @@ export function autoSelectSubtitle(
   for (let i = 0; i < textTracks.length; i++) {
     const track = textTracks[i];
     if (track.kind === 'subtitles' && track.language === locale) {
-      setActiveSubtitleTrack(player, locale);
+      setActiveSubtitleTrack(player, locale || null);
       return true;
     }
   }

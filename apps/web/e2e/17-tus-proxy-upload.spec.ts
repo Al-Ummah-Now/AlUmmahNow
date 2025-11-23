@@ -183,7 +183,7 @@ test.describe('TUS Proxy - Upload Flow', () => {
     try {
       await helpers.waitForUploadComplete(page, 60000);
       await expect(page.locator('text=Upload Complete')).toBeVisible();
-    } catch (error) {
+    } catch (_error) {
       // Upload might take longer or fail - that's okay for this test
       // We're primarily testing the proxy security
       console.log('Upload did not complete within timeout - security checks passed');

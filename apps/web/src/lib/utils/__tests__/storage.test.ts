@@ -384,6 +384,7 @@ describe('Storage Monitoring', () => {
   it('should provide helpful monitoring in development', () => {
     // Set NODE_ENV to development
     const originalEnv = process.env.NODE_ENV;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test requires modifying process.env
     (process.env as any).NODE_ENV = 'development';
 
     // Mock console.group methods
@@ -407,6 +408,7 @@ describe('Storage Monitoring', () => {
     consoleGroupSpy.mockRestore();
     consoleLogSpy.mockRestore();
     consoleGroupEndSpy.mockRestore();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test requires modifying process.env
     (process.env as any).NODE_ENV = originalEnv;
   });
 });

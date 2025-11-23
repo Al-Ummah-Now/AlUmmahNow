@@ -247,6 +247,11 @@ export class VideoUploadStatus extends OpenAPIRoute {
 					video.fileSize = bunnyStreamStatus.storageSize;
 				}
 
+				// Set playUrl for HLS streaming
+				if (!video.playUrl && bunnyStreamStatus.guid) {
+					video.playUrl = `https://${c.env.bunny_hostname}/${bunnyStreamStatus.guid}/playlist.m3u8`;
+				}
+
 				await repository.putObject(id, video);
 				logger.info('[VideoUploadStatus] Video status updated in R2', { videoId: id, status });
 			} catch (error) {

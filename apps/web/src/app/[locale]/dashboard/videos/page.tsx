@@ -7,12 +7,13 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VideoObject } from '@/interfaces';
-import { listVideos, deleteVideo } from '@/lib/api/videos';
+import { searchVideos, deleteVideo } from '@/lib/api/videos';
 import Image from 'next/image';
 import Link from 'next/link';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
+type FilterDuration = 'all' | 'short' | 'standard' | 'long';
 type SortBy = 'date' | 'views' | 'title';
 
 export default function VideoDashboardPage() {
@@ -27,6 +28,7 @@ export default function VideoDashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [privacyFilter, setPrivacyFilter] = useState<FilterPrivacy>('all');
+  const [durationFilter, setDurationFilter] = useState<FilterDuration>('all');
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
 
@@ -37,7 +39,7 @@ export default function VideoDashboardPage() {
     }
   }, [user, router, lang]);
 
-  // Fetch videos from all channels the user owns
+  // Fetch videos using single API call with filters
   useEffect(() => {
     const fetchVideos = async () => {
       if (!user) return;
@@ -56,49 +58,58 @@ export default function VideoDashboardPage() {
           return;
         }
 
-        // Fetch videos from all user's channels
-        const videoPromises = channelIds.map(channelId =>
-          listVideos({ channelId }, { userId: user.id, channelId })
+        // Single API call with server-side filtering
+        const result = await searchVideos(
+          '', // Empty query to get all videos
+          {
+            channelIds, // Pass all user's channel IDs
+            isOwner: true, // Mark as owner request for proper filtering
+            durationFilter: durationFilter, // Use the new durationFilter parameter
+            sortBy: sortBy === 'date' ? 'date' : sortBy === 'views' ? 'views' : 'relevance',
+            sortOrder: 'desc',
+          },
+          {
+            limit: 100, // Get more videos at once for owner dashboard
+          },
+          { userId: user.id, channelId: channelIds[0] || user.id }
         );
 
-        const results = await Promise.all(videoPromises);
+        const allVideos = result?.data || [];
 
-        // Combine all videos from all channels
-        const allVideos = results
-          .filter((result): result is NonNullable<typeof result> & { data: VideoObject[] } =>
-            result !== null && result !== undefined && !!result.data
-          )
-          .flatMap(result => result.data);
+        // Filter videos by privacy setting (server-side filtering not yet available)
+        let filtered = allVideos;
+        if (privacyFilter !== 'all') {
+          filtered = filtered.filter((video) =>
+            privacyFilter === 'public' ? video.isPublic : !video.isPublic
+          );
+        }
 
-        // Remove duplicates (in case a video appears in multiple results)
-        const uniqueVideos = Array.from(
-          new Map(allVideos.map(video => [video.id, video])).values()
-        );
-
-        setVideos(uniqueVideos);
-        setFilteredVideos(uniqueVideos);
+        setVideos(filtered);
+        setFilteredVideos(filtered);
       } catch (error) {
         console.error('Error fetching videos:', error);
+        setVideos([]);
+        setFilteredVideos([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchVideos();
-  }, [user, multiAccountUser?.channels]);
+  }, [user, multiAccountUser?.channels, durationFilter, sortBy, privacyFilter]);
 
-  // Apply filters and search
+  // Apply client-side search and status filtering
   useEffect(() => {
     let filtered = [...videos];
 
-    // Search filter
+    // Search filter (client-side for immediate feedback)
     if (searchQuery) {
       filtered = filtered.filter((video) =>
         video.title.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    // Status filter
+    // Status filter (client-side until API supports it)
     if (statusFilter !== 'all') {
       filtered = filtered.filter(() => {
         // Assuming we have a status field, otherwise default to 'ready'
@@ -107,29 +118,24 @@ export default function VideoDashboardPage() {
       });
     }
 
-    // Privacy filter
-    if (privacyFilter !== 'all') {
-      filtered = filtered.filter((video) =>
-        privacyFilter === 'public' ? video.isPublic : !video.isPublic
-      );
+    // Sorting is already handled by API, but apply for client-side search results
+    if (searchQuery) {
+      filtered.sort((a, b) => {
+        switch (sortBy) {
+          case 'date':
+            return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
+          case 'views':
+            return (b.views || 0) - (a.views || 0);
+          case 'title':
+            return a.title.localeCompare(b.title);
+          default:
+            return 0;
+        }
+      });
     }
 
-    // Sort
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'date':
-          return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
-        case 'views':
-          return (b.views || 0) - (a.views || 0);
-        case 'title':
-          return a.title.localeCompare(b.title);
-        default:
-          return 0;
-      }
-    });
-
     setFilteredVideos(filtered);
-  }, [videos, searchQuery, statusFilter, privacyFilter, sortBy]);
+  }, [videos, searchQuery, statusFilter, sortBy]);
 
   const handleSelectVideo = (videoId: string) => {
     const newSelected = new Set(selectedVideos);
@@ -256,6 +262,17 @@ export default function VideoDashboardPage() {
                 <option value="all">{t.video.filterByPrivacy}</option>
                 <option value="public">{t.video.public}</option>
                 <option value="private">{t.video.private}</option>
+              </select>
+
+              <select
+                value={durationFilter}
+                onChange={(e) => setDurationFilter(e.target.value as FilterDuration)}
+                className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="all">{t.video.allVideos || 'All Videos'}</option>
+                <option value="short">{t.video.shortVideos || 'Short (≤3 min)'}</option>
+                <option value="standard">{t.video.standardVideos || 'Standard (3-20 min)'}</option>
+                <option value="long">{t.video.longVideos || 'Long (>20 min)'}</option>
               </select>
 
               <select

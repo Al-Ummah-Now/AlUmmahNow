@@ -408,6 +408,10 @@ export const AR_TRANSLATIONS: AppTranslations = {
     speed: 'السرعة',
     currentTime: 'الوقت الحالي',
     totalDuration: 'المدة الكاملة',
+    // Video Duration Filters
+    shortVideos: 'قصيرة (≤٣ دقائق)',
+    standardVideos: 'عادية (٣-٢٠ دقيقة)',
+    longVideos: 'طويلة (>٢٠ دقيقة)',
   },
 
   search: {

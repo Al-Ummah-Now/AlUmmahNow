@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { VideoSection } from './VideoSection';
 import {
   getTrendingVideos,
@@ -49,14 +49,7 @@ export function TrendingVideosSection({
   const [algorithm, setAlgorithm] = useState<AlgorithmOption>(initialAlgorithm);
   const [timeWindow] = useState<TimeWindowOption>(initialTimeWindow);
 
-  // Fetch trending videos when algorithm or timeWindow changes
-  useEffect(() => {
-    if (initialVideos.length === 0 || algorithm !== initialAlgorithm || timeWindow !== initialTimeWindow) {
-      fetchVideos();
-    }
-  }, [algorithm, timeWindow]);
-
-  const fetchVideos = async (loadMore = false) => {
+  const fetchVideos = useCallback(async (loadMore = false) => {
     try {
       if (loadMore) {
         setLoadingMore(true);
@@ -107,7 +100,14 @@ export function TrendingVideosSection({
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [limit, algorithm, timeWindow, cursor]);
+
+  // Fetch trending videos when algorithm or timeWindow changes
+  useEffect(() => {
+    if (initialVideos.length === 0 || algorithm !== initialAlgorithm || timeWindow !== initialTimeWindow) {
+      fetchVideos();
+    }
+  }, [algorithm, timeWindow, initialVideos.length, initialAlgorithm, initialTimeWindow, fetchVideos]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {

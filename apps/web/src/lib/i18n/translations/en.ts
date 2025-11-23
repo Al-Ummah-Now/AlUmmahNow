@@ -408,6 +408,10 @@ export const EN_TRANSLATIONS: AppTranslations = {
     speed: 'Speed',
     currentTime: 'Current Time',
     totalDuration: 'Total Duration',
+    // Video Duration Filters
+    shortVideos: 'Short (≤3 min)',
+    standardVideos: 'Standard (3-20 min)',
+    longVideos: 'Long (>20 min)',
   },
 
   search: {

@@ -347,7 +347,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         // Next.js redirect errors are expected - they indicate successful server-side redirect
         const isRedirectError = serverError instanceof Error &&
           (serverError.message === 'NEXT_REDIRECT' ||
-           (serverError as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'));
+           ('digest' in serverError && typeof serverError.digest === 'string' && serverError.digest.startsWith('NEXT_REDIRECT')));
 
         if (!isRedirectError) {
           throw serverError;
@@ -393,7 +393,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         // Next.js redirect errors are expected - they indicate successful server-side redirect
         const isRedirectError = serverError instanceof Error &&
           (serverError.message === 'NEXT_REDIRECT' ||
-           (serverError as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'));
+           ('digest' in serverError && typeof serverError.digest === 'string' && serverError.digest.startsWith('NEXT_REDIRECT')));
 
         if (!isRedirectError) {
           throw serverError;

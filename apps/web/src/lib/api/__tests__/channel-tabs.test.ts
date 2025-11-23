@@ -305,6 +305,7 @@ describe('verifyChannelOwnership', () => {
   });
 
   it('should return false when auth context has no userId', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test case for incomplete auth context
     mockGetServerAuthContext.mockResolvedValue({ channelId: 'channel-456' } as any);
 
     const result = await verifyChannelOwnership('test-channel-id');
@@ -425,6 +426,7 @@ describe('Error Handling', () => {
   });
 
   it('should handle malformed responses', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test case for malformed API response
     mockApiRequestServer.mockResolvedValue({} as any);
 
     const result = await getChannelTabConfig('test-channel-id');

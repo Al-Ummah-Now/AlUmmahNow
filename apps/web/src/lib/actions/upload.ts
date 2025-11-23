@@ -19,7 +19,7 @@ export async function initiateVideoUpload(
     descriptionLocalized?: Record<string, string>;
     isPublic?: boolean;
     tags?: string;
-    category?: any;
+    category?: string;
     fileSize: number;
     mimeType: string;
     thumbnail?: {

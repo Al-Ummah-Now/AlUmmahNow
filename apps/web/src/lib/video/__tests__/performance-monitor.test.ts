@@ -2,6 +2,8 @@
  * Performance Monitor Tests - Simplified Version
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- Test file requires mocking global objects */
+
 // Mock performance before importing module
 const mockPerformanceNow = jest.fn();
 const mockPerformanceMark = jest.fn();

@@ -437,6 +437,10 @@ export interface AppTranslations {
     speed?: string;
     currentTime?: string;
     totalDuration?: string;
+    // Video duration filters
+    shortVideos?: string;
+    standardVideos?: string;
+    longVideos?: string;
   };
 
   /**

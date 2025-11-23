@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import { VideoSection } from './VideoSection';
 import {
@@ -47,14 +47,7 @@ export function RecommendedVideosSection({
   const [strategy, setStrategy] = useState<StrategyOption>(initialStrategy);
   const [basedOn, setBasedOn] = useState<string | undefined>();
 
-  // Fetch recommended videos when strategy changes
-  useEffect(() => {
-    if (initialVideos.length === 0 || strategy !== initialStrategy) {
-      fetchVideos();
-    }
-  }, [strategy, userId, seedVideoId]);
-
-  const fetchVideos = async (loadMore = false) => {
+  const fetchVideos = useCallback(async (loadMore = false) => {
     try {
       if (loadMore) {
         setLoadingMore(true);
@@ -108,7 +101,14 @@ export function RecommendedVideosSection({
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [limit, strategy, userId, seedVideoId, cursor]);
+
+  // Fetch recommended videos when strategy changes
+  useEffect(() => {
+    if (initialVideos.length === 0 || strategy !== initialStrategy) {
+      fetchVideos();
+    }
+  }, [strategy, userId, seedVideoId, initialVideos.length, initialStrategy, fetchVideos]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {

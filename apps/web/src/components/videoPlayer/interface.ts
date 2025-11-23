@@ -8,6 +8,7 @@ export interface PlayerOptions {
   description: string;
   views: string;
   url: string;
+  playUrl?: string; // HLS streaming URL from Bunny.net
   poster?: string; // Video thumbnail/poster image URL
   autoplay: boolean;
   type: string;

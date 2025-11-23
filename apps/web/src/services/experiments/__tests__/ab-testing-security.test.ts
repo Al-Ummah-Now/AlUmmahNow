@@ -21,6 +21,7 @@ describe('ABTestingEngine Security Tests', () => {
       const input = 'user123experiment456';
 
       // Access private method via type assertion for testing
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const engineAny = engine as any;
 
       const hash1 = await engineAny.hashUserId(input);
@@ -32,6 +33,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should produce different hashes for similar inputs (avalanche effect)', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const engineAny = engine as any;
 
       const hash1 = await engineAny.hashUserId('user123');
@@ -53,6 +55,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should have uniform distribution for variant assignment', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const engineAny = engine as any;
       const sampleSize = 10000;
       const results = { control: 0, treatment: 0 };
@@ -75,6 +78,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should be non-predictable - sequential users get random assignments', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const engineAny = engine as any;
       const sequentialResults: boolean[] = [];
 
@@ -100,6 +104,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should handle traffic allocation consistently', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const engineAny = engine as any;
       const experimentId = 'test-experiment';
       const trafficAllocation = 30; // 30% traffic
@@ -125,6 +130,7 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should resist gaming attempts - cannot predict variant from user ID', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const engineAny = engine as any;
 
       // Attacker tries to find patterns
@@ -152,10 +158,12 @@ describe('ABTestingEngine Security Tests', () => {
     });
 
     it('should fallback gracefully when crypto.subtle is unavailable', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const engineAny = engine as any;
 
       // Mock crypto.subtle to be undefined
       const originalCrypto = global.crypto;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (global as any).crypto = undefined;
 
       try {
@@ -170,11 +178,13 @@ describe('ABTestingEngine Security Tests', () => {
         expect(hash).toBe(hash2);
       } finally {
         // Restore crypto
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (global as any).crypto = originalCrypto;
       }
     });
 
     it('should handle very long input strings efficiently', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const engineAny = engine as any;
 
       // Create a very long input string

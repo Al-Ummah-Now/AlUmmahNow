@@ -4,8 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useI18n } from '@/lib/i18n';
-import { listScheduledVideos, cancelSchedule, publishNow } from '@/lib/api/scheduling';
-import type { ScheduledVideoInfo, ScheduledPublishStatus } from '@al-ummah/shared-types';
+import { searchVideos } from '@/lib/api/videos';
+import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
+import type { VideoObject } from '@/interfaces';
+import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
 import { Calendar, Clock, Edit, Trash2, PlayCircle, AlertCircle, Loader } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -18,13 +20,13 @@ export default function ScheduledVideosPage() {
   const auth = useAuth();
   const { user: multiAccountUser } = useMultiAccount();
 
-  const [videos, setVideos] = useState<ScheduledVideoInfo[]>([]);
+  const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<ScheduledPublishStatus | 'all'>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Fetch scheduled videos
+  // Fetch scheduled videos using single API call
   const fetchScheduledVideos = async () => {
     if (!auth.user) {
       setLoading(false);
@@ -46,35 +48,36 @@ export default function ScheduledVideosPage() {
         return;
       }
 
-      // Fetch scheduled videos from all user's channels
-      const scheduledPromises = channelIds.map(channelId =>
-        listScheduledVideos(
-          {
-            userId: auth.user!.id,
-            channelId,
-          },
-          {
-            limit: 50,
-            status: filterStatus === 'all' ? undefined : filterStatus,
-          }
-        )
+      // Map filter status to schedule filter
+      const scheduleFilter =
+        filterStatus === 'all' ? 'scheduled' :
+        filterStatus === 'published' ? 'published' :
+        'scheduled'; // Default to scheduled for other statuses
+
+      // Use single searchVideos call with schedule filtering
+      const result = await searchVideos(
+        '', // Empty query to get all videos
+        {
+          channelIds, // Filter by user's channels
+          isOwner: true, // Only show videos owned by the user
+          scheduleFilter, // Filter by schedule status (scheduled/published)
+          sortBy: 'date', // Sort by date (most recent first)
+          sortOrder: 'desc',
+        },
+        {
+          limit: 100, // Fetch up to 100 scheduled videos
+        },
+        {
+          userId: auth.user.id,
+          channelId: auth.user.id, // Use user ID as fallback channel
+        }
       );
 
-      const results = await Promise.all(scheduledPromises);
+      if (!result) {
+        throw new Error('Failed to fetch scheduled videos');
+      }
 
-      // Combine all scheduled videos from all channels
-      const allVideos = results
-        .filter((result): result is NonNullable<typeof result> & { success: true; result: { videos: ScheduledVideoInfo[] } } =>
-          result !== null && result !== undefined && result.success === true && !!result.result?.videos
-        )
-        .flatMap(result => result.result.videos);
-
-      // Remove duplicates (in case a video appears in multiple results)
-      const uniqueVideos = Array.from(
-        new Map(allVideos.map(video => [video.videoId, video])).values()
-      );
-
-      setVideos(uniqueVideos);
+      setVideos(result.data);
     } catch (err) {
       console.error('Error fetching scheduled videos:', err);
       setError('An error occurred while fetching scheduled videos');
@@ -263,105 +266,117 @@ export default function ScheduledVideosPage() {
       {/* Videos List */}
       {!loading && !error && videos.length > 0 && (
         <div className="space-y-4">
-          {videos.map((video) => (
-            <div
-              key={video.videoId}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
-            >
-              <div className="p-4 md:p-6 flex flex-col md:flex-row gap-4">
-                {/* Thumbnail */}
-                <div className="flex-shrink-0">
-                  <div className="relative w-full md:w-64 aspect-video bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
-                    {video.thumbnailUrl ? (
-                      <Image
-                        src={video.thumbnailUrl}
-                        alt={video.title}
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <Calendar className="text-gray-400" size={48} />
-                      </div>
-                    )}
-                  </div>
-                </div>
+          {videos.map((video) => {
+            // Extract schedule metadata from video object
+            const scheduleStatus = (video as VideoObject & { scheduleStatus?: ScheduledPublishStatus }).scheduleStatus || 'scheduled';
+            const scheduledPublishDate = (video as VideoObject & { scheduledPublishDate?: string }).scheduledPublishDate;
+            const canEdit = video.userId === auth.user?.id;
+            const canCancel = canEdit && (scheduleStatus === 'scheduled' || scheduleStatus === 'publishing');
 
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
-                    {video.title}
-                  </h3>
-
-                  {/* Status */}
-                  <div className="mb-3">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(video.status)}`}>
-                      {(t.schedule && t.schedule[`status${video.status.charAt(0).toUpperCase() + video.status.slice(1)}` as keyof typeof t.schedule]) || video.status}
-                    </span>
+            return (
+              <div
+                key={video.id}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
+              >
+                <div className="p-4 md:p-6 flex flex-col md:flex-row gap-4">
+                  {/* Thumbnail */}
+                  <div className="flex-shrink-0">
+                    <div className="relative w-full md:w-64 aspect-video bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
+                      {video.thumbnailUrl ? (
+                        <Image
+                          src={video.thumbnailUrl}
+                          alt={video.title}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <Calendar className="text-gray-400" size={48} />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Schedule Info */}
-                  <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                    <div className="flex items-center space-x-2">
-                      <Calendar size={16} />
-                      <span>
-                        {t.schedule?.scheduledFor || 'Scheduled for'}: {video.localScheduledDate}
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
+                      {video.title}
+                    </h3>
+
+                    {/* Status */}
+                    <div className="mb-3">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(scheduleStatus)}`}>
+                        {(t.schedule && t.schedule[`status${scheduleStatus.charAt(0).toUpperCase() + scheduleStatus.slice(1)}` as keyof typeof t.schedule]) || scheduleStatus}
                       </span>
                     </div>
-                    {video.status === 'scheduled' && (
-                      <div className="flex items-center space-x-2">
-                        <Clock size={16} />
-                        <span>
-                          {t.schedule?.publishesIn || 'Publishes in'}: {formatTimeRemaining(video.scheduledPublishDate)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Actions */}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {video.canEdit && (
-                      <Link
-                        href={`/${locale}/video/${video.videoId}/edit`}
-                        className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-                      >
-                        <Edit size={16} className="mr-1.5" />
-                        {t.schedule?.editSchedule || 'Edit Schedule'}
-                      </Link>
-                    )}
-                    {video.status === 'scheduled' && (
-                      <button
-                        onClick={() => handlePublishNow(video.videoId)}
-                        disabled={actionLoading === video.videoId}
-                        className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {actionLoading === video.videoId ? (
-                          <Loader size={16} className="mr-1.5 animate-spin" />
-                        ) : (
-                          <PlayCircle size={16} className="mr-1.5" />
-                        )}
-                        {t.schedule?.publishNow || 'Publish Now'}
-                      </button>
-                    )}
-                    {video.canCancel && (
-                      <button
-                        onClick={() => handleCancelSchedule(video.videoId)}
-                        disabled={actionLoading === video.videoId}
-                        className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {actionLoading === video.videoId ? (
-                          <Loader size={16} className="mr-1.5 animate-spin" />
-                        ) : (
-                          <Trash2 size={16} className="mr-1.5" />
-                        )}
-                        {t.schedule?.cancelSchedule || 'Cancel Schedule'}
-                      </button>
-                    )}
+                    {/* Schedule Info */}
+                    <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                      {scheduledPublishDate && (
+                        <>
+                          <div className="flex items-center space-x-2">
+                            <Calendar size={16} />
+                            <span>
+                              {t.schedule?.scheduledFor || 'Scheduled for'}: {new Date(scheduledPublishDate).toLocaleString(locale)}
+                            </span>
+                          </div>
+                          {scheduleStatus === 'scheduled' && (
+                            <div className="flex items-center space-x-2">
+                              <Clock size={16} />
+                              <span>
+                                {t.schedule?.publishesIn || 'Publishes in'}: {formatTimeRemaining(scheduledPublishDate)}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {canEdit && (
+                        <Link
+                          href={`/${locale}/video/${video.id}/edit`}
+                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                        >
+                          <Edit size={16} className="mr-1.5" />
+                          {t.schedule?.editSchedule || 'Edit Schedule'}
+                        </Link>
+                      )}
+                      {scheduleStatus === 'scheduled' && (
+                        <button
+                          onClick={() => handlePublishNow(video.id)}
+                          disabled={actionLoading === video.id}
+                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {actionLoading === video.id ? (
+                            <Loader size={16} className="mr-1.5 animate-spin" />
+                          ) : (
+                            <PlayCircle size={16} className="mr-1.5" />
+                          )}
+                          {t.schedule?.publishNow || 'Publish Now'}
+                        </button>
+                      )}
+                      {canCancel && (
+                        <button
+                          onClick={() => handleCancelSchedule(video.id)}
+                          disabled={actionLoading === video.id}
+                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {actionLoading === video.id ? (
+                            <Loader size={16} className="mr-1.5 animate-spin" />
+                          ) : (
+                            <Trash2 size={16} className="mr-1.5" />
+                          )}
+                          {t.schedule?.cancelSchedule || 'Cancel Schedule'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

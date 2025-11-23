@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -27,7 +27,7 @@ export default function VideoPreviewRTL({ videoUrl, posterUrl, className = '' }:
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
@@ -36,16 +36,16 @@ export default function VideoPreviewRTL({ videoUrl, posterUrl, className = '' }:
       }
       setIsPlaying(!isPlaying);
     }
-  };
+  }, [isPlaying]);
 
-  const toggleMute = () => {
+  const toggleMute = useCallback(() => {
     if (videoRef.current) {
       videoRef.current.muted = !isMuted;
       setIsMuted(!isMuted);
     }
-  };
+  }, [isMuted]);
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       videoRef.current?.parentElement?.requestFullscreen();
       setIsFullscreen(true);
@@ -53,7 +53,7 @@ export default function VideoPreviewRTL({ videoUrl, posterUrl, className = '' }:
       document.exitFullscreen();
       setIsFullscreen(false);
     }
-  };
+  }, []);
 
   const handleTimeUpdate = () => {
     if (videoRef.current) {
@@ -121,7 +121,7 @@ export default function VideoPreviewRTL({ videoUrl, posterUrl, className = '' }:
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [isPlaying, isMuted, duration]);
+  }, [togglePlay, toggleMute, toggleFullscreen, duration]);
 
   return (
     <div

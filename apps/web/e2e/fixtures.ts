@@ -1,3 +1,7 @@
+/* eslint-disable react-hooks/rules-of-hooks */
+// The above disable is for Playwright's test.extend() which uses 'use' as a parameter name
+// This is incorrectly detected as a React hook, but it's actually Playwright's fixture API
+
 import { test as base, expect, Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
@@ -29,7 +33,7 @@ type TestFixtures = {
 };
 
 export const test = base.extend<TestFixtures>({
-  mockUser: async ({}, use) => {
+  mockUser: async (_fixtures, use) => {
     const user = {
       id: 'test-user-' + Date.now(),
       email: 'test@example.com',
@@ -38,8 +42,8 @@ export const test = base.extend<TestFixtures>({
     };
     await use(user);
   },
-  
-  mockChannel: async ({}, use) => {
+
+  mockChannel: async (_fixtures, use) => {
     const channel = {
       id: 'test-channel-' + Date.now(),
       name: 'Test Channel ' + Date.now(),
@@ -48,8 +52,8 @@ export const test = base.extend<TestFixtures>({
     };
     await use(channel);
   },
-  
-  mockVideo: async ({}, use) => {
+
+  mockVideo: async (_fixtures, use) => {
     const video = {
       id: 'test-video-' + Date.now(),
       title: 'Test Video ' + Date.now(),

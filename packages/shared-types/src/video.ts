@@ -43,6 +43,7 @@ export interface VideoObject extends Timestamps {
     thumb?: string;  // 120x90
   };
   videoUrl: string;
+  playUrl?: string; // HLS streaming URL (e.g., https://vz-xxx.b-cdn.net/{videoGuid}/playlist.m3u8)
   userId: string;
   channelId: string | null;
   channel: string;
@@ -144,15 +145,36 @@ export interface VideoUpdateRequest {
   language?: string;
 }
 
+/**
+ * Duration filter for video search
+ * - 'all': No duration filtering
+ * - 'short': Videos <= 180 seconds
+ * - 'standard': Videos > 180 seconds and not live
+ * - 'live': Live stream videos
+ */
+export type VideoDurationFilter = 'all' | 'short' | 'standard' | 'live';
+
+/**
+ * Schedule filter for video search
+ * - 'all': All videos (scheduled and published)
+ * - 'scheduled': Only scheduled videos (not yet published)
+ * - 'published': Only published videos
+ */
+export type VideoScheduleFilter = 'all' | 'scheduled' | 'published';
+
 export interface VideoListParams {
   limit?: number;
   cursor?: string;
   channelId?: string;
+  channelIds?: string[];
   userId?: string;
   category?: VideoCategory;
   tags?: string[];
   isPublic?: boolean;
   isFeatured?: boolean;
+  durationFilter?: VideoDurationFilter;
+  scheduleFilter?: VideoScheduleFilter;
+  isOwner?: boolean;
   sortBy?: 'dateCreated' | 'views' | 'likesCount' | 'title';
   sortOrder?: 'asc' | 'desc';
 }

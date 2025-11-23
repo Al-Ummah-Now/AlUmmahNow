@@ -302,7 +302,7 @@ export async function validateSubtitleFile(
       warnings,
       preview
     };
-  } catch (error) {
+  } catch (_error) {
     errors.push('Failed to parse subtitle file');
     return { valid: false, errors, warnings };
   }

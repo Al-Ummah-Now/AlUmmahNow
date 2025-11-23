@@ -11,7 +11,7 @@ import {
 } from "./types";
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
-import { Channel } from "@al-ummah/shared-types";
+import { Channel, VideoObject, Playlist } from "@al-ummah/shared-types";
 import { logger } from '@/lib/logger-server';
 
 
@@ -298,13 +298,13 @@ export async function updateChannelCover(
 export async function getChannelVideos(
   channelId: string,
   params?: ListQueryParams
-): Promise<PaginationResponse<any> | null> {
+): Promise<PaginationResponse<VideoObject> | null> {
   const queryString = buildQueryParams({
     limit: params?.limit,
     cursor: params?.cursor
   });
 
-  return apiRequestServer<PaginationResponse<any>>({
+  return apiRequestServer<PaginationResponse<VideoObject>>({
     method: 'GET',
     url: buildApiUrl(`/api/channels/${channelId}/videos${queryString}`),
     functionName: 'getChannelVideos'
@@ -318,13 +318,13 @@ export async function getChannelVideos(
 export async function getChannelShorts(
   channelId: string,
   params?: ListQueryParams
-): Promise<PaginationResponse<any> | null> {
+): Promise<PaginationResponse<VideoObject> | null> {
   const queryString = buildQueryParams({
     limit: params?.limit,
     cursor: params?.cursor
   });
 
-  return apiRequestServer<PaginationResponse<any>>({
+  return apiRequestServer<PaginationResponse<VideoObject>>({
     method: 'GET',
     url: buildApiUrl(`/api/channels/${channelId}/shorts${queryString}`),
     functionName: 'getChannelShorts'
@@ -338,14 +338,14 @@ export async function getChannelShorts(
 export async function getChannelLiveStreams(
   channelId: string,
   params?: ListQueryParams & { active?: boolean }
-): Promise<PaginationResponse<any> | null> {
+): Promise<PaginationResponse<VideoObject> | null> {
   const queryString = buildQueryParams({
     limit: params?.limit,
     cursor: params?.cursor,
     active: params?.active
   });
 
-  return apiRequestServer<PaginationResponse<any>>({
+  return apiRequestServer<PaginationResponse<VideoObject>>({
     method: 'GET',
     url: buildApiUrl(`/api/channels/${channelId}/live${queryString}`),
     functionName: 'getChannelLiveStreams'
@@ -359,13 +359,13 @@ export async function getChannelLiveStreams(
 export async function getChannelPlaylists(
   channelId: string,
   params?: ListQueryParams
-): Promise<PaginationResponse<any> | null> {
+): Promise<PaginationResponse<Playlist> | null> {
   const queryString = buildQueryParams({
     limit: params?.limit,
     cursor: params?.cursor
   });
 
-  return apiRequestServer<PaginationResponse<any>>({
+  return apiRequestServer<PaginationResponse<Playlist>>({
     method: 'GET',
     url: buildApiUrl(`/api/channels/${channelId}/playlists${queryString}`),
     functionName: 'getChannelPlaylists'

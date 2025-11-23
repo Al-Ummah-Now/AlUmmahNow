@@ -22,11 +22,13 @@ describe('BunnyStreamService', () => {
 
       it('should throw error for null videoId', () => {
         const service = new BunnyStreamService(mockConfig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect(() => service.getHlsUrl(null as any)).toThrow('BunnyStreamService: videoId is required and must be a string');
       });
 
       it('should throw error for undefined videoId', () => {
         const service = new BunnyStreamService(mockConfig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect(() => service.getHlsUrl(undefined as any)).toThrow('BunnyStreamService: videoId is required and must be a string');
       });
 
@@ -37,6 +39,7 @@ describe('BunnyStreamService', () => {
 
       it('should throw error for non-string videoId', () => {
         const service = new BunnyStreamService(mockConfig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect(() => service.getHlsUrl(123 as any)).toThrow('BunnyStreamService: videoId is required and must be a string');
       });
     });
@@ -49,11 +52,13 @@ describe('BunnyStreamService', () => {
 
       it('should throw error for null languageCode', () => {
         const service = new BunnyStreamService(mockConfig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect(() => service.getCaptionUrl(testVideoId, null as any)).toThrow('BunnyStreamService: languageCode is required and must be a string');
       });
 
       it('should throw error for undefined languageCode', () => {
         const service = new BunnyStreamService(mockConfig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect(() => service.getCaptionUrl(testVideoId, undefined as any)).toThrow('BunnyStreamService: languageCode is required and must be a string');
       });
 
@@ -91,16 +96,19 @@ describe('BunnyStreamService', () => {
 
       it('should throw error for non-number width', () => {
         const service = new BunnyStreamService(mockConfig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect(() => service.getThumbnailUrl(testVideoId, { width: '640' as any })).toThrow('BunnyStreamService: thumbnail width must be between 1 and 7680 pixels');
       });
 
       it('should throw error for non-number height', () => {
         const service = new BunnyStreamService(mockConfig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect(() => service.getThumbnailUrl(testVideoId, { height: '360' as any })).toThrow('BunnyStreamService: thumbnail height must be between 1 and 4320 pixels');
       });
 
       it('should throw error for non-number timestamp', () => {
         const service = new BunnyStreamService(mockConfig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect(() => service.getThumbnailUrl(testVideoId, { timestamp: '30' as any })).toThrow('BunnyStreamService: timestamp must be a non-negative number');
       });
 

@@ -117,8 +117,9 @@ const UploadPage: React.FC = () => {
     }
 
     // Validate file types
+    const allowedTypes = VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES as readonly string[];
     const invalidFiles = selectedFiles.filter(
-      file => !VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type as any)
+      file => !allowedTypes.includes(file.type)
     );
     if (invalidFiles.length > 0) {
       setUploadError(

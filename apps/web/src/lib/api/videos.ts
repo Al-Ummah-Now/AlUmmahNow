@@ -581,7 +581,12 @@ export async function dislikeVideoComment(
  */
 export async function searchVideos(
   query: string,
-  filters?: SearchFilters,
+  filters?: SearchFilters & {
+    channelIds?: string[];
+    durationFilter?: 'all' | 'short' | 'standard' | 'long' | 'live';
+    scheduleFilter?: 'all' | 'scheduled' | 'published';
+    isOwner?: boolean;
+  },
   params?: ListQueryParams,
   headers?: ApiHeaders
 ): Promise<PaginationResponse<VideoObject> | null> {
@@ -590,7 +595,7 @@ export async function searchVideos(
 
     // Basic search
     if (query.trim()) {
-      queryParams.append('search', query);
+      queryParams.append('q', query);
     }
 
     // Pagination
@@ -610,6 +615,20 @@ export async function searchVideos(
       }
       if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
       if (filters.sortOrder) queryParams.append('sortOrder', filters.sortOrder);
+
+      // New filter parameters
+      if (filters.channelIds && filters.channelIds.length > 0) {
+        queryParams.append('channelIds', filters.channelIds.join(','));
+      }
+      if (filters.durationFilter && filters.durationFilter !== 'all') {
+        queryParams.append('durationFilter', filters.durationFilter);
+      }
+      if (filters.scheduleFilter && filters.scheduleFilter !== 'all') {
+        queryParams.append('scheduleFilter', filters.scheduleFilter);
+      }
+      if (filters.isOwner !== undefined) {
+        queryParams.append('isOwner', filters.isOwner.toString());
+      }
     }
 
     const response = await fetch(
@@ -1243,6 +1262,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             description: video.description || '',
             channel: video.channel,
             url: video.videoUrl,
+            playUrl: video.playUrl,
             poster: video.thumbnailUrl,
             views: `${video.views || 0}`,
             dateCreated: new Date(video.dateCreated),

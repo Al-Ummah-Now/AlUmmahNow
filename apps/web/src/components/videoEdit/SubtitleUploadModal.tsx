@@ -93,7 +93,7 @@ export default function SubtitleUploadModal({
       if (!result.valid) {
         setError(result.errors.join(', '));
       }
-    } catch (err) {
+    } catch (_err) {
       setError(t.subtitle?.validationFailed || 'Failed to validate subtitle file');
     } finally {
       setIsValidating(false);
@@ -176,7 +176,7 @@ export default function SubtitleUploadModal({
       } else {
         setError(result?.error || t.subtitle?.uploadFailed || 'Failed to upload subtitle');
       }
-    } catch (err) {
+    } catch (_err) {
       setError(t.subtitle?.uploadError || 'An error occurred while uploading');
     } finally {
       setIsUploading(false);

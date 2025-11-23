@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Star, StarOff, Languages, FileText, Calendar, HardDrive, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
@@ -50,12 +50,7 @@ export default function SubtitleUploadSection({
   const [deleteConfirm, setDeleteConfirm] = useState<SubtitleTrack | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Load subtitles on mount
-  useEffect(() => {
-    loadSubtitles();
-  }, [videoId]);
-
-  const loadSubtitles = async () => {
+  const loadSubtitles = useCallback(async () => {
     setIsLoading(true);
     try {
       const tracks = await listSubtitles(videoId, { userId, channelId });
@@ -65,7 +60,12 @@ export default function SubtitleUploadSection({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [videoId, userId, channelId]);
+
+  // Load subtitles on mount
+  useEffect(() => {
+    loadSubtitles();
+  }, [loadSubtitles]);
 
   const handleUploadSuccess = (subtitle: SubtitleTrack) => {
     setSubtitles((prev) => [...prev, subtitle]);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import { VideoSection } from './VideoSection';
 import { getPopularVideos, type PopularVideosParams } from '@/lib/api/sections';
@@ -39,14 +39,7 @@ export function PopularVideosSection({
   const [hasMore, setHasMore] = useState(true);
   const [period, setPeriod] = useState<PeriodOption>(initialPeriod);
 
-  // Fetch popular videos when period changes
-  useEffect(() => {
-    if (initialVideos.length === 0 || period !== initialPeriod) {
-      fetchVideos();
-    }
-  }, [period]);
-
-  const fetchVideos = async (loadMore = false) => {
+  const fetchVideos = useCallback(async (loadMore = false) => {
     try {
       if (loadMore) {
         setLoadingMore(true);
@@ -96,7 +89,14 @@ export function PopularVideosSection({
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [limit, period, cursor]);
+
+  // Fetch popular videos when period changes
+  useEffect(() => {
+    if (initialVideos.length === 0 || period !== initialPeriod) {
+      fetchVideos();
+    }
+  }, [period, initialPeriod, initialVideos.length, fetchVideos]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {

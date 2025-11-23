@@ -20,10 +20,10 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   // Memoize to prevent new array reference on every render
   const videoSources = useMemo(() => [
     {
-      src: `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
+      src: options.playUrl || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
       type: 'application/x-mpegURL'
     }
-  ], [options.id]);
+  ], [options.playUrl, options.id]);
 
   // Use poster from options (API-provided thumbnail URL) or fallback to default pattern
   // Ensure the poster URL has the protocol (https://) - some API responses return relative URLs

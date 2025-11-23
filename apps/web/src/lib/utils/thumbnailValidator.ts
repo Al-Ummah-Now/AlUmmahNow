@@ -30,7 +30,7 @@ export async function validateThumbnailFile(file: File): Promise<ThumbnailValida
   const warnings: string[] = [];
 
   // Check file type
-  if (!ALLOWED_MIME_TYPES.includes(file.type as any)) {
+  if (!ALLOWED_MIME_TYPES.includes(file.type as typeof ALLOWED_MIME_TYPES[number])) {
     return {
       valid: false,
       error: `Invalid file type. Allowed types: JPEG, PNG, WebP`
@@ -73,7 +73,7 @@ export async function validateThumbnailFile(file: File): Promise<ThumbnailValida
     if (Math.abs(aspectRatio - recommendedRatio) > 0.1) {
       warnings.push('Image aspect ratio differs from recommended 16:9');
     }
-  } catch (error) {
+  } catch (_error) {
     warnings.push('Unable to verify image dimensions');
   }
 

@@ -46,8 +46,8 @@ export default function Home() {
       if (vid) {
         const videoData = await fetchVideoById(vid);
         // Store video owner ID for ownership check
-        // Assuming video has userId field
-        setVideoOwner((videoData as any)?.userId || null);
+        // Extract userId from the video data if it exists
+        setVideoOwner((videoData && 'userId' in videoData) ? (videoData as unknown as { userId: string }).userId : null);
       }
     };
 

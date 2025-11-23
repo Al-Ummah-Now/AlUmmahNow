@@ -7,7 +7,7 @@
  * Displays list of templates with actions: edit, delete, set as default.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   Plus,
@@ -37,7 +37,7 @@ export default function UploadDefaultsPage() {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   // Load templates
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -52,18 +52,18 @@ export default function UploadDefaultsPage() {
         setTemplates([]);
         setError(isRTL ? 'فشل في تحميل القوالب' : 'Failed to load templates');
       }
-    } catch (err) {
+    } catch (_err) {
       // Exception occurred - set empty array and show error
       setTemplates([]);
       setError(isRTL ? 'حدث خطأ أثناء التحميل' : 'An error occurred while loading');
     } finally {
       setLoading(false);
     }
-  };
+  }, [isRTL]);
 
   useEffect(() => {
     loadTemplates();
-  }, []);
+  }, [loadTemplates]);
 
   // Handle create template
   const handleCreate = () => {
@@ -97,7 +97,7 @@ export default function UploadDefaultsPage() {
       } else {
         alert(isRTL ? 'فشل في حذف القالب' : 'Failed to delete template');
       }
-    } catch (err) {
+    } catch (_err) {
       alert(isRTL ? 'حدث خطأ أثناء الحذف' : 'An error occurred while deleting');
     }
   };
@@ -111,7 +111,7 @@ export default function UploadDefaultsPage() {
       } else {
         alert(isRTL ? 'فشل في تعيين القالب الافتراضي' : 'Failed to set default template');
       }
-    } catch (err) {
+    } catch (_err) {
       alert(isRTL ? 'حدث خطأ' : 'An error occurred');
     }
     setActiveMenu(null);

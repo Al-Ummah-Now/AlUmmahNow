@@ -7,7 +7,7 @@ class MemoryMonitor {
   getAvailableMemory(): number {
     // Use Performance Memory API if available (Chrome/Edge)
     if ('memory' in performance) {
-      const memory = (performance as any).memory;
+      const memory = (performance as unknown as { memory: { jsHeapSizeLimit: number; usedJSHeapSize: number } }).memory;
       return memory.jsHeapSizeLimit - memory.usedJSHeapSize;
     }
 
@@ -18,7 +18,7 @@ class MemoryMonitor {
 
   getUsedMemory(): number {
     if ('memory' in performance) {
-      const memory = (performance as any).memory;
+      const memory = (performance as unknown as { memory: { jsHeapSizeLimit: number; usedJSHeapSize: number } }).memory;
       return memory.usedJSHeapSize;
     }
     return 0;
@@ -26,7 +26,7 @@ class MemoryMonitor {
 
   getTotalMemory(): number {
     if ('memory' in performance) {
-      const memory = (performance as any).memory;
+      const memory = (performance as unknown as { memory: { jsHeapSizeLimit: number; usedJSHeapSize: number } }).memory;
       return memory.jsHeapSizeLimit;
     }
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
@@ -54,7 +54,7 @@ class BandwidthMonitor {
     if (this.measurements.length === 0) {
       // Initial estimate based on connection type
       if ('connection' in navigator) {
-        const conn = (navigator as any).connection;
+        const conn = (navigator as { connection?: { effectiveType?: string } }).connection;
         const effectiveType = conn?.effectiveType;
         switch (effectiveType) {
           case '4g': return 5 * 1024 * 1024;   // 5MB/s

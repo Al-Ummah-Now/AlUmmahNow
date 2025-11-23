@@ -171,7 +171,7 @@ export function TemplateEditorModal({
       } else {
         setError(isRTL ? 'فشل في حفظ القالب' : 'Failed to save template');
       }
-    } catch (err) {
+    } catch (_err) {
       setError(isRTL ? 'حدث خطأ أثناء الحفظ' : 'An error occurred while saving');
     } finally {
       setSaving(false);
