@@ -93,7 +93,7 @@ export function transformCommentToView(comment: z.infer<typeof BusinessComment>)
 
 // Batch transformation functions for arrays
 export function transformVideosToView(videos: z.infer<typeof BusinessVideo>[]): z.infer<typeof VideoView>[] {
-    return (videos || []).map(transformVideoToView);
+    return (videos || []).map(video => transformVideoToView(video));
 }
 
 export function transformChannelsToView(channels: z.infer<typeof BusinessChannel>[]): z.infer<typeof ChannelView>[] {

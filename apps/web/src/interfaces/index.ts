@@ -12,10 +12,12 @@ export interface VideoObject {
     descriptionLocalized?: Record<string, string>; // Multi-language descriptions
     thumbnailUrl: string;
     videoUrl: string;
+    playUrl?: string; // HLS streaming URL (e.g., https://vz-xxx.b-cdn.net/{videoGuid}/playlist.m3u8)
     userId: string;
     channel: string;
     channelId: string | null;
     channelAvatarUrl: string; // Updated to match shared-types interface
+    channelCoverUrl?: string; // Channel cover/banner image
     channelName: string;
     dateCreated: string;
     dateModified: string;

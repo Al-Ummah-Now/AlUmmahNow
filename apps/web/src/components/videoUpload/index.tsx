@@ -3,7 +3,7 @@ import React, { useState, useRef, useCallback } from "react";
 import * as tus from "tus-js-client";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
-import { useActiveChannel } from "@/contexts/ActiveChannelContext";
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus } from "@/lib/actions/upload";
@@ -87,7 +87,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const thumbnailUrlRef = useRef<string>('');
 
   const auth = useAuth();
-  const { activeChannel } = useActiveChannel();
+  const { user: multiAccountUser } = useMultiAccount();
+  const activeChannel = multiAccountUser?.channel;
 
   // File validation
   const validateFile = (file: File): string | null => {
@@ -183,7 +184,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
     // Extract userId and channelId after auth check
     const userId = auth.user.id;
-    const channelId = activeChannel.channelId;
+    const channelId = activeChannel.id;
 
     try {
       // Step 1: Initiate upload and get TUS configuration

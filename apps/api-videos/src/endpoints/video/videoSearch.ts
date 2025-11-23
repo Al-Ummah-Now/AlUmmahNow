@@ -181,21 +181,25 @@ export class VideoSearch extends OpenAPIRoute {
 					return false;
 				}
 
-				// Schedule filter (since scheduledPublishStatus doesn't exist, we'll treat all videos as published for now)
-				// This is a placeholder - when the field is added to Video schema, uncomment the logic below:
-				/*
-				const scheduledStatus = video.scheduledPublishStatus;
-				if (scheduleFilter === "scheduled") {
-					if (scheduledStatus !== "scheduled" && scheduledStatus !== "publishing") {
-						return false;
+				// Schedule filter - filter by scheduled publish status
+				if (scheduleFilter !== "all") {
+					const scheduledStatus = video.scheduledPublishStatus;
+
+					if (scheduleFilter === "scheduled") {
+						// Show only videos that are scheduled or currently publishing
+						if (scheduledStatus !== "scheduled" && scheduledStatus !== "publishing") {
+							return false;
+						}
+					}
+
+					if (scheduleFilter === "published") {
+						// Show only videos that are NOT scheduled or publishing
+						// (i.e., they're already published or have no schedule status)
+						if (scheduledStatus === "scheduled" || scheduledStatus === "publishing") {
+							return false;
+						}
 					}
 				}
-				if (scheduleFilter === "published") {
-					if (scheduledStatus === "scheduled" || scheduledStatus === "publishing") {
-						return false;
-					}
-				}
-				*/
 
 				// If video is private, only show if user owns it
 				if (video.isPublic === false) {

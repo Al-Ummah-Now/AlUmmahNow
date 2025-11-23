@@ -44,6 +44,7 @@ export interface AppTranslations {
     submit: string;
     confirm: string;
     noResults: string;
+    view: string;
     viewAll: string;
     learnMore: string;
     retry: string;
@@ -384,7 +385,9 @@ export interface AppTranslations {
     changePrivacy?: string;
     videosSelected?: string;
     confirmDelete?: string;
+    confirmDeleteTitle?: string;
     confirmDeleteMultiple?: string;
+    confirmDeleteMultipleTitle?: string;
     deleteSuccess?: string;
     deleteMultipleSuccess?: string;
     noVideosFound?: string;

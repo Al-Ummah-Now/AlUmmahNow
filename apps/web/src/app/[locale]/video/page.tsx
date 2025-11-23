@@ -10,13 +10,10 @@ import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Edit } from "lucide-react";
 
 export default function Home() {
-  const params = useParams();
-  const locale = params.locale as string;
   const { t, lang } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);

@@ -19,11 +19,14 @@ export default function ScheduledVideosPage() {
   const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
   const { t } = useI18n(locale);
   const auth = useAuth();
-  const { user: multiAccountUser } = useMultiAccount();
+  const { user: multiAccountUser, loading: multiAccountLoading } = useMultiAccount();
 
   const [videos, setVideos] = useState<VideoObject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [fetchLoading, setFetchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Combined loading state
+  const loading = multiAccountLoading || fetchLoading;
   const [filterStatus, setFilterStatus] = useState<ScheduledPublishStatus | 'all'>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -44,22 +47,29 @@ export default function ScheduledVideosPage() {
   // Fetch scheduled videos using single API call
   const fetchScheduledVideos = async () => {
     if (!auth.user) {
-      setLoading(false);
+      setFetchLoading(false);
+      return;
+    }
+
+    // Wait for multiAccountUser to load before fetching
+    if (!multiAccountUser) {
+      // Don't change loading state - just wait for multiAccountUser to load
+      // When it loads, useEffect will trigger again
       return;
     }
 
     try {
-      setLoading(true);
+      setFetchLoading(true);
       setError(null);
 
       // Get all channels the user owns
-      const userChannels = multiAccountUser?.channels || [];
+      const userChannels = multiAccountUser.channels || [];
       const channelIds = userChannels.map(ch => ch.id);
 
       if (channelIds.length === 0) {
         // User has no channels, show empty state
         setVideos([]);
-        setLoading(false);
+        setFetchLoading(false);
         return;
       }
 
@@ -97,7 +107,7 @@ export default function ScheduledVideosPage() {
       console.error('Error fetching scheduled videos:', err);
       setError('An error occurred while fetching scheduled videos');
     } finally {
-      setLoading(false);
+      setFetchLoading(false);
     }
   };
 

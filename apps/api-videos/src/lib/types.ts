@@ -80,6 +80,13 @@ export const Video = z.object({
     dislikes: z.array(Dislike).default([]),
     isPublic: z.boolean().default(true),
     isLive: z.boolean().default(false),
+    // Scheduling fields
+    scheduledPublishDate: DateTime().optional(),
+    scheduledPublishTimezone: Str().optional(),
+    scheduledPublishStatus: z.enum(['scheduled', 'publishing', 'published', 'failed', 'cancelled']).optional(),
+    scheduledBy: Str().optional(),
+    scheduledAt: DateTime().optional(),
+    publishedViaSchedule: z.boolean().optional(),
 });
 
 export const Playlist = z.object({
