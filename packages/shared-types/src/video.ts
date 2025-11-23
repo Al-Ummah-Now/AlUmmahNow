@@ -49,6 +49,7 @@ export interface VideoObject extends Timestamps {
   channel: string;
   channelName: string;
   channelAvatarUrl: string;
+  channelCoverUrl?: string; // Channel cover/banner image
 
   // Video metadata
   duration?: number;

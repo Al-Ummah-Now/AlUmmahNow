@@ -6,11 +6,15 @@ import { Video as BusinessVideo, Channel as BusinessChannel, Profile as Business
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
 
 // Transform a business video to a view model
-export function transformVideoToView(video: z.infer<typeof BusinessVideo>): z.infer<typeof VideoView> {
+export function transformVideoToView(
+    video: z.infer<typeof BusinessVideo>,
+    channel?: z.infer<typeof BusinessChannel> | null
+): z.infer<typeof VideoView> {
     return {
         ...video,
-        channelName: "", // TODO: Resolve from channel data
-        channelAvatarUrl: undefined, // TODO: Resolve from channel data
+        channelName: channel?.name || "",
+        channelAvatarUrl: channel?.avatarUrl,
+        channelCoverUrl: channel?.coverUrl,
         likesCount: video.likes?.length || 0,
         dislikesCount: video.dislikes?.length || 0,
         commentsCount: video.comments?.length || 0,

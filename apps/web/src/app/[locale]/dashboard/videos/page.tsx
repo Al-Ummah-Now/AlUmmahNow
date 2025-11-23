@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, UploadCloud, Trash2, Eye, Edit } from 'lucide-react';
+import { Search, UploadCloud, Trash2, Eye, Edit, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -75,6 +75,11 @@ export default function VideoDashboardPage() {
         );
 
         const allVideos = result?.data || [];
+
+        console.log('[VideoDashboard] Fetched videos:', allVideos.length);
+        console.log('[VideoDashboard] Video IDs:', allVideos.map(v => v.id));
+        console.log('[VideoDashboard] Looking for video: e1b093a6-929c-452f-b1cf-c31d1990dd85');
+        console.log('[VideoDashboard] Channel IDs used in query:', channelIds);
 
         // Filter videos by privacy setting (server-side filtering not yet available)
         let filtered = allVideos;
@@ -236,8 +241,17 @@ export default function VideoDashboardPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.video.searchVideos}
-                className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                className="w-full pl-10 pr-10 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X size={18} />
+                </button>
+              )}
             </div>
 
             {/* Filters Row */}
@@ -327,10 +341,11 @@ export default function VideoDashboardPage() {
             {filteredVideos.map((video) => (
               <div
                 key={video.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+                className="video-card bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden"
               >
-                {/* Checkbox */}
-                <div className="relative">
+                {/* Thumbnail with Checkbox */}
+                <div className="relative w-full h-48 bg-gray-200 dark:bg-gray-700">
+                  {/* Checkbox overlay */}
                   <input
                     type="checkbox"
                     checked={selectedVideos.has(video.id)}
@@ -338,51 +353,58 @@ export default function VideoDashboardPage() {
                     className="absolute top-3 left-3 w-5 h-5 z-10 cursor-pointer"
                   />
 
-                  {/* Thumbnail */}
-                  <div className="relative w-full aspect-video bg-gray-200 dark:bg-gray-700">
-                    {video.thumbnailUrl ? (
-                      <Image
-                        src={video.thumbnailUrl}
-                        alt={video.title}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                        unoptimized
+                  {/* Thumbnail Image */}
+                  {video.thumbnailUrl && video.thumbnailUrl.trim() !== '' ? (
+                    <Image
+                      src={video.thumbnailUrl}
+                      alt={video.title}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                      unoptimized
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
+                        if (placeholder) placeholder.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  
+                  {/* Placeholder */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-700"
+                    style={{ display: video.thumbnailUrl && video.thumbnailUrl.trim() !== '' ? 'none' : 'flex' }}
+                  >
+                    <svg
+                      className="w-16 h-16 text-gray-400 dark:text-gray-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
                       />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <svg
-                          className="w-16 h-16 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.5}
-                            d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                          />
-                        </svg>
-                      </div>
-                    )}
+                    </svg>
                   </div>
                 </div>
 
-                {/* Content */}
+                {/* Video Details - Matching VideoCard style */}
                 <div className="p-4">
-                  <h3 className="font-semibold text-lg mb-2 line-clamp-2 dark:text-white">
+                  <h3 className="text-lg truncate font-[Tahoma]">
                     {video.title}
                   </h3>
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    <span>{video.views || 0} {t.video.views}</span>
-                    <span>•</span>
-                    <span>{formatDate(video.dateCreated)}</span>
-                  </div>
+                  <p className="text-sm truncate">{video.channelName || video.channel}</p>
+                  <p className="text-sm">
+                    {video.views || 0} {t.video.videoViews?.toLowerCase() || 'views'} • {formatDate(video.dateCreated)}
+                  </p>
 
-                  <div className="flex items-center gap-2 mb-3">
+                  {/* Privacy Badge */}
+                  <div className="mt-2">
                     <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
+                      className={`inline-block px-2 py-1 rounded text-xs font-medium ${
                         video.isPublic
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                           : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
@@ -393,27 +415,27 @@ export default function VideoDashboardPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 mt-3">
                     <Link
                       href={`/${lang}/video?vid=${video.id}`}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
                     >
-                      <Eye size={16} />
-                      {t.common.viewAll}
+                      <Eye size={14} />
+                      <span className="text-xs">{t.common.viewAll}</span>
                     </Link>
                     <Link
                       href={`/${lang}/video/${video.id}/edit`}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
                     >
-                      <Edit size={16} />
-                      {t.common.edit}
+                      <Edit size={14} />
+                      <span className="text-xs">{t.common.edit}</span>
                     </Link>
                     <button
                       onClick={() => handleDeleteVideo(video.id)}
-                      className="px-3 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      className="px-2 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                       aria-label={t.common.delete}
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>

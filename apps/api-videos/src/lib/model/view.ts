@@ -54,10 +54,12 @@ export const VideoView = z.object({
     description: Str().optional(),
     thumbnailUrl: Str().optional(),
     videoUrl: Str().optional(),
+    playUrl: Str().optional(), // HLS streaming URL from Bunny.net
     userId: Str(),
     channelId: Str(),
     channelName: Str(), // Denormalized for client convenience
     channelAvatarUrl: Str().optional(), // Denormalized for client convenience
+    channelCoverUrl: Str().optional(), // Denormalized for client convenience
     dateCreated: DateTime(),
     dateModified: DateTime(),
     views: z.number(),

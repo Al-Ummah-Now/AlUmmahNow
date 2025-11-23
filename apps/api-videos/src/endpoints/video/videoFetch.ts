@@ -1,10 +1,11 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { Video as BusinessVideo, ResponseError } from "../../lib/types";
+import { Video as BusinessVideo, Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
 
 export class VideoFetch extends OpenAPIRoute {
 	schema = {
@@ -92,14 +93,45 @@ export class VideoFetch extends OpenAPIRoute {
 			);
 		}
 
-		// Transform to view model for response
-		const videoView = transformVideoToView(video);
+		// Fetch channel data to populate channelName, channelAvatarUrl, and channelCoverUrl
+		let channel = null;
+		if (video.channelId) {
+			try {
+				const channelBucket = c.env.channels;
+				type ChannelType = z.infer<typeof BusinessChannel>;
+				const channelRepository = new R2Repository<ChannelType>(channelBucket);
+				channel = await channelRepository.getObject(video.channelId);
+
+				if (channel) {
+					logger.info('[VideoFetch] Channel fetched successfully', {
+						videoId: video.id,
+						channelId: video.channelId,
+						channelName: channel.name
+					});
+				} else {
+					logger.warn('[VideoFetch] Channel not found', {
+						videoId: video.id,
+						channelId: video.channelId
+					});
+				}
+			} catch (error) {
+				logger.error('[VideoFetch] Error fetching channel data', {
+					videoId: video.id,
+					channelId: video.channelId,
+					error: error instanceof Error ? error.message : String(error)
+				});
+				// Continue without channel data - transformation will use empty values
+			}
+		}
+
+		// Transform to view model for response with channel data
+		const videoView = transformVideoToView(video, channel);
 
 		// Send queue message for video view analytics
 		const queue = new Queue(c.env.queue);
-		await queue.send(MessageType.VideoView, { 
-			videoId: video.id, 
-			userId, 
+		await queue.send(MessageType.VideoView, {
+			videoId: video.id,
+			userId,
 			channelId,
 			timestamp: new Date().toISOString(),
 		});

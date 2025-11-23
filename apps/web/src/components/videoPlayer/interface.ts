@@ -4,7 +4,9 @@ export interface PlayerOptions {
   id: string;
   title: string;
   channel: string;
+  channelName: string;
   channelAvatar: string;
+  channelCover?: string;
   description: string;
   views: string;
   url: string;

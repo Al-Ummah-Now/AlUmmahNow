@@ -632,7 +632,7 @@ export async function searchVideos(
     }
 
     const response = await fetch(
-      `${baseUrl}/api/videos?${queryParams.toString()}`,
+      `${baseUrl}/api/videos/search?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
@@ -1261,6 +1261,9 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             title: video.title,
             description: video.description || '',
             channel: video.channel,
+            channelName: video.channelName,
+            channelAvatar: video.channelAvatarUrl,
+            channelCover: video.channelCoverUrl,
             url: video.videoUrl,
             playUrl: video.playUrl,
             poster: video.thumbnailUrl,
@@ -1271,7 +1274,6 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             width: video.width,
             height: video.height,
             availableResolutions: video.availableResolutions,
-            channelAvatar: video.channelAvatarUrl,
             likesCount: video.likesCount,
             dislikesCount: video.dislikesCount,
             commentsCount: video.commentsCount,

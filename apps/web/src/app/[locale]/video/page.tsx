@@ -9,9 +9,7 @@ import { VideoInfo } from "@/interfaces";
 import { PlayerOptions } from "@/components/videoPlayer/interface";
 import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
-import { useRealTimeNotifications } from "@/hooks/useRealTimeNotifications";
 import { useLanguage } from "@/hooks/useLanguage";
-import { Button } from "@/components/ui/button";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Edit } from "lucide-react";
@@ -26,9 +24,6 @@ export default function Home() {
   const [vid, _setVid] = useQueryState("vid", { shallow: false });
   const { user } = useAuth();
   const [videoOwner, setVideoOwner] = useState<string | null>(null);
-
-  // Real-time notifications for demonstration
-  const { addNotification } = useRealTimeNotifications({ userId: user?.id });
 
   useEffect(() => {
     setIsMounted(true); // Ensure the component is mounted on the client
@@ -64,20 +59,6 @@ export default function Home() {
     fetchRelatedVideos();
   }, [user?.id]);
 
-  // Demo function to test notifications
-  const testNotification = () => {
-    const notificationTypes = ['like', 'comment', 'subscription', 'upload', 'system'] as const;
-    const randomType = notificationTypes[Math.floor(Math.random() * notificationTypes.length)];
-
-    addNotification({
-      title: `Test ${randomType} notification`,
-      message: `This is a demo ${randomType} notification to show real-time functionality!`,
-      type: randomType,
-      userId: user?.id || 'demo',
-      actionUrl: `/${locale}/video?vid=` + (vid || 'demo')
-    });
-  };
-
   if (!vid) {
     return (
       <main className="flex flex-1 flex-col items-center justify-center p-8">
@@ -86,16 +67,6 @@ export default function Home() {
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             {t.video.selectVideoMessage || 'Please select a video to watch or add a video ID to the URL.'}
           </p>
-
-          {/* Demo notification button */}
-          {user && process.env.NODE_ENV === 'development' && (
-            <div className="space-y-2">
-              <p className="text-sm text-gray-500">{t.notifications?.demoFeatures || 'Demo Real-time Features'}:</p>
-              <Button onClick={testNotification} variant="outline">
-                {t.notifications?.testNotification || 'Test Notification'}
-              </Button>
-            </div>
-          )}
         </div>
       </main>
     );
@@ -134,21 +105,6 @@ export default function Home() {
                     <Edit size={20} />
                     <span>{t.video.editVideo}</span>
                   </Link>
-                </div>
-              )}
-
-              {/* Demo buttons for testing (development only) */}
-              {process.env.NODE_ENV === 'development' && user && (
-                <div className="w-full max-w-4xl mt-2 px-4">
-                  <div className="flex gap-2 justify-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={testNotification}
-                    >
-                      {t.notifications?.testNotification || 'Test Notification'}
-                    </Button>
-                  </div>
                 </div>
               )}
             </div>
