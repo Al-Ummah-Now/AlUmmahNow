@@ -211,7 +211,7 @@ test.describe('Account Switching', () => {
 
     // Get all active channel related keys from localStorage
     const channelData = await page.evaluate(() => {
-      const data: Record<string, any> = {};
+      const data: Record<string, unknown> = {};
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.includes('al-ummah-active-channel')) {
@@ -239,10 +239,11 @@ test.describe('Account Switching', () => {
       const hasUserIdSuffix = parts.length > 4; // al-ummah-active-channel-{userId}
       console.log(`  Has userId suffix: ${hasUserIdSuffix}`);
 
-      if (channelData[key] && typeof channelData[key] === 'object') {
-        console.log(`  Channel ID: ${channelData[key].channelId}`);
-        console.log(`  Channel Name: ${channelData[key].name}`);
-        console.log(`  Is Main: ${channelData[key].isMain}`);
+      const channelInfo = channelData[key] as Record<string, unknown>;
+      if (channelInfo && typeof channelInfo === 'object') {
+        console.log(`  Channel ID: ${channelInfo.channelId}`);
+        console.log(`  Channel Name: ${channelInfo.name}`);
+        console.log(`  Is Main: ${channelInfo.isMain}`);
       }
     }
 

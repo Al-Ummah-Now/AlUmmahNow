@@ -6,7 +6,6 @@
 
 import type { AppTranslations, SupportedLanguage } from '../types';
 import { EN_TRANSLATIONS, AR_TRANSLATIONS } from '../translations';
-import { logger } from '@/lib/logger-server';
 
 
 /**

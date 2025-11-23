@@ -1,4 +1,5 @@
 import { test, expect, helpers } from './fixtures';
+import type { Page } from '@playwright/test';
 
 /**
  * TUS Proxy Log Verification Tests
@@ -14,7 +15,7 @@ import { test, expect, helpers } from './fixtures';
  */
 
 // Helper function to fetch logs from log service
-async function fetchLogs(page: any, filters?: { level?: string; search?: string }) {
+async function fetchLogs(page: Page, filters?: { level?: string; search?: string }) {
   try {
     const response = await page.request.get('http://localhost:3089/logs/stream/realtime', {
       params: {
@@ -37,8 +38,8 @@ async function fetchLogs(page: any, filters?: { level?: string; search?: string 
 }
 
 // Helper to search logs for specific patterns
-function findLogsMatching(logs: any[], pattern: string | RegExp): any[] {
-  return logs.filter((log: any) => {
+function findLogsMatching(logs: unknown[], pattern: string | RegExp): unknown[] {
+  return logs.filter((log: unknown) => {
     const logStr = JSON.stringify(log).toLowerCase();
     if (typeof pattern === 'string') {
       return logStr.includes(pattern.toLowerCase());
@@ -190,7 +191,7 @@ test.describe('TUS Proxy - Log Verification', () => {
     const logs = await fetchLogs(page);
 
     // Look for logs with videoId
-    const videoIdLogs = logs.filter((log: any) => {
+    const videoIdLogs = logs.filter((log: unknown) => {
       const logStr = JSON.stringify(log).toLowerCase();
       return logStr.includes('videoid') || logStr.includes('video_id');
     });
@@ -213,7 +214,7 @@ test.describe('TUS Proxy - Log Verification', () => {
     const logs = await fetchLogs(page);
 
     // Look for logs with user/auth context
-    const authLogs = logs.filter((log: any) => {
+    const authLogs = logs.filter((log: unknown) => {
       const logStr = JSON.stringify(log).toLowerCase();
       return logStr.includes('userid') ||
              logStr.includes('user_id') ||
@@ -303,7 +304,7 @@ test.describe('TUS Proxy - Log Analysis', () => {
     expect(errorLogs.length).toBeGreaterThan(0);
 
     // Verify logs contain helpful debugging context
-    const hasDebugInfo = logs.some(log => {
+    const hasDebugInfo = logs.some((log: unknown) => {
       const logStr = JSON.stringify(log);
       return logStr.includes('error') ||
              logStr.includes('status') ||
@@ -339,7 +340,7 @@ test.describe('TUS Proxy - Log Analysis', () => {
     expect(uploadLogs.length).toBeGreaterThan(0);
 
     // Look for lifecycle events (create, progress, cancel/complete)
-    const lifecycleLogs = logs.filter((log: any) => {
+    const lifecycleLogs = logs.filter((log: unknown) => {
       const logStr = JSON.stringify(log).toLowerCase();
       return logStr.includes('create') ||
              logStr.includes('progress') ||

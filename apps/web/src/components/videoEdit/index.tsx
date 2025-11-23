@@ -42,7 +42,7 @@ export default function VideoEdit({
   onCancel,
   className = '',
 }: VideoEditProps) {
-  const { t, isRTL, lang } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);

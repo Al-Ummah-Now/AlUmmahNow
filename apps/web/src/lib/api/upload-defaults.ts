@@ -12,7 +12,6 @@ import {
   CreateTemplateRequest,
   UpdateTemplateRequest,
   TemplateListResponse,
-  VideoCategory,
 } from '@al-ummah/shared-types';
 import { apiRequestServer, buildApiUrl } from './api-client';
 import { getServerAuthContext } from './server-auth-v2';

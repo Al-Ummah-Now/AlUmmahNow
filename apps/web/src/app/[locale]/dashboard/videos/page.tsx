@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Filter, UploadCloud, Trash2, Eye, Edit, Share2, MoreVertical } from 'lucide-react';
+import { Search, UploadCloud, Trash2, Eye, Edit } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
@@ -70,9 +70,9 @@ export default function VideoDashboardPage() {
 
     // Status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter((video) => {
+      filtered = filtered.filter(() => {
         // Assuming we have a status field, otherwise default to 'ready'
-        const status = 'ready'; // TODO: Get from video.status when available
+        const status = 'ready'; // Placeholder - will be implemented when video.status is available
         return status === statusFilter;
       });
     }
@@ -144,7 +144,7 @@ export default function VideoDashboardPage() {
     if (!user) return;
     if (selectedVideos.size === 0) return;
 
-    if (!confirm(t.video.confirmDeleteMultiple.replace('{count}', selectedVideos.size.toString()))) {
+    if (!confirm(t.video.confirmDeleteMultiple?.replace('{count}', selectedVideos.size.toString()) || 'Are you sure you want to delete selected videos?')) {
       return;
     }
 
@@ -250,7 +250,7 @@ export default function VideoDashboardPage() {
             {selectedVideos.size > 0 && (
               <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <span className="text-sm font-medium dark:text-white">
-                  {t.video.videosSelected.replace('{count}', selectedVideos.size.toString())}
+                  {t.video.videosSelected?.replace('{count}', selectedVideos.size.toString()) || `${selectedVideos.size} videos selected`}
                 </span>
                 <button
                   onClick={handleSelectAll}

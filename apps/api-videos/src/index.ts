@@ -126,6 +126,13 @@ import { ListUploadDefaultsEndpoint, CreateUploadDefaultEndpoint } from "./endpo
 import { GetUploadDefaultEndpoint, UpdateUploadDefaultEndpoint, DeleteUploadDefaultEndpoint, SetDefaultTemplateEndpoint } from "./endpoints/settings/uploadDefaultsById";
 // TUS Proxy import
 import { createTusRouter } from "./endpoints/video/tus";
+// Video Sections imports
+import { RecentVideosSection } from "./endpoints/sections/recent";
+import { PopularVideosSection } from "./endpoints/sections/popular";
+import { TrendingVideosSection } from "./endpoints/sections/trending";
+import { RecommendedVideosSection } from "./endpoints/sections/recommended";
+import { CategoryVideosSection } from "./endpoints/sections/by-category";
+import { AdminIndexOperations } from "./endpoints/sections/admin";
 import { logger } from './lib/logger';
 
 
@@ -243,6 +250,13 @@ openapi.get("/api/community/posts/:postId/comments", ListPostComments);
 openapi.get("/api/live-streams", LiveStreamsList);
 // Phase 2: Analytics endpoints
 openapi.get("/api/analytics", AnalyticsGet);
+
+// Video Sections endpoints (public)
+openapi.get("/api/videos/sections/recent", RecentVideosSection);
+openapi.get("/api/videos/sections/popular", PopularVideosSection);
+openapi.get("/api/videos/sections/trending", TrendingVideosSection);
+openapi.get("/api/videos/sections/recommended", RecommendedVideosSection);
+openapi.get("/api/videos/sections/by-category/:category", CategoryVideosSection);
 
 // Monitoring and testing endpoints (public)
 openapi.get("/health", HealthCheck);
@@ -493,6 +507,10 @@ openapi.get("/api/upload-defaults/:id", GetUploadDefaultEndpoint);
 openapi.put("/api/upload-defaults/:id", UpdateUploadDefaultEndpoint);
 openapi.delete("/api/upload-defaults/:id", DeleteUploadDefaultEndpoint);
 openapi.put("/api/upload-defaults/:id/default", SetDefaultTemplateEndpoint);
+
+// Video Sections Admin operations (require auth)
+app.use('/api/videos/sections/admin', authMiddleware);
+openapi.get("/api/videos/sections/admin", AdminIndexOperations);
 
 // Override the default OpenAPI document to include authentication
 app.get("/openapi.json", async (c) => {

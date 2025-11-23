@@ -26,7 +26,7 @@ const CATEGORY_LABELS = {
 };
 
 export function VariableGuide({ onInsertVariable }: VariableGuideProps) {
-  const { t, isRTL } = useLanguage();
+  const { isRTL } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
   const [copiedVariable, setCopiedVariable] = useState<string | null>(null);
 

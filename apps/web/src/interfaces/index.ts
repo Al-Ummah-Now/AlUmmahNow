@@ -20,7 +20,7 @@ export interface VideoObject {
     dateCreated: string;
     dateModified: string;
     createdAt: string; // For compatibility with shared-types
-    updatedAt: string; // For compatibility with shared-types
+    updatedAt?: string; // For compatibility with shared-types - made optional
     views?: number;
     width?: number;
     height?: number;
@@ -83,6 +83,9 @@ export interface User {
     id: string;
     email: string;
     role?: 'user' | 'moderator' | 'admin'; // Add role field for moderation access
+    channel?: Channel; // Optional channel reference
+    channelName?: string; // Channel display name
+    name?: string; // User display name
 }
 
 export interface AuthSubject {
@@ -92,6 +95,7 @@ export interface AuthSubject {
 export interface Playlist {
     id: string;
     title: string;
+    name?: string; // For compatibility with shared-types
     description?: string;
     thumbnailUrl?: string;
     userId: string; // Made required to match API spec
@@ -99,6 +103,7 @@ export interface Playlist {
     channelName?: string; // Added from API spec
     dateCreated: string;
     dateModified: string;
+    createdAt?: string; // For compatibility with shared-types
     videos?: string[];
     videosCount?: number; // Added from API spec
     isPublic?: boolean;

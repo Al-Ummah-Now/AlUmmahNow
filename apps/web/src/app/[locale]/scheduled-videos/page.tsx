@@ -8,7 +8,7 @@ import type { ScheduledVideoInfo, ScheduledPublishStatus } from '@al-ummah/share
 import { Calendar, Clock, Edit, Trash2, PlayCircle, AlertCircle, Loader } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 export default function ScheduledVideosPage() {
   const pathname = usePathname();
@@ -59,12 +59,13 @@ export default function ScheduledVideosPage() {
 
   useEffect(() => {
     fetchScheduledVideos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.user, filterStatus]);
 
   // Handle cancel schedule
   const handleCancelSchedule = async (videoId: string) => {
     if (!auth.user) return;
-    if (!confirm(t.schedule?.confirmCancelSchedule || 'Are you sure?')) return;
+    if (!confirm(t.schedule?.confirmCancelSchedule ?? 'Are you sure?')) return;
 
     try {
       setActionLoading(videoId);
@@ -78,7 +79,7 @@ export default function ScheduledVideosPage() {
         // Refresh the list
         await fetchScheduledVideos();
       } else {
-        alert(result?.error || t.schedule.scheduleFailed);
+        alert(result?.error || t.schedule?.scheduleFailed || 'Schedule operation failed');
       }
     } catch (err) {
       console.error('Error canceling schedule:', err);
@@ -91,7 +92,7 @@ export default function ScheduledVideosPage() {
   // Handle publish now
   const handlePublishNow = async (videoId: string) => {
     if (!auth.user) return;
-    if (!confirm(t.schedule?.confirmPublishNow || 'Are you sure?')) return;
+    if (!confirm(t.schedule?.confirmPublishNow ?? 'Are you sure?')) return;
 
     try {
       setActionLoading(videoId);
@@ -121,15 +122,15 @@ export default function ScheduledVideosPage() {
     const scheduled = new Date(scheduledDate);
     const diff = scheduled.getTime() - now.getTime();
 
-    if (diff < 0) return t.schedule?.publishesSoon || 'Soon';
+    if (diff < 0) return t.schedule?.publishesSoon ?? 'Soon';
 
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
-    if (days > 0) return `${days} ${t.schedule?.days || 'days'}, ${hours} ${t.schedule?.hours || 'hours'}`;
-    if (hours > 0) return `${hours} ${t.schedule?.hours || 'hours'}, ${minutes} ${t.schedule?.minutes || 'minutes'}`;
-    return `${minutes} ${t.schedule?.minutes || 'minutes'}`;
+    if (days > 0) return `${days} ${t.schedule?.days ?? 'days'}, ${hours} ${t.schedule?.hours ?? 'hours'}`;
+    if (hours > 0) return `${hours} ${t.schedule?.hours ?? 'hours'}, ${minutes} ${t.schedule?.minutes ?? 'minutes'}`;
+    return `${minutes} ${t.schedule?.minutes ?? 'minutes'}`;
   };
 
   // Get status badge color
@@ -155,7 +156,7 @@ export default function ScheduledVideosPage() {
       <div className="container mx-auto px-4 py-12 max-w-4xl">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            {t.schedule.scheduledVideos}
+            {t.schedule?.scheduledVideos ?? 'Scheduled Videos'}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             Please sign in to view your scheduled videos.
@@ -176,17 +177,17 @@ export default function ScheduledVideosPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          {t.schedule.myScheduledVideos}
+          {t.schedule?.myScheduledVideos ?? 'My Scheduled Videos'}
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          {t.schedule.noScheduledVideosMessage}
+          {t.schedule?.noScheduledVideosMessage ?? 'View and manage your scheduled videos'}
         </p>
       </div>
 
       {/* Filters */}
       <div className="mb-6 flex items-center space-x-4">
         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {t.schedule.filterByStatus}:
+          {t.schedule?.filterByStatus ?? 'Filter by status'}:
         </label>
         <select
           value={filterStatus}
@@ -225,16 +226,16 @@ export default function ScheduledVideosPage() {
         <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <Calendar className="mx-auto text-gray-400 mb-4" size={64} />
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            {t.schedule.noScheduledVideos}
+            {t.schedule?.noScheduledVideos ?? 'No Scheduled Videos'}
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            {t.schedule.createFirstScheduledVideo}
+            {t.schedule?.createFirstScheduledVideo ?? 'Create your first scheduled video to get started'}
           </p>
           <Link
             href={`/${locale}/upload`}
             className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            {t.schedule.scheduleAVideo}
+            {t.schedule?.scheduleAVideo ?? 'Schedule a Video'}
           </Link>
         </div>
       )}

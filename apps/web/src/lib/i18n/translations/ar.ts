@@ -33,6 +33,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
     retry: 'إعادة المحاولة',
     demo: 'تجريبي',
     welcome: 'مرحباً',
+    collapse: 'طي',
+    expand: 'توسيع',
+    loadMore: 'تحميل المزيد',
   },
 
   languages: {
@@ -67,6 +70,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     signOutOf: 'تسجيل الخروج من',
     signOutOfAll: 'تسجيل الخروج من جميع الحسابات',
     signIn: 'تسجيل الدخول',
+    home: 'العودة إلى الرئيسية',
     light: 'فاتح',
     dark: 'داكن',
     channel: 'قناة',
@@ -324,6 +328,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     // Video Management Dashboard
     myVideos: 'فيديوهاتي',
     manageVideos: 'إدارة الفيديوهات',
+    manageVideosDescription: 'إدارة فيديوهات قناتك',
     videoManagement: 'إدارة الفيديوهات',
     allVideos: 'جميع الفيديوهات',
     uploadedVideos: 'الفيديوهات المرفوعة',
@@ -801,6 +806,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     genericError: 'حدث خطأ. يرجى المحاولة مرة أخرى.',
     networkError: 'خطأ في الشبكة. يرجى التحقق من اتصالك.',
     notFound: 'الصفحة غير موجودة',
+    notFoundDescription: 'عذراً، الصفحة التي تبحث عنها غير موجودة. ربما تمت إزالتها أو أن الرابط غير صحيح.',
     unauthorized: 'غير مصرح. يرجى تسجيل الدخول.',
     forbidden: 'الوصول محظور',
     serverError: 'خطأ في الخادم. يرجى المحاولة لاحقاً.',
@@ -931,5 +937,31 @@ export const AR_TRANSLATIONS: AppTranslations = {
     statusActive: 'نشط',
     statusProcessing: 'جاري المعالجة',
     statusFailed: 'فشل',
+  },
+
+  sections: {
+    // Video Sections
+    recentVideos: 'أحدث الفيديوهات',
+    popularVideos: 'الفيديوهات الشائعة',
+    trendingVideos: 'الرائج',
+    recommendedVideos: 'موصى لك',
+    noRecentVideos: 'لا توجد فيديوهات حديثة متاحة',
+    noPopularVideos: 'لا توجد فيديوهات شائعة متاحة',
+    noTrendingVideos: 'لا توجد فيديوهات رائجة متاحة',
+    noRecommendedVideos: 'لا توجد فيديوهات موصى بها متاحة',
+    // Time Periods
+    periodDaily: 'اليوم',
+    periodWeekly: 'هذا الأسبوع',
+    periodMonthly: 'هذا الشهر',
+    periodAll: 'كل الأوقات',
+    // Strategies
+    strategyPopular: 'شائع',
+    strategyCategoryBased: 'مشابه',
+    strategyRandom: 'اكتشف',
+    basedOn: 'بناءً على',
+    // Common
+    loadMore: 'تحميل المزيد',
+    collapse: 'طي',
+    expand: 'توسيع',
   },
 };

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback } from 'react';
-import { X, Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   SUPPORTED_LANGUAGES,

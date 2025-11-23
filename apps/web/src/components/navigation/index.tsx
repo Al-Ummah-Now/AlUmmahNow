@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import { Profile } from "@/interfaces";
 import { fetchProfile } from "@/lib/api/profiles-client";
 import { useAuth } from "../AuthProvider/authContext";
-import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 
 // Lazy load navigation components for better FID
 const LeftNavigation = dynamic(() => import("@/components/LeftNavigation/index"), {

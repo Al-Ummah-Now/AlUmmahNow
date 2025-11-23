@@ -277,7 +277,7 @@ describe('Channel Routing - Edge Cases', () => {
     mockGetChannelById.mockResolvedValue(mockChannel);
 
     const params = Promise.resolve({ locale: 'en', id: 'test-channel-id' });
-    const { container } = render(await ChannelHomePage({ params }));
+    render(await ChannelHomePage({ params }));
 
     await waitFor(() => {
       expect(screen.getByText('Channel Trailer')).toBeInTheDocument();
@@ -313,7 +313,7 @@ describe('Channel Routing - Edge Cases', () => {
     mockGetChannelById.mockResolvedValue(mockChannel);
 
     const params = Promise.resolve({ locale: 'en', id: 'test-channel-id' });
-    const { container } = render(await ChannelHomePage({ params }));
+    render(await ChannelHomePage({ params }));
 
     await waitFor(() => {
       expect(screen.getByText('Channel Trailer')).toBeInTheDocument();

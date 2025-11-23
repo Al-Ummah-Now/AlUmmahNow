@@ -33,6 +33,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
     retry: 'Retry',
     demo: 'Demo',
     welcome: 'Welcome',
+    collapse: 'Collapse',
+    expand: 'Expand',
+    loadMore: 'Load More',
   },
 
   languages: {
@@ -67,6 +70,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     signOutOf: 'Sign out of',
     signOutOfAll: 'Sign out of all accounts',
     signIn: 'Sign In',
+    home: 'Go Home',
     light: 'Light',
     dark: 'Dark',
     channel: 'channel',
@@ -324,6 +328,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     // Video Management Dashboard
     myVideos: 'My Videos',
     manageVideos: 'Manage Videos',
+    manageVideosDescription: 'Manage your channel videos',
     videoManagement: 'Video Management',
     allVideos: 'All Videos',
     uploadedVideos: 'Uploaded Videos',
@@ -801,6 +806,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     genericError: 'An error occurred. Please try again.',
     networkError: 'Network error. Please check your connection.',
     notFound: 'Page not found',
+    notFoundDescription: 'Sorry, the page you are looking for does not exist. It might have been removed or the URL might be incorrect.',
     unauthorized: 'Unauthorized. Please login.',
     forbidden: 'Access forbidden',
     serverError: 'Server error. Please try again later.',
@@ -931,6 +937,32 @@ export const EN_TRANSLATIONS: AppTranslations = {
     statusActive: 'Active',
     statusProcessing: 'Processing',
     statusFailed: 'Failed',
+  },
+
+  sections: {
+    // Video Sections
+    recentVideos: 'Recent Uploads',
+    popularVideos: 'Popular Videos',
+    trendingVideos: 'Trending',
+    recommendedVideos: 'Recommended for You',
+    noRecentVideos: 'No recent videos available',
+    noPopularVideos: 'No popular videos available',
+    noTrendingVideos: 'No trending videos available',
+    noRecommendedVideos: 'No recommended videos available',
+    // Time Periods
+    periodDaily: 'Today',
+    periodWeekly: 'This Week',
+    periodMonthly: 'This Month',
+    periodAll: 'All Time',
+    // Strategies
+    strategyPopular: 'Popular',
+    strategyCategoryBased: 'Similar',
+    strategyRandom: 'Discover',
+    basedOn: 'Based on',
+    // Common
+    loadMore: 'Load More',
+    collapse: 'Collapse',
+    expand: 'Expand',
   },
 
   uploadDefaults: {

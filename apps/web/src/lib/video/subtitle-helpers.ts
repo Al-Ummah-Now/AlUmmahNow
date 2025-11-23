@@ -8,6 +8,14 @@ import type { Player } from 'video.js';
 import { SubtitleTrack } from '@/lib/api/subtitles';
 import { logger } from '@/lib/logger-server';
 
+// Extend Player type to include methods not in type definitions
+interface ExtendedPlayer extends Player {
+  textTracks(): any;
+  removeRemoteTextTrack(track: any): void;
+  addRemoteTextTrack(options: any, manualCleanup?: boolean): any;
+  el(): HTMLElement;
+}
+
 
 export interface SubtitleSettings {
   fontSize: 'small' | 'medium' | 'large';
@@ -27,7 +35,7 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
  * Load subtitle tracks into Video.js player
  */
 export function loadSubtitleTracks(
-  player: Player,
+  player: ExtendedPlayer,
   subtitles: SubtitleTrack[]
 ): void {
   if (!player || subtitles.length === 0) return;
@@ -62,7 +70,7 @@ export function loadSubtitleTracks(
  * Apply subtitle appearance settings
  */
 export function applySubtitleSettings(
-  player: Player,
+  player: ExtendedPlayer,
   settings: SubtitleSettings
 ): void {
   const textTrackDisplay = player.el().querySelector('.vjs-text-track-display');
@@ -81,7 +89,7 @@ export function applySubtitleSettings(
 
   // Apply to all cue elements
   const cues = textTrackDisplay.querySelectorAll('.vjs-text-track-cue');
-  cues.forEach((cue) => {
+  cues.forEach((cue: Element) => {
     const cueEl = cue as HTMLElement;
     cueEl.style.backgroundColor = `rgba(0, 0, 0, ${settings.backgroundOpacity / 100})`;
     cueEl.style.color = settings.textColor;
@@ -106,7 +114,7 @@ export function applySubtitleSettings(
 /**
  * Get current active subtitle track
  */
-export function getActiveSubtitleTrack(player: Player): string | null {
+export function getActiveSubtitleTrack(player: ExtendedPlayer): string | null {
   const textTracks = player.textTracks();
 
   for (let i = 0; i < textTracks.length; i++) {
@@ -123,7 +131,7 @@ export function getActiveSubtitleTrack(player: Player): string | null {
  * Set active subtitle track by language
  */
 export function setActiveSubtitleTrack(
-  player: Player,
+  player: ExtendedPlayer,
   language: string | null
 ): void {
   const textTracks = player.textTracks();
@@ -148,7 +156,7 @@ export function setActiveSubtitleTrack(
 /**
  * Cycle to next subtitle track
  */
-export function cycleSubtitleTrack(player: Player): void {
+export function cycleSubtitleTrack(player: ExtendedPlayer): void {
   const textTracks = player.textTracks();
   const subtitleTracks: any[] = [];
 
@@ -187,7 +195,7 @@ export function cycleSubtitleTrack(player: Player): void {
  * Auto-select subtitle track based on user's locale
  */
 export function autoSelectSubtitle(
-  player: Player,
+  player: ExtendedPlayer,
   userLocale: string
 ): boolean {
   const textTracks = player.textTracks();

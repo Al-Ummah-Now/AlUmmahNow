@@ -54,7 +54,7 @@ function parseTimestamp(timestamp: string): number | null {
 }
 
 export default function ChapterEditor({
-  videoId,
+  videoId: _videoId,
   videoDuration,
   initialChapters = [],
   onSave,
@@ -200,7 +200,7 @@ export default function ChapterEditor({
     updated.sort((a, b) => a.startTime - b.startTime);
 
     // Validate minimum duration
-    const hasShortChapter = updated.some((ch, i) => {
+    const hasShortChapter = updated.some((ch) => {
       const duration = ch.endTime - ch.startTime;
       return duration < 10;
     });

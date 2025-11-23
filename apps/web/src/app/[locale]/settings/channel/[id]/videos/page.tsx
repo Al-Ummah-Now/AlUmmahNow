@@ -164,7 +164,7 @@ export default function ChannelVideosPage() {
     if (!user) return;
     if (selectedVideos.size === 0) return;
 
-    if (!confirm(t.video.confirmDeleteMultiple.replace('{count}', selectedVideos.size.toString()))) {
+    if (!confirm(t.video.confirmDeleteMultiple?.replace('{count}', selectedVideos.size.toString()) || 'Are you sure you want to delete selected videos?')) {
       return;
     }
 
@@ -279,7 +279,7 @@ export default function ChannelVideosPage() {
             {selectedVideos.size > 0 && (
               <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <span className="text-sm font-medium dark:text-white">
-                  {t.video.videosSelected.replace('{count}', selectedVideos.size.toString())}
+                  {t.video.videosSelected?.replace('{count}', selectedVideos.size.toString()) || `${selectedVideos.size} videos selected`}
                 </span>
                 <button
                   onClick={handleSelectAll}

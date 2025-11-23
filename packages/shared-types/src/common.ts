@@ -36,7 +36,7 @@ export interface ApiError {
 
 export interface Timestamps {
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface SoftDelete {

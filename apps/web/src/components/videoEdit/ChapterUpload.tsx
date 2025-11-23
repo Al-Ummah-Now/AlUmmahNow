@@ -128,7 +128,7 @@ function parseChapterFile(
 }
 
 export default function ChapterUpload({
-  videoId,
+  videoId: _videoId,
   videoDuration,
   onChaptersParsed,
   onCancel,
@@ -310,7 +310,7 @@ export default function ChapterUpload({
                 </p>
               </div>
               <div className="divide-y dark:divide-gray-600 max-h-64 overflow-y-auto">
-                {parsedChapters.map((chapter, index) => (
+                {parsedChapters.map((chapter) => (
                   <div
                     key={chapter.id}
                     className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"

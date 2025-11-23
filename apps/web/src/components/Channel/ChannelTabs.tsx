@@ -18,7 +18,7 @@ export function ChannelTabs({ channel, locale }: ChannelTabsProps) {
   const pathname = usePathname();
   const t = getTranslations(locale as 'en' | 'ar');
   const [tabs, setTabs] = useState<Tab[]>(() => getDefaultTabs(channel, t));
-  const [isLoading, setIsLoading] = useState(true);
+  const [_isLoading, setIsLoading] = useState(true);
 
   // Fetch tab configuration from API
   useEffect(() => {
@@ -109,7 +109,7 @@ function getTabPath(tabId: string): string {
 }
 
 // Default tabs as fallback (shown while loading or on error)
-function getDefaultTabs(channel: Channel, t: ReturnType<typeof getTranslations>): Tab[] {
+function getDefaultTabs(_channel: Channel, t: ReturnType<typeof getTranslations>): Tab[] {
   return [
     { id: 'home', label: t.channel.home, path: '' },
     { id: 'videos', label: t.video.videos, path: '/videos' },

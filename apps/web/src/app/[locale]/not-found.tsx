@@ -23,9 +23,9 @@ export default function NotFound() {
   // Translation keys with fallbacks
   const pageNotFound = t.errors?.notFound || 'Page Not Found';
   const pageNotFoundDescription =
-    t.errors?.notFound ||
+    t.errors?.notFoundDescription ||
     'Sorry, the page you are looking for does not exist. It might have been removed or the URL might be incorrect.';
-  const goHome = t.common?.back || 'Go Home';
+  const goHome = t.navigation?.home || 'Go Home';
   const goBack = t.common?.back || 'Go Back';
 
   const handleGoBack = () => {
