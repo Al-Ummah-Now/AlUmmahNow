@@ -1,23 +1,39 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { searchVideos } from '@/lib/api/videos';
-import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import type { VideoObject } from '@/interfaces';
-import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
-import { Calendar, Clock, Edit, Trash2, PlayCircle, AlertCircle, Loader } from 'lucide-react';
+import { ViewSwitcher, type ViewMode } from '@/components/calendar/ViewSwitcher';
+import { CalendarControls } from '@/components/calendar/CalendarControls';
+import { ScheduledVideosList } from '@/components/scheduled-videos/ScheduledVideosList';
+import { navigateNext, navigatePrevious, type ViewType, type CalendarType } from '@/components/calendar/utils/dateFormatters';
+import { Loader } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import type { View, NavigateAction } from 'react-big-calendar';
+
+// Lazy load calendar component for better performance
+const ScheduledVideoCalendar = dynamic(
+  () => import('@/components/calendar/ScheduledVideoCalendar').then(mod => ({ default: mod.ScheduledVideoCalendar })),
+  {
+    loading: () => (
+      <div className="flex justify-center items-center py-24">
+        <Loader className="animate-spin text-blue-600" size={48} />
+      </div>
+    ),
+    ssr: false
+  }
+);
 
 export default function ScheduledVideosPage() {
   const pathname = usePathname();
   const router = useRouter();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const searchParams = useSearchParams();
+  const { t, locale } = useLanguage();
   const auth = useAuth();
   const { user: multiAccountUser, loading: multiAccountLoading } = useMultiAccount();
 
@@ -25,10 +41,37 @@ export default function ScheduledVideosPage() {
   const [fetchLoading, setFetchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // View state with URL persistence
+  const [view, setView] = useState<ViewMode>(() => {
+    const viewParam = searchParams.get('view');
+    return (viewParam === 'calendar' || viewParam === 'list') ? viewParam : 'list';
+  });
+
+  const [calendarType, setCalendarType] = useState<CalendarType>(() => {
+    const typeParam = searchParams.get('calendarType');
+    return (typeParam === 'hijri' || typeParam === 'gregorian') ? typeParam : 'gregorian';
+  });
+
+  const [calendarView, setCalendarView] = useState<ViewType>(() => {
+    const viewTypeParam = searchParams.get('calendarView');
+    return (viewTypeParam === 'month' || viewTypeParam === 'week' || viewTypeParam === 'day') ? viewTypeParam : 'month';
+  });
+
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
+
   // Combined loading state
   const loading = multiAccountLoading || fetchLoading;
-  const [filterStatus, setFilterStatus] = useState<ScheduledPublishStatus | 'all'>('all');
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Update URL when view state changes
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('view', view);
+    params.set('calendarType', calendarType);
+    params.set('calendarView', calendarView);
+
+    const newUrl = `${pathname}?${params.toString()}`;
+    router.replace(newUrl, { scroll: false });
+  }, [view, calendarType, calendarView, pathname, router, searchParams]);
 
   // Redirect if not authenticated or no channels
   useEffect(() => {
@@ -53,8 +96,6 @@ export default function ScheduledVideosPage() {
 
     // Wait for multiAccountUser to load before fetching
     if (!multiAccountUser) {
-      // Don't change loading state - just wait for multiAccountUser to load
-      // When it loads, useEffect will trigger again
       return;
     }
 
@@ -73,19 +114,13 @@ export default function ScheduledVideosPage() {
         return;
       }
 
-      // Map filter status to schedule filter
-      const scheduleFilter =
-        filterStatus === 'all' ? 'scheduled' :
-        filterStatus === 'published' ? 'published' :
-        'scheduled'; // Default to scheduled for other statuses
-
       // Use single searchVideos call with schedule filtering
       const result = await searchVideos(
         '', // Empty query to get all videos
         {
           channelIds, // Filter by user's channels
           isOwner: true, // Only show videos owned by the user
-          scheduleFilter, // Filter by schedule status (scheduled/published)
+          scheduleFilter: 'scheduled', // Get all scheduled videos
           sortBy: 'date', // Sort by date (most recent first)
           sortOrder: 'desc',
         },
@@ -114,95 +149,38 @@ export default function ScheduledVideosPage() {
   useEffect(() => {
     fetchScheduledVideos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.user, multiAccountUser?.channels, filterStatus]);
+  }, [auth.user, multiAccountUser?.channels]);
 
-  // Handle cancel schedule
-  const handleCancelSchedule = async (videoId: string) => {
-    if (!auth.user) return;
-    if (!confirm(t.schedule?.confirmCancelSchedule ?? 'Are you sure?')) return;
-
-    try {
-      setActionLoading(videoId);
-
-      const result = await cancelSchedule(videoId, {
-        userId: auth.user.id,
-        channelId: auth.user.id,
-      });
-
-      if (result?.success) {
-        // Refresh the list
-        await fetchScheduledVideos();
-      } else {
-        alert(result?.error || t.schedule?.scheduleFailed || 'Schedule operation failed');
-      }
-    } catch (err) {
-      console.error('Error canceling schedule:', err);
-      alert('An error occurred while canceling the schedule');
-    } finally {
-      setActionLoading(null);
-    }
+  // Handle view change
+  const handleViewChange = (newView: ViewMode) => {
+    setView(newView);
   };
 
-  // Handle publish now
-  const handlePublishNow = async (videoId: string) => {
-    if (!auth.user) return;
-    if (!confirm(t.schedule?.confirmPublishNow ?? 'Are you sure?')) return;
-
-    try {
-      setActionLoading(videoId);
-
-      const result = await publishNow(videoId, {
-        userId: auth.user.id,
-        channelId: auth.user.id,
-      });
-
-      if (result?.success) {
-        // Refresh the list
-        await fetchScheduledVideos();
-      } else {
-        alert(result?.error || 'Failed to publish video');
-      }
-    } catch (err) {
-      console.error('Error publishing video:', err);
-      alert('An error occurred while publishing the video');
-    } finally {
-      setActionLoading(null);
-    }
+  // Handle calendar navigation
+  const handleNavigatePrevious = () => {
+    setCurrentDate(prev => navigatePrevious(prev, calendarView));
   };
 
-  // Format remaining time
-  const formatTimeRemaining = (scheduledDate: string): string => {
-    const now = new Date();
-    const scheduled = new Date(scheduledDate);
-    const diff = scheduled.getTime() - now.getTime();
-
-    if (diff < 0) return t.schedule?.publishesSoon ?? 'Soon';
-
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (days > 0) return `${days} ${t.schedule?.days ?? 'days'}, ${hours} ${t.schedule?.hours ?? 'hours'}`;
-    if (hours > 0) return `${hours} ${t.schedule?.hours ?? 'hours'}, ${minutes} ${t.schedule?.minutes ?? 'minutes'}`;
-    return `${minutes} ${t.schedule?.minutes ?? 'minutes'}`;
+  const handleNavigateNext = () => {
+    setCurrentDate(prev => navigateNext(prev, calendarView));
   };
 
-  // Get status badge color
-  const getStatusColor = (status: ScheduledPublishStatus): string => {
-    switch (status) {
-      case 'scheduled':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'publishing':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      case 'published':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'failed':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      case 'cancelled':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    }
+  const handleNavigateToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const handleCalendarNavigate = (date: Date, _view: View, _action: NavigateAction) => {
+    setCurrentDate(date);
+  };
+
+  // Handle event click
+  const handleEventClick = (videoId: string) => {
+    router.push(`/${locale}/video/${videoId}/edit`);
+  };
+
+  // Handle video click from list
+  const handleVideoClick = (videoId: string) => {
+    router.push(`/${locale}/video/${videoId}/edit`);
   };
 
   if (!auth.user) {
@@ -219,7 +197,7 @@ export default function ScheduledVideosPage() {
             href={`/${locale}/`}
             className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            {t.navigation.signIn}
+            {t.navigation?.signIn ?? 'Sign In'}
           </Link>
         </div>
       </div>
@@ -229,180 +207,59 @@ export default function ScheduledVideosPage() {
   return (
     <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8 max-w-7xl">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          {t.schedule?.myScheduledVideos ?? 'My Scheduled Videos'}
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          {t.schedule?.noScheduledVideosMessage ?? 'View and manage your scheduled videos'}
-        </p>
-      </div>
-
-      {/* Filters */}
-      <div className="mb-6 flex items-center space-x-4">
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {t.schedule?.filterByStatus ?? 'Filter by status'}:
-        </label>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as ScheduledPublishStatus | 'all')}
-          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-        >
-          <option value="all">{t.schedule?.allStatuses || 'All Statuses'}</option>
-          <option value="scheduled">{t.schedule?.statusScheduled || 'Scheduled'}</option>
-          <option value="publishing">{t.schedule?.statusPublishing || 'Publishing'}</option>
-          <option value="published">{t.schedule?.statusPublished || 'Published'}</option>
-          <option value="failed">{t.schedule?.statusFailed || 'Failed'}</option>
-          <option value="cancelled">{t.schedule?.statusCancelled || 'Cancelled'}</option>
-        </select>
-      </div>
-
-      {/* Loading State */}
-      {loading && (
-        <div className="flex justify-center items-center py-12">
-          <Loader className="animate-spin text-blue-600" size={32} />
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && !loading && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start space-x-3">
-          <AlertCircle className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
-          <div>
-            <h3 className="font-medium text-red-900 dark:text-red-100">Error</h3>
-            <p className="text-sm text-red-700 dark:text-red-200">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!loading && !error && videos.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
-          <Calendar className="mx-auto text-gray-400 mb-4" size={64} />
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            {t.schedule?.noScheduledVideos ?? 'No Scheduled Videos'}
-          </h3>
+      <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            {t.schedule?.myScheduledVideos ?? 'My Scheduled Videos'}
+          </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            {t.schedule?.createFirstScheduledVideo ?? 'Create your first scheduled video to get started'}
+            {t.schedule?.noScheduledVideosMessage ?? 'View and manage your scheduled videos'}
           </p>
         </div>
+
+        {/* View Switcher */}
+        <ViewSwitcher
+          currentView={view}
+          onViewChange={handleViewChange}
+        />
+      </div>
+
+      {/* Calendar Controls (only shown in calendar view) */}
+      {view === 'calendar' && (
+        <div className="mb-6">
+          <CalendarControls
+            currentDate={currentDate}
+            viewType={calendarView}
+            calendarType={calendarType}
+            onViewTypeChange={setCalendarView}
+            onCalendarTypeChange={setCalendarType}
+            onNavigatePrevious={handleNavigatePrevious}
+            onNavigateNext={handleNavigateNext}
+            onNavigateToday={handleNavigateToday}
+          />
+        </div>
       )}
 
-      {/* Videos List */}
-      {!loading && !error && videos.length > 0 && (
-        <div className="space-y-4">
-          {videos.map((video) => {
-            // Extract schedule metadata from video object
-            const scheduleStatus = (video as VideoObject & { scheduleStatus?: ScheduledPublishStatus }).scheduleStatus || 'scheduled';
-            const scheduledPublishDate = (video as VideoObject & { scheduledPublishDate?: string }).scheduledPublishDate;
-            const canEdit = video.userId === auth.user?.id;
-            const canCancel = canEdit && (scheduleStatus === 'scheduled' || scheduleStatus === 'publishing');
-
-            return (
-              <div
-                key={video.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
-              >
-                <div className="p-4 md:p-6 flex flex-col md:flex-row gap-4">
-                  {/* Thumbnail */}
-                  <div className="flex-shrink-0">
-                    <div className="relative w-full md:w-64 aspect-video bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
-                      {video.thumbnailUrl ? (
-                        <Image
-                          src={video.thumbnailUrl}
-                          alt={video.title}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <Calendar className="text-gray-400" size={48} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Details */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
-                      {video.title}
-                    </h3>
-
-                    {/* Status */}
-                    <div className="mb-3">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(scheduleStatus)}`}>
-                        {(t.schedule && t.schedule[`status${scheduleStatus.charAt(0).toUpperCase() + scheduleStatus.slice(1)}` as keyof typeof t.schedule]) || scheduleStatus}
-                      </span>
-                    </div>
-
-                    {/* Schedule Info */}
-                    <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                      {scheduledPublishDate && (
-                        <>
-                          <div className="flex items-center space-x-2">
-                            <Calendar size={16} />
-                            <span>
-                              {t.schedule?.scheduledFor || 'Scheduled for'}: {new Date(scheduledPublishDate).toLocaleString(locale)}
-                            </span>
-                          </div>
-                          {scheduleStatus === 'scheduled' && (
-                            <div className="flex items-center space-x-2">
-                              <Clock size={16} />
-                              <span>
-                                {t.schedule?.publishesIn || 'Publishes in'}: {formatTimeRemaining(scheduledPublishDate)}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {canEdit && (
-                        <Link
-                          href={`/${locale}/video/${video.id}/edit`}
-                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-                        >
-                          <Edit size={16} className="mr-1.5" />
-                          {t.schedule?.editSchedule || 'Edit Schedule'}
-                        </Link>
-                      )}
-                      {scheduleStatus === 'scheduled' && (
-                        <button
-                          onClick={() => handlePublishNow(video.id)}
-                          disabled={actionLoading === video.id}
-                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {actionLoading === video.id ? (
-                            <Loader size={16} className="mr-1.5 animate-spin" />
-                          ) : (
-                            <PlayCircle size={16} className="mr-1.5" />
-                          )}
-                          {t.schedule?.publishNow || 'Publish Now'}
-                        </button>
-                      )}
-                      {canCancel && (
-                        <button
-                          onClick={() => handleCancelSchedule(video.id)}
-                          disabled={actionLoading === video.id}
-                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {actionLoading === video.id ? (
-                            <Loader size={16} className="mr-1.5 animate-spin" />
-                          ) : (
-                            <Trash2 size={16} className="mr-1.5" />
-                          )}
-                          {t.schedule?.cancelSchedule || 'Cancel Schedule'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* Main Content */}
+      {view === 'list' ? (
+        <ScheduledVideosList
+          videos={videos}
+          isLoading={loading}
+          error={error ? new Error(error) : null}
+          onVideoClick={handleVideoClick}
+          onRefresh={fetchScheduledVideos}
+        />
+      ) : (
+        <ScheduledVideoCalendar
+          videos={videos}
+          calendarType={calendarType}
+          viewType={calendarView}
+          currentDate={currentDate}
+          onNavigate={handleCalendarNavigate}
+          onEventClick={handleEventClick}
+          isLoading={loading}
+          error={error ? new Error(error) : null}
+        />
       )}
     </div>
   );

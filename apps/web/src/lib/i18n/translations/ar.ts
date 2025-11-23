@@ -638,6 +638,38 @@ export const AR_TRANSLATIONS: AppTranslations = {
     willBePublishedOn: 'سيتم نشره في',
     localTime: 'الوقت المحلي',
     utcTime: 'التوقيت العالمي',
+    // Calendar View
+    views: {
+      list: 'قائمة',
+      calendar: 'تقويم',
+    },
+    calendar: {
+      month: 'شهر',
+      week: 'أسبوع',
+      day: 'يوم',
+      today: 'اليوم',
+      previous: 'السابق',
+      next: 'التالي',
+      calendarType: 'نوع التقويم',
+      gregorian: 'ميلادي',
+      hijri: 'هجري (إسلامي)',
+      noEvents: 'لا توجد فيديوهات مجدولة لهذه الفترة',
+      scheduledFor: 'مجدول لـ',
+    },
+    hijriMonths: {
+      1: 'محرم',
+      2: 'صفر',
+      3: 'ربيع الأول',
+      4: 'ربيع الثاني',
+      5: 'جمادى الأولى',
+      6: 'جمادى الثانية',
+      7: 'رجب',
+      8: 'شعبان',
+      9: 'رمضان',
+      10: 'شوال',
+      11: 'ذو القعدة',
+      12: 'ذو الحجة',
+    },
   },
 
   analytics: {
