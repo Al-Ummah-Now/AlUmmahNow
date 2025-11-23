@@ -40,8 +40,8 @@ export async function getChapters(
   }, async () => {
     const auth = await getServerAuthContext();
     return {
-      userId: auth?.user?.id || '',
-      channelId: auth?.user?.channelId || '',
+      userId: auth?.userId || '',
+      channelId: auth?.channelId || '',
       accessToken: auth?.accessToken || '',
     };
   }, false); // Public endpoint
@@ -64,8 +64,8 @@ export async function updateChapters(
   }, async () => {
     const auth = await getServerAuthContext();
     return {
-      userId: auth?.user?.id || '',
-      channelId: auth?.user?.channelId || '',
+      userId: auth?.userId || '',
+      channelId: auth?.channelId || '',
       accessToken: auth?.accessToken || '',
     };
   }, true); // Auth required

@@ -23,7 +23,7 @@ interface BatchUploadQueueProps {
 export function BatchUploadQueue({
   files,
   overallProgress,
-  isUploading,
+  // isUploading,
   onPauseAll,
   onResumeAll,
   onCancelAll,
@@ -33,7 +33,7 @@ export function BatchUploadQueue({
   onCancelFile,
   onRetryFile,
 }: BatchUploadQueueProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL: _isRTL } = useLanguage();
 
   const stats = React.useMemo(() => {
     const completed = files.filter(f => f.status === 'completed').length;
@@ -46,7 +46,7 @@ export function BatchUploadQueue({
     return { completed, uploading, failed, pending, paused, cancelled, total: files.length };
   }, [files]);
 
-  const hasUploadingOrPaused = stats.uploading > 0 || stats.paused > 0;
+  const /* hasUploadingOrPaused */ _unusedHasUploadingOrPaused = stats.uploading > 0 || stats.paused > 0;
   const hasActiveTasks = stats.uploading > 0 || stats.pending > 0 || stats.paused > 0;
 
   return (

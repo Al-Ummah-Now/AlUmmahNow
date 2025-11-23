@@ -214,7 +214,7 @@ export class TusParallelManager {
    * Clear all uploads
    */
   clearAll(): void {
-    this.uploads.forEach((upload, id) => {
+    this.uploads.forEach((_upload, id) => {
       this.cancel(id);
     });
     this.uploads.clear();

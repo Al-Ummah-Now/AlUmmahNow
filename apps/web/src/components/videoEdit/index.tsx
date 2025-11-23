@@ -128,10 +128,10 @@ export default function VideoEdit({
 
       const result = await updateVideo(video.id, updateData, { userId, channelId });
 
-      if (result && result.video) {
+      if (result?.result?.video) {
         setSuccess(t.video.updateSuccess);
         setHasUnsavedChanges(false);
-        onSave?.(result.video);
+        onSave?.(result.result.video);
       } else {
         setError(t.video.updateFailed);
       }

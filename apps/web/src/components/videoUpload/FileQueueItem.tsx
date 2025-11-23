@@ -32,7 +32,7 @@ export function FileQueueItem({
   onCancel,
   onRetry,
 }: FileQueueItemProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL: _isRTL } = useLanguage();
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';

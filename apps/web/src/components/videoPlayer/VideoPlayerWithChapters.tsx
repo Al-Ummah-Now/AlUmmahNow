@@ -14,7 +14,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import CustomVideoPlayer, { CustomVideoPlayerProps } from './CustomVideoPlayer';
+import CustomVideoPlayer, { CustomVideoPlayerProps } from '../VideoPlayer/CustomVideoPlayer';
 import { ChapterMarkers } from './ChapterMarkers';
 import { ChapterList } from './ChapterList';
 import { CurrentChapter } from './CurrentChapter';
@@ -22,6 +22,7 @@ import { useVideoChapters } from '@/hooks/useVideoChapters';
 import type { Player } from 'video.js';
 
 interface VideoPlayerWithChaptersProps extends CustomVideoPlayerProps {
+  videoId: string;
   enableChapters?: boolean;
   showChapterOverlay?: boolean;
 }
@@ -114,7 +115,7 @@ export function VideoPlayerWithChapters({
       <CustomVideoPlayer
         {...playerProps}
         videoId={videoId}
-        onPlayerReady={(playerInstance) => {
+        onPlayerReady={(playerInstance: Player) => {
           setPlayer(playerInstance);
         }}
       />

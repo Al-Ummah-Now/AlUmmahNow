@@ -20,7 +20,7 @@ export function useBatchUpload({
   userId,
   channelId,
   sharedMetadata = {},
-  onUploadComplete,
+  // onUploadComplete,
   onError,
 }: UseBatchUploadOptions) {
   const [files, setFiles] = useState<UploadQueueItem[]>([]);

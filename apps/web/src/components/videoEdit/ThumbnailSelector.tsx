@@ -79,8 +79,8 @@ export default function ThumbnailSelector({
       // Upload to API
       const result = await uploadVideoThumbnail(videoId, file, { userId, channelId });
 
-      if (result && result.thumbnailUrl) {
-        const uploadedUrl = result.thumbnailUrl;
+      if (result?.result?.thumbnailUrl) {
+        const uploadedUrl = result.result.thumbnailUrl;
         setCustomThumbnail(uploadedUrl);
         setSelectedThumbnail(uploadedUrl);
         onThumbnailChange(uploadedUrl);

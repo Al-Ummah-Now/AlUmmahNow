@@ -27,7 +27,7 @@ export function ThumbnailUploadSection({
   disabled = false
 }: ThumbnailUploadSectionProps) {
   const [autoThumbnails, setAutoThumbnails] = useState<string[]>([]);
-  const [customThumbnail, setCustomThumbnail] = useState<File | null>(null);
+  const [/* customThumbnail */ _customThumbnail, setCustomThumbnail] = useState<File | null>(null);
   const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
