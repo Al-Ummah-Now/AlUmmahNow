@@ -5,6 +5,7 @@ import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useI18n } from '@/lib/i18n';
+import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
 
 const ProfileEditPage = () => {
   const params = useParams();
@@ -16,6 +17,7 @@ const ProfileEditPage = () => {
   const [displayNameAr, setDisplayNameAr] = useState('');
   const [bioEn, setBioEn] = useState('');
   const [bioAr, setBioAr] = useState('');
+  const [timezone, setTimezone] = useState<string>('');
   const auth = useAuth();
 
   useEffect(() => {
@@ -30,6 +32,7 @@ const ProfileEditPage = () => {
       setDisplayNameAr(profile.displayNameLocalized?.ar || '');
       setBioEn(profile.bioLocalized?.en || profile.bio || '');
       setBioAr(profile.bioLocalized?.ar || '');
+      setTimezone(profile.timezone || getBrowserTimezone());
     }
   }, [profile]);
 
@@ -53,6 +56,7 @@ const ProfileEditPage = () => {
         en: bioEn || '',
         ar: bioAr || ''
       },
+      timezone: timezone || getBrowserTimezone(),
     };
     updateProfile(newProfile, setProfile);
   };
@@ -243,6 +247,32 @@ const ProfileEditPage = () => {
                   dir="rtl"
                 />
               )}
+            </div>
+
+            {/* Timezone Selector */}
+            <div className="block">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                {t.profile?.timezone || 'Timezone'}
+              </span>
+              <select
+                name="timezone"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
+              >
+                {Object.entries(COMMON_TIMEZONES).map(([region, timezones]) => (
+                  <optgroup key={region} label={region}>
+                    {timezones.map((tz) => (
+                      <option key={tz.value} value={tz.value}>
+                        {tz.label} ({tz.offset})
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t.profile?.currentTimezone || 'Current timezone'}: {getTimezoneDisplayName(timezone)}
+              </p>
             </div>
 
             <label className="block">

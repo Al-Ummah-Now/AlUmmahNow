@@ -5,6 +5,7 @@ import { Profile } from '@/interfaces';
 import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
 
 const ProfileCreatePage = () => {
   const { t } = useLanguage();
@@ -14,10 +15,15 @@ const ProfileCreatePage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
+  const [timezone, setTimezone] = useState<string>('');
   const auth = useAuth();
   const router = useRouter();
 
   useEffect(() => {
+    // Auto-detect system timezone
+    const detectedTimezone = getBrowserTimezone();
+    setTimezone(detectedTimezone);
+
     // Initialize default profile for creation
     if (auth?.user) {
       setProfile({
@@ -27,7 +33,8 @@ const ProfileCreatePage = () => {
         lastName: '',
         displayName: '',
         avatarUrl: '/avatar.png',
-        coverUrl: undefined
+        coverUrl: undefined,
+        timezone: detectedTimezone
       });
     }
   }, [auth]);
@@ -68,6 +75,7 @@ const ProfileCreatePage = () => {
           en: bioEn || '',
           ar: bioAr || ''
         },
+        timezone: timezone || getBrowserTimezone(),
         avatarUrl: profile.avatarUrl,
         coverUrl: profile.coverUrl,
         email: profile.email,
@@ -221,6 +229,32 @@ const ProfileCreatePage = () => {
                   dir="rtl"
                 />
               )}
+            </div>
+
+            {/* Timezone Selector */}
+            <div>
+              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                {t.profile?.timezone || 'Timezone'}
+              </label>
+              <select
+                name="timezone"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
+              >
+                {Object.entries(COMMON_TIMEZONES).map(([region, timezones]) => (
+                  <optgroup key={region} label={region}>
+                    {timezones.map((tz) => (
+                      <option key={tz.value} value={tz.value}>
+                        {tz.label} ({tz.offset})
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {t.profile?.timezoneDetected || 'Detected timezone'}: {getTimezoneDisplayName(timezone)}
+              </p>
             </div>
 
             <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4">

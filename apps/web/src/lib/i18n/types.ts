@@ -286,6 +286,9 @@ export interface AppTranslations {
     welcomeUser: string;
     editProfileDescription: string;
     noPlaylistsAvailable: string;
+    timezone: string;
+    timezoneDetected: string;
+    currentTimezone: string;
   };
 
   /**

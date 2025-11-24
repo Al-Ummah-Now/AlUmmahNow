@@ -69,6 +69,7 @@ export interface ProfileUpdateRequest {
   bioLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
+  timezone?: string;
 }
 
 // Playlist Types

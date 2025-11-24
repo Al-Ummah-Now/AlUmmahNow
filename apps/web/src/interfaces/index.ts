@@ -74,6 +74,7 @@ export interface Profile {
     coverUrl?: string;
     bio?: string;
     bioLocalized?: Record<string, string>; // Multi-language bios
+    timezone?: string; // IANA timezone (e.g., 'America/New_York', 'Asia/Dubai')
     channelsCount?: number;
     dateCreated?: string;
     dateModified?: string;

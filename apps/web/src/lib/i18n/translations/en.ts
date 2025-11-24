@@ -258,6 +258,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
     newPlaylist: 'New Playlist',
     firstPlaylistMessage: 'Create your first playlist to organize your favorite videos',
     noPlaylistsAvailable: 'No playlists available at this time',
+    timezone: 'Timezone',
+    timezoneDetected: 'Detected timezone',
+    currentTimezone: 'Current timezone',
   },
 
   video: {

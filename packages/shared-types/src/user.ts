@@ -30,6 +30,7 @@ export interface Profile extends Timestamps {
   bioLocalized?: Record<string, string>; // Multi-language bios
   websiteUrl?: string;
   location?: string;
+  timezone?: string; // IANA timezone (e.g., 'America/New_York', 'Asia/Dubai') - defaults to browser timezone
   channelsCount?: number;
   subscribersCount?: number;
 }
@@ -45,6 +46,7 @@ export interface ProfileUpdateRequest {
   bioLocalized?: Record<string, string>;
   websiteUrl?: string;
   location?: string;
+  timezone?: string; // IANA timezone
 }
 
 export interface AuthSubject {

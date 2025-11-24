@@ -1,6 +1,5 @@
 "use client";
 import React from "react";
-import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
 import { useRouter, usePathname } from "next/navigation";
 import { HeaderProps } from "./interfaces";

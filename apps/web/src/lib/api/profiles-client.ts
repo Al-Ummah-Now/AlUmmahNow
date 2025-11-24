@@ -163,6 +163,7 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
             avatarUrl: profile.avatarUrl,
             coverUrl: profile.coverUrl,
             email: profile.email,
+            timezone: profile.timezone,
         };
 
         logger.info('[updateProfile] Step 1: Prepared profile data for API:', JSON.stringify(profileData, null, 2));

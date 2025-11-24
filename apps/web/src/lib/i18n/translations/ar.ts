@@ -258,6 +258,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
     newPlaylist: 'قائمة تشغيل جديدة',
     firstPlaylistMessage: 'أنشئ قائمة التشغيل الأولى لتنظيم مقاطع الفيديو المفضلة لديك',
     noPlaylistsAvailable: 'لا توجد قوائم تشغيل متاحة حاليًا',
+    timezone: 'المنطقة الزمنية',
+    timezoneDetected: 'المنطقة الزمنية المكتشفة',
+    currentTimezone: 'المنطقة الزمنية الحالية',
   },
 
   video: {

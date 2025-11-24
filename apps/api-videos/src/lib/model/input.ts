@@ -40,6 +40,7 @@ export const ProfileInput = z.object({
     lastName: Str({ required: false, description: "Last name" }),
     avatarUrl: Str({ required: false, description: "Profile avatar URL" }),
     coverUrl: Str({ required: false, description: "Profile cover image URL" }),
+    timezone: Str({ required: false, description: "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')" }),
 });
 
 export const ChannelInput = z.object({
@@ -88,6 +89,7 @@ export const ProfileUpdateInput = z.object({
     bioLocalized: z.record(z.string()).optional().describe("Multi-language bios"),
     avatarUrl: Str({ required: false, description: "Profile avatar URL" }),
     coverUrl: Str({ required: false, description: "Profile cover image URL" }),
+    timezone: Str({ required: false, description: "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')" }),
 });
 
 export const ChannelUpdateInput = z.object({

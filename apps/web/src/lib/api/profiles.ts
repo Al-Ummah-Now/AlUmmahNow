@@ -303,6 +303,7 @@ export async function createProfile(data: {
   avatarUrl?: string;
   coverUrl?: string;
   email: string;
+  timezone?: string;
 }) {
   return createProfileAPI(data);
 }
