@@ -16,8 +16,6 @@
 
 import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { useTheme } from 'next-themes';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import Link from 'next/link';
 import { login } from '@/lib/actions';
@@ -29,9 +27,6 @@ import {
   Plus,
   LogOut,
   User,
-  Sun,
-  Moon,
-  Languages,
   Tv,
   Crown,
   Video,
@@ -39,12 +34,8 @@ import {
 } from 'lucide-react';
 
 export function UnifiedNavigation() {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
   // Get language context and translations
-  const { t, lang, oppositeLanguage, languages } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const {
     user,
@@ -149,8 +140,6 @@ export function UnifiedNavigation() {
     return channelName;
   };
 
-  const { theme, setTheme } = useTheme();
-
   const [isOpen, setIsOpen] = useState(false);
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
@@ -175,19 +164,6 @@ export function UnifiedNavigation() {
       <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
     );
   }
-
-  const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
-  };
-
-  const switchLanguage = () => {
-    // Smart language switching using language context
-    const newPath = pathname?.replace(`/${lang}`, `/${oppositeLanguage}`) || `/${oppositeLanguage}`;
-    const params = searchParams?.toString();
-    const newUrl = params ? `${newPath}?${params}` : newPath;
-    router.push(newUrl);
-    setIsOpen(false);
-  };
 
   // Anonymous user - show menu icon with Sign In option
   if (!user) {
@@ -223,37 +199,6 @@ export function UnifiedNavigation() {
               role="menu"
               aria-orientation="vertical"
             >
-              {/* Quick Actions - Dark Mode & Language */}
-              <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex gap-2">
-                  <button
-                    onClick={toggleTheme}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    role="menuitem"
-                  >
-                    {theme === 'dark' ? (
-                      <Sun className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                    ) : (
-                      <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                    )}
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      {theme === 'dark' ? t.navigation.light : t.navigation.dark}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={switchLanguage}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    role="menuitem"
-                  >
-                    <Languages className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      {languages[oppositeLanguage].displayName}
-                    </span>
-                  </button>
-                </div>
-              </div>
-
               {/* Sign In */}
               <div className="p-3">
                 <form action={login}>
@@ -433,37 +378,6 @@ export function UnifiedNavigation() {
                   </span>
                 </div>
               )}
-            </div>
-
-            {/* Quick Actions - Dark Mode & Language */}
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex gap-2">
-                <button
-                  onClick={toggleTheme}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  role="menuitem"
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  ) : (
-                    <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  )}
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {theme === 'dark' ? t.navigation.light : t.navigation.dark}
-                  </span>
-                </button>
-
-                <button
-                  onClick={switchLanguage}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  role="menuitem"
-                >
-                  <Languages className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {languages[oppositeLanguage].displayName}
-                  </span>
-                </button>
-              </div>
             </div>
 
             {/* Navigation Links */}

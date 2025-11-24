@@ -1,0 +1,160 @@
+/**
+ * Scheduled Video Calendar Styles
+ *
+ * Global styles for react-big-calendar using Tailwind utilities
+ */
+
+@layer components {
+  /* Common Calendar Styles */
+  .scheduled-video-calendar .rbc-event {
+    background: transparent !important;
+    border: none !important;
+    padding: 2px !important;
+  }
+
+  .scheduled-video-calendar .rbc-event-content {
+    padding: 0 !important;
+  }
+
+  .scheduled-video-calendar .rbc-today {
+    background-color: rgba(59, 130, 246, 0.1) !important;
+  }
+
+  .dark .scheduled-video-calendar .rbc-today {
+    background-color: rgba(64, 111, 187, 0.384) !important;
+  }
+
+  .scheduled-video-calendar .rbc-header {
+    padding: 0.25rem 0.5rem;
+    font-weight: 600;
+    color: rgb(55, 65, 81);
+    border-bottom: 1px solid rgb(229, 231, 235);
+  }
+
+  .dark .scheduled-video-calendar .rbc-header {
+    color: rgb(156, 163, 175);
+    border-bottom-color: rgb(55, 65, 81);
+  }
+
+  .scheduled-video-calendar .rbc-event-label {
+    display: none;
+  }
+
+  /* Time View Styles (Week & Day) */
+  .scheduled-video-calendar .rbc-time-view {
+    border: 1px solid rgb(229, 231, 235);
+    border-radius: 0.5rem;
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-view {
+    border-color: rgb(55, 65, 81);
+  }
+
+  .scheduled-video-calendar .rbc-time-slot {
+    border-color: rgb(229, 231, 235);
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-slot {
+    border-color: rgb(55, 65, 81);
+  }
+
+  /* Thicker lines every hour (every 4th slot for 15min intervals) */
+  .scheduled-video-calendar .rbc-time-slot:nth-child(4n+1) {
+    border-top: 4px solid rgb(156, 163, 175) !important;
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-slot:nth-child(4n+1) {
+    border-top: 4px solid rgb(55, 65, 81) !important;
+  }
+
+  .scheduled-video-calendar .rbc-time-header {
+    border-color: rgb(229, 231, 235);
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-header {
+    border-color: rgb(55, 65, 81);
+  }
+
+  .scheduled-video-calendar .rbc-time-content {
+    border-top: 1px solid rgb(229, 231, 235);
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-content {
+    border-top-color: rgb(55, 65, 81);
+  }
+
+  .scheduled-video-calendar .rbc-current-time-indicator {
+    background-color: rgb(239, 68, 68);
+  }
+
+  /* Time gutter labels */
+  .scheduled-video-calendar .rbc-time-slot {
+    color: rgb(75, 85, 99);
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-slot {
+    color: rgb(156, 163, 175);
+  }
+
+  .scheduled-video-calendar .rbc-label {
+    color: rgb(75, 85, 99);
+  }
+
+  .dark .scheduled-video-calendar .rbc-label {
+    color: rgb(156, 163, 175);
+  }
+
+  /* Month View Styles */
+  .scheduled-video-calendar .rbc-off-range {
+    color: rgb(156, 163, 175);
+  }
+
+  .dark .scheduled-video-calendar .rbc-off-range {
+    color: rgb(55, 65, 81);
+  }
+
+  .scheduled-video-calendar .rbc-off-range-bg {
+    background-color: rgb(249, 250, 251) !important;
+  }
+
+  .dark .scheduled-video-calendar .rbc-off-range-bg {
+    background-color: rgb(17, 24, 39) !important;
+  }
+
+  .scheduled-video-calendar .rbc-month-view {
+    border: 1px solid rgb(229, 231, 235);
+    border-radius: 0.5rem;
+  }
+
+  .dark .scheduled-video-calendar .rbc-month-view {
+    border-color: rgb(55, 65, 81);
+  }
+
+  .scheduled-video-calendar .rbc-day-bg {
+    border-color: rgb(229, 231, 235);
+  }
+
+  .dark .scheduled-video-calendar .rbc-day-bg {
+    border-color: rgb(55, 65, 81);
+  }
+
+  .scheduled-video-calendar .rbc-month-row {
+    height: 140px;
+    min-height: 140px;
+    max-height: 140px;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .scheduled-video-calendar .rbc-month-row {
+      height: 100px;
+      min-height: 100px;
+      max-height: 100px;
+    }
+
+    .scheduled-video-calendar .rbc-header {
+      padding: 0.25rem 0.125rem;
+      font-size: 0.875rem;
+    }
+  }
+}

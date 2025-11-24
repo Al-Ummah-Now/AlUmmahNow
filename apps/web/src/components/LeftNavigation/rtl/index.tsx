@@ -2,8 +2,10 @@
 import React from "react";
 import IcoButton from "@/components/iconButton";
 import Link from 'next/link';
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { useTheme } from 'next-themes';
+import { Sun, Moon, Globe } from 'lucide-react';
 
 interface NavItems {
     label: string;
@@ -24,9 +26,13 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     withOverlay = false, // Default to no overlay
 }) => {
     const pathname = usePathname();
-    const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const { user } = useMultiAccount();
     const activeChannel = user?.channel;
+    const { theme, setTheme } = useTheme();
+
+    const locale = 'ar';
 
     const allNavItems: NavItems[] = [
         { label: "الرئيسية", icon: "fa-house", href: `/${locale}/` }, // Home
@@ -41,6 +47,17 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
         ? allNavItems
         : allNavItems.filter(item => item.label !== "رفع فيديو");
 
+    const toggleTheme = () => {
+        setTheme(theme === 'dark' ? 'light' : 'dark');
+    };
+
+    const switchLanguage = () => {
+        const newPath = pathname?.replace('/ar', '/en') || '/en';
+        const params = searchParams?.toString();
+        const newUrl = params ? `${newPath}?${params}` : newPath;
+        router.push(newUrl);
+    };
+
     return (
         <>
             {/* Overlay */}
@@ -53,8 +70,8 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
 
             {/* Navigation */}
             <nav
-                className={`${withOverlay? "fixed top-0 bg-transparent z-50 h-screen " : "bg-white dark:bg-gray-900 p-4 md:absolute"} 
-                    ${isCollapsed ? "w-0 hidden" : "w-48"} 
+                className={`${withOverlay? "fixed top-0 bg-transparent z-50 h-screen " : "bg-white dark:bg-gray-900 p-4 md:absolute"}
+                    ${isCollapsed ? "w-0 hidden" : "w-48"}
                     transition-all duration-300`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
@@ -68,7 +85,58 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                         />
                     </div>
                 )}
-                <ul className="bg-white dark:bg-gray-900 h-screen">
+                <ul className="bg-white dark:bg-gray-900 h-screen flex flex-col overflow-y-auto">
+                    {/* Enhanced Controls Section - AT TOP */}
+                    <li className="px-3 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div className="space-y-2.5">
+                            {/* Dark Mode Toggle */}
+                            <button
+                                onClick={toggleTheme}
+                                className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
+                                aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}
+                            >
+                                <div className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 ${
+                                    theme === 'dark'
+                                        ? 'bg-yellow-500/10 text-yellow-500 group-hover:bg-yellow-500/20'
+                                        : 'bg-blue-500/10 text-blue-600 group-hover:bg-blue-500/20'
+                                }`}>
+                                    {theme === 'dark' ? (
+                                        <Sun className="h-5 w-5" />
+                                    ) : (
+                                        <Moon className="h-5 w-5" />
+                                    )}
+                                </div>
+                                <div className="flex-1 text-right">
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                        المظهر
+                                    </div>
+                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                        {theme === 'dark' ? 'فاتح' : 'داكن'}
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* Language Selector */}
+                            <button
+                                onClick={switchLanguage}
+                                className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
+                                aria-label="التبديل إلى English"
+                            >
+                                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500/20 transition-all duration-200">
+                                    <Globe className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 text-right">
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                        اللغة
+                                    </div>
+                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                        English
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
+                    </li>
+
                     {navItems.map((item, index) => (
                         <li
                             key={index}

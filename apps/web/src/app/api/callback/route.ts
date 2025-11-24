@@ -90,10 +90,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Redirect to English locale (default) with session_updated param
+    // Redirect to Arabic locale (default) with session_updated param
     // The app requires a locale (/en or /ar) to properly function
-    logger.debug("[redirect]", `${url.origin}/en`)
-    return NextResponse.redirect(`${url.origin}/en?session_updated=true`);
+    logger.debug("[redirect]", `${url.origin}/ar`)
+    return NextResponse.redirect(`${url.origin}/ar?session_updated=true`);
   }
   return NextResponse.json(result.error, { status: 400 });
 

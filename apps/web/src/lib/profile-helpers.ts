@@ -13,7 +13,7 @@ export async function shouldRedirectToProfileCreation(user: User | null): Promis
     
     // If profile doesn't exist, redirect to profile creation
     if (!profileExists) {
-      return { shouldRedirect: true, redirectPath: '/en/profile/create' };
+      return { shouldRedirect: true, redirectPath: '/ar/profile/create' };
     }
     
     return { shouldRedirect: false, redirectPath: null };
@@ -24,6 +24,6 @@ export async function shouldRedirectToProfileCreation(user: User | null): Promis
   }
 }
 
-export function getProfileCreationPath(locale: 'en' | 'ar' = 'en'): string {
+export function getProfileCreationPath(locale: 'en' | 'ar' = 'ar'): string {
   return `/${locale}/profile/create`;
 }

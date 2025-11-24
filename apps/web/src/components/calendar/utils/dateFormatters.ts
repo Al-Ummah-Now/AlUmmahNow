@@ -6,8 +6,8 @@
  */
 
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { enUS, ar as arSA } from 'date-fns/locale';
 import { gregorianToHijri, formatHijriDate, getHijriMonthName } from './hijriConverter';
-import moment from 'moment';
 
 export type CalendarType = 'gregorian' | 'hijri';
 export type ViewType = 'month' | 'week' | 'day';
@@ -119,30 +119,28 @@ function formatCalendarHeaderPart(
       return formatHijriDate(hijriDate, locale);
     }
   } else {
-    // Gregorian formatting using moment for proper locale support
-    const m = moment(date);
+    // Gregorian formatting using date-fns for proper locale support
+    const dateFnsLocale = locale === 'ar' ? arSA : enUS;
 
     if (viewType === 'month') {
-      const monthName = m.format('MMMM');
+      const monthName = format(date, 'MMMM', { locale: dateFnsLocale });
       const year = date.getFullYear();
       return `${monthName} ${formatNumber(year, locale)}`;
     } else if (viewType === 'week') {
       const weekStart = startOfWeek(date, { weekStartsOn: 0 }); // Sunday
       const weekEnd = endOfWeek(date, { weekStartsOn: 0 });
-      const mStart = moment(weekStart);
-      const mEnd = moment(weekEnd);
 
       if (locale === 'ar') {
         const separator = '،';
         if (weekStart.getMonth() === weekEnd.getMonth()) {
-          const monthName = mStart.format('MMMM');
+          const monthName = format(weekStart, 'MMMM', { locale: dateFnsLocale });
           const startDay = weekStart.getDate();
           const endDay = weekEnd.getDate();
           const year = weekStart.getFullYear();
           return `${monthName} ${formatNumber(startDay, locale)}-${formatNumber(endDay, locale)}${separator} ${formatNumber(year, locale)}`;
         } else {
-          const startMonthName = mStart.format('MMMM');
-          const endMonthName = mEnd.format('MMMM');
+          const startMonthName = format(weekStart, 'MMMM', { locale: dateFnsLocale });
+          const endMonthName = format(weekEnd, 'MMMM', { locale: dateFnsLocale });
           const startDay = weekStart.getDate();
           const endDay = weekEnd.getDate();
           if (weekStart.getFullYear() === weekEnd.getFullYear()) {
@@ -158,18 +156,18 @@ function formatCalendarHeaderPart(
 
       // English locale
       if (weekStart.getMonth() === weekEnd.getMonth()) {
-        return format(weekStart, 'MMMM d') + ' - ' + format(weekEnd, 'd, yyyy');
+        return format(weekStart, 'MMMM d', { locale: dateFnsLocale }) + ' - ' + format(weekEnd, 'd, yyyy', { locale: dateFnsLocale });
       } else {
-        return format(weekStart, 'MMM d') + ' - ' + format(weekEnd, 'MMM d, yyyy');
+        return format(weekStart, 'MMM d', { locale: dateFnsLocale }) + ' - ' + format(weekEnd, 'MMM d, yyyy', { locale: dateFnsLocale });
       }
     } else {
       if (locale === 'ar') {
-        const monthName = m.format('MMMM');
+        const monthName = format(date, 'MMMM', { locale: dateFnsLocale });
         const day = date.getDate();
         const year = date.getFullYear();
         return `${formatNumber(day, locale)} ${monthName} ${formatNumber(year, locale)}`;
       }
-      return format(date, 'MMMM d, yyyy');
+      return format(date, 'MMMM d, yyyy', { locale: dateFnsLocale });
     }
   }
 }

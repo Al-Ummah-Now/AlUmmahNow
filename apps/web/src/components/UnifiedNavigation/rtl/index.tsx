@@ -17,8 +17,6 @@
 
 import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { useTheme } from 'next-themes';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { login } from '@/lib/actions';
 import { fetchProfile } from '@/lib/api/profiles-client';
@@ -29,9 +27,6 @@ import {
   Plus,
   LogOut,
   User,
-  Sun,
-  Moon,
-  Languages,
   Tv,
   Crown,
   Video,
@@ -142,11 +137,6 @@ export function UnifiedNavigationRTL() {
     return channelName;
   };
 
-  const { theme, setTheme } = useTheme();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
   const [isOpen, setIsOpen] = useState(false);
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
@@ -157,18 +147,6 @@ export function UnifiedNavigationRTL() {
       <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
     );
   }
-
-  const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
-  };
-
-  const switchLanguage = () => {
-    const newPath = pathname?.replace('/ar', '/en') || '/';
-    const params = searchParams?.toString();
-    const newUrl = params ? `${newPath}?${params}` : newPath;
-    router.push(newUrl);
-    setIsOpen(false);
-  };
 
   // Anonymous user - show menu icon with Sign In option
   if (!user) {
@@ -205,37 +183,6 @@ export function UnifiedNavigationRTL() {
               aria-orientation="vertical"
               dir="rtl"
             >
-              {/* Quick Actions - Dark Mode & Language */}
-              <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex gap-2">
-                  <button
-                    onClick={toggleTheme}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    role="menuitem"
-                  >
-                    {theme === 'dark' ? (
-                      <Sun className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                    ) : (
-                      <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                    )}
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      {theme === 'dark' ? 'فاتح' : 'داكن'}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={switchLanguage}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    role="menuitem"
-                  >
-                    <Languages className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      English
-                    </span>
-                  </button>
-                </div>
-              </div>
-
               {/* Sign In */}
               <div className="p-3">
                 <form action={login}>
@@ -416,37 +363,6 @@ export function UnifiedNavigationRTL() {
                   </span>
                 </div>
               )}
-            </div>
-
-            {/* Quick Actions - Dark Mode & Language */}
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex gap-2">
-                <button
-                  onClick={toggleTheme}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  role="menuitem"
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  ) : (
-                    <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  )}
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {theme === 'dark' ? 'فاتح' : 'داكن'}
-                  </span>
-                </button>
-
-                <button
-                  onClick={switchLanguage}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  role="menuitem"
-                >
-                  <Languages className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    English
-                  </span>
-                </button>
-              </div>
             </div>
 
             {/* Navigation Links */}

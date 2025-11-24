@@ -68,7 +68,7 @@ export function CalendarControls({
         </button>
 
         {/* Current Period Header */}
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white ml-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white ml-2 min-w-[280px] transition-all duration-200">
           {headerText}
         </h2>
       </div>

@@ -106,7 +106,7 @@ export function CalendarControlsRTL({
       {/* Left Section: Header + Navigation + Today Button */}
       <div className="flex items-center gap-3">
         {/* Current Period Header */}
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mr-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mr-2 min-w-[280px] transition-all duration-200">
           {headerText}
         </h2>
 
@@ -121,17 +121,17 @@ export function CalendarControlsRTL({
         {/* Navigation Buttons (reversed for RTL) */}
         <div className="flex items-center gap-1">
           <button
-            onClick={onNavigateNext}
+            onClick={onNavigatePrevious}
             className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label={(t.schedule?.calendar?.next) ?? "Next"}
+            aria-label={(t.schedule?.calendar?.previous) ?? "Previous"}
           >
             <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
 
           <button
-            onClick={onNavigatePrevious}
+            onClick={onNavigateNext}
             className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label={(t.schedule?.calendar?.previous) ?? "Previous"}
+            aria-label={(t.schedule?.calendar?.next) ?? "Next"}
           >
             <ChevronRight size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
