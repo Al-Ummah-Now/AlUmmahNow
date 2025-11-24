@@ -10,6 +10,7 @@ import { test, expect } from '@playwright/test';
 const BASE_URL = process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3001';
 const LOCALE_EN = `${BASE_URL}/en`;
 const LOCALE_AR = `${BASE_URL}/ar`;
+const SCHEDULED_VIDEOS_PATH = '/scheduled-videos';
 
 // Helper function to login (adjust based on your auth implementation)
 async function login(page: any, locale = 'en') {
@@ -32,7 +33,7 @@ async function login(page: any, locale = 'en') {
 test.describe('Scheduled Videos Calendar - View Switching', () => {
   test.beforeEach(async ({ page }) => {
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled`);
+    await page.goto(`${LOCALE_EN}/scheduled-videos`);
   });
 
   test('should switch from list to calendar view', async ({ page }) => {
@@ -80,7 +81,7 @@ test.describe('Scheduled Videos Calendar - View Switching', () => {
 
     // Navigate away and back
     await page.goto(`${LOCALE_EN}/dashboard`);
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled`);
+    await page.goto(`${LOCALE_EN}/scheduled-videos`);
 
     // Verify calendar view is still active
     await expect(page.locator('[role="application"]')).toBeVisible();
@@ -90,7 +91,7 @@ test.describe('Scheduled Videos Calendar - View Switching', () => {
 test.describe('Scheduled Videos Calendar - Calendar Navigation', () => {
   test.beforeEach(async ({ page }) => {
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
   });
 
   test('should navigate to next month', async ({ page }) => {
@@ -164,7 +165,7 @@ test.describe('Scheduled Videos Calendar - Calendar Navigation', () => {
 test.describe('Scheduled Videos Calendar - Calendar Type Switching', () => {
   test.beforeEach(async ({ page }) => {
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
   });
 
   test('should switch from Gregorian to Hijri calendar', async ({ page }) => {
@@ -229,7 +230,7 @@ test.describe('Scheduled Videos Calendar - Calendar Type Switching', () => {
 test.describe('Scheduled Videos Calendar - Event Interaction', () => {
   test.beforeEach(async ({ page }) => {
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
   });
 
   test('should click on calendar event to navigate to edit page', async ({ page }) => {
@@ -270,7 +271,7 @@ test.describe('Scheduled Videos Calendar - Responsive Behavior', () => {
   test('should work on mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify calendar is visible and usable
     await expect(page.locator('[role="application"]')).toBeVisible();
@@ -283,7 +284,7 @@ test.describe('Scheduled Videos Calendar - Responsive Behavior', () => {
   test('should work on tablet viewport', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify calendar is visible
     await expect(page.locator('[role="application"]')).toBeVisible();
@@ -292,7 +293,7 @@ test.describe('Scheduled Videos Calendar - Responsive Behavior', () => {
   test('should work on desktop viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify calendar is visible
     await expect(page.locator('[role="application"]')).toBeVisible();
@@ -302,7 +303,7 @@ test.describe('Scheduled Videos Calendar - Responsive Behavior', () => {
 test.describe('Scheduled Videos Calendar - Localization', () => {
   test('should display calendar in Arabic when locale is ar', async ({ page }) => {
     await login(page, 'ar');
-    await page.goto(`${LOCALE_AR}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_AR}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify RTL layout
     const calendar = page.locator('[role="application"]');
@@ -314,7 +315,7 @@ test.describe('Scheduled Videos Calendar - Localization', () => {
 
   test('should display calendar in English when locale is en', async ({ page }) => {
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify LTR layout
     const calendar = page.locator('[role="application"]');
@@ -326,7 +327,7 @@ test.describe('Scheduled Videos Calendar - Localization', () => {
 
   test('should show RTL layout for Arabic', async ({ page }) => {
     await login(page, 'ar');
-    await page.goto(`${LOCALE_AR}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_AR}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify main container has RTL
     const mainContainer = page.locator('main');
@@ -335,7 +336,7 @@ test.describe('Scheduled Videos Calendar - Localization', () => {
 
   test('should show LTR layout for English', async ({ page }) => {
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify main container has LTR
     const mainContainer = page.locator('main');
@@ -344,7 +345,7 @@ test.describe('Scheduled Videos Calendar - Localization', () => {
 
   test('should translate all labels and month names', async ({ page }) => {
     await login(page, 'ar');
-    await page.goto(`${LOCALE_AR}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_AR}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify Arabic month names (Gregorian)
     const monthYear = await page.textContent('[data-testid="calendar-month-year"]');
@@ -367,7 +368,7 @@ test.describe('Scheduled Videos Calendar - Error Handling', () => {
     });
 
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify error message is displayed
     await expect(page.locator('text=/error|failed/i')).toBeVisible();
@@ -383,7 +384,7 @@ test.describe('Scheduled Videos Calendar - Error Handling', () => {
     });
 
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify empty state message
     await expect(page.locator('text=/no scheduled videos|empty/i')).toBeVisible();
@@ -405,7 +406,7 @@ test.describe('Scheduled Videos Calendar - Error Handling', () => {
     });
 
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Verify calendar doesn't crash
     await expect(page.locator('[role="application"]')).toBeVisible();
@@ -432,7 +433,7 @@ test.describe('Scheduled Videos Calendar - Performance', () => {
     await login(page, 'en');
 
     const startTime = Date.now();
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
     await page.waitForSelector('[role="application"]');
     const loadTime = Date.now() - startTime;
 
@@ -442,7 +443,7 @@ test.describe('Scheduled Videos Calendar - Performance', () => {
 
   test('should navigate between months smoothly', async ({ page }) => {
     await login(page, 'en');
-    await page.goto(`${LOCALE_EN}/dashboard/videos/scheduled?view=calendar`);
+    await page.goto(`${LOCALE_EN}${SCHEDULED_VIDEOS_PATH}?view=calendar`);
 
     // Navigate multiple times
     for (let i = 0; i < 5; i++) {
@@ -454,5 +455,156 @@ test.describe('Scheduled Videos Calendar - Performance', () => {
       // Verify navigation is fast (< 500ms)
       expect(navTime).toBeLessThan(500);
     }
+  });
+});
+
+test.describe('Scheduled Videos Calendar - Dual Calendar Display', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, 'en');
+    await page.goto(`${LOCALE_EN}/scheduled-videos?view=calendar`);
+  });
+
+  test('should display both Gregorian and Hijri dates in month view cells', async ({ page }) => {
+    // Switch to month view
+    await page.click('button:has-text("Month")');
+    await page.waitForTimeout(500);
+
+    // Find a date cell - they should have two numbers: Gregorian on top, Hijri below
+    const dateHeader = page.locator('.rbc-date-cell').first();
+    await expect(dateHeader).toBeVisible();
+
+    // Verify there are two text elements (Gregorian day and Hijri day)
+    const textElements = dateHeader.locator('div > div');
+    const count = await textElements.count();
+    expect(count).toBeGreaterThanOrEqual(2); // At least 2: Gregorian and Hijri
+  });
+
+  test('should display both Gregorian and Hijri dates in week view headers', async ({ page }) => {
+    // Switch to week view
+    await page.click('button:has-text("Week")');
+    await page.waitForTimeout(500);
+
+    // Find week header - should have weekday, Gregorian day, and Hijri day
+    const weekHeader = page.locator('.rbc-header').first();
+    await expect(weekHeader).toBeVisible();
+
+    // Verify there are multiple text elements (weekday + both calendar days)
+    const textElements = weekHeader.locator('div > div');
+    const count = await textElements.count();
+    expect(count).toBeGreaterThanOrEqual(2); // At least weekday + dates
+  });
+
+  test('should display both Gregorian and Hijri dates in day view header', async ({ page }) => {
+    // Switch to day view
+    await page.click('button:has-text("Day")');
+    await page.waitForTimeout(500);
+
+    // Find day header - should have weekday, Gregorian day, and Hijri day
+    const dayHeader = page.locator('.rbc-header').first();
+    await expect(dayHeader).toBeVisible();
+
+    // Verify header contains date information
+    const textContent = await dayHeader.textContent();
+    expect(textContent).toBeTruthy();
+    expect(textContent!.length).toBeGreaterThan(0);
+  });
+
+  test('should show dual calendar header with both calendars', async ({ page }) => {
+    // The header should show "Month Year / Month Year" format
+    const calendarHeader = page.locator('h2').first();
+    await expect(calendarHeader).toBeVisible();
+
+    const headerText = await calendarHeader.textContent();
+    // Should contain a slash separating Gregorian and Hijri
+    expect(headerText).toContain('/');
+  });
+});
+
+test.describe('Scheduled Videos Calendar - Arabic Numerals and RTL', () => {
+  test('should display Arabic numerals in Arabic locale', async ({ page }) => {
+    await login(page, 'ar');
+    await page.goto(`${LOCALE_AR}/scheduled-videos?view=calendar`);
+
+    // Wait for calendar to load
+    await page.waitForSelector('.rbc-calendar', { timeout: 10000 });
+
+    // Get calendar header with month/year
+    const calendarHeader = page.locator('h2').first();
+    const headerText = await calendarHeader.textContent();
+
+    // Arabic numerals: ٠١٢٣٤٥٦٧٨٩
+    // Check if text contains Arabic numerals (١ or ٢ etc.)
+    const hasArabicNumerals = /[٠-٩]/.test(headerText || '');
+    expect(hasArabicNumerals).toBe(true);
+  });
+
+  test('should display Western numerals in English locale', async ({ page }) => {
+    await login(page, 'en');
+    await page.goto(`${LOCALE_EN}/scheduled-videos?view=calendar`);
+
+    // Wait for calendar to load
+    await page.waitForSelector('.rbc-calendar', { timeout: 10000 });
+
+    // Get calendar header with month/year
+    const calendarHeader = page.locator('h2').first();
+    const headerText = await calendarHeader.textContent();
+
+    // Should contain Western numerals (2024, 2025, etc.)
+    const hasWesternNumerals = /[0-9]/.test(headerText || '');
+    expect(hasWesternNumerals).toBe(true);
+
+    // Should NOT contain Arabic numerals
+    const hasArabicNumerals = /[٠-٩]/.test(headerText || '');
+    expect(hasArabicNumerals).toBe(false);
+  });
+
+  test('should apply RTL layout in Arabic locale', async ({ page }) => {
+    await login(page, 'ar');
+    await page.goto(`${LOCALE_AR}/scheduled-videos?view=calendar`);
+
+    // Verify calendar container has RTL direction
+    const calendarContainer = page.locator('.calendar-container');
+    await expect(calendarContainer).toHaveAttribute('dir', 'rtl');
+  });
+
+  test('should apply LTR layout in English locale', async ({ page }) => {
+    await login(page, 'en');
+    await page.goto(`${LOCALE_EN}/scheduled-videos?view=calendar`);
+
+    // Verify calendar container has LTR direction
+    const calendarContainer = page.locator('.calendar-container');
+    await expect(calendarContainer).toHaveAttribute('dir', 'ltr');
+  });
+
+  test('should display Arabic weekday names in Arabic locale', async ({ page }) => {
+    await login(page, 'ar');
+    await page.goto(`${LOCALE_AR}/scheduled-videos?view=calendar&calendarView=week`);
+
+    // Wait for calendar to load
+    await page.waitForSelector('.rbc-calendar', { timeout: 10000 });
+
+    // Get first header (weekday name)
+    const weekHeader = page.locator('.rbc-header').first();
+    const weekdayText = await weekHeader.textContent();
+
+    // Arabic weekdays contain Arabic characters
+    const hasArabicText = /[\u0600-\u06FF]/.test(weekdayText || '');
+    expect(hasArabicText).toBe(true);
+  });
+
+  test('should display English weekday names in English locale', async ({ page }) => {
+    await login(page, 'en');
+    await page.goto(`${LOCALE_EN}/scheduled-videos?view=calendar&calendarView=week`);
+
+    // Wait for calendar to load
+    await page.waitForSelector('.rbc-calendar', { timeout: 10000 });
+
+    // Get first header (weekday name)
+    const weekHeader = page.locator('.rbc-header').first();
+    const weekdayText = await weekHeader.textContent();
+
+    // English weekdays (Sun, Mon, Tue, etc.)
+    const hasEnglishWeekday = /(Sun|Mon|Tue|Wed|Thu|Fri|Sat)/.test(weekdayText || '');
+    expect(hasEnglishWeekday).toBe(true);
   });
 });

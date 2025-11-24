@@ -6,10 +6,24 @@
  */
 
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
-import { gregorianToHijri, formatHijriDate } from './hijriConverter';
+import { gregorianToHijri, formatHijriDate, getHijriMonthName } from './hijriConverter';
+import moment from 'moment';
 
 export type CalendarType = 'gregorian' | 'hijri';
 export type ViewType = 'month' | 'week' | 'day';
+
+/**
+ * Format number according to locale using Intl.NumberFormat
+ * @param num - Number to format
+ * @param locale - Locale for formatting ('en' or 'ar')
+ * @returns Formatted number string
+ */
+export function formatNumber(num: number, locale: 'en' | 'ar'): string {
+  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals (٠-٩)
+  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
+  // Disable grouping to prevent commas in years (e.g., 2024 not 2,024)
+  return new Intl.NumberFormat(localeCode, { useGrouping: false }).format(num);
+}
 
 /**
  * Format date based on calendar type and locale
@@ -36,7 +50,132 @@ export function formatDateByCalendar(
 }
 
 /**
- * Format date for calendar header
+ * Format date for calendar header - shows both Gregorian and Hijri dates
+ * @param date - Date to format
+ * @param viewType - Type of view (month/week/day)
+ * @param locale - Locale for formatting
+ * @returns Formatted header string with both calendars
+ */
+export function formatDualCalendarHeader(
+  date: Date,
+  viewType: ViewType,
+  locale: 'en' | 'ar'
+): string {
+  const gregorianPart = formatCalendarHeaderPart(date, viewType, 'gregorian', locale);
+  const hijriPart = formatCalendarHeaderPart(date, viewType, 'hijri', locale);
+
+  if (locale === 'ar') {
+    return `${gregorianPart} / ${hijriPart}`;
+  }
+  return `${gregorianPart} / ${hijriPart}`;
+}
+
+/**
+ * Format date for calendar header (single calendar type)
+ * @param date - Date to format
+ * @param viewType - Type of view (month/week/day)
+ * @param calendarType - Type of calendar
+ * @param locale - Locale for formatting
+ * @returns Formatted header string
+ */
+function formatCalendarHeaderPart(
+  date: Date,
+  viewType: ViewType,
+  calendarType: CalendarType,
+  locale: 'en' | 'ar'
+): string {
+  if (calendarType === 'hijri') {
+    const hijriDate = gregorianToHijri(date);
+    const monthName = getHijriMonthName(hijriDate.month, locale);
+
+    if (viewType === 'month') {
+      return `${monthName} ${formatNumber(hijriDate.year, locale)}`;
+    } else if (viewType === 'week') {
+      // For week view, calculate Hijri week range
+      const weekStart = startOfWeek(date, { weekStartsOn: 0 }); // Sunday
+      const weekEnd = endOfWeek(date, { weekStartsOn: 0 });
+
+      const hijriStart = gregorianToHijri(weekStart);
+      const hijriEnd = gregorianToHijri(weekEnd);
+
+      const startMonthName = getHijriMonthName(hijriStart.month, locale);
+      const endMonthName = getHijriMonthName(hijriEnd.month, locale);
+
+      // If same month, show "Month d-d, year"
+      if (hijriStart.month === hijriEnd.month && hijriStart.year === hijriEnd.year) {
+        const separator = locale === 'ar' ? '،' : ',';
+        return `${startMonthName} ${formatNumber(hijriStart.day, locale)}-${formatNumber(hijriEnd.day, locale)}${separator} ${formatNumber(hijriStart.year, locale)}`;
+      } else if (hijriStart.year === hijriEnd.year) {
+        // Different months, same year
+        const separator = locale === 'ar' ? '،' : ',';
+        return `${startMonthName} ${formatNumber(hijriStart.day, locale)} - ${endMonthName} ${formatNumber(hijriEnd.day, locale)}${separator} ${formatNumber(hijriStart.year, locale)}`;
+      } else {
+        // Different years
+        const separator = locale === 'ar' ? '،' : ',';
+        return `${startMonthName} ${formatNumber(hijriStart.day, locale)}${separator} ${formatNumber(hijriStart.year, locale)} - ${endMonthName} ${formatNumber(hijriEnd.day, locale)}${separator} ${formatNumber(hijriEnd.year, locale)}`;
+      }
+    } else {
+      // For day view, show full date
+      return formatHijriDate(hijriDate, locale);
+    }
+  } else {
+    // Gregorian formatting using moment for proper locale support
+    const m = moment(date);
+
+    if (viewType === 'month') {
+      const monthName = m.format('MMMM');
+      const year = date.getFullYear();
+      return `${monthName} ${formatNumber(year, locale)}`;
+    } else if (viewType === 'week') {
+      const weekStart = startOfWeek(date, { weekStartsOn: 0 }); // Sunday
+      const weekEnd = endOfWeek(date, { weekStartsOn: 0 });
+      const mStart = moment(weekStart);
+      const mEnd = moment(weekEnd);
+
+      if (locale === 'ar') {
+        const separator = '،';
+        if (weekStart.getMonth() === weekEnd.getMonth()) {
+          const monthName = mStart.format('MMMM');
+          const startDay = weekStart.getDate();
+          const endDay = weekEnd.getDate();
+          const year = weekStart.getFullYear();
+          return `${monthName} ${formatNumber(startDay, locale)}-${formatNumber(endDay, locale)}${separator} ${formatNumber(year, locale)}`;
+        } else {
+          const startMonthName = mStart.format('MMMM');
+          const endMonthName = mEnd.format('MMMM');
+          const startDay = weekStart.getDate();
+          const endDay = weekEnd.getDate();
+          if (weekStart.getFullYear() === weekEnd.getFullYear()) {
+            const year = weekStart.getFullYear();
+            return `${startMonthName} ${formatNumber(startDay, locale)} - ${endMonthName} ${formatNumber(endDay, locale)}${separator} ${formatNumber(year, locale)}`;
+          } else {
+            const startYear = weekStart.getFullYear();
+            const endYear = weekEnd.getFullYear();
+            return `${startMonthName} ${formatNumber(startDay, locale)}${separator} ${formatNumber(startYear, locale)} - ${endMonthName} ${formatNumber(endDay, locale)}${separator} ${formatNumber(endYear, locale)}`;
+          }
+        }
+      }
+
+      // English locale
+      if (weekStart.getMonth() === weekEnd.getMonth()) {
+        return format(weekStart, 'MMMM d') + ' - ' + format(weekEnd, 'd, yyyy');
+      } else {
+        return format(weekStart, 'MMM d') + ' - ' + format(weekEnd, 'MMM d, yyyy');
+      }
+    } else {
+      if (locale === 'ar') {
+        const monthName = m.format('MMMM');
+        const day = date.getDate();
+        const year = date.getFullYear();
+        return `${formatNumber(day, locale)} ${monthName} ${formatNumber(year, locale)}`;
+      }
+      return format(date, 'MMMM d, yyyy');
+    }
+  }
+}
+
+/**
+ * Format date for calendar header (backward compatible - single calendar type)
  * @param date - Date to format
  * @param viewType - Type of view (month/week/day)
  * @param calendarType - Type of calendar
@@ -49,39 +188,7 @@ export function formatCalendarHeader(
   calendarType: CalendarType,
   locale: 'en' | 'ar'
 ): string {
-  if (calendarType === 'hijri') {
-    const hijriDate = gregorianToHijri(date);
-    const monthName = formatHijriDate({ ...hijriDate, day: 1 }, locale).split(' ')[1];
-
-    if (viewType === 'month') {
-      if (locale === 'ar') {
-        return `${monthName} ${convertToArabicNumerals(hijriDate.year)}`;
-      }
-      return `${monthName} ${hijriDate.year}`;
-    } else if (viewType === 'week') {
-      // For week view, show the month and year
-      return formatHijriDate(hijriDate, locale);
-    } else {
-      // For day view, show full date
-      return formatHijriDate(hijriDate, locale);
-    }
-  } else {
-    // Gregorian formatting
-    if (viewType === 'month') {
-      return format(date, 'MMMM yyyy');
-    } else if (viewType === 'week') {
-      const weekStart = startOfWeek(date, { weekStartsOn: 0 }); // Sunday
-      const weekEnd = endOfWeek(date, { weekStartsOn: 0 });
-
-      if (weekStart.getMonth() === weekEnd.getMonth()) {
-        return format(weekStart, 'MMMM d') + ' - ' + format(weekEnd, 'd, yyyy');
-      } else {
-        return format(weekStart, 'MMM d') + ' - ' + format(weekEnd, 'MMM d, yyyy');
-      }
-    } else {
-      return format(date, 'MMMM d, yyyy');
-    }
-  }
+  return formatCalendarHeaderPart(date, viewType, calendarType, locale);
 }
 
 /**
@@ -92,14 +199,16 @@ export function formatCalendarHeader(
  * @returns Formatted time string
  */
 export function formatTime(date: Date, locale: 'en' | 'ar', use24Hour = false): string {
-  const formatString = use24Hour ? 'HH:mm' : 'h:mm a';
-  const timeStr = format(date, formatString);
+  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals
+  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
 
-  if (locale === 'ar') {
-    return convertToArabicNumerals(timeStr);
-  }
+  const options: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: !use24Hour,
+  };
 
-  return timeStr;
+  return new Intl.DateTimeFormat(localeCode, options).format(date);
 }
 
 /**
@@ -185,23 +294,6 @@ export function navigatePrevious(date: Date, viewType: ViewType): Date {
     case 'day':
       return addDays(date, -1);
   }
-}
-
-/**
- * Convert Western numerals to Arabic-Indic numerals
- * @param str - String to convert
- * @returns String with Arabic-Indic numerals
- */
-function convertToArabicNumerals(str: string | number): string {
-  const arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-  return str
-    .toString()
-    .split('')
-    .map((char) => {
-      const digit = parseInt(char);
-      return isNaN(digit) ? char : arabicNumerals[digit];
-    })
-    .join('');
 }
 
 /**

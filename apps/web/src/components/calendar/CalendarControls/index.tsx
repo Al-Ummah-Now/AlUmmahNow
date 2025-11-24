@@ -10,15 +10,13 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import type { ViewType, CalendarType } from '../utils/dateFormatters';
-import { formatCalendarHeader } from '../utils/dateFormatters';
+import type { ViewType } from '../utils/dateFormatters';
+import { formatDualCalendarHeader } from '../utils/dateFormatters';
 
 interface CalendarControlsProps {
   currentDate: Date;
   viewType: ViewType;
-  calendarType: CalendarType;
   onViewTypeChange: (viewType: ViewType) => void;
-  onCalendarTypeChange: (calendarType: CalendarType) => void;
   onNavigatePrevious: () => void;
   onNavigateNext: () => void;
   onNavigateToday: () => void;
@@ -28,9 +26,7 @@ interface CalendarControlsProps {
 export function CalendarControls({
   currentDate,
   viewType,
-  calendarType,
   onViewTypeChange,
-  onCalendarTypeChange,
   onNavigatePrevious,
   onNavigateNext,
   onNavigateToday,
@@ -38,7 +34,7 @@ export function CalendarControls({
 }: CalendarControlsProps) {
   const { t, locale } = useLanguage();
 
-  const headerText = formatCalendarHeader(currentDate, viewType, calendarType, locale);
+  const headerText = formatDualCalendarHeader(currentDate, viewType, locale);
 
   return (
     <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${className}`}>
@@ -77,14 +73,14 @@ export function CalendarControls({
         </h2>
       </div>
 
-      {/* Right Section: View Type + Calendar Type */}
+      {/* Right Section: View Type */}
       <div className="flex flex-wrap items-center gap-3">
         {/* View Type Selector */}
         <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600">
           <button
             onClick={() => onViewTypeChange('month')}
             className={`
-              px-3 py-1.5 text-sm font-medium rounded-l-lg transition-colors
+              px-3 py-1.5 text-sm font-medium rounded-s-lg transition-colors
               ${
                 viewType === 'month'
                   ? 'bg-blue-600 text-white'
@@ -99,7 +95,7 @@ export function CalendarControls({
           <button
             onClick={() => onViewTypeChange('week')}
             className={`
-              px-3 py-1.5 text-sm font-medium border-x border-gray-300 dark:border-gray-600 transition-colors
+              px-3 py-1.5 text-sm font-medium border-s border-e border-gray-300 dark:border-gray-600 transition-colors
               ${
                 viewType === 'week'
                   ? 'bg-blue-600 text-white'
@@ -114,7 +110,7 @@ export function CalendarControls({
           <button
             onClick={() => onViewTypeChange('day')}
             className={`
-              px-3 py-1.5 text-sm font-medium rounded-r-lg transition-colors
+              px-3 py-1.5 text-sm font-medium rounded-e-lg transition-colors
               ${
                 viewType === 'day'
                   ? 'bg-blue-600 text-white'
@@ -126,17 +122,6 @@ export function CalendarControls({
             {(t.schedule?.calendar?.day) ?? "Day"}
           </button>
         </div>
-
-        {/* Calendar Type Selector */}
-        <select
-          value={calendarType}
-          onChange={(e) => onCalendarTypeChange(e.target.value as CalendarType)}
-          className="px-3 py-1.5 text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label={(t.schedule?.calendar?.calendarType) ?? "Calendar Type"}
-        >
-          <option value="gregorian">{(t.schedule?.calendar?.gregorian) ?? "Gregorian"}</option>
-          <option value="hijri">{(t.schedule?.calendar?.hijri) ?? "Hijri"}</option>
-        </select>
       </div>
     </div>
   );

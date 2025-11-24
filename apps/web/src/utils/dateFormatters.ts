@@ -57,11 +57,14 @@ export function formatDate(
     dateOptions.month = 'long';
   }
   if (includeTime) {
-    dateOptions.hour = 'numeric';
+    dateOptions.hour = '2-digit';
     dateOptions.minute = '2-digit';
+    dateOptions.hour12 = true;
   }
 
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SA' : 'en-US', dateOptions).format(date);
+  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals (٠-٩)
+  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
+  return new Intl.DateTimeFormat(localeCode, dateOptions).format(date);
 }
 
 /**
@@ -72,13 +75,17 @@ export function formatTime(
   locale: 'en' | 'ar' = 'en',
   timeZone?: string
 ): string {
+  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals (٠-٩)
+  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
+
   const options: Intl.DateTimeFormatOptions = {
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
     timeZone: timeZone || undefined,
   };
 
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SA' : 'en-US', options).format(date);
+  return new Intl.DateTimeFormat(localeCode, options).format(date);
 }
 
 /**
@@ -148,12 +155,15 @@ export function formatMonthYear(
     return formatHijriDate(hijriDate, locale, { includeYear: true, includeDay: false });
   }
 
+  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals (٠-٩)
+  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
+
   const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'long',
   };
 
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SA' : 'en-US', options).format(date);
+  return new Intl.DateTimeFormat(localeCode, options).format(date);
 }
 
 /**
@@ -181,11 +191,14 @@ export function getWeekdayShort(
   date: Date,
   locale: 'en' | 'ar' = 'en'
 ): string {
+  // For Arabic, use 'ar-u-nu-arab' for consistency
+  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
+
   const options: Intl.DateTimeFormatOptions = {
     weekday: 'short',
   };
 
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SA' : 'en-US', options).format(date);
+  return new Intl.DateTimeFormat(localeCode, options).format(date);
 }
 
 /**

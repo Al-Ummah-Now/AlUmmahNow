@@ -10,7 +10,7 @@ import type { VideoObject } from '@/interfaces';
 import { ViewSwitcher, type ViewMode } from '@/components/calendar/ViewSwitcher';
 import { CalendarControls } from '@/components/calendar/CalendarControls';
 import { ScheduledVideosList } from '@/components/scheduled-videos/ScheduledVideosList';
-import { navigateNext, navigatePrevious, type ViewType, type CalendarType } from '@/components/calendar/utils/dateFormatters';
+import { navigateNext, navigatePrevious, type ViewType } from '@/components/calendar/utils/dateFormatters';
 import { Loader } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -47,11 +47,6 @@ export default function ScheduledVideosPage() {
     return (viewParam === 'calendar' || viewParam === 'list') ? viewParam : 'list';
   });
 
-  const [calendarType, setCalendarType] = useState<CalendarType>(() => {
-    const typeParam = searchParams.get('calendarType');
-    return (typeParam === 'hijri' || typeParam === 'gregorian') ? typeParam : 'gregorian';
-  });
-
   const [calendarView, setCalendarView] = useState<ViewType>(() => {
     const viewTypeParam = searchParams.get('calendarView');
     return (viewTypeParam === 'month' || viewTypeParam === 'week' || viewTypeParam === 'day') ? viewTypeParam : 'month';
@@ -59,19 +54,46 @@ export default function ScheduledVideosPage() {
 
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  // Combined loading state
+  // Combined loading state for list view
   const loading = multiAccountLoading || fetchLoading;
+
+  // Calendar-specific loading: only show loading during actual video fetch
+  // Don't tie to multiAccountLoading to avoid stuck loading states
+  const calendarLoading = fetchLoading;
+
+  // Debug logging to track loading state
+  useEffect(() => {
+    console.log('[ScheduledVideos] Loading state:', {
+      multiAccountLoading,
+      fetchLoading,
+      loading,
+      calendarLoading,
+      hasAuth: !!auth.user,
+      hasMultiAccount: !!multiAccountUser,
+      videosCount: videos.length
+    });
+  }, [multiAccountLoading, fetchLoading, loading, calendarLoading, auth.user, multiAccountUser, videos.length]);
 
   // Update URL when view state changes
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('view', view);
-    params.set('calendarType', calendarType);
-    params.set('calendarView', calendarView);
+    const currentView = searchParams.get('view');
+    const currentCalendarView = searchParams.get('calendarView');
 
-    const newUrl = `${pathname}?${params.toString()}`;
-    router.replace(newUrl, { scroll: false });
-  }, [view, calendarType, calendarView, pathname, router, searchParams]);
+    // Only update if values have actually changed
+    if (
+      currentView !== view ||
+      currentCalendarView !== calendarView
+    ) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', view);
+      params.set('calendarView', calendarView);
+      // Remove calendarType param if it exists (cleanup from old version)
+      params.delete('calendarType');
+
+      const newUrl = `${pathname}?${params.toString()}`;
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [view, calendarView, pathname, router, searchParams]);
 
   // Redirect if not authenticated or no channels
   useEffect(() => {
@@ -80,41 +102,57 @@ export default function ScheduledVideosPage() {
       return;
     }
 
-    // Redirect users without channels to main page
-    const userChannels = multiAccountUser?.channels || [];
-    if (userChannels.length === 0) {
-      router.push(`/${locale}`);
+    // Only redirect if we've confirmed user has loaded and has no channels
+    if (multiAccountUser && !multiAccountLoading) {
+      const userChannels = multiAccountUser.channels || [];
+      if (userChannels.length === 0) {
+        router.push(`/${locale}`);
+      }
     }
-  }, [auth.user, multiAccountUser?.channels, router, locale]);
+  }, [auth.user, multiAccountUser, multiAccountLoading, router, locale]);
 
   // Fetch scheduled videos using single API call
   const fetchScheduledVideos = async () => {
+    console.log('[fetchScheduledVideos] Starting fetch', {
+      hasAuth: !!auth.user,
+      hasMultiAccount: !!multiAccountUser
+    });
+
+    // Clear any previous errors at the start
+    setError(null);
+
     if (!auth.user) {
+      console.log('[fetchScheduledVideos] No auth user, stopping');
       setFetchLoading(false);
       return;
     }
 
     // Wait for multiAccountUser to load before fetching
     if (!multiAccountUser) {
+      console.log('[fetchScheduledVideos] Waiting for multiAccountUser to load');
       return;
     }
 
     try {
+      console.log('[fetchScheduledVideos] Setting fetchLoading = true');
       setFetchLoading(true);
-      setError(null);
 
       // Get all channels the user owns
       const userChannels = multiAccountUser.channels || [];
       const channelIds = userChannels.map(ch => ch.id);
 
+      console.log('[fetchScheduledVideos] User channels:', channelIds);
+
       if (channelIds.length === 0) {
         // User has no channels, show empty state
+        console.log('[fetchScheduledVideos] No channels, showing empty state');
         setVideos([]);
         setFetchLoading(false);
         return;
       }
 
       // Use single searchVideos call with schedule filtering
+      console.log('[fetchScheduledVideos] Calling searchVideos API...');
       const result = await searchVideos(
         '', // Empty query to get all videos
         {
@@ -133,15 +171,24 @@ export default function ScheduledVideosPage() {
         }
       );
 
-      if (!result) {
-        throw new Error('Failed to fetch scheduled videos');
-      }
+      console.log('[fetchScheduledVideos] API response:', {
+        hasResult: !!result,
+        dataLength: result?.data?.length || 0
+      });
 
-      setVideos(result.data);
+      // Handle null result or missing data gracefully
+      if (!result || !result.data) {
+        console.log('[fetchScheduledVideos] No data returned, setting empty array');
+        setVideos([]);
+      } else {
+        setVideos(result.data);
+        console.log('[fetchScheduledVideos] Videos updated successfully');
+      }
     } catch (err) {
-      console.error('Error fetching scheduled videos:', err);
+      console.error('[fetchScheduledVideos] Error fetching scheduled videos:', err);
       setError('An error occurred while fetching scheduled videos');
     } finally {
+      console.log('[fetchScheduledVideos] Setting fetchLoading = false');
       setFetchLoading(false);
     }
   };
@@ -230,9 +277,7 @@ export default function ScheduledVideosPage() {
           <CalendarControls
             currentDate={currentDate}
             viewType={calendarView}
-            calendarType={calendarType}
             onViewTypeChange={setCalendarView}
-            onCalendarTypeChange={setCalendarType}
             onNavigatePrevious={handleNavigatePrevious}
             onNavigateNext={handleNavigateNext}
             onNavigateToday={handleNavigateToday}
@@ -252,12 +297,11 @@ export default function ScheduledVideosPage() {
       ) : (
         <ScheduledVideoCalendar
           videos={videos}
-          calendarType={calendarType}
           viewType={calendarView}
           currentDate={currentDate}
           onNavigate={handleCalendarNavigate}
           onEventClick={handleEventClick}
-          isLoading={loading}
+          isLoading={calendarLoading}
           error={error ? new Error(error) : null}
         />
       )}

@@ -32,7 +32,7 @@ export function ViewSwitcher({
         onClick={() => onViewChange('list')}
         className={`
           flex items-center gap-2 px-4 py-2 text-sm font-medium
-          rounded-l-lg transition-colors
+          rounded-s-lg transition-colors
           ${
             currentView === 'list'
               ? 'bg-blue-600 text-white'
@@ -50,7 +50,7 @@ export function ViewSwitcher({
         onClick={() => onViewChange('calendar')}
         className={`
           flex items-center gap-2 px-4 py-2 text-sm font-medium
-          rounded-r-lg transition-colors border-l border-gray-300 dark:border-gray-600
+          rounded-e-lg transition-colors border-s border-gray-300 dark:border-gray-600
           ${
             currentView === 'calendar'
               ? 'bg-blue-600 text-white'
