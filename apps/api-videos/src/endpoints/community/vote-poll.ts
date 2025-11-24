@@ -181,6 +181,54 @@ export class VoteOnPoll extends OpenAPIRoute {
     }
   }
 
+  /**
+   * KNOWN ISSUE: Race Condition in Vote Counting
+   *
+   * This method uses a read-modify-write pattern that is NOT atomic:
+   * 1. Read current vote counts from R2
+   * 2. Increment vote counts locally
+   * 3. Write updated counts back to R2
+   *
+   * PROBLEM:
+   * If two users vote simultaneously on the same poll:
+   * - User A reads: totalVotes = 100
+   * - User B reads: totalVotes = 100 (before A's write)
+   * - User A increments to 101 and writes
+   * - User B increments to 101 and writes (overwrites A's vote!)
+   * - Result: totalVotes = 101 instead of 102 (one vote lost)
+   *
+   * IMPACT:
+   * - Vote counts may be inaccurate under concurrent load
+   * - Higher traffic = more lost votes
+   * - Low-traffic polls will see minimal impact
+   *
+   * SOLUTION OPTIONS:
+   *
+   * Option 1: Cloudflare Durable Objects (RECOMMENDED)
+   * - Provides single-threaded atomic operations
+   * - Each poll gets its own Durable Object instance
+   * - Guaranteed consistency without race conditions
+   * - Implementation: Move vote counting logic to Durable Objects
+   * - Trade-off: Additional complexity, requires Durable Objects setup
+   *
+   * Option 2: Optimistic Locking with ETags
+   * - Add version/etag field to VoteResults
+   * - Check etag before write, retry if changed
+   * - Simpler than Durable Objects, works with R2
+   * - Trade-off: Requires retry logic, may have contention under high load
+   *
+   * Option 3: Accept the Risk (CURRENT APPROACH)
+   * - Suitable for low-traffic community features
+   * - Most polls will have sequential votes (low concurrency)
+   * - Lost votes are statistically rare in typical usage
+   * - Can upgrade to Option 1 or 2 if accuracy becomes critical
+   *
+   * RECOMMENDATION:
+   * - Start with current implementation for MVP/low-traffic
+   * - Monitor vote accuracy metrics
+   * - Migrate to Durable Objects when poll traffic increases
+   * - Consider Option 2 as intermediate step if needed
+   */
   private async updateResults(
     c: any,
     postId: string,
