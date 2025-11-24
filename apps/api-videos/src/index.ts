@@ -363,7 +363,7 @@ app.use('/api/community/posts', (c, next) => {
 });
 
 app.use('/api/community/posts/:postId/like', authMiddleware);
-app.use('/api/community/posts/:postId/vote', authMiddleware);
+app.use('/api/community/posts/:channelId/:postId/vote', authMiddleware);
 
 // Community posts comments - GET is public, others require auth
 app.use('/api/community/posts/:postId/comments', (c, next) => {
@@ -489,7 +489,7 @@ openapi.put("/api/community/posts/:postId", UpdateCommunityPost);
 openapi.delete("/api/community/posts/:postId", DeleteCommunityPost);
 openapi.post("/api/community/posts/:postId/like", LikeCommunityPost);
 openapi.delete("/api/community/posts/:postId/like", UnlikeCommunityPost);
-openapi.post("/api/community/posts/:postId/vote", VoteOnPoll);
+openapi.post("/api/community/posts/:channelId/:postId/vote", VoteOnPoll);
 
 // Community Posts - Comments management (require auth)
 openapi.post("/api/community/posts/:postId/comments", CreatePostComment);
@@ -625,7 +625,7 @@ app.get("/openapi.json", async (c) => {
 		'/api/community/posts', // POST (create)
 		'/api/community/posts/{postId}', // PUT, DELETE
 		'/api/community/posts/{postId}/like', // POST, DELETE
-		'/api/community/posts/{postId}/vote', // POST
+		'/api/community/posts/{channelId}/{postId}/vote', // POST
 		// Community Posts - Comments management
 		'/api/community/posts/{postId}/comments', // POST (create)
 		'/api/community/posts/{postId}/comments/{commentId}', // PUT, DELETE

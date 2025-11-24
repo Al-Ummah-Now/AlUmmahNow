@@ -27,7 +27,8 @@ export class VoteOnPoll extends OpenAPIRoute {
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({
-        postId: z.string(),
+        channelId: z.string().describe('Channel ID that owns the post'),
+        postId: z.string().describe('Post ID to vote on'),
       }),
       body: {
         content: {
@@ -81,7 +82,7 @@ export class VoteOnPoll extends OpenAPIRoute {
 
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
-    const { postId } = c.req.param();
+    const { channelId, postId } = c.req.param();
     const request = await this.getValidatedData<typeof this.schema>();
     const body: any = request.body;
 
@@ -98,25 +99,18 @@ export class VoteOnPoll extends OpenAPIRoute {
         return c.json({ error: 'Already voted on this poll' }, 400);
       }
 
-      // Get post
-      let postKey: string | null = null;
-      let post: CommunityPost | null = null;
+      // Get post using direct key access (fixed N+1 query issue)
+      const postKey = `posts/${channelId}/${postId}.json`;
+      const postData = await c.env.community_posts.get(postKey);
 
-      const listResult = await c.env.community_posts.list({ prefix: 'posts/' });
-
-      for (const object of listResult.objects) {
-        if (object.key.includes(`/${postId}.json`)) {
-          postKey = object.key;
-          const postData = await c.env.community_posts.get(object.key);
-          if (postData) {
-            post = await postData.json();
-          }
-          break;
-        }
+      if (!postData) {
+        return c.json({ error: 'Poll not found' }, 404);
       }
 
-      if (!post || !postKey || post.type !== PostType.POLL || !post.poll) {
-        return c.json({ error: 'Poll not found' }, 404);
+      const post: CommunityPost = await postData.json();
+
+      if (post.type !== PostType.POLL || !post.poll) {
+        return c.json({ error: 'Post is not a poll' }, 400);
       }
 
       // Check if voting ended
