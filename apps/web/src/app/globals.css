@@ -38,7 +38,11 @@
     text-wrap: balance;
   }
 
-  /* Hide scrollbar while maintaining scroll functionality */
+  /**
+   * Hide scrollbar while maintaining scroll functionality
+   * Used by: TabNavigation component for horizontal scrolling
+   * Browser support: All modern browsers + IE10+
+   */
   .scrollbar-hide {
     -ms-overflow-style: none;  /* Internet Explorer 10+ */
     scrollbar-width: none;  /* Firefox */

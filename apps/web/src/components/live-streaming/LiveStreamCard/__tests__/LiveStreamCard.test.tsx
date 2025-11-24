@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { screen, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/utils/test-utils';
 import {
   createMockLiveStream,

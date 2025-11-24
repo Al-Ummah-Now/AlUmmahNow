@@ -15,7 +15,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useLiveStreams, useLiveNow, useScheduledStreams, useEndedStreams } from '../useLiveStreams';
 import { LiveStreamsAPI } from '@/lib/api/livestreams';
-import { createMockLiveStreams, createMockPaginatedResponse } from '@/__tests__/utils/mock-data';
+import { createMockLiveStreams } from '@/__tests__/utils/mock-data';
 
 // Mock the LiveStreamsAPI
 jest.mock('@/lib/api/livestreams', () => ({

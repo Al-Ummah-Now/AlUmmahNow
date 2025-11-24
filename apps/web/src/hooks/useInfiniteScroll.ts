@@ -9,6 +9,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * Options for configuring the useInfiniteScroll hook
@@ -117,10 +118,10 @@ export function useInfiniteScroll({
       loadingRef.current = true;
 
       try {
-        console.log('[useInfiniteScroll] Loading more content');
+        logger.debug('[useInfiniteScroll] Loading more content');
         await onLoadMore();
       } catch (error) {
-        console.error('[useInfiniteScroll] Error loading more content:', error);
+        logger.error('[useInfiniteScroll] Error loading more content', error);
       } finally {
         loadingRef.current = false;
       }
@@ -131,7 +132,7 @@ export function useInfiniteScroll({
   useEffect(() => {
     // Don't observe if disabled or no more content
     if (!enabled || !hasMore) {
-      console.log('[useInfiniteScroll] Observer disabled:', { enabled, hasMore });
+      logger.debug('[useInfiniteScroll] Observer disabled', { enabled, hasMore });
       return;
     }
 
@@ -140,7 +141,7 @@ export function useInfiniteScroll({
       (entries) => {
         const [entry] = entries;
 
-        console.log('[useInfiniteScroll] Intersection observed:', {
+        logger.debug('[useInfiniteScroll] Intersection observed', {
           isIntersecting: entry.isIntersecting,
           intersectionRatio: entry.intersectionRatio
         });
@@ -160,14 +161,14 @@ export function useInfiniteScroll({
     // Start observing the trigger element
     const currentTrigger = triggerRef.current;
     if (currentTrigger && observerRef.current) {
-      console.log('[useInfiniteScroll] Starting to observe trigger element');
+      logger.debug('[useInfiniteScroll] Starting to observe trigger element');
       observerRef.current.observe(currentTrigger);
     }
 
     // Cleanup function
     return () => {
       if (observerRef.current) {
-        console.log('[useInfiniteScroll] Cleaning up observer');
+        logger.debug('[useInfiniteScroll] Cleaning up observer');
         observerRef.current.disconnect();
         observerRef.current = null;
       }

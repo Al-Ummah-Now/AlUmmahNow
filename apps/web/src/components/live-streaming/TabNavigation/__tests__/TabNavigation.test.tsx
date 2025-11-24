@@ -327,7 +327,7 @@ describe('TabNavigation Component', () => {
     });
 
     it('applies active styling to count badge on active tab', () => {
-      const { container } = renderWithProviders(
+      renderWithProviders(
         <TabNavigation
           activeTab="live"
           onTabChange={() => {}}
