@@ -1,6 +1,7 @@
 import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
 import { Context } from 'hono';
+import sanitizeHtml from 'sanitize-html';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
@@ -11,6 +12,17 @@ import type {
   PostCommentIndex,
   CommunityPost,
 } from '@al-ummah/shared-types';
+
+// Sanitization configuration for comments
+// Allows basic formatting while preventing XSS attacks
+const sanitizeOptions = {
+  allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
+  allowedAttributes: {
+    'a': ['href']
+  },
+  allowedSchemes: ['http', 'https'],
+  disallowedTagsMode: 'discard' as const
+};
 
 const createCommentRequestSchema = z.object({
   content: z
@@ -175,14 +187,14 @@ export class CreatePostComment extends OpenAPIRoute {
       }
     }
 
-    // 3. Create comment object
+    // 3. Create comment object with sanitized content
     const comment: PostComment = {
       id: crypto.randomUUID(),
       postId,
       channelId: channelId || userId,
       userId: userId,
       parentCommentId: requestBody.parentCommentId,
-      content: requestBody.content,
+      content: sanitizeHtml(requestBody.content, sanitizeOptions),
       userDisplayName: (auth.payload as any).email || 'Anonymous',
       userAvatarUrl: undefined,
       channelVerified: false,

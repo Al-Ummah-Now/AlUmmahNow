@@ -24,12 +24,14 @@
     "@openauthjs/openauth": "^0.4.3",
     "chanfana": "^2.8.0",
     "hono": "^4.10.4",
+    "sanitize-html": "^2.14.0",
     "tus-js-client": "^4.3.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251106.1",
     "@types/node": "24.10.0",
+    "@types/sanitize-html": "^2.13.0",
     "@types/service-worker-mock": "^2.0.1",
     "tsx": "^4.19.2",
     "typescript": "5.9.3",

@@ -1,5 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
+import sanitizeHtml from 'sanitize-html';
 import {
   CommunityPost,
   PostType,
@@ -12,6 +13,17 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateCreatePost } from '../../validation/community-posts';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
+
+// Sanitization configuration for community posts
+// Allows basic formatting while preventing XSS attacks
+const sanitizeOptions = {
+  allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
+  allowedAttributes: {
+    'a': ['href']
+  },
+  allowedSchemes: ['http', 'https'],
+  disallowedTagsMode: 'discard' as const
+};
 
 const createPostSchema = z.object({
   type: z.nativeEnum(PostType),
@@ -135,23 +147,24 @@ export class CreateCommunityPost extends OpenAPIRoute {
         return c.json({ error: 'User does not own this channel' }, 403);
       }
 
-      // Create post object
+      // Create post object with sanitized content
       const post: CommunityPost = {
         id: crypto.randomUUID(),
         channelId: channelId,
         userId: userId,
         type: body.type,
-        content: body.content,
+        content: body.content ? sanitizeHtml(body.content, sanitizeOptions) : undefined,
         images: body.images, // Images should be pre-uploaded via /api/community/media/upload/images
         videoId: body.videoId,
         gif: body.gif, // GIF should be pre-uploaded via /api/community/media/upload/gif
         poll: body.poll ? {
           ...body.poll,
+          question: sanitizeHtml(body.poll.question, sanitizeOptions),
           totalVotes: 0,
           showResults: false,
           options: body.poll.options.map((opt, idx) => ({
             id: `option-${idx}`,
-            text: opt.text,
+            text: opt.text ? sanitizeHtml(opt.text, sanitizeOptions) : undefined,
             image: opt.image, // Poll option images should be pre-uploaded
             votes: 0,
             percentage: 0
@@ -159,11 +172,13 @@ export class CreateCommunityPost extends OpenAPIRoute {
         } : undefined,
         quiz: body.quiz ? {
           ...body.quiz,
+          question: sanitizeHtml(body.quiz.question, sanitizeOptions),
+          explanation: body.quiz.explanation ? sanitizeHtml(body.quiz.explanation, sanitizeOptions) : undefined,
           totalAttempts: 0,
           correctAttempts: 0,
           options: body.quiz.options.map((opt, idx) => ({
             id: `quiz-option-${idx}`,
-            text: opt.text,
+            text: sanitizeHtml(opt.text, sanitizeOptions),
             image: opt.image, // Quiz option images should be pre-uploaded
           }))
         } : undefined,
