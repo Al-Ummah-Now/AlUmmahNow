@@ -152,7 +152,7 @@ export const CONTENT_REQUIRED_TYPES: Record<string, string[]> = {
 
 // Validation constraints
 export const CHANNEL_SECTION_CONSTRAINTS = {
-  MAX_SECTIONS_PER_CHANNEL: 50,
+  MAX_SECTIONS_PER_CHANNEL: 5,
   MAX_TITLE_LENGTH: 100,
   MAX_VIDEO_IDS: 20,
   MAX_PLAYLIST_IDS: 10,
