@@ -73,6 +73,7 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
 
   return {
     userId,
-    accessToken: accessToken.value
+    accessToken: accessToken.value,
+    channelId: '' // Legacy users don't have channelId yet - will be set after profile creation
   };
 }

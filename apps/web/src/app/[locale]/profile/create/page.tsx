@@ -6,14 +6,15 @@ import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
+import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 
 const ProfileCreatePage = () => {
   const { t } = useLanguage();
   const params = useParams();
   const locale = params.locale as string;
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveButtonState>('idle');
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [timezone, setTimezone] = useState<string>('');
   const auth = useAuth();
@@ -43,28 +44,38 @@ const ProfileCreatePage = () => {
     event.preventDefault();
     if (!profile || !auth?.user) return;
 
-    setLoading(true);
-    setError(null);
+    setSaveState('saving');
+    setErrorMessage('');
 
     const formData = new FormData(event.target as HTMLFormElement);
-    const firstName = formData.get('firstName') as string;
-    const lastName = formData.get('lastName') as string;
+    const firstNameEn = formData.get('firstNameEn') as string;
+    const firstNameAr = formData.get('firstNameAr') as string;
+    const lastNameEn = formData.get('lastNameEn') as string;
+    const lastNameAr = formData.get('lastNameAr') as string;
     const displayNameEn = formData.get('displayNameEn') as string;
     const displayNameAr = formData.get('displayNameAr') as string;
     const bioEn = formData.get('bioEn') as string;
     const bioAr = formData.get('bioAr') as string;
 
     // Validation
-    if (!firstName.trim()) {
-      setError(t.validation.required);
-      setLoading(false);
+    if (!firstNameEn.trim()) {
+      setSaveState('error');
+      setErrorMessage(t.validation.required);
       return;
     }
 
     try {
       const result = await createProfile({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: firstNameEn.trim(),
+        firstNameLocalized: {
+          en: firstNameEn.trim() || '',
+          ar: firstNameAr.trim() || ''
+        },
+        lastName: lastNameEn.trim(),
+        lastNameLocalized: {
+          en: lastNameEn.trim() || '',
+          ar: lastNameAr.trim() || ''
+        },
         displayName: displayNameEn || '',
         displayNameLocalized: {
           en: displayNameEn || '',
@@ -82,13 +93,15 @@ const ProfileCreatePage = () => {
       });
 
       console.log('Profile created successfully:', result);
-      // Redirect to home page after successful profile creation
-      router.push(`/${locale}/`);
+      setSaveState('success');
+      // Redirect to home page after successful profile creation with a slight delay
+      setTimeout(() => {
+        router.push(`/${locale}/`);
+      }, 1000);
     } catch (error) {
       console.error('Profile creation failed:', error);
-      setError(error instanceof Error ? error.message : t.errors.genericError);
-    } finally {
-      setLoading(false);
+      setSaveState('error');
+      setErrorMessage(error instanceof Error ? error.message : t.errors.genericError);
     }
   };
 
@@ -111,12 +124,6 @@ const ProfileCreatePage = () => {
             <p className="text-gray-600 dark:text-gray-400">{t.profile.welcomeMessage}</p>
           </div>
 
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md">
-              <p className="text-red-700 dark:text-red-400">{error}</p>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
@@ -131,62 +138,86 @@ const ProfileCreatePage = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t.profile.emailCannotBeChanged}</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                  {t.profile.firstName} <span className="text-red-500 dark:text-red-400">*</span>
-                </label>
+            {/* Language Tabs - Controls all localized fields */}
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab('en')}
+                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                  activeTab === 'en'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                {t.languages.english}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('ar')}
+                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                  activeTab === 'ar'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                {t.languages.arabic}
+              </button>
+            </div>
+
+            {/* First Name with Language Tabs */}
+            <div>
+              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                {t.profile.firstName} <span className="text-red-500 dark:text-red-400">*</span>
+              </label>
+              {activeTab === 'en' && (
                 <input
                   type="text"
-                  name="firstName"
+                  name="firstNameEn"
                   required
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.yourFirstName}
                 />
-              </div>
-
-              <div>
-                <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                  {t.profile.lastName}
-                </label>
+              )}
+              {activeTab === 'ar' && (
                 <input
                   type="text"
-                  name="lastName"
+                  name="firstNameAr"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
+                  placeholder={t.profile.firstNameArabic || 'الاسم الأول'}
+                  dir="rtl"
+                />
+              )}
+            </div>
+
+            {/* Last Name with Language Tabs */}
+            <div>
+              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                {t.profile.lastName}
+              </label>
+              {activeTab === 'en' && (
+                <input
+                  type="text"
+                  name="lastNameEn"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.yourLastName}
                 />
-              </div>
+              )}
+              {activeTab === 'ar' && (
+                <input
+                  type="text"
+                  name="lastNameAr"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
+                  placeholder={t.profile.lastNameArabic || 'اسم العائلة'}
+                  dir="rtl"
+                />
+              )}
             </div>
 
-            {/* Display Name with Language Tabs */}
+            {/* Display Name */}
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.displayName}
               </label>
-              <div className="flex gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('en')}
-                  className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
-                    activeTab === 'en'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  {t.languages.english}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('ar')}
-                  className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
-                    activeTab === 'ar'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  {t.languages.arabic}
-                </button>
-              </div>
               {activeTab === 'en' && (
                 <input
                   type="text"
@@ -207,7 +238,7 @@ const ProfileCreatePage = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t.profile.displayNameEmpty}</p>
             </div>
 
-            {/* Bio with Language Tabs */}
+            {/* Bio */}
             <div>
               <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.bio}
@@ -264,15 +295,16 @@ const ProfileCreatePage = () => {
               </p>
             </div>
 
-            <div className="flex gap-4 pt-4">
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 bg-blue-600 dark:bg-blue-500 text-white py-3 px-6 rounded-md font-medium hover:bg-blue-700 dark:hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {loading ? `${t.common.create}...` : t.profile.createProfile}
-              </button>
-            </div>
+            <SaveButton
+              state={saveState}
+              type="submit"
+              idleText={t.profile.createProfile}
+              savingText={t.common.saving || 'Saving...'}
+              successText={t.common.saved || 'Saved!'}
+              errorText={t.common.saveFailed || 'Save Failed'}
+              errorMessage={errorMessage}
+              fullWidth={true}
+            />
           </form>
         </div>
       </div>

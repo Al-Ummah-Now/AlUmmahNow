@@ -14,6 +14,20 @@ const ProfilePage = () => {
   const router = useRouter();
   const { profile, isLoading, error } = useProfile(auth?.user || null);
 
+  // Get localized name or fall back to default
+  const getLocalizedName = (
+    defaultValue: string | undefined,
+    localizedValues: Record<string, string> | undefined
+  ): string => {
+    if (localizedValues && localizedValues[locale]) {
+      return localizedValues[locale];
+    }
+    return defaultValue || '';
+  };
+
+  const displayFirstName = getLocalizedName(profile?.firstName, profile?.firstNameLocalized);
+  const displayLastName = getLocalizedName(profile?.lastName, profile?.lastNameLocalized);
+
   return (
     <div className="profile-page flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
       {/* Main Content */}
@@ -80,7 +94,7 @@ const ProfilePage = () => {
                   }}
                 />
               </div>
-              <h1 className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{`${profile?.firstName ?? ""} ${profile?.lastName ?? ""}`}</h1>
+              <h1 className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{`${displayFirstName} ${displayLastName}`}</h1>
             </section>
 
             {/* Channel Management Section */}

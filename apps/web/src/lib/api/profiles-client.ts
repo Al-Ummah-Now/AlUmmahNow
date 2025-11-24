@@ -155,7 +155,9 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
     try {
         const profileData = {
             firstName: profile.firstName,
+            firstNameLocalized: profile.firstNameLocalized,
             lastName: profile.lastName,
+            lastNameLocalized: profile.lastNameLocalized,
             displayName: profile.displayName,
             displayNameLocalized: profile.displayNameLocalized,
             bio: profile.bio,

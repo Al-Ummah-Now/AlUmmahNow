@@ -94,12 +94,16 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                                 onClick={toggleTheme}
                                 className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
                                 aria-label={theme === 'dark' ? t.navigation?.light || 'Light Mode' : t.navigation?.dark || 'Dark Mode'}
+                                suppressHydrationWarning
                             >
-                                <div className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 ${
-                                    theme === 'dark'
-                                        ? 'bg-yellow-500/10 text-yellow-500 group-hover:bg-yellow-500/20'
-                                        : 'bg-blue-500/10 text-blue-600 group-hover:bg-blue-500/20'
-                                }`}>
+                                <div
+                                    className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 ${
+                                        theme === 'dark'
+                                            ? 'bg-yellow-500/10 text-yellow-500 group-hover:bg-yellow-500/20'
+                                            : 'bg-blue-500/10 text-blue-600 group-hover:bg-blue-500/20'
+                                    }`}
+                                    suppressHydrationWarning
+                                >
                                     {theme === 'dark' ? (
                                         <Sun className="h-5 w-5" />
                                     ) : (
@@ -110,7 +114,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                                     <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
                                         Theme
                                     </div>
-                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100" suppressHydrationWarning>
                                         {theme === 'dark' ? 'Light' : 'Dark'}
                                     </div>
                                 </div>

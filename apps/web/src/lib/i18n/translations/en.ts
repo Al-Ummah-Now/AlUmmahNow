@@ -37,6 +37,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
     collapse: 'Collapse',
     expand: 'Expand',
     loadMore: 'Load More',
+    saving: 'Saving...',
+    saved: 'Saved!',
+    saveFailed: 'Save Failed',
   },
 
   languages: {
@@ -244,6 +247,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
     lastName: 'Last Name',
     yourFirstName: 'Your first name',
     yourLastName: 'Your last name',
+    firstNameArabic: 'الاسم الأول',
+    lastNameArabic: 'اسم العائلة',
     displayNameOptional: 'How others will see your name (optional)',
     displayNameArabic: 'كيف سيرى الآخرون اسمك (اختياري)',
     displayNameEmpty: 'If left empty, we\'ll use your first and last name',

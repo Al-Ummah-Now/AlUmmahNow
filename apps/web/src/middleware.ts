@@ -3,7 +3,8 @@
  *
  * Features:
  * - Content Security Policy (CSP) headers
- * - Locale validation and routing for dynamic [locale] routes
+ * - Locale validation based on LOCALES config (supports any locale with isSupported: true)
+ * - Automatic redirect of unsupported locales to default locale
  * - RTL/LTR direction headers
  * - Video.js CDN whitelisting with integrity checks
  * - Bunny CDN media source allowance
@@ -102,58 +103,58 @@ export function middleware(request: NextRequest) {
   // Determine environment
   const isDevelopment = process.env.NODE_ENV === 'development';
 
-  // Handle dynamic [locale] routes
-  // Skip static locale routes (/ar/*, /en/*) and non-locale routes
-  const dynamicLocaleMatch = pathname.match(/^\/([^\/]+)/);
+  // Handle locale routes
+  // Check if the first path segment is a locale code
+  const localeMatch = pathname.match(/^\/([^\/]+)/);
 
-  if (dynamicLocaleMatch) {
-    const potentialLocale = dynamicLocaleMatch[1];
+  if (localeMatch) {
+    const potentialLocale = localeMatch[1];
     const supportedLocaleCodes = getSupportedLocaleCodes();
 
-    // Check if this is a dynamic [locale] route (not /ar or /en, which are static)
-    // Also skip Next.js internals (_next), API routes (api), and static files
-    const isStaticLocaleRoute = ['ar', 'en'].includes(potentialLocale);
+    // Skip Next.js internals (_next), API routes (api), and static files
     const isNextInternal = potentialLocale.startsWith('_next');
     const isApiRoute = potentialLocale === 'api';
     const isPublicFile = potentialLocale === 'public' || pathname.includes('.');
 
-    if (!isStaticLocaleRoute && !isNextInternal && !isApiRoute && !isPublicFile) {
-      // This might be a dynamic [locale] route
-      // Check if the locale is valid but not one of our static routes
-      if (supportedLocaleCodes.includes(potentialLocale) && !['ar', 'en'].includes(potentialLocale)) {
-        // Valid dynamic locale - continue processing
-        const response = NextResponse.next();
+    if (!isNextInternal && !isApiRoute && !isPublicFile) {
+      // Check if this looks like a locale code (2 letters)
+      if (potentialLocale.length === 2) {
+        // Check if the locale is supported
+        if (supportedLocaleCodes.includes(potentialLocale)) {
+          // Valid supported locale - continue processing
+          const response = NextResponse.next();
 
-        // Add locale and direction headers for the response
-        const direction = getTextDirection(potentialLocale);
-        response.headers.set('X-Locale', potentialLocale);
-        response.headers.set('X-Text-Direction', direction);
+          // Add locale and direction headers for the response
+          const direction = getTextDirection(potentialLocale);
+          response.headers.set('X-Locale', potentialLocale);
+          response.headers.set('X-Text-Direction', direction);
 
-        // Add CSP and security headers
-        const csp = generateCSP(isDevelopment);
-        response.headers.set('Content-Security-Policy', csp);
+          // Add CSP and security headers
+          const csp = generateCSP(isDevelopment);
+          response.headers.set('Content-Security-Policy', csp);
 
-        Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
-          response.headers.set(header, value);
-        });
+          Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
+            response.headers.set(header, value);
+          });
 
-        if (isDevelopment) {
-          response.headers.set('X-CSP-Debug', 'development-mode');
-          response.headers.set('X-Security-Headers', 'enabled');
+          if (isDevelopment) {
+            response.headers.set('X-CSP-Debug', 'development-mode');
+            response.headers.set('X-Security-Headers', 'enabled');
+          }
+
+          return response;
+        } else {
+          // Looks like a locale code but not supported - redirect to default locale
+          const defaultLocale = getValidLocale(potentialLocale);
+          const redirectPath = pathname.replace(`/${potentialLocale}`, `/${defaultLocale}`);
+
+          return NextResponse.redirect(new URL(redirectPath, request.url));
         }
-
-        return response;
-      } else if (potentialLocale.length === 2 && !supportedLocaleCodes.includes(potentialLocale)) {
-        // Looks like a locale code but not supported - redirect to default locale
-        const defaultLocale = getValidLocale(potentialLocale);
-        const redirectPath = pathname.replace(`/${potentialLocale}`, `/${defaultLocale}`);
-
-        return NextResponse.redirect(new URL(redirectPath, request.url));
       }
     }
   }
 
-  // Default response for all other routes (including static /ar/* and /en/*)
+  // Default response for all other routes
   const response = NextResponse.next();
 
   // Generate and add Content Security Policy

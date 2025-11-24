@@ -54,7 +54,7 @@ export const LOCALES: LocaleConfig[] = [
 /**
  * Default locale when none is specified or an unsupported locale is requested
  */
-export const DEFAULT_LOCALE = 'ar';
+export const DEFAULT_LOCALE = 'en';
 
 /**
  * Supported locale type (for TypeScript)

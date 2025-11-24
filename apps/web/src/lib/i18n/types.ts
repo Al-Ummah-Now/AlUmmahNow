@@ -54,6 +54,9 @@ export interface AppTranslations {
     collapse?: string;
     expand?: string;
     loadMore?: string;
+    saving?: string;
+    saved?: string;
+    saveFailed?: string;
   };
 
   /**
@@ -270,6 +273,8 @@ export interface AppTranslations {
     lastName: string;
     yourFirstName: string;
     yourLastName: string;
+    firstNameArabic: string;
+    lastNameArabic: string;
     displayNameOptional: string;
     displayNameArabic: string;
     displayNameEmpty: string;

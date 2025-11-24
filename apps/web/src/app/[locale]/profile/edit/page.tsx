@@ -1,11 +1,12 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useI18n } from '@/lib/i18n';
 import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
+import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 
 const ProfileEditPage = () => {
   const params = useParams();
@@ -13,12 +14,19 @@ const ProfileEditPage = () => {
   const { t } = useI18n(locale as 'en' | 'ar');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
+  const [firstNameEn, setFirstNameEn] = useState('');
+  const [firstNameAr, setFirstNameAr] = useState('');
+  const [lastNameEn, setLastNameEn] = useState('');
+  const [lastNameAr, setLastNameAr] = useState('');
   const [displayNameEn, setDisplayNameEn] = useState('');
   const [displayNameAr, setDisplayNameAr] = useState('');
   const [bioEn, setBioEn] = useState('');
   const [bioAr, setBioAr] = useState('');
   const [timezone, setTimezone] = useState<string>('');
+  const [saveState, setSaveState] = useState<SaveButtonState>('idle');
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const auth = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (auth?.user) {
@@ -28,6 +36,10 @@ const ProfileEditPage = () => {
 
   useEffect(() => {
     if (profile) {
+      setFirstNameEn(profile.firstNameLocalized?.en || profile.firstName || '');
+      setFirstNameAr(profile.firstNameLocalized?.ar || '');
+      setLastNameEn(profile.lastNameLocalized?.en || profile.lastName || '');
+      setLastNameAr(profile.lastNameLocalized?.ar || '');
       setDisplayNameEn(profile.displayNameLocalized?.en || profile.displayName || '');
       setDisplayNameAr(profile.displayNameLocalized?.ar || '');
       setBioEn(profile.bioLocalized?.en || profile.bio || '');
@@ -36,29 +48,52 @@ const ProfileEditPage = () => {
     }
   }, [profile]);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    // Handle form submission logic here
-    const formData = new FormData(event.target as HTMLFormElement);
+    setSaveState('saving');
+    setErrorMessage('');
 
-    const newProfile = {
-      id: auth.user!.id,
-      email: auth.user!.email,
-      firstName: formData.get('firstName') as string,
-      lastName: formData.get('lastName') as string,
-      displayName: displayNameEn || '',
-      displayNameLocalized: {
-        en: displayNameEn || '',
-        ar: displayNameAr || ''
-      },
-      bio: bioEn || '',
-      bioLocalized: {
-        en: bioEn || '',
-        ar: bioAr || ''
-      },
-      timezone: timezone || getBrowserTimezone(),
-    };
-    updateProfile(newProfile, setProfile);
+    try {
+      const newProfile = {
+        id: auth.user!.id,
+        email: auth.user!.email,
+        firstName: firstNameEn || '',
+        firstNameLocalized: {
+          en: firstNameEn || '',
+          ar: firstNameAr || ''
+        },
+        lastName: lastNameEn || '',
+        lastNameLocalized: {
+          en: lastNameEn || '',
+          ar: lastNameAr || ''
+        },
+        displayName: displayNameEn || '',
+        displayNameLocalized: {
+          en: displayNameEn || '',
+          ar: displayNameAr || ''
+        },
+        bio: bioEn || '',
+        bioLocalized: {
+          en: bioEn || '',
+          ar: bioAr || ''
+        },
+        avatarUrl: profile?.avatarUrl,
+        coverUrl: profile?.coverUrl,
+        timezone: timezone || getBrowserTimezone(),
+      };
+
+      const success = await updateProfile(newProfile, setProfile);
+
+      if (success) {
+        setSaveState('success');
+      } else {
+        setSaveState('error');
+        setErrorMessage('Failed to save profile. Please try again.');
+      }
+    } catch (error) {
+      setSaveState('error');
+      setErrorMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
+    }
   };
 
   const handlePhotoUpdate = (type: 'profilePhoto' | 'coverPhoto', file: File) => {
@@ -72,6 +107,28 @@ const ProfileEditPage = () => {
       updateCoverPhoto(profile, file, setProfile);
     }
   };
+
+  const handleBack = () => {
+    router.back();
+  };
+
+  const handleCancel = () => {
+    router.push(`/${locale}/`);
+  };
+
+  // Get localized name or fall back to default
+  const getLocalizedName = (
+    defaultValue: string | undefined,
+    localizedValues: Record<string, string> | undefined
+  ): string => {
+    if (localizedValues && localizedValues[locale]) {
+      return localizedValues[locale];
+    }
+    return defaultValue || '';
+  };
+
+  const displayFirstName = getLocalizedName(profile?.firstName, profile?.firstNameLocalized);
+  const displayLastName = getLocalizedName(profile?.lastName, profile?.lastNameLocalized);
 
   return (
     <div className="profile-edit-page flex flex-col flex-1 bg-gray-100 dark:bg-gray-900">
@@ -142,7 +199,7 @@ const ProfileEditPage = () => {
               />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-12">{t.profile.welcomeUser?.replace('{name}', `${profile?.firstName ?? ""} ${profile?.lastName ?? ""}`) || `${t.common.welcome} ${profile?.firstName ?? ""} ${profile?.lastName ?? ""}!`}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-12">{t.profile.welcomeUser?.replace('{name}', `${displayFirstName} ${displayLastName}`) || `${t.common.welcome} ${displayFirstName} ${displayLastName}!`}</h1>
           <p className="text-gray-600 dark:text-gray-400">{t.profile.editProfileDescription || 'Edit your profile information below.'}</p>
         </section>
 
@@ -150,32 +207,9 @@ const ProfileEditPage = () => {
         <section id="edit-profile" className="section mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">{t.profile.editProfile}</h2>
           <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="space-y-3">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">{t.profile.firstName}</span>
-                <input
-                  type="text"
-                  name="firstName"
-                  className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder={t.profile.yourFirstName}
-                  defaultValue={profile?.firstName || ''}
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">{t.profile.lastName}</span>
-                <input
-                  type="text"
-                  name="lastName"
-                  className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder={t.profile.yourLastName}
-                  defaultValue={profile?.lastName || ''}
-                />
-              </label>
-            </div>
-
-            {/* Display Name with Language Tabs */}
+            {/* First Name with Language Tabs */}
             <div className="block">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.displayName}</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.firstName}</span>
               <div className="flex gap-2 mb-3">
                 <button
                   type="button"
@@ -200,6 +234,58 @@ const ProfileEditPage = () => {
                   {t.languages.arabic}
                 </button>
               </div>
+              {activeTab === 'en' && (
+                <input
+                  type="text"
+                  name="firstNameEn"
+                  className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
+                  placeholder={t.profile.yourFirstName}
+                  value={firstNameEn}
+                  onChange={(e) => setFirstNameEn(e.target.value)}
+                />
+              )}
+              {activeTab === 'ar' && (
+                <input
+                  type="text"
+                  name="firstNameAr"
+                  className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
+                  placeholder={t.profile.firstNameArabic || 'الاسم الأول'}
+                  value={firstNameAr}
+                  onChange={(e) => setFirstNameAr(e.target.value)}
+                  dir="rtl"
+                />
+              )}
+            </div>
+
+            {/* Last Name with Language Tabs */}
+            <div className="block">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.lastName}</span>
+              {activeTab === 'en' && (
+                <input
+                  type="text"
+                  name="lastNameEn"
+                  className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
+                  placeholder={t.profile.yourLastName}
+                  value={lastNameEn}
+                  onChange={(e) => setLastNameEn(e.target.value)}
+                />
+              )}
+              {activeTab === 'ar' && (
+                <input
+                  type="text"
+                  name="lastNameAr"
+                  className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
+                  placeholder={t.profile.lastNameArabic || 'اسم العائلة'}
+                  value={lastNameAr}
+                  onChange={(e) => setLastNameAr(e.target.value)}
+                  dir="rtl"
+                />
+              )}
+            </div>
+
+            {/* Display Name */}
+            <div className="block">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.displayName}</span>
               {activeTab === 'en' && (
                 <input
                   type="text"
@@ -286,12 +372,34 @@ const ProfileEditPage = () => {
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.profile.emailCannotBeChanged}</p>
             </label>
-            <button
-              type="submit"
-              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 font-medium transition-colors shadow-md hover:shadow-lg"
-            >
-              {t.common.save}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="px-6 py-3 rounded-lg font-semibold transition-all duration-300 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
+              >
+                {t.common.back || 'Back'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="px-6 py-3 rounded-lg font-semibold transition-all duration-300 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
+              >
+                {t.common.cancel || 'Cancel'}
+              </button>
+              <div className="flex-1">
+                <SaveButton
+                  state={saveState}
+                  type="submit"
+                  idleText={t.common.save}
+                  savingText={t.common.saving || 'Saving...'}
+                  successText={t.common.saved || 'Saved!'}
+                  errorText={t.common.saveFailed || 'Save Failed'}
+                  errorMessage={errorMessage}
+                  fullWidth={true}
+                />
+              </div>
+            </div>
           </form>
         </section>
       </main>

@@ -69,7 +69,9 @@ export interface Profile {
     displayName?: string;
     displayNameLocalized?: Record<string, string>; // Multi-language display names
     firstName?: string;
+    firstNameLocalized?: Record<string, string>; // Multi-language first names
     lastName?: string;
+    lastNameLocalized?: Record<string, string>; // Multi-language last names
     avatarUrl?: string;
     coverUrl?: string;
     bio?: string;

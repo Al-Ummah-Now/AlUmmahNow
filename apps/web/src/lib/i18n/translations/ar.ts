@@ -37,6 +37,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
     collapse: 'طي',
     expand: 'توسيع',
     loadMore: 'تحميل المزيد',
+    saving: 'جاري الحفظ...',
+    saved: 'تم الحفظ!',
+    saveFailed: 'فشل الحفظ',
   },
 
   languages: {
@@ -244,6 +247,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
     lastName: 'اسم العائلة',
     yourFirstName: 'اسمك الأول',
     yourLastName: 'اسم عائلتك',
+    firstNameArabic: 'الاسم الأول',
+    lastNameArabic: 'اسم العائلة',
     displayNameOptional: 'كيف سيرى الآخرون اسمك (اختياري)',
     displayNameArabic: 'كيف سيرى الآخرون اسمك (اختياري)',
     displayNameEmpty: 'إذا تُرك فارغاً، سنستخدم اسمك الأول واسم عائلتك',
