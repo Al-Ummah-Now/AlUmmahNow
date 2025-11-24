@@ -4,7 +4,7 @@
  * navigation, calendar type switching, and event interaction.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 // Test configuration
 const BASE_URL = process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3001';
@@ -13,7 +13,7 @@ const LOCALE_AR = `${BASE_URL}/ar`;
 const SCHEDULED_VIDEOS_PATH = '/scheduled-videos';
 
 // Helper function to login (adjust based on your auth implementation)
-async function login(page: any, locale = 'en') {
+async function login(page: Page, locale = 'en') {
   const baseUrl = locale === 'en' ? LOCALE_EN : LOCALE_AR;
 
   // Navigate to login page

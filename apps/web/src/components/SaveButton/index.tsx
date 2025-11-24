@@ -95,7 +95,7 @@ export const SaveButton: React.FC<SaveButtonProps> = ({
     try {
       await onClick();
       setInternalState('success');
-    } catch (error) {
+    } catch (_error) {
       setInternalState('error');
     }
   };

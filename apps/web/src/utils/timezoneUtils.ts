@@ -18,7 +18,7 @@ export function isValidTimezone(timezone: string): boolean {
   try {
     Intl.DateTimeFormat(undefined, { timeZone: timezone });
     return true;
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -35,7 +35,7 @@ export function getTimezoneOffset(timezone: string, date: Date = new Date()): nu
     const tzDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
     // Calculate difference in minutes
     return (tzDate.getTime() - utcDate.getTime()) / (1000 * 60);
-  } catch (error) {
+  } catch (_error) {
     return 0;
   }
 }
@@ -189,7 +189,7 @@ export function getTimezoneAbbreviation(timezone: string, date: Date = new Date(
     const parts = formatter.formatToParts(date);
     const timeZonePart = parts.find(part => part.type === 'timeZoneName');
     return timeZonePart?.value || timezone;
-  } catch (error) {
+  } catch (_error) {
     return timezone;
   }
 }

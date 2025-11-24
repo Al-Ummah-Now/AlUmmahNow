@@ -9,7 +9,7 @@ import { CalendarEvent } from '../CalendarEvent';
 // Mock Next.js Image component
 jest.mock('next/image', () => ({
   __esModule: true,
-  default: (props: any) => {
+  default: (props: Record<string, unknown>) => {
     const { fill, ...rest } = props;
     // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
     return <img {...rest} data-fill={fill ? 'true' : 'false'} />;

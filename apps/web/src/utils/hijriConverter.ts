@@ -51,11 +51,11 @@ export function gregorianToHijri(date: Date): HijriDate {
   const day = date.getDate();
 
   // Julian day calculation
-  let a = Math.floor((14 - month) / 12);
-  let y = year + 4800 - a;
-  let m = month + 12 * a - 3;
+  const a = Math.floor((14 - month) / 12);
+  const y = year + 4800 - a;
+  const m = month + 12 * a - 3;
 
-  let jd =
+  const jd =
     day +
     Math.floor((153 * m + 2) / 5) +
     365 * y +
@@ -67,9 +67,9 @@ export function gregorianToHijri(date: Date): HijriDate {
   // Convert Julian day to Hijri
   // Using Kuwaiti algorithm with adjustment
   let l = jd - 1948440 + 10632;
-  let n = Math.floor((l - 1) / 10631);
+  const n = Math.floor((l - 1) / 10631);
   l = l - 10631 * n + 354;
-  let j =
+  const j =
     Math.floor((10985 - l) / 5316) * Math.floor((50 * l) / 17719) +
     Math.floor(l / 5670) * Math.floor((43 * l) / 15238);
   l =
@@ -97,7 +97,7 @@ export function hijriToGregorian(hijriDate: HijriDate): Date {
   const { year, month, day } = hijriDate;
 
   // Calculate Julian day from Hijri
-  let jd =
+  const jd =
     Math.floor((11 * year + 3) / 30) +
     354 * year +
     30 * month -
@@ -107,12 +107,12 @@ export function hijriToGregorian(hijriDate: HijriDate): Date {
     385;
 
   // Convert Julian day to Gregorian
-  let a = jd + 32044;
-  let b = Math.floor((4 * a + 3) / 146097);
-  let c = a - Math.floor((146097 * b) / 4);
-  let d = Math.floor((4 * c + 3) / 1461);
-  let e = c - Math.floor((1461 * d) / 4);
-  let m = Math.floor((5 * e + 2) / 153);
+  const a = jd + 32044;
+  const b = Math.floor((4 * a + 3) / 146097);
+  const c = a - Math.floor((146097 * b) / 4);
+  const d = Math.floor((4 * c + 3) / 1461);
+  const e = c - Math.floor((1461 * d) / 4);
+  const m = Math.floor((5 * e + 2) / 153);
 
   const gregDay = e - Math.floor((153 * m + 2) / 5) + 1;
   const gregMonth = m + 3 - 12 * Math.floor(m / 10);

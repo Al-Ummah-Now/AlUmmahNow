@@ -21,7 +21,7 @@ export const TimeGutterHeader: React.FC = () => {
  */
 interface TimeSlotWrapperProps {
   value: Date;
-  resource?: any;
+  resource?: unknown;
   children?: React.ReactNode;
 }
 

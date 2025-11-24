@@ -33,7 +33,7 @@ export interface ScheduledVideoCalendarProps {
  * Transform VideoObject to CalendarEventData
  */
 function transformVideoToCalendarEvent(video: VideoObject): CalendarEventData | null {
-  const scheduledDate = (video as any).scheduledPublishDate;
+  const scheduledDate = 'scheduledPublishDate' in video ? (video as VideoObject & { scheduledPublishDate?: string }).scheduledPublishDate : undefined;
 
   if (!scheduledDate) {
     return null;
