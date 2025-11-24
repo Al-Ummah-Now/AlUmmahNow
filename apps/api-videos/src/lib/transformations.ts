@@ -35,25 +35,22 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
 
 // Transform a business profile to a view model
 export function transformProfileToView(profile: z.infer<typeof BusinessProfile>): z.infer<typeof ProfileView> {
-    // Compute display name
-    const displayName = profile.userName || 
-                       (profile.firstName && profile.lastName ? `${profile.firstName} ${profile.lastName}` : null) ||
-                       profile.firstName ||
-                       profile.lastName ||
-                       undefined;
-
+   
     return {
         id: profile.id,
         email: profile.email,
         userName: profile.userName,
         firstName: profile.firstName,
+        firstNameLocalized: profile.firstNameLocalized,
         lastName: profile.lastName,
-        displayName,
+        lastNameLocalized: profile.lastNameLocalized,
+        displayName: profile.displayName,
         displayNameLocalized: profile.displayNameLocalized,
         bio: profile.bio,
         bioLocalized: profile.bioLocalized,
         avatarUrl: profile.avatarUrl,
         coverUrl: profile.coverUrl,
+        timezone: profile.timezone,
         dateCreated: profile.dateCreated,
         dateModified: profile.dateModified,
         channelsCount: profile.channels?.length || 0,
