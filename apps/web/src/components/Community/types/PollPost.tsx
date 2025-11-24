@@ -43,6 +43,7 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
     setVoting(true);
     try {
       const result = await voteOnPoll(
+        post.channelId,
         post.id,
         { optionIds: selectedOptions },
         { channelId: post.channelId, userId: 'current-user' }

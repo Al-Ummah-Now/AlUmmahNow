@@ -150,16 +150,17 @@ export async function unlikeCommunityPost(
 
 /**
  * Vote on a poll post
- * POST /api/community/posts/{postId}/vote
+ * POST /api/community/posts/{channelId}/{postId}/vote
  */
 export async function voteOnPoll(
+  channelId: string,
   postId: string,
   data: VoteOnPollRequest,
   headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
 ): Promise<VoteOnPollResponse | null> {
   return apiRequestServer<VoteOnPollResponse>({
     method: 'POST',
-    url: buildApiUrl(`/api/community/posts/${postId}/vote`),
+    url: buildApiUrl(`/api/community/posts/${channelId}/${postId}/vote`),
     body: data,
     functionName: 'voteOnPoll'
   }, async () => ({
