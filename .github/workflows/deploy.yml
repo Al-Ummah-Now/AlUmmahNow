@@ -89,6 +89,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
       - name: Build web application
         run: |
           pnpm --filter @al-ummah/web build
@@ -137,6 +143,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
       - name: Type check API
         run: pnpm --filter @al-ummah/api-videos type-check
         continue-on-error: true
@@ -168,6 +180,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
       - name: Type check processor
         run: pnpm --filter @al-ummah/processor type-check
         timeout-minutes: 3
@@ -196,6 +214,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Type check websocket-server
         run: pnpm --filter @al-ummah/websocket-server type-check
@@ -330,6 +354,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
       - name: Generate preview name
         id: preview-name
         run: |
@@ -416,6 +446,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
       - name: Generate preview name
         id: preview-name
         run: |
@@ -499,6 +535,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Generate preview name
         id: preview-name
@@ -661,6 +703,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Download web build artifacts
         uses: actions/download-artifact@v6
