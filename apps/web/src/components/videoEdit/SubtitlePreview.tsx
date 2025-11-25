@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
-import { SubtitleCue, formatSubtitleTime } from '@/lib/api/subtitles';
+import { SubtitleCue } from '@/lib/api/subtitles';
+import { formatSubtitleTime } from '@/lib/api/subtitle-utils';
 import { useLanguage } from '@/hooks/useLanguage';
 
 interface SubtitlePreviewProps {
