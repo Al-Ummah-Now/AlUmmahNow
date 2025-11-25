@@ -19,10 +19,6 @@ export class ProfilesList extends OpenAPIRoute {
 					description: "The last cursor returned from the previous request",
 				}).optional(),
 			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID" }).optional().nullable(),
-			}),
 		},
 		responses: {
 			"200": {
@@ -68,7 +64,6 @@ export class ProfilesList extends OpenAPIRoute {
 
 		// Retrieve the validated parameters
 		const { limit, cursor } = request.query;
-		const { channelId, userId } = request.headers;
 
 		// Get profiles from storage
         const bucket = c.env.profiles;

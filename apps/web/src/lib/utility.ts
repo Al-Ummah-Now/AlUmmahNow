@@ -61,16 +61,13 @@ export function removeUnwantedChars(str: string): string {
 
 /**
  * Create API headers from user information
- * @param user - User object containing id and other properties
+ * Note: userId is now extracted from JWT token in Authorization header server-side
  * @param channelId - Optional channelId to include in headers
- * @returns API headers object or undefined if no user
+ * @returns API headers object or undefined if no channelId
  */
-export function createApiHeaders(user: { id: string } | null | undefined, channelId?: string): { userId: string; channelId?: string } | undefined {
-  if (!user?.id) return undefined;
-  return {
-    userId: user.id,
-    ...(channelId && { channelId }),
-  };
+export function createApiHeaders(channelId?: string): { channelId: string } | undefined {
+  if (!channelId) return undefined;
+  return { channelId };
 }
 
 /**

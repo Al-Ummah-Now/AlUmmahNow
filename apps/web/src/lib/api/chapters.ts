@@ -40,7 +40,7 @@ export async function getChapters(
   }, async () => {
     const auth = await getServerAuthContext();
     return {
-      userId: auth?.userId || '',
+      
       channelId: auth?.channelId || '',
       accessToken: auth?.accessToken || '',
     };
@@ -64,7 +64,7 @@ export async function updateChapters(
   }, async () => {
     const auth = await getServerAuthContext();
     return {
-      userId: auth?.userId || '',
+      
       channelId: auth?.channelId || '',
       accessToken: auth?.accessToken || '',
     };

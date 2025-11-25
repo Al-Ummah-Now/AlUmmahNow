@@ -37,8 +37,8 @@ export default function LikeButton({
 
     try {
       const result = liked
-        ? await unlikeCommunityPost(postId, { channelId, userId })
-        : await likeCommunityPost(postId, { channelId, userId });
+        ? await unlikeCommunityPost(postId, { channelId })
+        : await likeCommunityPost(postId, { channelId });
 
       if (result) {
         setLikes(result.totalLikes);

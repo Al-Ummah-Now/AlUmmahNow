@@ -16,7 +16,6 @@ export class CommentUpdate extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 			body: {
 				content: {
@@ -69,7 +68,9 @@ export class CommentUpdate extends OpenAPIRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id, cid } = request.params;
-		const { channelId, userId } = request.headers;
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		const { channelId } = request.headers;
 
 		// Get the video and find the comment
 		const bucket = c.env.videos;

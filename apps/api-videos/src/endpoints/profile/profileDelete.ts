@@ -1,4 +1,4 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, OpenAPIRoute } from "chanfana";
 import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { z } from "zod";
@@ -7,16 +7,7 @@ import Queue, { MessageType } from "../../lib/queue";
 export class ProfileDelete extends OpenAPIRoute {
 	schema = {
 		tags: ["Profiles"],
-		summary: "Delete a Profile",
-		request: {
-			params: z.object({
-				id: Str({ description: "Profile ID" }),
-			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
-			}),
-		},
+		summary: "Delete the authenticated user's profile",
 		responses: {
 			"200": {
 				description: "Returns if the profile was deleted successfully",
@@ -48,25 +39,24 @@ export class ProfileDelete extends OpenAPIRoute {
 	};
 
 	async handle(c) {
-		// Get validated data
-		const request = await this.getValidatedData<typeof this.schema>();
+		// Get auth context - profile ID is always the user ID
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		if (!userId) {
+			return c.json({ error: 'Unauthorized' }, 401);
+		}
 
-		// Retrieve the validated id
-		const { id } = request.params;
-		const { channelId, userId } = request.headers;
-
-		// Delete profile from storage
-        const bucket = c.env.profiles;
+		// Delete profile from storage (profile ID = user ID)
+		const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
-		await repository.deleteObject(id);
+		await repository.deleteObject(userId);
 
 		// Send queue message for profile deletion
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ProfileDelete, {
-			profileId: id,
+			profileId: userId,
 			userId: userId,
-			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});
 

@@ -122,7 +122,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         setUser(sessionInfo.user);
         setAccounts(sessionInfo.accounts);
         logger.info('[MultiAccountProvider] Session loaded successfully:', {
-          userId: sessionInfo.user?.id,
+          
           email: sessionInfo.user?.email,
           accountsCount: sessionInfo.accounts.length
         });

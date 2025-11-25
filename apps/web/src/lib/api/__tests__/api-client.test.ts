@@ -109,7 +109,7 @@ describe('API Client - apiRequestServer', () => {
     const mockResponse = { data: {} };
     const authContext = {
       accessToken: 'test-access-token',
-      userId: 'user-123',
+      
       channelId: 'channel-456',
     };
 

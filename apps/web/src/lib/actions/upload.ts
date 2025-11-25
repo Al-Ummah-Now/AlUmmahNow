@@ -29,7 +29,7 @@ export async function initiateVideoUpload(
       filename?: string;
     };
   },
-  userId: string,
+  
   channelId: string
 ): Promise<{
   success: boolean;
@@ -47,7 +47,7 @@ export async function initiateVideoUpload(
   };
   error?: string;
 }> {
-  const result = await initiateVideoUploadApi(metadata, { userId, channelId });
+  const result = await initiateVideoUploadApi(metadata, {  channelId });
 
   // Add auth token to result for client-side TUS upload
   if (result?.success && result.result) {
@@ -72,7 +72,7 @@ export async function initiateVideoUpload(
  */
 export async function completeVideoUpload(
   videoId: string,
-  userId: string,
+  
   channelId: string,
   fileSize?: number,
   duration?: number
@@ -85,7 +85,7 @@ export async function completeVideoUpload(
   };
   error?: string;
 }> {
-  const result = await completeVideoUploadApi(videoId, { userId, channelId }, fileSize, duration);
+  const result = await completeVideoUploadApi(videoId, {  channelId }, fileSize, duration);
   return result || { success: false, error: "Failed to complete upload" };
 }
 
@@ -94,7 +94,7 @@ export async function completeVideoUpload(
  */
 export async function getVideoUploadStatus(
   videoId: string,
-  userId: string,
+  
   channelId: string
 ): Promise<{
   success: boolean;
@@ -111,7 +111,7 @@ export async function getVideoUploadStatus(
   };
   error?: string;
 }> {
-  const result = await getVideoUploadStatusApi(videoId, { userId, channelId });
+  const result = await getVideoUploadStatusApi(videoId, {  channelId });
   return result || { success: false, error: "Failed to get upload status" };
 }
 
@@ -127,7 +127,7 @@ export async function initiateBatchUpload(
     isPublic: boolean;
     tags?: string;
   }>,
-  userId: string,
+  
   channelId: string,
   sharedMetadata?: {
     channelId?: string;
@@ -151,7 +151,7 @@ export async function initiateBatchUpload(
 }> {
   const result = await initiateBatchUploadApi(
     { videos, sharedMetadata },
-    { userId, channelId }
+    {  channelId }
   );
   return result || { success: false, error: "Failed to initiate batch upload" };
 }

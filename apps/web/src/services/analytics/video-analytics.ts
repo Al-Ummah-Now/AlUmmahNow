@@ -24,7 +24,6 @@ import {
  */
 export class VideoAnalytics {
   private videoId: string;
-  private userId?: string;
   private sessionId: string;
   private startTime: number;
   private eventQueue: AnalyticsEvent[] = [];
@@ -42,11 +41,10 @@ export class VideoAnalytics {
 
   constructor(
     videoId: string,
-    userId?: string,
+    _userId?: string,
     config?: Partial<AnalyticsConfig>
   ) {
     this.videoId = videoId;
-    this.userId = userId;
     this.sessionId = this.generateSessionId();
     this.startTime = Date.now();
 
@@ -431,7 +429,7 @@ export class VideoAnalytics {
   private addEvent(event: Partial<AnalyticsEvent>): void {
     const fullEvent: AnalyticsEvent = {
       videoId: this.videoId,
-      userId: this.userId,
+      
       sessionId: this.sessionId,
       timestamp: new Date().toISOString(),
       relativeTime: Date.now() - this.startTime,

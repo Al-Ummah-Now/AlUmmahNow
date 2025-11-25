@@ -46,7 +46,6 @@ export class UpdateWatchProgress extends OpenAPIRoute {
         "Updates the current playback position for a video. Should be called periodically (every 10 seconds) during video playback.",
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: ProgressParams,

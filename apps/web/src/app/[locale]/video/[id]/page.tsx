@@ -43,7 +43,7 @@ export default function VideoViewPage() {
   // Fetch related videos from the API
   useEffect(() => {
     const fetchRelatedVideos = async () => {
-      const videos = await fetchVideos(null, user?.id);
+      const videos = await fetchVideos(null);
       setRelatedVideos(videos || []);
     };
 
@@ -59,7 +59,7 @@ export default function VideoViewPage() {
       title: `Test ${randomType} notification`,
       message: `This is a demo ${randomType} notification to show real-time functionality!`,
       type: randomType,
-      userId: user?.id || 'demo',
+      userId: user?.id || '',
       actionUrl: `/${locale}/video/${videoId}`
     });
   };

@@ -101,7 +101,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                         {children}
 
                         {/* Real-time notification center */}
-                        <NotificationCenter user={user} />
+                        <NotificationCenter />
                       </div>
                     </WebSocketProvider>
                   </ActiveChannelWrapper>

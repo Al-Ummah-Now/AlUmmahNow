@@ -1,4 +1,4 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileUpdateInput } from "../../lib/model/input";
@@ -10,15 +10,8 @@ import Queue, { MessageType } from "../../lib/queue";
 export class ProfileUpdate extends OpenAPIRoute {
     schema = {
         tags: ["Profiles"],
-        summary: "Update a Profile",
+        summary: "Update the authenticated user's profile",
         request: {
-            params: z.object({
-                id: Str({ description: "Profile id" }),
-            }),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
-			}),
             body: {
                 content: {
                     "application/json": {
@@ -64,18 +57,21 @@ export class ProfileUpdate extends OpenAPIRoute {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
-        // Retrieve the validated id
-        const { id } = request.params;
-		const { channelId, userId } = request.headers;
+        // Get auth context - profile ID is always the user ID
+        const auth = c.get('auth');
+        const userId = auth?.userId;
+        if (!userId) {
+            return c.json({ error: 'Unauthorized' }, 401);
+        }
 
         // Retrieve the validated request body
         const profileUpdateInput = request.body;
 
-        // Get existing profile from storage
+        // Get existing profile from storage (profile ID = user ID)
         const bucket = c.env.profiles;
         type ProfileType = z.infer<typeof BusinessProfile>;
         const repository = new R2Repository<ProfileType>(bucket);
-        const existingProfile = await repository.getObject(id);
+        const existingProfile = await repository.getObject(userId);
 
         if (!existingProfile) {
             return c.json({
@@ -94,14 +90,13 @@ export class ProfileUpdate extends OpenAPIRoute {
             bioLocalized: profileUpdateInput.bioLocalized ?? existingProfile.bioLocalized,
         };
 
-        await repository.putObject(id, updatedProfile);
+        await repository.putObject(userId, updatedProfile);
 
         // Send queue message for profile update
         const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ProfileUpdate, {
-            profileId: id,
+            profileId: userId,
             userId: userId,
-            channelId: channelId,
             timestamp: new Date().toISOString(),
         });
 

@@ -46,7 +46,7 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
         post.channelId,
         post.id,
         { optionIds: selectedOptions },
-        { channelId: post.channelId, userId: 'current-user' }
+        { channelId: post.channelId }
       );
 
       if (result?.success) {

@@ -49,7 +49,6 @@ export async function listVideos(
           'Content-Type': 'application/json',
 
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -82,7 +81,6 @@ export async function getVideoById(
           'Content-Type': 'application/json',
 
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -104,7 +102,7 @@ export async function getVideoById(
  */
 export async function createVideo(
   data: VideoCreateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ video: VideoObject }> | null> {
   try {
     const response = await fetch(
@@ -115,7 +113,6 @@ export async function createVideo(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: JSON.stringify(data),
       }
@@ -139,7 +136,7 @@ export async function createVideo(
 export async function updateVideo(
   videoId: string,
   data: Partial<VideoCreateRequest>,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ video: VideoObject }> | null> {
   try {
     const response = await fetch(
@@ -150,7 +147,6 @@ export async function updateVideo(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: JSON.stringify(data),
       }
@@ -173,7 +169,7 @@ export async function updateVideo(
  */
 export async function deleteVideo(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ success: boolean }> | null> {
   try {
     logger.info('[deleteVideo] Attempting to delete video:', { videoId, headers });
@@ -186,7 +182,6 @@ export async function deleteVideo(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -214,7 +209,7 @@ export async function deleteVideo(
  */
 export async function bulkDeleteVideos(
   videoIds: string[],
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{
   success: boolean;
   results: Array<{
@@ -238,7 +233,6 @@ export async function bulkDeleteVideos(
         headers: {
           'Content-Type': 'application/json',
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: JSON.stringify({ videoIds }),
       }
@@ -268,7 +262,7 @@ export async function bulkDeleteVideos(
 export async function uploadVideoThumbnail(
   videoId: string,
   file: File,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ thumbnailUrl: string }> | null> {
   try {
     const formData = new FormData();
@@ -280,7 +274,6 @@ export async function uploadVideoThumbnail(
         method: 'POST',
         headers: {
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: formData,
       }
@@ -304,7 +297,7 @@ export async function uploadVideoThumbnail(
 export async function createVideoComment(
   videoId: string,
   data: CommentCreateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
   try {
     const response = await fetch(
@@ -315,7 +308,6 @@ export async function createVideoComment(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: JSON.stringify(data),
       }
@@ -340,7 +332,7 @@ export async function updateVideoComment(
   videoId: string,
   commentId: string,
   data: CommentUpdateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
   try {
     const response = await fetch(
@@ -351,7 +343,6 @@ export async function updateVideoComment(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: JSON.stringify(data),
       }
@@ -375,7 +366,7 @@ export async function updateVideoComment(
 export async function deleteVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -386,7 +377,6 @@ export async function deleteVideoComment(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -408,7 +398,7 @@ export async function deleteVideoComment(
  */
 export async function likeVideo(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -419,7 +409,6 @@ export async function likeVideo(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -441,7 +430,7 @@ export async function likeVideo(
  */
 export async function unlikeVideo(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -452,7 +441,6 @@ export async function unlikeVideo(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -474,7 +462,7 @@ export async function unlikeVideo(
  */
 export async function dislikeVideo(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -485,7 +473,6 @@ export async function dislikeVideo(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -507,7 +494,7 @@ export async function dislikeVideo(
  */
 export async function removeVideoDislike(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -518,7 +505,6 @@ export async function removeVideoDislike(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -541,7 +527,7 @@ export async function removeVideoDislike(
 export async function likeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -552,7 +538,6 @@ export async function likeVideoComment(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -575,7 +560,7 @@ export async function likeVideoComment(
 export async function unlikeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -586,7 +571,6 @@ export async function unlikeVideoComment(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -609,7 +593,7 @@ export async function unlikeVideoComment(
 export async function dislikeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -620,7 +604,6 @@ export async function dislikeVideoComment(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -696,7 +679,6 @@ export async function searchVideos(
     const requestHeaders = {
       'Content-Type': 'application/json',
       ...(headers?.channelId && { 'channelId': headers.channelId }),
-      ...(headers?.userId && { 'userId': headers.userId }),
     };
 
     logger.info('[searchVideos] Making request:', {
@@ -775,7 +757,7 @@ function getMockTrendingVideos(): VideoObject[] {
       description: 'A comprehensive guide to applying Islamic principles in contemporary life',
       thumbnailUrl: videoThumbnail,
       videoUrl: '#',
-      userId: 'user-1',
+      userId: 'mock-user-1',
       channel: 'Islamic Studies',
       channelId: 'channel-1',
       channelAvatarUrl: avatarPlaceholder,
@@ -797,7 +779,7 @@ function getMockTrendingVideos(): VideoObject[] {
       description: 'Experience the divine beauty of Quranic verses with proper Tajweed',
       thumbnailUrl: videoThumbnail,
       videoUrl: '#',
-      userId: 'user-2',
+      userId: 'mock-user-2',
       channel: 'Quran Academy',
       channelId: 'channel-2',
       channelAvatarUrl: avatarPlaceholder,
@@ -819,7 +801,7 @@ function getMockTrendingVideos(): VideoObject[] {
       description: 'Discover the remarkable achievements during the Islamic Golden Age',
       thumbnailUrl: videoThumbnail,
       videoUrl: '#',
-      userId: 'user-3',
+      userId: 'mock-user-3',
       channel: 'History Channel',
       channelId: 'channel-3',
       channelAvatarUrl: avatarPlaceholder,
@@ -841,7 +823,7 @@ function getMockTrendingVideos(): VideoObject[] {
       description: 'Step-by-step guide to performing the five daily prayers',
       thumbnailUrl: videoThumbnail,
       videoUrl: '#',
-      userId: 'user-4',
+      userId: 'mock-user-4',
       channel: 'Islamic Guidance',
       channelId: 'channel-4',
       channelAvatarUrl: avatarPlaceholder,
@@ -871,7 +853,7 @@ function getMockRecommendations(): VideoObject[] {
       description: 'Explore the beautiful architectural heritage of Islamic civilization',
       thumbnailUrl: videoThumbnail,
       videoUrl: '#',
-      userId: 'user-2',
+      userId: 'mock-user-2',
       channel: 'Islamic Heritage',
       channelId: 'channel-2',
       channelAvatarUrl: avatarPlaceholder,
@@ -893,7 +875,7 @@ function getMockRecommendations(): VideoObject[] {
       description: 'Learn the sacred art of Arabic calligraphy and its spiritual significance',
       thumbnailUrl: videoThumbnail,
       videoUrl: '#',
-      userId: 'user-5',
+      userId: 'mock-user-5',
       channel: 'Islamic Arts',
       channelId: 'channel-5',
       channelAvatarUrl: avatarPlaceholder,
@@ -1025,7 +1007,6 @@ export async function getRecommendedVideos(
           'Content-Type': 'application/json',
 
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -1055,7 +1036,7 @@ export async function uploadVideo(
     isPublic: boolean;
     tags?: string[];
   },
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ video: VideoObject }> | null> {
   try {
     const formData = new FormData();
@@ -1074,7 +1055,6 @@ export async function uploadVideo(
         headers: {
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: formData,
       }
@@ -1120,7 +1100,7 @@ export async function initiateVideoUploadApi(
     fileSize: number;
     mimeType: string;
   },
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{
   success: boolean;
   result?: {
@@ -1168,7 +1148,7 @@ export async function initiateVideoUploadApi(
     body: metadata,
     functionName: 'initiateVideoUploadApi'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -1180,7 +1160,7 @@ export async function initiateVideoUploadApi(
  */
 export async function completeVideoUploadApi(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>,
   fileSize?: number,
   duration?: number
 ): Promise<{
@@ -1206,7 +1186,7 @@ export async function completeVideoUploadApi(
     body: { videoId, fileSize, duration },
     functionName: 'completeVideoUploadApi'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -1232,7 +1212,7 @@ export async function initiateBatchUploadApi(
       isPublic?: boolean;
     };
   },
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{
   success: boolean;
   result?: Array<{
@@ -1268,7 +1248,7 @@ export async function initiateBatchUploadApi(
     body: request,
     functionName: 'initiateBatchUploadApi'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -1280,7 +1260,7 @@ export async function initiateBatchUploadApi(
  */
 export async function getVideoUploadStatusApi(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{
   success: boolean;
   result?: {
@@ -1315,7 +1295,7 @@ export async function getVideoUploadStatusApi(
     url: buildApiUrl(`/api/videos/${videoId}/upload-status`),
     functionName: 'getVideoUploadStatusApi'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -1366,12 +1346,12 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
     }
 }
 
-export async function fetchVideos(cursor: string | null = null, userId?: string): Promise<VideoInfo[] | undefined> {
+export async function fetchVideos(cursor: string | null = null): Promise<VideoInfo[] | undefined> {
     try {
         const result = await listVideos({
             limit: 15,
             cursor: cursor || undefined
-        }, userId ? { userId } : undefined);
+        }, undefined);
 
         if (!result) {
             throw new Error('Failed to fetch videos');
@@ -1403,12 +1383,12 @@ export async function fetchVideos(cursor: string | null = null, userId?: string)
     }
 }
 
-export async function fetchVideosWithPagination(cursor: string | null = null, userId?: string): Promise<PaginationResponse<VideoObject> | null> {
+export async function fetchVideosWithPagination(cursor: string | null = null): Promise<PaginationResponse<VideoObject> | null> {
     try {
         const result = await listVideos({
             limit: 15,
             cursor: cursor || undefined
-        }, userId ? { userId } : undefined);
+        }, undefined);
         return result;
     } catch (error) {
         logger.error('[fetchVideosWithPagination] Error:', error instanceof Error ? error.message : String(error));

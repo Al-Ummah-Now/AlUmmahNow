@@ -21,7 +21,6 @@ export class VideoScheduleDelete extends OpenAPIRoute {
       description: 'Cancel the scheduled publication of a video. Video will remain in draft/private status.',
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

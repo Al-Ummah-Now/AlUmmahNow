@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { abTestingEngine, ExperimentResult } from '@/services/experiments/ab-testing';
 import { getExperiment, isUserInTargetAudience, Experiment } from '@/services/experiments/feature-flags';
 import { logger } from '@/lib/logger-client';
+import { useAuth } from '@/components/AuthProvider/authContext';
 
 
 interface UseExperimentOptions {
@@ -24,13 +25,15 @@ interface ExperimentState {
 
 export function useExperiment(
   experimentId: string,
-  userId: string | null,
   options: UseExperimentOptions = {}
 ): ExperimentState & {
   trackConversion: (value?: number) => void;
   reset: () => void;
   getVariantConfig: () => unknown;
 } {
+  const { user } = useAuth();
+  const userId = user?.id;
+
   const [state, setState] = useState<ExperimentState>({
     isLoading: true,
     variant: null,
@@ -159,9 +162,11 @@ export function useExperiment(
 
 export function useExperiments(
   experimentIds: string[],
-  userId: string | null,
   options: UseExperimentOptions = {}
 ) {
+  const { user } = useAuth();
+  const userId = user?.id;
+
   const [experiments, setExperiments] = useState<Record<string, ExperimentState>>({});
 
   useEffect(() => {

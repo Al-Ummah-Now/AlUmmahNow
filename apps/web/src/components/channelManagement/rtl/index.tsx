@@ -23,16 +23,14 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   className = '',
 }) => {
   const router = useRouter();
-  const auth = useAuth();
+  const { user } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Get userId from auth
-  const userId = auth?.user?.id;
-
-  // For channelId, we'll use the first channel's ID or empty string
-  // The API will return user's channels based on userId
-  const channelId = userId || '';
+  // Get userId from auth - use user's first channel or empty string
+  // The API will return user's channels based on the authenticated user
+  const userId = user?.id || '';
+  const channelId = userId;
 
   const {
     channels,
@@ -42,7 +40,6 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     deleteChannel,
   } = useChannels({
     channelId,
-    userId,
     autoFetch: true,
   });
 

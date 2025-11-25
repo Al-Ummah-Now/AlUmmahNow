@@ -1,7 +1,7 @@
 import { fromHono } from "chanfana";
 import { Hono } from "hono";
 import { cors } from 'hono/cors'
-import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth";
+import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
 import { loggingMiddleware } from "./middleware/logging";
 import { errorHandler } from "./middleware/error-handler";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
@@ -181,6 +181,11 @@ app.options('/api/*', (c) => {
 // Use optionalAuthMiddleware for GET endpoints (allow both authenticated and public access)
 // Use authMiddleware for CUD operations (require authentication)
 app.use('/api/*', optionalAuthMiddleware);
+
+// Validate channelId header when present
+// This middleware verifies that the channelId belongs to the authenticated user
+// It must run after auth middleware so the user context is available
+app.use('/api/*', channelIdMiddleware);
 
 // For routes that require authentication, we'll add authMiddleware later
 // or use it selectively based on the operation type
@@ -408,8 +413,8 @@ openapi.get("/api/videos/:id/schedule", VideoScheduleFetch); // Get schedule sta
 openapi.get("/api/videos/scheduled", VideoScheduleList); // List all scheduled videos
 
 openapi.post("/api/profiles", ProfileCreate);
-openapi.put("/api/profiles/:id", ProfileUpdate);
-openapi.delete("/api/profiles/:id", ProfileDelete);
+openapi.put("/api/profile", ProfileUpdate);
+openapi.delete("/api/profile", ProfileDelete);
 
 // Watch history management (require auth)
 openapi.post("/api/profiles/watch-history", WatchHistoryAdd);
@@ -424,8 +429,8 @@ openapi.post("/api/watch-history/:videoId/progress", UpdateWatchProgress);
 openapi.get("/api/watch-history/:videoId/progress", GetWatchProgress);
 
 // Profile photo/cover routes (also require auth)
-app.put("/api/profiles/:id/avatar", authMiddleware, handleAvatarUpdate);
-app.put("/api/profiles/:id/cover", authMiddleware, handleCoverUpdate);
+app.put("/api/profile/avatar", authMiddleware, handleAvatarUpdate);
+app.put("/api/profile/cover", authMiddleware, handleCoverUpdate);
 
 // Channel photo/cover routes (also require auth)
 app.put("/api/channels/:id/avatar", authMiddleware, handleChannelAvatarUpdate);
@@ -591,9 +596,9 @@ app.get("/openapi.json", async (c) => {
 		'/api/videos/{id}/comments/{cid}/dislikes', // POST, DELETE
 		// Profile management
 		'/api/profiles', // POST
-		'/api/profiles/{id}', // PUT, DELETE
-		'/api/profiles/{id}/avatar', // PUT
-		'/api/profiles/{id}/cover', // PUT
+		'/api/profile', // PUT, DELETE (authenticated user's profile)
+		'/api/profile/avatar', // PUT
+		'/api/profile/cover', // PUT
 		// Channel management
 		'/api/channels', // POST
 		'/api/channels/{id}', // PUT, DELETE

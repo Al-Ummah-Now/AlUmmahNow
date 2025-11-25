@@ -164,8 +164,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
       }
 
       const result = await createCommunityPost(baseData as unknown as CreateCommunityPostRequest, {
-        channelId: id,
-        userId: ''
+        channelId: id
       });
 
       if (result?.success) {

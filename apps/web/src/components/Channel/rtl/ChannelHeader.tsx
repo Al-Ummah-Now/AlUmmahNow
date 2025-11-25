@@ -76,7 +76,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
 
       logger.info(`[ChannelHeader] ${isSubscribed ? 'Unsubscribing from' : 'Subscribing to'} channel`, {
         channelId: channel.id,
-        userId: user.id,
+        
         method,
       });
 

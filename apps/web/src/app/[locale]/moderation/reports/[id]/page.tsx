@@ -42,7 +42,7 @@ const ReportDetailPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const headers = createApiHeaders(auth?.user);
+      const headers = undefined; // userId now extracted from JWT
       const reportData = await ModerationAPI.getReportById(reportId, headers);
 
       setReport(reportData);
@@ -70,7 +70,7 @@ const ReportDetailPage: React.FC = () => {
       setActionLoading(true);
       setError(null);
 
-      const headers = createApiHeaders(auth?.user, report.contentType === 'channel' ? report.contentId : undefined);
+      const headers = createApiHeaders(report.contentType === 'channel' ? report.contentId : undefined);
 
       const actionData: ModerationActionRequest = {
         reportId: report.id,

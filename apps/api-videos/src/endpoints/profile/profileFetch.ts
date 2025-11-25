@@ -15,10 +15,6 @@ export class ProfileFetch extends OpenAPIRoute {
 			params: z.object({
 				id: Str({ description: "Profile id" }),
 			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID" }).optional().nullable(),
-			}),
 		},
 		responses: {
 			"200": {
@@ -71,8 +67,7 @@ export class ProfileFetch extends OpenAPIRoute {
 
 			// Get user from auth context (optional for GET endpoints)
 			const authContext = getAuthContext(c);
-			const userId = authContext?.userId || request.headers?.userId;
-			const channelId = request.headers?.channelId;
+			const userId = authContext?.userId;
 
 			// Get profile from storage
 			const bucket = c.env.profiles;
@@ -95,7 +90,6 @@ export class ProfileFetch extends OpenAPIRoute {
 			await queue.send(MessageType.ProfileView, {
 				profileId: id,
 				userId: userId,
-				channelId: channelId,
 				timestamp: new Date().toISOString(),
 			});
 

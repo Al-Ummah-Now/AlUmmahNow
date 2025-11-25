@@ -16,7 +16,6 @@ export class LikeCommunityPost extends OpenAPIRoute {
       }),
       headers: z.object({
         channelId: z.string().optional(),
-        userId: z.string().optional(), // Deprecated: Use auth context instead
       }),
     },
     responses: {

@@ -211,3 +211,76 @@ export function getUserId(c: Context): string | null {
   const auth = getAuthContext(c);
   return auth?.userId || null;
 }
+
+/**
+ * Middleware to validate channelId header
+ * Must be used AFTER authMiddleware
+ * Validates that the channelId in the header:
+ * 1. Exists as a channel in R2
+ * 2. Belongs to the authenticated user
+ *
+ * If channelId header is not provided, middleware passes through
+ * If channelId is invalid or doesn't belong to user, returns 403
+ */
+export async function channelIdMiddleware(c: Context, next: Next) {
+  try {
+    // Get channelId from header
+    const channelId = c.req.header('channelId');
+
+    // If no channelId header, pass through (some endpoints may not need it)
+    if (!channelId) {
+      return await next();
+    }
+
+    // Get auth context - must have been set by authMiddleware
+    const auth = getAuthContext(c);
+    if (!auth) {
+      return c.json({
+        success: false,
+        error: 'Authentication required'
+      }, 401);
+    }
+
+    // Fetch channel from R2
+    const channelsBucket = c.env.channels;
+    if (!channelsBucket) {
+      logger.error('Channels bucket not available');
+      return c.json({
+        success: false,
+        error: 'Internal server error'
+      }, 500);
+    }
+
+    const channelObject = await channelsBucket.get(channelId);
+    if (!channelObject) {
+      logger.warn(`Channel not found: ${channelId}`);
+      return c.json({
+        success: false,
+        error: 'Channel not found'
+      }, 404);
+    }
+
+    // Parse channel data
+    const channelData = await channelObject.json() as { userId: string };
+
+    // Verify ownership
+    if (channelData.userId !== auth.userId) {
+      logger.warn(`User ${auth.userId} attempted to use channel ${channelId} owned by ${channelData.userId}`);
+      return c.json({
+        success: false,
+        error: 'You do not have permission to perform actions on behalf of this channel'
+      }, 403);
+    }
+
+    // Set channelId in context for use by endpoints
+    c.set('channelId', channelId);
+
+    return await next();
+  } catch (error) {
+    logger.error('Channel ID middleware error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to validate channel'
+    }, 500);
+  }
+}

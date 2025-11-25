@@ -26,7 +26,7 @@ const VideosPage: React.FC = () => {
   const fetchVideos = useCallback(async (cursor: string | null) => {
     setLoading(true);
     try {
-      const data = await fetchVideosWithPagination(cursor, user?.id);
+      const data = await fetchVideosWithPagination(cursor);
 
       if (!data) {
         console.error("Failed to fetch videos");

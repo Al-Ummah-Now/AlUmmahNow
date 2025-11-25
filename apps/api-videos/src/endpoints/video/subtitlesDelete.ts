@@ -19,7 +19,6 @@ export class SubtitlesDelete extends OpenAPIRoute {
       description: 'Delete a subtitle track for a specific language',
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

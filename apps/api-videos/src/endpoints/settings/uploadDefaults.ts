@@ -33,7 +33,6 @@ export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
         'Get all upload templates for the authenticated user. Templates can be filtered by channel and active status.',
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         query: z.object({

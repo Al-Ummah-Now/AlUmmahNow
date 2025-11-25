@@ -14,7 +14,6 @@ export class VideoDelete extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 		},
 		responses: {
@@ -55,7 +54,9 @@ export class VideoDelete extends OpenAPIRoute {
 
 		// Retrieve the validated slug
 		const { videoId } = request.params;
-		const { channelId, userId } = request.headers;
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		const { channelId } = request.headers;
 
 		// Get the video before deletion
 		const bucket = c.env.videos;

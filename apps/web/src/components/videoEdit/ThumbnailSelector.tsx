@@ -10,7 +10,6 @@ interface ThumbnailSelectorProps {
   videoId: string;
   currentThumbnailUrl: string;
   cdnHostname?: string;
-  userId: string;
   channelId: string;
   onThumbnailChange: (thumbnailUrl: string) => void;
   className?: string;
@@ -20,7 +19,6 @@ export default function ThumbnailSelector({
   videoId,
   currentThumbnailUrl,
   cdnHostname,
-  userId,
   channelId,
   onThumbnailChange,
   className = '',
@@ -77,7 +75,7 @@ export default function ThumbnailSelector({
       reader.readAsDataURL(file);
 
       // Upload to API
-      const result = await uploadVideoThumbnail(videoId, file, { userId, channelId });
+      const result = await uploadVideoThumbnail(videoId, file, { channelId });
 
       if (result?.data?.thumbnailUrl) {
         const uploadedUrl = result.data.thumbnailUrl;

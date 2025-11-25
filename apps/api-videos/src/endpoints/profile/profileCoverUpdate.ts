@@ -11,16 +11,11 @@ const app = new Hono();
 
 const handleCoverUpdate = async (c) => {
     try {
-        // Extract the `id` parameter
-        const id = c.req.param("id");
-
-        // Extract headers for queue message
-        const userId = c.req.header('userId');
-        const channelId = c.req.header('channelId');
-
-        // Validate the `id`
-        if (!id) {
-            return c.json({ success: false, error: "Profile ID is required" }, 400);
+        // Get auth context - profile ID is always the user ID
+        const auth = c.get('auth');
+        const userId = auth?.userId;
+        if (!userId) {
+            return c.json({ error: 'Unauthorized' }, 401);
         }
 
         // Parse the form data
@@ -38,13 +33,13 @@ const handleCoverUpdate = async (c) => {
             return c.json({ success: false, error: "Invalid file type" }, 400);
         }
 
-        // Mocked R2 bucket and repository
+        // R2 bucket and repository (profile ID = user ID)
         const bucket: R2Bucket = c.env.profiles;
         type ProfileType = z.infer<typeof BusinessProfile>;
         const repository = new R2Repository<ProfileType>(bucket);
 
         // Fetch the profile from the repository
-        const profile = await repository.getObject(id);
+        const profile = await repository.getObject(userId);
         if (!profile) {
             return c.json({ success: false, error: "Profile not found" }, 404);
         }
@@ -76,16 +71,15 @@ const handleCoverUpdate = async (c) => {
         });
         await bunnyStorageClient.putFile(path, stream);
 
-        //Update the profile's avatar URL
+        //Update the profile's cover URL
         profile.coverUrl = `https://images.alummahnow.net${path}`;
-        await repository.putObject(id, profile);
+        await repository.putObject(userId, profile);
 
         // Send queue message for cover update
         const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ProfileUpdate, {
-            profileId: id,
+            profileId: userId,
             userId,
-            channelId,
             timestamp: new Date().toISOString(),
             action: 'cover_update',
         });

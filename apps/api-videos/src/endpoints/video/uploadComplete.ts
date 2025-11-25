@@ -14,7 +14,6 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 		description: "🔒 **Authentication Required**: Finalize video upload and update status to processing.",
 		request: {
 			headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         body: {

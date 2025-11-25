@@ -18,7 +18,7 @@ export async function scheduleVideo(
   scheduledPublishDate: string,
   timezone: string,
   notifyOnPublish: boolean = true,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{
   success: boolean;
   result?: VideoScheduleResponse;
@@ -48,7 +48,7 @@ export async function scheduleVideo(
         functionName: 'scheduleVideo',
       },
       async () => ({
-        userId: headers.userId,
+        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),
@@ -68,7 +68,7 @@ export async function updateSchedule(
   videoId: string,
   scheduledPublishDate: string,
   timezone: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>,
   notifyOnPublish?: boolean
 ): Promise<{
   success: boolean;
@@ -98,7 +98,7 @@ export async function updateSchedule(
         functionName: 'updateSchedule',
       },
       async () => ({
-        userId: headers.userId,
+        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),
@@ -116,7 +116,7 @@ export async function updateSchedule(
  */
 export async function cancelSchedule(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{
   success: boolean;
   result?: { message: string };
@@ -136,7 +136,7 @@ export async function cancelSchedule(
         functionName: 'cancelSchedule',
       },
       async () => ({
-        userId: headers.userId,
+        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),
@@ -154,7 +154,7 @@ export async function cancelSchedule(
  */
 export async function publishNow(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{
   success: boolean;
   result?: { message: string; videoId: string };
@@ -174,7 +174,7 @@ export async function publishNow(
         functionName: 'publishNow',
       },
       async () => ({
-        userId: headers.userId,
+        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),
@@ -191,7 +191,7 @@ export async function publishNow(
  * GET /api/videos/scheduled
  */
 export async function listScheduledVideos(
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>,
   params?: {
     limit?: number;
     cursor?: string;
@@ -225,7 +225,7 @@ export async function listScheduledVideos(
         functionName: 'listScheduledVideos',
       },
       async () => ({
-        userId: headers.userId,
+        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),
@@ -243,7 +243,7 @@ export async function listScheduledVideos(
  */
 export async function getVideoSchedule(
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{
   success: boolean;
   result?: VideoScheduleResponse;
@@ -263,7 +263,7 @@ export async function getVideoSchedule(
         functionName: 'getVideoSchedule',
       },
       async () => ({
-        userId: headers.userId,
+        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),

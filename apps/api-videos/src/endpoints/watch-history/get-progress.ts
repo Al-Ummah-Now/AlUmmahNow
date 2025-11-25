@@ -36,7 +36,6 @@ export class GetWatchProgress extends OpenAPIRoute {
         "Retrieves the current playback progress for a video. Used to resume playback from where the user left off.",
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: ProgressParams,

@@ -127,7 +127,6 @@ export async function getReports(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -160,7 +159,6 @@ export async function getReportById(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -193,7 +191,6 @@ export async function createReport(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
         body: JSON.stringify(reportData),
       }
@@ -227,7 +224,6 @@ export async function takeModerationAction(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
         body: JSON.stringify(actionData),
       }
@@ -258,7 +254,6 @@ export async function getStats(headers?: ApiHeaders): Promise<ModerationStats | 
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -291,7 +286,6 @@ export async function getUserModeration(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -409,7 +403,7 @@ function getMockStats(): ModerationStats {
 
 function getMockUserModeration(): UserModeration {
   return {
-    userId: "user_123",
+    userId: "mock-user-id",
     userName: "ahmad_user",
     email: "ahmad@example.com",
     status: "active",

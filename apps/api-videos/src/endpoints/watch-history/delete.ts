@@ -26,7 +26,6 @@ export class DeleteWatchHistory extends OpenAPIRoute {
         "Removes a specific video from the authenticated user's watch history.",
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: DeleteWatchHistoryParams,

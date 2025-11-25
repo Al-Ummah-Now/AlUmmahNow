@@ -102,12 +102,12 @@ function ChannelEditPage() {
           avatarUrl: formData.avatarUrl,
           coverUrl: formData.coverUrl
         },
-        { channelId: userChannelId, userId: user.id }
+        { channelId: userChannelId }
       );
 
       router.push(`/${locale}/channels/${channelId}`);
     } catch (error) {
-      logger.error('Error updating channel', { error, channelId, userId: user.id });
+      logger.error('Error updating channel', { error, channelId });
       setError(t.errors.genericError);
       setIsSaving(false);
     }
@@ -136,7 +136,7 @@ function ChannelEditPage() {
       const updatedChannel = await uploadFn(
         channelId,
         file,
-        { channelId: userChannelId, userId: user.id }
+        { channelId: userChannelId }
       );
 
       if (updatedChannel) {
@@ -153,7 +153,7 @@ function ChannelEditPage() {
         throw new Error(t.errors.uploadFailed || 'Upload failed');
       }
     } catch (error) {
-      logger.error('Error uploading file', { error, type, channelId, userId: user.id });
+      logger.error('Error uploading file', { error, type, channelId });
       setError(t.errors.genericError);
 
       // Revert to original URL on error

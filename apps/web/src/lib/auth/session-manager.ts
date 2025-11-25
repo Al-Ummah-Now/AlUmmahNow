@@ -242,7 +242,7 @@ export class SessionManager {
       }
 
       const userInfo = verified.subject.properties;
-      const userId = userInfo.id;
+      const userId = userInfo.id; // Extract userId from JWT subject
 
       // Create new session structure
       // Note: OpenAuth JWT only includes id and email (see subjects.ts)
@@ -572,7 +572,7 @@ export class SessionManager {
       const { apiRequestServer, buildApiUrl, buildQueryParams } = await import('../api/api-client');
 
       // Fetch channels for this specific user using their own access token
-      const queryString = buildQueryParams({ userId });
+      const queryString = buildQueryParams({ });
       const response = await apiRequestServer<{ data: Channel[]; cursor: string; limit: number }>(
         {
           method: 'GET',

@@ -29,7 +29,6 @@ export class GetUploadDefaultEndpoint extends OpenAPIRoute {
         'Get a specific upload template by ID. User must own the template.',
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

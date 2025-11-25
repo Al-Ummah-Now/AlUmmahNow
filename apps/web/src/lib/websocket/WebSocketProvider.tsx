@@ -63,8 +63,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
     // Auto-connect for both authenticated and anonymous users
     // Anonymous users can view real-time updates but cannot post
-    const userId = user?.id || `anonymous_${Date.now()}`;
-    wsManagerRef.current.connect(userId).catch((error) => {
+    wsManagerRef.current.connect(user?.id).catch((error) => {
       console.error('Failed to connect to WebSocket:', error);
     });
 
@@ -83,8 +82,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   useEffect(() => {
     if (wsManagerRef.current) {
       if (!wsManagerRef.current.isConnected()) {
-        const userId = user?.id || `anonymous_${Date.now()}`;
-        wsManagerRef.current.connect(userId).catch((error) => {
+        wsManagerRef.current.connect(user?.id).catch((error) => {
           console.error('Failed to reconnect to WebSocket:', error);
         });
       }

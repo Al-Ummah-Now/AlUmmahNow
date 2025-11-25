@@ -20,7 +20,6 @@ export class VideoBulkDelete extends OpenAPIRoute {
 			},
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 		},
 		responses: {
@@ -68,7 +67,9 @@ export class VideoBulkDelete extends OpenAPIRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { videoIds } = request.body;
-		const { channelId, userId } = request.headers;
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		const { channelId } = request.headers;
 
 		// Get the repository
 		const bucket = c.env.videos;

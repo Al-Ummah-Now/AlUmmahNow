@@ -104,8 +104,8 @@ export default function Comment({
 
     try {
       const result = liked
-        ? await unlikePostComment(postId, comment.id, { channelId, userId })
-        : await likePostComment(postId, comment.id, { channelId, userId });
+        ? await unlikePostComment(postId, comment.id, { channelId })
+        : await likePostComment(postId, comment.id, { channelId });
 
       if (result) {
         setLikes(result.totalLikes);
@@ -167,7 +167,7 @@ export default function Comment({
         postId,
         comment.id,
         { content: editContent.trim() },
-        { channelId, userId }
+        { channelId }
       );
 
       if (result?.success && result.comment) {
@@ -191,7 +191,7 @@ export default function Comment({
     if (!confirm(isRTL ? 'هل تريد حذف هذا التعليق؟' : 'Delete this comment?')) return;
 
     try {
-      const result = await deletePostComment(postId, comment.id, { channelId, userId });
+      const result = await deletePostComment(postId, comment.id, { channelId });
 
       if (result?.success) {
         if (onCommentDeleted) {
@@ -207,7 +207,7 @@ export default function Comment({
     if (!isPostOwner || !channelId || !userId) return;
 
     try {
-      const result = await heartPostComment(postId, comment.id, { channelId, userId });
+      const result = await heartPostComment(postId, comment.id, { channelId });
 
       if (result?.success) {
         setHearted(result.hearted);
@@ -221,7 +221,7 @@ export default function Comment({
     if (!isPostOwner || !channelId || !userId) return;
 
     try {
-      const result = await pinPostComment(postId, comment.id, { channelId, userId });
+      const result = await pinPostComment(postId, comment.id, { channelId });
 
       if (result?.success) {
         setPinned(!pinned);

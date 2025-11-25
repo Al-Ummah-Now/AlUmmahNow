@@ -36,7 +36,7 @@ type EditFormData = {
 
 export default function VideoEdit({
   video,
-  userId,
+  // userId is passed by parent but not used (authentication via JWT)
   channelId,
   onSave,
   onCancel,
@@ -126,7 +126,7 @@ export default function VideoEdit({
         isPublic: formData.isPublic,
       };
 
-      const result = await updateVideo(video.id, updateData, { userId, channelId });
+      const result = await updateVideo(video.id, updateData, {  channelId });
 
       if (result?.data?.video) {
         setSuccess(t.video.updateSuccess ?? 'Video updated successfully');
@@ -272,7 +272,6 @@ export default function VideoEdit({
         <ThumbnailSelector
           videoId={video.id}
           currentThumbnailUrl={video.thumbnailUrl}
-          userId={userId}
           channelId={channelId}
           onThumbnailChange={(url) => handleInputChange('thumbnailUrl', url)}
         />
@@ -358,7 +357,6 @@ export default function VideoEdit({
         {/* Subtitles/Captions Section */}
         <SubtitleUploadSection
           videoId={video.id}
-          userId={userId}
           channelId={channelId}
         />
 

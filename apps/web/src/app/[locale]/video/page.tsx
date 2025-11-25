@@ -49,7 +49,7 @@ export default function Home() {
   // Fetch related videos from the API
   useEffect(() => {
     const fetchRelatedVideos = async () => {
-      const videos = await fetchVideos(null, user?.id);
+      const videos = await fetchVideos(null);
       setRelatedVideos(videos || []);
     };
 

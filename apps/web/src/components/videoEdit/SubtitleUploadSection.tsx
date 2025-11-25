@@ -18,7 +18,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 interface SubtitleUploadSectionProps {
   videoId: string;
-  userId: string;
   channelId: string;
   className?: string;
 }
@@ -37,7 +36,6 @@ interface SubtitleUploadSectionProps {
  */
 export default function SubtitleUploadSection({
   videoId,
-  userId,
   channelId,
   className = '',
 }: SubtitleUploadSectionProps) {
@@ -53,14 +51,14 @@ export default function SubtitleUploadSection({
   const loadSubtitles = useCallback(async () => {
     setIsLoading(true);
     try {
-      const tracks = await listSubtitles(videoId, { userId, channelId });
+      const tracks = await listSubtitles(videoId, {  channelId });
       setSubtitles(tracks);
     } catch (error) {
       console.error('Failed to load subtitles:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [videoId, userId, channelId]);
+  }, [videoId, channelId]);
 
   // Load subtitles on mount
   useEffect(() => {
@@ -74,7 +72,7 @@ export default function SubtitleUploadSection({
   const handleSetDefault = async (language: string) => {
     setActionLoading(`default-${language}`);
     try {
-      const result = await setDefaultSubtitle(videoId, language, { userId, channelId });
+      const result = await setDefaultSubtitle(videoId, language, {  channelId });
       if (result?.success) {
         // Update local state
         setSubtitles((prev) =>
@@ -94,7 +92,7 @@ export default function SubtitleUploadSection({
   const handleDelete = async (subtitle: SubtitleTrack) => {
     setActionLoading(`delete-${subtitle.language}`);
     try {
-      const result = await deleteSubtitle(videoId, subtitle.language, { userId, channelId });
+      const result = await deleteSubtitle(videoId, subtitle.language, {  channelId });
       if (result?.success) {
         setSubtitles((prev) => prev.filter((sub) => sub.language !== subtitle.language));
       }
@@ -415,7 +413,6 @@ export default function SubtitleUploadSection({
       {/* Upload Modal */}
       <SubtitleUploadModal
         videoId={videoId}
-        userId={userId}
         channelId={channelId}
         open={isModalOpen}
         onOpenChange={setIsModalOpen}

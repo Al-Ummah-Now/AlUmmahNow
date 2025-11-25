@@ -7,7 +7,6 @@ import { useRouter, useParams } from "next/navigation";
 import { CheckCircle, AlertCircle, Upload, FileVideo, FileStack, ShieldAlert } from "lucide-react";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useAuth } from "@/components/AuthProvider/authContext";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import Link from "next/link";
@@ -18,7 +17,6 @@ const UploadPage: React.FC = () => {
   const { t } = useLanguage();
   const params = useParams();
   const locale = params.locale as string;
-  const auth = useAuth();
   const router = useRouter();
   const { activeChannel } = useActiveChannel();
 
@@ -48,7 +46,7 @@ const UploadPage: React.FC = () => {
     cancelAll,
     clearQueue,
   } = useBatchUpload({
-    userId: auth.user?.id || '',
+    
     channelId: activeChannel?.channelId || '',
     onUploadComplete: (videoId) => {
       console.log('Video uploaded:', videoId);

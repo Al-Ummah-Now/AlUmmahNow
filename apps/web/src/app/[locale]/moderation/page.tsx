@@ -39,7 +39,8 @@ const ModerationDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const headers = auth?.user ? { userId: auth.user.id } : undefined;
+      // Headers no longer needed - userId extracted from JWT token server-side
+      const headers = undefined;
 
       // Load reports and stats in parallel
       const [reportsData, statsData] = await Promise.all([

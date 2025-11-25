@@ -35,7 +35,7 @@ export interface UseRealTimeNotificationsReturn {
 export function useRealTimeNotifications(
   options: UseRealTimeNotificationsOptions = {}
 ): UseRealTimeNotificationsReturn {
-  const { userId, maxNotifications = 50, autoRemoveAfter } = options;
+  const {  maxNotifications = 50, autoRemoveAfter } = options;
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Remove specific notification
@@ -111,9 +111,9 @@ export function useRealTimeNotifications(
   // Subscribe to real-time notifications
   // Note: handleNotificationUpdate should NOT be in dependencies as it would cause re-subscriptions
   const isConnected = useWebSocketSubscription(
-    userId ? `user:${userId}:notifications` : 'notifications',
+    options.userId ? `user:${options.userId}:notifications` : 'notifications',
     handleNotificationUpdate,
-    [userId]
+    [options.userId]
   );
   
   // Add notification manually (for testing or local notifications)

@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger-client';
 
 
 interface UseBatchUploadOptions {
-  userId: string;
+  userId?: string; // Optional - no longer needed for API calls
   channelId: string;
   sharedMetadata?: Partial<VideoUploadMetadata>;
   onUploadComplete?: (videoId: string) => void;
@@ -17,7 +17,7 @@ interface UseBatchUploadOptions {
 }
 
 export function useBatchUpload({
-  userId,
+  userId, // Deprecated - no longer used
   channelId,
   sharedMetadata = {},
   // onUploadComplete,
@@ -89,7 +89,6 @@ export function useBatchUpload({
           description: sharedMetadata.description,
           tags: sharedMetadata.tags?.join(','),
         })),
-        userId,
         channelId,
         {
           channelId,

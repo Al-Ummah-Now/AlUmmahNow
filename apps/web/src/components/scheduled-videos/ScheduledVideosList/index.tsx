@@ -62,7 +62,7 @@ export function ScheduledVideosList({
       setActionLoading(videoId);
 
       const result = await cancelSchedule(videoId, {
-        userId: auth.user.id,
+        
         channelId: auth.user.id,
       });
 
@@ -89,7 +89,7 @@ export function ScheduledVideosList({
       setActionLoading(videoId);
 
       const result = await publishNow(videoId, {
-        userId: auth.user.id,
+        
         channelId: auth.user.id,
       });
 

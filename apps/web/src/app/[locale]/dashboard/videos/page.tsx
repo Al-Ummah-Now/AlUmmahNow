@@ -94,7 +94,7 @@ export default function VideoDashboardPage() {
           {
             limit: 100, // Get more videos at once for owner dashboard
           },
-          { userId: user.id, channelId: channelIds[0] || user.id }
+          {  channelId: channelIds[0] || user.id }
         );
 
         const allVideos = result?.data || [];
@@ -192,7 +192,7 @@ export default function VideoDashboardPage() {
     if (!user || !videoToDelete) return;
 
     try {
-      const result = await deleteVideo(videoToDelete, { userId: user.id, channelId: user.id });
+      const result = await deleteVideo(videoToDelete, {  channelId: user.id });
       if (result) {
         setVideos((prev) => prev.filter((v) => v.id !== videoToDelete));
         setSelectedVideos((prev) => {
@@ -226,7 +226,7 @@ export default function VideoDashboardPage() {
 
       // Call bulk delete API
       const result = await bulkDeleteVideos(videoIdsArray, {
-        userId: user.id,
+        
         channelId: user.id
       });
 

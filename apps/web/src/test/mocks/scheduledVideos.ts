@@ -13,7 +13,7 @@ export const mockScheduledVideos = [
     scheduledPublishTimezone: 'America/New_York',
     scheduledPublishStatus: 'scheduled' as const,
     channelId: 'channel-1',
-    userId: 'user-1',
+    
     duration: 3600,
     views: 0,
     likes: 0,
@@ -30,7 +30,7 @@ export const mockScheduledVideos = [
     scheduledPublishTimezone: 'Asia/Riyadh',
     scheduledPublishStatus: 'scheduled' as const,
     channelId: 'channel-2',
-    userId: 'user-2',
+    
     duration: 7200,
     views: 0,
     likes: 0,
@@ -47,7 +47,7 @@ export const mockScheduledVideos = [
     scheduledPublishTimezone: 'Europe/London',
     scheduledPublishStatus: 'scheduled' as const,
     channelId: 'channel-1',
-    userId: 'user-1',
+    
     duration: 1800,
     views: 0,
     likes: 0,
@@ -64,7 +64,7 @@ export const mockScheduledVideos = [
     scheduledPublishTimezone: 'America/New_York',
     scheduledPublishStatus: 'scheduled' as const,
     channelId: 'channel-3',
-    userId: 'user-3',
+    
     duration: 2400,
     views: 0,
     likes: 0,
@@ -81,7 +81,7 @@ export const mockScheduledVideos = [
     scheduledPublishTimezone: 'UTC',
     scheduledPublishStatus: 'published' as const,
     channelId: 'channel-1',
-    userId: 'user-1',
+    
     duration: 3000,
     views: 1500,
     likes: 120,
@@ -98,7 +98,7 @@ export const mockScheduledVideos = [
     scheduledPublishTimezone: 'America/New_York',
     scheduledPublishStatus: 'scheduled' as const,
     channelId: 'channel-1',
-    userId: 'user-1',
+    
     duration: 1200,
     views: 0,
     likes: 0,
@@ -115,7 +115,7 @@ export const mockScheduledVideos = [
     scheduledPublishTimezone: 'America/New_York',
     scheduledPublishStatus: 'scheduled' as const,
     channelId: 'channel-2',
-    userId: 'user-2',
+    
     duration: 1500,
     views: 0,
     likes: 0,

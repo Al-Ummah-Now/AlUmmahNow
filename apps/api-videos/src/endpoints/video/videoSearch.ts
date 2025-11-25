@@ -35,7 +35,6 @@ export class VideoSearch extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID (required when isOwner is true)" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -89,7 +88,7 @@ export class VideoSearch extends OpenAPIRoute {
 
 		// Get auth context for user information
 		const authContext = getAuthContext(c);
-		const userId = authContext?.userId || request.headers.userId;
+		const userId = authContext?.userId;
 		const { channelId } = request.headers;
 
 		// Retrieve the validated parameters

@@ -39,7 +39,6 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
     return null;
   }
 
-  const userId = auth.properties.id;
   const cookieStore = await cookies();
   const accessToken = cookieStore.get('access_token');
   const refreshToken = cookieStore.get('refresh_token');
@@ -47,6 +46,8 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
   if (!accessToken?.value) {
     return null;
   }
+
+  const userId = auth.properties.id; // Extract userId from auth properties
 
   // Auto-migrate legacy user to SessionManager
   try {

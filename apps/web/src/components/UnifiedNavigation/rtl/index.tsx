@@ -97,7 +97,7 @@ export function UnifiedNavigationRTL() {
   // Update local state when user changes
   useEffect(() => {
     console.log('[UnifiedNavigation RTL] User changed:', {
-      userId: user?.id,
+      
       email: user?.email,
       hasChannel: !!user?.channel,
       channelName: user?.channel?.name,

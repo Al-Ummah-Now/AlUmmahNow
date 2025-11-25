@@ -27,7 +27,6 @@ export class VideosList extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID (automatically set from JWT token if authenticated)" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -64,7 +63,9 @@ export class VideosList extends OpenAPIRoute {
 
 		// Retrieve the validated parameters
 		const { limit, cursor, sort, filter, channelId: queryChannelId, category } = request.query;
-		const { channelId, userId } = request.headers;
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		const { channelId } = request.headers;
 
 		// Use channelId from query parameter if provided, otherwise from headers
 		const filterChannelId = queryChannelId || channelId;

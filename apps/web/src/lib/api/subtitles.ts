@@ -48,7 +48,7 @@ export async function uploadSubtitle(
   file: File,
   language: string,
   isDefault: boolean,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ subtitle: SubtitleTrack }> | null> {
   try {
     const formData = new FormData();
@@ -62,7 +62,6 @@ export async function uploadSubtitle(
         method: 'POST',
         headers: {
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: formData,
       }
@@ -102,7 +101,6 @@ export async function listSubtitles(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -136,7 +134,6 @@ export async function getSubtitle(
         headers: {
           'Content-Type': 'text/plain',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -159,7 +156,7 @@ export async function getSubtitle(
 export async function deleteSubtitle(
   videoId: string,
   language: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ success: boolean }> | null> {
   try {
     const response = await fetch(
@@ -169,7 +166,6 @@ export async function deleteSubtitle(
         headers: {
           'Content-Type': 'application/json',
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -198,7 +194,7 @@ export async function deleteSubtitle(
 export async function setDefaultSubtitle(
   videoId: string,
   language: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ success: boolean }> | null> {
   try {
     const response = await fetch(
@@ -208,7 +204,6 @@ export async function setDefaultSubtitle(
         headers: {
           'Content-Type': 'application/json',
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );

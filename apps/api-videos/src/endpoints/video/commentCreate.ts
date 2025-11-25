@@ -16,7 +16,6 @@ export class CommentCreate extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 			body: {
 				content: {
@@ -68,7 +67,9 @@ export class CommentCreate extends OpenAPIRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		const { channelId } = request.headers;
 
 		// Implement your own object fetch here
 		const bucket = c.env.videos;

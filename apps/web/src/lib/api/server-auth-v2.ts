@@ -34,7 +34,7 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
 
     // Return auth context in the format expected by API clients
     return {
-      userId: session.userId,
+      
       accessToken: session.accessToken,
       channelId: session.channelId, // Now includes active channel
     };
@@ -64,7 +64,7 @@ export async function getAuthContextForUser(userId: string): Promise<AuthContext
   }
 
   return {
-    userId: userSession.userId,
+    
     accessToken: userSession.accessToken,
     channelId: userSession.activeChannelId || undefined,
   };

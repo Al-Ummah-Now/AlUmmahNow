@@ -18,7 +18,7 @@ export function ActiveChannelWrapper({ children }: ActiveChannelWrapperProps) {
   // Fetch user channels
   const { channels } = useChannels({
     channelId: user?.id,
-    userId: user?.id,
+    
     autoFetch: !!user?.id
   });
 

@@ -28,9 +28,10 @@ export interface ApiRequestOptions {
 }
 
 export interface AuthContext {
-  userId?: string;
+  userId?: string; // Available server-side from JWT decode or session
   channelId?: string;
   accessToken?: string;
+  // Note: userId is not sent from client, but available server-side from JWT token or session
 }
 
 /**
@@ -56,17 +57,13 @@ export async function apiRequest<T>(
       if (authContext.accessToken) {
         requestHeaders['Authorization'] = `Bearer ${authContext.accessToken}`;
       }
-      if (authContext.userId) {
-        requestHeaders['userId'] = authContext.userId;
-      }
       if (authContext.channelId) {
         requestHeaders['channelId'] = authContext.channelId;
       }
 
       // Log auth only if we have actual auth data
-      if (authContext.accessToken || authContext.userId) {
+      if (authContext.accessToken) {
         logApiAuth(functionName, {
-          userId: authContext.userId,
           hasToken: !!authContext.accessToken,
           tokenLength: authContext.accessToken?.length
         });

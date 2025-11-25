@@ -13,9 +13,6 @@ export class ProfileCreate extends OpenAPIRoute {
 		summary: "Create a new Profile",
 		description: "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
 		request: {
-			headers: z.object({
-				userId: Str({ description: "User ID (automatically set from JWT token)" }).optional(),
-			}),
 			body: {
 				content: {
 					"application/json": {
@@ -61,9 +58,15 @@ export class ProfileCreate extends OpenAPIRoute {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
+		// Get auth context
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		if (!userId) {
+			return c.json({ error: 'Unauthorized' }, 401);
+		}
+
 		// Retrieve the validated request body
 		const profileInput = request.body;
-		const { userId } = request.headers;
 
 		// Create business profile object
 		const entityDefaults = createEntityDefaults();

@@ -15,7 +15,6 @@ export class LikeDelete extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 		},
 		responses: {
@@ -54,7 +53,9 @@ export class LikeDelete extends OpenAPIRoute {
 
 		// Retrieve the validated slug
 		const { id, cid } = request.params;
-		const { channelId, userId } = request.headers;
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		const { channelId } = request.headers;
 
         // Implement your own object fetch here
         const bucket = c.env.videos;

@@ -15,7 +15,6 @@ const unlikeCommentSchema = {
     }),
     headers: z.object({
       channelId: z.string().optional(),
-      userId: z.string(),
     }),
   },
   responses: {
@@ -53,10 +52,11 @@ export class UnlikePostComment extends OpenAPIRoute {
     if (!auth) {
       return c.json({ success: false, error: 'Authentication required' }, 401);
     }
+    const userId = auth.userId;
 
     const { postId, commentId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId, userId } = request.headers;
+    const { channelId } = request.headers;
 
     const bucket = c.env.community_posts;
 

@@ -68,7 +68,7 @@ export function RecommendedVideosSection({
       }
 
       logger.info('[RecommendedVideosSection] Fetching videos', { params, userId, loadMore });
-      const response = await getRecommendedVideos(params, userId ? { userId } : undefined);
+      const response = await getRecommendedVideos(params, userId ? { } : undefined);
 
       if (!response) {
         throw new Error('Failed to fetch recommended videos');

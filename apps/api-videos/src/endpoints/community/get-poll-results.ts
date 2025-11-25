@@ -9,7 +9,6 @@ export class GetPollResults extends OpenAPIRoute {
     summary: 'Get poll results',
     request: {
       headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

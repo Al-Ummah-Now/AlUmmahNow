@@ -22,7 +22,6 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
     description: 'Manually update chapters for a video. Requires authentication and video ownership.',
     request: {
       headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

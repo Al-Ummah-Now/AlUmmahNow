@@ -23,7 +23,6 @@ export class UploadResumeEndpoint extends OpenAPIRoute {
 		description: "Generate new TUS authorization to resume an interrupted video upload. The video must have been previously initiated and owned by the authenticated user.",
 		request: {
 			headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

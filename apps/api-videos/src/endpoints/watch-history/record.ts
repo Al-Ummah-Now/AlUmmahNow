@@ -50,7 +50,6 @@ export class RecordWatchHistory extends OpenAPIRoute {
         "Records a video view for the authenticated user. Creates a new entry or updates existing watch history for this video.",
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         body: {

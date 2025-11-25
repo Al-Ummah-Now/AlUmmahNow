@@ -2,7 +2,6 @@
 import React from "react";
 import Image from 'next/image';
 import { useRealTimeNotifications } from '@/hooks/useRealTimeNotifications';
-import { useAuth } from '@/components/AuthProvider/authContext';
 
 interface UserAvatarProps {
     avatarUrl?: string | null;
@@ -17,9 +16,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
     onClick,
     className = ""
 }) => {
-    const { user } = useAuth();
     const { isConnected } = useRealTimeNotifications({
-        userId: user?.id,
         maxNotifications: 10,
         autoRemoveAfter: 10000
     });

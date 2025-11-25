@@ -182,8 +182,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       return;
     }
 
-    // Extract userId and channelId after auth check
-    const userId = auth.user.id;
+    // Extract channelId after auth check
     const channelId = activeChannel.id;
 
     try {
@@ -216,7 +215,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             filename: selectedThumbnail.filename,
           } : undefined,
         },
-        userId,
         channelId
       );
 
@@ -312,7 +310,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           // Step 3: Complete upload
           const completeResult = await completeVideoUpload(
             videoId,
-            userId,
             channelId,
             selectedFile.size,
             undefined // Duration will be detected by Bunny.net
@@ -327,7 +324,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           const maxPolls = VIDEO_UPLOAD_CONFIG.POLLING.MAX_POLLS;
 
           while (pollCount < maxPolls) {
-            const statusResult = await getVideoUploadStatus(videoId, userId, channelId);
+            const statusResult = await getVideoUploadStatus(videoId, channelId);
 
             if (statusResult.success && statusResult.result) {
               const { status, progress: encodingProgress } = statusResult.result;
@@ -358,7 +355,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 scheduleData.scheduledPublishDate,
                 scheduleData.timezone,
                 scheduleData.notifyOnPublish,
-                { userId, channelId }
+                {  channelId }
               );
 
               if (!scheduleResult?.success) {
@@ -378,7 +375,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             description: metadata.description || null,
             thumbnailUrl: thumbnailUrlRef.current,
             videoUrl: `${VIDEO_UPLOAD_CONFIG.BUNNY_CDN_BASE_URL}/library/${libraryIdRef.current}/videos/${videoId}`,
-            userId: userId,
+            userId: auth.user?.id || '',
             channel: channelId,
             channelId: channelId,
             channelAvatarUrl: activeChannel.avatarUrl || '',

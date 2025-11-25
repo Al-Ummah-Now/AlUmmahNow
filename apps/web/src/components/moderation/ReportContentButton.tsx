@@ -65,7 +65,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
         ...(reportForm.description && { description: reportForm.description }),
       };
 
-      const headers = createApiHeaders(auth.user, contentType === 'channel' ? contentId : undefined);
+      const headers = createApiHeaders(contentType === 'channel' ? contentId : undefined);
       await ModerationAPI.createReport(reportData, headers);
 
       setSuccess(true);

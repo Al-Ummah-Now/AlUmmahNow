@@ -77,7 +77,7 @@ export default function CommentForm({
       const result = await createPostComment(
         postId,
         { content: content.trim() },
-        { channelId, userId }
+        { channelId }
       );
 
       if (result?.success && result.comment) {

@@ -7,8 +7,8 @@ import { logger } from '@/lib/logger-client';
 
 interface UseChannelsOptions {
   channelId?: string;
-  userId?: string;
   autoFetch?: boolean;
+  // Note: userId is now extracted from JWT token in Authorization header server-side
 }
 
 interface UseChannelsReturn {
@@ -26,16 +26,16 @@ interface UseChannelsReturn {
  * Fetches channels using ChannelsAPI and provides CRUD operations
  */
 export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn => {
-  const { channelId, userId, autoFetch = true } = options;
+  const { channelId, autoFetch = true } = options;
 
   const [channels, setChannels] = useState<Channel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
-    // Skip if no auth headers
-    if (!channelId || !userId) {
-      logger.info('useChannels: Skipping fetch - missing channelId or userId');
+    // Skip if no channelId
+    if (!channelId) {
+      logger.info('useChannels: Skipping fetch - missing channelId');
       setChannels([]);
       setError(null);
       setIsLoading(false);
@@ -46,11 +46,11 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      logger.info('useChannels: Fetching channels with headers:', { channelId, userId });
+      logger.info('useChannels: Fetching channels with headers:', { channelId });
 
       const response = await listChannels(
         { limit: 100 }, // Get up to 100 channels
-        { channelId, userId }
+        { channelId }
       );
 
       if (!response) {
@@ -88,18 +88,18 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [channelId, userId]);
+  }, [channelId]);
 
   // Auto-fetch on mount if enabled
   useEffect(() => {
-    if (autoFetch && channelId && userId) {
+    if (autoFetch && channelId) {
       refetch();
     }
-  }, [autoFetch, channelId, userId, refetch]);
+  }, [autoFetch, channelId, refetch]);
 
   const createChannel = useCallback(async (data: ChannelCreateRequest): Promise<boolean> => {
-    if (!channelId || !userId) {
-      logger.error('useChannels.createChannel: Missing channelId or userId');
+    if (!channelId) {
+      logger.error('useChannels.createChannel: Missing channelId');
       setError('Authentication required');
       return false;
     }
@@ -110,9 +110,8 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     try {
       logger.info('useChannels: Creating channel with data:', data);
 
-      const headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>> = {
-        channelId,
-        userId
+      const headers: Required<Pick<ApiHeaders, 'channelId'>> = {
+        channelId
       };
 
       const response = await createChannelAPI(data, headers);
@@ -134,14 +133,14 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [channelId, userId, refetch]);
+  }, [channelId, refetch]);
 
   const updateChannel = useCallback(async (
     id: string,
     data: ChannelUpdateRequest
   ): Promise<boolean> => {
-    if (!channelId || !userId) {
-      logger.error('useChannels.updateChannel: Missing channelId or userId');
+    if (!channelId) {
+      logger.error('useChannels.updateChannel: Missing channelId');
       setError('Authentication required');
       return false;
     }
@@ -152,9 +151,8 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     try {
       logger.info('useChannels: Updating channel', { id, data });
 
-      const headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>> = {
-        channelId,
-        userId
+      const headers: Required<Pick<ApiHeaders, 'channelId'>> = {
+        channelId
       };
 
       const response = await updateChannelAPI(id, data, headers);
@@ -176,11 +174,11 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [channelId, userId, refetch]);
+  }, [channelId, refetch]);
 
   const deleteChannel = useCallback(async (id: string): Promise<boolean> => {
-    if (!channelId || !userId) {
-      logger.error('useChannels.deleteChannel: Missing channelId or userId');
+    if (!channelId) {
+      logger.error('useChannels.deleteChannel: Missing channelId');
       setError('Authentication required');
       return false;
     }
@@ -191,9 +189,8 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     try {
       logger.info('useChannels: Deleting channel', id);
 
-      const headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>> = {
-        channelId,
-        userId
+      const headers: Required<Pick<ApiHeaders, 'channelId'>> = {
+        channelId
       };
 
       const response = await deleteChannelAPI(id, headers);
@@ -215,7 +212,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [channelId, userId, refetch]);
+  }, [channelId, refetch]);
 
   return {
     channels,

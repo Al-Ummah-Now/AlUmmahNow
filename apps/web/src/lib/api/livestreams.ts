@@ -38,7 +38,6 @@ export async function listLiveStreams(
           'Content-Type': 'application/json',
 
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );

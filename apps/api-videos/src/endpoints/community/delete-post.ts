@@ -16,7 +16,6 @@ export class DeleteCommunityPost extends OpenAPIRoute {
       }),
       headers: z.object({
         channelId: z.string(),
-        userId: z.string(),
       }),
     },
     responses: {
@@ -56,9 +55,14 @@ export class DeleteCommunityPost extends OpenAPIRoute {
 
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
+    if (!auth) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    const userId = auth.userId;
+
     const { postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId, userId } = request.headers;
+    const { channelId } = request.headers;
 
     if (!channelId) {
       return c.json({ error: 'channelId header is required for deleting posts' }, 400);

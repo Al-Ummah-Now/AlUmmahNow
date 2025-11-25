@@ -253,14 +253,13 @@ export async function getRecommendedVideos(
     if (params.seedVideoId) queryParams.append('seedVideoId', params.seedVideoId);
 
     const url = `${baseUrl}/api/videos/sections/recommended${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    logger.info('[getRecommendedVideos] Fetching from:', { url, params, userId: headers?.userId });
+    logger.info('[getRecommendedVideos] Fetching from:', { url, params });
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         ...(headers?.channelId && { 'channelId': headers.channelId }),
-        ...(headers?.userId && { 'userId': headers.userId }),
       },
     });
 

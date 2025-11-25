@@ -41,7 +41,6 @@ export async function listPlaylists(
           'Content-Type': 'application/json',
 
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -74,7 +73,6 @@ export async function getPlaylistById(
           'Content-Type': 'application/json',
 
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -96,7 +94,7 @@ export async function getPlaylistById(
  */
 export async function createPlaylist(
   data: PlaylistCreateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ playlist: Playlist }> | null> {
   try {
     const response = await fetch(
@@ -107,7 +105,6 @@ export async function createPlaylist(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: JSON.stringify(data),
       }
@@ -131,7 +128,7 @@ export async function createPlaylist(
 export async function updatePlaylist(
   id: string,
   data: PlaylistUpdateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ playlist: Playlist }> | null> {
   try {
     const response = await fetch(
@@ -142,7 +139,6 @@ export async function updatePlaylist(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: JSON.stringify(data),
       }
@@ -165,7 +161,7 @@ export async function updatePlaylist(
  */
 export async function deletePlaylist(
   id: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -176,7 +172,6 @@ export async function deletePlaylist(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );
@@ -199,7 +194,7 @@ export async function deletePlaylist(
 export async function addVideoToPlaylist(
   playlistId: string,
   data: PlaylistAddVideoRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -210,7 +205,6 @@ export async function addVideoToPlaylist(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
         body: JSON.stringify(data),
       }
@@ -234,7 +228,7 @@ export async function addVideoToPlaylist(
 export async function removeVideoFromPlaylist(
   playlistId: string,
   videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
     const response = await fetch(
@@ -245,7 +239,6 @@ export async function removeVideoFromPlaylist(
           'Content-Type': 'application/json',
 
           'channelId': headers.channelId,
-          'userId': headers.userId,
         },
       }
     );

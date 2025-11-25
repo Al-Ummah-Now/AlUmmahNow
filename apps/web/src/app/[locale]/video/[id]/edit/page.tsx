@@ -35,7 +35,7 @@ export default function VideoEditPage() {
       }
 
       try {
-        const videoData = await getVideoById(videoId, { userId: user.id });
+        const videoData = await getVideoById(videoId);
 
         if (!videoData) {
           setError(t.errors.notFound);

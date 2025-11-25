@@ -19,7 +19,6 @@ export class VideoChaptersGet extends OpenAPIRoute {
     description: 'Retrieve parsed chapters for a video. If chapters are not cached, they will be parsed from the description.',
     request: {
       headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

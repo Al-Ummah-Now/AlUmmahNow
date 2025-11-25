@@ -11,7 +11,7 @@
  * ```tsx
  * const { viewerCount, isConnected, sendViewingHeartbeat } = useVideoWebSocket({
  *   videoId: 'abc123',
- *   userId: 'user456',
+ *   
  *   isPlaying: true
  * });
  * ```

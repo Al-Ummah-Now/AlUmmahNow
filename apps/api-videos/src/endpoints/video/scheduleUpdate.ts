@@ -22,7 +22,6 @@ export class VideoScheduleUpdate extends OpenAPIRoute {
       description: 'Reschedule a video to a new date and time. Cannot update if already publishing or published.',
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

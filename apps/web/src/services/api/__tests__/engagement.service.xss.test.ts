@@ -163,14 +163,8 @@ describe('VideoEngagementService - XSS Protection', () => {
         }
       });
 
-      it('should reject invalid user IDs', async () => {
-        const result = await service.trackView('valid-video', '<script>alert(1)</script>');
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Invalid user ID format');
-      });
-
       it('should accept valid inputs', async () => {
-        const result = await service.trackView('valid-video-123', 'valid-user-456');
+        const result = await service.trackView('valid-video-123');
         expect(result.success).toBe(true);
       });
     });
@@ -191,31 +185,10 @@ describe('VideoEngagementService - XSS Protection', () => {
       it('should reject invalid video IDs', async () => {
         const result = await service.likeVideo(
           '<script>alert(1)</script>',
-          'valid-channel',
-          'valid-user'
+          'valid-channel'
         );
         expect(result.success).toBe(false);
         expect(result.error).toBe('Invalid video ID format');
-      });
-
-      it('should reject invalid channel IDs', async () => {
-        const result = await service.likeVideo(
-          'valid-video',
-          'javascript:alert(1)',
-          'valid-user'
-        );
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Invalid user or channel ID format');
-      });
-
-      it('should reject invalid user IDs', async () => {
-        const result = await service.likeVideo(
-          'valid-video',
-          'valid-channel',
-          '../../etc/passwd'
-        );
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Invalid user or channel ID format');
       });
     });
   });
@@ -275,18 +248,6 @@ describe('VideoEngagementService - XSS Protection', () => {
       });
     });
 
-    describe('User/Channel ID validation', () => {
-      it('should follow same rules as video ID validation', async () => {
-        // Test with invalid user ID
-        const result1 = await service.trackView('valid-video', 'user<script>');
-        expect(result1.success).toBe(false);
-        expect(result1.error).toBe('Invalid user ID format');
-
-        // Test with valid user ID
-        const result2 = await service.trackView('valid-video', 'user-123');
-        expect(result2.success).toBe(true);
-      });
-    });
   });
 
   describe('URL Encoding', () => {

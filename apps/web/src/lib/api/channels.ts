@@ -36,15 +36,13 @@ export async function listChannels(
 }
 
 /**
- * List channels for a specific user
- * GET /api/channels?userId={userId}
+ * List channels for the authenticated user
+ * GET /api/channels (userId extracted from JWT token)
  */
 export async function listUserChannels(
-  userId: string,
   params?: ListQueryParams
 ): Promise<PaginationResponse<Channel> | null> {
   const queryString = buildQueryParams({
-    userId,
     limit: params?.limit,
     cursor: params?.cursor
   });
@@ -77,7 +75,7 @@ export async function getChannelById(
  */
 export async function createChannel(
   data: ChannelCreateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ channel: Channel }> | null> {
   return apiRequestServer<ApiResponse<{ channel: Channel }>>({
     method: 'POST',
@@ -85,7 +83,7 @@ export async function createChannel(
     body: data,
     functionName: 'createChannel'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -98,7 +96,7 @@ export async function createChannel(
 export async function updateChannel(
   id: string,
   data: ChannelUpdateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ channel: Channel }> | null> {
   return apiRequestServer<ApiResponse<{ channel: Channel }>>({
     method: 'PUT',
@@ -106,7 +104,7 @@ export async function updateChannel(
     body: data,
     functionName: 'updateChannel'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -118,14 +116,14 @@ export async function updateChannel(
  */
 export async function deleteChannel(
   id: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>({
     method: 'DELETE',
     url: buildApiUrl(`/api/channels/${id}`),
     functionName: 'deleteChannel'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -138,7 +136,7 @@ export async function deleteChannel(
 export async function subscribeToChannel(
   channelId: string,
   data: SubscriptionRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>({
     method: 'POST',
@@ -146,7 +144,7 @@ export async function subscribeToChannel(
     body: data,
     functionName: 'subscribeToChannel'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -158,14 +156,14 @@ export async function subscribeToChannel(
  */
 export async function unsubscribeFromChannel(
   channelId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>({
     method: 'DELETE',
     url: buildApiUrl(`/api/channels/${channelId}/subscribe`),
     functionName: 'unsubscribeFromChannel'
   }, async () => ({
-    userId: headers.userId,
+    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -178,7 +176,7 @@ export async function unsubscribeFromChannel(
 export async function updateChannelAvatar(
   channelId: string,
   file: File,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<Channel | null> {
   const formData = new FormData();
   formData.append('photo', file);
@@ -188,22 +186,20 @@ export async function updateChannelAvatar(
   logger.info('[updateChannelAvatar] Auth context', {
     hasToken: !!authContext?.accessToken,
     tokenLength: authContext?.accessToken?.length,
-    userId: authContext?.userId,
+
     channelId: authContext?.channelId,
     headersChannelId: headers.channelId,
-    headersUserId: headers.userId,
   });
 
   const requestHeaders = {
     'Authorization': `Bearer ${authContext?.accessToken || ''}`,
     'channelId': headers.channelId,
-    'userId': headers.userId,
   };
 
   logger.info('[updateChannelAvatar] Request headers', {
     hasAuth: requestHeaders.Authorization.length > 10,
     channelId: requestHeaders.channelId,
-    userId: requestHeaders.userId,
+    
   });
 
   const response = await fetch(buildApiUrl(`/api/channels/${channelId}/avatar`), {
@@ -238,7 +234,7 @@ export async function updateChannelAvatar(
 export async function updateChannelCover(
   channelId: string,
   file: File,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<Channel | null> {
   const formData = new FormData();
   formData.append('photo', file);
@@ -248,22 +244,20 @@ export async function updateChannelCover(
   logger.info('[updateChannelCover] Auth context', {
     hasToken: !!authContext?.accessToken,
     tokenLength: authContext?.accessToken?.length,
-    userId: authContext?.userId,
+
     channelId: authContext?.channelId,
     headersChannelId: headers.channelId,
-    headersUserId: headers.userId,
   });
 
   const requestHeaders = {
     'Authorization': `Bearer ${authContext?.accessToken || ''}`,
     'channelId': headers.channelId,
-    'userId': headers.userId,
   };
 
   logger.info('[updateChannelCover] Request headers', {
     hasAuth: requestHeaders.Authorization.length > 10,
     channelId: requestHeaders.channelId,
-    userId: requestHeaders.userId,
+    
   });
 
   const response = await fetch(buildApiUrl(`/api/channels/${channelId}/cover`), {

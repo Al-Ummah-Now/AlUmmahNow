@@ -147,20 +147,20 @@ export function useVideoEngagement({
 
         if (wasLiked) {
           // Unlike
-          const result = await service.unlikeVideo(videoId, channelId!, userId!);
+          const result = await service.unlikeVideo(videoId, channelId!);
           if (!result.success) {
             throw new Error(result.error || 'Failed to unlike video');
           }
         } else {
           // Like
-          const result = await service.likeVideo(videoId, channelId!, userId!);
+          const result = await service.likeVideo(videoId, channelId!);
           if (!result.success) {
             throw new Error(result.error || 'Failed to like video');
           }
 
           // Remove dislike if it was set
           if (wasDisliked) {
-            await service.removeDislike(videoId, channelId!, userId!);
+            await service.removeDislike(videoId, channelId!);
           }
         }
 
@@ -173,7 +173,7 @@ export function useVideoEngagement({
         rollbackState();
 
         const message = error instanceof Error ? error.message : 'Failed to update like status';
-        logger.error('[useVideoEngagement] Like error:', message);
+        logger.error('[useVideoEngagement] Like error:', { message, videoId, channelId, userId });
         onError?.(message);
       } finally {
         setPending(false);
@@ -237,20 +237,20 @@ export function useVideoEngagement({
 
         if (wasDisliked) {
           // Remove dislike
-          const result = await service.removeDislike(videoId, channelId!, userId!);
+          const result = await service.removeDislike(videoId, channelId!);
           if (!result.success) {
             throw new Error(result.error || 'Failed to remove dislike');
           }
         } else {
           // Dislike
-          const result = await service.dislikeVideo(videoId, channelId!, userId!);
+          const result = await service.dislikeVideo(videoId, channelId!);
           if (!result.success) {
             throw new Error(result.error || 'Failed to dislike video');
           }
 
           // Remove like if it was set
           if (wasLiked) {
-            await service.unlikeVideo(videoId, channelId!, userId!);
+            await service.unlikeVideo(videoId, channelId!);
           }
         }
 

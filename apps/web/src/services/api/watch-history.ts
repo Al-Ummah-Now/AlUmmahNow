@@ -215,12 +215,10 @@ export class WatchHistoryService {
    * watch history from localStorage to the server.
    *
    * @param authToken - JWT authentication token
-   * @param userId - User ID for filtering progress
    * @returns Promise resolving to sync results
    */
   static async syncLocalToAPI(
-    authToken: string,
-    userId: string
+    authToken: string
   ): Promise<{ synced: number; failed: number }> {
     try {
       const stored = this.getStoredProgress();
@@ -231,7 +229,7 @@ export class WatchHistoryService {
 
       for (const [videoId, progress] of Object.entries(stored)) {
         const result = await this.saveProgress(
-          { ...progress, userId },
+          { ...progress },
           authToken
         );
 

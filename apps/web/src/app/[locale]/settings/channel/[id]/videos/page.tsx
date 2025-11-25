@@ -62,7 +62,7 @@ export default function ChannelVideosPage() {
       try {
         // Fetch videos and channel in parallel
         const [result, channel] = await Promise.all([
-          listVideos({ channelId }, { userId: user.id, channelId: channelId }),
+          listVideos({ channelId }, { channelId: channelId }),
           getChannelById(channelId)
         ]);
 
@@ -75,7 +75,7 @@ export default function ChannelVideosPage() {
           setFilteredVideos(result.data);
         }
       } catch (error) {
-        logger.error('Error fetching videos and channel', { error, channelId, userId: user.id });
+        logger.error('Error fetching videos and channel', { error, channelId });
       } finally {
         setLoading(false);
       }
@@ -145,7 +145,7 @@ export default function ChannelVideosPage() {
     if (!confirm(t.video.confirmDelete)) return;
 
     try {
-      const result = await deleteVideo(videoId, { userId: user.id, channelId });
+      const result = await deleteVideo(videoId, { channelId });
       if (result) {
         setVideos((prev) => prev.filter((v) => v.id !== videoId));
         setSelectedVideos((prev) => {
@@ -155,7 +155,7 @@ export default function ChannelVideosPage() {
         });
       }
     } catch (error) {
-      logger.error('Error deleting video', { error, videoId, channelId, userId: user.id });
+      logger.error('Error deleting video', { error, videoId, channelId });
       alert(t.errors.genericError);
     }
   };
@@ -170,7 +170,7 @@ export default function ChannelVideosPage() {
 
     try {
       const deletePromises = Array.from(selectedVideos).map((videoId) =>
-        deleteVideo(videoId, { userId: user.id, channelId })
+        deleteVideo(videoId, { channelId })
       );
 
       await Promise.all(deletePromises);
@@ -178,7 +178,7 @@ export default function ChannelVideosPage() {
       setVideos((prev) => prev.filter((v) => !selectedVideos.has(v.id)));
       setSelectedVideos(new Set());
     } catch (error) {
-      logger.error('Error deleting videos', { error, selectedVideos: Array.from(selectedVideos), channelId, userId: user.id });
+      logger.error('Error deleting videos', { error, selectedVideos: Array.from(selectedVideos), channelId });
       alert(t.errors.genericError);
     }
   };

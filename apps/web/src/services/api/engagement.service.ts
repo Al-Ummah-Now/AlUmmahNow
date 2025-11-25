@@ -77,26 +77,6 @@ function sanitizeVideoId(videoId: string): string {
   return encodeURIComponent(videoId.trim());
 }
 
-/**
- * Security: Validate user/channel ID format
- *
- * @param id - The ID to validate
- * @returns True if valid, false otherwise
- */
-function isValidUserId(id: string | undefined): boolean {
-  if (!id || typeof id !== 'string') {
-    return false;
-  }
-
-  // Length check
-  if (id.length === 0 || id.length > 100) {
-    return false;
-  }
-
-  // Pattern check - alphanumeric, hyphens, underscores (typical for user/channel IDs)
-  const idRegex = /^[a-zA-Z0-9_-]+$/;
-  return idRegex.test(id);
-}
 
 /**
  * Video Engagement Service Class
@@ -231,22 +211,14 @@ export class VideoEngagementService {
    * Track a video view (once per session)
    *
    * @param videoId - The video ID
-   * @param userId - Optional user ID for authenticated tracking
    * @returns Promise resolving to success status
    */
-  async trackView(videoId: string, userId?: string): Promise<EngagementResult> {
+  async trackView(videoId: string): Promise<EngagementResult> {
     // Security: Validate input parameters
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
         error: 'Invalid video ID format'
-      };
-    }
-
-    if (userId && !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user ID format'
       };
     }
 
@@ -284,15 +256,13 @@ export class VideoEngagementService {
    *
    * @param videoId - The video ID
    * @param channelId - User's channel ID (required for API)
-   * @param userId - User ID (required for API)
    * @returns Promise resolving to success status
    */
   async likeVideo(
     videoId: string,
-    channelId: string,
-    userId: string
+    channelId: string
   ): Promise<EngagementResult> {
-    // Security: Validate all input parameters
+    // Security: Validate video ID format
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
@@ -300,15 +270,8 @@ export class VideoEngagementService {
       };
     }
 
-    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user or channel ID format'
-      };
-    }
-
     try {
-      const result = await VideosAPI.likeVideo(videoId, { channelId, userId });
+      const result = await VideosAPI.likeVideo(videoId, { channelId });
 
       if (!result || !result.success) {
         throw new Error('Failed to like video');
@@ -329,15 +292,13 @@ export class VideoEngagementService {
    *
    * @param videoId - The video ID
    * @param channelId - User's channel ID (required for API)
-   * @param userId - User ID (required for API)
    * @returns Promise resolving to success status
    */
   async unlikeVideo(
     videoId: string,
-    channelId: string,
-    userId: string
+    channelId: string
   ): Promise<EngagementResult> {
-    // Security: Validate all input parameters
+    // Security: Validate video ID format
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
@@ -345,15 +306,8 @@ export class VideoEngagementService {
       };
     }
 
-    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user or channel ID format'
-      };
-    }
-
     try {
-      const result = await VideosAPI.unlikeVideo(videoId, { channelId, userId });
+      const result = await VideosAPI.unlikeVideo(videoId, { channelId });
 
       if (!result || !result.success) {
         throw new Error('Failed to unlike video');
@@ -374,15 +328,13 @@ export class VideoEngagementService {
    *
    * @param videoId - The video ID
    * @param channelId - User's channel ID (required for API)
-   * @param userId - User ID (required for API)
    * @returns Promise resolving to success status
    */
   async dislikeVideo(
     videoId: string,
-    channelId: string,
-    userId: string
+    channelId: string
   ): Promise<EngagementResult> {
-    // Security: Validate all input parameters
+    // Security: Validate video ID format
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
@@ -390,15 +342,8 @@ export class VideoEngagementService {
       };
     }
 
-    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user or channel ID format'
-      };
-    }
-
     try {
-      const result = await VideosAPI.dislikeVideo(videoId, { channelId, userId });
+      const result = await VideosAPI.dislikeVideo(videoId, { channelId });
 
       if (!result || !result.success) {
         throw new Error('Failed to dislike video');
@@ -419,15 +364,13 @@ export class VideoEngagementService {
    *
    * @param videoId - The video ID
    * @param channelId - User's channel ID (required for API)
-   * @param userId - User ID (required for API)
    * @returns Promise resolving to success status
    */
   async removeDislike(
     videoId: string,
-    channelId: string,
-    userId: string
+    channelId: string
   ): Promise<EngagementResult> {
-    // Security: Validate all input parameters
+    // Security: Validate video ID format
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
@@ -435,15 +378,8 @@ export class VideoEngagementService {
       };
     }
 
-    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user or channel ID format'
-      };
-    }
-
     try {
-      const result = await VideosAPI.removeVideoDislike(videoId, { channelId, userId });
+      const result = await VideosAPI.removeVideoDislike(videoId, { channelId });
 
       if (!result || !result.success) {
         throw new Error('Failed to remove dislike');

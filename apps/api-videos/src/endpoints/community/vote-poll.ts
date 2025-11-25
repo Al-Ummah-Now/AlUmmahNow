@@ -19,7 +19,6 @@ export class VoteOnPoll extends OpenAPIRoute {
     summary: 'Vote on a community poll',
     request: {
       headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

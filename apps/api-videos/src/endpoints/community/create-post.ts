@@ -75,7 +75,6 @@ export class CreateCommunityPost extends OpenAPIRoute {
     request: {
       headers: z.object({
         channelId: z.string().optional(),
-        userId: z.string(),
       }),
       body: {
         content: {
@@ -112,9 +111,14 @@ export class CreateCommunityPost extends OpenAPIRoute {
 
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
+    if (!auth) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    const userId = auth.userId;
+
     const request: any = await this.getValidatedData<typeof this.schema>();
     const body: any = request.body;
-    const { channelId, userId } = request.headers;
+    const { channelId } = request.headers;
 
     if (!body) {
       return c.json({ error: 'Request body is required' }, 400);

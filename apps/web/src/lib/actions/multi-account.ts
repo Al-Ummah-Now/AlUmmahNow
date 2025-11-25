@@ -252,7 +252,7 @@ export async function createChannelForActiveUser(
 
     // Create channel via API
     const response = await createChannel(data, {
-      userId: session.userId,
+      
       channelId: session.channelId || '', // Use empty string if no channel selected
     });
 
@@ -359,7 +359,7 @@ export async function getActiveSessionInfo() {
   }
 
   logger.info('[getActiveSessionInfo] Session found:', {
-    userId: session.userId,
+    
     email: session.email,
     hasChannel: !!session.channel,
     channelsCount: session.availableChannels.length,
@@ -379,7 +379,7 @@ export async function getActiveSessionInfo() {
   } : null;
 
   logger.debug('[getActiveSessionInfo] TRACE', {
-    userId: session.userId,
+
     email: session.email,
     'session.channel': session.channel ? session.channel.name : null,
     'channelData': channelData ? channelData.name : null,

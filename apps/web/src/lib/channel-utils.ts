@@ -34,7 +34,7 @@ export async function isChannelOwner(channelId: string): Promise<boolean> {
 
     logger.info('[isChannelOwner] Ownership checked', {
       channelId,
-      userId: authContext.userId,
+      
       isOwner,
     });
 

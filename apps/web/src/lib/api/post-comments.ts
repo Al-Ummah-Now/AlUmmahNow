@@ -69,7 +69,7 @@ export async function listCommentReplies(
 export async function createPostComment(
   postId: string,
   data: PostCommentCreateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<PostCommentCreateResponse | null> {
   return apiRequestServer<PostCommentCreateResponse>(
     {
@@ -79,7 +79,7 @@ export async function createPostComment(
       functionName: 'createPostComment',
     },
     async () => ({
-      userId: headers.userId,
+      
       channelId: headers.channelId,
       accessToken: (await getServerAuthContext())?.accessToken || '',
     }),
@@ -95,7 +95,7 @@ export async function updatePostComment(
   postId: string,
   commentId: string,
   data: PostCommentUpdateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<PostCommentCreateResponse | null> {
   return apiRequestServer<PostCommentCreateResponse>(
     {
@@ -105,7 +105,7 @@ export async function updatePostComment(
       functionName: 'updatePostComment',
     },
     async () => ({
-      userId: headers.userId,
+      
       channelId: headers.channelId,
       accessToken: (await getServerAuthContext())?.accessToken || '',
     }),
@@ -120,7 +120,7 @@ export async function updatePostComment(
 export async function deletePostComment(
   postId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>(
     {
@@ -129,7 +129,7 @@ export async function deletePostComment(
       functionName: 'deletePostComment',
     },
     async () => ({
-      userId: headers.userId,
+      
       channelId: headers.channelId,
       accessToken: (await getServerAuthContext())?.accessToken || '',
     }),
@@ -144,7 +144,7 @@ export async function deletePostComment(
 export async function likePostComment(
   postId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<PostCommentLikeResponse | null> {
   return apiRequestServer<PostCommentLikeResponse>(
     {
@@ -153,7 +153,7 @@ export async function likePostComment(
       functionName: 'likePostComment',
     },
     async () => ({
-      userId: headers.userId,
+      
       channelId: headers.channelId,
       accessToken: (await getServerAuthContext())?.accessToken || '',
     }),
@@ -168,7 +168,7 @@ export async function likePostComment(
 export async function unlikePostComment(
   postId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<PostCommentLikeResponse | null> {
   return apiRequestServer<PostCommentLikeResponse>(
     {
@@ -177,7 +177,7 @@ export async function unlikePostComment(
       functionName: 'unlikePostComment',
     },
     async () => ({
-      userId: headers.userId,
+      
       channelId: headers.channelId,
       accessToken: (await getServerAuthContext())?.accessToken || '',
     }),
@@ -192,7 +192,7 @@ export async function unlikePostComment(
 export async function pinPostComment(
   postId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>(
     {
@@ -201,7 +201,7 @@ export async function pinPostComment(
       functionName: 'pinPostComment',
     },
     async () => ({
-      userId: headers.userId,
+      
       channelId: headers.channelId,
       accessToken: (await getServerAuthContext())?.accessToken || '',
     }),
@@ -216,7 +216,7 @@ export async function pinPostComment(
 export async function heartPostComment(
   postId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean; hearted: boolean } | null> {
   return apiRequestServer<{ success: boolean; hearted: boolean }>(
     {
@@ -225,7 +225,7 @@ export async function heartPostComment(
       functionName: 'heartPostComment',
     },
     async () => ({
-      userId: headers.userId,
+      
       channelId: headers.channelId,
       accessToken: (await getServerAuthContext())?.accessToken || '',
     }),

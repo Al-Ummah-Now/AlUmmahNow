@@ -81,7 +81,7 @@ export default function ReplyForm({
           content: content.trim(),
           parentCommentId,
         },
-        { channelId, userId }
+        { channelId }
       );
 
       if (result?.success && result.comment) {

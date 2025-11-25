@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRealTimeNotifications, Notification } from '@/hooks/useRealTimeNotifications';
-import { User } from '@/interfaces';
 import { X, Bell, Heart, MessageCircle, UserPlus, Video, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -100,17 +99,12 @@ function NotificationToast({ notification, onClose, onAction }: NotificationToas
   );
 }
 
-interface NotificationCenterProps {
-  user?: User | null;
-}
-
-export function NotificationCenter({ user }: NotificationCenterProps) {
+export function NotificationCenter() {
   const {
     notifications,
     unreadCount,
     markAsRead
   } = useRealTimeNotifications({
-    userId: user?.id,
     maxNotifications: 10,
     autoRemoveAfter: 10000 // 10 seconds
   });

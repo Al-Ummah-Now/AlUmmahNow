@@ -23,7 +23,6 @@ export class ListCommunityPosts extends OpenAPIRoute {
     summary: 'List community posts for a channel',
     request: {
       headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         query: querySchema,

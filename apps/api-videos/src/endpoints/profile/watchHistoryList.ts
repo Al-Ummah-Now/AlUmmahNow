@@ -21,7 +21,6 @@ export class WatchHistoryList extends OpenAPIRoute {
 		description: "🔒 **Authentication Required**: Get the user's watch history with pagination.",
 		request: {
 			headers: z.object({
-          userId: z.string().optional().nullable(),
         }),
         query: z.object({
 				limit: Num({

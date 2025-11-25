@@ -23,21 +23,19 @@ describe('APIClient', () => {
 
   it('should update headers', () => {
     const client = new APIClient();
-    
+
     client.setHeaders({
       channelId: 'channel-789',
-      userId: 'user-101',
     });
 
     expect(client.getHeaders()).toEqual({
       channelId: 'channel-789',
-      userId: 'user-101',
     });
   });
 
   it('should merge headers when updating', () => {
     const client = new APIClient({
-      userId: 'user-123',
+      userId: 'user-789',
     });
 
     client.setHeaders({
@@ -45,7 +43,7 @@ describe('APIClient', () => {
     });
 
     expect(client.getHeaders()).toEqual({
-      userId: 'user-123',
+      userId: 'user-789',
       channelId: 'channel-456',
     });
   });
@@ -84,7 +82,7 @@ describe('APIClient', () => {
 describe('createAuthenticatedClient', () => {
   it('should create client with channelId and userId', () => {
     const client = createAuthenticatedClient('channel-123', 'user-456');
-    
+
     expect(client.getHeaders()).toEqual({
       channelId: 'channel-123',
       userId: 'user-456',

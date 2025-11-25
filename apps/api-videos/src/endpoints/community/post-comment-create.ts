@@ -44,7 +44,6 @@ const createCommentSchema = {
     }),
     headers: z.object({
       channelId: z.string().optional(),
-      userId: z.string(),
     }),
     body: {
       content: {
@@ -99,10 +98,11 @@ export class CreatePostComment extends OpenAPIRoute {
     if (!auth) {
       return c.json({ success: false, error: 'Authentication required' }, 401);
     }
+    const userId = auth.userId;
 
     const { postId } = c.req.param();
     const data: any = await this.getValidatedData<z.infer<typeof createCommentRequestSchema>>();
-    const { channelId, userId } = data.headers;
+    const { channelId } = data.headers;
 
     if (!data.body) {
       return c.json({ success: false, error: 'Request body is required' }, 400);

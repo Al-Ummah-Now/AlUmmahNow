@@ -24,7 +24,6 @@ export class VideoScheduleCreate extends OpenAPIRoute {
         'Schedule a video to be automatically published at a specified date and time. Video must be in draft/private status.',
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

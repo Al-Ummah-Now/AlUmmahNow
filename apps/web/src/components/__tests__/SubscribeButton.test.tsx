@@ -104,7 +104,7 @@ describe('SubscribeButton', () => {
         'channel-789',
         { notificationsEnabled: true },
         expect.objectContaining({
-          userId: 'user-123',
+          
           channelId: 'channel-456'
         })
       );
@@ -145,7 +145,7 @@ describe('SubscribeButton', () => {
       expect(mockUnsubscribe).toHaveBeenCalledWith(
         'channel-789',
         expect.objectContaining({
-          userId: 'user-123',
+          
           channelId: 'channel-456'
         })
       );

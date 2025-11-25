@@ -20,7 +20,6 @@ export class SubtitlesUpload extends OpenAPIRoute {
         'Upload a subtitle file (.srt, .vtt, .sbv) for a video. Converts to WebVTT format automatically.',
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

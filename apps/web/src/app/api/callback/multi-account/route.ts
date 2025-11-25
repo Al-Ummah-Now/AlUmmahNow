@@ -37,7 +37,7 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
     try {
       if (user) {
         logger.info("[Multi-Account Callback] Adding account to session:", {
-          userId: user.id,
+          
           email: user.email,
         });
 
@@ -61,7 +61,7 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
         const verifySession = await SessionManager.getActiveSession();
         if (verifySession) {
           logger.info("[Multi-Account Callback] Session verified:", {
-            userId: verifySession.userId,
+            
             email: verifySession.email,
             accountsCount: verifySession.availableAccounts.length,
           });

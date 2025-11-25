@@ -24,7 +24,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) 
 
   console.log('[ProfileGuard] State:', {
     hasUser: !!user,
-    userId: user?.id,
+    
     userEmail: user?.email,
     accountLoading,
     pathname,

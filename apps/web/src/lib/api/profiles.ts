@@ -26,9 +26,8 @@ export async function getProfileCurrent(): Promise<Profile | null> {
     return null;
   }
 
-  const userId = authContext.userId!;
   logApiAuth(fnName, {
-    userId,
+    userId: authContext.userId,
     hasToken: true,
     tokenLength: authContext.accessToken?.length
   });
@@ -36,7 +35,7 @@ export async function getProfileCurrent(): Promise<Profile | null> {
   const result = await apiRequestServer<unknown>(
     {
       method: 'GET',
-      url: buildApiUrl(`/api/profiles/${userId}`),
+      url: buildApiUrl(`/api/profiles/${authContext.userId}`),
       functionName: fnName
     },
     getServerAuthContext,
@@ -185,14 +184,13 @@ export async function createProfileAPI(
     return null;
   }
 
-  const userId = authContext.userId!;
   logApiAuth(fnName, {
-    userId,
+    userId: authContext.userId,
     hasToken: true,
     tokenLength: authContext.accessToken?.length
   });
 
-  const requestBody = { ...data, id: userId };
+  const requestBody = { ...data, id: authContext.userId };
 
   const result = await apiRequestServer<ApiResponse<{ profile: Profile }>>(
     {
@@ -214,9 +212,8 @@ export async function createProfileAPI(
 
 /**
  * Update the current authenticated user's profile
- * PUT /api/profiles/{id}
+ * PUT /api/profile
  * Server action that properly handles HttpOnly cookies
- * Uses authenticated user ID automatically
  */
 export async function updateProfileAPI(
   data: ProfileUpdateRequest
@@ -229,9 +226,7 @@ export async function updateProfileAPI(
     return null;
   }
 
-  const userId = authContext.userId!;
   logApiAuth(fnName, {
-    userId,
     hasToken: true,
     tokenLength: authContext.accessToken?.length
   });
@@ -239,7 +234,7 @@ export async function updateProfileAPI(
   const result = await apiRequestServer<ApiResponse<{ profile: Profile }>>(
     {
       method: 'PUT',
-      url: buildApiUrl(`/api/profiles/${userId}`),
+      url: buildApiUrl('/api/profile'),
       body: data,
       functionName: fnName
     },
@@ -269,8 +264,7 @@ export async function deleteProfileAPI(): Promise<{ success: boolean } | null> {
     return null;
   }
 
-  const userId = authContext.userId!;
-  logApiAuth(fnName, { userId, hasToken: true });
+  logApiAuth(fnName, {  hasToken: true });
 
   const result = await apiRequestServer<{ success: boolean }>(
     {
@@ -312,7 +306,7 @@ export async function createProfile(data: {
 
 /**
  * Upload avatar photo for the current authenticated user
- * PUT /api/profiles/{id}/avatar
+ * PUT /api/profile/avatar
  * Server action that handles FormData upload with proper authentication
  */
 export async function uploadProfileAvatar(formData: FormData): Promise<Profile | null> {
@@ -324,20 +318,17 @@ export async function uploadProfileAvatar(formData: FormData): Promise<Profile |
     return null;
   }
 
-  const userId = authContext.userId!;
-  logApiAuth(fnName, { userId, hasToken: true });
+  logApiAuth(fnName, {  hasToken: true });
 
   // FormData is handled differently - we need to make the request directly
   // instead of using apiRequestServer which expects JSON
-  const apiUrl = buildApiUrl(`/api/profiles/${userId}/avatar`);
+  const apiUrl = buildApiUrl('/api/profile/avatar');
 
   try {
     const response = await fetch(apiUrl, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${authContext.accessToken || ''}`,
-        'userId': userId,
-        'channelId': authContext.channelId || '',
       },
       body: formData,
     });
@@ -358,7 +349,7 @@ export async function uploadProfileAvatar(formData: FormData): Promise<Profile |
 
 /**
  * Upload cover photo for the current authenticated user
- * PUT /api/profiles/{id}/cover
+ * PUT /api/profile/cover
  * Server action that handles FormData upload with proper authentication
  */
 export async function uploadProfileCover(formData: FormData): Promise<Profile | null> {
@@ -370,19 +361,16 @@ export async function uploadProfileCover(formData: FormData): Promise<Profile | 
     return null;
   }
 
-  const userId = authContext.userId!;
-  logApiAuth(fnName, { userId, hasToken: true });
+  logApiAuth(fnName, {  hasToken: true });
 
   // FormData is handled differently - we need to make the request directly
-  const apiUrl = buildApiUrl(`/api/profiles/${userId}/cover`);
+  const apiUrl = buildApiUrl('/api/profile/cover');
 
   try {
     const response = await fetch(apiUrl, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${authContext.accessToken || ''}`,
-        'userId': userId,
-        'channelId': authContext.channelId || '',
       },
       body: formData,
     });

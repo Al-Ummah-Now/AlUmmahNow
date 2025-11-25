@@ -181,7 +181,7 @@ describe('useRealTimeNotifications', () => {
 
     const { result } = renderHook(
       () => useRealTimeNotifications({
-        userId: 'test-user',
+        
         maxNotifications: 50
       }),
       { wrapper }
@@ -230,7 +230,7 @@ describe('useRealTimeNotifications', () => {
 
     const { result } = renderHook(
       () => useRealTimeNotifications({
-        userId: 'test-user',
+        
         maxNotifications: 50,
         autoRemoveAfter: 100 // 100ms auto-remove
       }),

@@ -19,7 +19,6 @@ import { Progress } from '@/components/ui/progress';
 
 interface SubtitleUploadModalProps {
   videoId: string;
-  userId: string;
   channelId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,7 +41,6 @@ interface SubtitleUploadModalProps {
  */
 export default function SubtitleUploadModal({
   videoId,
-  userId,
   channelId,
   open,
   onOpenChange,
@@ -159,7 +157,7 @@ export default function SubtitleUploadModal({
         selectedFile,
         selectedLanguage,
         isDefault,
-        { userId, channelId }
+        { channelId }
       );
 
       clearInterval(progressInterval);

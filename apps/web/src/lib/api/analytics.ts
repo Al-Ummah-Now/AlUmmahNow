@@ -35,7 +35,6 @@ export async function getSummary(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -72,7 +71,6 @@ export async function getChannelAnalytics(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -109,7 +107,6 @@ export async function getVideoAnalytics(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );
@@ -147,7 +144,6 @@ export async function getMetrics(
         headers: {
           'Content-Type': 'application/json',
           ...(headers?.channelId && { 'channelId': headers.channelId }),
-          ...(headers?.userId && { 'userId': headers.userId }),
         },
       }
     );

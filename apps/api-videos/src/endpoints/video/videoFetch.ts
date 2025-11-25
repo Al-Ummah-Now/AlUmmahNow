@@ -17,7 +17,6 @@ export class VideoFetch extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -62,7 +61,9 @@ export class VideoFetch extends OpenAPIRoute {
 
 		// Retrieve the validated slug
 		const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const auth = c.get('auth');
+		const userId = auth?.userId;
+		const { channelId } = request.headers;
 
 		// Implement your own object fetch here
 		const bucket = c.env.videos;

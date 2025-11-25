@@ -86,7 +86,7 @@ export async function verifyChannelOwnership(
 
     logger.info('verifyChannelOwnership: Ownership verified', {
       channelId,
-      userId: authContext.userId,
+      
       isOwner,
     });
 

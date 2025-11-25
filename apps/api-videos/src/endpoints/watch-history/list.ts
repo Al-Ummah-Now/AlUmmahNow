@@ -72,7 +72,6 @@ export class ListWatchHistory extends OpenAPIRoute {
         "Returns paginated list of videos watched by the authenticated user, sorted by most recent by default.",
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         query: ListWatchHistoryQuery,

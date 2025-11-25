@@ -32,7 +32,6 @@ export class ChannelSectionsListPopulated extends OpenAPIRoute {
       `,
       request: {
         headers: z.object({
-          userId: z.string().optional().nullable(),
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({

@@ -17,7 +17,7 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
     logger.info('[fetchProfile] Timestamp:', new Date().toISOString());
     logger.info('[fetchProfile] Input user:', {
         hasUser: !!user,
-        userId: user?.id,
+        
         userEmail: user?.email,
         userIdType: typeof user?.id
     });
@@ -91,7 +91,7 @@ export const checkProfileExists = async (user: User | null | undefined): Promise
     logger.info('[checkProfileExists] ========== START ==========');
     logger.info('[checkProfileExists] User input:', {
         hasUser: !!user,
-        userId: user?.id,
+        
         userEmail: user?.email
     });
 

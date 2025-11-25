@@ -84,7 +84,7 @@ export class ABTestingEngine {
         STORAGE_KEY_AB_ASSIGNMENTS,
         serialized,
         {
-          userId: this.userId,
+          
           maxUserItems: 100, // Max 100 experiments per user
           enableCleanup: true
         }
@@ -156,7 +156,7 @@ export class ABTestingEngine {
       eventType: 'assignment',
       experimentId: experiment.id,
       variant,
-      userId: this.userId,
+      userId: this.userId!,
       timestamp: assignment.assignmentTime
     });
 
@@ -193,7 +193,7 @@ export class ABTestingEngine {
       eventType: 'conversion',
       experimentId,
       variant: assignment.variant,
-      userId: this.userId,
+      userId: this.userId!,
       timestamp: Date.now(),
       conversionValue
     });

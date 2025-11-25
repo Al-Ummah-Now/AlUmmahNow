@@ -69,7 +69,7 @@ const mockNotFound = notFound as jest.MockedFunction<typeof notFound>;
 // Mock channel data
 const createMockChannel = (overrides?: Partial<Channel>): Channel => ({
   id: 'test-channel-id',
-  userId: 'user-123',
+  userId: 'test-user-id',
   email: 'test@example.com',
   name: 'Test Channel',
   nameLocalized: {

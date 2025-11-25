@@ -15,7 +15,6 @@ export class UploadCommunityPostGif extends OpenAPIRoute {
     request: {
       headers: z.object({
         channelId: z.string(),
-        userId: z.string(),
       }),
       body: {
         content: {
@@ -60,8 +59,13 @@ export class UploadCommunityPostGif extends OpenAPIRoute {
   async handle(c: any): Promise<Response> {
     try {
       const auth = c.get('auth');
+      if (!auth) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+      const userId = auth.userId;
+
       const request = await this.getValidatedData<typeof this.schema>();
-      const { channelId, userId } = request.headers;
+      const { channelId } = request.headers;
 
       // Verify channel ownership
       const channelKey = `${channelId}/channel.json`;

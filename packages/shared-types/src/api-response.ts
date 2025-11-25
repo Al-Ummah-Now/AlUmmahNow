@@ -35,9 +35,9 @@ export interface ListQueryParams {
 
 /**
  * API request headers
+ * Note: userId is now extracted from JWT token in Authorization header server-side
  */
 export interface ApiHeaders {
   channelId?: string;
-  userId?: string;
   authorization?: string;
 }

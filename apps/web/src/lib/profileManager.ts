@@ -27,7 +27,7 @@ class ProfileManager {
   async loadProfile(user: User | null) {
     logger.info('ProfileManager.loadProfile called with:', { 
       user: !!user, 
-      userId: user?.id,
+      
       userIdType: typeof user?.id,
       currentUserId: this.currentUserId,
       isLoading: this.isLoading,
