@@ -134,6 +134,7 @@ export default defineConfig({
     command: 'pnpm dev',
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000, // 2 minutes for Next.js to start
+    // CI runners are slower - allow 5 minutes for Next.js to start
+    timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
   },
 });
