@@ -34,10 +34,10 @@
 | `FRONTEND_IMPLEMENTATION_GUIDE.md` | docs/guides/ | Developer guide |
 | `IMPLEMENTATION_SUMMARY.md` | docs/archive/implementation/ | Historical |
 
-### Delete (Obsolete)
-| File | Reason |
-|------|--------|
-| `CALENDAR_REMAINING_TASKS.md` | Task tracking file, work completed |
+### Restored (Incomplete Features)
+| File | New Location | Reason |
+|------|--------------|--------|
+| `CALENDAR_REMAINING_TASKS.md` | `docs/features/scheduled-videos-calendar-tasks.md` | Feature 70% complete, phases 5-8 remaining |
 
 ### Merge into Single Document
 | Files | Target | Reason |
@@ -260,6 +260,7 @@ Based on documentation analysis, these features are documented but may not be im
 
 | Feature | Documentation | Status |
 |---------|--------------|--------|
+| **Scheduled Videos Calendar** | docs/features/scheduled-videos-calendar-tasks.md | **70% COMPLETE** |
 | Admin App | docs/research/admin-app-specification.md | PLANNED |
 | RunPod Integration | docs/research/infrastructure-orchestration.md | PLANNED |
 | Hetzner Integration | docs/research/infrastructure-orchestration.md | PLANNED |
@@ -268,6 +269,22 @@ Based on documentation analysis, these features are documented but may not be im
 | Subscription System | docs/research/subscription-system-schema.md | PLANNED |
 | Cost Dashboard | docs/research/analytics-dashboard-architecture.md | PLANNED |
 | Live Streaming Phase 3-4 | docs/live-streaming/ | PARTIAL |
+
+### Scheduled Videos Calendar - Remaining Work
+
+**Completion**: 70% - Phases 5-8 remaining
+
+| Phase | Description | Status | Est. Hours |
+|-------|-------------|--------|------------|
+| Phase 5 | Complete CalendarEvent + ScheduledVideoCalendar components | NOT STARTED | 4-6 hrs |
+| Phase 6 | Page integration & refactoring | NOT STARTED | 2-3 hrs |
+| Phase 7 | Testing & verification (unit, E2E, manual) | NOT STARTED | 2-3 hrs |
+| Phase 8 | Documentation & cleanup | NOT STARTED | 1 hr |
+
+**Key Files**:
+- `apps/web/src/components/calendar/CalendarEvent/index.tsx` - needs implementation
+- `apps/web/src/components/calendar/ScheduledVideoCalendar/` - not started
+- `apps/web/src/app/[locale]/scheduled-videos/page.tsx` - needs refactoring
 
 ---
 
