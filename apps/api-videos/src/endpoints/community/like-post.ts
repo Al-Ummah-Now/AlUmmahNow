@@ -16,7 +16,7 @@ export class LikeCommunityPost extends OpenAPIRoute {
       }),
       headers: z.object({
         channelId: z.string().optional(),
-        userId: z.string(),
+        userId: z.string().optional(), // Deprecated: Use auth context instead
       }),
     },
     responses: {
@@ -47,25 +47,40 @@ export class LikeCommunityPost extends OpenAPIRoute {
 
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
+    if (!auth) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
     const { postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId, userId } = request.headers;
+    const { channelId } = request.headers;
+    const userId = auth.userId;
 
     try {
-      // Find the post
+      // Find the post - use direct lookup if channelId provided, otherwise scan
       let postKey: string | null = null;
       let post: CommunityPost | null = null;
 
-      const listResult = await c.env.community_posts.list({ prefix: 'posts/' });
-
-      for (const object of listResult.objects) {
-        if (object.key.includes(`/${postId}.json`)) {
-          postKey = object.key;
-          const postData = await c.env.community_posts.get(object.key);
-          if (postData) {
-            post = await postData.json();
+      if (channelId) {
+        // Direct key lookup when channelId is provided (O(1))
+        postKey = `posts/${channelId}/${postId}.json`;
+        const postData = await c.env.community_posts.get(postKey);
+        if (postData) {
+          post = await postData.json();
+        }
+      } else {
+        // Fallback: scan all posts (N+1 query)
+        // TODO: Implement postId → channelId mapping in KV for O(1) lookups
+        const listResult = await c.env.community_posts.list({ prefix: 'posts/' });
+        for (const object of listResult.objects) {
+          if (object.key.includes(`/${postId}.json`)) {
+            postKey = object.key;
+            const postData = await c.env.community_posts.get(object.key);
+            if (postData) {
+              post = await postData.json();
+            }
+            break;
           }
-          break;
         }
       }
 
@@ -87,11 +102,7 @@ export class LikeCommunityPost extends OpenAPIRoute {
         };
         await c.env.community_posts.put(likeKey, JSON.stringify(likeRecord));
 
-        // Increment like count
-        post.likes = (post.likes || 0) + 1;
-        await c.env.community_posts.put(postKey, JSON.stringify(post));
-
-        // Send to queue for notifications
+        // Queue message for async counter update (fix race condition)
         const queue = new Queue(c.env.queue);
         await queue.send(MessageType.CommunityPostLiked, {
           postId,
@@ -101,17 +112,18 @@ export class LikeCommunityPost extends OpenAPIRoute {
           timestamp: new Date().toISOString()
         });
 
+        // Return current count without incrementing (processor will handle it)
         return c.json({
           success: true,
           liked: true,
-          totalLikes: post.likes,
+          totalLikes: post.likes || 0,
         });
       } else {
         // Already liked
         return c.json({
           success: true,
           liked: true,
-          totalLikes: post.likes,
+          totalLikes: post.likes || 0,
         });
       }
     } catch (error) {

@@ -98,10 +98,10 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		const { userId, channelId } = request.headers;
-		// Get auth context for user information (fallback)
+		const { channelId } = request.headers;
+		// Get auth context for user information
 		const authContext = getAuthContext(c);
-		const effectiveUserId = userId || authContext?.userId;
+		const effectiveUserId = authContext?.userId;
 
 		if (!effectiveUserId) {
 			return c.json({

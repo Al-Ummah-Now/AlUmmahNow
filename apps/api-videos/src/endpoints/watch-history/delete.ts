@@ -51,10 +51,10 @@ export class DeleteWatchHistory extends OpenAPIRoute {
 
   async handle(c: Context) {
     const request = await this.getValidatedData<typeof this.schema>();
-    const { userId, channelId } = request.headers;
+    const { channelId } = request.headers;
 
     const auth = c.get("auth");
-    const effectiveUserId = userId || auth?.userId;
+    const effectiveUserId = auth?.userId;
 
     if (!effectiveUserId) {
       return c.json({ error: "Authentication required" }, 401);
@@ -82,7 +82,7 @@ export class DeleteWatchHistory extends OpenAPIRoute {
       }
 
       // Verify the entry belongs to the authenticated user
-      if (existingEntry.userId !== userId) {
+      if (existingEntry.userId !== effectiveUserId) {
         return c.json({ error: "Unauthorized to delete this entry" }, 403);
       }
 

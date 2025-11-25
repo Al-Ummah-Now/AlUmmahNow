@@ -71,6 +71,7 @@ export enum MessageType {
   // Community post events
   CommunityPostCreated,
   CommunityPostLiked,
+  CommunityPostUnliked,
   CommunityPostDeleted,
   PollVoted,
 

@@ -37,9 +37,22 @@ export interface R2Object {
   arrayBuffer: () => Promise<ArrayBuffer>;
 }
 
+export interface R2ListOptions {
+  prefix?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface R2Objects {
+  objects: Array<{ key: string }>;
+  truncated: boolean;
+  cursor?: string;
+}
+
 export interface R2Bucket {
   put: (key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: R2PutOptions) => Promise<void>;
   get: (key: string) => Promise<R2Object | null>;
+  list: (options?: R2ListOptions) => Promise<R2Objects>;
 }
 
 export interface QueueEnvironment {

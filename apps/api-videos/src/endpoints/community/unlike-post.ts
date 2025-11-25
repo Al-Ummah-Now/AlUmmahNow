@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { CommunityPost, LikePostResponse } from '@al-ummah/shared-types';
 import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 
 export class UnlikeCommunityPost extends OpenAPIRoute {
@@ -15,7 +16,7 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
       }),
       headers: z.object({
         channelId: z.string().optional(),
-        userId: z.string(),
+        userId: z.string().optional(), // Deprecated: Use auth context instead
       }),
     },
     responses: {
@@ -46,31 +47,29 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
 
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
+    if (!auth) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
     const { postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId, userId } = request.headers;
+    const { channelId } = request.headers;
+    const userId = auth.userId;
 
     try {
-      // Find the post
-      let postKey: string | null = null;
-      let post: CommunityPost | null = null;
-
-      const listResult = await c.env.community_posts.list({ prefix: 'posts/' });
-
-      for (const object of listResult.objects) {
-        if (object.key.includes(`/${postId}.json`)) {
-          postKey = object.key;
-          const postData = await c.env.community_posts.get(object.key);
-          if (postData) {
-            post = await postData.json();
-          }
-          break;
-        }
+      // Direct key lookup with channelId (fix N+1 query)
+      if (!channelId) {
+        return c.json({ error: 'channelId header is required' }, 400);
       }
 
-      if (!post || !postKey) {
+      const postKey = `posts/${channelId}/${postId}.json`;
+      const postData = await c.env.community_posts.get(postKey);
+
+      if (!postData) {
         return c.json({ error: 'Post not found' }, 404);
       }
+
+      const post: CommunityPost = await postData.json();
 
       // Check if user liked
       const likeKey = `likes/${postId}/${userId}.json`;
@@ -80,21 +79,28 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
         // Remove like
         await c.env.community_posts.delete(likeKey);
 
-        // Decrement like count
-        post.likes = Math.max(0, (post.likes || 0) - 1);
-        await c.env.community_posts.put(postKey, JSON.stringify(post));
+        // Queue message for async counter update (fix race condition)
+        const queue = new Queue(c.env.queue);
+        await queue.send(MessageType.CommunityPostUnliked, {
+          postId,
+          channelId: post.channelId,
+          userId: userId,
+          unlikerChannelId: channelId,
+          timestamp: new Date().toISOString()
+        });
 
+        // Return current count without decrementing (processor will handle it)
         return c.json({
           success: true,
           liked: false,
-          totalLikes: post.likes,
+          totalLikes: post.likes || 0,
         });
       } else {
         // Not liked
         return c.json({
           success: true,
           liked: false,
-          totalLikes: post.likes,
+          totalLikes: post.likes || 0,
         });
       }
     } catch (error) {

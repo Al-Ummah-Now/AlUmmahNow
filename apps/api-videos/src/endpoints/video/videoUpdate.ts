@@ -94,12 +94,12 @@ export class VideoUpdate extends OpenAPIRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		const { userId, channelId } = request.headers;
+		const { channelId } = request.headers;
 		const videoUpdateInput = request.body;
 
-		// Get auth context for user information (fallback)
+		// Get auth context for user information
 		const authContext = getAuthContext(c);
-		const effectiveUserId = userId || authContext?.userId;
+		const effectiveUserId = authContext?.userId;
 
 		if (!effectiveUserId) {
 			return c.json({

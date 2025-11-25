@@ -2,6 +2,7 @@ import { AlUmmahMessage, ProcessingResult, MessageType, QueueEnvironment } from 
 import { Logger } from '@al-ummah/logger';
 import { handleChannelSectionEvent } from './handlers/channel-section';
 import { handlePollVoteEvent } from './handlers/poll-vote';
+import { handlePostLikeEvent } from './handlers/post-like';
 // Channel tabs are frontend-only, no backend processing needed
 // import { handleChannelTabEvent } from './handlers/channel-tab';
 
@@ -131,9 +132,13 @@ export class MessageProcessor {
 
       // Community post events
       case MessageType.CommunityPostCreated:
-      case MessageType.CommunityPostLiked:
       case MessageType.CommunityPostDeleted:
         await this.processCommunityPostMessage(message);
+        break;
+
+      // Post like event - handled separately for like count calculation
+      case MessageType.CommunityPostLiked:
+        await handlePostLikeEvent(message, env, this.logger);
         break;
 
       // Poll vote event - handled separately for score calculation
@@ -442,12 +447,10 @@ export class MessageProcessor {
       case MessageType.CommunityPostCreated:
         this.logger.info(`Community post ${postId} created on channel ${channelId} by user ${userId}`);
         break;
-      case MessageType.CommunityPostLiked:
-        this.logger.info(`Community post ${postId} liked by user ${userId}`);
-        break;
       case MessageType.CommunityPostDeleted:
         this.logger.info(`Community post ${postId} deleted from channel ${channelId}`);
         break;
+      // CommunityPostLiked is now handled by dedicated handlePostLikeEvent handler
       // PollVoted is now handled by dedicated handlePollVoteEvent handler
     }
   }
