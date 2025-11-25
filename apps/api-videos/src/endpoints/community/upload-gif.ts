@@ -3,6 +3,8 @@ import { z } from 'zod';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { validateImageMagicBytes, readFileHeader } from '../../lib/security/magic-bytes';
+import { generateUniqueFilename } from '../../lib/security/filename-sanitize';
 import { logger } from '../../lib/logger';
 
 const MAX_GIF_SIZE = 10 * 1024 * 1024; // 10MB for GIFs
@@ -88,9 +90,55 @@ export class UploadCommunityPostGif extends OpenAPIRoute {
         return c.json({ error: 'No GIF file provided' }, 400);
       }
 
-      // Validate file type
-      if (file.type !== 'image/gif') {
-        return c.json({ error: 'Invalid file type. Must be image/gif' }, 400);
+      // SECURITY: Validate file type using magic bytes (not just Content-Type header)
+      try {
+        const fileHeader = await readFileHeader(file, 12);
+        const magicByteResult = validateImageMagicBytes(fileHeader, file.type);
+
+        if (!magicByteResult.isValid) {
+          logger.warn('[SECURITY] GIF upload rejected: invalid file signature', {
+            userId,
+            channelId,
+            providedType: file.type,
+            fileName: file.name,
+            error: magicByteResult.error,
+          });
+
+          return c.json({
+            error: magicByteResult.error || 'Invalid GIF file format'
+          }, 400);
+        }
+
+        // Verify it's actually a GIF (not just any valid image)
+        if (magicByteResult.detectedMimeType !== 'image/gif') {
+          logger.warn('[SECURITY] GIF upload rejected: file is not a GIF', {
+            userId,
+            channelId,
+            providedType: file.type,
+            detectedType: magicByteResult.detectedMimeType,
+            fileName: file.name,
+          });
+
+          return c.json({
+            error: `Invalid file type. Expected GIF but detected ${magicByteResult.detectedFormat || 'unknown format'}`
+          }, 400);
+        }
+
+        // Log if Content-Type header doesn't match
+        if (magicByteResult.mimeTypeMismatch) {
+          logger.warn('[SECURITY] GIF upload: MIME type mismatch', {
+            userId,
+            channelId,
+            providedType: file.type,
+            detectedType: magicByteResult.detectedMimeType,
+            fileName: file.name,
+          });
+        }
+      } catch (error) {
+        logger.error('[SECURITY] GIF magic byte validation error', { error, userId, channelId });
+        return c.json({
+          error: 'Failed to validate GIF file'
+        }, 500);
       }
 
       // Validate file size
@@ -103,9 +151,21 @@ export class UploadCommunityPostGif extends OpenAPIRoute {
       const zone = requireEnvVar(c.env, 'ZONE');
       const bunnyClient = new BunnyStorageClient(zone, key);
 
-      // Generate unique filename
-      const gifId = crypto.randomUUID();
-      const path = `/community-posts/${channelId}/${gifId}.gif`;
+      // SECURITY: Sanitize filename to prevent path traversal attacks
+      const sanitizedFilename = generateUniqueFilename(file.name, {
+        allowedExtensions: ['.gif'],
+        toLowerCase: true,
+      });
+
+      const path = `/community-posts/${channelId}/${sanitizedFilename}`;
+
+      logger.info('[SECURITY] GIF file validated and sanitized', {
+        userId,
+        channelId,
+        originalName: file.name,
+        sanitizedName: sanitizedFilename,
+        fileSize: file.size,
+      });
 
       // Upload to Bunny.net
       const stream = file.stream() as ReadableStream;
