@@ -4,6 +4,22 @@ import { VideoCategory } from "@al-ummah/shared-types";
 
 // Pure business/database models - represent data as stored in R2
 
+// Common fields for soft delete
+const SoftDeleteFields = {
+    isDeleted: z.boolean().optional(),
+    deletedAt: DateTime().optional(),
+    markedForDeletion: z.boolean().optional(),
+    markedForDeletionAt: DateTime().optional(),
+};
+
+// Common fields for moderation
+const ModerationFields = {
+    isHidden: z.boolean().optional(),
+    hiddenAt: DateTime().optional(),
+    hiddenByUserId: Str().optional(),
+    hiddenReason: Str().optional(),
+};
+
 export const Like = z.object({
     id: Str(),
     userId: Str(),
@@ -87,6 +103,9 @@ export const Video = z.object({
     scheduledBy: Str().optional(),
     scheduledAt: DateTime().optional(),
     publishedViaSchedule: z.boolean().optional(),
+    // Soft delete and moderation fields
+    ...SoftDeleteFields,
+    ...ModerationFields,
 });
 
 export const Playlist = z.object({
@@ -100,6 +119,9 @@ export const Playlist = z.object({
     dateModified: DateTime(),
     videos: z.array(Str()).default([]), // Array of video IDs
     isPublic: z.boolean().default(true),
+    // Soft delete and moderation fields
+    ...SoftDeleteFields,
+    ...ModerationFields,
 });
 
 // Watch history entry type
@@ -142,6 +164,7 @@ export const Channel = z.object({
     description: Str().optional(),
     descriptionLocalized: z.record(z.string()).optional(),
     isMain: Bool().default(false),
+    isPrivate: z.boolean().optional(), // User-controlled privacy
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     dateCreated: DateTime(),
@@ -151,6 +174,9 @@ export const Channel = z.object({
     subscribers: z.array(Subscription).default([]),
     subscriptions: z.array(Subscription).default([]),
     likes: z.array(Like).default([]),
+    // Soft delete and moderation fields
+    ...SoftDeleteFields,
+    ...ModerationFields,
 });
 
 // Channel Tab Configuration

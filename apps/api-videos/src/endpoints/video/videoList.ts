@@ -79,6 +79,16 @@ export class VideosList extends OpenAPIRoute {
 		
 		// Filter videos based on privacy settings, user context, and filters
 		let filteredVideos = (videos.items || []).filter(video => {
+			// Filter out soft-deleted videos
+			if (video.isDeleted) {
+				return false;
+			}
+
+			// Filter out moderation-hidden videos
+			if (video.isHidden) {
+				return false;
+			}
+
 			// Apply channel filter if specified
 			if (filterChannelId && video.channelId !== filterChannelId) {
 				return false;

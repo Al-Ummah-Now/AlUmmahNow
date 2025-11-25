@@ -134,6 +134,42 @@ export class ChannelSectionsListPopulated extends OpenAPIRoute {
       );
     }
 
+    // Check if channel is deleted (soft delete)
+    if (channel.isDeleted) {
+      logger.warn(`Channel is deleted: ${channelId}`);
+      return c.json(
+        {
+          success: false,
+          error: 'Channel not found',
+        },
+        404
+      );
+    }
+
+    // Check if channel is hidden (moderation) - blocks everyone including owner
+    if (channel.isHidden) {
+      logger.warn(`Channel is hidden: ${channelId}`);
+      return c.json(
+        {
+          success: false,
+          error: 'Channel not found',
+        },
+        404
+      );
+    }
+
+    // Check if channel is private - only owner can access
+    if (channel.isPrivate && channel.userId !== auth?.userId) {
+      logger.warn(`Private channel ${channelId} access denied for user ${auth?.userId}`);
+      return c.json(
+        {
+          success: false,
+          error: 'Channel not found',
+        },
+        404
+      );
+    }
+
     // List sections with prefix for this channel
     const listResult = await c.env.channel_sections.list({
       prefix: `${channelId}/`,
@@ -150,8 +186,13 @@ export class ChannelSectionsListPopulated extends OpenAPIRoute {
       })
     );
 
-    // Filter out nulls
-    let filteredSections = sections.filter((s): s is ChannelSection => s !== null);
+    // Filter out nulls, deleted, and hidden sections
+    let filteredSections = sections.filter((s): s is ChannelSection => {
+      if (s === null) return false;
+      if (s.isDeleted) return false;
+      if (s.isHidden) return false;
+      return true;
+    });
 
     // Filter by type if provided
     if (type) {

@@ -96,6 +96,16 @@ export class ListCommunityPosts extends OpenAPIRoute {
         if (postData) {
           const post = await postData.json();
 
+          // Filter out soft-deleted posts
+          if (post.isDeleted) {
+            continue;
+          }
+
+          // Filter out moderation-hidden posts
+          if (post.isHidden) {
+            continue;
+          }
+
           // Filter by status
           if (post.status !== status && status !== PostStatus.PUBLISHED) {
             continue;

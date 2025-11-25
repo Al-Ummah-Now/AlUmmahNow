@@ -70,6 +70,16 @@ export class PlaylistFetch extends OpenAPIRoute {
             return c.json({ success: false, error: "Playlist not found" }, 404);
         }
 
+        // Check if playlist is deleted (soft delete)
+        if (playlist.isDeleted) {
+            return c.json({ success: false, error: "Playlist not found" }, 404);
+        }
+
+        // Check if playlist is hidden (moderation) - blocks everyone
+        if (playlist.isHidden) {
+            return c.json({ success: false, error: "Playlist not found" }, 404);
+        }
+
         // Check privacy permissions
         if (playlist.isPublic === false && (!userId || playlist.userId !== userId)) {
             return c.json({ success: false, error: "Playlist not found" }, 404); // Don't reveal that private playlist exists

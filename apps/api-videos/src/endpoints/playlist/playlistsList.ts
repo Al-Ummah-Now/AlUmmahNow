@@ -64,15 +64,25 @@ export class PlaylistsList extends OpenAPIRoute {
         const repository = new R2Repository<PlaylistType>(bucket);
         let playlists = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
         
-        // Filter playlists based on privacy settings and user context
+        // Filter playlists based on privacy settings, soft delete, moderation, and user context
         const filteredPlaylists = {
             ...playlists,
             items: (playlists.items || []).filter(playlist => {
+                // Filter out soft-deleted playlists
+                if (playlist.isDeleted) {
+                    return false;
+                }
+
+                // Filter out moderation-hidden playlists
+                if (playlist.isHidden) {
+                    return false;
+                }
+
                 // If playlist is explicitly private (false), only show if user owns it
                 if (playlist.isPublic === false) {
                     return userId && playlist.userId === userId;
                 }
-                
+
                 // If playlist is public (true) or undefined/null (default to public), always show it
                 return true;
             })

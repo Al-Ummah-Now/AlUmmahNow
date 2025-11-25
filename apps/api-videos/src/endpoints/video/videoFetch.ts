@@ -82,6 +82,30 @@ export class VideoFetch extends OpenAPIRoute {
 			);
 		}
 
+		// Check if video is deleted (soft delete)
+		if (video.isDeleted) {
+			logger.warn('[VideoFetch] Video is deleted', { videoId: id });
+			return c.json(
+				{
+					success: false,
+					error: "Object not found",
+				},
+				404
+			);
+		}
+
+		// Check if video is hidden (moderation) - blocks everyone
+		if (video.isHidden) {
+			logger.warn('[VideoFetch] Video is hidden', { videoId: id });
+			return c.json(
+				{
+					success: false,
+					error: "Object not found",
+				},
+				404
+			);
+		}
+
 		// Check privacy permissions
 		if (video.isPublic === false && (!userId || video.userId !== userId)) {
 			return c.json(

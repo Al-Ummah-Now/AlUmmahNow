@@ -5,11 +5,13 @@
  * into sections like featured videos, playlists, recent uploads, etc.
  */
 
+import { SoftDelete, Moderation } from './common';
+
 // ============================================================================
 // Business Model - stored in R2
 // ============================================================================
 
-export interface ChannelSection {
+export interface ChannelSection extends SoftDelete, Moderation {
   id: string;
   channelId: string;
   userId: string;
@@ -45,7 +47,7 @@ export interface ChannelSection {
 // View Model - returned in API responses
 // ============================================================================
 
-export interface ChannelSectionView {
+export interface ChannelSectionView extends SoftDelete, Moderation {
   id: string;
   channelId: string;
   type: string;

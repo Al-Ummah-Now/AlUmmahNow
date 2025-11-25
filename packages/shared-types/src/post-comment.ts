@@ -3,7 +3,9 @@
  * Following YouTube's comment threading structure
  */
 
-export interface PostComment {
+import { SoftDelete, Moderation } from './common';
+
+export interface PostComment extends SoftDelete, Moderation {
   id: string;                        // UUID
   postId: string;                    // Parent post ID
   channelId: string;                 // Commenter's channel ID
@@ -30,7 +32,8 @@ export interface PostComment {
   // Timestamps
   createdAt: string;                 // ISO timestamp
   updatedAt?: string;                // ISO timestamp
-  deletedAt?: string;                // Soft delete timestamp
+  // deletedAt, isDeleted, markedForDeletion inherited from SoftDelete
+  // isHidden, hiddenAt, hiddenByUserId, hiddenReason inherited from Moderation
 }
 
 // Request/Response types

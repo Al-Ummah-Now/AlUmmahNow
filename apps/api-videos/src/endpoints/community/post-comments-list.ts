@@ -116,12 +116,19 @@ export class ListPostComments extends OpenAPIRoute {
       const commentObj = await bucket.get(commentKey);
       if (commentObj) {
         const comment: PostComment = await commentObj.json();
-        // Filter out deleted comments without replies
-        if (comment.deletedAt && comment.repliesCount === 0) {
+
+        // Filter out moderation-hidden comments completely
+        if (comment.isHidden) {
           return null;
         }
+
+        // Filter out soft-deleted comments without replies
+        if ((comment.isDeleted || comment.deletedAt) && comment.repliesCount === 0) {
+          return null;
+        }
+
         // Mask deleted comments with replies
-        if (comment.deletedAt) {
+        if (comment.isDeleted || comment.deletedAt) {
           return {
             ...comment,
             content: '[deleted]',

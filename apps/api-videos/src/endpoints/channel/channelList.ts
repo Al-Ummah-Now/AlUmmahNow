@@ -67,8 +67,27 @@ export class ChannelsList extends OpenAPIRoute {
 		const repository = new R2Repository<ChannelType>(bucket);
 		let Channels = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
 
-		// Filter channels by userId if provided
-		let filteredChannels = Channels.items || [];
+		// Filter channels by userId if provided, and apply privacy/moderation filters
+		let filteredChannels = (Channels.items || []).filter(channel => {
+			// Filter out soft-deleted channels
+			if (channel.isDeleted) {
+				return false;
+			}
+
+			// Filter out moderation-hidden channels
+			if (channel.isHidden) {
+				return false;
+			}
+
+			// Filter out private channels (except for owner)
+			if (channel.isPrivate && channel.userId !== userId) {
+				return false;
+			}
+
+			return true;
+		});
+
+		// Additional filter by userId if requested (to show only user's channels)
 		if (userId) {
 			filteredChannels = filteredChannels.filter(channel => channel.userId === userId);
 		}

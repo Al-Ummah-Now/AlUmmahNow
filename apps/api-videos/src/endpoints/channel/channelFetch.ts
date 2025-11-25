@@ -82,6 +82,39 @@ export class ChannelFetch extends OpenAPIRoute {
 				);
 			}
 
+			// Check if channel is deleted (soft delete)
+			if (channel.isDeleted) {
+				return c.json(
+					{
+						success: false,
+						error: "Object not found",
+					},
+					404
+				);
+			}
+
+			// Check if channel is hidden (moderation) - blocks everyone including owner
+			if (channel.isHidden) {
+				return c.json(
+					{
+						success: false,
+						error: "Object not found",
+					},
+					404
+				);
+			}
+
+			// Check if channel is private - only owner can access
+			if (channel.isPrivate && channel.userId !== userId) {
+				return c.json(
+					{
+						success: false,
+						error: "Object not found",
+					},
+					404
+				);
+			}
+
 			// Transform to view model for response
 			const channelView = transformChannelToView(channel);
 

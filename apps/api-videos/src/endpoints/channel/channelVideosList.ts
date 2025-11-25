@@ -102,6 +102,33 @@ export class ChannelVideosList extends OpenAPIRoute {
 				}, 404);
 			}
 
+			// Check if channel is deleted (soft delete)
+			if (channel.isDeleted) {
+				logger.warn('Channel is deleted', { channelId });
+				return c.json({
+					success: false,
+					error: 'Channel not found'
+				}, 404);
+			}
+
+			// Check if channel is hidden (moderation) - blocks everyone including owner
+			if (channel.isHidden) {
+				logger.warn('Channel is hidden', { channelId });
+				return c.json({
+					success: false,
+					error: 'Channel not found'
+				}, 404);
+			}
+
+			// Check if channel is private - only owner can access
+			if (channel.isPrivate && channel.userId !== userId) {
+				logger.warn('Private channel access denied', { channelId, userId });
+				return c.json({
+					success: false,
+					error: 'Channel not found'
+				}, 404);
+			}
+
 			// Get videos from R2 bucket
 			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
@@ -114,6 +141,16 @@ export class ChannelVideosList extends OpenAPIRoute {
 			let channelVideos = (videos.items || []).filter(video => {
 				// Must belong to this channel
 				if (video.channelId !== channelId) {
+					return false;
+				}
+
+				// Filter out soft-deleted videos
+				if (video.isDeleted) {
+					return false;
+				}
+
+				// Filter out moderation-hidden videos
+				if (video.isHidden) {
 					return false;
 				}
 

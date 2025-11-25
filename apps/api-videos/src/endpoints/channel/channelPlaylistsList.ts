@@ -99,6 +99,33 @@ export class ChannelPlaylistsList extends OpenAPIRoute {
 				}, 404);
 			}
 
+			// Check if channel is deleted (soft delete)
+			if (channel.isDeleted) {
+				logger.warn('Channel is deleted', { channelId });
+				return c.json({
+					success: false,
+					error: 'Channel not found'
+				}, 404);
+			}
+
+			// Check if channel is hidden (moderation) - blocks everyone including owner
+			if (channel.isHidden) {
+				logger.warn('Channel is hidden', { channelId });
+				return c.json({
+					success: false,
+					error: 'Channel not found'
+				}, 404);
+			}
+
+			// Check if channel is private - only owner can access
+			if (channel.isPrivate && channel.userId !== userId) {
+				logger.warn('Private channel access denied', { channelId, userId });
+				return c.json({
+					success: false,
+					error: 'Channel not found'
+				}, 404);
+			}
+
 			// Get playlists from R2 bucket
 			const bucket = c.env.playlists;
 			type PlaylistType = z.infer<typeof BusinessPlaylist>;
@@ -111,6 +138,16 @@ export class ChannelPlaylistsList extends OpenAPIRoute {
 			let channelPlaylists = (playlists.items || []).filter(playlist => {
 				// Must belong to this channel
 				if (playlist.channelId !== channelId) {
+					return false;
+				}
+
+				// Filter out soft-deleted playlists
+				if (playlist.isDeleted) {
+					return false;
+				}
+
+				// Filter out moderation-hidden playlists
+				if (playlist.isHidden) {
 					return false;
 				}
 

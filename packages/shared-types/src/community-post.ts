@@ -1,6 +1,8 @@
 // Community Posts Types - YouTube-style channel community tab
 
-export interface CommunityPost {
+import { SoftDelete, Moderation } from './common';
+
+export interface CommunityPost extends SoftDelete, Moderation {
   id: string;                        // UUID
   channelId: string;                 // Channel that created the post
   userId: string;                    // User ID of the post creator

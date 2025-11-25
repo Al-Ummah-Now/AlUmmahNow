@@ -4,6 +4,22 @@ import { z } from "zod";
 // Response/view schemas - define what gets returned to clients
 // These include computed fields and formatted data for API responses
 
+// Common fields for soft delete
+const SoftDeleteFields = {
+    isDeleted: z.boolean().optional(),
+    deletedAt: DateTime().optional(),
+    markedForDeletion: z.boolean().optional(),
+    markedForDeletionAt: DateTime().optional(),
+};
+
+// Common fields for moderation
+const ModerationFields = {
+    isHidden: z.boolean().optional(),
+    hiddenAt: DateTime().optional(),
+    hiddenByUserId: Str().optional(),
+    hiddenReason: Str().optional(),
+};
+
 export const LikeView = z.object({
     id: Str(),
     userId: Str(),
@@ -41,8 +57,9 @@ export const CommentView = z.object({
     dislikesCount: z.number(),
     repliesCount: z.number(),
     isEdited: z.boolean(),
-    isDeleted: z.boolean(),
     isPinned: z.boolean(),
+    ...SoftDeleteFields,
+    ...ModerationFields,
     // Note: replies array removed to avoid circular reference
     // Use separate endpoint to get comment replies if needed
 });
@@ -71,6 +88,8 @@ export const VideoView = z.object({
     commentsCount: z.number(),
     isPublic: z.boolean(),
     isLive: z.boolean(),
+    ...SoftDeleteFields,
+    ...ModerationFields,
     // For detailed views, include recent comments
     comments: z.array(CommentView).optional(),
 });
@@ -88,6 +107,8 @@ export const PlaylistView = z.object({
     dateModified: DateTime(),
     videosCount: z.number(),
     isPublic: z.boolean(),
+    ...SoftDeleteFields,
+    ...ModerationFields,
     // Note: videos array removed to avoid circular reference
     // Use separate endpoint to get playlist videos if needed
 });
@@ -127,6 +148,7 @@ export const ChannelView = z.object({
     email: Str().email(),
     name: Str(),
     isMain: z.boolean(),
+    isPrivate: z.boolean().optional(), // User-controlled privacy
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     dateCreated: DateTime(),
@@ -136,6 +158,8 @@ export const ChannelView = z.object({
     subscribersCount: z.number(),
     subscriptionsCount: z.number(),
     likesCount: z.number(),
+    ...SoftDeleteFields,
+    ...ModerationFields,
     // Note: recent content arrays removed to avoid circular reference
     // Use separate endpoints to get recent videos/playlists if needed
 });
@@ -176,6 +200,8 @@ export const LiveStreamView = z.object({
     dislikesCount: z.number(),
     commentsCount: z.number(),
     duration: z.number().optional().describe("Stream duration in seconds"),
+    ...SoftDeleteFields,
+    ...ModerationFields,
 });
 
 // Phase 2: Content Moderation view models
