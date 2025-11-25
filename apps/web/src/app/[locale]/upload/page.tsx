@@ -1,4 +1,6 @@
-"use client";
+'use client';
+
+import { logger } from '@/lib/logger-client';
 import React, { useState, useCallback, useRef } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
@@ -49,7 +51,7 @@ const UploadPage: React.FC = () => {
     
     channelId: activeChannel?.channelId || '',
     onUploadComplete: (videoId) => {
-      console.log('Video uploaded:', videoId);
+      logger.debug('Video uploaded:', videoId);
     },
     onError: (error) => {
       setUploadError(error);

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 /**
  * Watch History Service
  *
@@ -79,7 +80,7 @@ export class WatchHistoryService {
 
       return { success: true };
     } catch (error) {
-      console.error('[WatchHistoryService] Failed to save progress:', error);
+      logger.error('[WatchHistoryService] Failed to save progress:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Network error',
@@ -119,7 +120,7 @@ export class WatchHistoryService {
       const data = await response.json();
       return data.result || data;
     } catch (error) {
-      console.error('[WatchHistoryService] Failed to get progress:', error);
+      logger.error('[WatchHistoryService] Failed to get progress:', error);
       return null;
     }
   }
@@ -139,7 +140,7 @@ export class WatchHistoryService {
       const success = StorageManager.safeSetItem(STORAGE_KEY, jsonStr);
 
       if (!success) {
-        console.warn('[WatchHistoryService] Failed to save watch progress to localStorage (quota exceeded)');
+        logger.warn('[WatchHistoryService] Failed to save watch progress to localStorage (quota exceeded)');
 
         // Try to save just this video's progress by removing oldest entries
         const entries = Object.entries(stored);
@@ -160,14 +161,14 @@ export class WatchHistoryService {
           const retrySuccess = StorageManager.safeSetItem(STORAGE_KEY, reducedJson);
 
           if (retrySuccess && process.env.NODE_ENV === 'development') {
-            console.log('[WatchHistoryService] Saved progress with reduced storage');
+            logger.debug('[WatchHistoryService] Saved progress with reduced storage');
           }
         }
       } else if (process.env.NODE_ENV === 'development') {
-        console.log('[WatchHistoryService] Saved progress locally:', progress);
+        logger.debug('[WatchHistoryService] Saved progress locally:', progress);
       }
     } catch (error) {
-      console.error('[WatchHistoryService] Failed to save progress locally:', error);
+      logger.error('[WatchHistoryService] Failed to save progress locally:', error);
     }
   }
 
@@ -182,7 +183,7 @@ export class WatchHistoryService {
       const stored = this.getStoredProgress();
       return stored[videoId] || null;
     } catch (error) {
-      console.error('[WatchHistoryService] Failed to get progress from localStorage:', error);
+      logger.error('[WatchHistoryService] Failed to get progress from localStorage:', error);
       return null;
     }
   }
@@ -202,7 +203,7 @@ export class WatchHistoryService {
       const parsed = JSON.parse(stored);
       return typeof parsed === 'object' && parsed !== null ? parsed : {};
     } catch (error) {
-      console.warn('[WatchHistoryService] Failed to parse stored progress, resetting:', error);
+      logger.warn('[WatchHistoryService] Failed to parse stored progress, resetting:', error);
       localStorage.removeItem(STORAGE_KEY);
       return {};
     }
@@ -244,7 +245,7 @@ export class WatchHistoryService {
       }
 
       if (synced > 0 && process.env.NODE_ENV === 'development') {
-        console.log(`[WatchHistoryService] Synced ${synced} items from localStorage to API`);
+        logger.debug(`[WatchHistoryService] Synced ${synced} items from localStorage to API`);
       }
 
       // Update localStorage with only the items that failed to sync
@@ -256,7 +257,7 @@ export class WatchHistoryService {
 
       return { synced, failed };
     } catch (error) {
-      console.error('[WatchHistoryService] Failed to sync localStorage to API:', error);
+      logger.error('[WatchHistoryService] Failed to sync localStorage to API:', error);
       return { synced: 0, failed: Object.keys(this.getStoredProgress()).length };
     }
   }
@@ -285,7 +286,7 @@ export class WatchHistoryService {
       delete stored[videoId];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
     } catch (error) {
-      console.error('[WatchHistoryService] Failed to clear progress:', error);
+      logger.error('[WatchHistoryService] Failed to clear progress:', error);
     }
   }
 

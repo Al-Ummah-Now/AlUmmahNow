@@ -6,6 +6,7 @@
  */
 
 'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -73,7 +74,7 @@ export function ScheduledVideosList({
         alert(result?.error || t.schedule?.scheduleFailed || 'Schedule operation failed');
       }
     } catch (err) {
-      console.error('Error canceling schedule:', err);
+      logger.error('Error canceling schedule:', err);
       alert('An error occurred while canceling the schedule');
     } finally {
       setActionLoading(null);
@@ -100,7 +101,7 @@ export function ScheduledVideosList({
         alert(result?.error || 'Failed to publish video');
       }
     } catch (err) {
-      console.error('Error publishing video:', err);
+      logger.error('Error publishing video:', err);
       alert('An error occurred while publishing the video');
     } finally {
       setActionLoading(null);

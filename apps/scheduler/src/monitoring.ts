@@ -1,5 +1,6 @@
 import type { Env, HealthStatus, Metrics, PublishEvent } from './types';
 import { getLastRun } from './locks';
+import { logger } from './lib/logger';
 
 /**
  * Report metrics to queue for analytics
@@ -21,9 +22,9 @@ export async function reportMetrics(
       ...metrics,
     });
 
-    console.log(`Reported metrics: ${metrics.processed} processed, ${metrics.failed} failed, ${metrics.duration}ms duration`);
+    logger.debug(`Reported metrics: ${metrics.processed} processed, ${metrics.failed} failed, ${metrics.duration}ms duration`);
   } catch (error) {
-    console.error('Failed to report metrics:', error);
+    logger.error('Failed to report metrics:', error);
   }
 }
 
@@ -38,9 +39,9 @@ export async function logEvent(
 ): Promise<void> {
   try {
     await queue.send(event);
-    console.log(`Logged event: ${event.type} for video ${event.videoId}`);
+    logger.debug(`Logged event: ${event.type} for video ${event.videoId}`);
   } catch (error) {
-    console.error('Failed to log event:', error);
+    logger.error('Failed to log event:', error);
   }
 }
 
@@ -68,7 +69,7 @@ export async function checkHealth(env: Env): Promise<HealthStatus> {
       failureRate,
     };
   } catch (error) {
-    console.error('Failed to check health:', error);
+    logger.error('Failed to check health:', error);
     return {
       healthy: false,
       queueDepth: 0,
@@ -87,7 +88,7 @@ async function getQueueDepth(env: Env): Promise<number> {
     const metrics = await env.SCHEDULER_METRICS.get('queue_depth');
     return metrics ? parseInt(metrics, 10) : 0;
   } catch (error) {
-    console.error('Failed to get queue depth:', error);
+    logger.error('Failed to get queue depth:', error);
     return 0;
   }
 }
@@ -108,7 +109,7 @@ async function getFailureRate(env: Env): Promise<number> {
 
     return metrics.failedToday / total;
   } catch (error) {
-    console.error('Failed to get failure rate:', error);
+    logger.error('Failed to get failure rate:', error);
     return 0;
   }
 }
@@ -155,7 +156,7 @@ export async function updateDailyMetrics(
       { expirationTtl: 86400 } // 24 hours
     );
   } catch (error) {
-    console.error('Failed to update daily metrics:', error);
+    logger.error('Failed to update daily metrics:', error);
   }
 }
 
@@ -171,7 +172,7 @@ export async function sendAlert(
   try {
     const message = error instanceof Error ? error.message : String(error);
 
-    console.error(`ALERT: ${message}`);
+    logger.error(`ALERT: ${message}`);
 
     // Log to queue for external monitoring
     await env.QUEUE.send({
@@ -181,7 +182,7 @@ export async function sendAlert(
       stack: error instanceof Error ? error.stack : undefined,
     });
   } catch (alertError) {
-    console.error('Failed to send alert:', alertError);
+    logger.error('Failed to send alert:', alertError);
   }
 }
 
@@ -208,6 +209,6 @@ export async function initializeMetrics(env: Env): Promise<void> {
       );
     }
   } catch (error) {
-    console.error('Failed to initialize metrics:', error);
+    logger.error('Failed to initialize metrics:', error);
   }
 }

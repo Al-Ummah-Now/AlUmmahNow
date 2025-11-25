@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger-client';
 
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -174,7 +175,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
       }
     } catch (err) {
       setError(isRTL ? 'حدث خطأ' : 'An error occurred');
-      console.error('Publish error:', err);
+      logger.error('Publish error:', err);
     } finally {
       setLoading(false);
     }

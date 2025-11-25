@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import Image from 'next/image';
@@ -53,7 +53,7 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
         setHasVoted(true);
       }
     } catch (error) {
-      console.error('Failed to vote:', error);
+      logger.error('Failed to vote:', error);
     } finally {
       setVoting(false);
     }

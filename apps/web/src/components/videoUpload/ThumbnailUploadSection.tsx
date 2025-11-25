@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
@@ -45,7 +46,7 @@ export function ThumbnailUploadSection({
           setLoading(false);
         })
         .catch(err => {
-          console.error('Failed to extract frames:', err);
+          logger.error('Failed to extract frames:', err);
           setError('Failed to extract video frames');
           setLoading(false);
         });
@@ -86,7 +87,7 @@ export function ThumbnailUploadSection({
 
     // Show warnings if any
     if (validation.warnings && validation.warnings.length > 0) {
-      console.warn('Thumbnail warnings:', validation.warnings);
+      logger.warn('Thumbnail warnings:', validation.warnings);
     }
 
     // Convert to base64

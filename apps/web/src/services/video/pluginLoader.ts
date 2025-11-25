@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 import videojs, { Player } from 'video.js';
 
 interface VideoJSPlugin {
@@ -39,7 +40,7 @@ export async function loadPlugin(
 
   const pluginLoader = pluginRegistry[pluginName];
   if (!pluginLoader) {
-    console.warn(`Plugin ${pluginName} not found in registry`);
+    logger.warn(`Plugin ${pluginName} not found in registry`);
     return null;
   }
 
@@ -68,7 +69,7 @@ export async function loadPlugin(
 
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Attempt ${attempt + 1} failed to load plugin ${pluginName}:`, error);
+      logger.warn(`Attempt ${attempt + 1} failed to load plugin ${pluginName}:`, error);
 
       if (attempt < retries) {
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -76,7 +77,7 @@ export async function loadPlugin(
     }
   }
 
-  console.error(`Failed to load plugin ${pluginName} after ${retries + 1} attempts:`, lastError);
+  logger.error(`Failed to load plugin ${pluginName} after ${retries + 1} attempts:`, lastError);
   return null;
 }
 

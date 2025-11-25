@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
@@ -45,7 +46,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
   };
 
   const handleChannelSelect = (channel: Channel) => {
-    console.log("ChannelSwitcher: Switching to channel:", channel);
+    logger.debug("ChannelSwitcher: Switching to channel:", channel);
     setActiveChannel({
       channelId: channel.id,
       userId: channel.userId,

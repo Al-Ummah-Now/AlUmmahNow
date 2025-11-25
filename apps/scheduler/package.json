@@ -12,7 +12,8 @@
     "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
-    "@al-ummah/shared-types": "workspace:*"
+    "@al-ummah/shared-types": "workspace:*",
+    "@al-ummah/logger": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",

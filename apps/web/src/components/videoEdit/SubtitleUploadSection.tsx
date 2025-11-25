@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Star, StarOff, Languages, FileText, Calendar, HardDrive, Loader2 } from 'lucide-react';
@@ -54,7 +54,7 @@ export default function SubtitleUploadSection({
       const tracks = await listSubtitles(videoId, {  channelId });
       setSubtitles(tracks);
     } catch (error) {
-      console.error('Failed to load subtitles:', error);
+      logger.error('Failed to load subtitles:', error);
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +83,7 @@ export default function SubtitleUploadSection({
         );
       }
     } catch (error) {
-      console.error('Failed to set default subtitle:', error);
+      logger.error('Failed to set default subtitle:', error);
     } finally {
       setActionLoading(null);
     }
@@ -97,7 +97,7 @@ export default function SubtitleUploadSection({
         setSubtitles((prev) => prev.filter((sub) => sub.language !== subtitle.language));
       }
     } catch (error) {
-      console.error('Failed to delete subtitle:', error);
+      logger.error('Failed to delete subtitle:', error);
     } finally {
       setActionLoading(null);
       setDeleteConfirm(null);

@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { CommunityPost } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
@@ -45,7 +45,7 @@ export default function PostEngagement({
           url: shareUrl,
         });
       } catch (error) {
-        console.log('Error sharing:', error);
+        logger.debug('Error sharing:', error);
       }
     } else {
       setShowShareMenu(!showShareMenu);

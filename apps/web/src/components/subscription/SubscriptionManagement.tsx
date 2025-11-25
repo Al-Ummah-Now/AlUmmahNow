@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
@@ -63,7 +64,7 @@ export const SubscriptionManagement: React.FC = () => {
         );
       }
     } catch (error) {
-      console.error('Failed to toggle notifications:', error);
+      logger.error('Failed to toggle notifications:', error);
     }
   };
 
@@ -83,7 +84,7 @@ export const SubscriptionManagement: React.FC = () => {
         setSubscriptions(prev => prev.filter(sub => sub.id !== channelId));
       }
     } catch (error) {
-      console.error('Failed to unsubscribe:', error);
+      logger.error('Failed to unsubscribe:', error);
     } finally {
       setIsLoading(false);
     }

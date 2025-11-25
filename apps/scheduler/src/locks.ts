@@ -1,3 +1,5 @@
+import { logger } from './lib/logger';
+
 /**
  * Acquire a distributed lock for a video to prevent duplicate processing
  * @param kv KV namespace for locks
@@ -22,7 +24,7 @@ export async function acquireLock(
     const currentValue = await kv.get(key);
     return currentValue === lockValue;
   } catch (error) {
-    console.error('Failed to acquire lock:', error);
+    logger.error('Failed to acquire lock:', error);
     return false;
   }
 }
@@ -39,7 +41,7 @@ export async function releaseLock(
   try {
     await kv.delete(key);
   } catch (error) {
-    console.error('Failed to release lock:', error);
+    logger.error('Failed to release lock:', error);
   }
 }
 
@@ -57,7 +59,7 @@ export async function isLocked(
     const value = await kv.get(key);
     return value !== null;
   } catch (error) {
-    console.error('Failed to check lock:', error);
+    logger.error('Failed to check lock:', error);
     return false;
   }
 }
@@ -72,7 +74,7 @@ export async function updateLastRun(kv: KVNamespace): Promise<void> {
       expirationTtl: 300, // 5 minutes
     });
   } catch (error) {
-    console.error('Failed to update last run:', error);
+    logger.error('Failed to update last run:', error);
   }
 }
 
@@ -86,7 +88,7 @@ export async function getLastRun(kv: KVNamespace): Promise<number | null> {
     const value = await kv.get('last_run');
     return value ? parseInt(value, 10) : null;
   } catch (error) {
-    console.error('Failed to get last run:', error);
+    logger.error('Failed to get last run:', error);
     return null;
   }
 }

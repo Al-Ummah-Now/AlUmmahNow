@@ -1,5 +1,6 @@
-"use client";
+'use client';
 
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, UploadCloud, Trash2, Eye, Edit, X } from 'lucide-react';
@@ -99,10 +100,10 @@ export default function VideoDashboardPage() {
 
         const allVideos = result?.data || [];
 
-        console.log('[VideoDashboard] Fetched videos:', allVideos.length);
-        console.log('[VideoDashboard] Video IDs:', allVideos.map(v => v.id));
-        console.log('[VideoDashboard] Looking for video: e1b093a6-929c-452f-b1cf-c31d1990dd85');
-        console.log('[VideoDashboard] Channel IDs used in query:', channelIds);
+        logger.debug('[VideoDashboard] Fetched videos:', allVideos.length);
+        logger.debug('[VideoDashboard] Video IDs:', allVideos.map(v => v.id));
+        logger.debug('[VideoDashboard] Looking for video: e1b093a6-929c-452f-b1cf-c31d1990dd85');
+        logger.debug('[VideoDashboard] Channel IDs used in query:', channelIds);
 
         // Filter videos by privacy setting (server-side filtering not yet available)
         let filtered = allVideos;
@@ -115,7 +116,7 @@ export default function VideoDashboardPage() {
         setVideos(filtered);
         setFilteredVideos(filtered);
       } catch (error) {
-        console.error('Error fetching videos:', error);
+        logger.error('Error fetching videos:', error);
         setVideos([]);
         setFilteredVideos([]);
       } finally {
@@ -206,7 +207,7 @@ export default function VideoDashboardPage() {
         setErrorMessage(t.errors?.genericError || 'An error occurred');
       }
     } catch (error) {
-      console.error('Error deleting video:', error);
+      logger.error('Error deleting video:', error);
       setErrorMessage(t.errors?.genericError || 'An error occurred');
       setDeleteDialogOpen(false);
     }
@@ -269,7 +270,7 @@ export default function VideoDashboardPage() {
 
       setBulkDeleteDialogOpen(false);
     } catch (error) {
-      console.error('Error deleting videos:', error);
+      logger.error('Error deleting videos:', error);
       setErrorMessage(t.errors?.genericError || 'An error occurred');
       setBulkDeleteDialogOpen(false);
     }

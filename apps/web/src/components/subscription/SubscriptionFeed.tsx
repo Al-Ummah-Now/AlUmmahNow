@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -31,7 +32,7 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
       // _setVideos(response.videos);
       setLastRefresh(new Date());
     } catch (error) {
-      console.error('Failed to load subscription feed:', error);
+      logger.error('Failed to load subscription feed:', error);
     } finally {
       setIsLoading(false);
     }

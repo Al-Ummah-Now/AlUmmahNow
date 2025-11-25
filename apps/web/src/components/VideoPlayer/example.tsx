@@ -92,11 +92,11 @@ function MyVideoPage() {
       title="My Video Title"
       autoplay={false}
       startTime={0}
-      onPlay={() => console.log('Playing')}
-      onPause={() => console.log('Paused')}
-      onEnded={() => console.log('Ended')}
+      onPlay={() => logger.debug('Playing')}
+      onPause={() => logger.debug('Paused')}
+      onEnded={() => logger.debug('Ended')}
       onTimeUpdate={(current, duration) => {
-        console.log(\`\${current}/\${duration}\`);
+        logger.debug(\`\${current}/\${duration}\`);
       }}
       rtl={false}
     />

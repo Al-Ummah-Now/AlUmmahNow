@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 import { PostComment } from "@al-ummah/shared-types";
 
 import { useState, useRef, useEffect } from 'react';
@@ -93,7 +93,7 @@ export default function ReplyForm({
         setError(isRTL ? 'فشل نشر الرد' : 'Failed to post reply');
       }
     } catch (err) {
-      console.error('Failed to create reply:', err);
+      logger.error('Failed to create reply:', err);
       setError(isRTL ? 'حدث خطأ أثناء نشر الرد' : 'An error occurred while posting your reply');
     } finally {
       setLoading(false);

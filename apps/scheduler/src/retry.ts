@@ -2,6 +2,7 @@ import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import type { Env, FailedVideo } from './types';
 import { markAsFailed } from './publisher';
 import { sendFailureNotification } from './notifier';
+import { logger } from './lib/logger';
 
 /**
  * Schedule retries for failed video publishes
@@ -19,7 +20,7 @@ export async function scheduleRetries(
 
     if (retryCount >= maxRetries) {
       // Mark as permanently failed
-      console.error(`Video ${video.videoId} exceeded max retries (${maxRetries})`);
+      logger.error(`Video ${video.videoId} exceeded max retries (${maxRetries})`);
       await markAsFailed(env.SCHEDULED_VIDEOS, video, error);
       await sendFailureNotification(env, video, error);
       continue;
@@ -31,9 +32,7 @@ export async function scheduleRetries(
       const retryTime = new Date();
       retryTime.setMinutes(retryTime.getMinutes() + delayMinutes);
 
-      console.log(
-        `Scheduling retry for video ${video.videoId} in ${delayMinutes} minutes (attempt ${retryCount + 1}/${maxRetries})`
-      );
+      logger.info(`Scheduling retry for video ${video.videoId} in ${delayMinutes} minutes (attempt ${retryCount + 1}/${maxRetries})`);
 
       // Reschedule with incremented retry count
       const updatedMetadata: ScheduledVideoMetadata = {
@@ -56,7 +55,7 @@ export async function scheduleRetries(
         error: error.message,
       });
     } catch (retryError) {
-      console.error(`Failed to schedule retry for video ${video.videoId}:`, retryError);
+      logger.error(`Failed to schedule retry for video ${video.videoId}:`, retryError);
     }
   }
 }
@@ -90,9 +89,9 @@ export async function rescheduleVideo(
       }
     );
 
-    console.log(`Rescheduled video ${metadata.videoId} from ${oldKey} to ${newKey}`);
+    logger.info(`Rescheduled video ${metadata.videoId} from ${oldKey} to ${newKey}`);
   } catch (error) {
-    console.error(`Failed to reschedule video ${metadata.videoId}:`, error);
+    logger.error(`Failed to reschedule video ${metadata.videoId}:`, error);
     throw error;
   }
 }

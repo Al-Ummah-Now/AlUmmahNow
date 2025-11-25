@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -72,7 +73,7 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
         }
       }
     } catch (error) {
-      console.error('Subscription toggle failed:', error);
+      logger.error('Subscription toggle failed:', error);
     } finally {
       setIsLoading(false);
     }

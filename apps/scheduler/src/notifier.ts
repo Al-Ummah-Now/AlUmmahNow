@@ -1,5 +1,6 @@
 import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import type { Env } from './types';
+import { logger } from './lib/logger';
 
 /**
  * Send notification to user when video is successfully published
@@ -32,9 +33,9 @@ export async function sendNotification(
       }
     );
 
-    console.log(`Sent publish notification to user ${metadata.userId}`);
+    logger.info(`Sent publish notification to user ${metadata.userId}`);
   } catch (error) {
-    console.error(`Failed to send notification for video ${metadata.videoId}:`, error);
+    logger.error(`Failed to send notification for video ${metadata.videoId}:`, error);
   }
 }
 
@@ -68,9 +69,9 @@ export async function sendFailureNotification(
       }
     );
 
-    console.log(`Sent failure notification to user ${metadata.userId}`);
+    logger.info(`Sent failure notification to user ${metadata.userId}`);
   } catch (notifyError) {
-    console.error(`Failed to send failure notification for video ${metadata.videoId}:`, notifyError);
+    logger.error(`Failed to send failure notification for video ${metadata.videoId}:`, notifyError);
   }
 }
 
@@ -104,7 +105,7 @@ async function notifyUser(
       throw new Error(`Notification API returned ${response.status}`);
     }
   } catch (error) {
-    console.error('Failed to send WebSocket notification:', error);
+    logger.error('Failed to send WebSocket notification:', error);
     throw error;
   }
 }

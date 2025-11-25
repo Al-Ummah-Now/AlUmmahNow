@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 import React, { useState } from "react";
 import Comment, { CommentProps } from "@/components/comment";
 import { Comments } from "@/interfaces";
@@ -34,13 +35,13 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
     videoId,
     initialComments,
     onCommentAdded: (comment) => {
-      console.log("📢 New comment added:", comment);
+      logger.debug("📢 New comment added:", comment);
     },
     onCommentUpdated: (comment) => {
-      console.log("📢 Comment updated:", comment);
+      logger.debug("📢 Comment updated:", comment);
     },
     onCommentDeleted: (commentId) => {
-      console.log("📢 Comment deleted:", commentId);
+      logger.debug("📢 Comment deleted:", commentId);
     }
   });
 
@@ -68,7 +69,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
 
       setNewCommentText("");
     } catch (error) {
-      console.error("Failed to add comment:", error);
+      logger.error("Failed to add comment:", error);
     } finally {
       setIsSubmitting(false);
     }

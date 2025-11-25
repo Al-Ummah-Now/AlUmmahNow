@@ -7,6 +7,7 @@
  */
 
 'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { ErrorDisplay } from './ErrorDisplay';
@@ -72,8 +73,8 @@ export class VideoPlayerErrorBoundary extends Component<
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Log error to console in development
     if (process.env.NODE_ENV === 'development') {
-      console.error('VideoPlayerErrorBoundary caught error:', error);
-      console.error('Error Info:', errorInfo);
+      logger.error('VideoPlayerErrorBoundary caught error:', error);
+      logger.error('Error Info:', errorInfo);
     }
 
     // Call optional error callback
@@ -112,10 +113,10 @@ export class VideoPlayerErrorBoundary extends Component<
       };
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('Error Report:', JSON.stringify(errorReport, null, 2));
+        logger.debug('Error Report:', JSON.stringify(errorReport, null, 2));
       }
     } catch (reportError) {
-      console.error('Failed to report error:', reportError);
+      logger.error('Failed to report error:', reportError);
     }
   }
 

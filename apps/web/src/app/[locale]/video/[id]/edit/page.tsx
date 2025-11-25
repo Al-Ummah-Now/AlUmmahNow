@@ -1,5 +1,6 @@
-"use client";
+'use client';
 
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -52,7 +53,7 @@ export default function VideoEditPage() {
 
         setVideo(videoData);
       } catch (err) {
-        console.error('Error fetching video:', err);
+        logger.error('Error fetching video:', err);
         setError(t.errors.genericError);
       } finally {
         setLoading(false);

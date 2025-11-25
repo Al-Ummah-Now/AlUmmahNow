@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { VideoObject } from "@/interfaces";
@@ -40,7 +41,7 @@ export const TrendingContent: React.FC<TrendingContentProps> = ({
       const trendingVideos = await VideosAPI.getTrendingVideos(selectedPeriod, category, limit);
       setVideos(trendingVideos);
     } catch (error) {
-      console.error('Error fetching trending videos:', error);
+      logger.error('Error fetching trending videos:', error);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import { CommunityPost, PostType, PostStatus } from '@al-ummah/shared-types';
@@ -69,7 +69,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
       await onDelete(post.id);
       setShowDeleteDialog(false);
     } catch (error) {
-      console.error('Delete failed:', error);
+      logger.error('Delete failed:', error);
     } finally {
       setDeleting(false);
     }

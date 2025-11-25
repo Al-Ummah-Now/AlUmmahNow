@@ -13,6 +13,7 @@
  */
 
 'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -63,7 +64,7 @@ export function UnifiedNavigation() {
       fetchProfile(user, (profileData: Profile) => {
         setProfile(profileData);
       }).catch((err: Error) => {
-        console.error('[UnifiedNavigation] Failed to load profile:', err);
+        logger.error('[UnifiedNavigation] Failed to load profile:', err);
       });
     } else {
       setProfile(null);
@@ -85,7 +86,7 @@ export function UnifiedNavigation() {
             }).catch(() => resolve()); // Silently fail for individual accounts
           });
         } catch (_err) {
-          console.error(`[UnifiedNavigation] Failed to load profile for ${account.userId}`);
+          logger.error(`[UnifiedNavigation] Failed to load profile for ${account.userId}`);
         }
       }
 
@@ -99,7 +100,7 @@ export function UnifiedNavigation() {
 
   // Update local state when user changes
   useEffect(() => {
-    console.log('[UnifiedNavigation] User changed:', {
+    logger.debug('[UnifiedNavigation] User changed:', {
       
       email: user?.email,
       hasChannel: !!user?.channel,

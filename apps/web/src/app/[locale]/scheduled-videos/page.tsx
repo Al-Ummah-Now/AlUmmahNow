@@ -1,5 +1,6 @@
-"use client";
+'use client';
 
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -63,7 +64,7 @@ export default function ScheduledVideosPage() {
 
   // Debug logging to track loading state
   useEffect(() => {
-    console.log('[ScheduledVideos] Loading state:', {
+    logger.debug('[ScheduledVideos] Loading state:', {
       multiAccountLoading,
       fetchLoading,
       loading,
@@ -113,7 +114,7 @@ export default function ScheduledVideosPage() {
 
   // Fetch scheduled videos using single API call
   const fetchScheduledVideos = async () => {
-    console.log('[fetchScheduledVideos] Starting fetch', {
+    logger.debug('[fetchScheduledVideos] Starting fetch', {
       hasAuth: !!auth.user,
       hasMultiAccount: !!multiAccountUser
     });
@@ -122,37 +123,37 @@ export default function ScheduledVideosPage() {
     setError(null);
 
     if (!auth.user) {
-      console.log('[fetchScheduledVideos] No auth user, stopping');
+      logger.debug('[fetchScheduledVideos] No auth user, stopping');
       setFetchLoading(false);
       return;
     }
 
     // Wait for multiAccountUser to load before fetching
     if (!multiAccountUser) {
-      console.log('[fetchScheduledVideos] Waiting for multiAccountUser to load');
+      logger.debug('[fetchScheduledVideos] Waiting for multiAccountUser to load');
       return;
     }
 
     try {
-      console.log('[fetchScheduledVideos] Setting fetchLoading = true');
+      logger.debug('[fetchScheduledVideos] Setting fetchLoading = true');
       setFetchLoading(true);
 
       // Get all channels the user owns
       const userChannels = multiAccountUser.channels || [];
       const channelIds = userChannels.map(ch => ch.id);
 
-      console.log('[fetchScheduledVideos] User channels:', channelIds);
+      logger.debug('[fetchScheduledVideos] User channels:', channelIds);
 
       if (channelIds.length === 0) {
         // User has no channels, show empty state
-        console.log('[fetchScheduledVideos] No channels, showing empty state');
+        logger.debug('[fetchScheduledVideos] No channels, showing empty state');
         setVideos([]);
         setFetchLoading(false);
         return;
       }
 
       // Use single searchVideos call with schedule filtering
-      console.log('[fetchScheduledVideos] Calling searchVideos API...');
+      logger.debug('[fetchScheduledVideos] Calling searchVideos API...');
       const result = await searchVideos(
         '', // Empty query to get all videos
         {
@@ -171,24 +172,24 @@ export default function ScheduledVideosPage() {
         }
       );
 
-      console.log('[fetchScheduledVideos] API response:', {
+      logger.debug('[fetchScheduledVideos] API response:', {
         hasResult: !!result,
         dataLength: result?.data?.length || 0
       });
 
       // Handle null result or missing data gracefully
       if (!result || !result.data) {
-        console.log('[fetchScheduledVideos] No data returned, setting empty array');
+        logger.debug('[fetchScheduledVideos] No data returned, setting empty array');
         setVideos([]);
       } else {
         setVideos(result.data);
-        console.log('[fetchScheduledVideos] Videos updated successfully');
+        logger.debug('[fetchScheduledVideos] Videos updated successfully');
       }
     } catch (err) {
-      console.error('[fetchScheduledVideos] Error fetching scheduled videos:', err);
+      logger.error('[fetchScheduledVideos] Error fetching scheduled videos:', err);
       setError('An error occurred while fetching scheduled videos');
     } finally {
-      console.log('[fetchScheduledVideos] Setting fetchLoading = false');
+      logger.debug('[fetchScheduledVideos] Setting fetchLoading = false');
       setFetchLoading(false);
     }
   };

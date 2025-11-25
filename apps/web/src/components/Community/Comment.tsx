@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import { PostComment } from '@al-ummah/shared-types';
@@ -115,7 +115,7 @@ export default function Comment({
         setLikes(previousLikes);
       }
     } catch (error) {
-      console.error('Failed to toggle like:', error);
+      logger.error('Failed to toggle like:', error);
       setLiked(previousLiked);
       setLikes(previousLikes);
     }
@@ -138,7 +138,7 @@ export default function Comment({
         setShowReplies(true);
       }
     } catch (error) {
-      console.error('Failed to load replies:', error);
+      logger.error('Failed to load replies:', error);
     } finally {
       setLoadingReplies(false);
     }
@@ -177,7 +177,7 @@ export default function Comment({
         }
       }
     } catch (error) {
-      console.error('Failed to update comment:', error);
+      logger.error('Failed to update comment:', error);
     }
   };
 
@@ -199,7 +199,7 @@ export default function Comment({
         }
       }
     } catch (error) {
-      console.error('Failed to delete comment:', error);
+      logger.error('Failed to delete comment:', error);
     }
   };
 
@@ -213,7 +213,7 @@ export default function Comment({
         setHearted(result.hearted);
       }
     } catch (error) {
-      console.error('Failed to heart comment:', error);
+      logger.error('Failed to heart comment:', error);
     }
   };
 
@@ -228,7 +228,7 @@ export default function Comment({
         setShowMenu(false);
       }
     } catch (error) {
-      console.error('Failed to pin comment:', error);
+      logger.error('Failed to pin comment:', error);
     }
   };
 

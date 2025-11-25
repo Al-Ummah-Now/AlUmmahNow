@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, X, AlertCircle, Info } from 'lucide-react';
@@ -116,7 +117,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
         notifyOnPublish,
       });
     } catch (err) {
-      console.error('Error parsing datetime:', err);
+      logger.error('Error parsing datetime:', err);
       setError(t.schedule?.invalidScheduleTime || 'Invalid schedule time');
       onScheduleChange(null);
     }

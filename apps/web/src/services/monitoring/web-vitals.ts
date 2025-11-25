@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 import { onCLS, onINP, onFCP, onLCP, onTTFB, type Metric } from 'web-vitals';
 
 interface WebVitalsConfig {
@@ -72,7 +73,7 @@ export class WebVitalsMonitor {
         throw new Error(`Failed to send web vital: ${response.status}`);
       }
     } catch (error) {
-      console.error('Failed to send web vital metric:', error);
+      logger.error('Failed to send web vital metric:', error);
       this.metricsQueue.push(metric);
     }
   }
@@ -99,7 +100,7 @@ export class WebVitalsMonitor {
         throw new Error(`Failed to send web vitals batch: ${response.status}`);
       }
     } catch (error) {
-      console.error('Failed to send web vitals batch:', error);
+      logger.error('Failed to send web vitals batch:', error);
       this.metricsQueue.unshift(...metricsToSend);
     }
   }

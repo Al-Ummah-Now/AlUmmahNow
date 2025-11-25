@@ -1,4 +1,6 @@
-"use client";
+'use client';
+
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoCard from "@/components/videoCard/index";
@@ -40,7 +42,7 @@ const SearchPage: React.FC = () => {
             const data = await VideosAPI.searchVideos(searchQuery, filters, { limit: 20 });
             setVideos(data?.data || []);
         } catch (error) {
-            console.error('Search error:', error);
+            logger.error('Search error:', error);
             setVideos([]);
         } finally {
             setLoading(false);

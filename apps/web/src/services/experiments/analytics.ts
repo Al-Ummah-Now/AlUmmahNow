@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 export interface ExperimentEvent {
   eventType: 'assignment' | 'conversion' | 'exposure';
   experimentId: string;
@@ -47,11 +48,11 @@ class ExperimentAnalytics {
 
       if (!response.success && response.error) {
         this.eventQueue.unshift(...eventsToSend);
-        console.error('Failed to send A/B test events:', response.error);
+        logger.error('Failed to send A/B test events:', response.error);
       }
     } catch (error) {
       this.eventQueue.unshift(...eventsToSend);
-      console.error('Network error sending A/B test events:', error);
+      logger.error('Network error sending A/B test events:', error);
     } finally {
       this.isProcessing = false;
     }
@@ -125,7 +126,7 @@ class ExperimentAnalytics {
 
       return data;
     } catch (error) {
-      console.error('Failed to fetch experiment results:', error);
+      logger.error('Failed to fetch experiment results:', error);
       throw error;
     }
   }
@@ -149,7 +150,7 @@ class ExperimentAnalytics {
 
       return data;
     } catch (error) {
-      console.error('Failed to fetch experiment statistics:', error);
+      logger.error('Failed to fetch experiment statistics:', error);
       throw error;
     }
   }

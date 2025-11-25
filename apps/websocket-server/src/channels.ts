@@ -4,6 +4,7 @@
  */
 
 import { SessionData } from './messages';
+import { logger } from './lib/logger';
 
 export class ChannelManager {
   // Map of channel -> Set of sessionIds subscribed to that channel
@@ -34,7 +35,7 @@ export class ChannelManager {
 
       return true;
     } catch (error) {
-      console.error('Error subscribing to channel:', error);
+      logger.error('Error subscribing to channel:', error);
       return false;
     }
   }
@@ -64,7 +65,7 @@ export class ChannelManager {
 
       return true;
     } catch (error) {
-      console.error('Error unsubscribing from channel:', error);
+      logger.error('Error unsubscribing from channel:', error);
       return false;
     }
   }

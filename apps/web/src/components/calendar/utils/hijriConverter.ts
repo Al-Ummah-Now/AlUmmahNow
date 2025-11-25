@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 /**
  * Hijri Calendar Conversion Utilities
  *
@@ -33,7 +34,7 @@ export function gregorianToHijri(date: Date): HijriDate {
       day: hijriDate.hd,
     };
   } catch (error) {
-    console.error('Error converting Gregorian to Hijri:', error);
+    logger.error('Error converting Gregorian to Hijri:', error);
     // Return a fallback date
     return {
       year: 1445,
@@ -58,7 +59,7 @@ export function hijriToGregorian(hijriDate: HijriDate): Date {
 
     return new Date(gregorianDate.gy, gregorianDate.gm - 1, gregorianDate.gd);
   } catch (error) {
-    console.error('Error converting Hijri to Gregorian:', error);
+    logger.error('Error converting Hijri to Gregorian:', error);
     // Return current date as fallback
     return new Date();
   }

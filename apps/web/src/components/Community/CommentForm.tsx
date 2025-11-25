@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
@@ -90,7 +90,7 @@ export default function CommentForm({
         setError(isRTL ? 'فشل نشر التعليق' : 'Failed to post comment');
       }
     } catch (err) {
-      console.error('Failed to create comment:', err);
+      logger.error('Failed to create comment:', err);
       setError(isRTL ? 'حدث خطأ أثناء نشر التعليق' : 'An error occurred while posting your comment');
     } finally {
       setLoading(false);

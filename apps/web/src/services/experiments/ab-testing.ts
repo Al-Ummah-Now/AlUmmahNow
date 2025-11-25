@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 import { Experiment, ExperimentAssignment } from './feature-flags';
 import { trackExperimentEvent } from './analytics';
 import { quotaManager } from '@/lib/storage/quota-manager';
@@ -66,7 +67,7 @@ export class ABTestingEngine {
         }
       }
     } catch (error) {
-      console.warn('[ABTesting] Failed to load persisted assignments:', error);
+      logger.warn('[ABTesting] Failed to load persisted assignments:', error);
       // Graceful degradation: continue without persisted data
     }
   }
@@ -91,7 +92,7 @@ export class ABTestingEngine {
       );
 
       if (!result.success) {
-        console.error('[ABTesting] Failed to persist assignments:', result.error, result.message);
+        logger.error(`[ABTesting] Failed to persist assignments: ${result.error}`, { message: result.message });
 
         // Attempt recovery by removing old assignments for this user
         if (result.error === 'QUOTA_EXCEEDED') {
@@ -105,12 +106,12 @@ export class ABTestingEngine {
           );
 
           if (!retryResult.success) {
-            console.error('[ABTesting] Retry failed after emergency cleanup');
+            logger.error('[ABTesting] Retry failed after emergency cleanup');
           }
         }
       }
     } catch (error) {
-      console.error('[ABTesting] Error persisting assignments:', error);
+      logger.error('[ABTesting] Error persisting assignments:', error);
       // Graceful degradation: assignments remain in memory
     }
   }
@@ -185,7 +186,7 @@ export class ABTestingEngine {
   trackConversion(experimentId: string, conversionValue?: number): void {
     const assignment = this.assignments.get(experimentId);
     if (!assignment || !this.userId) {
-      console.warn(`No assignment found for experiment ${experimentId}`);
+      logger.warn(`No assignment found for experiment ${experimentId}`);
       return;
     }
 
@@ -275,11 +276,11 @@ export class ABTestingEngine {
       } else {
         // Fallback for environments without crypto.subtle
         // This should rarely be needed in modern browsers or Cloudflare Workers
-        console.warn('[ABTesting] crypto.subtle not available, using fallback hash function');
+        logger.warn('[ABTesting] crypto.subtle not available, using fallback hash function');
         return this.fallbackHash(input);
       }
     } catch (error) {
-      console.error('[ABTesting] Error computing SHA-256 hash, using fallback:', error);
+      logger.error('[ABTesting] Error computing SHA-256 hash, using fallback:', error);
       return this.fallbackHash(input);
     }
   }
@@ -331,16 +332,16 @@ export class ABTestingEngine {
       const result = quotaManager.performMaintenance(STORAGE_KEY_AB_ASSIGNMENTS);
 
       if (result.cleanedItems > 0) {
-        console.log(`[ABTesting] Cleaned up ${result.cleanedItems} old assignments`);
+        logger.debug(`[ABTesting] Cleaned up ${result.cleanedItems} old assignments`);
         // Reload assignments after cleanup
         this.loadPersistedAssignments();
       }
 
       if (!result.quotaAvailable) {
-        console.warn('[ABTesting] localStorage quota is running low');
+        logger.warn('[ABTesting] localStorage quota is running low');
       }
     } catch (error) {
-      console.error('[ABTesting] Error during maintenance:', error);
+      logger.error('[ABTesting] Error during maintenance:', error);
     }
   }
 
@@ -349,11 +350,11 @@ export class ABTestingEngine {
    */
   private performEmergencyCleanup(): void {
     try {
-      console.warn('[ABTesting] Performing emergency cleanup due to quota exceeded');
+      logger.warn('[ABTesting] Performing emergency cleanup due to quota exceeded');
 
       // More aggressive cleanup: remove assignments older than 30 days
       const cleanedOld = quotaManager.cleanupOldItems(STORAGE_KEY_AB_ASSIGNMENTS, 30);
-      console.log(`[ABTesting] Emergency cleanup removed ${cleanedOld} old assignments`);
+      logger.debug(`[ABTesting] Emergency cleanup removed ${cleanedOld} old assignments`);
 
       // Keep only the most recent 50 assignments for this user
       if (this.userId) {
@@ -367,10 +368,10 @@ export class ABTestingEngine {
           this.assignments.set(id, assignment);
         });
 
-        console.log(`[ABTesting] Reduced user assignments to ${this.assignments.size} most recent`);
+        logger.debug(`[ABTesting] Reduced user assignments to ${this.assignments.size} most recent`);
       }
     } catch (error) {
-      console.error('[ABTesting] Error during emergency cleanup:', error);
+      logger.error('[ABTesting] Error during emergency cleanup:', error);
     }
   }
 

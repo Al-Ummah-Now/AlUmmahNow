@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, AlertCircle, Check, X } from 'lucide-react';
@@ -174,7 +174,7 @@ export default function ChapterUpload({
       setParsedChapters(chapters);
       setParseErrors(errors);
     } catch (error) {
-      console.error('Error parsing file:', error);
+      logger.error('Error parsing file:', error);
       setParseErrors([{ line: 0, message: 'Failed to read file' }]);
     } finally {
       setIsParsing(false);

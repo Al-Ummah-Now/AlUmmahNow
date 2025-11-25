@@ -1,4 +1,6 @@
-"use client";
+'use client';
+
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Profile } from '@/interfaces';
@@ -92,14 +94,14 @@ const ProfileCreatePage = () => {
         email: profile.email,
       });
 
-      console.log('Profile created successfully:', result);
+      logger.debug('Profile created successfully:', result);
       setSaveState('success');
       // Redirect to home page after successful profile creation with a slight delay
       setTimeout(() => {
         router.push(`/${locale}/`);
       }, 1000);
     } catch (error) {
-      console.error('Profile creation failed:', error);
+      logger.error('Profile creation failed:', error);
       setSaveState('error');
       setErrorMessage(error instanceof Error ? error.message : t.errors.genericError);
     }

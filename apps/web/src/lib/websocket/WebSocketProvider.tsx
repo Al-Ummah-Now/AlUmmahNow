@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
@@ -64,7 +65,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     // Auto-connect for both authenticated and anonymous users
     // Anonymous users can view real-time updates but cannot post
     wsManagerRef.current.connect(user?.id).catch((error) => {
-      console.error('Failed to connect to WebSocket:', error);
+      logger.error('Failed to connect to WebSocket:', error);
     });
 
     return () => {
@@ -83,7 +84,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     if (wsManagerRef.current) {
       if (!wsManagerRef.current.isConnected()) {
         wsManagerRef.current.connect(user?.id).catch((error) => {
-          console.error('Failed to reconnect to WebSocket:', error);
+          logger.error('Failed to reconnect to WebSocket:', error);
         });
       }
     }

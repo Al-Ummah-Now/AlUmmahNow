@@ -5,6 +5,7 @@ import { publishVideo, queryScheduledVideos, removeSchedule } from './publisher'
 import { scheduleRetries } from './retry';
 import { sendNotification } from './notifier';
 import { reportMetrics, logEvent, sendAlert, initializeMetrics, updateDailyMetrics } from './monitoring';
+import { logger } from './lib/logger';
 
 export default {
   /**
@@ -14,7 +15,7 @@ export default {
     const startTime = Date.now();
 
     try {
-      console.log('Scheduler cron triggered at', new Date().toISOString());
+      logger.info(`Scheduler cron triggered at ${new Date().toISOString()}`);
 
       // Initialize metrics if needed
       await initializeMetrics(env);
@@ -29,7 +30,7 @@ export default {
       const windowEnd = new Date(windowStart);
       windowEnd.setMinutes(windowEnd.getMinutes() + 1);
 
-      console.log(`Processing time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
+      logger.debug(`Processing time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
 
       // 2. Query scheduled videos for this time window
       const scheduledVideos = await queryScheduledVideos(
@@ -39,11 +40,11 @@ export default {
       );
 
       if (scheduledVideos.length === 0) {
-        console.log('No videos scheduled for current window');
+        logger.debug('No videos scheduled for current window');
         return;
       }
 
-      console.log(`Found ${scheduledVideos.length} videos to process`);
+      logger.info(`Found ${scheduledVideos.length} videos to process`);
 
       // 3. Process in batches with distributed locking
       const results = await processBatch(scheduledVideos, env, ctx);
@@ -56,17 +57,15 @@ export default {
         duration,
       });
 
-      console.log(
-        `Batch complete: ${results.successful.length} successful, ${results.failed.length} failed, ${duration}ms`
-      );
+      logger.info(`Batch complete: ${results.successful.length} successful, ${results.failed.length} failed, ${duration}ms`);
 
       // 5. Handle failures with retry
       if (results.failed.length > 0) {
-        console.log(`Scheduling retries for ${results.failed.length} failed videos`);
+        logger.info(`Scheduling retries for ${results.failed.length} failed videos`);
         await scheduleRetries(results.failed, env);
       }
     } catch (error) {
-      console.error('Scheduler error:', error);
+      logger.error('Scheduler error:', error);
       await sendAlert(env, error);
     }
   },
@@ -106,7 +105,7 @@ async function processBatch(
       const locked = await acquireLock(env.SCHEDULER_LOCKS, lockKey, lockTtl);
 
       if (!locked) {
-        console.log(`Video ${video.videoId} already being processed (lock exists)`);
+        logger.debug(`Video ${video.videoId} already being processed (lock exists)`);
         return;
       }
 
@@ -142,11 +141,9 @@ async function processBatch(
 
         results.successful.push(video);
 
-        console.log(
-          `Published video ${video.videoId} in ${Date.now() - publishStartTime}ms (delay: ${delaySeconds}s)`
-        );
+        logger.info(`Published video ${video.videoId} in ${Date.now() - publishStartTime}ms (delay: ${delaySeconds}s)`);
       } catch (error) {
-        console.error(`Failed to publish video ${video.videoId}:`, error);
+        logger.error(`Failed to publish video ${video.videoId}:`, error);
 
         // Log failure event
         await logEvent(env.QUEUE, {

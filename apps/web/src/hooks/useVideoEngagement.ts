@@ -263,7 +263,7 @@ export function useVideoEngagement({
         rollbackState();
 
         const message = error instanceof Error ? error.message : 'Failed to update dislike status';
-        logger.error('[useVideoEngagement] Dislike error:', message);
+        logger.error('[useVideoEngagement] Dislike error:', { message, videoId, channelId, userId });
         onError?.(message);
       } finally {
         setPending(false);
@@ -309,7 +309,7 @@ export function useVideoEngagement({
       await service.trackShare(videoId, platform);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to share video';
-      logger.error('[useVideoEngagement] Share error:', message);
+      logger.error('[useVideoEngagement] Share error:', { message, videoId });
       onError?.(message);
     }
   }, [videoId, onSuccess, onError]);

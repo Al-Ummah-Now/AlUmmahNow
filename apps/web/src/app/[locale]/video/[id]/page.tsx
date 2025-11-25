@@ -1,4 +1,6 @@
-"use client";
+'use client';
+
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from "react";
 import VideoPlayer from "@/components/videoPlayer/index";
 import RelatedVideosSection from "@/components/related/index";
@@ -105,7 +107,7 @@ export default function VideoViewPage() {
                   initialLikesCount={videoDetails.likesCount || 0}
                   initialCommentsCount={videoDetails.commentsCount || 0}
                   onMetricsUpdate={(metrics) => {
-                    console.log('📊 Video metrics updated:', metrics);
+                    logger.debug('📊 Video metrics updated:', metrics);
                   }}
                 />
               </div>

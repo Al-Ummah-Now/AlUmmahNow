@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef } from 'react';
 import Image from 'next/image';
@@ -86,7 +87,7 @@ export default function ThumbnailSelector({
         setUploadError(t.video.thumbnailUploadFailed ?? 'Failed to upload thumbnail');
       }
     } catch (error) {
-      console.error('Error uploading thumbnail:', error);
+      logger.error('Error uploading thumbnail:', error);
       setUploadError(t.video.thumbnailUploadFailed ?? 'Failed to upload thumbnail');
     } finally {
       setIsUploading(false);

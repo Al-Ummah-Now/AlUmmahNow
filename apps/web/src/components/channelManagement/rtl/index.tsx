@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -51,7 +51,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
 
   // Handle create channel
   const handleCreateChannel = async (data: CreateChannelFormData) => {
-    console.log('ChannelManagementSection (RTL): Creating channel with data:', data);
+    logger.debug('ChannelManagementSection (RTL): Creating channel with data:', data);
 
     const success = await createChannel({
       name: data.name,
@@ -68,14 +68,14 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
 
   // Handle edit channel
   const handleEditChannel = (channel: Channel) => {
-    console.log('ChannelManagementSection (RTL): Edit channel:', channel);
+    logger.debug('ChannelManagementSection (RTL): Edit channel:', channel);
     // Navigate to channel edit page (Arabic route)
     router.push(`/ar/settings/channel/${channel.id}/edit`);
   };
 
   // Handle delete channel
   const handleDeleteChannel = async (channelId: string) => {
-    console.log('ChannelManagementSection (RTL): Delete channel:', channelId);
+    logger.debug('ChannelManagementSection (RTL): Delete channel:', channelId);
 
     const success = await deleteChannel(channelId);
 
@@ -88,7 +88,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
 
   // Handle view channel
   const handleViewChannel = (channelId: string) => {
-    console.log('ChannelManagementSection (RTL): View channel:', channelId);
+    logger.debug('ChannelManagementSection (RTL): View channel:', channelId);
     // Navigate to channel page (Arabic route)
     router.push(`/ar/channels/${channelId}`);
   };

@@ -155,6 +155,9 @@ importers:
 
   apps/scheduler:
     dependencies:
+      '@al-ummah/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@al-ummah/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types

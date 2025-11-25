@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { CommunityPost } from '@al-ummah/shared-types';
@@ -46,7 +46,7 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
         setError(isRTL ? 'فشل تحميل المنشورات' : 'Failed to load posts');
       }
     } catch (err) {
-      console.error('Error loading community posts:', err);
+      logger.error('Error loading community posts:', err);
       setError(isRTL ? 'حدث خطأ أثناء تحميل المنشورات' : 'An error occurred while loading posts');
     } finally {
       setLoading(false);

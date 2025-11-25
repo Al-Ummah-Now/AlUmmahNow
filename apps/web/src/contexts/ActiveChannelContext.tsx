@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Channel } from "@al-ummah/shared-types";
@@ -43,12 +44,12 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
 
   // Initialize active channel from localStorage or default to main/first channel
   useEffect(() => {
-    console.log('ActiveChannelProvider: Initializing with channels:', userChannels);
-    console.log('ActiveChannelProvider: userId:', userId);
+    logger.debug('ActiveChannelProvider: Initializing with channels:', userChannels);
+    logger.debug('ActiveChannelProvider: userId:', userId);
 
     // Clear active channel if no user
     if (!userId) {
-      console.log('ActiveChannelProvider: No userId, clearing active channel');
+      logger.debug('ActiveChannelProvider: No userId, clearing active channel');
       setActiveChannelState(null);
       if (typeof window !== 'undefined') {
         // Clear any stored channel for this session
@@ -59,7 +60,7 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
 
     // Clear active channel if no channels available (user has no profile/channels)
     if (!userChannels || userChannels.length === 0) {
-      console.log('ActiveChannelProvider: No channels available, clearing active channel');
+      logger.debug('ActiveChannelProvider: No channels available, clearing active channel');
       setActiveChannelState(null);
       const storageKey = getStorageKey(userId);
       if (typeof window !== 'undefined') {
@@ -81,16 +82,16 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
           const channelExists = userChannels.some(ch => ch.id === parsed.channelId);
 
           if (channelExists) {
-            console.log('ActiveChannelProvider: Restored from localStorage:', parsed);
+            logger.debug('ActiveChannelProvider: Restored from localStorage:', parsed);
             setActiveChannelState(parsed);
             return;
           } else {
-            console.log('ActiveChannelProvider: Stored channel no longer exists, clearing');
+            logger.debug('ActiveChannelProvider: Stored channel no longer exists, clearing');
             localStorage.removeItem(storageKey);
           }
         }
       } catch (error) {
-        console.error('ActiveChannelProvider: Error loading from localStorage:', error);
+        logger.error('ActiveChannelProvider: Error loading from localStorage:', error);
         localStorage.removeItem(storageKey);
       }
     }
@@ -109,7 +110,7 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
         isMain: defaultChannel.isMain,
       };
 
-      console.log('ActiveChannelProvider: Setting default channel:', activeChannelData);
+      logger.debug('ActiveChannelProvider: Setting default channel:', activeChannelData);
       setActiveChannelState(activeChannelData);
 
       // Save to localStorage with user-specific key
@@ -118,7 +119,7 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
       }
     } else {
       // No channels for this user - clear active channel
-      console.log('ActiveChannelProvider: No channels for user, clearing active channel');
+      logger.debug('ActiveChannelProvider: No channels for user, clearing active channel');
       setActiveChannelState(null);
       if (typeof window !== 'undefined') {
         localStorage.removeItem(storageKey);
@@ -127,7 +128,7 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
   }, [userChannels, userId]);
 
   const setActiveChannel = useCallback((channel: ActiveChannel) => {
-    console.log('ActiveChannelProvider: Setting active channel:', channel);
+    logger.debug('ActiveChannelProvider: Setting active channel:', channel);
     setActiveChannelState(channel);
 
     // Persist to localStorage with user-specific key
@@ -138,7 +139,7 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
   }, [userId]);
 
   const clearActiveChannel = useCallback(() => {
-    console.log('ActiveChannelProvider: Clearing active channel');
+    logger.debug('ActiveChannelProvider: Clearing active channel');
     setActiveChannelState(null);
 
     // Remove from localStorage

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 import { getChannelById } from '@/lib/api/channels';
 import { ChannelHeader as ChannelHeaderLTR } from '@/components/Channel/ChannelHeader';
 import { ChannelHeader as ChannelHeaderRTL } from '@/components/Channel/rtl/ChannelHeader';
@@ -28,7 +29,7 @@ export default async function ChannelLayout({
 
   // Validate locale
   if (!isLocaleSupported(locale)) {
-    console.warn(`[ChannelLayout] Unsupported locale: ${locale}`);
+    logger.warn(`[ChannelLayout] Unsupported locale: ${locale}`);
     notFound();
   }
 

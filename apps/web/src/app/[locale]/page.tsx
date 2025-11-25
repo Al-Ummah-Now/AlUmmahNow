@@ -1,4 +1,6 @@
-"use client";
+'use client';
+
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoCardLTR from "@/components/videoCard/index";
@@ -29,7 +31,7 @@ const VideosPage: React.FC = () => {
       const data = await fetchVideosWithPagination(cursor);
 
       if (!data) {
-        console.error("Failed to fetch videos");
+        logger.error("Failed to fetch videos");
         return;
       }
 
@@ -41,7 +43,7 @@ const VideosPage: React.FC = () => {
       });
       setNextCursor(data.pagination?.nextCursor ?? null); // Update the next cursor
     } catch (error) {
-      console.error("Error fetching videos:", error);
+      logger.error("Error fetching videos:", error);
     } finally {
       setLoading(false);
     }
@@ -50,11 +52,11 @@ const VideosPage: React.FC = () => {
   useEffect(() => {
     // Prevent duplicate initial fetch
     if (hasInitialFetch.current) {
-      console.log('VideosPage: Skipping duplicate initial fetch');
+      logger.debug('VideosPage: Skipping duplicate initial fetch');
       return;
     }
 
-    console.log('VideosPage: Performing initial fetch');
+    logger.debug('VideosPage: Performing initial fetch');
     hasInitialFetch.current = true;
     fetchVideos(null);
   }, [fetchVideos]);

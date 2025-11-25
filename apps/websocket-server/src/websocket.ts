@@ -8,6 +8,7 @@ import { validateJWT, validateJWTBasic, AuthPayload } from './auth';
 import { ChannelManager } from './channels';
 import { PresenceManager } from './presence';
 import { ClientMessageSchema, ServerMessage, RateLimitInfo } from './messages';
+import { logger } from './lib/logger';
 
 interface WebSocketConnection {
   webSocket: WebSocket;
@@ -183,7 +184,7 @@ export class WebSocketDurableObject extends DurableObject {
           });
       }
     } catch (error) {
-      console.error('Error handling WebSocket message:', error);
+      logger.error('Error handling WebSocket message:', error);
       this.sendMessage(ws, {
         type: 'error',
         error: 'Failed to process message',
@@ -215,7 +216,7 @@ export class WebSocketDurableObject extends DurableObject {
       // Remove connection
       this.connections.delete(ws);
 
-      console.log(`WebSocket closed: ${connection.sessionId}, code: ${code}, reason: ${reason}`);
+      logger.debug(`WebSocket closed: ${connection.sessionId}, code: ${code}, reason: ${reason}`);
     }
   }
 
@@ -223,7 +224,7 @@ export class WebSocketDurableObject extends DurableObject {
    * Handle WebSocket error
    */
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
-    console.error('WebSocket error:', error);
+    logger.error('WebSocket error:', error);
     const connection = this.connections.get(ws);
     if (connection) {
       this.connections.delete(ws);
@@ -284,7 +285,7 @@ export class WebSocketDurableObject extends DurableObject {
       this.channelManager.subscribe(connection.sessionId, userChannel);
 
     } catch (error) {
-      console.error('Authentication error:', error);
+      logger.error('Authentication error:', error);
       this.sendMessage(ws, {
         type: 'error',
         error: 'Authentication failed',
@@ -449,7 +450,7 @@ export class WebSocketDurableObject extends DurableObject {
     try {
       ws.send(JSON.stringify(message));
     } catch (error) {
-      console.error('Error sending WebSocket message:', error);
+      logger.error('Error sending WebSocket message:', error);
     }
   }
 
@@ -489,7 +490,7 @@ export class WebSocketDurableObject extends DurableObject {
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (error) {
-      console.error('Error handling broadcast request:', error);
+      logger.error('Error handling broadcast request:', error);
       return new Response(JSON.stringify({ error: 'Failed to broadcast' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },

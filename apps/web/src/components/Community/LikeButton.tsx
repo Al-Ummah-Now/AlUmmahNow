@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -48,7 +48,7 @@ export default function LikeButton({
         setLikes(previousLikes);
       }
     } catch (error) {
-      console.error('Failed to toggle like:', error);
+      logger.error('Failed to toggle like:', error);
       setLiked(previousLiked);
       setLikes(previousLikes);
     } finally {

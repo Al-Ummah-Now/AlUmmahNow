@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect } from 'react';
 import { X, Plus, FileText, Edit3 } from 'lucide-react';
@@ -136,7 +137,7 @@ export default function VideoEdit({
         setError(t.video.updateFailed ?? 'Failed to update video');
       }
     } catch (err) {
-      console.error('Error saving video:', err);
+      logger.error('Error saving video:', err);
       setError(t.errors.genericError);
     } finally {
       setIsSaving(false);
@@ -417,7 +418,7 @@ export default function VideoEdit({
                       setError(result?.error || t.errors.genericError);
                     }
                   } catch (err) {
-                    console.error('Error saving chapters:', err);
+                    logger.error('Error saving chapters:', err);
                     setError(t.errors.genericError);
                   }
                 }}
@@ -443,7 +444,7 @@ export default function VideoEdit({
                       setError(result?.error || t.errors.genericError);
                     }
                   } catch (err) {
-                    console.error('Error saving chapters:', err);
+                    logger.error('Error saving chapters:', err);
                     setError(t.errors.genericError);
                   }
                 }}

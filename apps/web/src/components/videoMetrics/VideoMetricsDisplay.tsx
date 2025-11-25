@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState } from 'react';
 import { useRealTimeVideoMetrics, useRealTimePresence } from '@/hooks/useRealTimeVideoMetrics';
@@ -69,7 +69,7 @@ export function VideoMetricsDisplay({
         setIsLiked(false);
 
         await VideosAPI.unlikeVideo(videoId, headers);
-        console.log('👍 Video unliked');
+        logger.debug('👍 Video unliked');
       } else {
         // If currently disliked, remove dislike first
         if (isDisliked) {
@@ -86,10 +86,10 @@ export function VideoMetricsDisplay({
 
         setIsLiked(true);
         await VideosAPI.likeVideo(videoId, headers);
-        console.log('👍 Video liked');
+        logger.debug('👍 Video liked');
       }
     } catch (error) {
-      console.error('Failed to toggle like:', error);
+      logger.error('Failed to toggle like:', error);
       // Revert optimistic update on error
       if (isLiked) {
         updateMetrics({ likesCount: metrics.likesCount + 1 });
@@ -119,7 +119,7 @@ export function VideoMetricsDisplay({
         setIsDisliked(false);
 
         await VideosAPI.removeVideoDislike(videoId, headers);
-        console.log('👎 Video dislike removed');
+        logger.debug('👎 Video dislike removed');
       } else {
         // If currently liked, remove like first
         if (isLiked) {
@@ -136,10 +136,10 @@ export function VideoMetricsDisplay({
 
         setIsDisliked(true);
         await VideosAPI.dislikeVideo(videoId, headers);
-        console.log('👎 Video disliked');
+        logger.debug('👎 Video disliked');
       }
     } catch (error) {
-      console.error('Failed to toggle dislike:', error);
+      logger.error('Failed to toggle dislike:', error);
       // Revert optimistic update on error
       if (isDisliked) {
         updateMetrics({ dislikesCount: metrics.dislikesCount + 1 });

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 /**
  * Video Analytics API Route
  *
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     if (process.env.NODE_ENV === 'development') {
       const errorEvents = events.filter((e: { eventType: string }) => e.eventType === 'error');
 
-      console.log('[Analytics] Video event batch:', {
+      logger.debug('[Analytics] Video event batch:', {
         timestamp: new Date().toISOString(),
         eventCount: events.length,
         events: events.map((e: { eventType: string }) => e.eventType)
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
       // Log detailed error information
       if (errorEvents.length > 0) {
         errorEvents.forEach((event: { data?: unknown }) => {
-          console.error('[Analytics] ERROR DETAILS:', JSON.stringify(event.data, null, 2));
+          logger.error('[Analytics] ERROR DETAILS:', JSON.stringify(event.data, null, 2));
         });
       }
     }
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
         const videoId = event.videoId;
 
         if (!videoId) {
-          console.warn('[Analytics] Ready event missing videoId:', event);
+          logger.warn('[Analytics] Ready event missing videoId:', event);
           continue;
         }
 
@@ -65,13 +66,13 @@ export async function POST(request: NextRequest) {
           });
 
           if (!response.ok) {
-            console.error('[Analytics] Failed to forward view to API:', response.status, response.statusText);
+            logger.error(`[Analytics] Failed to forward view to API: ${response.status} ${response.statusText}`);
           } else if (process.env.NODE_ENV === 'development') {
             const result = await response.json();
-            console.log('[Analytics] View tracked successfully:', result);
+            logger.debug('[Analytics] View tracked successfully:', result);
           }
         } catch (forwardError) {
-          console.error('[Analytics] Error forwarding to API:', forwardError);
+          logger.error('[Analytics] Error forwarding to API:', forwardError);
           // Don't fail the request if forwarding fails
         }
       }
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('[Analytics] Error processing video event:', error);
+    logger.error('[Analytics] Error processing video event:', error);
 
     return NextResponse.json(
       {

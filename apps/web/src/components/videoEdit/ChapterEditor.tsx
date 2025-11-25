@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect } from 'react';
 import { Plus, X, MoveUp, MoveDown, Save, AlertCircle } from 'lucide-react';
@@ -273,7 +273,7 @@ export default function ChapterEditor({
       await onSave?.(chapters);
       setHasChanges(false);
     } catch (error) {
-      console.error('Error saving chapters:', error);
+      logger.error('Error saving chapters:', error);
       setErrors({ global: t.errors.genericError });
     } finally {
       setIsSaving(false);

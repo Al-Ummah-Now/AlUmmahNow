@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 import React, { useState } from 'react';
 import { CreateChannelDialogProps, CreateChannelFormData } from './types';
 import {
@@ -120,7 +121,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
       setErrors({});
       onOpenChange(false);
     } catch (error) {
-      console.error('Error submitting channel:', error);
+      logger.error('Error submitting channel:', error);
     }
   };
 

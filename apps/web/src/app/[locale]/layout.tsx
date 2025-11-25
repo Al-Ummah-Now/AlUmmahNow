@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 /**
  * Dynamic Locale Layout
  *
@@ -35,7 +36,7 @@ export default async function LocaleLayout({
 
   // Validate locale - return 404 if not supported
   if (!isLocaleSupported(locale)) {
-    console.warn(`[LocaleLayout] Unsupported locale requested: ${locale}`);
+    logger.warn(`[LocaleLayout] Unsupported locale requested: ${locale}`);
     notFound();
   }
 
@@ -44,7 +45,7 @@ export default async function LocaleLayout({
 
   // Log locale activation (development only)
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[LocaleLayout] Activating locale: ${locale} (${dir})`);
+    logger.debug(`[LocaleLayout] Activating locale: ${locale} (${dir})`);
   }
 
   return (

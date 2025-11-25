@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { SearchSuggestion } from "@/lib/api/types";
@@ -44,7 +45,7 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
           setSuggestions(results);
           setShowSuggestions(true);
         } catch (error) {
-          console.error('Error fetching suggestions:', error);
+          logger.error('Error fetching suggestions:', error);
         } finally {
           setLoading(false);
         }

@@ -1,4 +1,5 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 import React, { useState, useRef, useCallback } from "react";
 import * as tus from "tus-js-client";
 import { VideoObject } from "@/interfaces";
@@ -258,7 +259,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           filetype: selectedFile.type,
         },
         onError: (error) => {
-          console.error('TUS upload error:', error);
+          logger.error('TUS upload error:', error);
           setUploadProgress({
             percentage: uploadProgress?.percentage || 0,
             state: 'error',
@@ -359,11 +360,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               );
 
               if (!scheduleResult?.success) {
-                console.warn('Failed to schedule video:', scheduleResult?.error);
+                logger.warn('Failed to schedule video:', scheduleResult?.error);
                 // Continue anyway - video is uploaded successfully
               }
             } catch (schedError) {
-              console.warn('Error scheduling video:', schedError);
+              logger.warn('Error scheduling video:', schedError);
               // Continue anyway - video is uploaded successfully
             }
           }

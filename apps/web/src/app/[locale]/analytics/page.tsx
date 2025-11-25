@@ -1,4 +1,6 @@
-"use client";
+'use client';
+
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import * as AnalyticsAPI from '@/lib/api/analytics';
@@ -38,7 +40,7 @@ const AnalyticsPage = () => {
 
       } catch (err) {
         setError(t.errors.genericError);
-        console.error('Analytics loading error:', err);
+        logger.error('Analytics loading error:', err);
       } finally {
         setIsLoading(false);
       }

@@ -1,4 +1,5 @@
 import type { ScheduledVideoMetadata, VideoObject } from '@al-ummah/shared-types';
+import { logger } from './lib/logger';
 
 /**
  * Publish a scheduled video by updating its status to public
@@ -19,7 +20,7 @@ export async function publishVideo(
 
   // 2. Verify video is in correct state for publishing
   if (videoData.isPublic) {
-    console.warn(`Video ${metadata.videoId} is already public, skipping`);
+    logger.warn(`Video ${metadata.videoId} is already public, skipping`);
     return;
   }
 
@@ -44,7 +45,7 @@ export async function publishVideo(
     }
   );
 
-  console.log(`Successfully published video ${metadata.videoId} via scheduler`);
+  logger.info(`Successfully published video ${metadata.videoId} via scheduler`);
 }
 
 /**
@@ -70,7 +71,7 @@ export async function queryScheduledVideos(
 
     const prefix = `${year}-${month}-${day}/${hour}/`;
 
-    console.log(`Querying scheduled videos with prefix: ${prefix}`);
+    logger.debug(`Querying scheduled videos with prefix: ${prefix}`);
 
     // List all videos in this hour
     const listed = await scheduledBucket.list({ prefix });
@@ -88,13 +89,13 @@ export async function queryScheduledVideos(
           videos.push(metadata);
         }
       } catch (error) {
-        console.error(`Failed to parse scheduled video ${object.key}:`, error);
+        logger.error(`Failed to parse scheduled video ${object.key}:`, error);
       }
     }
 
-    console.log(`Found ${videos.length} videos scheduled for current window`);
+    logger.debug(`Found ${videos.length} videos scheduled for current window`);
   } catch (error) {
-    console.error('Failed to query scheduled videos:', error);
+    logger.error('Failed to query scheduled videos:', error);
     throw error;
   }
 
@@ -120,9 +121,9 @@ export async function removeSchedule(
     const key = `${year}-${month}-${day}/${hour}/${metadata.videoId}.json`;
 
     await scheduledBucket.delete(key);
-    console.log(`Removed schedule for video ${metadata.videoId}`);
+    logger.debug(`Removed schedule for video ${metadata.videoId}`);
   } catch (error) {
-    console.error(`Failed to remove schedule for video ${metadata.videoId}:`, error);
+    logger.error(`Failed to remove schedule for video ${metadata.videoId}:`, error);
   }
 }
 
@@ -162,8 +163,8 @@ export async function markAsFailed(
       }
     );
 
-    console.log(`Marked video ${metadata.videoId} as permanently failed`);
+    logger.warn(`Marked video ${metadata.videoId} as permanently failed`);
   } catch (err) {
-    console.error(`Failed to mark video ${metadata.videoId} as failed:`, err);
+    logger.error(`Failed to mark video ${metadata.videoId} as failed:`, err);
   }
 }

@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { PostComment } from '@al-ummah/shared-types';
@@ -70,7 +70,7 @@ export default function CommentsSection({
         setHasMore(result.pagination.hasNext);
       }
     } catch (error) {
-      console.error('Failed to load comments:', error);
+      logger.error('Failed to load comments:', error);
     } finally {
       setLoading(false);
       setLoadingMore(false);

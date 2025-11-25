@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 interface PerformanceMetrics {
   timeToFirstFrame: number;
   rebufferCount: number;
@@ -274,7 +275,7 @@ export class VideoPerformanceMonitor {
         throw new Error(`Failed to send metrics: ${response.status}`);
       }
     } catch (error) {
-      console.error('Failed to send performance metrics:', error);
+      logger.error('Failed to send performance metrics:', error);
     }
   }
 

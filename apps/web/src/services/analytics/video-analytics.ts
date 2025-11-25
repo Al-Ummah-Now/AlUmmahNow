@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 /**
  * Video Analytics Service
  *
@@ -379,7 +380,7 @@ export class VideoAnalytics {
     // Only fire each quartile once per session
     if (this.quartilesFired.has(quartile)) {
       if (this.config.enableDebugLogging) {
-        console.log(`[VideoAnalytics] Quartile ${quartile}% already tracked, skipping`);
+        logger.debug(`[VideoAnalytics] Quartile ${quartile}% already tracked, skipping`);
       }
       return;
     }
@@ -440,7 +441,7 @@ export class VideoAnalytics {
     this.eventQueue.push(fullEvent);
 
     if (this.config.enableDebugLogging) {
-      console.log('[VideoAnalytics]', fullEvent.eventType, fullEvent);
+      logger.debug(`[VideoAnalytics] ${fullEvent.eventType}`, fullEvent);
     }
 
     // Flush if queue is full
@@ -482,10 +483,10 @@ export class VideoAnalytics {
         }
 
         if (this.config.enableDebugLogging) {
-          console.log('[VideoAnalytics] Flushed', events.length, 'events');
+          logger.debug(`[VideoAnalytics] Flushed ${events.length} events`);
         }
       } catch (error) {
-        console.error('[VideoAnalytics] Failed to send events:', error);
+        logger.error('[VideoAnalytics] Failed to send events:', error);
 
         // Re-add events to queue on failure
         this.eventQueue.unshift(...events);
@@ -522,7 +523,7 @@ export class VideoAnalytics {
         pending = Array.isArray(parsed) ? parsed : [];
       } catch (parseError) {
         // If parsing fails or result isn't an array, start fresh
-        console.warn('[VideoAnalytics] Failed to parse pendingVideoAnalytics from localStorage. Data may be corrupted and will be reset.', parseError);
+        logger.warn('[VideoAnalytics] Failed to parse pendingVideoAnalytics from localStorage. Data may be corrupted and will be reset.', parseError);
         pending = [];
       }
 
@@ -538,29 +539,29 @@ export class VideoAnalytics {
         );
 
         if (this.config.enableDebugLogging) {
-          console.log('[VideoAnalytics] Stored', events.length, 'events locally');
+          logger.debug(`[VideoAnalytics] Stored ${events.length} events locally`);
           if (combined.length > MAX_STORED_EVENTS) {
-            console.warn('[VideoAnalytics] Dropped', combined.length - MAX_STORED_EVENTS, 'old events');
+            logger.warn(`[VideoAnalytics] Dropped ${combined.length - MAX_STORED_EVENTS} old events`);
           }
         }
       } catch (storageError) {
         // Handle quota exceeded error gracefully
         if (storageError instanceof DOMException && storageError.name === 'QuotaExceededError') {
-          console.warn('[VideoAnalytics] localStorage quota exceeded, clearing old events');
+          logger.warn('[VideoAnalytics] localStorage quota exceeded, clearing old events');
           localStorage.removeItem('pendingVideoAnalytics');
           // Try storing just the new events
           try {
             localStorage.setItem('pendingVideoAnalytics', JSON.stringify(events));
           } catch {
             // If still fails, give up gracefully
-            console.error('[VideoAnalytics] Cannot store events, quota exceeded');
+            logger.error('[VideoAnalytics] Cannot store events, quota exceeded');
           }
         } else {
           throw storageError; // Re-throw other storage errors
         }
       }
     } catch (error) {
-      console.error('[VideoAnalytics] Failed to store events locally:', error);
+      logger.error('[VideoAnalytics] Failed to store events locally:', error);
     }
   }
 
