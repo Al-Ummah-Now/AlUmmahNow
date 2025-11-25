@@ -2,9 +2,9 @@
  * Channel types
  */
 
-import { Timestamps } from './common';
+import { Timestamps, SoftDelete, Moderation } from './common';
 
-export interface Channel extends Timestamps {
+export interface Channel extends Timestamps, SoftDelete, Moderation {
   id: string;
   userId: string;
   email: string;
@@ -16,6 +16,9 @@ export interface Channel extends Timestamps {
   coverUrl?: string;
   isMain: boolean;
   isVerified?: boolean;
+
+  // Privacy (user-controlled - owner + admins can access)
+  isPrivate?: boolean;
 
   // Stats
   subscribersCount?: number;

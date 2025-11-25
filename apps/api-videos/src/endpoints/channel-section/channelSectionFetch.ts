@@ -5,7 +5,6 @@ import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { transformChannelSectionToView } from '../../lib/transformations';
 import { logger } from '../../lib/logger';
-// Using console logging as per project pattern
 
 export class ChannelSectionFetch extends OpenAPIRoute {
   schema = addAuthToSchema(
@@ -83,8 +82,41 @@ export class ChannelSectionFetch extends OpenAPIRoute {
       );
     }
 
-    // For now, all channels are publicly visible
-    // TODO: Add privacy controls when Channel type supports it
+    // Check if channel is deleted
+    if (channel.isDeleted) {
+      logger.warn(`Channel is deleted: ${channelId}`);
+      return c.json(
+        {
+          success: false,
+          error: 'Channel not found',
+        },
+        404
+      );
+    }
+
+    // Check if channel is hidden (moderation) - blocks everyone including owner
+    if (channel.isHidden) {
+      logger.warn(`Channel is hidden: ${channelId}`);
+      return c.json(
+        {
+          success: false,
+          error: 'Channel not found',
+        },
+        404
+      );
+    }
+
+    // Check if channel is private - only owner can access
+    if (channel.isPrivate && channel.userId !== auth?.userId) {
+      logger.warn(`Private channel ${channelId} access denied for user ${auth?.userId}`);
+      return c.json(
+        {
+          success: false,
+          error: 'Channel not found',
+        },
+        404
+      );
+    }
 
     // Fetch the section
     const sectionsRepo = new R2Repository<ChannelSection>(c.env.channel_sections);

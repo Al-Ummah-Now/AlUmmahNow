@@ -3,7 +3,7 @@
  * These types are shared between frontend and backend
  */
 
-import { Timestamps } from './common';
+import { Timestamps, SoftDelete, Moderation } from './common';
 import { SubtitleTrack } from './subtitle';
 import { VideoCategory } from './upload-defaults';
 
@@ -28,7 +28,7 @@ export interface VideoChapterData {
   version: number;      // For future migration
 }
 
-export interface VideoObject extends Timestamps {
+export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   id: string;
   title: string;
   titleLocalized?: Record<string, string>; // Multi-language titles

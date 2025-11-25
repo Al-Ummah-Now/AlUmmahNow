@@ -178,7 +178,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
     // Check active channel
     if (!activeChannel) {
-      onError('No active channel selected. Please select a channel first.');
+      onError(t.errors.channelRequired);
       return;
     }
 
@@ -410,7 +410,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
     } catch (error: unknown) {
       const err = error as { message?: string };
-      const errorMessage = err.message || 'Upload failed. Please try again.';
+      const errorMessage = err.message || t.errors.uploadFailed;
       setUploadProgress({
         percentage: uploadProgress?.percentage || 0,
         state: 'error',

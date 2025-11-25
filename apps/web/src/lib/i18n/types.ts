@@ -817,6 +817,19 @@ export interface AppTranslations {
     uploadError: string;
     sessionExpired: string;
     uploadFailed: string;
+    authRequired: string;
+    channelRequired: string;
+    failedToLoad: string;
+    failedToSave: string;
+    failedToDelete: string;
+    failedToUpdate: string;
+    failedToCreate: string;
+    failedToSwitch: string;
+    failedToProcess: string;
+    invalidFile: string;
+    fileTooLarge: string;
+    reportReasonRequired: string;
+    loginRequired: string;
   };
 
   /**

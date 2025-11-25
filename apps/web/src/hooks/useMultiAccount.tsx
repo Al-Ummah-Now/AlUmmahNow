@@ -22,6 +22,7 @@ import {
 } from '@/lib/actions/multi-account';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
+import { useLanguage } from '@/hooks/useLanguage';
 
 // Types
 interface ChannelInfo {
@@ -78,6 +79,7 @@ const MultiAccountContext = createContext<MultiAccountContextValue | null>(null)
  */
 export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const { t } = useLanguage();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -207,7 +209,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       // This will redirect to OAuth flow
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to add account:', err);
-      setError('Failed to add account');
+      setError(t.errors.failedToCreate);
     }
   }, []);
 
@@ -240,7 +242,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to switch account:', err);
-      setError('Failed to switch account');
+      setError(t.errors.failedToSwitch);
     } finally {
       setLoading(false);
     }
@@ -268,7 +270,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       router.refresh();
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to remove account:', err);
-      setError('Failed to remove account');
+      setError(t.errors.failedToDelete);
     }
   }, [accounts, loadSessionData, router]);
 
@@ -285,7 +287,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       router.refresh();
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to switch channel:', err);
-      setError('Failed to switch channel');
+      setError(t.errors.failedToSwitch);
     } finally {
       setLoading(false);
     }
@@ -307,7 +309,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       return null;
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to create channel:', err);
-      setError('Failed to create channel');
+      setError(t.errors.failedToCreate);
       return null;
     }
   }, [loadSessionData, router]);
@@ -328,7 +330,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to reload channels:', err);
-      setError('Failed to reload channels');
+      setError(t.errors.failedToLoad);
     }
   }, []);
 
@@ -371,7 +373,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to logout:', err);
-      setError('Failed to logout');
+      setError(t.errors.genericError);
     }
   }, [accounts, loadSessionData, router]);
 
@@ -411,7 +413,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       router.push(`/${locale}`);
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to logout all:', err);
-      setError('Failed to logout');
+      setError(t.errors.genericError);
     }
   }, [router]);
 
