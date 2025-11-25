@@ -28,6 +28,20 @@ export interface R2PutOptions {
   customMetadata?: Record<string, string>;
 }
 
+export interface R2Object {
+  key: string;
+  body: ReadableStream;
+  bodyUsed: boolean;
+  json: <T = unknown>() => Promise<T>;
+  text: () => Promise<string>;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+}
+
+export interface R2Bucket {
+  put: (key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: R2PutOptions) => Promise<void>;
+  get: (key: string) => Promise<R2Object | null>;
+}
+
 export interface QueueEnvironment {
   MESSAGE_QUEUE: {
     send: (message: AlUmmahMessage) => Promise<void>;
@@ -35,9 +49,8 @@ export interface QueueEnvironment {
   DLQ?: { // Optional - might not be configured in all environments
     send: (message: AlUmmahMessage) => Promise<void>;
   };
-  MESSAGES_BUCKET: {
-    put: (key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: R2PutOptions) => Promise<void>;
-  };
+  MESSAGES_BUCKET: R2Bucket;
+  community_posts: R2Bucket;
   ENVIRONMENT: string;
   LOG_LEVEL: string;
 }

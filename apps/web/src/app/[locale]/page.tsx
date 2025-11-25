@@ -39,7 +39,7 @@ const VideosPage: React.FC = () => {
         const newVideos = data.data.filter(video => !existingIds.has(video.id));
         return [...prevVideos, ...newVideos];
       });
-      setNextCursor(data.cursor); // Update the next cursor
+      setNextCursor(data.pagination?.nextCursor ?? null); // Update the next cursor
     } catch (error) {
       console.error("Error fetching videos:", error);
     } finally {

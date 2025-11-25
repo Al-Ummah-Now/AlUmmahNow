@@ -1,5 +1,14 @@
-import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
+/**
+ * Scheduler Types
+ * Re-exports shared types and defines scheduler-specific types
+ */
 
+import type { ScheduledVideoMetadata, PublishEvent } from '@al-ummah/shared-types';
+
+// Re-export for convenience
+export type { ScheduledVideoMetadata, PublishEvent };
+
+// Cloudflare Worker environment bindings
 export interface Env {
   VIDEOS: R2Bucket;
   SCHEDULED_VIDEOS: R2Bucket;
@@ -12,6 +21,7 @@ export interface Env {
   WEBSOCKET_URL: string;
 }
 
+// Scheduler-specific types
 export interface BatchResult {
   successful: ScheduledVideoMetadata[];
   failed: FailedVideo[];
@@ -20,15 +30,6 @@ export interface BatchResult {
 export interface FailedVideo {
   video: ScheduledVideoMetadata;
   error: Error;
-}
-
-export interface PublishEvent {
-  type: 'SCHEDULED_PUBLISH_SUCCESS' | 'SCHEDULED_PUBLISH_FAILURE' | 'SCHEDULED_PUBLISH_RETRY';
-  videoId: string;
-  scheduledTime: string;
-  publishedAt?: string;
-  error?: string;
-  retryCount?: number;
 }
 
 export interface HealthStatus {

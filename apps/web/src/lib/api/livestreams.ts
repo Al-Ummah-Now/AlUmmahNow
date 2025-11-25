@@ -201,11 +201,11 @@ export async function getLiveNow(
       limit,
     });
 
-    if (!response || !response.success || !response.result) {
+    if (!response || !response.success || !response.data) {
       return [];
     }
 
-    return response.result.data || [];
+    return response.data.data || [];
   } catch (error) {
     logger.error('getLiveNow error:', error);
     return [];
@@ -224,11 +224,11 @@ export async function getScheduledStreams(
       limit,
     });
 
-    if (!response || !response.success || !response.result) {
+    if (!response || !response.success || !response.data) {
       return [];
     }
 
-    return response.result.data || [];
+    return response.data.data || [];
   } catch (error) {
     logger.error('getScheduledStreams error:', error);
     return [];
@@ -256,11 +256,11 @@ export async function getStreamsByChannel(
       limit,
     });
 
-    if (!response || !response.success || !response.result) {
+    if (!response || !response.success || !response.data) {
       return [];
     }
 
-    return response.result.data || [];
+    return response.data.data || [];
   } catch (error) {
     logger.error('getStreamsByChannel error:', error);
     return [];

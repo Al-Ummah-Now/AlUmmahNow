@@ -165,16 +165,16 @@ export default function SubtitleUploadModal({
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      if (result?.success && result.result?.subtitle) {
+      if (result?.success && result.data?.subtitle) {
         setSuccess(true);
-        onUploadSuccess?.(result.result.subtitle);
+        onUploadSuccess?.(result.data.subtitle);
 
         // Close modal after 1.5 seconds
         setTimeout(() => {
           handleOpenChange(false);
         }, 1500);
       } else {
-        setError(result?.error || t.subtitle?.uploadFailed || 'Failed to upload subtitle');
+        setError(result?.error?.message || t.subtitle?.uploadFailed || 'Failed to upload subtitle');
       }
     } catch (_err) {
       setError(t.subtitle?.uploadError || 'An error occurred while uploading');

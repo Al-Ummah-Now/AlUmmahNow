@@ -4,11 +4,7 @@ import {
   CommunityPost,
   PostType,
   VoteRecord,
-  VoteResults,
-  VoteOnPollRequest,
-  VoteOnPollResponse,
 } from '@al-ummah/shared-types';
-import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
@@ -40,19 +36,12 @@ export class VoteOnPoll extends OpenAPIRoute {
     },
     responses: {
       200: {
-        description: 'Vote recorded successfully',
+        description: 'Vote recorded successfully. Results are calculated asynchronously.',
         content: {
           'application/json': {
             schema: z.object({
               success: z.boolean(),
-              results: z.object({
-                totalVotes: z.number(),
-                options: z.array(z.object({
-                  id: z.string(),
-                  votes: z.number(),
-                  percentage: z.number(),
-                })),
-              }),
+              message: z.string(),
             }),
           },
         },
@@ -140,142 +129,25 @@ export class VoteOnPoll extends OpenAPIRoute {
       };
       await c.env.community_posts.put(voteKey, JSON.stringify(voteRecord));
 
-      // Update results
-      const results = await this.updateResults(c, postId, post.poll, body.optionIds);
-
-      // Update post with new totals
-      post.poll.totalVotes = results.totalVotes;
-      post.poll.options = post.poll.options.map(opt => ({
-        ...opt,
-        votes: results.options[opt.id]?.count || 0,
-        percentage: results.options[opt.id]?.percentage || 0,
-      }));
-
-      // Save updated post
-      await c.env.community_posts.put(postKey, JSON.stringify(post));
-
-      // Send to queue for analytics
+      // Send to queue for score calculation (moved from synchronous calculation)
       const queue = new Queue(c.env.queue);
       await queue.send(MessageType.PollVoted, {
         postId,
         channelId: post.channelId,
         userId: auth.userId,
         optionIds: body.optionIds,
+        // Include poll options for processor to initialize results if needed
+        pollOptions: post.poll.options.map(opt => ({ id: opt.id })),
         timestamp: new Date().toISOString(),
       });
 
       return c.json({
         success: true,
-        results: {
-          totalVotes: results.totalVotes,
-          options: post.poll.options.map(opt => ({
-            id: opt.id,
-            votes: opt.votes,
-            percentage: opt.percentage,
-          })),
-        },
+        message: 'Vote recorded successfully',
       });
     } catch (error) {
       logger.error('Error voting on poll:', error);
       return c.json({ error: 'Failed to record vote' }, 500);
     }
-  }
-
-  /**
-   * KNOWN ISSUE: Race Condition in Vote Counting
-   *
-   * This method uses a read-modify-write pattern that is NOT atomic:
-   * 1. Read current vote counts from R2
-   * 2. Increment vote counts locally
-   * 3. Write updated counts back to R2
-   *
-   * PROBLEM:
-   * If two users vote simultaneously on the same poll:
-   * - User A reads: totalVotes = 100
-   * - User B reads: totalVotes = 100 (before A's write)
-   * - User A increments to 101 and writes
-   * - User B increments to 101 and writes (overwrites A's vote!)
-   * - Result: totalVotes = 101 instead of 102 (one vote lost)
-   *
-   * IMPACT:
-   * - Vote counts may be inaccurate under concurrent load
-   * - Higher traffic = more lost votes
-   * - Low-traffic polls will see minimal impact
-   *
-   * SOLUTION OPTIONS:
-   *
-   * Option 1: Cloudflare Durable Objects (RECOMMENDED)
-   * - Provides single-threaded atomic operations
-   * - Each poll gets its own Durable Object instance
-   * - Guaranteed consistency without race conditions
-   * - Implementation: Move vote counting logic to Durable Objects
-   * - Trade-off: Additional complexity, requires Durable Objects setup
-   *
-   * Option 2: Optimistic Locking with ETags
-   * - Add version/etag field to VoteResults
-   * - Check etag before write, retry if changed
-   * - Simpler than Durable Objects, works with R2
-   * - Trade-off: Requires retry logic, may have contention under high load
-   *
-   * Option 3: Accept the Risk (CURRENT APPROACH)
-   * - Suitable for low-traffic community features
-   * - Most polls will have sequential votes (low concurrency)
-   * - Lost votes are statistically rare in typical usage
-   * - Can upgrade to Option 1 or 2 if accuracy becomes critical
-   *
-   * RECOMMENDATION:
-   * - Start with current implementation for MVP/low-traffic
-   * - Monitor vote accuracy metrics
-   * - Migrate to Durable Objects when poll traffic increases
-   * - Consider Option 2 as intermediate step if needed
-   */
-  private async updateResults(
-    c: any,
-    postId: string,
-    poll: any,
-    optionIds: string[]
-  ): Promise<VoteResults> {
-    const resultsKey = `votes/${postId}/results.json`;
-    const existing = await c.env.community_posts.get(resultsKey);
-
-    let results: VoteResults = {
-      postId,
-      totalVotes: 0,
-      options: {},
-      lastUpdated: new Date().toISOString(),
-    };
-
-    if (existing) {
-      results = await existing.json();
-    }
-
-    // Initialize all options
-    for (const option of poll.options) {
-      if (!results.options[option.id]) {
-        results.options[option.id] = { count: 0, percentage: 0 };
-      }
-    }
-
-    // Update vote counts
-    results.totalVotes++;
-    for (const optionId of optionIds) {
-      if (!results.options[optionId]) {
-        results.options[optionId] = { count: 0, percentage: 0 };
-      }
-      results.options[optionId].count++;
-    }
-
-    // Recalculate percentages
-    for (const optionId in results.options) {
-      results.options[optionId].percentage =
-        results.totalVotes > 0
-          ? Math.round((results.options[optionId].count / results.totalVotes) * 100 * 10) / 10
-          : 0;
-    }
-
-    results.lastUpdated = new Date().toISOString();
-    await c.env.community_posts.put(resultsKey, JSON.stringify(results));
-
-    return results;
   }
 }

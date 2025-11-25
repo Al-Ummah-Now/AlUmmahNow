@@ -78,7 +78,10 @@ export async function uploadSubtitle(
     logger.error('uploadSubtitle error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to upload subtitle'
+      error: {
+        code: 'UPLOAD_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to upload subtitle'
+      }
     };
   }
 }
@@ -180,7 +183,10 @@ export async function deleteSubtitle(
     logger.error('deleteSubtitle error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to delete subtitle'
+      error: {
+        code: 'DELETE_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to delete subtitle'
+      }
     };
   }
 }
@@ -216,7 +222,10 @@ export async function setDefaultSubtitle(
     logger.error('setDefaultSubtitle error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to set default subtitle'
+      error: {
+        code: 'SET_DEFAULT_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to set default subtitle'
+      }
     };
   }
 }

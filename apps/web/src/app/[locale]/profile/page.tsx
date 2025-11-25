@@ -9,7 +9,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 const ProfilePage = () => {
   const params = useParams();
   const locale = params.locale as string;
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const auth = useAuth();
   const router = useRouter();
   const { profile, isLoading, error } = useProfile(auth?.user || null);
@@ -65,7 +65,7 @@ const ProfilePage = () => {
                   {/* Edit Button - Always visible */}
                   <button
                     onClick={() => router.push(`/${locale}/profile/edit`)}
-                    className="absolute top-4 right-4 inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg"
+                    className={`absolute top-4 ${isRTL ? 'left-4' : 'right-4'} inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg`}
                   >
                     <svg
                       className="w-4 h-4"
@@ -86,7 +86,7 @@ const ProfilePage = () => {
 
                 {/* Profile Photo */}
                 <div
-                  className="profile-photo w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-600 border-4 border-white dark:border-gray-800 absolute bottom-[-24px] left-4 overflow-hidden"
+                  className={`profile-photo w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-600 border-4 border-white dark:border-gray-800 absolute bottom-[-24px] ${isRTL ? 'right-4' : 'left-4'} overflow-hidden`}
                   style={{
                     backgroundImage: profile?.avatarUrl ? `url(${profile.avatarUrl})` : `url(/avatar.png)`,
                     backgroundSize: 'cover',

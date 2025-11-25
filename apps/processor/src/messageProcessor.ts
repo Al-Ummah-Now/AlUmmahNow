@@ -1,6 +1,7 @@
 import { AlUmmahMessage, ProcessingResult, MessageType, QueueEnvironment } from './types';
 import { Logger } from '@al-ummah/logger';
 import { handleChannelSectionEvent } from './handlers/channel-section';
+import { handlePollVoteEvent } from './handlers/poll-vote';
 // Channel tabs are frontend-only, no backend processing needed
 // import { handleChannelTabEvent } from './handlers/channel-tab';
 
@@ -132,8 +133,12 @@ export class MessageProcessor {
       case MessageType.CommunityPostCreated:
       case MessageType.CommunityPostLiked:
       case MessageType.CommunityPostDeleted:
-      case MessageType.PollVoted:
         await this.processCommunityPostMessage(message);
+        break;
+
+      // Poll vote event - handled separately for score calculation
+      case MessageType.PollVoted:
+        await handlePollVoteEvent(message, env, this.logger);
         break;
 
       // Channel section events
@@ -426,7 +431,6 @@ export class MessageProcessor {
       channelId: string;
       userId?: string;
       likerChannelId?: string;
-      optionIds?: string[];
     };
 
     if (!postId || !channelId) {
@@ -444,11 +448,7 @@ export class MessageProcessor {
       case MessageType.CommunityPostDeleted:
         this.logger.info(`Community post ${postId} deleted from channel ${channelId}`);
         break;
-      case MessageType.PollVoted: {
-        const { optionIds } = message.payload as { optionIds?: string[] };
-        this.logger.info(`User ${userId} voted on poll ${postId} (${optionIds?.length || 0} options selected)`);
-        break;
-      }
+      // PollVoted is now handled by dedicated handlePollVoteEvent handler
     }
   }
 

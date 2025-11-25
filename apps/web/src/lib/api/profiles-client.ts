@@ -186,14 +186,14 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
 
             logger.info('[updateProfile] Create result:', {
                 hasResult: !!createResult,
-                hasProfile: !!createResult?.result?.profile,
-                profile: createResult?.result?.profile
+                hasProfile: !!createResult?.data?.profile,
+                profile: createResult?.data?.profile
             });
 
-            if (createResult?.result?.profile) {
+            if (createResult?.data?.profile) {
                 logger.info('[updateProfile] ✅ Profile created successfully');
                 logger.info('[updateProfile] Step 4: Setting created profile in React state...');
-                setProfile(createResult.result.profile);
+                setProfile(createResult.data.profile);
                 logger.info('[updateProfile] ========== END (CREATED) ==========');
                 return true;
             }
@@ -204,14 +204,14 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
 
             logger.info('[updateProfile] Update result:', {
                 hasResult: !!updateResult,
-                hasProfile: !!updateResult?.result?.profile,
-                profile: updateResult?.result?.profile
+                hasProfile: !!updateResult?.data?.profile,
+                profile: updateResult?.data?.profile
             });
 
-            if (updateResult?.result?.profile) {
+            if (updateResult?.data?.profile) {
                 logger.info('[updateProfile] ✅ Profile updated successfully');
                 logger.info('[updateProfile] Step 4: Setting updated profile in React state...');
-                setProfile(updateResult.result.profile);
+                setProfile(updateResult.data.profile);
                 logger.info('[updateProfile] ========== END (UPDATED) ==========');
                 return true;
             }

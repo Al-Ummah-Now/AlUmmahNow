@@ -137,7 +137,7 @@ export async function getReports(
     }
 
     const data: ApiResponse<ContentReport[]> = await response.json();
-    return data.result || getMockReports();
+    return data.data || getMockReports();
   } catch (error) {
     logger.warn('getReports: using mock data:', error);
     return getMockReports();
@@ -170,7 +170,7 @@ export async function getReportById(
     }
 
     const data: ApiResponse<ContentReport> = await response.json();
-    return data.result || getMockReports()[0];
+    return data.data || getMockReports()[0];
   } catch (error) {
     logger.warn('getReportById: using mock data:', error);
     return getMockReports()[0];
@@ -204,7 +204,7 @@ export async function createReport(
     }
 
     const data: ApiResponse<ContentReport> = await response.json();
-    return data.result || getMockReports()[0];
+    return data.data || getMockReports()[0];
   } catch (error) {
     logger.warn('createReport: mock creation:', error);
     return getMockReports()[0];
@@ -238,7 +238,7 @@ export async function takeModerationAction(
     }
 
     const data: ApiResponse<ModerationAction> = await response.json();
-    return data.result || getMockActions()[0];
+    return data.data || getMockActions()[0];
   } catch (error) {
     logger.warn('takeModerationAction: mock action:', error);
     return getMockActions()[0];
@@ -268,7 +268,7 @@ export async function getStats(headers?: ApiHeaders): Promise<ModerationStats | 
     }
 
     const data: ApiResponse<ModerationStats> = await response.json();
-    return data.result || getMockStats();
+    return data.data || getMockStats();
   } catch (error) {
     logger.warn('getStats: using mock stats:', error);
     return getMockStats();
@@ -301,7 +301,7 @@ export async function getUserModeration(
     }
 
     const data: ApiResponse<UserModeration> = await response.json();
-    return data.result || getMockUserModeration();
+    return data.data || getMockUserModeration();
   } catch (error) {
     logger.warn('getUserModeration: using mock data:', error);
     return getMockUserModeration();

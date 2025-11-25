@@ -256,17 +256,17 @@ export async function createChannelForActiveUser(
       channelId: session.channelId || '', // Use empty string if no channel selected
     });
 
-    if (response?.result?.channel) {
+    if (response?.data?.channel) {
       // Reload channels to include the new one
       await SessionManager.loadUserChannels(session.userId);
 
       // If this is the first channel, set it as active
       if (!session.channelId) {
-        await SessionManager.setActiveChannel(response.result.channel.id);
+        await SessionManager.setActiveChannel(response.data.channel.id);
       }
 
       revalidatePath('/');
-      return response.result.channel;
+      return response.data.channel;
     }
 
     return null;
