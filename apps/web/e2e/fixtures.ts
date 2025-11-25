@@ -33,7 +33,7 @@ type TestFixtures = {
 };
 
 export const test = base.extend<TestFixtures>({
-  mockUser: async (_fixtures, use) => {
+  mockUser: async ({}, use) => {
     const user = {
       id: 'test-user-' + Date.now(),
       email: 'test@example.com',
@@ -43,7 +43,7 @@ export const test = base.extend<TestFixtures>({
     await use(user);
   },
 
-  mockChannel: async (_fixtures, use) => {
+  mockChannel: async ({}, use) => {
     const channel = {
       id: 'test-channel-' + Date.now(),
       name: 'Test Channel ' + Date.now(),
@@ -53,7 +53,7 @@ export const test = base.extend<TestFixtures>({
     await use(channel);
   },
 
-  mockVideo: async (_fixtures, use) => {
+  mockVideo: async ({}, use) => {
     const video = {
       id: 'test-video-' + Date.now(),
       title: 'Test Video ' + Date.now(),

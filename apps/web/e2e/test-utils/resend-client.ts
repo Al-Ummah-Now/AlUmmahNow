@@ -59,11 +59,27 @@ export class ResendTestClient {
 
         const data = await response.json();
 
-        // Find verification email for the specified address
-        const verificationEmail = data.data?.find((emailRecord: ResendEmailRecord) => {
-          return emailRecord.to?.includes(email) &&
+        // Find verification email for the specified address (most recent first)
+        // Sort by created_at descending to get the newest email
+        const sortedEmails = (data.data || []).sort((a: ResendEmailRecord, b: ResendEmailRecord) => {
+          const dateA = new Date(a.created_at as string || 0).getTime();
+          const dateB = new Date(b.created_at as string || 0).getTime();
+          return dateB - dateA; // Most recent first
+        });
+
+        const verificationEmail = sortedEmails.find((emailRecord: ResendEmailRecord) => {
+          const matches = emailRecord.to?.includes(email) &&
                  (emailRecord.subject?.toLowerCase().includes('verification') ||
-                  emailRecord.subject?.toLowerCase().includes('verify'));
+                  emailRecord.subject?.toLowerCase().includes('verify') ||
+                  emailRecord.subject?.toLowerCase().includes('code'));
+          if (matches) {
+            logger.debug('Found matching email', {
+              to: emailRecord.to,
+              subject: emailRecord.subject,
+              created_at: emailRecord.created_at
+            });
+          }
+          return matches;
         });
 
         if (verificationEmail) {
@@ -139,35 +155,56 @@ export class ResendTestClient {
    * @returns Verification code, or null if not found
    */
   extractVerificationCode(emailHtml: string): string | null {
-    // Pattern 1: Look for 6-digit codes
-    const sixDigitMatch = emailHtml.match(/\b(\d{6})\b/);
-    if (sixDigitMatch) {
-      logger.info('Extracted 6-digit verification code');
-      return sixDigitMatch[1];
-    }
+    // Strategy: Find all 6-digit numbers that are NOT part of CSS hex colors
+    // CSS colors are in format #XXXXXX where X is hex digit (0-9, a-f, A-F)
 
-    // Pattern 2: Look for codes in common HTML patterns
-    // e.g., <h1>123456</h1> or <p>Your code: ABC123</p>
-    const codePatterns = [
-      /<h[1-6]>([A-Z0-9]{4,8})<\/h[1-6]>/i,
-      /<code>([A-Z0-9]{4,8})<\/code>/i,
-      /<strong>([A-Z0-9]{4,8})<\/strong>/i,
-      /code:\s*([A-Z0-9]{4,8})/i,
-      /verification code:\s*([A-Z0-9]{4,8})/i,
+    // First, try to find codes in prominent HTML elements (most reliable)
+    const prominentPatterns = [
+      /<h[1-6][^>]*>(\d{6})<\/h[1-6]>/i,
+      /<div[^>]*class="[^"]*code[^"]*"[^>]*>(\d{6})<\/div>/i,
+      /<span[^>]*class="[^"]*code[^"]*"[^>]*>(\d{6})<\/span>/i,
+      /<strong>(\d{6})<\/strong>/i,
+      /<b>(\d{6})<\/b>/i,
+      /code[^>]*>(\d{6})</i,
     ];
 
-    for (const pattern of codePatterns) {
+    for (const pattern of prominentPatterns) {
       const match = emailHtml.match(pattern);
       if (match) {
-        logger.info('Extracted verification code using pattern', {
-          pattern: pattern.source
-        });
+        logger.info('Extracted verification code from prominent element', { code: match[1] });
         return match[1];
       }
     }
 
-    logger.warn('Could not extract verification code from email');
-    return null;
+    // Find all 6-digit sequences
+    const allDigits = emailHtml.match(/\d{6}/g);
+    if (!allDigits || allDigits.length === 0) {
+      logger.warn('No 6-digit sequences found in email');
+      return null;
+    }
+
+    // Filter out CSS hex colors by checking if preceded by '#'
+    // Also filter out common CSS color codes
+    const cssColorCodes = new Set(['333333', '555555', '666666', '999999', 'aaaaaa', 'cccccc', 'ffffff', '000000']);
+    const nonCssDigits = allDigits.filter(digit => {
+      // Check if this appears to be a CSS color
+      const isLikelyCssColor = cssColorCodes.has(digit.toLowerCase()) ||
+        emailHtml.includes(`#${digit}`) ||
+        emailHtml.includes(`#${digit.toLowerCase()}`);
+      return !isLikelyCssColor;
+    });
+
+    if (nonCssDigits.length > 0) {
+      // Return the last non-CSS 6-digit number (most likely to be the verification code)
+      const code = nonCssDigits[nonCssDigits.length - 1];
+      logger.info('Extracted verification code (last non-CSS 6-digit)', { code });
+      return code;
+    }
+
+    // Fallback: return the last 6-digit number
+    const code = allDigits[allDigits.length - 1];
+    logger.info('Extracted verification code (fallback to last digit)', { code });
+    return code;
   }
 
   /**

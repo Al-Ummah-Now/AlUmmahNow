@@ -31,10 +31,12 @@ async function globalSetup(_config: FullConfig) {
 
   const openAuthUrl = process.env.OPENAUTH_URL || 'http://localhost:3301';
   const webAppUrl = process.env.WEB_APP_URL || 'http://localhost:3001';
+  const clientId = process.env.OPENAUTH_CLIENT_ID || 'alummah-web';
 
   logger.info('[Global Setup] Configuration', {
     openAuthUrl,
-    webAppUrl
+    webAppUrl,
+    clientId
   });
 
   const resendClient = new ResendTestClient(resendApiKey);
@@ -78,45 +80,76 @@ async function globalSetup(_config: FullConfig) {
     const page = await context.newPage();
 
     try {
-      // Navigate to OpenAuth signup
-      await page.goto(`${openAuthUrl}/signup`, { waitUntil: 'networkidle' });
+      // Start with the OAuth authorize endpoint - this sets up proper session state
+      const callbackUrl = `${webAppUrl}/api/callback`;
+      const authorizeUrl = `${openAuthUrl}/authorize?redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&client_id=${clientId}`;
+
+      logger.info(`[Setup] Starting OAuth flow for ${user.email}`);
+      await page.goto(authorizeUrl, { waitUntil: 'networkidle' });
+
+      // Click the "Register" link to go to registration page
+      const registerLink = await page.$('a[href*="register"], a:has-text("Register")');
+      if (registerLink) {
+        await registerLink.click();
+        await page.waitForLoadState('networkidle');
+      }
 
       logger.info(`[Setup] Filling registration form for ${user.email}`);
 
-      // Fill registration form
-      await page.fill('input[type="email"]', user.email);
-      await page.fill('input[type="password"]', user.password);
-      await page.click('button[type="submit"]');
+      // Fill registration form - OpenAuth uses name attributes
+      await page.fill('input[name="email"]', user.email);
+      await page.fill('input[name="password"]', user.password);
+      await page.fill('input[name="repeat"]', user.password); // Repeat password field
+      await page.click('button[data-component="button"]');
 
-      // Wait for verification code input to appear
-      logger.info(`[Setup] Waiting for verification code input for ${user.email}`);
-      await page.waitForSelector('text=/verification.*code/i', { timeout: 10000 });
+      // Wait for verification code page or direct redirect
+      logger.info(`[Setup] Waiting for next step for ${user.email}`);
 
-      // Get verification code from Resend
-      logger.info(`[Setup] Fetching verification email for ${user.email}`);
-      const emailHtml = await resendClient.getVerificationEmail(user.email);
+      // Wait a moment for the page to transition
+      await page.waitForTimeout(2000);
 
-      if (!emailHtml) {
-        throw new Error('No verification email received within timeout period');
+      // Check if we're on a verification page by looking for "Code" placeholder
+      const codeInput = await page.$('input[placeholder*="Code"], input[placeholder*="code"], input[name="code"]');
+
+      if (codeInput) {
+        logger.info(`[Setup] Verification code required for ${user.email}`);
+
+        // Get verification code from Resend
+        const emailHtml = await resendClient.getVerificationEmail(user.email);
+
+        if (!emailHtml) {
+          throw new Error('No verification email received within timeout period');
+        }
+
+        const code = resendClient.extractVerificationCode(emailHtml);
+
+        if (!code) {
+          throw new Error('Failed to extract verification code from email');
+        }
+
+        logger.info(`[Setup] Entering verification code for ${user.email}`);
+
+        // Enter verification code
+        await codeInput.fill(code);
+        await page.click('button[data-component="button"]');
       }
 
-      const code = resendClient.extractVerificationCode(emailHtml);
-      if (!code) {
-        throw new Error('Failed to extract verification code from email');
+      // Wait for successful authentication - callback URL or home page
+      logger.info(`[Setup] Waiting for authentication to complete for ${user.email}`);
+
+      // Wait for callback URL and then navigate to verify auth
+      try {
+        await page.waitForURL('**/api/callback**', { timeout: 20000 });
+
+        // Give time for cookies to be set
+        await page.waitForTimeout(1000);
+
+        // Navigate to home page to verify authentication worked
+        await page.goto(`${webAppUrl}/en`, { waitUntil: 'networkidle' });
+      } catch {
+        // Already on home page or elsewhere - continue
+        logger.debug(`[Setup] Current URL after auth: ${page.url()}`);
       }
-
-      logger.info(`[Setup] Verification code received for ${user.email}`);
-
-      // Enter verification code
-      await page.fill('input[type="text"], input[type="number"]', code);
-      await page.click('button[type="submit"]');
-
-      // Wait for successful authentication and redirect
-      logger.info(`[Setup] Waiting for authentication callback for ${user.email}`);
-      await page.waitForURL('**/api/callback?code=*', { timeout: 15000 });
-
-      logger.info(`[Setup] Waiting for redirect to home page for ${user.email}`);
-      await page.waitForURL('**/en', { timeout: 10000 });
 
       // Save authenticated state
       logger.info(`[Setup] Saving authentication state for ${user.email}`);

@@ -265,7 +265,9 @@ export function getStartEnd<T>(
  * ```
  */
 export function parseLocaleFromPath(pathname: string): string {
-  const match = pathname.match(/^\/(ar|en|[a-z]{2})\//);
+  // Match locale at start of path, with optional trailing slash or end of string
+  // Handles: /ar, /ar/, /ar/page, /en, /en/, /en/page
+  const match = pathname.match(/^\/(ar|en|[a-z]{2})(?:\/|$)/);
   return match ? match[1] : DEFAULT_LOCALE;
 }
 
