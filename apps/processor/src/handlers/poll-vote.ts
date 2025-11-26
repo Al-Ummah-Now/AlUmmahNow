@@ -53,45 +53,76 @@ export async function handlePollVoteEvent(
 }
 
 /**
- * Updates vote results in R2.
- * Reads current results, increments counts, recalculates percentages.
+ * Recalculates vote results by reading ALL vote documents for a post.
+ * This approach is race-condition proof because:
+ * - Each user's vote is stored as a separate document keyed by userId
+ * - Duplicate votes just overwrite the same file
+ * - We count from source of truth, not increment counters
  */
 async function updateVoteResults(
   env: QueueEnvironment,
   postId: string,
-  optionIds: string[],
+  _optionIds: string[], // Not used - we read all votes from storage
   pollOptions: Array<{ id: string }>,
   logger: Logger
 ): Promise<VoteResults> {
+  const votesPrefix = `votes/${postId}/`;
   const resultsKey = `votes/${postId}/results.json`;
-  const existing = await env.community_posts.get(resultsKey);
 
-  let results: VoteResults = {
+  // Initialize fresh results
+  const results: VoteResults = {
     postId,
     totalVotes: 0,
     options: {},
     lastUpdated: new Date().toISOString(),
   };
 
-  if (existing) {
-    results = await existing.json<VoteResults>();
-  }
-
   // Initialize all options from poll configuration
   for (const option of pollOptions) {
-    if (!results.options[option.id]) {
-      results.options[option.id] = { count: 0, percentage: 0 };
-    }
+    results.options[option.id] = { count: 0, percentage: 0 };
   }
 
-  // Update vote counts
-  results.totalVotes++;
-  for (const optionId of optionIds) {
-    if (!results.options[optionId]) {
-      results.options[optionId] = { count: 0, percentage: 0 };
+  // List all vote documents for this post (with pagination for large polls)
+  let cursor: string | undefined;
+  let voteDocsProcessed = 0;
+
+  do {
+    const listOptions: { prefix: string; cursor?: string } = { prefix: votesPrefix };
+    if (cursor) {
+      listOptions.cursor = cursor;
     }
-    results.options[optionId].count++;
-  }
+    const listResult = await env.community_posts.list(listOptions);
+
+    // Read each vote document and count
+    for (const object of listResult.objects) {
+      // Skip the results.json file itself
+      if (object.key === resultsKey) {
+        continue;
+      }
+
+      try {
+        const voteData = await env.community_posts.get(object.key);
+        if (!voteData) continue;
+
+        const vote = await voteData.json<{ optionIds: string[] }>();
+
+        // Count this vote
+        results.totalVotes++;
+        voteDocsProcessed++;
+
+        // Count each option selected by this voter
+        for (const optionId of vote.optionIds) {
+          if (results.options[optionId]) {
+            results.options[optionId].count++;
+          }
+        }
+      } catch (error) {
+        logger.warn('Failed to read vote document', { key: object.key, error });
+      }
+    }
+
+    cursor = listResult.truncated ? listResult.cursor : undefined;
+  } while (cursor);
 
   // Recalculate percentages
   for (const optionId in results.options) {
@@ -107,7 +138,12 @@ async function updateVoteResults(
   results.lastUpdated = new Date().toISOString();
   await env.community_posts.put(resultsKey, JSON.stringify(results));
 
-  logger.debug('Vote results updated', { postId, totalVotes: results.totalVotes });
+  logger.debug('Vote results recalculated from source', {
+    postId,
+    totalVotes: results.totalVotes,
+    voteDocsProcessed,
+  });
+
   return results;
 }
 
