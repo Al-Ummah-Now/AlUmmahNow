@@ -60,7 +60,10 @@ export function transformProfileToView(profile: z.infer<typeof BusinessProfile>)
 }
 
 // Transform a business playlist to a view model
-export function transformPlaylistToView(playlist: z.infer<typeof BusinessPlaylist>): z.infer<typeof PlaylistView> {
+export function transformPlaylistToView(
+    playlist: z.infer<typeof BusinessPlaylist>,
+    channel?: z.infer<typeof BusinessChannel> | null
+): z.infer<typeof PlaylistView> {
     return {
         id: playlist.id,
         title: playlist.title,
@@ -68,7 +71,7 @@ export function transformPlaylistToView(playlist: z.infer<typeof BusinessPlaylis
         thumbnailUrl: playlist.thumbnailUrl,
         userId: playlist.userId,
         channelId: playlist.channelId,
-        channelName: "", // TODO: Resolve from channel data
+        channelName: channel?.name || "",
         dateCreated: playlist.dateCreated,
         dateModified: playlist.dateModified,
         videosCount: playlist.videos?.length || 0,
@@ -101,8 +104,14 @@ export function transformProfilesToView(profiles: z.infer<typeof BusinessProfile
     return (profiles || []).map(transformProfileToView);
 }
 
-export function transformPlaylistsToView(playlists: z.infer<typeof BusinessPlaylist>[]): z.infer<typeof PlaylistView>[] {
-    return (playlists || []).map(transformPlaylistToView);
+export function transformPlaylistsToView(
+    playlists: z.infer<typeof BusinessPlaylist>[],
+    channelMap?: Map<string, z.infer<typeof BusinessChannel>>
+): z.infer<typeof PlaylistView>[] {
+    return (playlists || []).map(playlist => {
+        const channel = playlist.channelId && channelMap ? channelMap.get(playlist.channelId) : undefined;
+        return transformPlaylistToView(playlist, channel);
+    });
 }
 
 export function transformCommentsToView(comments: z.infer<typeof BusinessComment>[]): z.infer<typeof CommentView>[] {

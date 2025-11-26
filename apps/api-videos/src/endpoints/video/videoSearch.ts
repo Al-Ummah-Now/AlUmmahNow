@@ -5,6 +5,8 @@ import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse,
 import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { Channel } from "@al-ummah/shared-types";
+import { logger } from "../../lib/logger";
 
 export class VideoSearch extends OptionalAuthRoute {
 	schema = {
@@ -267,15 +269,41 @@ export class VideoSearch extends OptionalAuthRoute {
 		const endIndex = Math.min(startIndex + limit, totalResults);
 		const paginatedVideos = scoredVideos.slice(startIndex, endIndex);
 
+		// Fetch channel data for paginated videos
+		const uniqueChannelIds = [...new Set(paginatedVideos.map(v => v.video.channelId).filter(Boolean))];
+		const channelMap = new Map<string, Channel>();
+
+		if (uniqueChannelIds.length > 0) {
+			const channelBucket = c.env.channels;
+			const channelRepo = new R2Repository<Channel>(channelBucket);
+
+			// Fetch channels in parallel
+			const channelPromises = uniqueChannelIds.map(async (channelId) => {
+				try {
+					const channel = await channelRepo.getObject(channelId);
+					if (channel) {
+						channelMap.set(channelId, channel);
+					}
+				} catch (error) {
+					logger.warn('[VideoSearch] Failed to fetch channel', { channelId, error });
+				}
+			});
+
+			await Promise.all(channelPromises);
+		}
+
 		// Transform to view models
-		const transformToView = (video: VideoType) => ({
-			...video,
-			channelName: "", // TODO: Fetch from channel data
-			channelAvatarUrl: undefined,
-			likesCount: video.likes?.length || 0,
-			dislikesCount: video.dislikes?.length || 0,
-			commentsCount: video.comments?.length || 0,
-		});
+		const transformToView = (video: VideoType) => {
+			const channel = video.channelId ? channelMap.get(video.channelId) : undefined;
+			return {
+				...video,
+				channelName: channel?.name || "",
+				channelAvatarUrl: channel?.avatarUrl,
+				likesCount: video.likes?.length || 0,
+				dislikesCount: video.dislikes?.length || 0,
+				commentsCount: video.comments?.length || 0,
+			};
+		};
 
 		// Send analytics event for search
 		const queue = new Queue(c.env.queue);

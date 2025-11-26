@@ -3,8 +3,9 @@ import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
-import { VideoCategory } from "@al-ummah/shared-types";
+import { VideoCategory, Channel } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
+import { logger } from "../../lib/logger";
 
 export class VideosList extends OptionalAuthRoute {
 	schema = {
@@ -131,16 +132,42 @@ export class VideosList extends OptionalAuthRoute {
 					return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
 			}
 		});
-		
+
+		// Fetch channel data for all videos
+		const channelIds = [...new Set(filteredVideos.map(v => v.channelId).filter(Boolean))];
+		const channelMap = new Map<string, Channel>();
+
+		if (channelIds.length > 0) {
+			const channelBucket = c.env.channels;
+			const channelRepo = new R2Repository<Channel>(channelBucket);
+
+			// Fetch channels in parallel
+			const channelPromises = channelIds.map(async (channelId) => {
+				try {
+					const channel = await channelRepo.getObject(channelId);
+					if (channel) {
+						channelMap.set(channelId, channel);
+					}
+				} catch (error) {
+					logger.warn('[VideosList] Failed to fetch channel', { channelId, error });
+				}
+			});
+
+			await Promise.all(channelPromises);
+		}
+
 		// Transform business videos to view models
-		const transformToView = (video: VideoType) => ({
-			...video,
-			channelName: "", // TODO: Fetch from channel data
-			channelAvatarUrl: undefined,
-			likesCount: video.likes?.length || 0,
-			dislikesCount: video.dislikes?.length || 0,
-			commentsCount: video.comments?.length || 0,
-		});
+		const transformToView = (video: VideoType) => {
+			const channel = video.channelId ? channelMap.get(video.channelId) : undefined;
+			return {
+				...video,
+				channelName: channel?.name || "",
+				channelAvatarUrl: channel?.avatarUrl,
+				likesCount: video.likes?.length || 0,
+				dislikesCount: video.dislikes?.length || 0,
+				commentsCount: video.comments?.length || 0,
+			};
+		};
 
 		// Return response using R2's native cursor
 		const response: PaginationResponse<ReturnType<typeof transformToView>> = {
