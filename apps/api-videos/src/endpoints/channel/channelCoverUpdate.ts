@@ -74,10 +74,13 @@ const handleCoverUpdate = async (c) => {
         //Update the Channel's avatar URL
         channel.coverUrl = `https://images.alummahnow.net${path}`;
 
+        const auth = c.get('auth');
+        const userId = auth?.userId;
+
         const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ChannelUpdate, {
 			channelId: id,
-			userId: c.req.header('userId'),
+			userId: userId,
 			timestamp: new Date().toISOString(),
 		});
 

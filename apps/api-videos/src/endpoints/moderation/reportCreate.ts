@@ -16,7 +16,6 @@ export class ReportCreate extends AuthenticatedRoute {
 		request: {
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional(),
-				userId: Str({ description: "User ID (automatically set from JWT token)" }).optional(),
 			}),
 			body: {
 				content: {
@@ -79,7 +78,8 @@ export class ReportCreate extends AuthenticatedRoute {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+		const userId = this.getUserId(c);
 		const inputReport = request.body;
 
 		try {

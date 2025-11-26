@@ -15,7 +15,6 @@ export class PlaylistCreate extends AuthenticatedRoute {
         request: {
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
             body: {
                 content: {

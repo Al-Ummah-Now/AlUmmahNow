@@ -15,7 +15,6 @@ export class PlaylistDelete extends AuthenticatedRoute {
             }),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
         },
         responses: {

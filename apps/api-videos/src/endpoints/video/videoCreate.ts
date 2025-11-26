@@ -18,7 +18,6 @@ export class VideoCreate extends AuthenticatedRoute {
 		description: "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
 		request: {
 			headers: z.object({
-				userId: Str({ description: "User ID" }).optional().nullable(),
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 			body: {

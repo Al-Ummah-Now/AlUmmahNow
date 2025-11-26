@@ -21,7 +21,6 @@ export class VideoUpdate extends AuthenticatedRoute {
 				id: Str({ description: "Video id" }),
 			}),
 			headers: z.object({
-				userId: Str({ description: "User ID" }).optional().nullable(),
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 			body: {

@@ -16,7 +16,6 @@ export class ChannelTabsFetch extends OptionalAuthRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID" }).optional().nullable(),
 			}),
 		},
 		responses: {

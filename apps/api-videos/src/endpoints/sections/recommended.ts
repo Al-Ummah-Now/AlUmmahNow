@@ -1,4 +1,4 @@
-import { PublicRoute, AppContext } from "../../base";
+import { OptionalAuthRoute, AppContext } from "../../base";
 import { Num, Str, Bool } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
@@ -37,7 +37,7 @@ const RecommendedVideosResponseSchema = z.object({
   }),
 });
 
-export class RecommendedVideosSection extends PublicRoute {
+export class RecommendedVideosSection extends OptionalAuthRoute {
   schema = {
     tags: ["Video Sections"],
     summary: "Get Recommended Videos",
@@ -60,11 +60,7 @@ export class RecommendedVideosSection extends PublicRoute {
           description: "Base recommendations on this video",
         }).optional(),
       }),
-      headers: z.object({
-        userId: Str({
-          description: "User ID for personalized recommendations (automatically set from JWT token if authenticated)",
-        }).optional().nullable(),
-      }),
+      headers: z.object({}),
     },
     responses: {
       "200": {
@@ -105,7 +101,7 @@ export class RecommendedVideosSection extends PublicRoute {
       // Get validated data
       const data = await this.getValidatedData<typeof this.schema>();
       const { limit, cursor, strategy = 'popular', excludeWatched = false, seedVideoId } = data.query;
-      const { userId } = data.headers;
+      const userId = this.getUserId(c);
 
       // Initialize managers
       const videoBucket = c.env.videos;

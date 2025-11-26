@@ -20,7 +20,6 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional(),
-				userId: Str({ description: "User ID (automatically set from JWT token)" }).optional(),
 			}),
 			body: {
 				content: {
