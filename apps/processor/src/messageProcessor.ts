@@ -518,8 +518,10 @@ export class MessageProcessor {
       reporterId: string;
       reason: string;
       timestamp: string;
+      description?: string;
       moderatorId?: string;
       action?: string;
+      moderatorNotes?: string;
     };
 
     if (!reportId || !entityType || !entityId) {
@@ -528,22 +530,13 @@ export class MessageProcessor {
 
     switch (message.type) {
       case MessageType.ReportCreate:
-        // Save report to R2 bucket
-        const reportData = {
-          id: reportId,
-          entityType,
-          entityId,
-          reporterId,
-          reason,
-          status: 'pending',
-          createdAt: timestamp || new Date().toISOString(),
-        };
+        const { description } = message.payload as { description?: string };
+        const createdAt = timestamp || new Date().toISOString();
 
-        const reportKey = `${entityType}/${entityId}/${reportId}.json`;
-        await env.reports.put(reportKey, JSON.stringify(reportData), {
-          httpMetadata: { contentType: 'application/json' },
-          customMetadata: { entityType, entityId, reporterId, status: 'pending' },
-        });
+        await env.REPORTS_DB.prepare(`
+          INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+        `).bind(reportId, entityType, entityId, reporterId, reason, description || null, createdAt).run();
 
         this.logger.info(`Report ${reportId} saved for ${entityType} ${entityId}`, {
           reason,
@@ -552,24 +545,23 @@ export class MessageProcessor {
         break;
 
       case MessageType.ReportResolve:
-        const { moderatorId, action } = message.payload as { moderatorId?: string; action?: string };
+        const { moderatorId, action, moderatorNotes } = message.payload as {
+          moderatorId?: string;
+          action?: string;
+          moderatorNotes?: string;
+        };
+        const resolvedAt = new Date().toISOString();
 
-        // Update report status in R2
-        const resolveKey = `${entityType}/${entityId}/${reportId}.json`;
-        const existingReport = await env.reports.get(resolveKey);
-
-        if (existingReport) {
-          const report = await existingReport.json<Record<string, unknown>>();
-          report.status = 'resolved';
-          report.moderatorId = moderatorId;
-          report.action = action;
-          report.resolvedAt = new Date().toISOString();
-
-          await env.reports.put(resolveKey, JSON.stringify(report), {
-            httpMetadata: { contentType: 'application/json' },
-            customMetadata: { entityType, entityId, status: 'resolved' },
-          });
-        }
+        await env.REPORTS_DB.prepare(`
+          UPDATE reports
+          SET status = 'resolved',
+              moderator_id = ?,
+              action = ?,
+              moderator_notes = ?,
+              resolved_at = ?,
+              updated_at = ?
+          WHERE id = ?
+        `).bind(moderatorId, action, moderatorNotes || null, resolvedAt, resolvedAt, reportId).run();
 
         this.logger.info(`Report ${reportId} resolved by moderator ${moderatorId}`, {
           action,

@@ -55,6 +55,31 @@ export interface R2Bucket {
   list: (options?: R2ListOptions) => Promise<R2Objects>;
 }
 
+export interface D1Database {
+  prepare: (sql: string) => D1PreparedStatement;
+  batch: <T = unknown>(statements: D1PreparedStatement[]) => Promise<D1Result<T>[]>;
+  exec: (sql: string) => Promise<D1ExecResult>;
+}
+
+export interface D1PreparedStatement {
+  bind: (...values: unknown[]) => D1PreparedStatement;
+  first: <T = unknown>(colName?: string) => Promise<T | null>;
+  run: () => Promise<D1Result>;
+  all: <T = unknown>() => Promise<D1Result<T>>;
+}
+
+export interface D1Result<T = unknown> {
+  results?: T[];
+  success: boolean;
+  error?: string;
+  meta?: object;
+}
+
+export interface D1ExecResult {
+  count: number;
+  duration: number;
+}
+
 export interface QueueEnvironment {
   MESSAGE_QUEUE: {
     send: (message: AlUmmahMessage) => Promise<void>;
@@ -64,7 +89,7 @@ export interface QueueEnvironment {
   };
   MESSAGES_BUCKET: R2Bucket;
   community_posts: R2Bucket;
-  reports: R2Bucket;
+  REPORTS_DB: D1Database;
   ENVIRONMENT: string;
   LOG_LEVEL: string;
 }
