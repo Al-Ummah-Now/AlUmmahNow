@@ -12,10 +12,11 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
     summary: 'Unlike a community post',
     request: {
       params: z.object({
-        postId: z.string(),
+        channelId: z.string().describe('Channel ID that owns the post'),
+        postId: z.string().describe('Post ID to unlike'),
       }),
       headers: z.object({
-        channelId: z.string().optional(),
+        channelId: z.string().optional().describe('Actor channel ID (the channel removing the like)'),
       }),
     },
     responses: {
@@ -50,18 +51,14 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    const { postId } = c.req.param();
+    const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId } = request.headers;
+    const userChannelId = request.headers?.channelId;
     const userId = auth.userId;
 
     try {
-      // Direct key lookup with channelId (fix N+1 query)
-      if (!channelId) {
-        return c.json({ error: 'channelId header is required' }, 400);
-      }
-
-      const postKey = `posts/${channelId}/${postId}.json`;
+      // Direct key lookup (O(1))
+      const postKey = `posts/${postChannelId}/${postId}.json`;
       const postData = await c.env.community_posts.get(postKey);
 
       if (!postData) {
@@ -83,8 +80,10 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
         await queue.send(MessageType.CommunityPostUnliked, {
           postId,
           channelId: post.channelId,
-          userId: userId,
-          unlikerChannelId: channelId,
+          actor: {
+            userId,
+            channelId: userChannelId,
+          },
           timestamp: new Date().toISOString()
         });
 

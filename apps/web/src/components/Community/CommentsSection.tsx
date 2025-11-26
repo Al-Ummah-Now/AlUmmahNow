@@ -8,6 +8,7 @@ import Comment from './Comment';
 import { listPostComments } from '@/lib/api/post-comments';
 
 interface CommentsSectionProps {
+  postChannelId: string;
   postId: string;
   postOwnerId: string;
   commentsCount: number;
@@ -23,6 +24,7 @@ interface CommentsSectionProps {
 type SortBy = 'top' | 'newest';
 
 export default function CommentsSection({
+  postChannelId,
   postId,
   postOwnerId,
   commentsCount,
@@ -54,7 +56,7 @@ export default function CommentsSection({
     }
 
     try {
-      const result = await listPostComments(postId, {
+      const result = await listPostComments(postChannelId, postId, {
         limit: 20,
         cursor: reset ? undefined : cursor,
         sortBy,
@@ -75,7 +77,7 @@ export default function CommentsSection({
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [postId, sortBy, cursor]);
+  }, [postChannelId, postId, sortBy, cursor]);
 
   useEffect(() => {
     loadComments(true);
@@ -158,6 +160,7 @@ export default function CommentsSection({
       {commentsEnabled && (
         <div className="mb-6">
           <CommentForm
+            postChannelId={postChannelId}
             postId={postId}
             userAvatar={userAvatar}
             userDisplayName={userDisplayName}
@@ -228,6 +231,7 @@ export default function CommentsSection({
               <Comment
                 key={pinnedComment.id}
                 comment={pinnedComment}
+                postChannelId={postChannelId}
                 postId={postId}
                 isRTL={isRTL}
                 locale={locale}
@@ -246,6 +250,7 @@ export default function CommentsSection({
             <Comment
               key={comment.id}
               comment={comment}
+              postChannelId={postChannelId}
               postId={postId}
               isRTL={isRTL}
               locale={locale}

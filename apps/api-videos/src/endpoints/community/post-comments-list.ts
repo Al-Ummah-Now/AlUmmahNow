@@ -10,6 +10,7 @@ import type {
 
 const listCommentsSchema = {
   params: z.object({
+    channelId: Str({ description: 'Channel ID that owns the post' }),
     postId: Str({ description: 'Post ID' }),
   }),
   query: z.object({
@@ -67,7 +68,7 @@ export class ListPostComments extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
-    const { postId } = c.req.param();
+    const { channelId: postChannelId, postId } = c.req.param();
     const query = c.req.query();
     const limit = Math.min(parseInt(query.limit || '20'), 100);
     const cursor = query.cursor;
@@ -75,9 +76,10 @@ export class ListPostComments extends OpenAPIRoute {
 
     const bucket = c.env.COMMUNITY_POSTS;
 
-    // 1. Find the post to get channelId
-    const postKey = await this.findPostKey(bucket, postId);
-    if (!postKey) {
+    // 1. Verify post exists (O(1) lookup)
+    const postKey = `posts/${postChannelId}/${postId}.json`;
+    const postObj = await bucket.get(postKey);
+    if (!postObj) {
       return c.json(
         {
           success: false,
@@ -180,13 +182,4 @@ export class ListPostComments extends OpenAPIRoute {
     return c.json(response);
   }
 
-  private async findPostKey(bucket: R2Bucket, postId: string): Promise<string | null> {
-    const list = await bucket.list({ prefix: 'posts/' });
-    for (const object of list.objects) {
-      if (object.key.endsWith(`/${postId}.json`)) {
-        return object.key;
-      }
-    }
-    return null;
-  }
 }

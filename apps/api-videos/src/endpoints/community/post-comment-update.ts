@@ -2,6 +2,7 @@ import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
 import { Context } from 'hono';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import Queue, { MessageType } from '../../lib/queue';
 import type { PostComment } from '@al-ummah/shared-types';
 
 const updateCommentRequestSchema = z.object({
@@ -18,11 +19,12 @@ const updateCommentSchema = {
   description: 'Update comment content. Only the comment author can update their comment.',
   request: {
     params: z.object({
+      channelId: Str({ description: 'Channel ID that owns the post' }),
       postId: Str({ description: 'Post ID' }),
       commentId: Str({ description: 'Comment ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional(),
+      channelId: z.string().optional().describe('Actor channel ID'),
     }),
     body: {
       content: {
@@ -79,9 +81,9 @@ export class UpdatePostComment extends OpenAPIRoute {
     }
     const userId = auth.userId;
 
-    const { postId, commentId } = c.req.param();
+    const { channelId: postChannelId, postId, commentId } = c.req.param();
     const data: any = await this.getValidatedData<z.infer<typeof updateCommentRequestSchema>>();
-    const { channelId } = data.headers;
+    const userChannelId = data.headers?.channelId;
 
     if (!data.body) {
       return c.json({ success: false, error: 'Request body is required' }, 400);
@@ -131,6 +133,19 @@ export class UpdatePostComment extends OpenAPIRoute {
     comment.updatedAt = new Date().toISOString();
 
     await bucket.put(commentKey, JSON.stringify(comment));
+
+    // 5. Send queue event
+    const queue = new Queue(c.env.queue);
+    await queue.send(MessageType.PostCommentUpdated, {
+      postId,
+      commentId,
+      channelId: postChannelId,
+      actor: {
+        userId,
+        channelId: userChannelId,
+      },
+      timestamp: comment.updatedAt,
+    });
 
     return c.json({
       success: true,

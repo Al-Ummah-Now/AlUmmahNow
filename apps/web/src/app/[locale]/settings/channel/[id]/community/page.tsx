@@ -87,7 +87,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   };
 
   const handleDelete = async (postId: string) => {
-    const result = await deleteCommunityPost(postId, {
+    const result = await deleteCommunityPost(id, postId, {
       channelId: id
     });
 

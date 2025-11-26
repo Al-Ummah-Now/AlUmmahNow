@@ -69,6 +69,7 @@ export default function PostEngagement({
       )}>
         {/* Like Button */}
         <LikeButton
+          postChannelId={post.channelId}
           postId={post.id}
           initialLikes={post.likes}
           isRTL={isRTL}

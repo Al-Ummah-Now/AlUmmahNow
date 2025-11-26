@@ -17,6 +17,7 @@ import {
 
 interface CommentProps {
   comment: PostComment;
+  postChannelId: string;
   postId: string;
   isRTL?: boolean;
   locale?: string;
@@ -65,6 +66,7 @@ function getTimeAgo(date: Date, isRTL: boolean): string {
 
 export default function Comment({
   comment,
+  postChannelId,
   postId,
   isRTL = false,
   locale = 'en',
@@ -104,8 +106,8 @@ export default function Comment({
 
     try {
       const result = liked
-        ? await unlikePostComment(postId, comment.id, { channelId })
-        : await likePostComment(postId, comment.id, { channelId });
+        ? await unlikePostComment(postChannelId, postId, comment.id, { channelId })
+        : await likePostComment(postChannelId, postId, comment.id, { channelId });
 
       if (result) {
         setLikes(result.totalLikes);
@@ -126,7 +128,7 @@ export default function Comment({
 
     setLoadingReplies(true);
     try {
-      const result = await listCommentReplies(postId, comment.id, {
+      const result = await listCommentReplies(postChannelId, postId, comment.id, {
         limit: 10,
         cursor: repliesCursor,
       });
@@ -164,6 +166,7 @@ export default function Comment({
 
     try {
       const result = await updatePostComment(
+        postChannelId,
         postId,
         comment.id,
         { content: editContent.trim() },
@@ -191,7 +194,7 @@ export default function Comment({
     if (!confirm(isRTL ? 'هل تريد حذف هذا التعليق؟' : 'Delete this comment?')) return;
 
     try {
-      const result = await deletePostComment(postId, comment.id, { channelId });
+      const result = await deletePostComment(postChannelId, postId, comment.id, { channelId });
 
       if (result?.success) {
         if (onCommentDeleted) {
@@ -207,7 +210,7 @@ export default function Comment({
     if (!isPostOwner || !channelId || !userId) return;
 
     try {
-      const result = await heartPostComment(postId, comment.id, { channelId });
+      const result = await heartPostComment(postChannelId, postId, comment.id, { channelId });
 
       if (result?.success) {
         setHearted(result.hearted);
@@ -221,7 +224,7 @@ export default function Comment({
     if (!isPostOwner || !channelId || !userId) return;
 
     try {
-      const result = await pinPostComment(postId, comment.id, { channelId });
+      const result = await pinPostComment(postChannelId, postId, comment.id, { channelId });
 
       if (result?.success) {
         setPinned(!pinned);
@@ -419,6 +422,7 @@ export default function Comment({
         {/* Reply Form */}
         {showReplyForm && (
           <ReplyForm
+            postChannelId={postChannelId}
             postId={postId}
             parentCommentId={comment.id}
             replyToUsername={comment.userDisplayName}
@@ -440,6 +444,7 @@ export default function Comment({
               <Comment
                 key={reply.id}
                 comment={reply}
+                postChannelId={postChannelId}
                 postId={postId}
                 isRTL={isRTL}
                 locale={locale}

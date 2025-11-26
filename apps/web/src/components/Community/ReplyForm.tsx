@@ -10,6 +10,7 @@ const MAX_COMMENT_LENGTH = 10000;
 const SHOW_COUNTER_THRESHOLD = 500;
 
 interface ReplyFormProps {
+  postChannelId: string;
   postId: string;
   parentCommentId: string;
   replyToUsername: string;
@@ -24,6 +25,7 @@ interface ReplyFormProps {
 }
 
 export default function ReplyForm({
+  postChannelId,
   postId,
   parentCommentId,
   replyToUsername,
@@ -76,6 +78,7 @@ export default function ReplyForm({
 
     try {
       const result = await createPostComment(
+        postChannelId,
         postId,
         {
           content: content.trim(),

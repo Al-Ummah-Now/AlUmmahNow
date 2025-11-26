@@ -180,6 +180,7 @@ export default function PostCard({
       >
         {showComments && (
           <CommentsSection
+            postChannelId={post.channelId}
             postId={post.id}
             postOwnerId={post.channelId}
             commentsCount={post.comments}

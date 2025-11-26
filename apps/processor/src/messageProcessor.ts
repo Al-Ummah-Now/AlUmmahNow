@@ -123,7 +123,9 @@ export class MessageProcessor {
 
       // Community post comment events
       case MessageType.PostCommentCreated:
+      case MessageType.PostCommentUpdated:
       case MessageType.PostCommentLiked:
+      case MessageType.PostCommentUnliked:
       case MessageType.PostCommentDeleted:
       case MessageType.PostCommentPinned:
       case MessageType.PostCommentHearted:
@@ -132,12 +134,14 @@ export class MessageProcessor {
 
       // Community post events
       case MessageType.CommunityPostCreated:
+      case MessageType.CommunityPostUpdated:
       case MessageType.CommunityPostDeleted:
         await this.processCommunityPostMessage(message);
         break;
 
-      // Post like event - handled separately for like count calculation
+      // Post like/unlike events - handled separately for like count calculation
       case MessageType.CommunityPostLiked:
+      case MessageType.CommunityPostUnliked:
         await handlePostLikeEvent(message, env, this.logger);
         break;
 
@@ -431,11 +435,10 @@ export class MessageProcessor {
   private async processCommunityPostMessage(message: AlUmmahMessage): Promise<void> {
     this.logger.debug(`Processing community post message: ${MessageType[message.type]}`, message.payload);
 
-    const { postId, channelId, userId } = message.payload as {
+    const { postId, channelId, actor } = message.payload as {
       postId: string;
       channelId: string;
-      userId?: string;
-      likerChannelId?: string;
+      actor?: { userId: string; channelId?: string };
     };
 
     if (!postId || !channelId) {
@@ -445,12 +448,15 @@ export class MessageProcessor {
     // Process community post actions
     switch (message.type) {
       case MessageType.CommunityPostCreated:
-        this.logger.info(`Community post ${postId} created on channel ${channelId} by user ${userId}`);
+        this.logger.info(`Community post ${postId} created on channel ${channelId} by actor`, { actor });
+        break;
+      case MessageType.CommunityPostUpdated:
+        this.logger.info(`Community post ${postId} updated on channel ${channelId} by actor`, { actor });
         break;
       case MessageType.CommunityPostDeleted:
-        this.logger.info(`Community post ${postId} deleted from channel ${channelId}`);
+        this.logger.info(`Community post ${postId} deleted from channel ${channelId} by actor`, { actor });
         break;
-      // CommunityPostLiked is now handled by dedicated handlePostLikeEvent handler
+      // CommunityPostLiked/Unliked are now handled by dedicated handlePostLikeEvent handler
       // PollVoted is now handled by dedicated handlePollVoteEvent handler
     }
   }
@@ -458,11 +464,11 @@ export class MessageProcessor {
   private async processPostCommentMessage(message: AlUmmahMessage): Promise<void> {
     this.logger.debug(`Processing post comment message: ${MessageType[message.type]}`, message.payload);
 
-    const { postId, commentId, authorChannelId } = message.payload as {
+    const { postId, commentId, actor } = message.payload as {
       postId: string;
       commentId: string;
-      authorChannelId?: string;
-      authorUserId?: string;
+      channelId?: string;
+      actor?: { userId: string; channelId?: string };
       parentCommentId?: string;
     };
 
@@ -473,19 +479,25 @@ export class MessageProcessor {
     // Process post comment actions
     switch (message.type) {
       case MessageType.PostCommentCreated:
-        this.logger.info(`Comment ${commentId} created by channel ${authorChannelId} on post ${postId}`);
+        this.logger.info(`Comment ${commentId} created on post ${postId} by actor`, { actor });
+        break;
+      case MessageType.PostCommentUpdated:
+        this.logger.info(`Comment ${commentId} updated on post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentLiked:
-        this.logger.info(`Comment ${commentId} liked on post ${postId}`);
+        this.logger.info(`Comment ${commentId} liked on post ${postId} by actor`, { actor });
+        break;
+      case MessageType.PostCommentUnliked:
+        this.logger.info(`Comment ${commentId} unliked on post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentDeleted:
-        this.logger.info(`Comment ${commentId} deleted from post ${postId}`);
+        this.logger.info(`Comment ${commentId} deleted from post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentPinned:
-        this.logger.info(`Comment ${commentId} pinned on post ${postId}`);
+        this.logger.info(`Comment ${commentId} pinned on post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentHearted:
-        this.logger.info(`Comment ${commentId} hearted on post ${postId}`);
+        this.logger.info(`Comment ${commentId} hearted on post ${postId} by actor`, { actor });
         break;
     }
   }

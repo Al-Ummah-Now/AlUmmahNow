@@ -9,6 +9,7 @@ import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateUpdatePost } from '../../validation/community-posts';
 import { logger } from '../../lib/logger';
+import Queue, { MessageType } from '../../lib/queue';
 
 const updatePostSchema = z.object({
   content: z.string().max(5000).optional(),
@@ -24,10 +25,11 @@ export class UpdateCommunityPost extends OpenAPIRoute {
     summary: 'Update a community post',
     request: {
       params: z.object({
-        postId: z.string(),
+        channelId: z.string().describe('Channel ID that owns the post'),
+        postId: z.string().describe('Post ID to update'),
       }),
       headers: z.object({
-        channelId: z.string(),
+        channelId: z.string().describe('Actor channel ID (must own the post)'),
       }),
       body: {
         content: {
@@ -89,46 +91,36 @@ export class UpdateCommunityPost extends OpenAPIRoute {
     }
     const userId = auth.userId;
 
-    const { postId } = c.req.param();
+    const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
     const body: any = request.body;
-    const { channelId } = request.headers;
+    const userChannelId = request.headers?.channelId;
 
     if (!body) {
       return c.json({ error: 'Request body is required' }, 400);
     }
 
-    if (!channelId) {
-      return c.json({ error: 'channelId header is required for updating posts' }, 400);
+    // Verify user owns the channel they're trying to update from
+    if (userChannelId !== postChannelId) {
+      return c.json({ error: 'You can only update posts from your own channel' }, 403);
     }
 
     const user = {
       ...auth,
-      channelId,
+      channelId: postChannelId,
       userId,
     };
 
     try {
-      // Find and get the post
-      let postKey: string | null = null;
-      let post: CommunityPost | null = null;
+      // Direct key lookup (O(1))
+      const postKey = `posts/${postChannelId}/${postId}.json`;
+      const postData = await c.env.community_posts.get(postKey);
 
-      const listResult = await c.env.community_posts.list({ prefix: 'posts/' });
-
-      for (const object of listResult.objects) {
-        if (object.key.includes(`/${postId}.json`)) {
-          postKey = object.key;
-          const postData = await c.env.community_posts.get(object.key);
-          if (postData) {
-            post = await postData.json();
-          }
-          break;
-        }
-      }
-
-      if (!post || !postKey) {
+      if (!postData) {
         return c.json({ error: 'Post not found' }, 404);
       }
+
+      const post: CommunityPost = await postData.json();
 
       // Validate update
       const validation = await validateUpdatePost(body, post, user);
@@ -157,6 +149,19 @@ export class UpdateCommunityPost extends OpenAPIRoute {
 
       // Save updated post
       await c.env.community_posts.put(postKey, JSON.stringify(post));
+
+      // Send queue event
+      const queue = new Queue(c.env.queue);
+      await queue.send(MessageType.CommunityPostUpdated, {
+        postId,
+        channelId: postChannelId,
+        actor: {
+          userId,
+          channelId: userChannelId,
+        },
+        updatedFields: Object.keys(body).filter(k => body[k] !== undefined),
+        timestamp: post.updatedAt,
+      });
 
       return c.json({ success: true, post });
     } catch (error) {

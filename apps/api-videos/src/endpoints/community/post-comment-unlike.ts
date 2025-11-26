@@ -2,6 +2,7 @@ import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
 import { Context } from 'hono';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import Queue, { MessageType } from '../../lib/queue';
 import type { PostComment, PostCommentLikeResponse } from '@al-ummah/shared-types';
 
 const unlikeCommentSchema = {
@@ -10,11 +11,12 @@ const unlikeCommentSchema = {
   description: 'Remove a like from a comment. Idempotent - unliking twice has no effect.',
   request: {
     params: z.object({
+      channelId: Str({ description: 'Channel ID that owns the post' }),
       postId: Str({ description: 'Post ID' }),
       commentId: Str({ description: 'Comment ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional(),
+      channelId: z.string().optional().describe('Actor channel ID (the channel removing the like)'),
     }),
   },
   responses: {
@@ -54,9 +56,9 @@ export class UnlikePostComment extends OpenAPIRoute {
     }
     const userId = auth.userId;
 
-    const { postId, commentId } = c.req.param();
+    const { channelId: postChannelId, postId, commentId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId } = request.headers;
+    const userChannelId = request.headers?.channelId;
 
     const bucket = c.env.community_posts;
 
@@ -92,6 +94,19 @@ export class UnlikePostComment extends OpenAPIRoute {
     // 4. Decrement comment's likes count
     comment.likes = Math.max(0, comment.likes - 1);
     await bucket.put(commentKey, JSON.stringify(comment));
+
+    // 5. Send queue event
+    const queue = new Queue(c.env.queue);
+    await queue.send(MessageType.PostCommentUnliked, {
+      postId,
+      commentId,
+      channelId: postChannelId,
+      actor: {
+        userId,
+        channelId: userChannelId,
+      },
+      timestamp: new Date().toISOString(),
+    });
 
     const response: PostCommentLikeResponse = {
       success: true,

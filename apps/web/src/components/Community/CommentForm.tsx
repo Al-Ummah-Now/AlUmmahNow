@@ -10,6 +10,7 @@ const MAX_COMMENT_LENGTH = 10000;
 const SHOW_COUNTER_THRESHOLD = 500;
 
 interface CommentFormProps {
+  postChannelId: string;
   postId: string;
   userAvatar?: string;
   userDisplayName: string;
@@ -23,6 +24,7 @@ interface CommentFormProps {
 }
 
 export default function CommentForm({
+  postChannelId,
   postId,
   userAvatar,
   userDisplayName,
@@ -75,6 +77,7 @@ export default function CommentForm({
 
     try {
       const result = await createPostComment(
+        postChannelId,
         postId,
         { content: content.trim() },
         { channelId }

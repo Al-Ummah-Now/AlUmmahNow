@@ -2,10 +2,15 @@ import { AlUmmahMessage, MessageType, QueueEnvironment } from '../types';
 import { Logger } from '@al-ummah/logger';
 import { VoteResults, CommunityPost, PollOption } from '@al-ummah/shared-types';
 
+interface ActorPayload {
+  userId: string;
+  channelId?: string;
+}
+
 interface PollVotedPayload {
   postId: string;
   channelId: string;
-  userId: string;
+  actor: ActorPayload;
   optionIds: string[];
   pollOptions: Array<{ id: string }>;
   timestamp: string;

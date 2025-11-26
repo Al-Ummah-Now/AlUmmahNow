@@ -10,7 +10,6 @@ import {
 import { logger } from '../../lib/logger';
 
 const querySchema = z.object({
-  channelId: z.string(),
   page: z.coerce.number().min(1).default(1).optional(),
   limit: z.coerce.number().min(1).max(50).default(20).optional(),
   type: z.nativeEnum(PostType).optional(),
@@ -22,10 +21,10 @@ export class ListCommunityPosts extends OpenAPIRoute {
     tags: ['Community'],
     summary: 'List community posts for a channel',
     request: {
-      headers: z.object({
-          channelId: z.string().optional().nullable(),
-        }),
-        query: querySchema,
+      params: z.object({
+        channelId: z.string().describe('Channel ID to list posts from'),
+      }),
+      query: querySchema,
     },
     responses: {
       200: {
@@ -58,12 +57,13 @@ export class ListCommunityPosts extends OpenAPIRoute {
   };
 
   async handle(c: any): Promise<Response> {
+    const { channelId: postChannelId } = c.req.param();
     const request = await this.getValidatedData<typeof this.schema>();
-    const { channelId, page = 1, limit = 20, type, status = PostStatus.PUBLISHED } = request.query;
+    const { page = 1, limit = 20, type, status = PostStatus.PUBLISHED } = request.query;
 
     try {
       // Get channel post index
-      const indexKey = `posts/${channelId}/index.json`;
+      const indexKey = `posts/${postChannelId}/index.json`;
       const indexData = await c.env.community_posts.get(indexKey);
 
       if (!indexData) {
@@ -89,7 +89,7 @@ export class ListCommunityPosts extends OpenAPIRoute {
       const posts: CommunityPost[] = [];
 
       for (const postId of pagePostIds) {
-        const postKey = `posts/${channelId}/${postId}.json`;
+        const postKey = `posts/${postChannelId}/${postId}.json`;
         const postData = await c.env.community_posts.get(postKey);
 
         if (postData) {

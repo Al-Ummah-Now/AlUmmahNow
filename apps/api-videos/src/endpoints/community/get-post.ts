@@ -8,11 +8,9 @@ export class GetCommunityPost extends OpenAPIRoute {
     tags: ['Community'],
     summary: 'Get a single community post',
     request: {
-      headers: z.object({
-          channelId: z.string().optional().nullable(),
-        }),
-        params: z.object({
-        postId: z.string(),
+      params: z.object({
+        channelId: z.string().describe('Channel ID that owns the post'),
+        postId: z.string().describe('Post ID'),
       }),
     },
     responses: {
@@ -38,47 +36,39 @@ export class GetCommunityPost extends OpenAPIRoute {
   };
 
   async handle(c: any): Promise<Response> {
-    const { postId } = c.req.param();
+    const { channelId: postChannelId, postId } = c.req.param();
 
     try {
-      // Search for the post across all channels
-      // In production, you might want to maintain a global post index
-      const listResult = await c.env.community_posts.list({ prefix: 'posts/' });
+      // Direct key lookup (O(1))
+      const postKey = `posts/${postChannelId}/${postId}.json`;
+      const postData = await c.env.community_posts.get(postKey);
 
-      for (const object of listResult.objects) {
-        if (object.key.includes(`/${postId}.json`)) {
-          const postData = await c.env.community_posts.get(object.key);
+      if (!postData) {
+        return c.json({ error: 'Post not found' }, 404);
+      }
 
-          if (!postData) {
-            return c.json({ error: 'Post not found' }, 404);
-          }
+      const post = await postData.json();
 
-          const post = await postData.json();
+      // Don't show deleted posts
+      if (post.status === PostStatus.DELETED) {
+        return c.json({ error: 'Post not found' }, 404);
+      }
 
-          // Don't show deleted posts
-          if (post.status === PostStatus.DELETED) {
-            return c.json({ error: 'Post not found' }, 404);
-          }
-
-          // Check if poll/quiz has ended
-          if (post.poll?.votingEndsAt) {
-            const endTime = new Date(post.poll.votingEndsAt);
-            if (endTime < new Date()) {
-              post.poll.showResults = true;
-            }
-          }
-
-          // Increment view count
-          post.views = (post.views || 0) + 1;
-
-          // Save updated view count (async, don't wait)
-          c.env.community_posts.put(object.key, JSON.stringify(post));
-
-          return c.json(post);
+      // Check if poll/quiz has ended
+      if (post.poll?.votingEndsAt) {
+        const endTime = new Date(post.poll.votingEndsAt);
+        if (endTime < new Date()) {
+          post.poll.showResults = true;
         }
       }
 
-      return c.json({ error: 'Post not found' }, 404);
+      // Increment view count
+      post.views = (post.views || 0) + 1;
+
+      // Save updated view count (async, don't wait)
+      c.env.community_posts.put(postKey, JSON.stringify(post));
+
+      return c.json(post);
     } catch (error) {
       logger.error('Error getting community post:', error);
       return c.json({ error: 'Failed to get post' }, 500);

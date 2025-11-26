@@ -68,13 +68,18 @@ const createPostSchema = z.object({
   scheduledAt: z.string().datetime().optional()
 });
 
+const Str = (opts: { description: string }) => z.string().openapi(opts);
+
 export class CreateCommunityPost extends OpenAPIRoute {
   static schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Create a community post',
     request: {
+      params: z.object({
+        channelId: Str({ description: 'Channel ID that will own the post' }),
+      }),
       headers: z.object({
-        channelId: z.string().optional(),
+        channelId: z.string().optional().openapi({ description: 'User channel ID (for verification)' }),
       }),
       body: {
         content: {
@@ -118,15 +123,17 @@ export class CreateCommunityPost extends OpenAPIRoute {
 
     const request: any = await this.getValidatedData<typeof this.schema>();
     const body: any = request.body;
-    const { channelId } = request.headers;
+    const { channelId: postChannelId } = c.req.param();
+    const userChannelId = request.headers?.channelId;
 
     if (!body) {
       return c.json({ error: 'Request body is required' }, 400);
     }
 
-    // Community posts require a channel (can't post as just a user)
+    // Use URL param channelId as the target channel for the post
+    const channelId = postChannelId;
     if (!channelId) {
-      return c.json({ error: 'channelId header is required for creating posts' }, 400);
+      return c.json({ error: 'channelId is required for creating posts' }, 400);
     }
 
     // Validate request
@@ -214,7 +221,10 @@ export class CreateCommunityPost extends OpenAPIRoute {
         await queue.send(MessageType.CommunityPostCreated, {
           postId: post.id,
           channelId: channelId,
-          userId: userId,
+          actor: {
+            userId,
+            channelId: userChannelId,
+          },
           timestamp: post.createdAt
         });
       }

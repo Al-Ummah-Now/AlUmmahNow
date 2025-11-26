@@ -247,11 +247,11 @@ openapi.get("/api/channels/:id/live", ChannelLiveList); // Channel live streams 
 openapi.get("/api/channels/:id/playlists", ChannelPlaylistsList); // Channel playlists (public)
 openapi.get("/api/channels/:id/tabs", ChannelTabsFetch); // Channel tabs configuration (public)
 // Community Posts endpoints (public)
-openapi.get("/api/community/posts", ListCommunityPosts);
-openapi.get("/api/community/posts/:postId", GetCommunityPost);
-openapi.get("/api/community/posts/:postId/results", GetPollResults);
+openapi.get("/api/community/channels/:channelId/posts", ListCommunityPosts);
+openapi.get("/api/community/channels/:channelId/posts/:postId", GetCommunityPost);
+openapi.get("/api/community/channels/:channelId/posts/:postId/results", GetPollResults);
 // Community Posts - Comments endpoints (public read, auth required for write)
-openapi.get("/api/community/posts/:postId/comments", ListPostComments);
+openapi.get("/api/community/channels/:channelId/posts/:postId/comments", ListPostComments);
 // Phase 2: Live Streaming endpoints
 openapi.get("/api/live-streams", LiveStreamsList);
 // Phase 2: Analytics endpoints
@@ -359,27 +359,30 @@ app.use('/api/moderation/*', authMiddleware);
 app.use('/api/watch-history/*', authMiddleware);
 app.use('/api/watch-history', authMiddleware);
 
-// Community posts - GET endpoints are public, others require auth
-app.use('/api/community/posts', (c, next) => {
+// Community posts - POST for create requires auth
+app.use('/api/community/posts', authMiddleware);
+
+// Community posts channel routes - GET is public, others require auth
+app.use('/api/community/channels/:channelId/posts', (c, next) => {
 	if (c.req.method === 'GET') {
 		return next();
 	}
 	return authMiddleware(c, next);
 });
 
-app.use('/api/community/posts/:postId/like', authMiddleware);
-app.use('/api/community/posts/:channelId/:postId/vote', authMiddleware);
+app.use('/api/community/channels/:channelId/posts/:postId/like', authMiddleware);
+app.use('/api/community/channels/:channelId/posts/:postId/vote', authMiddleware);
 
 // Community posts comments - GET is public, others require auth
-app.use('/api/community/posts/:postId/comments', (c, next) => {
+app.use('/api/community/channels/:channelId/posts/:postId/comments', (c, next) => {
 	if (c.req.method === 'GET') {
 		return next();
 	}
 	return authMiddleware(c, next);
 });
 
-app.use('/api/community/posts/:postId/comments/:commentId', authMiddleware);
-app.use('/api/community/posts/:postId/comments/:commentId/like', authMiddleware);
+app.use('/api/community/channels/:channelId/posts/:postId/comments/:commentId', authMiddleware);
+app.use('/api/community/channels/:channelId/posts/:postId/comments/:commentId/like', authMiddleware);
 
 // SECURITY: Apply rate limiting to community media uploads
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
@@ -489,19 +492,19 @@ openapi.post("/api/moderation/report", ReportCreate);
 openapi.post("/api/moderation/actions/:reportId", ModerationAction);
 
 // Community Posts management (require auth)
-openapi.post("/api/community/posts", CreateCommunityPost);
-openapi.put("/api/community/posts/:postId", UpdateCommunityPost);
-openapi.delete("/api/community/posts/:postId", DeleteCommunityPost);
-openapi.post("/api/community/posts/:postId/like", LikeCommunityPost);
-openapi.delete("/api/community/posts/:postId/like", UnlikeCommunityPost);
-openapi.post("/api/community/posts/:channelId/:postId/vote", VoteOnPoll);
+openapi.post("/api/community/channels/:channelId/posts", CreateCommunityPost);
+openapi.put("/api/community/channels/:channelId/posts/:postId", UpdateCommunityPost);
+openapi.delete("/api/community/channels/:channelId/posts/:postId", DeleteCommunityPost);
+openapi.post("/api/community/channels/:channelId/posts/:postId/like", LikeCommunityPost);
+openapi.delete("/api/community/channels/:channelId/posts/:postId/like", UnlikeCommunityPost);
+openapi.post("/api/community/channels/:channelId/posts/:postId/vote", VoteOnPoll);
 
 // Community Posts - Comments management (require auth)
-openapi.post("/api/community/posts/:postId/comments", CreatePostComment);
-openapi.put("/api/community/posts/:postId/comments/:commentId", UpdatePostComment);
-openapi.delete("/api/community/posts/:postId/comments/:commentId", DeletePostComment);
-openapi.post("/api/community/posts/:postId/comments/:commentId/like", LikePostComment);
-openapi.delete("/api/community/posts/:postId/comments/:commentId/like", UnlikePostComment);
+openapi.post("/api/community/channels/:channelId/posts/:postId/comments", CreatePostComment);
+openapi.put("/api/community/channels/:channelId/posts/:postId/comments/:commentId", UpdatePostComment);
+openapi.delete("/api/community/channels/:channelId/posts/:postId/comments/:commentId", DeletePostComment);
+openapi.post("/api/community/channels/:channelId/posts/:postId/comments/:commentId/like", LikePostComment);
+openapi.delete("/api/community/channels/:channelId/posts/:postId/comments/:commentId/like", UnlikePostComment);
 
 // Community Posts - Media Upload (require auth)
 openapi.post("/api/community/media/upload/images", UploadCommunityPostImages);
@@ -628,13 +631,13 @@ app.get("/openapi.json", async (c) => {
 		'/api/moderation/actions/{reportId}', // POST
 		// Community Posts management
 		'/api/community/posts', // POST (create)
-		'/api/community/posts/{postId}', // PUT, DELETE
-		'/api/community/posts/{postId}/like', // POST, DELETE
-		'/api/community/posts/{channelId}/{postId}/vote', // POST
+		'/api/community/channels/{channelId}/posts/{postId}', // PUT, DELETE
+		'/api/community/channels/{channelId}/posts/{postId}/like', // POST, DELETE
+		'/api/community/channels/{channelId}/posts/{postId}/vote', // POST
 		// Community Posts - Comments management
-		'/api/community/posts/{postId}/comments', // POST (create)
-		'/api/community/posts/{postId}/comments/{commentId}', // PUT, DELETE
-		'/api/community/posts/{postId}/comments/{commentId}/like', // POST, DELETE
+		'/api/community/channels/{channelId}/posts/{postId}/comments', // POST (create)
+		'/api/community/channels/{channelId}/posts/{postId}/comments/{commentId}', // PUT, DELETE
+		'/api/community/channels/{channelId}/posts/{postId}/comments/{commentId}/like', // POST, DELETE
 		// Community Posts - Media Upload
 		'/api/community/media/upload/images', // POST
 		'/api/community/media/upload/gif', // POST

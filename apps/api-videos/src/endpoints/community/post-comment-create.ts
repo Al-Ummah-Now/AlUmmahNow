@@ -40,10 +40,11 @@ const createCommentSchema = {
     'Create a new top-level comment or reply to an existing comment. Threading depth limited to 1 level.',
   request: {
     params: z.object({
+      channelId: Str({ description: 'Channel ID that owns the post' }),
       postId: Str({ description: 'Post ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional(),
+      channelId: z.string().optional().describe('Actor channel ID (the channel posting the comment)'),
     }),
     body: {
       content: {
@@ -100,9 +101,9 @@ export class CreatePostComment extends OpenAPIRoute {
     }
     const userId = auth.userId;
 
-    const { postId } = c.req.param();
+    const { channelId: postChannelId, postId } = c.req.param();
     const data: any = await this.getValidatedData<z.infer<typeof createCommentRequestSchema>>();
-    const { channelId } = data.headers;
+    const userChannelId = data.headers?.channelId;
 
     if (!data.body) {
       return c.json({ success: false, error: 'Request body is required' }, 400);
@@ -111,18 +112,8 @@ export class CreatePostComment extends OpenAPIRoute {
     const requestBody = data.body as z.infer<typeof createCommentRequestSchema>;
     const bucket = c.env.community_posts;
 
-    // 1. Validate post exists and comments are enabled
-    const postKey = await this.findPostKey(bucket, postId);
-    if (!postKey) {
-      return c.json(
-        {
-          success: false,
-          error: 'Post not found',
-        },
-        404
-      );
-    }
-
+    // 1. Validate post exists and comments are enabled (O(1) lookup)
+    const postKey = `posts/${postChannelId}/${postId}.json`;
     const postObj = await bucket.get(postKey);
     if (!postObj) {
       return c.json(
@@ -191,7 +182,7 @@ export class CreatePostComment extends OpenAPIRoute {
     const comment: PostComment = {
       id: crypto.randomUUID(),
       postId,
-      channelId: channelId || userId,
+      channelId: userChannelId || userId,
       userId: userId,
       parentCommentId: requestBody.parentCommentId,
       content: sanitizeHtml(requestBody.content, sanitizeOptions),
@@ -244,8 +235,11 @@ export class CreatePostComment extends OpenAPIRoute {
     await queue.send(MessageType.PostCommentCreated, {
       postId,
       commentId: comment.id,
-      authorChannelId: channelId,
-      authorUserId: userId,
+      channelId: postChannelId,
+      actor: {
+        userId,
+        channelId: userChannelId,
+      },
       parentCommentId: requestBody.parentCommentId,
       timestamp: comment.createdAt,
     });
@@ -256,16 +250,6 @@ export class CreatePostComment extends OpenAPIRoute {
     };
 
     return c.json(response, 201);
-  }
-
-  private async findPostKey(bucket: R2Bucket, postId: string): Promise<string | null> {
-    const list = await bucket.list({ prefix: 'posts/' });
-    for (const object of list.objects) {
-      if (object.key.endsWith(`/${postId}.json`)) {
-        return object.key;
-      }
-    }
-    return null;
   }
 
   private async updateTopLevelIndex(

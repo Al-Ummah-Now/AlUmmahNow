@@ -16,13 +16,13 @@ import { ApiHeaders } from "./types";
 
 /**
  * List community posts for a channel
- * GET /api/community/posts?channelId={channelId}&page={page}&limit={limit}&type={type}
+ * GET /api/community/channels/{channelId}/posts?page={page}&limit={limit}&type={type}
  */
 export async function listCommunityPosts(
-  params: ListCommunityPostsParams
+  params: ListCommunityPostsParams,
+  headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<ListCommunityPostsResponse | null> {
   const queryString = buildQueryParams({
-    channelId: params.channelId,
     page: params.page || 1,
     limit: params.limit || 20,
     type: params.type,
@@ -31,40 +31,48 @@ export async function listCommunityPosts(
 
   return apiRequestServer<ListCommunityPostsResponse>({
     method: 'GET',
-    url: buildApiUrl(`/api/community/posts${queryString}`),
+    url: buildApiUrl(`/api/community/channels/${params.channelId}/posts${queryString}`),
     functionName: 'listCommunityPosts'
-  }, getServerAuthContext, false);
+  }, async () => ({
+    channelId: headers?.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), false);
 }
 
 /**
  * Get a single community post by ID
- * GET /api/community/posts/{postId}
+ * GET /api/community/channels/{channelId}/posts/{postId}
  */
 export async function getCommunityPost(
-  postId: string
+  channelId: string,
+  postId: string,
+  headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<CommunityPost | null> {
   return apiRequestServer<CommunityPost>({
     method: 'GET',
-    url: buildApiUrl(`/api/community/posts/${postId}`),
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}`),
     functionName: 'getCommunityPost'
-  }, getServerAuthContext, false);
+  }, async () => ({
+    channelId: headers?.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), false);
 }
 
 /**
  * Create a new community post
- * POST /api/community/posts
+ * POST /api/community/channels/{channelId}/posts
  */
 export async function createCommunityPost(
+  channelId: string,
   data: CreateCommunityPostRequest,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean; post: CommunityPost } | null> {
   return apiRequestServer<{ success: boolean; post: CommunityPost }>({
     method: 'POST',
-    url: buildApiUrl('/api/community/posts'),
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts`),
     body: data,
     functionName: 'createCommunityPost'
   }, async () => ({
-    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -72,20 +80,21 @@ export async function createCommunityPost(
 
 /**
  * Update a community post
- * PUT /api/community/posts/{postId}
+ * PUT /api/community/channels/{channelId}/posts/{postId}
  */
 export async function updateCommunityPost(
+  channelId: string,
   postId: string,
   data: UpdateCommunityPostRequest,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean; post: CommunityPost } | null> {
   return apiRequestServer<{ success: boolean; post: CommunityPost }>({
     method: 'PUT',
-    url: buildApiUrl(`/api/community/posts/${postId}`),
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}`),
     body: data,
     functionName: 'updateCommunityPost'
   }, async () => ({
-    
+
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -93,18 +102,19 @@ export async function updateCommunityPost(
 
 /**
  * Delete a community post
- * DELETE /api/community/posts/{postId}
+ * DELETE /api/community/channels/{channelId}/posts/{postId}
  */
 export async function deleteCommunityPost(
+  channelId: string,
   postId: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/community/posts/${postId}`),
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}`),
     functionName: 'deleteCommunityPost'
   }, async () => ({
-    
+
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -112,18 +122,19 @@ export async function deleteCommunityPost(
 
 /**
  * Like a community post
- * POST /api/community/posts/{postId}/like
+ * POST /api/community/channels/{channelId}/posts/{postId}/like
  */
 export async function likeCommunityPost(
+  channelId: string,
   postId: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<LikePostResponse | null> {
   return apiRequestServer<LikePostResponse>({
     method: 'POST',
-    url: buildApiUrl(`/api/community/posts/${postId}/like`),
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/like`),
     functionName: 'likeCommunityPost'
   }, async () => ({
-    
+
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -131,18 +142,19 @@ export async function likeCommunityPost(
 
 /**
  * Unlike a community post
- * DELETE /api/community/posts/{postId}/like
+ * DELETE /api/community/channels/{channelId}/posts/{postId}/like
  */
 export async function unlikeCommunityPost(
+  channelId: string,
   postId: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<LikePostResponse | null> {
   return apiRequestServer<LikePostResponse>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/community/posts/${postId}/like`),
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/like`),
     functionName: 'unlikeCommunityPost'
   }, async () => ({
-    
+
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -150,7 +162,7 @@ export async function unlikeCommunityPost(
 
 /**
  * Vote on a poll post
- * POST /api/community/posts/{channelId}/{postId}/vote
+ * POST /api/community/channels/{channelId}/posts/{postId}/vote
  */
 export async function voteOnPoll(
   channelId: string,
@@ -160,11 +172,11 @@ export async function voteOnPoll(
 ): Promise<VoteOnPollResponse | null> {
   return apiRequestServer<VoteOnPollResponse>({
     method: 'POST',
-    url: buildApiUrl(`/api/community/posts/${channelId}/${postId}/vote`),
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/vote`),
     body: data,
     functionName: 'voteOnPoll'
   }, async () => ({
-    
+
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -172,14 +184,19 @@ export async function voteOnPoll(
 
 /**
  * Get poll results
- * GET /api/community/posts/{postId}/results
+ * GET /api/community/channels/{channelId}/posts/{postId}/results
  */
 export async function getPollResults(
-  postId: string
+  channelId: string,
+  postId: string,
+  headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<VoteOnPollResponse | null> {
   return apiRequestServer<VoteOnPollResponse>({
     method: 'GET',
-    url: buildApiUrl(`/api/community/posts/${postId}/results`),
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/results`),
     functionName: 'getPollResults'
-  }, getServerAuthContext, false);
+  }, async () => ({
+    channelId: headers?.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), false);
 }

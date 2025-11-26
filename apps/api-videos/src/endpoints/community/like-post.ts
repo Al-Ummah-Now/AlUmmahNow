@@ -12,10 +12,11 @@ export class LikeCommunityPost extends OpenAPIRoute {
     summary: 'Like a community post',
     request: {
       params: z.object({
-        postId: z.string(),
+        channelId: z.string().describe('Channel ID that owns the post'),
+        postId: z.string().describe('Post ID to like'),
       }),
       headers: z.object({
-        channelId: z.string().optional(),
+        channelId: z.string().optional().describe('Actor channel ID (the channel performing the like)'),
       }),
     },
     responses: {
@@ -50,42 +51,21 @@ export class LikeCommunityPost extends OpenAPIRoute {
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    const { postId } = c.req.param();
+    const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId } = request.headers;
+    const userChannelId = request.headers?.channelId;
     const userId = auth.userId;
 
     try {
-      // Find the post - use direct lookup if channelId provided, otherwise scan
-      let postKey: string | null = null;
-      let post: CommunityPost | null = null;
+      // Direct key lookup (O(1))
+      const postKey = `posts/${postChannelId}/${postId}.json`;
+      const postData = await c.env.community_posts.get(postKey);
 
-      if (channelId) {
-        // Direct key lookup when channelId is provided (O(1))
-        postKey = `posts/${channelId}/${postId}.json`;
-        const postData = await c.env.community_posts.get(postKey);
-        if (postData) {
-          post = await postData.json();
-        }
-      } else {
-        // Fallback: scan all posts (N+1 query)
-        // TODO: Implement postId → channelId mapping in KV for O(1) lookups
-        const listResult = await c.env.community_posts.list({ prefix: 'posts/' });
-        for (const object of listResult.objects) {
-          if (object.key.includes(`/${postId}.json`)) {
-            postKey = object.key;
-            const postData = await c.env.community_posts.get(object.key);
-            if (postData) {
-              post = await postData.json();
-            }
-            break;
-          }
-        }
-      }
-
-      if (!post || !postKey) {
+      if (!postData) {
         return c.json({ error: 'Post not found' }, 404);
       }
+
+      const post: CommunityPost = await postData.json();
 
       // Check if user already liked
       const likeKey = `likes/${postId}/${userId}.json`;
@@ -95,7 +75,7 @@ export class LikeCommunityPost extends OpenAPIRoute {
         // Add like
         const likeRecord = {
           userId: userId,
-          channelId: channelId,
+          userChannelId: userChannelId,
           postId,
           likedAt: new Date().toISOString(),
         };
@@ -106,8 +86,10 @@ export class LikeCommunityPost extends OpenAPIRoute {
         await queue.send(MessageType.CommunityPostLiked, {
           postId,
           channelId: post.channelId,
-          userId: userId,
-          likerChannelId: channelId,
+          actor: {
+            userId,
+            channelId: userChannelId,
+          },
           timestamp: new Date().toISOString()
         });
 

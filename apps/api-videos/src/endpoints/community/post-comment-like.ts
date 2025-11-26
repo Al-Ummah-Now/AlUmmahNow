@@ -15,11 +15,12 @@ const likeCommentSchema = {
   description: 'Add a like to a comment. Idempotent - liking twice has no effect.',
   request: {
     params: z.object({
+      channelId: Str({ description: 'Channel ID that owns the post' }),
       postId: Str({ description: 'Post ID' }),
       commentId: Str({ description: 'Comment ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional(),
+      channelId: z.string().optional().describe('Actor channel ID (the channel performing the like)'),
     }),
   },
   responses: {
@@ -59,9 +60,9 @@ export class LikePostComment extends OpenAPIRoute {
     }
     const userId = auth.userId;
 
-    const { postId, commentId } = c.req.param();
+    const { channelId: postChannelId, postId, commentId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId } = request.headers;
+    const userChannelId = request.headers?.channelId;
 
     const bucket = c.env.community_posts;
 
@@ -121,8 +122,11 @@ export class LikePostComment extends OpenAPIRoute {
     await queue.send(MessageType.PostCommentLiked, {
       postId,
       commentId,
-      likerChannelId: channelId,
-      likerUserId: userId,
+      channelId: postChannelId,
+      actor: {
+        userId,
+        channelId: userChannelId,
+      },
       timestamp: likeRecord.likedAt,
     });
 

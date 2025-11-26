@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { likeCommunityPost, unlikeCommunityPost } from '@/lib/api/community-posts';
 
 interface LikeButtonProps {
+  postChannelId: string;
   postId: string;
   initialLikes: number;
   initialLiked?: boolean;
@@ -14,6 +15,7 @@ interface LikeButtonProps {
 }
 
 export default function LikeButton({
+  postChannelId,
   postId,
   initialLikes,
   initialLiked = false,
@@ -37,8 +39,8 @@ export default function LikeButton({
 
     try {
       const result = liked
-        ? await unlikeCommunityPost(postId, { channelId })
-        : await likeCommunityPost(postId, { channelId });
+        ? await unlikeCommunityPost(postChannelId, postId, { channelId })
+        : await likeCommunityPost(postChannelId, postId, { channelId });
 
       if (result) {
         setLikes(result.totalLikes);

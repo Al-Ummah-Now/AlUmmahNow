@@ -18,12 +18,12 @@ export class VoteOnPoll extends OpenAPIRoute {
     tags: ['Community'],
     summary: 'Vote on a community poll',
     request: {
-      headers: z.object({
-          channelId: z.string().optional().nullable(),
-        }),
-        params: z.object({
+      params: z.object({
         channelId: z.string().describe('Channel ID that owns the post'),
         postId: z.string().describe('Post ID to vote on'),
+      }),
+      headers: z.object({
+        channelId: z.string().optional().describe('Actor channel ID (the channel voting)'),
       }),
       body: {
         content: {
@@ -70,8 +70,9 @@ export class VoteOnPoll extends OpenAPIRoute {
 
   async handle(c: any): Promise<Response> {
     const auth = c.get('auth');
-    const { channelId, postId } = c.req.param();
-    const request = await this.getValidatedData<typeof this.schema>();
+    const { channelId: postChannelId, postId } = c.req.param();
+    const request: any = await this.getValidatedData<typeof this.schema>();
+    const userChannelId = request.headers?.channelId;
     const body: any = request.body;
 
     if (!body) {
@@ -88,7 +89,7 @@ export class VoteOnPoll extends OpenAPIRoute {
       }
 
       // Get post using direct key access (fixed N+1 query issue)
-      const postKey = `posts/${channelId}/${postId}.json`;
+      const postKey = `posts/${postChannelId}/${postId}.json`;
       const postData = await c.env.community_posts.get(postKey);
 
       if (!postData) {
@@ -132,8 +133,11 @@ export class VoteOnPoll extends OpenAPIRoute {
       const queue = new Queue(c.env.queue);
       await queue.send(MessageType.PollVoted, {
         postId,
-        channelId: post.channelId,
-        userId: auth.userId,
+        channelId: postChannelId,
+        actor: {
+          userId: auth.userId,
+          channelId: userChannelId,
+        },
         optionIds: body.optionIds,
         // Include poll options for processor to initialize results if needed
         pollOptions: post.poll.options.map(opt => ({ id: opt.id })),

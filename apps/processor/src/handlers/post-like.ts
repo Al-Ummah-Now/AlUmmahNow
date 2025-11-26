@@ -2,11 +2,15 @@ import { AlUmmahMessage, MessageType, QueueEnvironment } from '../types';
 import { Logger } from '@al-ummah/logger';
 import { CommunityPost } from '@al-ummah/shared-types';
 
+interface ActorPayload {
+  userId: string;
+  channelId?: string;
+}
+
 interface PostLikedPayload {
   postId: string;
   channelId: string;
-  userId: string;
-  likerChannelId?: string;
+  actor: ActorPayload;
   timestamp: string;
 }
 
@@ -25,10 +29,10 @@ export async function handlePostLikeEvent(
   logger.debug(`Processing post like message: ${MessageType[message.type]}`, message.payload);
 
   const payload = message.payload as unknown as PostLikedPayload;
-  const { postId, channelId, userId } = payload;
+  const { postId, channelId, actor } = payload;
 
-  if (!postId || !channelId || !userId) {
-    throw new Error('Post like message missing required fields: postId, channelId, userId');
+  if (!postId || !channelId || !actor?.userId) {
+    throw new Error('Post like message missing required fields: postId, channelId, actor.userId');
   }
 
   try {
@@ -41,11 +45,11 @@ export async function handlePostLikeEvent(
     logger.info('Post like processed successfully', {
       postId,
       channelId,
-      userId,
+      actor,
       totalLikes,
     });
   } catch (error) {
-    logger.error('Failed to process post like', { postId, channelId, userId, error });
+    logger.error('Failed to process post like', { postId, channelId, actor, error });
     throw error;
   }
 }

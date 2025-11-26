@@ -12,11 +12,12 @@ const deleteCommentSchema = {
     'Soft delete a comment. Comment author or post owner can delete. Comments with replies show [deleted] instead of being removed.',
   request: {
     params: z.object({
+      channelId: Str({ description: 'Channel ID that owns the post' }),
       postId: Str({ description: 'Post ID' }),
       commentId: Str({ description: 'Comment ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional(),
+      channelId: z.string().optional().describe('Actor channel ID (for authorization check)'),
     }),
   },
   responses: {
@@ -66,24 +67,14 @@ export class DeletePostComment extends OpenAPIRoute {
     }
     const userId = auth.userId;
 
-    const { postId, commentId } = c.req.param();
+    const { channelId: postChannelId, postId, commentId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const { channelId } = request.headers;
+    const userChannelId = request.headers?.channelId;
 
     const bucket = c.env.community_posts;
 
-    // 1. Get post to check ownership
-    const postKey = await this.findPostKey(bucket, postId);
-    if (!postKey) {
-      return c.json(
-        {
-          success: false,
-          error: 'Post not found',
-        },
-        404
-      );
-    }
-
+    // 1. Get post to check ownership (O(1) lookup)
+    const postKey = `posts/${postChannelId}/${postId}.json`;
     const postObj = await bucket.get(postKey);
     if (!postObj) {
       return c.json(
@@ -112,7 +103,7 @@ export class DeletePostComment extends OpenAPIRoute {
 
     // 3. Check authorization (comment author OR post owner)
     const isCommentAuthor = comment.userId === userId;
-    const isPostOwner = post.channelId === channelId;
+    const isPostOwner = post.channelId === userChannelId;
 
     if (!isCommentAuthor && !isPostOwner) {
       return c.json(
@@ -163,7 +154,11 @@ export class DeletePostComment extends OpenAPIRoute {
     await queue.send(MessageType.PostCommentDeleted, {
       postId,
       commentId,
-      deletedByUserId: userId,
+      channelId: postChannelId,
+      actor: {
+        userId,
+        channelId: userChannelId,
+      },
       timestamp: comment.deletedAt,
     });
 
@@ -171,16 +166,6 @@ export class DeletePostComment extends OpenAPIRoute {
       success: true,
       message: 'Comment deleted successfully',
     });
-  }
-
-  private async findPostKey(bucket: R2Bucket, postId: string): Promise<string | null> {
-    const list = await bucket.list({ prefix: 'posts/' });
-    for (const object of list.objects) {
-      if (object.key.endsWith(`/${postId}.json`)) {
-        return object.key;
-      }
-    }
-    return null;
   }
 
   private async findComment(

@@ -8,11 +8,9 @@ export class GetPollResults extends OpenAPIRoute {
     tags: ['Community'],
     summary: 'Get poll results',
     request: {
-      headers: z.object({
-          channelId: z.string().optional().nullable(),
-        }),
-        params: z.object({
-        postId: z.string(),
+      params: z.object({
+        channelId: z.string().describe('Channel ID that owns the post'),
+        postId: z.string().describe('Post ID'),
       }),
     },
     responses: {
@@ -58,25 +56,20 @@ export class GetPollResults extends OpenAPIRoute {
   };
 
   async handle(c: any): Promise<Response> {
-    const { postId } = c.req.param();
+    const { channelId: postChannelId, postId } = c.req.param();
 
     try {
-      // Get post
-      let post: CommunityPost | null = null;
+      // Direct key lookup (O(1))
+      const postKey = `posts/${postChannelId}/${postId}.json`;
+      const postData = await c.env.community_posts.get(postKey);
 
-      const listResult = await c.env.community_posts.list({ prefix: 'posts/' });
-
-      for (const object of listResult.objects) {
-        if (object.key.includes(`/${postId}.json`)) {
-          const postData = await c.env.community_posts.get(object.key);
-          if (postData) {
-            post = await postData.json();
-          }
-          break;
-        }
+      if (!postData) {
+        return c.json({ error: 'Poll not found' }, 404);
       }
 
-      if (!post || post.type !== PostType.POLL || !post.poll) {
+      const post: CommunityPost = await postData.json();
+
+      if (post.type !== PostType.POLL || !post.poll) {
         return c.json({ error: 'Poll not found' }, 404);
       }
 
