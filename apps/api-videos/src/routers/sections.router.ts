@@ -7,7 +7,6 @@ import { PopularVideosSection } from '../endpoints/sections/popular';
 import { TrendingVideosSection } from '../endpoints/sections/trending';
 import { RecommendedVideosSection } from '../endpoints/sections/recommended';
 import { CategoryVideosSection } from '../endpoints/sections/by-category';
-import { AdminIndexOperations } from '../endpoints/sections/admin';
 
 const app = new Hono();
 
@@ -19,6 +18,5 @@ sectionsRouter.get('/popular', PopularVideosSection);
 sectionsRouter.get('/trending', TrendingVideosSection);
 sectionsRouter.get('/recommended', RecommendedVideosSection);
 sectionsRouter.get('/by-category/:category', CategoryVideosSection);
-sectionsRouter.get('/admin', AdminIndexOperations);
 
 export default sectionsRouter;

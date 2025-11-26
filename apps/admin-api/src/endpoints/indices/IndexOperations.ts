@@ -1,8 +1,8 @@
-import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
+import { AdminRoute } from "../../base/AdminRoute";
+import { AppContext } from "../../base/types";
 import { initializeAllIndices, rebuildIndex, getIndexStats } from "../../lib/initializeIndices";
 import { logger } from "../../lib/logger";
-import { addAuthToSchema } from "../../lib/openapi-auth";
 
 const IndexOperationResponseSchema = z.object({
   success: z.boolean(),
@@ -20,13 +20,13 @@ const IndexOperationResponseSchema = z.object({
 
 /**
  * Admin endpoint to initialize or rebuild video section indices
- * This should be protected by authentication and potentially admin-only access
+ * Uses AdminRoute base class for automatic admin role validation
  */
-export class AdminIndexOperations extends OpenAPIRoute {
-  schema = addAuthToSchema({
+export class IndexOperations extends AdminRoute {
+  schema = {
     tags: ["Video Sections", "Admin"],
     summary: "Manage Video Section Indices",
-    description: "Admin endpoint to initialize, rebuild, or check status of video section indices. Requires authentication.",
+    description: "Admin endpoint to initialize, rebuild, or check status of video section indices. Requires admin or moderator role.",
     request: {
       query: z.object({
         operation: z.enum(['initialize', 'rebuild', 'status']).describe("Operation to perform"),
@@ -77,27 +77,12 @@ export class AdminIndexOperations extends OpenAPIRoute {
         },
       },
     },
-  }, 'required');
+  };
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     try {
-      // Check authentication
-      const auth = c.get('auth');
-      if (!auth || !auth.userId) {
-        return c.json(
-          {
-            success: false,
-            error: "Authentication required",
-          },
-          401
-        );
-      }
-
-      // TODO: Check admin permissions
-      // For now, we'll allow any authenticated user (should be restricted in production)
-      // if (!isAdmin(auth.userId)) {
-      //   return c.json({ success: false, error: "Admin access required" }, 403);
-      // }
+      const userId = this.getUserId(c);
+      logger.info('[IndexOperations] Processing request', { userId, path: c.req.path });
 
       // Get validated data
       const data = await this.getValidatedData<typeof this.schema>();
@@ -110,7 +95,7 @@ export class AdminIndexOperations extends OpenAPIRoute {
           // Start initialization in background
           c.executionCtx.waitUntil(
             initializeAllIndices(videoBucket).catch(err =>
-              logger.error("Failed to initialize indices", { error: err })
+              logger.error("[IndexOperations] Failed to initialize indices", { error: err })
             )
           );
 
@@ -124,7 +109,7 @@ export class AdminIndexOperations extends OpenAPIRoute {
             // Rebuild all indices
             c.executionCtx.waitUntil(
               initializeAllIndices(videoBucket).catch(err =>
-                logger.error("Failed to rebuild all indices", { error: err })
+                logger.error("[IndexOperations] Failed to rebuild all indices", { error: err })
               )
             );
 
@@ -132,11 +117,11 @@ export class AdminIndexOperations extends OpenAPIRoute {
               success: true,
               message: "Rebuilding all indices in background. This may take several minutes.",
             });
-          } else if (indexType && indexType !== 'all') {
+          } else if (indexType) {
             // Rebuild specific index
             c.executionCtx.waitUntil(
-              rebuildIndex(videoBucket, indexType as any, period).catch(err =>
-                logger.error(`Failed to rebuild ${indexType} index`, { error: err })
+              rebuildIndex(videoBucket, indexType, period).catch(err =>
+                logger.error(`[IndexOperations] Failed to rebuild ${indexType} index`, { error: err })
               )
             );
 
@@ -168,7 +153,7 @@ export class AdminIndexOperations extends OpenAPIRoute {
           }, 400);
       }
     } catch (error) {
-      logger.error("Error in admin index operations", { error });
+      logger.error("[IndexOperations] Error in admin index operations", { error });
       return c.json(
         {
           success: false,
