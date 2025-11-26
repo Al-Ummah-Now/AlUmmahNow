@@ -159,6 +159,12 @@ export class MessageProcessor {
         await handleChannelSectionEvent(message, env, this.logger);
         break;
 
+      // Content moderation events
+      case MessageType.ReportCreate:
+      case MessageType.ReportResolve:
+        await this.processReportMessage(message, env);
+        break;
+
       // Channel tab events - REMOVED: tabs are frontend-only, no backend processing
       // case MessageType.ChannelTabCreate:
       // case MessageType.ChannelTabUpdate:
@@ -498,6 +504,43 @@ export class MessageProcessor {
         break;
       case MessageType.PostCommentHearted:
         this.logger.info(`Comment ${commentId} hearted on post ${postId} by actor`, { actor });
+        break;
+    }
+  }
+
+  private async processReportMessage(message: AlUmmahMessage, _env: QueueEnvironment): Promise<void> {
+    this.logger.debug(`Processing report message: ${MessageType[message.type]}`, message.payload);
+
+    const { reportId, entityType, entityId, reporterId, reason } = message.payload as {
+      reportId: string;
+      entityType: string;
+      entityId: string;
+      reporterId: string;
+      reason: string;
+      moderatorId?: string;
+      action?: string;
+    };
+
+    if (!reportId || !entityType || !entityId) {
+      throw new Error('Report message missing required fields: reportId, entityType, entityId');
+    }
+
+    switch (message.type) {
+      case MessageType.ReportCreate:
+        this.logger.info(`Report ${reportId} created for ${entityType} ${entityId} by user ${reporterId}`, {
+          reason,
+          entityType,
+          entityId,
+        });
+        // Future: trigger automated content analysis, notify moderators for severe violations
+        break;
+      case MessageType.ReportResolve:
+        const { moderatorId, action } = message.payload as { moderatorId?: string; action?: string };
+        this.logger.info(`Report ${reportId} resolved by moderator ${moderatorId}`, {
+          action,
+          entityType,
+          entityId,
+        });
         break;
     }
   }
