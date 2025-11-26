@@ -3,11 +3,11 @@
  * List and create upload templates
  */
 
-import { OpenAPIRoute, Str, Bool, Num } from 'chanfana';
+import { Str, Bool, Num } from 'chanfana';
 import { z } from 'zod';
 import R2Repository from '../../lib/r2Repo';
 import { addAuthToSchema } from '../../lib/openapi-auth';
-import { getAuthContext } from '../../middleware/auth';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import {
   UploadTemplate,
   CreateTemplateRequest,
@@ -24,7 +24,7 @@ import { logger } from '../../lib/logger';
  * List Upload Templates Endpoint
  * GET /api/upload-defaults
  */
-export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
+export class ListUploadDefaultsEndpoint extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Settings'],
@@ -78,14 +78,9 @@ export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c) {
+  async handle(c: AppContext) {
     try {
-      const authContext = getAuthContext(c);
-      const userId = authContext?.userId;
-
-      if (!userId) {
-        return c.json({ success: false, error: 'Unauthorized' }, 401);
-      }
+      const userId = this.getUserId(c);
 
       // Get validated data
       const data = await this.getValidatedData<typeof this.schema>();
@@ -164,7 +159,7 @@ export class ListUploadDefaultsEndpoint extends OpenAPIRoute {
  * Create Upload Template Endpoint
  * POST /api/upload-defaults
  */
-export class CreateUploadDefaultEndpoint extends OpenAPIRoute {
+export class CreateUploadDefaultEndpoint extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Settings'],
@@ -227,14 +222,9 @@ export class CreateUploadDefaultEndpoint extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c) {
+  async handle(c: AppContext) {
     try {
-      const authContext = getAuthContext(c);
-      const userId = authContext?.userId;
-
-      if (!userId) {
-        return c.json({ success: false, error: 'Unauthorized' }, 401);
-      }
+      const userId = this.getUserId(c);
 
       // Get validated data
       const data = await this.getValidatedData<typeof this.schema>();

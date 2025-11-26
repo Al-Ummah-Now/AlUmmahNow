@@ -1,4 +1,3 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import R2Repository from '../../lib/r2Repo';
 import {
@@ -7,6 +6,7 @@ import {
   PostStatus,
   ListCommunityPostsResponse
 } from '@al-ummah/shared-types';
+import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';
 
 const querySchema = z.object({
@@ -16,7 +16,7 @@ const querySchema = z.object({
   status: z.nativeEnum(PostStatus).optional(),
 });
 
-export class ListCommunityPosts extends OpenAPIRoute {
+export class ListCommunityPosts extends OptionalAuthRoute {
   static schema = {
     tags: ['Community'],
     summary: 'List community posts for a channel',
@@ -56,7 +56,7 @@ export class ListCommunityPosts extends OpenAPIRoute {
     },
   };
 
-  async handle(c: any): Promise<Response> {
+  async handle(c: AppContext): Promise<Response> {
     const { channelId: postChannelId } = c.req.param();
     const request = await this.getValidatedData<typeof this.schema>();
     const { page = 1, limit = 20, type, status = PostStatus.PUBLISHED } = request.query;

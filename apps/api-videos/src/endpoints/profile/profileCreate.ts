@@ -1,4 +1,4 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileInput } from "../../lib/model/input";
@@ -6,8 +6,9 @@ import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView, createEntityDefaults } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ProfileCreate extends OpenAPIRoute {
+export class ProfileCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Profiles"],
 		summary: "Create a new Profile",
@@ -54,16 +55,12 @@ export class ProfileCreate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		// Get auth context
-		const auth = c.get('auth');
-		const userId = auth?.userId;
-		if (!userId) {
-			return c.json({ error: 'Unauthorized' }, 401);
-		}
+		// Get user ID from auth
+		const userId = this.getUserId(c);
 
 		// Retrieve the validated request body
 		const profileInput = request.body;

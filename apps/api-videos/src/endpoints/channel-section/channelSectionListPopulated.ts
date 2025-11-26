@@ -1,4 +1,4 @@
-import { OpenAPIRoute, Str, Bool } from 'chanfana';
+import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
@@ -6,8 +6,9 @@ import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { transformChannelSectionsToView } from '../../lib/transformations';
 import { populateSectionContent, transformChannelSectionWithContent } from '../../lib/channelSectionPopulator';
 import { logger } from '../../lib/logger';
+import { OptionalAuthRoute, AppContext } from '../../base';
 
-export class ChannelSectionsListPopulated extends OpenAPIRoute {
+export class ChannelSectionsListPopulated extends OptionalAuthRoute {
   schema = addAuthToSchema(
     {
       tags: ['Channel Sections'],
@@ -103,7 +104,7 @@ export class ChannelSectionsListPopulated extends OpenAPIRoute {
     'optional'
   );
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.params;
     const { limit, cursor, type, populate } = request.query;

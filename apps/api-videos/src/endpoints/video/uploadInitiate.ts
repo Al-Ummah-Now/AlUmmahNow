@@ -1,8 +1,7 @@
-import { OpenAPIRoute, Str, Num } from "chanfana";
+import { Str, Num } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { Channel } from "@al-ummah/shared-types";
-import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -10,8 +9,9 @@ import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 import { generateTUSConfig } from "../../lib/bunny/tus";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from '../../base';
 
-export class UploadInitiateEndpoint extends OpenAPIRoute {
+export class UploadInitiateEndpoint extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Initiate Video Upload with TUS Support",
@@ -89,17 +89,9 @@ export class UploadInitiateEndpoint extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
-		// Get auth context
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
-
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
+	async handle(c: AppContext) {
+		// Get authenticated user ID
+		const userId = this.getUserId(c);
 
 		try {
 			// Get validated data

@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { AnalyticsData as BusinessAnalyticsData, ResponseError } from "../../lib/types";
 import { AnalyticsQueryInput } from "../../lib/model/input";
@@ -9,7 +10,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 
-export class AnalyticsGet extends OpenAPIRoute {
+export class AnalyticsGet extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Analytics"],
 		summary: "Get Analytics Data",
@@ -70,7 +71,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
 		const { 
 			entityType = 'video', 
@@ -80,7 +81,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 			metrics = ['views', 'likes', 'comments'], 
 			granularity = 'day' 
 		} = request.query;
-		const { userId } = request.headers;
+		const userId = this.getUserId(c);
 
 		try {
 			// Date range handling

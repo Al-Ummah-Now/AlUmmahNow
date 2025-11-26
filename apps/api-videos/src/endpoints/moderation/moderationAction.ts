@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Report as BusinessReport, ResponseError } from "../../lib/types";
 import { ModerationActionInput } from "../../lib/model/input";
@@ -8,7 +9,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 
-export class ModerationAction extends OpenAPIRoute {
+export class ModerationAction extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Content Moderation"],
 		summary: "Take Moderation Action",
@@ -91,12 +92,12 @@ export class ModerationAction extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { reportId } = request.params;
-		const { userId } = request.headers;
+		const userId = this.getUserId(c);
 		const { action, reason, notes } = request.body;
 
 		try {

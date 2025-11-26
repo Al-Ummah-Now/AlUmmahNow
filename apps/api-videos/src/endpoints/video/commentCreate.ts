@@ -1,12 +1,13 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { Comment } from "../../lib/model/input";
+import { AuthenticatedRoute, AppContext } from '../../base';
 
 
-export class CommentCreate extends OpenAPIRoute {
+export class CommentCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Comments"],
 		summary: "Create a new comment for a video",
@@ -63,12 +64,11 @@ export class CommentCreate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		const auth = c.get('auth');
-		const userId = auth?.userId;
+		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
 		// Implement your own object fetch here

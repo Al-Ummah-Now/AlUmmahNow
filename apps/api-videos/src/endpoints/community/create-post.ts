@@ -1,4 +1,3 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import sanitizeHtml from 'sanitize-html';
 import {
@@ -8,7 +7,7 @@ import {
   PostVisibility,
   CreateCommunityPostRequest,
 } from '@al-ummah/shared-types';
-import { getAuthContext } from '../../middleware/auth';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateCreatePost } from '../../validation/community-posts';
 import Queue, { MessageType } from '../../lib/queue';
@@ -70,7 +69,7 @@ const createPostSchema = z.object({
 
 const Str = (opts: { description: string }) => z.string().openapi(opts);
 
-export class CreateCommunityPost extends OpenAPIRoute {
+export class CreateCommunityPost extends AuthenticatedRoute {
   static schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Create a community post',
@@ -114,12 +113,8 @@ export class CreateCommunityPost extends OpenAPIRoute {
     },
   }, 'required');
 
-  async handle(c: any): Promise<Response> {
-    const auth = c.get('auth');
-    if (!auth) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-    const userId = auth.userId;
+  async handle(c: AppContext): Promise<Response> {
+    const userId = this.getUserId(c);
 
     const request: any = await this.getValidatedData<typeof this.schema>();
     const body: any = request.body;

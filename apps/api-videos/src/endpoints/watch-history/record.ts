@@ -4,9 +4,7 @@
  * Records a video view in the user's watch history
  */
 
-import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type {
@@ -15,6 +13,7 @@ import type {
   WatchHistoryEvent
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from "../../base";
 
 // Request schema
 const RecordWatchRequestSchema = z.object({
@@ -41,7 +40,7 @@ const WatchHistoryEntrySchema = z.object({
   percentageWatched: z.number(),
 });
 
-export class RecordWatchHistory extends OpenAPIRoute {
+export class RecordWatchHistory extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -86,16 +85,11 @@ export class RecordWatchHistory extends OpenAPIRoute {
     "required"
   );
 
-  async handle(c: Context) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.headers;
 
-    const auth = c.get("auth");
-    const effectiveUserId = auth?.userId;
-
-    if (!effectiveUserId) {
-      return c.json({ error: "Authentication required" }, 401);
-    }
+    const effectiveUserId = this.getUserId(c);
 
     // Parse and validate request body
     const body = await c.req.json<RecordWatchRequest>();

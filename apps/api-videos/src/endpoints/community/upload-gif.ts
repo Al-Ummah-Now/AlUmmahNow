@@ -1,5 +1,5 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
 import { addAuthToSchema } from '../../lib/openapi-auth';
@@ -9,7 +9,7 @@ import { logger } from '../../lib/logger';
 
 const MAX_GIF_SIZE = 10 * 1024 * 1024; // 10MB for GIFs
 
-export class UploadCommunityPostGif extends OpenAPIRoute {
+export class UploadCommunityPostGif extends AuthenticatedRoute {
   schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Upload GIF for community post',
@@ -58,13 +58,9 @@ export class UploadCommunityPostGif extends OpenAPIRoute {
     },
   }, 'required');
 
-  async handle(c: any): Promise<Response> {
+  async handle(c: AppContext): Promise<Response> {
     try {
-      const auth = c.get('auth');
-      if (!auth) {
-        return c.json({ error: 'Unauthorized' }, 401);
-      }
-      const userId = auth.userId;
+      const userId = this.getUserId(c);
 
       const request = await this.getValidatedData<typeof this.schema>();
       const { channelId } = request.headers;

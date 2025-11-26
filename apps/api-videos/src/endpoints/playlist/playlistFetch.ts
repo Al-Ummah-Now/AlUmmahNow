@@ -1,9 +1,10 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Playlist, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
+import { OptionalAuthRoute, AppContext } from "../../base";
 
-export class PlaylistFetch extends OpenAPIRoute {
+export class PlaylistFetch extends OptionalAuthRoute {
     schema = {
         tags: ["Playlists"],
         summary: "Get a single playlist by id",
@@ -52,13 +53,14 @@ export class PlaylistFetch extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated slug
         const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 
         // Implement your own object fetch here
         const bucket = c.env.playlists;

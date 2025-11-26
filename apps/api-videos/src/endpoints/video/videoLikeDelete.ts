@@ -1,10 +1,11 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from '../../base';
 
-export class LikeDelete extends OpenAPIRoute {
+export class LikeDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Likes"],
 		summary: "Unlike a video",
@@ -46,14 +47,13 @@ export class LikeDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated slug
 		const { id } = request.params;
-		const auth = c.get('auth');
-		const userId = auth?.userId;
+		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
         // Implement your own object fetch here

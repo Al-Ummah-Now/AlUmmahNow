@@ -1,4 +1,4 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import {
 	ChannelTabConfig as BusinessChannelTabConfig,
@@ -10,8 +10,9 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ChannelTabsUpdate extends OpenAPIRoute {
+export class ChannelTabsUpdate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Update channel tabs configuration",
@@ -89,13 +90,14 @@ export class ChannelTabsUpdate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated id
 		const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Retrieve the validated request body
 		const tabsUpdateInput = request.body;

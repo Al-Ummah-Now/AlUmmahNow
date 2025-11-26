@@ -1,8 +1,9 @@
-import { OpenAPIRoute } from "chanfana";
+import { PublicRoute, AppContext } from "../../base";
+import { } from "chanfana";
 import { z } from "zod";
 import { APITester } from "../../tests/api.test";
 
-export class TestRunner extends OpenAPIRoute {
+export class TestRunner extends PublicRoute {
 schema = {
 tags: ["Monitoring"],
 summary: "Run API Tests",
@@ -34,7 +35,7 @@ timestamp: z.string(),
 },
 };
 
-async handle(c) {
+async handle(c: AppContext) {
 const tester = new APITester();
 const results = await tester.runAllTests();
 

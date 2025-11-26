@@ -1,7 +1,7 @@
 import { OpenAPIRoute, Str, Num } from "chanfana";
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -25,7 +25,7 @@ const SharedMetadataSchema = z.object({
 	isPublic: z.boolean().optional().describe("Visibility for all videos"),
 });
 
-export class UploadBatchInitiateEndpoint extends OpenAPIRoute {
+export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Videos"],
 		summary: "Initiate Batch Video Upload",
@@ -96,17 +96,10 @@ export class UploadBatchInitiateEndpoint extends OpenAPIRoute {
 		},
 	}, 'required');
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get auth context
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
+		const userId = this.getUserId(c);
 
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
 
 		try {
 			// Get validated data

@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { PublicRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 
 /**
@@ -7,7 +8,7 @@ import { z } from "zod";
  * This endpoint is used to test error handling in development.
  * It intentionally throws different types of errors based on the type parameter.
  */
-export class TestError extends OpenAPIRoute {
+export class TestError extends PublicRoute {
 	schema = {
 		tags: ["Monitoring"],
 		summary: "Test error handling (development only)",
@@ -40,7 +41,7 @@ export class TestError extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const data = await this.getValidatedData<typeof this.schema>();
 		const { type, message } = data.query;
 

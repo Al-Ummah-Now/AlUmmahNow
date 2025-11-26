@@ -1,13 +1,13 @@
 import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 
-export class UploadCompleteEndpoint extends OpenAPIRoute {
+export class UploadCompleteEndpoint extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Complete Video Upload",
@@ -79,17 +79,10 @@ export class UploadCompleteEndpoint extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get auth context
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
+		const userId = this.getUserId(c);
 
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
 
 		let videoId: string | undefined;
 

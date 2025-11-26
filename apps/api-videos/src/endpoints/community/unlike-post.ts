@@ -1,12 +1,11 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { CommunityPost, LikePostResponse } from '@al-ummah/shared-types';
-import { getAuthContext } from '../../middleware/auth';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 
-export class UnlikeCommunityPost extends OpenAPIRoute {
+export class UnlikeCommunityPost extends AuthenticatedRoute {
   static schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Unlike a community post',
@@ -45,16 +44,11 @@ export class UnlikeCommunityPost extends OpenAPIRoute {
     },
   });
 
-  async handle(c: any): Promise<Response> {
-    const auth = c.get('auth');
-    if (!auth) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+  async handle(c: AppContext): Promise<Response> {
+    const userId = this.getUserId(c);
     const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
     const userChannelId = request.headers?.channelId;
-    const userId = auth.userId;
 
     try {
       // Direct key lookup (O(1))

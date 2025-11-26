@@ -1,4 +1,5 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Report as BusinessReport, ResponseError } from "../../lib/types";
 import { ReportInput } from "../../lib/model/input";
@@ -7,7 +8,7 @@ import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from '../../lib/logger';
 
-export class ReportCreate extends OpenAPIRoute {
+export class ReportCreate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Content Moderation"],
 		summary: "Report Content",
@@ -74,7 +75,7 @@ export class ReportCreate extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 

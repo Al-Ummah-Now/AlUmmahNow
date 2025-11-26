@@ -1,8 +1,7 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
-import { Context } from 'hono';
 import sanitizeHtml from 'sanitize-html';
-import { getAuthContext } from '../../middleware/auth';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import type {
@@ -91,15 +90,11 @@ const createCommentSchema = {
   },
 };
 
-export class CreatePostComment extends OpenAPIRoute {
+export class CreatePostComment extends AuthenticatedRoute {
   schema = addAuthToSchema(createCommentSchema, 'required');
 
-  async handle(c: Context) {
-    const auth = c.get('auth');
-    if (!auth) {
-      return c.json({ success: false, error: 'Authentication required' }, 401);
-    }
-    const userId = auth.userId;
+  async handle(c: AppContext) {
+    const userId = this.getUserId(c);
 
     const { channelId: postChannelId, postId } = c.req.param();
     const data: any = await this.getValidatedData<z.infer<typeof createCommentRequestSchema>>();
@@ -179,6 +174,7 @@ export class CreatePostComment extends OpenAPIRoute {
     }
 
     // 3. Create comment object with sanitized content
+    const auth = this.getAuth(c);
     const comment: PostComment = {
       id: crypto.randomUUID(),
       postId,
@@ -186,7 +182,7 @@ export class CreatePostComment extends OpenAPIRoute {
       userId: userId,
       parentCommentId: requestBody.parentCommentId,
       content: sanitizeHtml(requestBody.content, sanitizeOptions),
-      userDisplayName: (auth.payload as any).email || 'Anonymous',
+      userDisplayName: (auth?.payload as any)?.email || 'Anonymous',
       userAvatarUrl: undefined,
       channelVerified: false,
       likes: 0,

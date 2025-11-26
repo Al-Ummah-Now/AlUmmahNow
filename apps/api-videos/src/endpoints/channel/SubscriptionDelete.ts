@@ -1,11 +1,12 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Channel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class SubscriptionDelete extends OpenAPIRoute {
+export class SubscriptionDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Subscriptions"],
 		summary: "Unsubscripe from a channel",
@@ -55,13 +56,14 @@ export class SubscriptionDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Extract channel ID and subscriber ID
 		const { id, cid } = request.params;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Implement your own object insertion here
 		try {

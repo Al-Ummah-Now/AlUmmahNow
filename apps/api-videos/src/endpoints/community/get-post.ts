@@ -1,9 +1,9 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
+import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';
 
-export class GetCommunityPost extends OpenAPIRoute {
+export class GetCommunityPost extends OptionalAuthRoute {
   static schema = {
     tags: ['Community'],
     summary: 'Get a single community post',
@@ -35,7 +35,7 @@ export class GetCommunityPost extends OpenAPIRoute {
     },
   };
 
-  async handle(c: any): Promise<Response> {
+  async handle(c: AppContext): Promise<Response> {
     const { channelId: postChannelId, postId } = c.req.param();
 
     try {

@@ -4,7 +4,8 @@
  * Removes a specific video from the user's watch history
  */
 
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -17,7 +18,7 @@ const DeleteWatchHistoryParams = z.object({
   videoId: Str({ description: "ID of the video to remove from watch history" }),
 });
 
-export class DeleteWatchHistory extends OpenAPIRoute {
+export class DeleteWatchHistory extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -52,12 +53,7 @@ export class DeleteWatchHistory extends OpenAPIRoute {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.headers;
 
-    const auth = c.get("auth");
-    const effectiveUserId = auth?.userId;
-
-    if (!effectiveUserId) {
-      return c.json({ error: "Authentication required" }, 401);
-    }
+    const userId = this.getUserId(c);
 
     // Get videoId from path params
     const { videoId } = c.req.param();
@@ -72,7 +68,7 @@ export class DeleteWatchHistory extends OpenAPIRoute {
       );
 
       // Generate entry ID (userId:videoId)
-      const entryId = `${effectiveUserId}:${videoId}`;
+      const entryId = `${userId}:${videoId}`;
 
       // Check if entry exists
       const existingEntry = await watchHistoryRepo.getObject(entryId);
@@ -81,7 +77,7 @@ export class DeleteWatchHistory extends OpenAPIRoute {
       }
 
       // Verify the entry belongs to the authenticated user
-      if (existingEntry.userId !== effectiveUserId) {
+      if (existingEntry.userId !== userId) {
         return c.json({ error: "Unauthorized to delete this entry" }, 403);
       }
 

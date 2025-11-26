@@ -1,12 +1,11 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
-import { getAuthContext } from '../../middleware/auth';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 
-export class DeleteCommunityPost extends OpenAPIRoute {
+export class DeleteCommunityPost extends AuthenticatedRoute {
   static schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Delete a community post',
@@ -54,12 +53,8 @@ export class DeleteCommunityPost extends OpenAPIRoute {
     },
   });
 
-  async handle(c: any): Promise<Response> {
-    const auth = c.get('auth');
-    if (!auth) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-    const userId = auth.userId;
+  async handle(c: AppContext): Promise<Response> {
+    const userId = this.getUserId(c);
 
     const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();

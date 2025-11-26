@@ -2,12 +2,13 @@
  * List all subtitle tracks for a video
  */
 
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import { SubtitleMetadata } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { PublicRoute, AppContext } from '../../base';
 
-export class SubtitlesList extends OpenAPIRoute {
+export class SubtitlesList extends PublicRoute {
   schema = {
     tags: ['Subtitles'],
     summary: 'List subtitle tracks for a video',
@@ -60,7 +61,7 @@ export class SubtitlesList extends OpenAPIRoute {
     },
   };
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     try {
       // Get validated data
       const request = await this.getValidatedData<typeof this.schema>();

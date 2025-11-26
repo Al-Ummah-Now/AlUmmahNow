@@ -1,11 +1,12 @@
-import { Bool, Num, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Num } from "chanfana";
 import { string, z } from "zod";
 import { Profile as BusinessProfile, PaginationResponse, ResponseError } from "../../lib/types";
 import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
+import { PublicRoute, AppContext } from "../../base";
 
-export class ProfilesList extends OpenAPIRoute {
+export class ProfilesList extends PublicRoute {
 	schema = {
 		tags: ["Profiles"],
 		summary: "List Profiles",
@@ -58,7 +59,7 @@ export class ProfilesList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 

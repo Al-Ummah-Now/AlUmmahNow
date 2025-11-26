@@ -4,7 +4,7 @@
  * Removes all watch history entries for the authenticated user
  */
 
-import { OpenAPIRoute } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -17,7 +17,7 @@ const ClearResponseSchema = z.object({
   message: z.string(),
 });
 
-export class ClearWatchHistory extends OpenAPIRoute {
+export class ClearWatchHistory extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -47,12 +47,7 @@ export class ClearWatchHistory extends OpenAPIRoute {
   async handle(c: Context) {
     const request = await this.getValidatedData<typeof this.schema>();
 
-    const auth = c.get("auth");
-    const effectiveUserId = auth?.userId;
-
-    if (!effectiveUserId) {
-      return c.json({ error: "Authentication required" }, 401);
-    }
+    const userId = this.getUserId(c);
 
     try {
       const watchHistoryRepo = new R2Repository<WatchHistoryEntry>(
@@ -64,7 +59,7 @@ export class ClearWatchHistory extends OpenAPIRoute {
 
       // Filter entries for this user
       const userEntries = allEntriesResponse.items.filter(
-        (entry) => entry.userId === effectiveUserId
+        (entry) => entry.userId === userId
       );
 
       // Delete all user's entries

@@ -1,11 +1,12 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from '../../base';
 
 
-export class CommentUpdate extends OpenAPIRoute {
+export class CommentUpdate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Comments"],
 		summary: "Update a comment for a video",
@@ -64,12 +65,11 @@ export class CommentUpdate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id, cid } = request.params;
-		const auth = c.get('auth');
-		const userId = auth?.userId;
+		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
 		// Get the video and find the comment

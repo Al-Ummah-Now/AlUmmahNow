@@ -11,12 +11,12 @@ const app = new Hono();
 
 const handleCoverUpdate = async (c) => {
     try {
-        // Get auth context - profile ID is always the user ID
+        // Get user ID from auth - profile ID is always the user ID
         const auth = c.get('auth');
-        const userId = auth?.userId;
-        if (!userId) {
+        if (!auth || !auth.userId) {
             return c.json({ error: 'Unauthorized' }, 401);
         }
+        const userId = auth.userId;
 
         // Parse the form data
         const formData = await c.req.parseBody();

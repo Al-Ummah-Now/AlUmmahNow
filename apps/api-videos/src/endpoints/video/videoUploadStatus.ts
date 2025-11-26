@@ -1,7 +1,7 @@
 import { OpenAPIRoute, Str } from "chanfana";
+import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import { requireSecret } from "../../lib/env-helpers";
@@ -32,7 +32,7 @@ const UploadStatus = z.object({
 	}).optional(),
 });
 
-export class VideoUploadStatus extends OpenAPIRoute {
+export class VideoUploadStatus extends OptionalAuthRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Get Video Upload Status",
@@ -93,15 +93,14 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
 		const { channelId } = request.headers;
 		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const effectiveUserId = authContext?.userId;
+		const effectiveUserId = this.getUserId(c);
 
 		if (!effectiveUserId) {
 			return c.json({

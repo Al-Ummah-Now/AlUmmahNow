@@ -1,11 +1,12 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Channel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class SubscriptionCreate extends OpenAPIRoute {
+export class SubscriptionCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Subscriptions"],
 		summary: "Subscripe to a channel",
@@ -54,13 +55,14 @@ export class SubscriptionCreate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const data = await this.getValidatedData<typeof this.schema>();
 
 		// Extract channel ID and subscriber ID
 		const { id } = data.params;
-		const { channelId, userId } = data.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = data.headers;
 
 		// Implement your own object insertion here
 		try {

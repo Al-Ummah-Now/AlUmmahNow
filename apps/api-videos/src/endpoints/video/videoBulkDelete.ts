@@ -1,10 +1,11 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from '../../base';
 
-export class VideoBulkDelete extends OpenAPIRoute {
+export class VideoBulkDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Delete multiple videos",
@@ -62,13 +63,12 @@ export class VideoBulkDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { videoIds } = request.body;
-		const auth = c.get('auth');
-		const userId = auth?.userId;
+		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
 		// Get the repository

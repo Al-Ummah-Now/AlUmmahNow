@@ -1,13 +1,13 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView } from "../../lib/transformations";
-import { getAuthContext, getUserId } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { OptionalAuthRoute, AppContext } from "../../base";
 
-export class ProfileFetch extends OpenAPIRoute {
+export class ProfileFetch extends OptionalAuthRoute {
 	schema = {
 		tags: ["Profiles"],
 		summary: "Get a single profile by id",
@@ -57,7 +57,7 @@ export class ProfileFetch extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
@@ -66,8 +66,7 @@ export class ProfileFetch extends OpenAPIRoute {
 			const { id } = request.params;
 
 			// Get user from auth context (optional for GET endpoints)
-			const authContext = getAuthContext(c);
-			const userId = authContext?.userId;
+			const userId = this.getUserId(c);
 
 			// Get profile from storage
 			const bucket = c.env.profiles;

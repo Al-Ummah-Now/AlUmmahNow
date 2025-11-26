@@ -1,4 +1,4 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { ChannelUpdateInput } from "../../lib/model/input";
@@ -6,8 +6,9 @@ import { ChannelView } from "../../lib/model/view";
 import { transformChannelToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ChannelUpdate extends OpenAPIRoute {
+export class ChannelUpdate extends AuthenticatedRoute {
     schema = {
         tags: ["Channels"],
         summary: "Update a Channel",
@@ -60,13 +61,14 @@ export class ChannelUpdate extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated id
         const { id } = request.params;
-		const { channelId, userId } = request.headers;
+        const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
         // Retrieve the validated request body
         const channelUpdateInput = request.body;

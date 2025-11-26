@@ -1,12 +1,12 @@
 import { Num, OpenAPIRoute, Str } from "chanfana";
+import { OptionalAuthRoute, AppContext } from '../../base';
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
-import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
-export class VideoSearch extends OpenAPIRoute {
+export class VideoSearch extends OptionalAuthRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Search Videos",
@@ -80,15 +80,14 @@ export class VideoSearch extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const startTime = Date.now();
 
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
+		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
 		// Retrieve the validated parameters

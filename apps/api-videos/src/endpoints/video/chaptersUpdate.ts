@@ -3,19 +3,19 @@
  * Manually update chapters for a video (requires authentication and ownership)
  */
 
-import { OpenAPIRoute, Str } from 'chanfana';
+import { AuthenticatedRoute, AppContext } from '../../base';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import R2Repository from '../../lib/r2Repo';
 import { validateChapters } from '../../lib/chapters/parser';
 import { VideoChapterSchema, VideoChapterDataSchema } from '@al-ummah/shared-types';
 import { ResponseError } from '../../lib/types';
-import { getAuthContext } from '../../middleware/auth';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 
-export class VideoChaptersUpdate extends OpenAPIRoute {
+export class VideoChaptersUpdate extends AuthenticatedRoute {
   schema = addAuthToSchema({
     tags: ['Videos'],
     summary: 'Update video chapters (manual edit)',
@@ -92,23 +92,13 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
     },
   }, 'required');
 
-  async handle(c) {
+  async handle(c: AppContext) {
     try {
-      // Get auth context
-      const auth = getAuthContext(c);
-      if (!auth) {
-        return c.json(
-          {
-            success: false,
-            error: 'Unauthorized',
-          },
-          401
-        );
-      }
-
       const request = await this.getValidatedData<typeof this.schema>();
       const { id: videoId } = request.params;
       const { chapters } = request.body;
+
+      const userId = this.getUserId(c);
 
       const bucket = c.env.videos;
       const videoRepo = new R2Repository<VideoObject>(bucket);
@@ -126,10 +116,10 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
         );
       }
 
-      if (video.userId !== auth.userId) {
+      if (video.userId !== userId) {
         logger.warn('User not authorized to edit video chapters', {
           videoId,
-          userId: auth.userId,
+          userId,
           ownerId: video.userId,
         });
         return c.json(
@@ -174,7 +164,7 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
 
       logger.info('Chapters manually updated', {
         videoId,
-        userId: auth.userId,
+        userId,
         chapterCount: chapters.length,
       });
 
@@ -182,7 +172,7 @@ export class VideoChaptersUpdate extends OpenAPIRoute {
       const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {
         videoId,
-        userId: auth.userId,
+        userId,
         channelId: video.channelId,
         timestamp: new Date().toISOString(),
         action: 'chapters_update',

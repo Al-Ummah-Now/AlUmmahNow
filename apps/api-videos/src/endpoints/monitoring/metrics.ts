@@ -1,9 +1,10 @@
-import { OpenAPIRoute } from "chanfana";
+import { PublicRoute, AppContext } from "../../base";
+import { } from "chanfana";
 import { z } from "zod";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 
-export class Metrics extends OpenAPIRoute {
+export class Metrics extends PublicRoute {
 schema = {
 tags: ["Monitoring"],
 summary: "API Metrics",
@@ -56,7 +57,7 @@ responseTime: z.number(),
 },
 };
 
-async handle(c) {
+async handle(c: AppContext) {
 const startTime = Date.now();
 
 try {

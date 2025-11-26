@@ -1,7 +1,7 @@
 import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import R2Repository from "../../lib/r2Repo";
 import { generateTUSConfig } from "../../lib/bunny/tus";
@@ -16,7 +16,7 @@ import { logger } from '../../lib/logger';
  * when an upload was interrupted due to network issues, browser crash,
  * or expired authorization.
  */
-export class UploadResumeEndpoint extends OpenAPIRoute {
+export class UploadResumeEndpoint extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Videos"],
 		summary: "Resume Video Upload",
@@ -94,17 +94,10 @@ export class UploadResumeEndpoint extends OpenAPIRoute {
 		},
 	}, 'required');
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get auth context
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
+		const userId = this.getUserId(c);
 
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
 
 		try {
 			// Get validated data

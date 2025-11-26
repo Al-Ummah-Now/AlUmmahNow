@@ -1,8 +1,8 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
 // Watch history entry type for response
 const WatchHistoryEntry = z.object({
@@ -14,7 +14,7 @@ const WatchHistoryEntry = z.object({
 	completed: z.boolean().optional().describe("Whether the video was watched to completion"),
 });
 
-export class WatchHistoryList extends OpenAPIRoute {
+export class WatchHistoryList extends AuthenticatedRoute {
 	schema = {
 		tags: ["Profiles"],
 		summary: "Get Watch History",
@@ -89,20 +89,12 @@ export class WatchHistoryList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
-
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
+		// Get user ID from auth
+		const userId = this.getUserId(c);
 
 		const { limit, offset, filter } = request.query;
 

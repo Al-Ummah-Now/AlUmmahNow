@@ -1,11 +1,12 @@
-import { OpenAPIRoute, Num } from "chanfana";
+import { OptionalAuthRoute, AppContext } from "../../base";
+import { Num } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
 import { LiveStreamView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 
-export class LiveStreamsList extends OpenAPIRoute {
+export class LiveStreamsList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Live Streams"],
 		summary: "List Live Streams",
@@ -54,7 +55,7 @@ export class LiveStreamsList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
 		const { cursor = "", limit = 9, status, channelId } = request.query;
 

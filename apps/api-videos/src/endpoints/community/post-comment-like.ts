@@ -1,6 +1,6 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
-import { Context } from 'hono';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import type {
@@ -50,15 +50,11 @@ const likeCommentSchema = {
   },
 };
 
-export class LikePostComment extends OpenAPIRoute {
+export class LikePostComment extends AuthenticatedRoute {
   schema = addAuthToSchema(likeCommentSchema, 'required');
 
-  async handle(c: Context) {
-    const auth = c.get('auth');
-    if (!auth) {
-      return c.json({ success: false, error: 'Authentication required' }, 401);
-    }
-    const userId = auth.userId;
+  async handle(c: AppContext) {
+    const userId = this.getUserId(c);
 
     const { channelId: postChannelId, postId, commentId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();

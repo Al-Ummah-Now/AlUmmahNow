@@ -1,9 +1,10 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
+import { OptionalAuthRoute, AppContext } from "../../base";
 
-export class PlaylistsList extends OpenAPIRoute {
+export class PlaylistsList extends OptionalAuthRoute {
     schema = {
         tags: ["Playlists"],
         summary: "List Playlists",
@@ -50,13 +51,14 @@ export class PlaylistsList extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated parameters
         const { limit, cursor } = request.query;
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 
         // Implement your own object list here
         const bucket = c.env.playlists;

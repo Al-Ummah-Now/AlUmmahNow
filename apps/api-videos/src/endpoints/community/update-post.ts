@@ -1,11 +1,10 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import {
   CommunityPost,
   PostVisibility,
   UpdateCommunityPostRequest,
 } from '@al-ummah/shared-types';
-import { getAuthContext } from '../../middleware/auth';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateUpdatePost } from '../../validation/community-posts';
 import { logger } from '../../lib/logger';
@@ -19,7 +18,7 @@ const updatePostSchema = z.object({
   pinned: z.boolean().optional(),
 });
 
-export class UpdateCommunityPost extends OpenAPIRoute {
+export class UpdateCommunityPost extends AuthenticatedRoute {
   static schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Update a community post',
@@ -84,12 +83,8 @@ export class UpdateCommunityPost extends OpenAPIRoute {
     },
   });
 
-  async handle(c: any): Promise<Response> {
-    const auth = c.get('auth');
-    if (!auth) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-    const userId = auth.userId;
+  async handle(c: AppContext): Promise<Response> {
+    const userId = this.getUserId(c);
 
     const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
@@ -105,6 +100,7 @@ export class UpdateCommunityPost extends OpenAPIRoute {
       return c.json({ error: 'You can only update posts from your own channel' }, 403);
     }
 
+    const auth = this.getAuth(c);
     const user = {
       ...auth,
       channelId: postChannelId,

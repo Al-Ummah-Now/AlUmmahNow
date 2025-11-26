@@ -1,6 +1,6 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
-import { Context } from 'hono';
+import { OptionalAuthRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import type {
   PostComment,
@@ -34,7 +34,7 @@ const responseSchema = z.object({
   }),
 });
 
-export class ListPostComments extends OpenAPIRoute {
+export class ListPostComments extends OptionalAuthRoute {
   schema = addAuthToSchema(
     {
       tags: ['Community Posts - Comments'],
@@ -67,7 +67,7 @@ export class ListPostComments extends OpenAPIRoute {
     'optional'
   );
 
-  async handle(c: Context) {
+  async handle(c: AppContext) {
     const { channelId: postChannelId, postId } = c.req.param();
     const query = c.req.query();
     const limit = Math.min(parseInt(query.limit || '20'), 100);

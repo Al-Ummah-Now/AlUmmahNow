@@ -1,12 +1,13 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelsToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { OptionalAuthRoute, AppContext } from "../../base";
 
-export class ChannelsList extends OpenAPIRoute {
+export class ChannelsList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "List Channels",
@@ -53,13 +54,14 @@ export class ChannelsList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated parameters
 		const { limit, cursor } = request.query;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Implement your own object list here
 		const bucket = c.env.channels;

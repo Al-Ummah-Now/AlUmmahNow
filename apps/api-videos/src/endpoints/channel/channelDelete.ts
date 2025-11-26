@@ -1,10 +1,11 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import R2Repository from "../../lib/r2Repo";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { z } from "zod";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ChannelDelete extends OpenAPIRoute {
+export class ChannelDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Delete a Channel",
@@ -47,13 +48,14 @@ export class ChannelDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated id
 		const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Get the channel before deletion
 		const bucket = c.env.channels;

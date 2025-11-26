@@ -1,10 +1,11 @@
-import { Bool, OpenAPIRoute } from "chanfana";
+import { Bool } from "chanfana";
 import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { z } from "zod";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ProfileDelete extends OpenAPIRoute {
+export class ProfileDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Profiles"],
 		summary: "Delete the authenticated user's profile",
@@ -38,13 +39,9 @@ export class ProfileDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
-		// Get auth context - profile ID is always the user ID
-		const auth = c.get('auth');
-		const userId = auth?.userId;
-		if (!userId) {
-			return c.json({ error: 'Unauthorized' }, 401);
-		}
+	async handle(c: AppContext) {
+		// Get user ID from auth - profile ID is always the user ID
+		const userId = this.getUserId(c);
 
 		// Delete profile from storage (profile ID = user ID)
 		const bucket = c.env.profiles;

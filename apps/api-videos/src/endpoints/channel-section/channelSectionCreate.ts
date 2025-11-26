@@ -1,4 +1,4 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
@@ -14,7 +14,7 @@ import {
 } from '../../lib/transformations';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
 import { logger } from '../../lib/logger';
-// Using console logging as per project pattern
+import { AuthenticatedRoute, AppContext } from '../../base';
 
 // Zod schema for the input
 const ChannelSectionCreateInputSchema = z.object({
@@ -43,7 +43,7 @@ const ChannelSectionCreateInputSchema = z.object({
   showChannelName: z.boolean().optional(),
 });
 
-export class ChannelSectionCreate extends OpenAPIRoute {
+export class ChannelSectionCreate extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Channel Sections'],
@@ -138,25 +138,14 @@ export class ChannelSectionCreate extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.params;
     const input = request.body as ChannelSectionCreateInput;
 
-    // Get auth context
-    const auth = c.get('auth');
-    if (!auth) {
-      logger.warn('Unauthorized attempt to create channel section');
-      return c.json(
-        {
-          success: false,
-          error: 'Unauthorized',
-        },
-        401
-      );
-    }
+    const userId = this.getUserId(c);
 
-    logger.info(`Creating section for channel ${channelId} by user ${auth.userId}`, {
+    logger.info(`Creating section for channel ${channelId} by user ${userId}`, {
       type: input.type,
       title: input.title,
     });
@@ -176,8 +165,8 @@ export class ChannelSectionCreate extends OpenAPIRoute {
       );
     }
 
-    if (channel.userId !== auth.userId) {
-      logger.warn(`User ${auth.userId} attempted to create section for channel ${channelId} owned by ${channel.userId}`);
+    if (channel.userId !== userId) {
+      logger.warn(`User ${userId} attempted to create section for channel ${channelId} owned by ${channel.userId}`);
       return c.json(
         {
           success: false,
@@ -227,7 +216,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
     const section: ChannelSection = {
       id: crypto.randomUUID(),
       channelId,
-      userId: auth.userId,
+      userId: userId,
       type: input.type,
       title: input.title,
       titleLocalized: input.titleLocalized,
@@ -252,7 +241,7 @@ export class ChannelSectionCreate extends OpenAPIRoute {
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionCreate, {
       channelId,
       sectionId: section.id,
-      userId: auth.userId,
+      userId: userId,
       timestamp: new Date().toISOString(),
     });
 

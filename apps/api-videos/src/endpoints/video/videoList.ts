@@ -1,11 +1,12 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { VideoCategory } from "@al-ummah/shared-types";
+import { OptionalAuthRoute, AppContext } from '../../base';
 
-export class VideosList extends OpenAPIRoute {
+export class VideosList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "List Videos",
@@ -57,14 +58,13 @@ export class VideosList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated parameters
 		const { limit, cursor, sort, filter, channelId: queryChannelId, category } = request.query;
-		const auth = c.get('auth');
-		const userId = auth?.userId;
+		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
 		// Use channelId from query parameter if provided, otherwise from headers

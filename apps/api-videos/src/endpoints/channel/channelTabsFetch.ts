@@ -1,10 +1,11 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { ChannelTabConfig as BusinessChannelTabConfig, Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
+import { OptionalAuthRoute, AppContext } from "../../base";
 
-export class ChannelTabsFetch extends OpenAPIRoute {
+export class ChannelTabsFetch extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Get channel tabs configuration",
@@ -46,7 +47,7 @@ export class ChannelTabsFetch extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();

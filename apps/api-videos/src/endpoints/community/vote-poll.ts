@@ -1,10 +1,10 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import {
   CommunityPost,
   PostType,
   VoteRecord,
 } from '@al-ummah/shared-types';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
@@ -13,7 +13,7 @@ const voteSchema = z.object({
   optionIds: z.array(z.string()).min(1).max(5),
 });
 
-export class VoteOnPoll extends OpenAPIRoute {
+export class VoteOnPoll extends AuthenticatedRoute {
   static schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Vote on a community poll',
@@ -68,8 +68,8 @@ export class VoteOnPoll extends OpenAPIRoute {
     },
   });
 
-  async handle(c: any): Promise<Response> {
-    const auth = c.get('auth');
+  async handle(c: AppContext): Promise<Response> {
+    const userId = this.getUserId(c);
     const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
     const userChannelId = request.headers?.channelId;
@@ -81,7 +81,7 @@ export class VoteOnPoll extends OpenAPIRoute {
 
     try {
       // Check if already voted
-      const voteKey = `votes/${postId}/${auth.userId}.json`;
+      const voteKey = `votes/${postId}/${userId}.json`;
       const existingVote = await c.env.community_posts.get(voteKey);
 
       if (existingVote) {
@@ -122,7 +122,7 @@ export class VoteOnPoll extends OpenAPIRoute {
 
       // Record vote
       const voteRecord: VoteRecord = {
-        userId: auth.userId,
+        userId: userId,
         postId,
         optionIds: body.optionIds,
         votedAt: new Date().toISOString(),
@@ -135,7 +135,7 @@ export class VoteOnPoll extends OpenAPIRoute {
         postId,
         channelId: postChannelId,
         actor: {
-          userId: auth.userId,
+          userId: userId,
           channelId: userChannelId,
         },
         optionIds: body.optionIds,

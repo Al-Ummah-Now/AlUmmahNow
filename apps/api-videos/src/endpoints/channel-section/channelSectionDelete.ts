@@ -1,13 +1,13 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
 import { logger } from '../../lib/logger';
-// Using console logging as per project pattern
+import { AuthenticatedRoute, AppContext } from '../../base';
 
-export class ChannelSectionDelete extends OpenAPIRoute {
+export class ChannelSectionDelete extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Channel Sections'],
@@ -73,24 +73,13 @@ export class ChannelSectionDelete extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId, sectionId } = request.params;
 
-    // Get auth context
-    const auth = c.get('auth');
-    if (!auth) {
-      logger.warn('Unauthorized attempt to delete channel section');
-      return c.json(
-        {
-          success: false,
-          error: 'Unauthorized',
-        },
-        401
-      );
-    }
+    const userId = this.getUserId(c);
 
-    logger.info(`Deleting section ${sectionId} for channel ${channelId} by user ${auth.userId}`);
+    logger.info(`Deleting section ${sectionId} for channel ${channelId} by user ${userId}`);
 
     // Verify channel exists and ownership
     const channelRepo = new R2Repository<Channel>(c.env.channels);
@@ -107,8 +96,8 @@ export class ChannelSectionDelete extends OpenAPIRoute {
       );
     }
 
-    if (channel.userId !== auth.userId) {
-      logger.warn(`User ${auth.userId} attempted to delete section for channel ${channelId} owned by ${channel.userId}`);
+    if (channel.userId !== userId) {
+      logger.warn(`User ${userId} attempted to delete section for channel ${channelId} owned by ${channel.userId}`);
       return c.json(
         {
           success: false,
@@ -168,7 +157,7 @@ export class ChannelSectionDelete extends OpenAPIRoute {
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionDelete, {
       channelId,
       sectionId,
-      userId: auth.userId,
+      userId: userId,
       timestamp: new Date().toISOString(),
     });
 

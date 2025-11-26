@@ -1,12 +1,13 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import { PlaylistView } from "../../lib/model/view";
 import { transformPlaylistToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class PlaylistRemoveVideo extends OpenAPIRoute {
+export class PlaylistRemoveVideo extends AuthenticatedRoute {
     schema = {
         tags: ["Playlists"],
         summary: "Remove a video from a playlist",
@@ -61,13 +62,14 @@ export class PlaylistRemoveVideo extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated parameters
         const { id, videoId } = request.params;
-        const { channelId, userId } = request.headers;
+        const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 
         // Get existing playlist
         const bucket = c.env.playlists;

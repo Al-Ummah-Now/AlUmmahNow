@@ -1,13 +1,13 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
 import { transformChannelSectionToView, transformChannelSectionsToView } from '../../lib/transformations';
 import { logger } from '../../lib/logger';
-// Using console logging as per project pattern
+import { OptionalAuthRoute, AppContext } from '../../base';
 
-export class ChannelSectionsList extends OpenAPIRoute {
+export class ChannelSectionsList extends OptionalAuthRoute {
   schema = addAuthToSchema(
     {
       tags: ['Channel Sections'],
@@ -93,7 +93,7 @@ export class ChannelSectionsList extends OpenAPIRoute {
     'optional'
   );
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.params;
     const { limit, cursor, type } = request.query;

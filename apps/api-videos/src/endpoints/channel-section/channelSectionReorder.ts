@@ -1,4 +1,4 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
@@ -11,7 +11,7 @@ import {
 import { transformChannelSectionsToView } from '../../lib/transformations';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
 import { logger } from '../../lib/logger';
-// Using console logging as per project pattern
+import { AuthenticatedRoute, AppContext } from '../../base';
 
 // Zod schema for the input
 const ChannelSectionReorderInputSchema = z.object({
@@ -20,7 +20,7 @@ const ChannelSectionReorderInputSchema = z.object({
     .max(CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL),
 });
 
-export class ChannelSectionReorder extends OpenAPIRoute {
+export class ChannelSectionReorder extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Channel Sections'],
@@ -116,25 +116,14 @@ export class ChannelSectionReorder extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.params;
     const { sectionIds } = request.body as ChannelSectionReorderInput;
 
-    // Get auth context
-    const auth = c.get('auth');
-    if (!auth) {
-      logger.warn('Unauthorized attempt to reorder channel sections');
-      return c.json(
-        {
-          success: false,
-          error: 'Unauthorized',
-        },
-        401
-      );
-    }
+    const userId = this.getUserId(c);
 
-    logger.info(`Reordering sections for channel ${channelId} by user ${auth.userId}`, {
+    logger.info(`Reordering sections for channel ${channelId} by user ${userId}`, {
       sectionCount: sectionIds.length,
     });
 
@@ -153,8 +142,8 @@ export class ChannelSectionReorder extends OpenAPIRoute {
       );
     }
 
-    if (channel.userId !== auth.userId) {
-      logger.warn(`User ${auth.userId} attempted to reorder sections for channel ${channelId} owned by ${channel.userId}`);
+    if (channel.userId !== userId) {
+      logger.warn(`User ${userId} attempted to reorder sections for channel ${channelId} owned by ${channel.userId}`);
       return c.json(
         {
           success: false,
@@ -274,7 +263,7 @@ export class ChannelSectionReorder extends OpenAPIRoute {
     // Queue analytics event
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionReorder, {
       channelId,
-      userId: auth.userId,
+      userId: userId,
       sectionCount: updatedSections.length,
       timestamp: new Date().toISOString(),
     });

@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { OptionalAuthRoute, AppContext } from '../../base';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
@@ -17,7 +18,7 @@ const VideoScheduleStatusResponseSchema = z.object({
   canCancel: z.boolean(),
 });
 
-export class VideoScheduleFetch extends OpenAPIRoute {
+export class VideoScheduleFetch extends OptionalAuthRoute {
   schema = addAuthToSchema(
     {
       tags: ['Videos - Scheduling'],
@@ -80,21 +81,9 @@ export class VideoScheduleFetch extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c) {
+  async handle(c: AppContext) {
     try {
-      // Get auth context
-      const auth = c.get('auth');
-      if (!auth) {
-        return c.json(
-          {
-            success: false,
-            error: 'Unauthorized',
-          },
-          401
-        );
-      }
-
-      const userId = auth.userId;
+      const userId = this.getUserId(c);
 
       // Get validated data
       const request = await this.getValidatedData<typeof this.schema>();

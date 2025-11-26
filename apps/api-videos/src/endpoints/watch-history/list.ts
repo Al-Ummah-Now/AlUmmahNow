@@ -4,7 +4,7 @@
  * Returns the authenticated user's watch history
  */
 
-import { OpenAPIRoute } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -63,7 +63,7 @@ const WatchHistoryResponseSchema = z.object({
   cursor: z.string().optional(),
 });
 
-export class ListWatchHistory extends OpenAPIRoute {
+export class ListWatchHistory extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -103,12 +103,7 @@ export class ListWatchHistory extends OpenAPIRoute {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.headers;
 
-    const auth = c.get("auth");
-    const effectiveUserId = auth?.userId;
-
-    if (!effectiveUserId) {
-      return c.json({ error: "Authentication required" }, 401);
-    }
+    const userId = this.getUserId(c);
 
     // Parse and validate query parameters
     const query = c.req.query();
@@ -128,7 +123,7 @@ export class ListWatchHistory extends OpenAPIRoute {
 
       // Filter entries for this user only
       let userEntries = allEntriesResponse.items.filter(
-        (entry) => entry.userId === effectiveUserId
+        (entry) => entry.userId === userId
       );
 
       // Apply completed filter if specified

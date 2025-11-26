@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamUpdateInput } from "../../lib/model/input";
@@ -8,7 +9,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 
-export class LiveStreamUpdate extends OpenAPIRoute {
+export class LiveStreamUpdate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Live Streams"],
 		summary: "Update Live Stream Status",
@@ -86,12 +87,13 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 		const updateData = request.body;
 
 		try {

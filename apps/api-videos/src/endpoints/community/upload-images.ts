@@ -1,5 +1,5 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
+import { AuthenticatedRoute, AppContext } from '../../base';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
 import { addAuthToSchema } from '../../lib/openapi-auth';
@@ -11,7 +11,7 @@ const MAX_IMAGES = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-export class UploadCommunityPostImages extends OpenAPIRoute {
+export class UploadCommunityPostImages extends AuthenticatedRoute {
   schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Upload images for community posts',
@@ -61,13 +61,9 @@ export class UploadCommunityPostImages extends OpenAPIRoute {
     },
   }, 'required');
 
-  async handle(c: any): Promise<Response> {
+  async handle(c: AppContext): Promise<Response> {
     try {
-      const auth = c.get('auth');
-      if (!auth) {
-        return c.json({ error: 'Unauthorized' }, 401);
-      }
-      const userId = auth.userId;
+      const userId = this.getUserId(c);
 
       const request = await this.getValidatedData<typeof this.schema>();
       const { channelId } = request.headers;

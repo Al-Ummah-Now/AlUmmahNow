@@ -2,7 +2,8 @@
  * Delete subtitle track
  */
 
-import { OpenAPIRoute, Str } from 'chanfana';
+import { AuthenticatedRoute, AppContext } from '../../base';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
@@ -11,7 +12,7 @@ import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleMetadata } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 
-export class SubtitlesDelete extends OpenAPIRoute {
+export class SubtitlesDelete extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Subtitles'],
@@ -87,21 +88,9 @@ export class SubtitlesDelete extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     try {
-      // Auth check
-      const auth = c.get('auth');
-      if (!auth) {
-        return c.json(
-          {
-            success: false,
-            error: 'Unauthorized',
-          },
-          401
-        );
-      }
-
-      const userId = auth.userId;
+      const userId = this.getUserId(c);
 
       // Get validated data
       const request = await this.getValidatedData<typeof this.schema>();

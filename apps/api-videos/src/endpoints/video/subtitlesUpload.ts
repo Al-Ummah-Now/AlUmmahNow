@@ -2,7 +2,8 @@
  * Upload subtitle track for a video
  */
 
-import { OpenAPIRoute, Str, Bool } from 'chanfana';
+import { AuthenticatedRoute, AppContext } from '../../base';
+import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
@@ -11,7 +12,7 @@ import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleTrack, SubtitleMetadata } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 
-export class SubtitlesUpload extends OpenAPIRoute {
+export class SubtitlesUpload extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Subtitles'],
@@ -104,21 +105,9 @@ export class SubtitlesUpload extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     try {
-      // Auth check
-      const auth = c.get('auth');
-      if (!auth) {
-        return c.json(
-          {
-            success: false,
-            error: 'Unauthorized',
-          },
-          401
-        );
-      }
-
-      const userId = auth.userId;
+      const userId = this.getUserId(c);
 
       // Get validated data
       const request = await this.getValidatedData<typeof this.schema>();

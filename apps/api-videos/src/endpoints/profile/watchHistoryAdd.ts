@@ -1,9 +1,9 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
 // Watch history entry type
 const WatchHistoryEntry = z.object({
@@ -15,7 +15,7 @@ const WatchHistoryEntry = z.object({
 	completed: z.boolean().optional().default(false).describe("Whether the video was watched to completion"),
 });
 
-export class WatchHistoryAdd extends OpenAPIRoute {
+export class WatchHistoryAdd extends AuthenticatedRoute {
 	schema = {
 		tags: ["Profiles"],
 		summary: "Add Video to Watch History",
@@ -86,20 +86,12 @@ export class WatchHistoryAdd extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
-
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
+		// Get user ID from auth
+		const userId = this.getUserId(c);
 
 		const { videoId, watchTime, totalDuration, completed } = request.body;
 
@@ -111,9 +103,10 @@ export class WatchHistoryAdd extends OpenAPIRoute {
 
 		// Create profile if it doesn't exist
 		if (!profile) {
+			const auth = c.get('auth');
 			profile = {
 				id: userId,
-				email: authContext.email || "unknown",
+				email: auth?.email || "unknown",
 				dateCreated: new Date().toISOString(),
 				dateModified: new Date().toISOString(),
 				watchHistory: [],

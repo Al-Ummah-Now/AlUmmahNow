@@ -1,9 +1,9 @@
-import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { CommunityPost, PostType, VoteResults } from '@al-ummah/shared-types';
+import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';
 
-export class GetPollResults extends OpenAPIRoute {
+export class GetPollResults extends OptionalAuthRoute {
   static schema = {
     tags: ['Community'],
     summary: 'Get poll results',
@@ -55,7 +55,7 @@ export class GetPollResults extends OpenAPIRoute {
     },
   };
 
-  async handle(c: any): Promise<Response> {
+  async handle(c: AppContext): Promise<Response> {
     const { channelId: postChannelId, postId } = c.req.param();
 
     try {

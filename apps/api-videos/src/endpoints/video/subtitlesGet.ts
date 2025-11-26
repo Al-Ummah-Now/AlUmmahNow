@@ -2,11 +2,12 @@
  * Get specific subtitle track
  */
 
-import { OpenAPIRoute, Str, Enumeration } from 'chanfana';
+import { Str, Enumeration } from 'chanfana';
 import { z } from 'zod';
 import { logger } from '../../lib/logger';
+import { PublicRoute, AppContext } from '../../base';
 
-export class SubtitlesGet extends OpenAPIRoute {
+export class SubtitlesGet extends PublicRoute {
   schema = {
     tags: ['Subtitles'],
     summary: 'Get specific subtitle track',
@@ -61,7 +62,7 @@ export class SubtitlesGet extends OpenAPIRoute {
     },
   };
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     try {
       // Get validated data
       const request = await this.getValidatedData<typeof this.schema>();

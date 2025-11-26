@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Num, Str } from "chanfana";
+import { PublicRoute, AppContext } from "../../base";
+import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
@@ -37,7 +38,7 @@ const PopularVideosResponseSchema = z.object({
   }),
 });
 
-export class PopularVideosSection extends OpenAPIRoute {
+export class PopularVideosSection extends PublicRoute {
   schema = {
     tags: ["Video Sections"],
     summary: "Get Popular Videos",
@@ -93,7 +94,7 @@ export class PopularVideosSection extends OpenAPIRoute {
     },
   };
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     try {
       // Get validated data
       const data = await this.getValidatedData<typeof this.schema>();

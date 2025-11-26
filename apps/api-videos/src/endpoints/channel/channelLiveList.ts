@@ -1,11 +1,12 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
+import { OptionalAuthRoute, AppContext } from "../../base";
 
-export class ChannelLiveList extends OpenAPIRoute {
+export class ChannelLiveList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "List Channel Live Streams",
@@ -69,14 +70,14 @@ export class ChannelLiveList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const startTime = Date.now();
 
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 		const { id: channelId } = request.params;
 		const { limit, cursor, active } = request.query;
-		const { userId } = request.headers;
+		const userId = this.getUserId(c);
 
 		logger.info('Fetching channel live streams', {
 			channelId,

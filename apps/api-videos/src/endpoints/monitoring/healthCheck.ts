@@ -1,7 +1,8 @@
-import { OpenAPIRoute } from "chanfana";
+import { PublicRoute, AppContext } from "../../base";
+import { } from "chanfana";
 import { z } from "zod";
 
-export class HealthCheck extends OpenAPIRoute {
+export class HealthCheck extends PublicRoute {
 	schema = {
 		tags: ["Monitoring"],
 		summary: "Health Check",
@@ -43,7 +44,7 @@ export class HealthCheck extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const startTime = Date.now();
 		const errors: string[] = [];
 

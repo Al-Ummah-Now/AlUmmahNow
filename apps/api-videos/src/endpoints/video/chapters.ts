@@ -3,7 +3,7 @@
  * Retrieves or generates chapters for a video
  */
 
-import { OpenAPIRoute, Str, Bool } from 'chanfana';
+import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import R2Repository from '../../lib/r2Repo';
 import { parseChapters } from '../../lib/chapters/parser';
@@ -11,8 +11,9 @@ import { VideoChapterDataSchema } from '@al-ummah/shared-types';
 import { ResponseError } from '../../lib/types';
 import type { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { PublicRoute, AppContext } from '../../base';
 
-export class VideoChaptersGet extends OpenAPIRoute {
+export class VideoChaptersGet extends PublicRoute {
   schema = {
     tags: ['Videos'],
     summary: 'Get video chapters',
@@ -68,7 +69,7 @@ export class VideoChaptersGet extends OpenAPIRoute {
     },
   };
 
-  async handle(c) {
+  async handle(c: AppContext) {
     try {
       const request = await this.getValidatedData<typeof this.schema>();
       const { id: videoId } = request.params;

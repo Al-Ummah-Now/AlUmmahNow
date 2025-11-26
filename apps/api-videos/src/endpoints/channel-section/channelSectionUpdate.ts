@@ -1,4 +1,4 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
@@ -14,7 +14,7 @@ import {
 } from '../../lib/transformations';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
 import { logger } from '../../lib/logger';
-// Using console logging as per project pattern
+import { AuthenticatedRoute, AppContext } from '../../base';
 
 // Zod schema for the input
 const ChannelSectionUpdateInputSchema = z.object({
@@ -34,7 +34,7 @@ const ChannelSectionUpdateInputSchema = z.object({
   showChannelName: z.boolean().optional(),
 });
 
-export class ChannelSectionUpdate extends OpenAPIRoute {
+export class ChannelSectionUpdate extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Channel Sections'],
@@ -127,25 +127,14 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
     'required'
   );
 
-  async handle(c: any) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId, sectionId } = request.params;
     const input = request.body as ChannelSectionUpdateInput;
 
-    // Get auth context
-    const auth = c.get('auth');
-    if (!auth) {
-      logger.warn('Unauthorized attempt to update channel section');
-      return c.json(
-        {
-          success: false,
-          error: 'Unauthorized',
-        },
-        401
-      );
-    }
+    const userId = this.getUserId(c);
 
-    logger.info(`Updating section ${sectionId} for channel ${channelId} by user ${auth.userId}`, {
+    logger.info(`Updating section ${sectionId} for channel ${channelId} by user ${userId}`, {
       updates: Object.keys(input),
     });
 
@@ -164,8 +153,8 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
       );
     }
 
-    if (channel.userId !== auth.userId) {
-      logger.warn(`User ${auth.userId} attempted to update section for channel ${channelId} owned by ${channel.userId}`);
+    if (channel.userId !== userId) {
+      logger.warn(`User ${userId} attempted to update section for channel ${channelId} owned by ${channel.userId}`);
       return c.json(
         {
           success: false,
@@ -230,7 +219,7 @@ export class ChannelSectionUpdate extends OpenAPIRoute {
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionUpdate, {
       channelId,
       sectionId,
-      userId: auth.userId,
+      userId: userId,
       timestamp: new Date().toISOString(),
     });
 

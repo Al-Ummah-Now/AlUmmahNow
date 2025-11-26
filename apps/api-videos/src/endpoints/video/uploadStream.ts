@@ -1,7 +1,7 @@
 import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
 import { requireSecret } from "../../lib/env-helpers";
 import { generateTUSConfig } from "../../lib/bunny/tus";
 import { logger } from '../../lib/logger';
@@ -15,7 +15,7 @@ import * as tus from 'tus-js-client';
  * 2. This endpoint streams it to Bunny.net using TUS
  * 3. Client never sees Bunny.net URL (security)
  */
-export class UploadStreamEndpoint extends OpenAPIRoute {
+export class UploadStreamEndpoint extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Stream Video Upload (Hidden TUS Proxy)",
@@ -72,17 +72,10 @@ export class UploadStreamEndpoint extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get auth context
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
+		const userId = this.getUserId(c);
 
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
 
 		try {
 			// Parse multipart form data

@@ -1,7 +1,8 @@
-import { OpenAPIRoute } from "chanfana";
+import { PublicRoute, AppContext } from "../../base";
+import { } from "chanfana";
 import { z } from "zod";
 
-export class StatusPage extends OpenAPIRoute {
+export class StatusPage extends PublicRoute {
 	schema = {
 		tags: ["Monitoring"],
 		summary: "API Status Page",
@@ -18,7 +19,7 @@ export class StatusPage extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const html = `
 <!DOCTYPE html>
 <html lang="en">

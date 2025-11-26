@@ -1,4 +1,5 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamInput } from "../../lib/model/input";
@@ -10,7 +11,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 
-export class LiveStreamCreate extends OpenAPIRoute {
+export class LiveStreamCreate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Live Streams"],
 		summary: "Create a new Live Stream",
@@ -69,11 +70,12 @@ export class LiveStreamCreate extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 		const inputStream = request.body;
 
 		// Create the business live stream object

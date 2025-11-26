@@ -4,7 +4,8 @@
  * Retrieves the current watch progress for a video
  */
 
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -27,7 +28,7 @@ const ProgressResponseSchema = z.object({
   lastWatchedAt: z.string().describe("Timestamp of last watch"),
 });
 
-export class GetWatchProgress extends OpenAPIRoute {
+export class GetWatchProgress extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -67,12 +68,7 @@ export class GetWatchProgress extends OpenAPIRoute {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.headers;
 
-    const auth = c.get("auth");
-    const effectiveUserId = auth?.userId;
-
-    if (!effectiveUserId) {
-      return c.json({ error: "Authentication required" }, 401);
-    }
+    const userId = this.getUserId(c);
 
     // Get videoId from path params
     const { videoId } = c.req.param();
@@ -87,7 +83,7 @@ export class GetWatchProgress extends OpenAPIRoute {
       );
 
       // Generate entry ID
-      const entryId = `${effectiveUserId}:${videoId}`;
+      const entryId = `${userId}:${videoId}`;
 
       // Get watch history entry
       const entry = await watchHistoryRepo.getObject(entryId);

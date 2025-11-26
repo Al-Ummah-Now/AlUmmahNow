@@ -1,4 +1,4 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ChannelInput } from "../../lib/model/input";
@@ -6,8 +6,9 @@ import { ChannelView } from "../../lib/model/view";
 import { transformChannelToView, createEntityDefaults } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ChannelCreate extends OpenAPIRoute {
+export class ChannelCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Create a new Channel",
@@ -57,13 +58,14 @@ export class ChannelCreate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated request body
 		const channelInput = request.body;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Get user's email from profile
 		const profileBucket = c.env.profiles;
