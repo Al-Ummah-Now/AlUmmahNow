@@ -44,6 +44,16 @@ const handleAvatarUpdate = async (c) => {
             return c.json({ success: false, error: "Channel not found" }, 404);
         }
 
+        // Verify user owns this channel
+        const auth = c.get('auth');
+        const userId = auth?.userId;
+        if (channel.userId !== userId) {
+            return c.json({
+                success: false,
+                error: "You do not have permission to update this channel",
+            }, 403);
+        }
+
         // Define the file path
         const photoId = crypto.randomUUID();
         const path = `/${photoId}_avatar.${file.type.split("/")[1]}`;
@@ -73,9 +83,6 @@ const handleAvatarUpdate = async (c) => {
 
         //Update the Channel's avatar URL
         channel.avatarUrl = `https://images.alummahnow.net${path}`;
-        
-        const auth = c.get('auth');
-        const userId = auth?.userId;
 
         const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ChannelUpdate, {
