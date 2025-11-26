@@ -17,7 +17,7 @@ import * as PlaylistsAPI from './playlists';
 import * as LiveStreamsAPI from './livestreams';
 import * as AnalyticsAPI from './analytics';
 import * as ModerationAPI from './moderation';
-import type { ReportCreateRequest, ModerationActionRequest } from './moderation';
+import type { ReportCreateRequest } from './moderation';
 import type {
   ListQueryParams,
   ApiHeaders,
@@ -125,15 +125,10 @@ export class APIClient {
     };
   }
 
-  // Moderation
+  // Moderation (user-facing only - admin functions are in admin-api)
   get moderation() {
     return {
-      getReports: (params?: ListQueryParams & { status?: string; priority?: string; contentType?: string; assignedTo?: string; reason?: string }, headers?: ApiHeaders) => ModerationAPI.getReports(params, { ...this.headers, ...headers }),
-      getReportById: (reportId: string, headers?: ApiHeaders) => ModerationAPI.getReportById(reportId, { ...this.headers, ...headers }),
-      createReport: (reportData: ReportCreateRequest, headers?: ApiHeaders) => ModerationAPI.createReport(reportData, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      takeModerationAction: (actionData: ModerationActionRequest, headers?: ApiHeaders) => ModerationAPI.takeModerationAction(actionData, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      getStats: (headers?: ApiHeaders) => ModerationAPI.getStats({ ...this.headers, ...headers }),
-      getUserModeration: (userId: string, headers?: ApiHeaders) => ModerationAPI.getUserModeration(userId, { ...this.headers, ...headers }),
+      createReport: (reportData: ReportCreateRequest, headers?: ApiHeaders) => ModerationAPI.createReport(reportData, { ...this.headers, ...headers }),
     };
   }
 

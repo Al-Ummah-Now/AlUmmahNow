@@ -29,7 +29,10 @@
     "websocket:dev": "turbo run dev --filter=@al-ummah/websocket-server",
     "websocket:build": "turbo run build --filter=@al-ummah/websocket-server",
     "websocket:deploy": "turbo run deploy --filter=@al-ummah/websocket-server",
-    "deploy:all": "pnpm run web:deploy:production && pnpm run api:deploy && pnpm run processor:deploy && pnpm run websocket:deploy"
+    "admin:dev": "turbo run dev --filter=@al-ummah/admin-api",
+    "admin:build": "turbo run build --filter=@al-ummah/admin-api",
+    "admin:deploy": "turbo run deploy --filter=@al-ummah/admin-api",
+    "deploy:all": "pnpm run web:deploy:production && pnpm run api:deploy && pnpm run processor:deploy && pnpm run websocket:deploy && pnpm run admin:deploy"
   },
   "devDependencies": {
     "tsx": "^4.20.6",

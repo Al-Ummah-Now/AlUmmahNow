@@ -21,6 +21,40 @@ importers:
         specifier: ^4.46.0
         version: 4.47.0(@cloudflare/workers-types@4.20251115.0)
 
+  apps/admin-api:
+    dependencies:
+      '@al-ummah/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
+      '@al-ummah/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      '@openauthjs/openauth':
+        specifier: ^0.4.3
+        version: 0.4.3(arctic@2.3.4)(hono@4.10.6)
+      chanfana:
+        specifier: ^2.0.5
+        version: 2.8.3
+      hono:
+        specifier: ^4.7.4
+        version: 4.10.6
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250109.0
+        version: 4.20251115.0
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.19.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      wrangler:
+        specifier: ^4.14.1
+        version: 4.47.0(@cloudflare/workers-types@4.20251115.0)
+
   apps/api-videos:
     dependencies:
       '@al-ummah/logger':
@@ -3300,6 +3334,9 @@ packages:
 
   '@types/node@20.19.25':
     resolution: {integrity: sha512-ZsJzA5thDQMSQO788d7IocwwQbI8B5OPzmqNvpf3NY/+MHDAS759Wo0gd2WQeXYt5AAAQjzcrTVC6SKCuYgoCQ==}
+
+  '@types/node@22.19.1':
+    resolution: {integrity: sha512-LCCV0HdSZZZb34qifBsyWlUmok6W7ouER+oQIGBScS8EsZsQbrtFTUrDX4hOl+CS6p7cnNC4td+qrSVGSCTUfQ==}
 
   '@types/node@24.10.0':
     resolution: {integrity: sha512-qzQZRBqkFsYyaSWXuEHc2WR9c0a0CXwiE5FWUvn7ZM+vdy1uZLfCunD38UzhuB7YN/J11ndbDBcTmOdxJo9Q7A==}
@@ -10307,6 +10344,10 @@ snapshots:
       undici-types: 5.26.5
 
   '@types/node@20.19.25':
+    dependencies:
+      undici-types: 6.21.0
+
+  '@types/node@22.19.1':
     dependencies:
       undici-types: 6.21.0
 

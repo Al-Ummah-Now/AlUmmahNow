@@ -1,9 +1,22 @@
 // Import shared types from @al-ummah/shared-types
-import { MessageType, ProcessingResult } from '@al-ummah/shared-types';
+import {
+  MessageType,
+  ProcessingResult,
+  D1Database,
+  D1PreparedStatement,
+  D1Result,
+  D1ExecResult,
+} from '@al-ummah/shared-types';
 
 // Re-export for use throughout processor
 export { MessageType };
-export type { ProcessingResult };
+export type {
+  ProcessingResult,
+  D1Database,
+  D1PreparedStatement,
+  D1Result,
+  D1ExecResult,
+};
 
 // Processor-specific message type (based on shared QueueMessage)
 export interface AlUmmahMessage {
@@ -55,30 +68,7 @@ export interface R2Bucket {
   list: (options?: R2ListOptions) => Promise<R2Objects>;
 }
 
-export interface D1Database {
-  prepare: (sql: string) => D1PreparedStatement;
-  batch: <T = unknown>(statements: D1PreparedStatement[]) => Promise<D1Result<T>[]>;
-  exec: (sql: string) => Promise<D1ExecResult>;
-}
-
-export interface D1PreparedStatement {
-  bind: (...values: unknown[]) => D1PreparedStatement;
-  first: <T = unknown>(colName?: string) => Promise<T | null>;
-  run: () => Promise<D1Result>;
-  all: <T = unknown>() => Promise<D1Result<T>>;
-}
-
-export interface D1Result<T = unknown> {
-  results?: T[];
-  success: boolean;
-  error?: string;
-  meta?: object;
-}
-
-export interface D1ExecResult {
-  count: number;
-  duration: number;
-}
+// D1 types are imported from @al-ummah/shared-types above
 
 export interface QueueEnvironment {
   MESSAGE_QUEUE: {

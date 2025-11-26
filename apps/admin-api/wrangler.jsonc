@@ -1,0 +1,94 @@
+{
+	"name": "al-ummah-admin-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2024-09-01",
+	"compatibility_flags": ["nodejs_compat"],
+
+	// D1 database for moderation reports
+	"d1_databases": [
+		{
+			"binding": "REPORTS_DB",
+			"database_name": "al-ummah-now-reports",
+			"database_id": "YOUR_DATABASE_ID"
+		}
+	],
+
+	// R2 buckets for content access (read/update for moderation)
+	"r2_buckets": [
+		{
+			"binding": "videos",
+			"bucket_name": "al-ummah-now-videos",
+			"preview_bucket_name": "al-ummah-now-videos-preview"
+		},
+		{
+			"binding": "channels",
+			"bucket_name": "al-ummah-now-channels",
+			"preview_bucket_name": "al-ummah-now-channels-preview"
+		},
+		{
+			"binding": "profiles",
+			"bucket_name": "al-ummah-now-profiles",
+			"preview_bucket_name": "al-ummah-now-profiles-preview"
+		},
+		{
+			"binding": "playlists",
+			"bucket_name": "al-ummah-now-playlists",
+			"preview_bucket_name": "al-ummah-now-playlists-preview"
+		}
+	],
+
+	// KV namespace for auth
+	"kv_namespaces": [
+		{
+			"binding": "AUTH_STORAGE",
+			"id": "YOUR_KV_ID",
+			"preview_id": "YOUR_PREVIEW_KV_ID"
+		}
+	],
+
+	// Queue for notifications
+	"queues": {
+		"producers": [
+			{
+				"binding": "queue",
+				"queue": "al-ummah-now-videos"
+			}
+		]
+	},
+
+	// Environment variables
+	"vars": {
+		"ENVIRONMENT": "production",
+		"LOG_LEVEL": "info"
+	},
+
+	// Environment-specific configurations
+	"env": {
+		"development": {
+			"vars": {
+				"ENVIRONMENT": "development",
+				"LOG_LEVEL": "debug"
+			}
+		},
+		"staging": {
+			"vars": {
+				"ENVIRONMENT": "staging",
+				"LOG_LEVEL": "info"
+			}
+		}
+	},
+
+	// Observability
+	"observability": {
+		"logs": {
+			"enabled": true
+		}
+	},
+
+	// Development server configuration
+	"dev": {
+		"ip": "127.0.0.1",
+		"port": 3090,
+		"local_protocol": "http"
+	}
+}
