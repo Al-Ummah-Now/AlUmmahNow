@@ -7,7 +7,7 @@ const app = new Hono();
 export const moderationRouter = fromHono(app, { base: '/api/moderation' });
 
 // Authenticated endpoints
-moderationRouter.post('/report', ReportCreate);
-moderationRouter.post('/actions/:reportId', ModerationAction);
+moderationRouter.post('/reports', ReportCreate);
+moderationRouter.post('/reports/:reportId/action', ModerationAction);
 
 export default moderationRouter;
