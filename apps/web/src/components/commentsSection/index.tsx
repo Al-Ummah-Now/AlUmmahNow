@@ -26,6 +26,9 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   const [newCommentText, setNewCommentText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Get the channelId from profile or user context
+  const channelId = profile?.id || user?.id || '';
+
   const {
     comments,
     addComment,
@@ -33,15 +36,16 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
     commentsCount
   } = useRealTimeComments({
     videoId,
+    channelId,
     initialComments,
     onCommentAdded: (comment) => {
-      logger.debug("📢 New comment added:", comment);
+      logger.debug("New comment added:", comment);
     },
     onCommentUpdated: (comment) => {
-      logger.debug("📢 Comment updated:", comment);
+      logger.debug("Comment updated:", comment);
     },
     onCommentDeleted: (commentId) => {
-      logger.debug("📢 Comment deleted:", commentId);
+      logger.debug("Comment deleted:", commentId);
     }
   });
 
@@ -62,7 +66,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
       // Add comment optimistically
       addComment({
         userId: user.id,
-        channelId: profile?.id || user.id,
+        channelId,
         videoId,
         text: newCommentText.trim()
       });
