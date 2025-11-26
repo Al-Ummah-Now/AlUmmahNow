@@ -2,9 +2,6 @@ import { subjects } from './auth-subjects';
 
 // Static authentication configuration
 export const AUTH_CONFIG = {
-  // Set to true to enable JWT signature verification
-  VERIFY_JWT_SIGNATURE: true, // Re-enabled for production
-  
   // OpenAuth subjects for JWT validation
   SUBJECTS: subjects,
   

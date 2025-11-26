@@ -46,10 +46,8 @@ export async function authMiddleware(c: Context, next: Next) {
       }, 401);
     }
 
-    // Validate the JWT token using the configured method
-    const payload = AUTH_CONFIG.VERIFY_JWT_SIGNATURE 
-      ? await validateJWTWithSignature(token, c.env) 
-      : await validateJWTBasic(token);
+    // Validate the JWT token with signature verification
+    const payload = await validateJWTWithSignature(token, c.env);
     
     if (!payload) {
       return c.json({
@@ -79,39 +77,7 @@ export async function authMiddleware(c: Context, next: Next) {
 }
 
 /**
- * Basic JWT validation (payload only, no signature verification)
- * Used when VERIFY_JWT_SIGNATURE is false
- */
-async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
-
-    // Decode the payload (we'll do basic validation for now)
-    const payload = JSON.parse(atob(parts[1])) as AuthPayload;
-
-    // Check expiration
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
-      return null;
-    }
-
-    // TODO: Verify signature with public key from your auth service
-    // For now, we'll do basic validation
-    // In production, you should verify the signature using your auth service's public key
-    
-    return payload;
-  } catch (error) {
-    logger.error('JWT validation error:', error);
-    return null;
-  }
-}
-
-/**
- * Enhanced JWT validation that verifies signature with OpenAuth subjects
- * This should be used in production
+ * JWT validation that verifies signature with OpenAuth subjects
  */
 async function validateJWTWithSignature(token: string, env?: any): Promise<AuthPayload | null> {
   try {
@@ -173,9 +139,7 @@ export async function optionalAuthMiddleware(c: Context, next: Next) {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const payload = AUTH_CONFIG.VERIFY_JWT_SIGNATURE
-        ? await validateJWTWithSignature(token, c.env)
-        : await validateJWTBasic(token);
+      const payload = await validateJWTWithSignature(token, c.env);
 
       if (payload) {
         c.set('auth', {
