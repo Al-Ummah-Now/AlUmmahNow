@@ -29,9 +29,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				sort: z.enum(["latest", "popular", "oldest"]).optional().default("latest").describe("Sort order for shorts"),
 			}),
 			headers: z.object({
-				userId: Str({
-					description: "User ID (automatically set from JWT token if authenticated)"
-				}).optional().nullable(),
+				channelId: Str({ description: "User's selected channel ID" }).optional(),
 			}),
 		},
 		responses: {

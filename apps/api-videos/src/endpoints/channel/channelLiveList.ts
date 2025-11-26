@@ -29,9 +29,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				active: z.boolean().optional().describe("If true, only return currently active live streams"),
 			}),
 			headers: z.object({
-				userId: Str({
-					description: "User ID (automatically set from JWT token if authenticated)"
-				}).optional().nullable(),
+				channelId: Str({ description: "User's selected channel ID" }).optional(),
 			}),
 		},
 		responses: {

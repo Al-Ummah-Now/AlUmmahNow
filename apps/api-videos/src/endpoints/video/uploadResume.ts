@@ -23,7 +23,7 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 		description: "Generate new TUS authorization to resume an interrupted video upload. The video must have been previously initiated and owned by the authenticated user.",
 		request: {
 			headers: z.object({
-          channelId: z.string().optional().nullable(),
+          channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         params: z.object({
 				videoId: Str({ description: "Video ID to resume upload for" }),

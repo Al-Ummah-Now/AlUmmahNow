@@ -32,7 +32,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 		description: "🔒 **Authentication Required**: Initiate upload for multiple videos (up to 15) with TUS support for concurrent resumable uploads.",
 		request: {
 			headers: z.object({
-          channelId: z.string().optional().nullable(),
+          channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         body: {
 				content: {

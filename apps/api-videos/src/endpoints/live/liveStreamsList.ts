@@ -1,5 +1,5 @@
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { Num } from "chanfana";
+import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
 import { LiveStreamView } from "../../lib/model/view";
@@ -13,9 +13,9 @@ export class LiveStreamsList extends OptionalAuthRoute {
 		description: "Get a paginated list of live streams. Public endpoint that returns both scheduled and active streams.",
 		request: {
 			headers: z.object({
-          channelId: z.string().optional().nullable(),
-        }),
-        query: z.object({
+				channelId: Str({ description: "User's selected channel ID" }).optional(),
+			}),
+			query: z.object({
 				cursor: z.string().optional().openapi({ example: "" }),
 				limit: Num({ default: 9 }).openapi({ example: 9 }),
 				status: z.enum(['scheduled', 'live', 'ended', 'cancelled']).optional().describe("Filter by stream status"),

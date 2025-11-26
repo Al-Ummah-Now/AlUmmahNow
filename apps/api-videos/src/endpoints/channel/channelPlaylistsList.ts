@@ -26,7 +26,9 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 					description: "The last cursor returned from the previous request for pagination",
 				}).optional(),
 			}),
-			headers: z.object({}),
+			headers: z.object({
+				channelId: Str({ description: "User's selected channel ID" }).optional(),
+			}),
 		},
 		responses: {
 			"200": {

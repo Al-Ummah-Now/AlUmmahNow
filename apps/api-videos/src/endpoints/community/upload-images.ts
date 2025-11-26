@@ -11,6 +11,8 @@ const MAX_IMAGES = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+const Str = (opts: { description: string }) => z.string().openapi(opts);
+
 export class UploadCommunityPostImages extends AuthenticatedRoute {
   schema = addAuthToSchema({
     tags: ['Community'],
@@ -18,7 +20,7 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
     description: 'Upload up to 10 images for a community post. Returns URLs for uploaded images.',
     request: {
       headers: z.object({
-        channelId: z.string(),
+        channelId: Str({ description: "User's selected channel ID" }).optional(),
       }),
       body: {
         content: {

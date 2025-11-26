@@ -34,7 +34,7 @@ export class VideoScheduleList extends OptionalAuthRoute {
       description: 'Get a list of all videos scheduled for publication by the authenticated user.',
       request: {
         headers: z.object({
-          channelId: z.string().optional().nullable(),
+          channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         query: z.object({
           channelId: Str({ description: 'Filter by channel ID' }).optional(),

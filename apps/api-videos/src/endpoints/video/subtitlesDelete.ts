@@ -20,7 +20,7 @@ export class SubtitlesDelete extends AuthenticatedRoute {
       description: 'Delete a subtitle track for a specific language',
       request: {
         headers: z.object({
-          channelId: z.string().optional().nullable(),
+          channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         params: z.object({
           videoId: Str({ description: 'Video ID' }),

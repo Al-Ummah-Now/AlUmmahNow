@@ -22,7 +22,7 @@ export class VideoScheduleDelete extends AuthenticatedRoute {
       description: 'Cancel the scheduled publication of a video. Video will remain in draft/private status.',
       request: {
         headers: z.object({
-          channelId: z.string().optional().nullable(),
+          channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         params: z.object({
           id: Str({ description: 'Video ID' }),

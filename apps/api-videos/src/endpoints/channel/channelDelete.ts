@@ -13,9 +13,6 @@ export class ChannelDelete extends AuthenticatedRoute {
 			params: z.object({
 				id: Str({ description: "Channel ID" }),
 			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-			}),
 		},
 		responses: {
 			"200": {
@@ -54,7 +51,6 @@ export class ChannelDelete extends AuthenticatedRoute {
 		// Retrieve the validated id
 		const { id } = request.params;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
 
 		// Get the channel before deletion
 		const bucket = c.env.channels;

@@ -23,7 +23,7 @@ export class VideoScheduleUpdate extends AuthenticatedRoute {
       description: 'Reschedule a video to a new date and time. Cannot update if already publishing or published.',
       request: {
         headers: z.object({
-          channelId: z.string().optional().nullable(),
+          channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         params: z.object({
           id: Str({ description: 'Video ID' }),

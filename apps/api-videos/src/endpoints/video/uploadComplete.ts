@@ -14,7 +14,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 		description: "🔒 **Authentication Required**: Finalize video upload and update status to processing.",
 		request: {
 			headers: z.object({
-          channelId: z.string().optional().nullable(),
+          channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         body: {
 				content: {

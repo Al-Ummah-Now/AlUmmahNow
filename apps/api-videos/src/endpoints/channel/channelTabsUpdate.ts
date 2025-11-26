@@ -21,9 +21,6 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 			params: z.object({
 				id: Str({ description: "Channel ID" }),
 			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-			}),
 			body: {
 				content: {
 					"application/json": {
@@ -96,7 +93,6 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 		// Retrieve the validated id
 		const { id } = request.params;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
 
 		// Retrieve the validated request body
 		const tabsUpdateInput = request.body;

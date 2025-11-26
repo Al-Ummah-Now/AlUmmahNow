@@ -1,4 +1,4 @@
-import { Bool, Str } from "chanfana";
+import { Bool } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ChannelInput } from "../../lib/model/input";
@@ -20,9 +20,6 @@ export class ChannelCreate extends AuthenticatedRoute {
 					},
 				},
 			},
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-			}),
 		},
 		responses: {
 			"200": {
@@ -64,7 +61,6 @@ export class ChannelCreate extends AuthenticatedRoute {
 		// Retrieve the validated request body
 		const channelInput = request.body;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
 
 		// Get user's email from profile
 		const profileBucket = c.env.profiles;

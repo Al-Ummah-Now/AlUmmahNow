@@ -9,6 +9,8 @@ import { logger } from '../../lib/logger';
 
 const MAX_GIF_SIZE = 10 * 1024 * 1024; // 10MB for GIFs
 
+const Str = (opts: { description: string }) => z.string().openapi(opts);
+
 export class UploadCommunityPostGif extends AuthenticatedRoute {
   schema = addAuthToSchema({
     tags: ['Community'],
@@ -16,7 +18,7 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
     description: 'Upload a single GIF for a community post. Returns URL for uploaded GIF.',
     request: {
       headers: z.object({
-        channelId: z.string(),
+        channelId: Str({ description: "User's selected channel ID" }).optional(),
       }),
       body: {
         content: {
