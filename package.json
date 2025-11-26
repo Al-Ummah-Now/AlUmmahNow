@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "description": "Al Ummah Now - Islamic content platform monorepo",
+  "pnpm": {
+    "overrides": {
+      "glob": ">=11.1.0",
+      "esbuild": ">=0.25.0",
+      "body-parser": ">=2.2.1",
+      "next": ">=15.4.7"
+    }
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
