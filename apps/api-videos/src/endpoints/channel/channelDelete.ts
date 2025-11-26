@@ -33,6 +33,22 @@ export class ChannelDelete extends AuthenticatedRoute {
 					},
 				},
 			},
+			"403": {
+				description: "Forbidden - user does not own this channel",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
+			"404": {
+				description: "Channel not found",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
 			"500": {
 				description: "Internal server error",
 				content: {
@@ -63,6 +79,14 @@ export class ChannelDelete extends AuthenticatedRoute {
 				success: false,
 				error: "Channel not found",
 			}, 404);
+		}
+
+		// Verify user owns this channel
+		if (channel.userId !== userId) {
+			return c.json({
+				success: false,
+				error: "You do not have permission to delete this channel",
+			}, 403);
 		}
 
 		// Send queue message for channel deletion

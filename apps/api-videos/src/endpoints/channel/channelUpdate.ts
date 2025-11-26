@@ -46,6 +46,22 @@ export class ChannelUpdate extends AuthenticatedRoute {
                     },
                 },
             },
+            "403": {
+                description: "Forbidden - user does not own this channel",
+                content: {
+                    "application/json": {
+                        schema: ResponseError,
+                    },
+                },
+            },
+            "404": {
+                description: "Channel not found",
+                content: {
+                    "application/json": {
+                        schema: ResponseError,
+                    },
+                },
+            },
             "500": {
                 description: "Internal server error",
                 content: {
@@ -80,6 +96,14 @@ export class ChannelUpdate extends AuthenticatedRoute {
                 success: false,
                 error: "Channel not found",
             }, 404);
+        }
+
+        // Verify user owns this channel
+        if (existingChannel.userId !== userId) {
+            return c.json({
+                success: false,
+                error: "You do not have permission to update this channel",
+            }, 403);
         }
 
         // Update the channel with new values
