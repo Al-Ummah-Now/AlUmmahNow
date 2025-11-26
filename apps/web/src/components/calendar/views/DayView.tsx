@@ -7,7 +7,7 @@
 'use client';
 
 import React, { useMemo, useCallback } from 'react';
-import { Calendar, dateFnsLocalizer, View, NavigateAction } from 'react-big-calendar';
+import { Calendar as BigCalendar, dateFnsLocalizer, View, NavigateAction } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS, ar as arSA } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -17,6 +17,10 @@ import { CustomWeekHeader } from '../shared/CustomHeaders';
 import { EventWrapper, CalendarEventData } from '../shared/EventWrapper';
 import { TimeGutterHeader } from '../shared/TimeComponents';
 import { formatTime } from '../utils/dateFormatters';
+
+// Type cast to fix React 19 compatibility issue with react-big-calendar
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const Calendar = BigCalendar as any;
 
 interface DayViewProps {
   events: CalendarEventData[];
@@ -111,7 +115,8 @@ export function DayView({
             header: DayHeader,
           },
           timeGutterHeader: CustomTimeGutterHeader,
-        }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- React 19 compatibility
+        } as any}
         style={{ height: '100%' }}
         popup
         selectable={false}

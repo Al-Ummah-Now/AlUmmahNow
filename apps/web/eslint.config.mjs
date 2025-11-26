@@ -24,6 +24,11 @@ const eslintConfig = [
     ],
   },
   {
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: __dirname,
+      },
+    },
     rules: {
       // Allow unused variables/parameters prefixed with underscore
       "@typescript-eslint/no-unused-vars": [
