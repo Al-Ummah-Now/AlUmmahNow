@@ -32,6 +32,8 @@
     "admin:dev": "turbo run dev --filter=@al-ummah/admin-api",
     "admin:build": "turbo run build --filter=@al-ummah/admin-api",
     "admin:deploy": "turbo run deploy --filter=@al-ummah/admin-api",
+    "admin-web:dev": "turbo run dev --filter=@al-ummah/admin-web",
+    "admin-web:build": "turbo run build --filter=@al-ummah/admin-web",
     "deploy:all": "pnpm run web:deploy:production && pnpm run api:deploy && pnpm run processor:deploy && pnpm run websocket:deploy && pnpm run admin:deploy"
   },
   "devDependencies": {
