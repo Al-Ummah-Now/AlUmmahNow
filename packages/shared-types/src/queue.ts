@@ -91,6 +91,10 @@ export enum MessageType {
   ChannelTabDelete,
   ChannelTabReorder,
   ChannelTabSwitch,
+
+  // Content moderation events
+  ReportCreate,
+  ReportResolve,
 }
 
 // Generic message structure for queue messages

@@ -5,6 +5,7 @@ import { Report as BusinessReport, ResponseError } from "../../lib/types";
 import { ReportInput } from "../../lib/model/input";
 import { ReportView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
+import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from '../../lib/logger';
 
@@ -122,10 +123,16 @@ export class ReportCreate extends AuthenticatedRoute {
 			// Save the report to the repository
 			await repository.putObject(`report:${report.entityId}:${report.id}:${userId}`, report);
 
-			// TODO: In production, trigger content moderation workflow
-			// - Queue for automated analysis
-			// - Notify moderation team for severe violations
-			// - Update content visibility if needed
+			// Queue report for content moderation processing
+			const queue = new Queue(c.env.queue);
+			await queue.send(MessageType.ReportCreate, {
+				reportId: report.id,
+				entityType: report.entityType,
+				entityId: report.entityId,
+				reporterId: userId,
+				reason: report.reason,
+				timestamp: new Date().toISOString(),
+			});
 
 			// Transform to view model for response (excluding sensitive data)
 			const reportView: z.infer<typeof ReportView> = {
