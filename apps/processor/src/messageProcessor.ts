@@ -508,15 +508,16 @@ export class MessageProcessor {
     }
   }
 
-  private async processReportMessage(message: AlUmmahMessage, _env: QueueEnvironment): Promise<void> {
+  private async processReportMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
     this.logger.debug(`Processing report message: ${MessageType[message.type]}`, message.payload);
 
-    const { reportId, entityType, entityId, reporterId, reason } = message.payload as {
+    const { reportId, entityType, entityId, reporterId, reason, timestamp } = message.payload as {
       reportId: string;
       entityType: string;
       entityId: string;
       reporterId: string;
       reason: string;
+      timestamp: string;
       moderatorId?: string;
       action?: string;
     };
@@ -527,15 +528,49 @@ export class MessageProcessor {
 
     switch (message.type) {
       case MessageType.ReportCreate:
-        this.logger.info(`Report ${reportId} created for ${entityType} ${entityId} by user ${reporterId}`, {
-          reason,
+        // Save report to R2 bucket
+        const reportData = {
+          id: reportId,
           entityType,
           entityId,
+          reporterId,
+          reason,
+          status: 'pending',
+          createdAt: timestamp || new Date().toISOString(),
+        };
+
+        const reportKey = `${entityType}/${entityId}/${reportId}.json`;
+        await env.reports.put(reportKey, JSON.stringify(reportData), {
+          httpMetadata: { contentType: 'application/json' },
+          customMetadata: { entityType, entityId, reporterId, status: 'pending' },
         });
-        // Future: trigger automated content analysis, notify moderators for severe violations
+
+        this.logger.info(`Report ${reportId} saved for ${entityType} ${entityId}`, {
+          reason,
+          reporterId,
+        });
         break;
+
       case MessageType.ReportResolve:
         const { moderatorId, action } = message.payload as { moderatorId?: string; action?: string };
+
+        // Update report status in R2
+        const resolveKey = `${entityType}/${entityId}/${reportId}.json`;
+        const existingReport = await env.reports.get(resolveKey);
+
+        if (existingReport) {
+          const report = await existingReport.json<Record<string, unknown>>();
+          report.status = 'resolved';
+          report.moderatorId = moderatorId;
+          report.action = action;
+          report.resolvedAt = new Date().toISOString();
+
+          await env.reports.put(resolveKey, JSON.stringify(report), {
+            httpMetadata: { contentType: 'application/json' },
+            customMetadata: { entityType, entityId, status: 'resolved' },
+          });
+        }
+
         this.logger.info(`Report ${reportId} resolved by moderator ${moderatorId}`, {
           action,
           entityType,

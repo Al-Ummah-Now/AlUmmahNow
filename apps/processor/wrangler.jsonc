@@ -14,6 +14,11 @@
 			"binding": "community_posts",
 			"bucket_name": "community-posts",
 			"preview_bucket_name": "community-posts-preview"
+		},
+		{
+			"binding": "reports",
+			"bucket_name": "al-ummah-now-reports",
+			"preview_bucket_name": "al-ummah-now-reports-preview"
 		}
 	],
 

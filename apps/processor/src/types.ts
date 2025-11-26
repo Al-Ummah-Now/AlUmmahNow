@@ -64,6 +64,7 @@ export interface QueueEnvironment {
   };
   MESSAGES_BUCKET: R2Bucket;
   community_posts: R2Bucket;
+  reports: R2Bucket;
   ENVIRONMENT: string;
   LOG_LEVEL: string;
 }
