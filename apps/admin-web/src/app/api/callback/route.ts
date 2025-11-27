@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthClient, subjects, setAdminSession } from '@/lib/auth';
+import { getAuthClient, setAdminSession } from '@/lib/auth';
+import { subjects } from '@/interfaces/subjects';
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       refreshToken: exchanged.tokens!.refresh,
     });
 
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   } catch (error) {
     console.error('Auth callback error:', error);
     return NextResponse.redirect(new URL('/login?error=auth_failed', request.url));

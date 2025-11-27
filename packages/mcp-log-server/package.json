@@ -1,0 +1,22 @@
+{
+  "name": "@al-ummah/mcp-log-server",
+  "version": "1.0.0",
+  "description": "MCP server for watching Al Ummah Now logs",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-log-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

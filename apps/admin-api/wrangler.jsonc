@@ -9,7 +9,10 @@
 		{
 			"binding": "REPORTS_DB",
 			"database_name": "al-ummah-now-reports",
-			"database_id": "YOUR_DATABASE_ID"
+			"database_id": "7bee932d-c6b1-47c2-ab70-7dba349104af",
+			"preview_database_id": "2d6a536c-6546-48c2-840a-40f9ddc21ab8",
+			"migrations_dir": "migrations",
+			"remote": true
 		}
 	],
 
@@ -17,23 +20,33 @@
 	"r2_buckets": [
 		{
 			"binding": "videos",
-			"bucket_name": "al-ummah-now-videos",
-			"preview_bucket_name": "al-ummah-now-videos-preview"
+			"bucket_name": "videos",
+			"preview_bucket_name": "videos-preview",
+			"remote": true
 		},
 		{
 			"binding": "channels",
-			"bucket_name": "al-ummah-now-channels",
-			"preview_bucket_name": "al-ummah-now-channels-preview"
+			"bucket_name": "channels",
+			"preview_bucket_name": "channels-preview",
+			"remote": true
 		},
 		{
 			"binding": "profiles",
-			"bucket_name": "al-ummah-now-profiles",
-			"preview_bucket_name": "al-ummah-now-profiles-preview"
+			"bucket_name": "profiles",
+			"preview_bucket_name": "profiles-preview",
+			"remote": true
 		},
 		{
 			"binding": "playlists",
-			"bucket_name": "al-ummah-now-playlists",
-			"preview_bucket_name": "al-ummah-now-playlists-preview"
+			"bucket_name": "playlists",
+			"preview_bucket_name": "playlists-preview",
+			"remote": true
+		},
+		{
+			"binding": "global_settings",
+			"bucket_name": "global-settings",
+			"preview_bucket_name": "global-settings-preview",
+			"remote": true
 		}
 	],
 

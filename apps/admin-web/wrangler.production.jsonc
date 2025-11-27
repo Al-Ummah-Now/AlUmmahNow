@@ -1,0 +1,25 @@
+{
+  "name": "al-ummah-admin-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-04-12",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "logpush": true,
+  "minify": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true,
+  "vars": {
+    "Issuer": "https://auth.alummahnow.net",
+    "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
+    "NEXTJS_ENV": "production",
+    "API_URL": "https://videos.api.alummahnow.net",
+    "ADMIN_API_URL": "https://admin.api.alummahnow.net",
+    "NEXT_PUBLIC_API_URL": "https://videos.api.alummahnow.net",
+    "NEXT_PUBLIC_BASE_URL": "https://admin.alummahnow.net"
+  }
+}

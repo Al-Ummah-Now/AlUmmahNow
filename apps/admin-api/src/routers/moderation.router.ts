@@ -3,7 +3,7 @@ import { fromHono } from 'chanfana';
 import { ReportsList, ReportGet, ReportAction, ReportStats } from '../endpoints/moderation';
 
 const app = new Hono();
-export const moderationRouter = fromHono(app, { base: '/api/moderation' });
+const moderationRouter = fromHono(app, { base: '' });
 
 // List and stats endpoints
 moderationRouter.get('/reports', ReportsList);

@@ -12,6 +12,7 @@ import { NotificationCenter } from "@/components/notifications/NotificationCente
 import { MultiAccountProvider } from "@/hooks/useMultiAccount";
 import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
 import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -85,8 +86,9 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
       </head>
       <body className="font-inter">
         <Suspense>
-          <NuqsAdapter>
-            <ThemeProvider
+          <QueryProvider>
+            <NuqsAdapter>
+              <ThemeProvider
               attribute="class"
               defaultTheme="system"
               enableSystem
@@ -110,7 +112,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                 <CookieSizeMonitor />
               </MultiAccountProvider>
             </ThemeProvider>
-          </NuqsAdapter>
+            </NuqsAdapter>
+          </QueryProvider>
         </Suspense>
       </body>
       <script async type="text/javascript" src="//assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>

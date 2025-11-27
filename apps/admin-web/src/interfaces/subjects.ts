@@ -5,5 +5,6 @@ export const subjects = createSubjects({
   user: v.object({
     id: v.string(),
     email: v.pipe(v.string(), v.email()),
+    roles: v.array(v.string()),
   }),
 });

@@ -57,7 +57,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             items.push({ label: "الإعدادات", icon: "fa-cog", href: "/ar/settings", onClick: onClose });
             
             // Add moderation link for admin/moderator users
-            if (user.role === 'admin' || user.role === 'moderator') {
+            if (user.roles?.includes('admin') || user.roles?.includes('moderator')) {
                 items.push({ label: "الإشراف", icon: "fa-shield-alt", href: "/ar/moderation", onClick: onClose });
             }
         }

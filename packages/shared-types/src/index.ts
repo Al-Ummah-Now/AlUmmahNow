@@ -40,3 +40,6 @@ export * from './schemas/chapter';
 
 // Export localization utility
 export * from './localization';
+
+// i18n types
+export * from './i18n';

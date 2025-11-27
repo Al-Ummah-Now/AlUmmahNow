@@ -1,0 +1,1348 @@
+/**
+ * Internationalization (i18n) Types
+ *
+ * Type definitions for the API-based i18n system.
+ * Translations are stored in R2 and served via API endpoints.
+ */
+
+// =============================================================================
+// Locale Configuration
+// =============================================================================
+
+/**
+ * Supported language codes
+ */
+export type SupportedLanguage = 'en' | 'ar';
+
+/**
+ * Locale configuration for a language
+ */
+export interface LocaleConfig {
+  /** Language code (e.g., 'en', 'ar') */
+  code: string;
+  /** Native name (e.g., 'English', 'العربية') */
+  name: string;
+  /** English name (e.g., 'English', 'Arabic') */
+  englishName: string;
+  /** Whether language is RTL */
+  isRTL: boolean;
+  /** Whether this is the default locale */
+  isDefault?: boolean;
+  /** Whether translations are complete */
+  isComplete?: boolean;
+}
+
+/**
+ * Full i18n configuration
+ */
+export interface I18nConfig {
+  /** Available locales */
+  locales: LocaleConfig[];
+  /** Default/fallback locale */
+  fallbackLocale: string;
+  /** Cache max age in seconds */
+  cacheMaxAge: number;
+  /** Current version */
+  version: string;
+}
+
+// =============================================================================
+// Translation Data
+// =============================================================================
+
+/**
+ * Translation data wrapper returned from API
+ */
+export interface TranslationData {
+  /** Version for cache invalidation */
+  version: string;
+  /** Locale code */
+  locale: string;
+  /** Last update timestamp */
+  updatedAt: string;
+  /** Translation content */
+  translations: AppTranslations;
+}
+
+/**
+ * Metadata for cache invalidation
+ */
+export interface I18nMetadata {
+  /** Current version */
+  version: string;
+  /** Available locale codes */
+  locales: string[];
+  /** Default locale */
+  defaultLocale: string;
+  /** Last update timestamp */
+  updatedAt: string;
+  /** Checksums per locale for cache validation */
+  checksums: Record<string, string>;
+  /** Available sections (for granular fetching) */
+  sections: string[];
+}
+
+// =============================================================================
+// API Request/Response Types
+// =============================================================================
+
+/**
+ * Request to update translations (admin only)
+ */
+export interface UpdateTranslationsRequest {
+  /** Partial or full translations */
+  translations: Partial<AppTranslations>;
+  /** Whether to merge with existing (true) or replace (false) */
+  merge?: boolean;
+}
+
+/**
+ * Response after updating translations
+ */
+export interface UpdateTranslationsResponse {
+  locale: string;
+  version: string;
+  updatedAt: string;
+  keysUpdated?: number;
+}
+
+// =============================================================================
+// App Translations Interface
+// =============================================================================
+
+/**
+ * Complete translation structure for the app
+ * All translations must implement this interface to ensure completeness
+ */
+export interface AppTranslations {
+  /**
+   * Common UI elements
+   */
+  common: {
+    appName: string;
+    loading: string;
+    error: string;
+    success: string;
+    cancel: string;
+    save: string;
+    delete: string;
+    edit: string;
+    create: string;
+    search: string;
+    filter: string;
+    sort: string;
+    close: string;
+    back: string;
+    next: string;
+    previous: string;
+    submit: string;
+    confirm: string;
+    noResults: string;
+    view: string;
+    viewAll: string;
+    learnMore: string;
+    retry: string;
+    demo: string;
+    backTo: string;
+    welcome: string;
+    collapse?: string;
+    expand?: string;
+    loadMore?: string;
+    saving?: string;
+    saved?: string;
+    saveFailed?: string;
+  };
+
+  /**
+   * Languages
+   */
+  languages: {
+    english: string;
+    arabic: string;
+  };
+
+  /**
+   * Header/Navigation
+   */
+  header: {
+    noChannelSelected: string;
+    switchAccount: string;
+    addAccount: string;
+    logout: string;
+    logoutAll: string;
+    settings: string;
+    darkMode: string;
+    lightMode: string;
+    viewChannel: string;
+  };
+
+  /**
+   * Navigation menu
+   */
+  navigation: {
+    navigationMenu: string;
+    navigation: string;
+    accounts: string;
+    profile: string;
+    analytics: string;
+    noChannel: string;
+    noActiveChannel: string;
+    createChannel: string;
+    channelName: string;
+    enterChannelName: string;
+    addAnotherAccount: string;
+    signOutOf: string;
+    signOutOfAll: string;
+    signIn: string;
+    home: string;
+    light: string;
+    dark: string;
+    channel: string;
+    channels: string;
+  };
+
+  /**
+   * Channel related
+   */
+  channel: {
+    myChannels: string;
+    selectChannel: string;
+    createChannel: string;
+    editChannel: string;
+    deleteChannel: string;
+    channelName: string;
+    channelDescription: string;
+    channelAvatar: string;
+    mainChannel: string;
+    subscribers: string;
+    videos: string;
+    subscribe: string;
+    subscribed: string;
+    unsubscribe: string;
+    manageChannels: string;
+    yourChannels: string;
+    browseWithoutChannel: string;
+    enterChannelNamePlaceholder: string;
+    refreshChannelList: string;
+    singleChannel: string;
+    clickToChangeCover: string;
+    clickToChangeAvatar: string;
+    updateChannelInformation: string;
+    channelNotFoundMessage: string;
+    charactersRemaining: string;
+    saveChanges: string;
+    channelNotFound: string;
+    channelNameEnglish: string;
+    channelNameArabic: string;
+    channelDescriptionEnglish: string;
+    channelDescriptionArabic: string;
+    channelBanner: string;
+    channelTrailer: string;
+    noChannelTrailer: string;
+    about: string;
+    content: string;
+    channelSectionsPlaceholder: string;
+    description: string;
+    noDescription: string;
+    statistics: string;
+    joined: string;
+    links: string;
+    twitter: string;
+    facebook: string;
+    instagram: string;
+    channelDetails: string;
+    channelId: string;
+    category: string;
+    tags: string;
+    home: string;
+    shorts: string;
+    live: string;
+    playlists: string;
+    community: string;
+    channels: string;
+    manageTabs: string;
+    setAsDefault: string;
+    hideTab: string;
+    showTab: string;
+    reorderTabs: string;
+    customTab: string;
+    addCustomTab: string;
+    tabName: string;
+    tabContent: string;
+    seeAll: string;
+    recentUploads: string;
+    recentUploadsDescription: string;
+    popularUploads: string;
+    popularUploadsDescription: string;
+    allPlaylists: string;
+    allPlaylistsDescription: string;
+    featuredVideos: string;
+    featuredVideosDescription: string;
+    likedVideos: string;
+    latestLive: string;
+    featuredPlaylists: string;
+    featuredPlaylistsDescription: string;
+    singlePlaylist: string;
+    singlePlaylistDescription: string;
+    playlistNotFound: string;
+    noPlaylistsFound: string;
+    liveNow: string;
+    liveNowDescription: string;
+    pastLiveStreams: string;
+    pastLiveStreamsDescription: string;
+    upcomingLiveStreams: string;
+    upcomingLiveStreamsDescription: string;
+    featuredChannels: string;
+    featuredChannelsDescription: string;
+    subscriptionsSection: string;
+    subscriptionsSectionDescription: string;
+    addSection: string;
+    configureSection: string;
+    addChannelSection: string;
+    sectionTitle: string;
+    enterSectionTitle: string;
+    charactersCount: string;
+    playlistIds: string;
+    enterOnePlaylistId: string;
+    enterPlaylistIds: string;
+    enterExactlyOnePlaylistId: string;
+    separatePlaylistIds: string;
+    channelIds: string;
+    enterChannelIds: string;
+    separateChannelIds: string;
+    automaticContentMessage: string;
+    creating: string;
+    createSection: string;
+    automaticContent: string;
+    playlist: string;
+    aboutChannel: string;
+    forYou: string;
+    additionalSettings: string;
+    manageSections: string;
+    customizeChannelLayout: string;
+    communitySettings: string;
+    manageCommunityPosts: string;
+    channelSettings: string;
+    generalSettings: string;
+    editChannelDetails: string;
+    backToChannel: string;
+    tabs: {
+      manage_tabs: string;
+      manage_tabs_description: string;
+      toggle_visibility: string;
+      set_as_default: string;
+      cannot_hide_last_tab: string;
+      cannot_hide_default_tab: string;
+      default_tab: string;
+      visible: string;
+      hidden: string;
+      save_changes: string;
+      changes_saved: string;
+      save_failed: string;
+      drag_to_reorder: string;
+      at_least_one_visible: string;
+      default_must_be_visible: string;
+    };
+  };
+
+  /**
+   * Profile related
+   */
+  profile: {
+    myProfile: string;
+    createProfile: string;
+    editProfile: string;
+    displayName: string;
+    email: string;
+    bio: string;
+    avatar: string;
+    profileCreated: string;
+    profileUpdated: string;
+    checkingProfile: string;
+    redirectingToProfileCreation: string;
+    redirecting: string;
+    welcomeMessage: string;
+    emailCannotBeChanged: string;
+    firstName: string;
+    lastName: string;
+    yourFirstName: string;
+    yourLastName: string;
+    firstNameArabic: string;
+    lastNameArabic: string;
+    displayNameOptional: string;
+    displayNameArabic: string;
+    displayNameEmpty: string;
+    bioOptional: string;
+    bioArabic: string;
+    privacyNotice: string;
+    privacyNoticeText: string;
+    welcome: string;
+    editInstructions: string;
+    myPlaylists: string;
+    playlistsDescription: string;
+    newPlaylist: string;
+    firstPlaylistMessage: string;
+    welcomeUser: string;
+    editProfileDescription: string;
+    noPlaylistsAvailable: string;
+    timezone: string;
+    timezoneDetected: string;
+    currentTimezone: string;
+  };
+
+  /**
+   * Video related
+   */
+  video: {
+    videos: string;
+    uploadVideo: string;
+    editVideo: string;
+    deleteVideo: string;
+    videoTitle: string;
+    videoDescription: string;
+    videoThumbnail: string;
+    videoDuration: string;
+    videoViews: string;
+    videoLikes: string;
+    videoComments: string;
+    videoShares: string;
+    relatedVideos: string;
+    watchLater: string;
+    addToPlaylist: string;
+    noVideoSelected: string;
+    selectVideoMessage: string;
+    noVideosAvailable: string;
+    latest: string;
+    popular: string;
+    oldest: string;
+    views: string;
+    view: string;
+    today: string;
+    yesterday: string;
+    daysAgo: string;
+    weeksAgo: string;
+    monthsAgo: string;
+    yearsAgo: string;
+    chapters?: string;
+    chapter?: string;
+    noChapters?: string;
+    currentChapter?: string;
+    nextChapter?: string;
+    previousChapter?: string;
+    addChapter?: string;
+    editChapter?: string;
+    deleteChapter?: string;
+    chapterTitle?: string;
+    chapterTimestamp?: string;
+    parseFromDescription?: string;
+    showChapters?: string;
+    hideChapters?: string;
+    chapterList?: string;
+    parseChapters?: string;
+    chapterParserHelp?: string;
+    chapterParserExample?: string;
+    chaptersDetected?: string;
+    chaptersParsed?: string;
+    invalidChapterFormat?: string;
+    firstChapterMustBeZero?: string;
+    chapterTooClose?: string;
+    maxChaptersReached?: string;
+    duplicateTimestamp?: string;
+    chapterTitleRequired?: string;
+    chapterTitleMaxLength?: string;
+    moveChapterUp?: string;
+    moveChapterDown?: string;
+    previewChapters?: string;
+    autoParseChapters?: string;
+    manualChapters?: string;
+    importedChapters?: string;
+    myVideos?: string;
+    manageVideos?: string;
+    manageVideosDescription?: string;
+    videoManagement?: string;
+    allVideos?: string;
+    uploadedVideos?: string;
+    searchVideos?: string;
+    filterByStatus?: string;
+    filterByPrivacy?: string;
+    sortVideos?: string;
+    allStatus?: string;
+    ready?: string;
+    processing?: string;
+    uploading?: string;
+    failed?: string;
+    public?: string;
+    private?: string;
+    makePublic?: string;
+    makePrivate?: string;
+    sortByDate?: string;
+    sortByViews?: string;
+    sortByTitle?: string;
+    bulkActions?: string;
+    selectAll?: string;
+    deselectAll?: string;
+    deleteSelected?: string;
+    changePrivacy?: string;
+    videosSelected?: string;
+    confirmDelete?: string;
+    confirmDeleteTitle?: string;
+    confirmDeleteMultiple?: string;
+    confirmDeleteMultipleTitle?: string;
+    deleteSuccess?: string;
+    deleteMultipleSuccess?: string;
+    noVideosFound?: string;
+    uploadFirstVideo?: string;
+    editVideoDetails?: string;
+    videoPreview?: string;
+    titleEnglish?: string;
+    titleArabic?: string;
+    descriptionEnglish?: string;
+    descriptionArabic?: string;
+    thumbnailSelector?: string;
+    autoGeneratedThumbnails?: string;
+    customThumbnail?: string;
+    uploadThumbnail?: string;
+    selectThumbnail?: string;
+    dragDropThumbnail?: string;
+    thumbnailRequirements?: string;
+    setAsDefault?: string;
+    currentThumbnail?: string;
+    videoTags?: string;
+    addTag?: string;
+    enterTag?: string;
+    removeTag?: string;
+    videoCategory?: string;
+    selectCategory?: string;
+    videoLanguage?: string;
+    videoPrivacy?: string;
+    publicVideo?: string;
+    privateVideo?: string;
+    saveChanges?: string;
+    saving?: string;
+    discardChanges?: string;
+    unsavedChanges?: string;
+    unsavedChangesMessage?: string;
+    leaveWithoutSaving?: string;
+    continueEditing?: string;
+    updateSuccess?: string;
+    updateFailed?: string;
+    thumbnailUploadSuccess?: string;
+    thumbnailUploadFailed?: string;
+    play?: string;
+    pause?: string;
+    mute?: string;
+    unmute?: string;
+    fullscreen?: string;
+    exitFullscreen?: string;
+    quality?: string;
+    speed?: string;
+    currentTime?: string;
+    totalDuration?: string;
+    shortVideos?: string;
+    standardVideos?: string;
+    longVideos?: string;
+  };
+
+  /**
+   * Search related
+   */
+  search: {
+    searchPlaceholder: string;
+    searchResults: string;
+    searchVideos: string;
+    searchChannels: string;
+    searchPlaylists: string;
+    noSearchResults: string;
+    recentSearches: string;
+    clearSearchHistory: string;
+    trending: string;
+    searchPageTitle: string;
+    searchButton: string;
+    searching: string;
+    foundResults: string;
+    foundResultsFor: string;
+    activeFilters: string;
+    category: string;
+    language: string;
+    duration: string;
+    dateFrom: string;
+    dateTo: string;
+    noResultsTitle: string;
+    noResultsMessage: string;
+    clearFilters: string;
+    filters: string;
+    active: string;
+    applyFilters: string;
+    clear: string;
+    uploadDate: string;
+    sortBy: string;
+    allCategories: string;
+    islamicLectures: string;
+    quranRecitation: string;
+    islamicHistory: string;
+    prayerGuidance: string;
+    islamicStories: string;
+    scholarlyDiscussions: string;
+    allLanguages: string;
+    english: string;
+    arabic: string;
+    anyDuration: string;
+    short: string;
+    medium: string;
+    long: string;
+    relevance: string;
+    uploadDateSort: string;
+    viewCount: string;
+    likes: string;
+    descending: string;
+    ascending: string;
+    trendingVideos: string;
+    lastHour: string;
+    today: string;
+    thisWeek: string;
+    thisMonth: string;
+    noTrendingVideos: string;
+    checkBackLater: string;
+  };
+
+  /**
+   * Upload related
+   */
+  upload: {
+    uploadTitle: string;
+    uploadVideo: string;
+    selectFile: string;
+    dragDropFiles: string;
+    videoDetails: string;
+    uploading: string;
+    uploadComplete: string;
+    uploadFailed: string;
+    uploadProgress: string;
+    processingVideo: string;
+    preparing: string;
+    makePublic: string;
+    cancelUpload: string;
+    dropHere: string;
+    supports: string;
+    max: string;
+    shareDescription: string;
+    videoUploadedMessage: string;
+    viewVideo: string;
+    uploadAnother: string;
+    waitingMessage: string;
+    percentComplete: string;
+    guidelines: string;
+    guidelineIslamicValues: string;
+    guidelineMaxSize: string;
+    guidelineFormats: string;
+    guidelineCopyright: string;
+    guidelineProcessing: string;
+    guidelineThumbnails: string;
+    shareWithCommunity: string;
+    paused: string;
+    processing: string;
+    complete: string;
+    failed: string;
+    pause: string;
+    resume: string;
+    cancel: string;
+    retry: string;
+    speed: string;
+    timeRemaining: string;
+    bytesUploaded: string;
+  };
+
+  /**
+   * Batch upload related
+   */
+  batch: {
+    batchUpload: string;
+    selectFiles: string;
+    selectedFiles: string;
+    filesSelected: string;
+    dragDropMultiple: string;
+    clickToBrowse: string;
+    fileLimit: string;
+    removeFile: string;
+    sharedMetadata: string;
+    individualMetadata: string;
+    applyToAll: string;
+    copyToAll: string;
+    resetToShared: string;
+    autoNumbering: string;
+    enableAutoNumbering: string;
+    numberingPattern: string;
+    uploadQueue: string;
+    queueEmpty: string;
+    addVideos: string;
+    startUploads: string;
+    pauseAll: string;
+    resumeAll: string;
+    cancelAll: string;
+    retryFailed: string;
+    overallProgress: string;
+    completed: string;
+    pending: string;
+    uploading: string;
+    paused: string;
+    cancelled: string;
+    eta: string;
+    overallEta: string;
+    concurrency: string;
+    concurrentUploads: string;
+    uploadSpeed: string;
+    totalProgress: string;
+    ofCompleted: string;
+    errors: {
+      tooFewFiles: string;
+      tooManyFiles: string;
+      invalidFileType: string;
+      fileTooLarge: string;
+      initiateFailed: string;
+      uploadFailed: string;
+    };
+  };
+
+  /**
+   * Analytics related
+   */
+  analytics: {
+    analyticsTitle: string;
+    overview: string;
+    views: string;
+    watchTime: string;
+    subscribers: string;
+    revenue: string;
+    topVideos: string;
+    topCountries: string;
+    topDevices: string;
+    realtimeViews: string;
+    last28Days: string;
+    last7Days: string;
+    today: string;
+    demoMode: string;
+    demoMessage: string;
+    trackPerformance: string;
+    demoModeMessage: string;
+  };
+
+  /**
+   * Time related
+   */
+  time: {
+    allTime: string;
+    hours: string;
+    minutes: string;
+  };
+
+  /**
+   * Subscriptions related
+   */
+  subscriptions: {
+    subscriptionsTitle: string;
+    mySubscriptions: string;
+    manage: string;
+    notificationSettings: string;
+    subscriptionFeed: string;
+    noSubscriptions: string;
+    loginToSeeVideos: string;
+    latestVideos: string;
+    lastUpdated: string;
+    refresh: string;
+    loadingFeed: string;
+    noVideosInFeed: string;
+    subscribeToSeeVideos: string;
+    discoverChannels: string;
+    loadMoreComingSoon: string;
+    showingVideosFrom: string;
+    wantMore: string;
+  };
+
+  /**
+   * Feed related
+   */
+  feed: {
+    feedTitle: string;
+    home: string;
+    trending: string;
+    subscriptions: string;
+    history: string;
+    watchLater: string;
+    likedVideos: string;
+  };
+
+  /**
+   * Moderation related
+   */
+  moderation: {
+    moderationTitle: string;
+    reports: string;
+    reviewReport: string;
+    approve: string;
+    reject: string;
+    takeAction: string;
+    reportReason: string;
+    reportStatus: string;
+    reportedBy: string;
+    reportDate: string;
+    moderationDashboard: string;
+    dashboardSubtitle: string;
+    totalReports: string;
+    pendingReports: string;
+    allTime: string;
+    needsAttention: string;
+    actions24h: string;
+    recentActivity: string;
+    avgResponseTime: string;
+    meanResolution: string;
+    filterReports: string;
+    priority: string;
+    contentType: string;
+    recentReports: string;
+    reportsPendingAction: string;
+    noReportsMatch: string;
+    accessDenied: string;
+    backToDashboard: string;
+    reportDetails: string;
+    reviewReportMessage: string;
+    reportReasonLabel: string;
+    descriptionLabel: string;
+    reportedByLabel: string;
+    reportDateLabel: string;
+    assignedToLabel: string;
+    resolutionNotesLabel: string;
+    reportedContentLabel: string;
+    viewOriginalContent: string;
+    chooseAction: string;
+    takeModerationAction: string;
+    alreadyResolved: string;
+    actionType: string;
+    selectAction: string;
+    approveContent: string;
+    removeContent: string;
+    hideContent: string;
+    warnUser: string;
+    restrictUser: string;
+    banUser: string;
+    dismissReport: string;
+    flagForReview: string;
+    briefReason: string;
+    notesOptional: string;
+    additionalNotes: string;
+    takingAction: string;
+    actionHistory: string;
+    viewAllReports: string;
+    userManagement: string;
+    reason: string;
+    description: string;
+    assignedTo: string;
+    status: {
+      pending: string;
+      inReview: string;
+      resolved: string;
+      rejected: string;
+      escalated: string;
+      allStatuses: string;
+      dismissed: string;
+    };
+    priorityEnum: {
+      urgent: string;
+      high: string;
+      medium: string;
+      low: string;
+      allPriorities: string;
+    };
+    contentTypeEnum: {
+      video: string;
+      comment: string;
+      channel: string;
+      playlist: string;
+      allTypes: string;
+    };
+    reportReasonEnum: {
+      inappropriateContent: string;
+      spam: string;
+      harassment: string;
+      violence: string;
+      hateSpeech: string;
+      falseInformation: string;
+      copyright: string;
+      privacyViolation: string;
+      other: string;
+    };
+  };
+
+  /**
+   * Authentication related
+   */
+  auth: {
+    login: string;
+    logout: string;
+    signUp: string;
+    forgotPassword: string;
+    resetPassword: string;
+    emailAddress: string;
+    password: string;
+    confirmPassword: string;
+    rememberMe: string;
+    loginSuccess: string;
+    logoutSuccess: string;
+    loginFailed: string;
+  };
+
+  /**
+   * Error messages
+   */
+  errors: {
+    genericError: string;
+    networkError: string;
+    notFound: string;
+    notFoundDescription: string;
+    unauthorized: string;
+    forbidden: string;
+    serverError: string;
+    validationError: string;
+    uploadError: string;
+    sessionExpired: string;
+    uploadFailed: string;
+    authRequired: string;
+    channelRequired: string;
+    failedToLoad: string;
+    failedToSave: string;
+    failedToDelete: string;
+    failedToUpdate: string;
+    failedToCreate: string;
+    failedToSwitch: string;
+    failedToProcess: string;
+    invalidFile: string;
+    fileTooLarge: string;
+    reportReasonRequired: string;
+    loginRequired: string;
+  };
+
+  /**
+   * Success messages
+   */
+  success: {
+    saved: string;
+    deleted: string;
+    uploaded: string;
+    updated: string;
+    created: string;
+  };
+
+  /**
+   * Validation messages
+   */
+  validation: {
+    required: string;
+    invalidEmail: string;
+    invalidUrl: string;
+    minLength: string;
+    maxLength: string;
+    passwordMismatch: string;
+  };
+
+  /**
+   * Comments related
+   */
+  comments: {
+    commentsCount: string;
+    addComment: string;
+    cancel: string;
+    comment: string;
+    commenting: string;
+    signInToComment: string;
+    signIn: string;
+    noComments: string;
+    liveUpdates: string;
+    live: string;
+    offline: string;
+  };
+
+  /**
+   * Community related
+   */
+  community: {
+    managePosts: string;
+    newPost: string;
+    searchPosts: string;
+    allTypes: string;
+    text: string;
+    image: string;
+    poll: string;
+    quiz: string;
+    video: string;
+    published: string;
+    scheduled: string;
+    drafts: string;
+    noResultsFound: string;
+    noPostsYet: string;
+    createFirstPost: string;
+    community: string;
+  };
+
+  /**
+   * Notifications related
+   */
+  notifications: {
+    notificationCenter: string;
+    new: string;
+    view: string;
+    markAsRead: string;
+    markAllAsRead: string;
+    noNotifications: string;
+    viewAll: string;
+    testNotification: string;
+    demoFeatures: string;
+    likeNotification: string;
+    commentNotification: string;
+    subscriptionNotification: string;
+    uploadNotification: string;
+    systemNotification: string;
+    likeMessage: string;
+    commentMessage: string;
+    subscriptionMessage: string;
+    uploadMessage: string;
+    systemMessage: string;
+  };
+
+  /**
+   * Subtitles/Captions related
+   */
+  subtitle: {
+    title: string;
+    subtitles: string;
+    subtitlesDescription: string;
+    upload: string;
+    language: string;
+    default: string;
+    delete: string;
+    settings: string;
+    fontSize: string;
+    off: string;
+    preview: string;
+    showingFirst5: string;
+    warnings: string;
+    moreCues: string;
+    noIssues: string;
+    uploadSubtitle: string;
+    selectLanguage: string;
+    chooseLanguage: string;
+    selectFile: string;
+    subtitleFile: string;
+    uploadProgress: string;
+    uploading: string;
+    uploadSuccess: string;
+    uploadError: string;
+    uploadFailed: string;
+    setAsDefault: string;
+    setDefault: string;
+    fileSize: string;
+    status: string;
+    uploadedAt: string;
+    actions: string;
+    noSubtitles: string;
+    noSubtitlesDescription: string;
+    uploadFirstSubtitle: string;
+    addSubtitle: string;
+    validationErrors: string;
+    validating: string;
+    validationFailed: string;
+    completeAllFields: string;
+    dragDropOrClick: string;
+    supportedFormats: string;
+    uploadFileArea: string;
+    confirmDelete: string;
+    confirmDeleteDescription: string;
+    deleteSubtitle: string;
+    statusActive: string;
+    statusProcessing: string;
+    statusFailed: string;
+  };
+
+  /**
+   * Video Sections related (optional)
+   */
+  sections?: {
+    recentVideos?: string;
+    popularVideos?: string;
+    trendingVideos?: string;
+    recommendedVideos?: string;
+    noRecentVideos?: string;
+    noPopularVideos?: string;
+    noTrendingVideos?: string;
+    noRecommendedVideos?: string;
+    periodDaily?: string;
+    periodWeekly?: string;
+    periodMonthly?: string;
+    periodAll?: string;
+    strategyPopular?: string;
+    strategyCategoryBased?: string;
+    strategyRandom?: string;
+    basedOn?: string;
+    loadMore?: string;
+    collapse?: string;
+    expand?: string;
+  };
+
+  /**
+   * Upload Defaults/Templates related (optional)
+   */
+  uploadDefaults?: {
+    title?: string;
+    subtitle?: string;
+    createTemplate?: string;
+    createFirstTemplate?: string;
+    noTemplates?: string;
+    noTemplatesMessage?: string;
+    templateName?: string;
+    templateNameEnglish?: string;
+    templateNameArabic?: string;
+    templateDescription?: string;
+    templateDescriptionPlaceholder?: string;
+    setAsDefault?: string;
+    defaultBadge?: string;
+    category?: string;
+    selectCategory?: string;
+    used?: string;
+    times?: string;
+    createNewTemplate?: string;
+    editTemplate?: string;
+    deleteTemplate?: string;
+    confirmDelete?: string;
+    deleteSuccess?: string;
+    deleteFailed?: string;
+    setDefaultSuccess?: string;
+    setDefaultFailed?: string;
+    templateInformation?: string;
+    templateNameRequired?: string;
+    titleRequired?: string;
+    videoMetadata?: string;
+    titleEnglish?: string;
+    titleArabic?: string;
+    descriptionEnglish?: string;
+    descriptionArabic?: string;
+    useVariables?: string;
+    useVariablesArabic?: string;
+    tags?: string;
+    tagsPlaceholder?: string;
+    tagsExample?: string;
+    visibility?: string;
+    public?: string;
+    private?: string;
+    unlisted?: string;
+    language?: string;
+    english?: string;
+    arabic?: string;
+    saving?: string;
+    saveFailed?: string;
+    saveError?: string;
+    uploadTemplate?: string;
+    noneManualEntry?: string;
+    defaultTemplate?: string;
+    templateApplied?: string;
+    loadTemplatesFailed?: string;
+    loadTemplatesError?: string;
+    enterVariableValues?: string;
+    templateRequiresInputs?: string;
+    episodeNumber?: string;
+    episodeNumberPlaceholder?: string;
+    seasonNumber?: string;
+    seasonNumberPlaceholder?: string;
+    seriesName?: string;
+    seriesNamePlaceholder?: string;
+    partNumber?: string;
+    partNumberPlaceholder?: string;
+    surahName?: string;
+    surahNamePlaceholder?: string;
+    ayahRange?: string;
+    ayahRangePlaceholder?: string;
+    juzNumber?: string;
+    juzNumberPlaceholder?: string;
+    variableGuide?: string;
+    variables?: string;
+    requiresInput?: string;
+    example?: string;
+    copy?: string;
+    copied?: string;
+    variableUsageNote?: string;
+    categoryDateTime?: string;
+    categoryIslamic?: string;
+    categoryEpisode?: string;
+    categoryQuran?: string;
+    categoryChannel?: string;
+    categoryVideo?: string;
+  };
+
+  /**
+   * Scheduling related (optional)
+   */
+  schedule?: {
+    title?: string;
+    schedulingOptions?: string;
+    publishImmediately?: string;
+    scheduleLater?: string;
+    selectDate?: string;
+    selectTime?: string;
+    selectDateTime?: string;
+    timezone?: string;
+    selectTimezone?: string;
+    notifyOnPublish?: string;
+    schedulePreview?: string;
+    willBePublishedOn?: string;
+    minimumScheduleTime?: string;
+    maximumScheduleTime?: string;
+    scheduled?: string;
+    cancel?: string;
+    publishNow?: string;
+    scheduledVideos?: string;
+    noScheduledVideos?: string;
+    scheduleVideo?: string;
+    reschedule?: string;
+    cancelSchedule?: string;
+    editSchedule?: string;
+    scheduledFor?: string;
+    myScheduledVideos?: string;
+    noScheduledVideosMessage?: string;
+    videoWillBePublished?: string;
+    atTime?: string;
+    inYourTimezone?: string;
+    goesLiveIn?: string;
+    dateAndTime?: string;
+    invalidScheduleTime?: string;
+    scheduleConflict?: string;
+    scheduleSuccess?: string;
+    scheduleFailed?: string;
+    scheduleUpdated?: string;
+    scheduleCancelled?: string;
+    publishingNow?: string;
+    publishedSuccessfully?: string;
+    statusScheduled?: string;
+    statusPublishing?: string;
+    statusPublished?: string;
+    statusFailed?: string;
+    statusCancelled?: string;
+    filterByStatus?: string;
+    allStatuses?: string;
+    sortByDate?: string;
+    oldestFirst?: string;
+    newestFirst?: string;
+    viewVideo?: string;
+    editVideo?: string;
+    deleteVideo?: string;
+    timeRemaining?: string;
+    publishesIn?: string;
+    publishesSoon?: string;
+    days?: string;
+    hours?: string;
+    minutes?: string;
+    seconds?: string;
+    createFirstScheduledVideo?: string;
+    scheduleAVideo?: string;
+    confirmCancelSchedule?: string;
+    confirmPublishNow?: string;
+    localTime?: string;
+    utcTime?: string;
+    views?: {
+      list: string;
+      calendar: string;
+    };
+    calendar?: {
+      month: string;
+      week: string;
+      day: string;
+      today: string;
+      previous: string;
+      next: string;
+      calendarType: string;
+      gregorian: string;
+      hijri: string;
+      noEvents: string;
+      scheduledFor: string;
+      loadingEvents?: string;
+      errorLoadingEvents?: string;
+      unknownError?: string;
+      noScheduledVideos?: string;
+      noScheduledVideosThisPeriod?: string;
+    };
+    hijriMonths?: {
+      1: string;
+      2: string;
+      3: string;
+      4: string;
+      5: string;
+      6: string;
+      7: string;
+      8: string;
+      9: string;
+      10: string;
+      11: string;
+      12: string;
+    };
+  };
+
+  /**
+   * Settings page related (optional)
+   */
+  settings?: {
+    uploadDefaults?: string;
+    uploadDefaultsDesc?: string;
+    channelSettings?: string;
+    channelSettingsDesc?: string;
+    profileSettings?: string;
+    profileSettingsDesc?: string;
+    settingsDescription?: string;
+    notAvailable?: string;
+    needHelp?: string;
+    needHelpDesc?: string;
+  };
+
+  /**
+   * Admin-specific translations (optional)
+   */
+  admin?: {
+    dashboard?: string;
+    overview?: string;
+    users?: string;
+    content?: string;
+    settings?: string;
+    translations?: string;
+    translationEditor?: string;
+    editTranslations?: string;
+    searchKeys?: string;
+    filterBySection?: string;
+    allSections?: string;
+    missingTranslations?: string;
+    saveAll?: string;
+    discardChanges?: string;
+    unsavedChanges?: string;
+    keyName?: string;
+    englishValue?: string;
+    arabicValue?: string;
+    lastUpdated?: string;
+    updatedBy?: string;
+    publishChanges?: string;
+    previewChanges?: string;
+    revertChanges?: string;
+    importTranslations?: string;
+    exportTranslations?: string;
+    translationsSaved?: string;
+    translationsFailed?: string;
+    noChangesToSave?: string;
+  };
+}
+
+/**
+ * Result type for useI18n hook
+ */
+export interface UseI18nResult {
+  /** Complete translation object for current language */
+  t: AppTranslations;
+  /** Current language code */
+  lang: SupportedLanguage;
+  /** Whether current language is RTL */
+  isRTL: boolean;
+  /** Text direction ('ltr' or 'rtl') */
+  dir: 'ltr' | 'rtl';
+}

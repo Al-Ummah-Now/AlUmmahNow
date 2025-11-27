@@ -5,12 +5,11 @@
 
 import { createLogger } from '@al-ummah/logger';
 
-// Type-safe access to environment variable
-declare const process: { env: Record<string, string | undefined> };
-
 // Create logger instance for admin-api
+// Note: LOG_LEVEL env var not available at module init in Workers
+// Using 'info' as default, can be configured via wrangler.toml vars
 const apiLogger = createLogger('admin-api', {
-  logLevel: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+  logLevel: 'info',
   forceHttpLogging: true,
 });
 

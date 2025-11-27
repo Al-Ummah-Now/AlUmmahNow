@@ -85,17 +85,17 @@ export interface Profile {
     subscriptions?: string[];
 }
 
+// Re-export auth types from shared-types
+export type { AuthUser, AuthSubject } from '@al-ummah/shared-types';
+
+// Extended User interface for web app (includes channel context)
 export interface User {
     id: string;
     email: string;
-    role?: 'user' | 'moderator' | 'admin'; // Add role field for moderation access
+    roles?: string[]; // User roles from auth token (e.g., ['user'], ['admin', 'moderator'])
     channel?: Partial<Channel> | null; // Optional channel reference (Partial for ChannelInfo compatibility)
     channelName?: string; // Channel display name
     name?: string; // User display name
-}
-
-export interface AuthSubject {
-    properties: User
 }
 
 export interface Playlist {

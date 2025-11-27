@@ -2,7 +2,6 @@ import { OpenAPIRoute } from 'chanfana';
 import { HTTPException } from 'hono/http-exception';
 import { AppContext, AuthContext } from './types';
 import { logger } from '../lib/logger';
-import R2Repository from '../lib/r2Repo';
 
 /**
  * Base class for API endpoints that REQUIRE admin/moderator authentication.
@@ -36,6 +35,19 @@ export abstract class AdminRoute extends OpenAPIRoute {
 
     // Validate authentication
     const auth = c.get('auth');
+
+    // Debug: Log what we received in auth context
+    logger.info('[AdminRoute] Auth context received', {
+      hasAuth: !!auth,
+      authKeys: auth ? Object.keys(auth) : [],
+      userId: auth?.userId,
+      roles: auth?.roles,
+      rolesType: auth?.roles ? typeof auth.roles : 'undefined',
+      rolesIsArray: Array.isArray(auth?.roles),
+      path: c.req.path,
+      method: c.req.method
+    });
+
     if (!auth) {
       logger.warn('[AdminRoute] Authentication required but not present', {
         path: c.req.path,
@@ -52,6 +64,7 @@ export abstract class AdminRoute extends OpenAPIRoute {
     if (!hasAdminRole) {
       logger.warn('[AdminRoute] Admin/moderator role required but not present', {
         userId: auth.userId,
+        authRoles: auth.roles,
         path: c.req.path,
         method: c.req.method
       });
@@ -71,34 +84,39 @@ export abstract class AdminRoute extends OpenAPIRoute {
 
   /**
    * Check if user has admin or moderator role
+   * Uses the roles already validated by the auth middleware
    */
   private async checkAdminRole(c: AppContext, userId: string): Promise<boolean> {
     try {
-      const profilesBucket = c.env.profiles;
-      if (!profilesBucket) {
-        logger.error('Profiles bucket not available');
+      // Get roles from auth context (already validated by adminMiddleware)
+      const auth = c.get('auth');
+
+      logger.info('[AdminRoute] checkAdminRole called', {
+        userId,
+        hasAuth: !!auth,
+        authRoles: auth?.roles,
+        authRolesLength: auth?.roles?.length
+      });
+
+      if (!auth) {
+        logger.warn('[AdminRoute] No auth context found in checkAdminRole', { userId });
         return false;
       }
 
-      const repository = new R2Repository<any>(profilesBucket);
-      const userProfile = await repository.getObject(`profile:${userId}`);
+      const roles = auth.roles || [];
+      const isAdmin = roles.includes('admin');
+      const isModerator = roles.includes('moderator');
 
-      if (userProfile) {
-        const roles = userProfile.roles || [];
-        const isAdmin = roles.includes('admin');
-        const isModerator = roles.includes('moderator');
+      logger.info('[AdminRoute] Role check result', {
+        userId,
+        roles,
+        rolesLength: roles.length,
+        isAdmin,
+        isModerator,
+        result: isAdmin || isModerator
+      });
 
-        if (isAdmin || isModerator) {
-          // Store roles in auth context
-          const auth = c.get('auth');
-          if (auth) {
-            c.set('auth', { ...auth, roles });
-          }
-          return true;
-        }
-      }
-
-      return false;
+      return isAdmin || isModerator;
     } catch (error) {
       logger.error('Error checking admin role:', error);
       return false;

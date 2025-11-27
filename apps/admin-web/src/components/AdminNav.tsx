@@ -20,16 +20,16 @@ export function AdminNav({ userEmail }: AdminNavProps) {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center">
-            <Link href="/" className="flex items-center">
+            <Link href="/dashboard" className="flex items-center">
               <span className="text-xl font-bold text-white">Al Ummah Now</span>
               <span className="ml-2 text-sm text-gray-400">Admin</span>
             </Link>
           </div>
           <div className="flex items-center gap-4">
             <Link
-              href="/"
+              href="/dashboard"
               className={`px-3 py-2 rounded ${
-                isActive('/') && pathname === '/'
+                isActive('/dashboard')
                   ? 'bg-gray-700 text-white'
                   : 'text-gray-300 hover:text-white'
               }`}
@@ -45,6 +45,16 @@ export function AdminNav({ userEmail }: AdminNavProps) {
               }`}
             >
               Moderation
+            </Link>
+            <Link
+              href="/translations"
+              className={`px-3 py-2 rounded ${
+                isActive('/translations')
+                  ? 'bg-gray-700 text-white'
+                  : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              Translations
             </Link>
             {userEmail && (
               <div className="flex items-center gap-3 ml-4 pl-4 border-l border-gray-700">

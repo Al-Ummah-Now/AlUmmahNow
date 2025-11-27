@@ -29,9 +29,10 @@ export type {
   SupportedLanguage,
   AppTranslations,
   UseI18nResult,
+  UseI18nResultExtended,
 } from './types';
 
-export { useI18n } from './hooks';
+export { useI18n, useI18nApi } from './hooks';
 
 export {
   getTranslations,

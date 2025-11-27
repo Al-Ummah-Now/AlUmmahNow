@@ -2,6 +2,7 @@ import { fromHono } from "chanfana";
 import { Hono } from "hono";
 import { cors } from 'hono/cors';
 import { authMiddleware, adminMiddleware } from "./middleware/auth";
+import { loggingMiddleware } from "./middleware/logging";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 
@@ -45,6 +46,13 @@ app.options('/api/*', (c) => {
 });
 
 // ==========================================
+// LOGGING MIDDLEWARE
+// ==========================================
+
+// Apply logging middleware to all API routes
+app.use('/api/*', loggingMiddleware);
+
+// ==========================================
 // AUTHENTICATION MIDDLEWARE
 // ==========================================
 
@@ -78,7 +86,7 @@ const openapi = fromHono(app, {
 // REGISTER ROUTERS
 // ==========================================
 
-registerAllRouters(app);
+registerAllRouters(openapi);
 
 // ==========================================
 // HEALTH CHECK

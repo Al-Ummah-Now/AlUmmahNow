@@ -1245,3 +1245,28 @@ export interface UseI18nResult {
    */
   dir: 'ltr' | 'rtl';
 }
+
+/**
+ * Extended result type for useI18nApi hook with loading states
+ */
+export interface UseI18nResultExtended extends UseI18nResult {
+  /**
+   * Whether translations are being loaded for the first time
+   */
+  isLoading: boolean;
+
+  /**
+   * Whether translations are being refetched in the background
+   */
+  isFetching: boolean;
+
+  /**
+   * Whether translations were fetched from API (not static fallback)
+   */
+  isFromApi: boolean;
+
+  /**
+   * Error if API fetch failed
+   */
+  error: Error | null;
+}

@@ -23,6 +23,7 @@ export interface AdminBindings {
   channels: R2Bucket;
   profiles: R2Bucket;
   playlists: R2Bucket;
+  global_settings: R2Bucket;
 
   // KV
   AUTH_STORAGE: KVNamespace;

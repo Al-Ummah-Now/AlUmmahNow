@@ -1,0 +1,29 @@
+{
+  "name": "al-ummah-admin-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-04-12",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "logpush": true,
+  "minify": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true,
+  "vars": {
+    "Issuer": "https://auth.alummahnow.net",
+    "NEXTJS_ENV": "development",
+    "API_URL": "http://127.0.0.1:3086",
+    "ADMIN_API_URL": "http://127.0.0.1:3090",
+    "NEXT_PUBLIC_API_URL": "http://127.0.0.1:3086",
+    "NEXT_PUBLIC_BASE_URL": "http://localhost:3091"
+  },
+  "dev": {
+    "ip": "127.0.0.1",
+    "port": 3091,
+    "local_protocol": "http"
+  }
+}

@@ -12,7 +12,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, useI18nApi } from '@/lib/i18n';
 import { parseLocaleFromPath } from '@/lib/i18n/utils';
 import type { SupportedLanguage } from '@/lib/i18n/types';
 
@@ -146,5 +146,87 @@ export function useLanguage(): UseLanguageResult {
     displayName: config.displayName,
     languages: LANGUAGE_CONFIG,
     oppositeLanguage,
+  };
+}
+
+/**
+ * Extended result type for useLanguageApi hook with loading states
+ */
+export interface UseLanguageApiResult extends UseLanguageResult {
+  /**
+   * Whether translations are loading
+   */
+  isLoading: boolean;
+
+  /**
+   * Whether translations are being fetched (including background refetch)
+   */
+  isFetching: boolean;
+
+  /**
+   * Whether translations came from API (vs static fallback)
+   */
+  isFromApi: boolean;
+
+  /**
+   * Error if translation fetch failed
+   */
+  error: Error | null;
+}
+
+/**
+ * Hook to get current language and API-based i18n utilities
+ *
+ * Similar to useLanguage but fetches translations from API with React Query caching.
+ * Falls back to static translations during loading or on error.
+ *
+ * @returns Language information, translation utilities, and loading states
+ *
+ * @example
+ * ```tsx
+ * function MyComponent() {
+ *   const { lang, t, dir, isLoading, isFromApi } = useLanguageApi();
+ *
+ *   return (
+ *     <div dir={dir}>
+ *       <h1>{t.common.appName}</h1>
+ *       {isLoading && <span>Loading...</span>}
+ *       {isFromApi && <span>Using live translations</span>}
+ *     </div>
+ *   );
+ * }
+ * ```
+ */
+export function useLanguageApi(): UseLanguageApiResult {
+  const pathname = usePathname();
+
+  // Extract language from pathname
+  const lang = useMemo(
+    () => extractLanguageFromPathname(pathname),
+    [pathname]
+  );
+
+  // Get translations for current language with API fetching
+  const { t, isLoading, isFetching, isFromApi, error } = useI18nApi(lang);
+
+  // Get language configuration
+  const config = LANGUAGE_CONFIG[lang];
+
+  // Determine opposite language (for switcher)
+  const oppositeLanguage: SupportedLanguage = lang === 'en' ? 'ar' : 'en';
+
+  return {
+    lang,
+    locale: lang,
+    t,
+    dir: config.direction,
+    isRTL: config.isRTL,
+    displayName: config.displayName,
+    languages: LANGUAGE_CONFIG,
+    oppositeLanguage,
+    isLoading,
+    isFetching,
+    isFromApi,
+    error,
   };
 }

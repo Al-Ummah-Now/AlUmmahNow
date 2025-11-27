@@ -151,7 +151,7 @@ export async function requireAuth(): Promise<AdminSession> {
 export async function login(): Promise<void> {
   const session = await getAdminSession();
   if (session) {
-    redirect('/');
+    redirect('/dashboard');
   }
 
   const client = await getAuthClient();
@@ -174,6 +174,3 @@ export async function logout(): Promise<void> {
 
   redirect('/login');
 }
-
-// Re-export subjects for callback route
-export { subjects };

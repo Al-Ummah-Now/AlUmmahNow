@@ -2,11 +2,11 @@ import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
-import R2Repository from '../lib/r2Repo';
 
 interface AuthPayload {
   sub: string;
   email?: string;
+  roles?: string[];
   iat: number;
   exp: number;
   aud?: string;
@@ -54,9 +54,22 @@ export async function authMiddleware(c: Context, next: Next) {
       }, 401);
     }
 
+    // Log the full token payload for debugging
+    logger.info('Auth token payload received', {
+      sub: payload.sub,
+      email: payload.email,
+      roles: payload.roles,
+      iat: payload.iat,
+      exp: payload.exp,
+      iss: payload.iss,
+      aud: payload.aud,
+      fullPayload: JSON.stringify(payload)
+    });
+
     c.set('auth', {
       userId: payload.sub,
       email: payload.email,
+      roles: payload.roles || [],
       payload
     } as AuthContext);
 
@@ -75,6 +88,7 @@ export async function authMiddleware(c: Context, next: Next) {
 /**
  * Admin/Moderator role check middleware
  * Must be used AFTER authMiddleware
+ * Reads roles from the auth token payload
  */
 export async function adminMiddleware(c: Context, next: Next) {
   try {
@@ -87,36 +101,32 @@ export async function adminMiddleware(c: Context, next: Next) {
       }, 401);
     }
 
-    // Check user roles from profile in R2
-    const profilesBucket = c.env.profiles;
-    if (!profilesBucket) {
-      logger.error('Profiles bucket not available');
-      return c.json({
-        success: false,
-        error: 'Internal server error'
-      }, 500);
-    }
-
-    const repository = new R2Repository<any>(profilesBucket);
-    const userProfile = await repository.getObject(`profile:${auth.userId}`);
-
-    const roles = userProfile?.roles || [];
+    // Get roles from auth context (populated from token)
+    const roles = auth.roles || [];
     const isAdmin = roles.includes('admin');
     const isModerator = roles.includes('moderator');
 
+    logger.info('Admin middleware checking roles', {
+      userId: auth.userId,
+      email: auth.email,
+      roles: roles,
+      rolesLength: roles.length,
+      isAdmin,
+      isModerator,
+      authPayload: JSON.stringify(auth.payload)
+    });
+
     if (!isAdmin && !isModerator) {
-      logger.warn(`User ${auth.userId} attempted admin access without proper role`, { roles });
+      logger.warn(`User ${auth.userId} attempted admin access without proper role`, {
+        roles,
+        email: auth.email,
+        payloadRoles: auth.payload?.roles
+      });
       return c.json({
         success: false,
         error: 'Admin or moderator role required'
       }, 403);
     }
-
-    // Add roles to auth context
-    c.set('auth', {
-      ...auth,
-      roles
-    });
 
     logger.debug(`Admin access granted for user ${auth.userId}`, { roles, isAdmin, isModerator });
 
@@ -139,8 +149,15 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
 
     const payload = JSON.parse(atob(parts[1])) as AuthPayload;
 
+    // Log the raw JWT payload for debugging
+    logger.info('JWT basic validation - raw payload', {
+      fullPayload: JSON.stringify(payload),
+      allKeys: Object.keys(payload)
+    });
+
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp && payload.exp < now) {
+      logger.warn('JWT token expired', { exp: payload.exp, now });
       return null;
     }
 
@@ -162,18 +179,35 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     const client = await getClient(env);
     const result = await client.verify(AUTH_CONFIG.SUBJECTS, token, { refresh: undefined });
 
+    // Log the raw OpenAuth verification result
+    logger.info('OpenAuth verify result', {
+      hasSubject: 'subject' in result,
+      subjectType: 'subject' in result ? result.subject?.type : undefined,
+      subjectProperties: 'subject' in result ? JSON.stringify(result.subject?.properties) : undefined,
+      hasError: 'err' in result,
+      error: 'err' in result ? JSON.stringify(result.err) : undefined,
+      fullResult: JSON.stringify(result)
+    });
+
     if ('subject' in result && result.subject) {
-      const openAuthPayload = result.subject.properties;
+      const openAuthPayload = result.subject.properties as { id?: string; email?: string; roles?: string[] };
       const now = Math.floor(Date.now() / 1000);
 
       const payload: AuthPayload = {
         sub: openAuthPayload.id || '',
         email: openAuthPayload.email || '',
+        roles: openAuthPayload.roles || [],
         exp: now + 3600,
         iat: now,
         aud: authConfig.JWT.AUDIENCE,
         iss: authConfig.JWT.ISSUER,
       };
+
+      logger.debug('Extracted auth payload from token', {
+        userId: payload.sub,
+        email: payload.email,
+        roles: payload.roles
+      });
 
       return payload;
     }

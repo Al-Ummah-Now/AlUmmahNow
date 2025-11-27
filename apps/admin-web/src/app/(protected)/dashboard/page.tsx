@@ -57,6 +57,16 @@ export default async function AdminDashboard() {
             </span>
           )}
         </Link>
+        <Link
+          href="/translations"
+          className="bg-gray-800 rounded-lg p-6 hover:bg-gray-700 transition-colors"
+        >
+          <h2 className="text-xl font-semibold text-white mb-2">Translation Management</h2>
+          <p className="text-gray-400">Edit translations for English and Arabic languages</p>
+          <span className="inline-block mt-4 bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+            EN / AR
+          </span>
+        </Link>
       </div>
     </div>
   );

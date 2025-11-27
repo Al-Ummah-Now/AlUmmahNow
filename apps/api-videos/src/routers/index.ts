@@ -10,6 +10,7 @@ import moderationRouter from './moderation.router';
 import settingsRouter from './settings.router';
 import sectionsRouter from './sections.router';
 import monitoringRouter from './monitoring.router';
+import i18nRouter from './i18n.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -27,6 +28,7 @@ import monitoringRouter from './monitoring.router';
  * - Live: /api/live-streams
  * - Analytics: /api/analytics
  * - Moderation: /api/moderation
+ * - i18n: /api/i18n
  * - Monitoring: / (root level - health, metrics, status)
  *
  * @param openapi - The main OpenAPI instance from chanfana
@@ -66,6 +68,9 @@ export function registerAllRouters(openapi: any) {
   // Sections domain - video sections (recent, popular, trending, recommended)
   openapi.route('/api/videos/sections', sectionsRouter);
 
+  // i18n domain - internationalization (translations, config, metadata)
+  openapi.route('/api/i18n', i18nRouter);
+
   // Monitoring domain - health checks, metrics, status page (root level)
   openapi.route('', monitoringRouter);
 }
@@ -83,5 +88,6 @@ export {
   moderationRouter,
   settingsRouter,
   sectionsRouter,
+  i18nRouter,
   monitoringRouter,
 };
