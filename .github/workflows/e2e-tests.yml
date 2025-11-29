@@ -58,12 +58,21 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
 
+      - name: Start web app
+        working-directory: apps/web
+        run: pnpm dev &
+
+      - name: Wait for web app
+        run: npx wait-on http://localhost:3001 --timeout 120000
+
       - name: Run E2E tests
         working-directory: apps/web
         run: pnpm exec playwright test --project=${{ matrix.browser }} --grep "@video-upload"
         env:
           CI: true
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          OPENAUTH_URL: https://auth.alummahnow.net
+          WEB_APP_URL: http://localhost:3001
 
       - name: Upload test results
         if: always()
@@ -126,12 +135,21 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps
 
+      - name: Start web app
+        working-directory: apps/web
+        run: pnpm dev &
+
+      - name: Wait for web app
+        run: npx wait-on http://localhost:3001 --timeout 120000
+
       - name: Run all E2E tests
         working-directory: apps/web
         run: pnpm exec playwright test
         env:
           CI: true
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          OPENAUTH_URL: https://auth.alummahnow.net
+          WEB_APP_URL: http://localhost:3001
 
       - name: Generate HTML report
         if: always()
@@ -197,6 +215,13 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium webkit
 
+      - name: Start web app
+        working-directory: apps/web
+        run: pnpm dev &
+
+      - name: Wait for web app
+        run: npx wait-on http://localhost:3001 --timeout 120000
+
       - name: Run mobile E2E tests
         working-directory: apps/web
         run: |
@@ -208,6 +233,8 @@ jobs:
         env:
           CI: true
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          OPENAUTH_URL: https://auth.alummahnow.net
+          WEB_APP_URL: http://localhost:3001
 
       - name: Upload mobile test results
         if: always()
