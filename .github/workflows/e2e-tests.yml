@@ -63,6 +63,7 @@ jobs:
         run: pnpm exec playwright test --project=${{ matrix.browser }} --grep "@video-upload"
         env:
           CI: true
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 
       - name: Upload test results
         if: always()
@@ -130,6 +131,7 @@ jobs:
         run: pnpm exec playwright test
         env:
           CI: true
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 
       - name: Generate HTML report
         if: always()
@@ -205,6 +207,7 @@ jobs:
           fi
         env:
           CI: true
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 
       - name: Upload mobile test results
         if: always()
