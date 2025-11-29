@@ -56,7 +56,8 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+        # Always install chromium (needed by globalSetup) plus matrix browser
+        run: pnpm exec playwright install --with-deps chromium ${{ matrix.browser }}
 
       - name: Start web app
         working-directory: apps/web
