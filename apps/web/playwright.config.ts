@@ -53,9 +53,6 @@ export default defineConfig({
 
     /* Accept downloads for file upload tests */
     acceptDownloads: true,
-
-    /* Permissions for file access */
-    permissions: ['clipboard-read', 'clipboard-write'],
   },
 
   /* Configure projects for major browsers */
