@@ -133,7 +133,8 @@ export default defineConfig({
   webServer: {
     command: 'pnpm dev',
     url: 'http://localhost:3001',
-    reuseExistingServer: !process.env.CI,
+    // Always reuse if server is already running (CI starts it manually for globalSetup)
+    reuseExistingServer: true,
     // CI runners are slower - allow 5 minutes for Next.js to start
     timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
   },
