@@ -94,7 +94,12 @@ export class WebSocketDurableObject extends DurableObject {
     });
 
     // If token is provided in URL, attempt authentication
+    // DEPRECATION: Token in URL is a security risk (exposed in logs, browser history)
+    // Clients should send token via 'authenticate' message after connection
     if (token) {
+      logger.warn('DEPRECATED: Token received in URL. Client should use authenticate message instead.', {
+        sessionId,
+      });
       await this.handleAuthentication(server, token);
     }
 

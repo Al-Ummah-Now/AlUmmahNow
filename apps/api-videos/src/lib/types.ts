@@ -153,6 +153,7 @@ export const Profile = z.object({
     dateModified: DateTime(),
     channels: z.array(Str()).default([]), // Array of channel IDs
     watchHistory: z.array(WatchHistoryEntry).default([]), // Watch history tracking
+    subscribedTo: z.array(Str()).default([]), // Channel IDs user is subscribed to (reverse index)
 });
 
 export const Channel = z.object({

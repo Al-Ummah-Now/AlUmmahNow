@@ -76,7 +76,7 @@ export function TranslationEditor({ availableLocales }: TranslationEditorProps) 
       setEditingKey(null);
       setEditValue('');
       setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch (e) {
+    } catch {
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
     }

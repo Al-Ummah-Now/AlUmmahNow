@@ -12,6 +12,7 @@ import { WatchHistoryAdd } from '../endpoints/profile/watchHistoryAdd';
 import { WatchHistoryList } from '../endpoints/profile/watchHistoryList';
 import handleAvatarUpdate from '../endpoints/profile/profileAvatarUpdate';
 import handleCoverUpdate from '../endpoints/profile/profileCoverUpdate';
+import { SubscriptionsList } from '../endpoints/channel/SubscriptionsList';
 
 const app = new Hono();
 
@@ -46,6 +47,9 @@ profileRouter.put('/profile', ProfileUpdate);
 
 // Auth required: Delete current user's profile
 profileRouter.delete('/profile', ProfileDelete);
+
+// Auth required: Get current user's subscriptions
+profileRouter.get('/profile/subscriptions', SubscriptionsList);
 
 // Auth required: Profile photo/cover uploads (non-OpenAPI handlers)
 app.put('/profile/avatar', authMiddleware, handleAvatarUpdate);

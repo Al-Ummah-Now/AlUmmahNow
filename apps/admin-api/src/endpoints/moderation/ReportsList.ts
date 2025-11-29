@@ -1,5 +1,5 @@
 import { AdminRoute, AppContext } from "../../base";
-import { Str, Num } from "chanfana";
+import { Num } from "chanfana";
 import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { ResponseError, ReportSchema } from "../../lib/types";

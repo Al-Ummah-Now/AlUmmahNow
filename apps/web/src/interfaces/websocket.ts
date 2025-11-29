@@ -18,6 +18,8 @@ export type WebSocketEventType =
   | 'user_joined'
   | 'user_left'
   | 'connection_acknowledged'
+  | 'authenticated'
+  | 'error'
   | 'heartbeat'
   | 'subscribe'
   | 'unsubscribe'

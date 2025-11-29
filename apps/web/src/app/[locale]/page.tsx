@@ -12,7 +12,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 
 const VideosPage: React.FC = () => {
   const { t, isRTL } = useLanguage();
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -47,7 +47,7 @@ const VideosPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     // Prevent duplicate initial fetch

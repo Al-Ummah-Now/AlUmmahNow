@@ -365,3 +365,34 @@ export async function getChannelPlaylists(
     functionName: 'getChannelPlaylists'
   }, getServerAuthContext, false);
 }
+
+/**
+ * Get user's subscriptions (channels they're subscribed to)
+ * GET /api/profile/subscriptions
+ */
+export async function getUserSubscriptions(
+  params?: { page?: number; pageSize?: number }
+): Promise<{
+  success: boolean;
+  data: Channel[];
+  total: number;
+  page: number;
+  pageSize: number;
+} | null> {
+  const queryString = buildQueryParams({
+    page: params?.page,
+    pageSize: params?.pageSize
+  });
+
+  return apiRequestServer<{
+    success: boolean;
+    data: Channel[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>({
+    method: 'GET',
+    url: buildApiUrl(`/api/profile/subscriptions${queryString}`),
+    functionName: 'getUserSubscriptions'
+  }, getServerAuthContext, true);
+}

@@ -178,7 +178,7 @@ export class UpdateTranslationsEndpoint extends AdminRoute {
         if (object) {
           try {
             existingData = await object.json();
-          } catch (parseError) {
+          } catch {
             logger.warn('Failed to parse existing translations');
           }
         }

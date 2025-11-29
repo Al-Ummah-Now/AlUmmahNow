@@ -33,6 +33,7 @@ export interface Profile extends Timestamps {
   timezone?: string; // IANA timezone (e.g., 'America/New_York', 'Asia/Dubai') - defaults to browser timezone
   channelsCount?: number;
   subscribersCount?: number;
+  subscribedTo?: string[]; // Channel IDs user is subscribed to (reverse index for efficient lookup)
 }
 
 export interface ProfileUpdateRequest {

@@ -45,23 +45,21 @@ export class WebSocketManager {
       this.state.status = 'connecting';
 
       try {
-        // Build WebSocket URL with authentication if available
+        // Build WebSocket URL - SECURITY: Never send token in URL
+        // Token is sent via first message after connection (industry standard)
         let wsUrl = this.config.url;
         const params = new URLSearchParams();
 
+        // Only userId in URL (not sensitive)
         if (userId || this.config.userId) {
           params.append('userId', userId || this.config.userId!);
-        }
-
-        if (this.config.authToken) {
-          params.append('token', this.config.authToken);
         }
 
         if (params.toString()) {
           wsUrl += `?${params.toString()}`;
         }
 
-        logger.info('🔌 Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+        logger.info('🔌 Connecting to WebSocket:', wsUrl);
 
         this.ws = new WebSocket(wsUrl);
 
@@ -70,6 +68,11 @@ export class WebSocketManager {
           this.state.status = 'connected';
           this.state.lastConnected = new Date();
           this.state.reconnectAttempts = 0;
+
+          // SECURITY: Send auth token via first message, not URL
+          if (this.config.authToken) {
+            this.sendAuthMessage(this.config.authToken);
+          }
 
           this.startHeartbeat();
           this.flushMessageQueue();
@@ -232,6 +235,18 @@ export class WebSocketManager {
       return;
     }
 
+    // Handle authentication response
+    if (message.type === 'authenticated') {
+      logger.info('🔐 Authentication successful', { userId: (message.data as { userId?: string })?.userId });
+      return;
+    }
+
+    // Handle auth error
+    if (message.type === 'error' && (message.data as { code?: string })?.code?.startsWith('AUTH')) {
+      logger.error('🔐 Authentication failed:', message.data);
+      return;
+    }
+
     // Handle heartbeat
     if (message.type === 'heartbeat') {
       this.sendMessage('heartbeat', { timestamp: Date.now() });
@@ -367,5 +382,28 @@ export class WebSocketManager {
 
   private generateMessageId(): string {
     return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Send authentication message to server
+   * SECURITY: Token sent via message, not URL (prevents logging/exposure)
+   */
+  private sendAuthMessage(token: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      logger.error('❌ Cannot send auth message: WebSocket not open');
+      return;
+    }
+
+    try {
+      // Send in format expected by server's ClientMessageSchema
+      const authMessage = {
+        type: 'authenticate',
+        token: token,
+      };
+      this.ws.send(JSON.stringify(authMessage));
+      logger.info('🔐 Sent authentication message');
+    } catch (error) {
+      logger.error('❌ Error sending auth message:', error);
+    }
   }
 }

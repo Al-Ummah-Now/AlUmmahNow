@@ -1,6 +1,6 @@
 import { Str } from "chanfana";
 import { z } from "zod";
-import { Channel, ResponseError } from "../../lib/types";
+import { Channel, Profile, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
@@ -102,6 +102,27 @@ export class SubscriptionDelete extends AuthenticatedRoute {
 			});
 
 			await repository.putObject(id, channel);
+
+			// Update reverse index on subscriber's profile
+			try {
+				const profileBucket = c.env.profiles;
+				type ProfileType = z.infer<typeof Profile>;
+				const profileRepository = new R2Repository<ProfileType>(profileBucket);
+				const profile = await profileRepository.getObject(userId);
+
+				if (profile && profile.subscribedTo) {
+					// Remove target channel from subscribedTo
+					const index = profile.subscribedTo.indexOf(id);
+					if (index !== -1) {
+						profile.subscribedTo.splice(index, 1);
+						await profileRepository.putObject(userId, profile);
+						logger.debug('Updated profile subscribedTo reverse index (removed)', { userId, targetChannelId: id });
+					}
+				}
+			} catch (profileError) {
+				// Log but don't fail the unsubscription - reverse index is for optimization
+				logger.warn('Failed to update profile subscribedTo index:', profileError);
+			}
 
 			return channel;
 		}

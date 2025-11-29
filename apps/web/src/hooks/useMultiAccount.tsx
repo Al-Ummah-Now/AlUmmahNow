@@ -211,7 +211,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to add account:', err);
       setError(t.errors.failedToCreate);
     }
-  }, []);
+  }, [t]);
 
   // Switch to a different account
   const switchAccount = useCallback(async (userId: string) => {
@@ -246,7 +246,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [loadSessionData, router]);
+  }, [loadSessionData, router, t]);
 
   // Remove an account
   const removeAccount = useCallback(async (userId: string) => {
@@ -272,7 +272,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to remove account:', err);
       setError(t.errors.failedToDelete);
     }
-  }, [accounts, loadSessionData, router]);
+  }, [accounts, loadSessionData, router, t]);
 
   // Switch to a different channel
   const switchToChannel = useCallback(async (channelId: string | null) => {
@@ -291,7 +291,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [loadSessionData, router]);
+  }, [loadSessionData, router, t]);
 
   // Create a new channel
   const createChannel = useCallback(async (data: ChannelCreateRequest): Promise<Channel | null> => {
@@ -312,7 +312,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       setError(t.errors.failedToCreate);
       return null;
     }
-  }, [loadSessionData, router]);
+  }, [loadSessionData, router, t]);
 
   // Reload channels (without triggering full loading state)
   const reloadChannels = useCallback(async () => {
@@ -332,7 +332,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to reload channels:', err);
       setError(t.errors.failedToLoad);
     }
-  }, []);
+  }, [t]);
 
   // Logout current account
   const logout = useCallback(async () => {
@@ -375,7 +375,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to logout:', err);
       setError(t.errors.genericError);
     }
-  }, [accounts, loadSessionData, router]);
+  }, [accounts, loadSessionData, router, t]);
 
   // Logout all accounts
   const logoutAll = useCallback(async (skipConfirmation = false) => {
@@ -415,7 +415,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to logout all:', err);
       setError(t.errors.genericError);
     }
-  }, [router]);
+  }, [router, t]);
 
   // Refresh session data
   const refresh = useCallback(async () => {

@@ -17,7 +17,7 @@ interface UseBatchUploadOptions {
 }
 
 export function useBatchUpload({
-  userId, // Deprecated - no longer used
+  userId: _userId, // Deprecated - no longer used
   channelId,
   sharedMetadata = {},
   // onUploadComplete,
@@ -134,7 +134,7 @@ export function useBatchUpload({
     } finally {
       setIsInitiating(false);
     }
-  }, [userId, channelId, sharedMetadata, onError]);
+  }, [channelId, sharedMetadata, onError]);
 
   /**
    * Remove a file from the queue
