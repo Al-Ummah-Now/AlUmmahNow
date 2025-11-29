@@ -17,7 +17,7 @@ All apps share TypeScript types via `@al-ummah/shared-types` workspace package.
 
 ## Development Process
 
-**CRITICAL**: Before writing ANY code, read and follow the development process in `BEFORE YOU CODE.MD`.
+**CRITICAL**: Before writing ANY code, read and follow the development process in `BEFORE_YOU_CODE.md`.
 
 This file contains the mandatory 10-step development workflow that MUST be followed for all development work:
 
@@ -32,7 +32,7 @@ This file contains the mandatory 10-step development workflow that MUST be follo
 9. **REVIEW CODE** - Self-review before opening PRs
 10. **OPEN PRs** - With proper descriptions and all checks passing
 
-**See `BEFORE YOU CODE.MD` for complete details, checklists, and code examples.**
+**See `BEFORE_YOU_CODE.md` for complete details, checklists, and code examples.**
 
 ## Code Quality Standards
 

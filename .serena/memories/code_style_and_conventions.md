@@ -2,7 +2,7 @@
 
 ## CRITICAL: BEFORE YOU CODE
 
-**MANDATORY**: Read and follow `BEFORE YOU CODE.MD` for the complete 10-step development workflow.
+**MANDATORY**: Read and follow `BEFORE_YOU_CODE.md` for the complete 10-step development workflow.
 
 ## Mandatory Development Process
 

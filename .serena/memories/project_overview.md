@@ -101,7 +101,7 @@ al-ummah-now/
 ├── pnpm-workspace.yaml   # pnpm workspaces
 ├── turbo.json            # Turborepo configuration
 ├── CLAUDE.md             # This guidance file
-└── BEFORE YOU CODE.MD    # Development workflow (CRITICAL)
+└── BEFORE_YOU_CODE.md    # Development workflow (CRITICAL)
 ```
 
 ## Key Features
@@ -131,7 +131,7 @@ al-ummah-now/
 
 ## Development Workflow
 
-**CRITICAL**: Always follow the 10-step development process in `BEFORE YOU CODE.MD`:
+**CRITICAL**: Always follow the 10-step development process in `BEFORE_YOU_CODE.md`:
 1. LOG EVERYTHING
 2. TDD (Test-Driven Development)
 3. BUILD

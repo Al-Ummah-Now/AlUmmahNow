@@ -2,7 +2,7 @@
 
 ## MANDATORY 10-Step Development Workflow
 
-**CRITICAL**: This checklist MUST be followed for ALL development work. See `BEFORE YOU CODE.MD` for complete details.
+**CRITICAL**: This checklist MUST be followed for ALL development work. See `BEFORE_YOU_CODE.md` for complete details.
 
 ---
 
