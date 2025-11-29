@@ -42,7 +42,8 @@
 		{
 			"binding": "PRESENCE_KV",
 			"id": "a3dbf9b2b80c4a3ea101281e19fd8407",
-			"preview_id": "156bbaeac14b4d0da721673e951bef3e"
+			"preview_id": "156bbaeac14b4d0da721673e951bef3e",
+			"remote": true
 		}
 	],
 	/**

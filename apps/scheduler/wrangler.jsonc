@@ -39,13 +39,15 @@
 	"kv_namespaces": [
 		{
 			"binding": "SCHEDULER_LOCKS",
-			"id": "scheduler-locks-kv",
-			"preview_id": "scheduler-locks-kv-preview"
+			"id": "d254593e8a0e4fc48598e95936780a70",
+			"preview_id": "b8f39eddc46f4613831fcfdc514d5eb0",
+			"remote": true
 		},
 		{
 			"binding": "SCHEDULER_METRICS",
-			"id": "scheduler-metrics-kv",
-			"preview_id": "scheduler-metrics-kv-preview"
+			"id": "9ccbc2f12cb5497c9fcc64ecf9de7b96",
+			"preview_id": "fb45dee7ba9a423aa7c5645fb9545c0f",
+			"remote": true
 		}
 	],
 

@@ -115,7 +115,15 @@ export async function queryOverdueVideos(
   const videos: ScheduledVideoMetadata[] = [];
   const now = new Date();
 
+  logger.info(`[queryOverdueVideos] Starting overdue check at ${now.toISOString()}`);
+
   try {
+    // Debug: List ALL objects in bucket first
+    const allObjects = await scheduledBucket.list({ limit: 100 });
+    logger.info(`[queryOverdueVideos] DEBUG: Total objects in bucket: ${allObjects.objects.length}`);
+    if (allObjects.objects.length > 0) {
+      logger.info(`[queryOverdueVideos] DEBUG: First 10 keys: ${allObjects.objects.slice(0, 10).map(o => o.key).join(', ')}`);
+    }
     // Generate prefixes for past hours up to maxAgeHours
     const prefixes: string[] = [];
     for (let hoursAgo = 1; hoursAgo <= maxAgeHours; hoursAgo++) {
@@ -130,24 +138,34 @@ export async function queryOverdueVideos(
     // Deduplicate prefixes (same hour can appear multiple times)
     const uniquePrefixes = [...new Set(prefixes)];
 
-    logger.info(`Checking ${uniquePrefixes.length} past hour prefixes for overdue videos`);
+    logger.info(`[queryOverdueVideos] Checking ${uniquePrefixes.length} prefixes, first 5: ${uniquePrefixes.slice(0, 5).join(', ')}`);
 
     for (const prefix of uniquePrefixes) {
       try {
         const listed = await scheduledBucket.list({ prefix });
 
+        if (listed.objects.length > 0) {
+          logger.info(`[queryOverdueVideos] Found ${listed.objects.length} objects in prefix ${prefix}`);
+        }
+
         for (const object of listed.objects) {
           try {
+            logger.info(`[queryOverdueVideos] Reading object: ${object.key}`);
             const videoObject = await scheduledBucket.get(object.key);
-            if (!videoObject) continue;
+            if (!videoObject) {
+              logger.warn(`[queryOverdueVideos] Object ${object.key} returned null`);
+              continue;
+            }
 
             const metadata: ScheduledVideoMetadata = JSON.parse(await videoObject.text());
             const scheduledDate = new Date(metadata.scheduledPublishDate);
 
+            logger.info(`[queryOverdueVideos] Video ${metadata.videoId} scheduled for ${scheduledDate.toISOString()}, now is ${now.toISOString()}`);
+
             // Only include if scheduled time has passed
             if (scheduledDate < now) {
               videos.push(metadata);
-              logger.debug(`Found overdue video: ${metadata.videoId} scheduled for ${metadata.scheduledPublishDate}`);
+              logger.info(`[queryOverdueVideos] Added overdue video: ${metadata.videoId}`);
             }
           } catch (error) {
             logger.error(`Failed to parse scheduled video ${object.key}:`, error);
@@ -159,10 +177,12 @@ export async function queryOverdueVideos(
     }
 
     if (videos.length > 0) {
-      logger.info(`Found ${videos.length} overdue videos to process`);
+      logger.info(`[queryOverdueVideos] Found ${videos.length} overdue videos to process`);
+    } else {
+      logger.info(`[queryOverdueVideos] No overdue videos found after checking all prefixes`);
     }
   } catch (error) {
-    logger.error('Failed to query overdue videos:', error);
+    logger.error('[queryOverdueVideos] Failed to query overdue videos:', error);
   }
 
   return videos;
