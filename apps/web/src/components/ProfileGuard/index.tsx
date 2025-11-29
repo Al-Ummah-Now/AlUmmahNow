@@ -4,17 +4,16 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface ProfileGuardProps {
   children: React.ReactNode;
-  locale?: 'en' | 'ar';
 }
 
-const ProfileGuard: React.FC<ProfileGuardProps> = ({ children, locale = 'en' }) => {
+const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
   logger.debug('[ProfileGuard] ========== COMPONENT RENDER ==========');
 
-  const { t } = useI18n(locale);
+  const { t, lang: locale } = useLanguage();
   const { user, loading: accountLoading } = useMultiAccount();
   const router = useRouter();
   const pathname = usePathname();

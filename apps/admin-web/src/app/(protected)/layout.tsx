@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getAdminSession } from '@/lib/auth';
+import { requireAdminRole } from '@/lib/auth';
 import { AdminNav } from '@/components/AdminNav';
 
 export default async function ProtectedLayout({
@@ -7,11 +6,8 @@ export default async function ProtectedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getAdminSession();
-
-  if (!session) {
-    redirect('/login');
-  }
+  // Verify authentication and admin role (redirects if not authorized)
+  const session = await requireAdminRole();
 
   return (
     <>

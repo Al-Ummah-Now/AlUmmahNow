@@ -2,10 +2,9 @@
 
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
 import { SearchSuggestion } from "@/lib/api/types";
 import * as VideosAPI from "@/lib/api/videos";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface SearchSuggestionsProps {
   query: string;
@@ -24,9 +23,7 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
   placeholder,
   debounceDelay = 300 // Default 300ms debounce delay
 }) => {
-  const pathname = usePathname();
-  const locale = pathname.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t } = useLanguage();
   const defaultPlaceholder = placeholder || t.search.searchPlaceholder;
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);

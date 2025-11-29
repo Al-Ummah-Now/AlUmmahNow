@@ -1,11 +1,14 @@
 import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import type { Env, BatchResult } from './types';
 import { acquireLock, releaseLock, updateLastRun } from './locks';
-import { publishVideo, queryScheduledVideos, removeSchedule } from './publisher';
+import { publishVideo, queryScheduledVideos, queryOverdueVideos, removeSchedule } from './publisher';
 import { scheduleRetries } from './retry';
 import { sendNotification } from './notifier';
 import { reportMetrics, logEvent, sendAlert, initializeMetrics, updateDailyMetrics } from './monitoring';
 import { logger } from './lib/logger';
+
+// Export the Durable Object class for Cloudflare Workers runtime
+export { SchedulerLock } from './durable-objects/SchedulerLock';
 
 export default {
   /**
@@ -39,17 +42,27 @@ export default {
         windowEnd
       );
 
-      if (scheduledVideos.length === 0) {
-        logger.debug('No videos scheduled for current window');
+      // 3. Also check for overdue videos (past scheduled time but not published)
+      const overdueVideos = await queryOverdueVideos(env.SCHEDULED_VIDEOS, 72);
+
+      // Combine and deduplicate by videoId
+      const allVideosMap = new Map<string, ScheduledVideoMetadata>();
+      for (const video of [...scheduledVideos, ...overdueVideos]) {
+        allVideosMap.set(video.videoId, video);
+      }
+      const allVideos = Array.from(allVideosMap.values());
+
+      if (allVideos.length === 0) {
+        logger.debug('No videos scheduled for current window or overdue');
         return;
       }
 
-      logger.info(`Found ${scheduledVideos.length} videos to process`);
+      logger.info(`Found ${allVideos.length} videos to process (${scheduledVideos.length} current, ${overdueVideos.length} overdue)`);
 
-      // 3. Process in batches with distributed locking
-      const results = await processBatch(scheduledVideos, env, ctx);
+      // 4. Process in batches with distributed locking
+      const results = await processBatch(allVideos, env, ctx);
 
-      // 4. Report metrics
+      // 5. Report metrics
       const duration = Date.now() - startTime;
       await reportMetrics(env.QUEUE, {
         processed: results.successful.length,
@@ -99,20 +112,22 @@ async function processBatch(
     const batch = videosToProcess.slice(i, i + CONCURRENCY);
 
     const promises = batch.map(async (video) => {
-      // Acquire distributed lock to prevent duplicate processing
-      const lockKey = `lock:${video.videoId}`;
+      // Acquire distributed lock via Durable Objects (atomic)
+      const lockKey = video.videoId; // DO uses videoId directly as the instance name
       const lockTtl = parseInt(env.LOCK_TTL, 10) || 120;
-      const locked = await acquireLock(env.SCHEDULER_LOCKS, lockKey, lockTtl);
+      const lockResult = await acquireLock(env.SCHEDULER_LOCK, lockKey, lockTtl);
 
-      if (!locked) {
+      if (!lockResult.acquired || !lockResult.token) {
         logger.debug(`Video ${video.videoId} already being processed (lock exists)`);
         return;
       }
 
+      const lockToken = lockResult.token;
+
       try {
         const publishStartTime = Date.now();
 
-        // Publish the video
+        // Publish the video (idempotent - checks if already public)
         await publishVideo(env.VIDEOS, video);
 
         // Calculate publish delay
@@ -161,8 +176,8 @@ async function processBatch(
           error: error instanceof Error ? error : new Error(String(error)),
         });
       } finally {
-        // Release lock
-        await releaseLock(env.SCHEDULER_LOCKS, lockKey);
+        // Release lock with token verification (only releases if we still own it)
+        await releaseLock(env.SCHEDULER_LOCK, lockKey, lockToken);
       }
     });
 

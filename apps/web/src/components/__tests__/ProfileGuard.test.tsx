@@ -67,6 +67,12 @@ jest.mock('next/navigation', () => ({
   usePathname: jest.fn(),
 }));
 
+// Mock useLanguage to return controlled locale
+const mockUseLanguage = jest.fn();
+jest.mock('@/hooks/useLanguage', () => ({
+  useLanguage: () => mockUseLanguage(),
+}));
+
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { usePathname } from 'next/navigation';
 
@@ -96,6 +102,17 @@ describe('ProfileGuard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUsePathname.mockReturnValue('/en/videos');
+    // Default to English locale
+    mockUseLanguage.mockReturnValue({
+      t: { profile: { checking: 'Checking profile...' } },
+      lang: 'en',
+      locale: 'en',
+      dir: 'ltr',
+      isRTL: false,
+      displayName: 'English',
+      languages: {},
+      oppositeLanguage: 'ar',
+    });
   });
 
   it('should render children when user is not authenticated', () => {
@@ -198,7 +215,7 @@ describe('ProfileGuard', () => {
     mockCheckProfileExists.mockResolvedValue(false);
 
     render(
-      <ProfileGuard locale="en">
+      <ProfileGuard>
         <div>Protected Content</div>
       </ProfileGuard>
     );
@@ -209,6 +226,17 @@ describe('ProfileGuard', () => {
   });
 
   it('should redirect to Arabic profile creation when locale is ar', async () => {
+    // Set Arabic locale
+    mockUseLanguage.mockReturnValue({
+      t: { profile: { checking: 'جاري التحقق من الملف الشخصي...' } },
+      lang: 'ar',
+      locale: 'ar',
+      dir: 'rtl',
+      isRTL: true,
+      displayName: 'العربية',
+      languages: {},
+      oppositeLanguage: 'en',
+    });
     mockUseMultiAccount.mockReturnValue(createMockContext({
       user: {
         id: 'user-123',
@@ -222,7 +250,7 @@ describe('ProfileGuard', () => {
     mockCheckProfileExists.mockResolvedValue(false);
 
     render(
-      <ProfileGuard locale="ar">
+      <ProfileGuard>
         <div>Protected Content</div>
       </ProfileGuard>
     );
@@ -266,6 +294,17 @@ describe('ProfileGuard', () => {
   });
 
   it('should show Arabic loading message when locale is ar', async () => {
+    // Set Arabic locale
+    mockUseLanguage.mockReturnValue({
+      t: { profile: { checking: 'جاري التحقق من الملف الشخصي...' } },
+      lang: 'ar',
+      locale: 'ar',
+      dir: 'rtl',
+      isRTL: true,
+      displayName: 'العربية',
+      languages: {},
+      oppositeLanguage: 'en',
+    });
     mockUseMultiAccount.mockReturnValue(createMockContext({
       user: {
         id: 'user-123',
@@ -281,7 +320,7 @@ describe('ProfileGuard', () => {
     );
 
     render(
-      <ProfileGuard locale="ar">
+      <ProfileGuard>
         <div>Protected Content</div>
       </ProfileGuard>
     );

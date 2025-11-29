@@ -1,10 +1,8 @@
 import { subjects } from './auth-subjects';
+import { logger } from '../lib/logger';
 
 // Static authentication configuration for Admin API
 export const AUTH_CONFIG = {
-  // Set to true to enable JWT signature verification
-  VERIFY_JWT_SIGNATURE: true,
-
   // OpenAuth subjects for JWT validation
   SUBJECTS: subjects,
 
@@ -21,10 +19,41 @@ export const AUTH_CONFIG = {
   ]
 } as const;
 
+/**
+ * Determines if JWT signature verification should be enabled based on environment
+ * SECURITY: Always enabled in production/staging, only disabled in development/local
+ */
+export function shouldVerifyJWTSignature(env: any): boolean {
+  const environment = env?.ENVIRONMENT?.toLowerCase() || 'production';
+
+  // SECURITY: Only allow disabled verification in development/local environments
+  const allowedDevEnvironments = ['development', 'dev', 'local'];
+  const isDevEnvironment = allowedDevEnvironments.includes(environment);
+
+  // Always verify in production and staging
+  const shouldVerify = !isDevEnvironment;
+
+  if (!shouldVerify) {
+    logger.warn('JWT signature verification DISABLED', {
+      environment,
+      reason: 'Running in development/local mode',
+      security_risk: 'This should NEVER happen in production'
+    });
+  } else {
+    logger.info('JWT signature verification ENABLED', {
+      environment,
+      security: 'Production-grade token validation active'
+    });
+  }
+
+  return shouldVerify;
+}
+
 // Dynamic configuration that depends on environment variables
 export function getAuthConfig(env: any) {
   return {
     ...AUTH_CONFIG,
+    VERIFY_JWT_SIGNATURE: shouldVerifyJWTSignature(env),
     JWT: {
       ...AUTH_CONFIG.JWT,
       ISSUER: env.Issuer,

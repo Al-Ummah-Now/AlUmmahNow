@@ -25,9 +25,31 @@ app.onError((err, c) => {
 // GLOBAL MIDDLEWARE
 // ==========================================
 
+// CORS origin validation
+const isAllowedOrigin = (origin: string): boolean => {
+  const allowedOrigins = [
+    // Production
+    'https://alummahnow.net',
+    'https://www.alummahnow.net',
+    'https://admin.alummahnow.net',
+    // Staging
+    'https://staging.alummahnow.net',
+    'https://admin-staging.alummahnow.net',
+    // Development
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3090',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:3086',
+    'http://127.0.0.1:3090',
+  ];
+  return allowedOrigins.includes(origin);
+};
+
 // Setup CORS
 app.use('*', cors({
-  origin: '*',
+  origin: (origin) => isAllowedOrigin(origin) ? origin : '',
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposeHeaders: ['Content-Length'],
@@ -37,7 +59,11 @@ app.use('*', cors({
 
 // OPTIONS handler for API endpoints
 app.options('/api/*', (c) => {
-  c.header('Access-Control-Allow-Origin', '*');
+  const origin = c.req.header('Origin') || '';
+  const allowedOrigin = isAllowedOrigin(origin) ? origin : '';
+  if (allowedOrigin) {
+    c.header('Access-Control-Allow-Origin', allowedOrigin);
+  }
   c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   c.header('Access-Control-Max-Age', '600');

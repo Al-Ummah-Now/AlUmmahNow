@@ -54,9 +54,11 @@ export function WeekView({
     });
   }, [locale]);
 
-  // Custom time formatting for localized numbers
+  // Custom time formatting - show full time with minutes for each slot
+  // Hide event time range (position indicates time, tooltip shows details)
   const formats = useMemo(() => ({
-    timeGutterFormat: (date: Date) => formatTime(date, locale, true),
+    timeGutterFormat: (date: Date) => formatTime(date, locale, false, false),
+    eventTimeRangeFormat: () => '',
   }), [locale]);
 
   // Custom event component renderer
@@ -105,8 +107,8 @@ export function WeekView({
         onNavigate={onNavigate}
         onSelectEvent={handleSelectEvent}
         rtl={isRTL}
-        step={15}
-        timeslots={1}
+        step={5}
+        timeslots={3}
         formats={formats}
         components={{
           toolbar: CustomToolbar,

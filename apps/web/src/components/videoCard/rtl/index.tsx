@@ -1,15 +1,13 @@
 "use client";
 import React from "react";
-import { redirect, usePathname } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import Image from "next/image";
 import { VideoObject, getLocalizedValue } from "@al-ummah/shared-types";
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const VideoCardRTL: React.FC<VideoObject> = (video) => {
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t, lang: locale } = useLanguage();
 
   const title = getLocalizedValue(video.titleLocalized, video.title, locale);
 

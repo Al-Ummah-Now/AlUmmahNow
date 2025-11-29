@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
-import { SubtitleCue } from '@/lib/api/subtitles';
+import type { SubtitleCue } from '@/lib/api/subtitles-types';
 import { formatSubtitleTime } from '@/lib/api/subtitle-utils';
 import { useLanguage } from '@/hooks/useLanguage';
 

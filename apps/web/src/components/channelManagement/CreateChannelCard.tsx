@@ -1,6 +1,6 @@
 import React from 'react';
 import { CreateChannelCardProps } from './types';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 
 /**
  * CreateChannelCard Component
@@ -8,9 +8,8 @@ import { useI18n } from '@/lib/i18n';
  */
 export const CreateChannelCard: React.FC<CreateChannelCardProps> = ({
   onClick,
-  lang = 'en',
 }) => {
-  const { t } = useI18n(lang);
+  const { t, lang } = useLanguage();
 
   return (
     <div

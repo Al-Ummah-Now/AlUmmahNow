@@ -7,9 +7,9 @@ import {
   listSubtitles,
   deleteSubtitle,
   setDefaultSubtitle,
-  SubtitleTrack,
-  SUPPORTED_LANGUAGES,
 } from '@/lib/api/subtitles';
+import type { SubtitleTrack } from '@/lib/api/subtitles-types';
+import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitleUploadModal from './SubtitleUploadModal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

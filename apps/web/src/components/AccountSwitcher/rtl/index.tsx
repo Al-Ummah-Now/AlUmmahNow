@@ -9,11 +9,11 @@
 
 import { useState } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { Plus, Check, LogOut, ChevronDown } from 'lucide-react';
 
 export default function AccountSwitcherRTL() {
-  const { t } = useI18n('ar');
+  const { t } = useLanguage();
 
   const {
     user,

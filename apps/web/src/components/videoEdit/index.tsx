@@ -13,6 +13,7 @@ import ThumbnailSelector from './ThumbnailSelector';
 import SubtitleUploadSection from './SubtitleUploadSection';
 import ChapterEditor from './ChapterEditor';
 import ChapterUpload from './ChapterUpload';
+import ScheduleSection from './ScheduleSection';
 
 interface VideoEditProps {
   video: VideoObject;
@@ -354,6 +355,22 @@ export default function VideoEdit({
             </label>
           </div>
         </div>
+
+        {/* Schedule Publication Section */}
+        <ScheduleSection
+          videoId={video.id}
+          channelId={channelId}
+          isPublic={formData.isPublic}
+          scheduledPublishDate={video.scheduledPublishDate}
+          scheduledPublishStatus={video.scheduledPublishStatus}
+          onScheduleChange={(scheduled, date) => {
+            if (scheduled && date) {
+              setSuccess('Video scheduled successfully');
+            } else if (!scheduled) {
+              setSuccess('Schedule cancelled');
+            }
+          }}
+        />
 
         {/* Subtitles/Captions Section */}
         <SubtitleUploadSection

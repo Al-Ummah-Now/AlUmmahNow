@@ -1,17 +1,15 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import { useAuth } from '@/components/AuthProvider/authContext';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 
 const ProfileEditPage = () => {
-  const params = useParams();
-  const locale = params.locale as string;
-  const { t } = useI18n(locale as 'en' | 'ar');
+  const { t, lang: locale } = useLanguage();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [firstNameEn, setFirstNameEn] = useState('');

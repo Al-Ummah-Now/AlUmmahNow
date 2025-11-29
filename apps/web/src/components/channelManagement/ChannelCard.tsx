@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChannelCardProps } from './types';
 import { Button } from '@/components/ui/button';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 
 /**
@@ -13,9 +13,8 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   onEdit,
   onDelete,
   onView,
-  lang = 'en',
 }) => {
-  const { t, dir } = useI18n(lang);
+  const { t, dir, lang } = useLanguage();
 
   const name = getLocalizedValue(channel.nameLocalized, channel.name, lang);
   const description = getLocalizedValue(channel.descriptionLocalized, channel.description, lang);

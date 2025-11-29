@@ -103,6 +103,72 @@ export async function queryScheduledVideos(
 }
 
 /**
+ * Query overdue scheduled videos (past their scheduled time but not yet published)
+ * @param scheduledBucket R2 bucket containing scheduled metadata
+ * @param maxAgeHours Maximum age in hours to look back (default 72 hours)
+ * @returns Array of overdue scheduled video metadata
+ */
+export async function queryOverdueVideos(
+  scheduledBucket: R2Bucket,
+  maxAgeHours: number = 72
+): Promise<ScheduledVideoMetadata[]> {
+  const videos: ScheduledVideoMetadata[] = [];
+  const now = new Date();
+
+  try {
+    // Generate prefixes for past hours up to maxAgeHours
+    const prefixes: string[] = [];
+    for (let hoursAgo = 1; hoursAgo <= maxAgeHours; hoursAgo++) {
+      const pastTime = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
+      const year = pastTime.getUTCFullYear();
+      const month = String(pastTime.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(pastTime.getUTCDate()).padStart(2, '0');
+      const hour = String(pastTime.getUTCHours()).padStart(2, '0');
+      prefixes.push(`${year}-${month}-${day}/${hour}/`);
+    }
+
+    // Deduplicate prefixes (same hour can appear multiple times)
+    const uniquePrefixes = [...new Set(prefixes)];
+
+    logger.info(`Checking ${uniquePrefixes.length} past hour prefixes for overdue videos`);
+
+    for (const prefix of uniquePrefixes) {
+      try {
+        const listed = await scheduledBucket.list({ prefix });
+
+        for (const object of listed.objects) {
+          try {
+            const videoObject = await scheduledBucket.get(object.key);
+            if (!videoObject) continue;
+
+            const metadata: ScheduledVideoMetadata = JSON.parse(await videoObject.text());
+            const scheduledDate = new Date(metadata.scheduledPublishDate);
+
+            // Only include if scheduled time has passed
+            if (scheduledDate < now) {
+              videos.push(metadata);
+              logger.debug(`Found overdue video: ${metadata.videoId} scheduled for ${metadata.scheduledPublishDate}`);
+            }
+          } catch (error) {
+            logger.error(`Failed to parse scheduled video ${object.key}:`, error);
+          }
+        }
+      } catch (error) {
+        logger.error(`Failed to list prefix ${prefix}:`, error);
+      }
+    }
+
+    if (videos.length > 0) {
+      logger.info(`Found ${videos.length} overdue videos to process`);
+    }
+  } catch (error) {
+    logger.error('Failed to query overdue videos:', error);
+  }
+
+  return videos;
+}
+
+/**
  * Remove a video from the scheduled bucket after successful publish
  * @param scheduledBucket R2 bucket containing scheduled metadata
  * @param metadata Scheduled video metadata

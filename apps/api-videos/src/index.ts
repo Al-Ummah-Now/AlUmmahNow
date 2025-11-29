@@ -29,9 +29,31 @@ app.onError(errorHandler);
 // GLOBAL MIDDLEWARE
 // ==========================================
 
+// CORS origin validation
+const isAllowedOrigin = (origin: string): boolean => {
+	const allowedOrigins = [
+		// Production
+		'https://alummahnow.net',
+		'https://www.alummahnow.net',
+		'https://admin.alummahnow.net',
+		// Staging
+		'https://staging.alummahnow.net',
+		'https://admin-staging.alummahnow.net',
+		// Development
+		'http://localhost:3000',
+		'http://localhost:3001',
+		'http://localhost:3090',
+		'http://127.0.0.1:3000',
+		'http://127.0.0.1:3001',
+		'http://127.0.0.1:3086',
+		'http://127.0.0.1:3090',
+	];
+	return allowedOrigins.includes(origin);
+};
+
 // Setup CORS for all routes
 app.use('*', cors({
-	origin: '*',
+	origin: (origin) => isAllowedOrigin(origin) ? origin : '',
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
 	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
 	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata'],
@@ -48,7 +70,11 @@ app.use('*', loggingMiddleware);
 
 // Explicit OPTIONS handler for profile endpoints
 app.options('/api/profile*', (c) => {
-	c.header('Access-Control-Allow-Origin', '*');
+	const origin = c.req.header('Origin') || '';
+	const allowedOrigin = isAllowedOrigin(origin) ? origin : '';
+	if (allowedOrigin) {
+		c.header('Access-Control-Allow-Origin', allowedOrigin);
+	}
 	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
 	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, channelId, userId');
 	c.header('Access-Control-Max-Age', '600');
@@ -58,7 +84,11 @@ app.options('/api/profile*', (c) => {
 
 // Explicit OPTIONS handler for all API endpoints
 app.options('/api/*', (c) => {
-	c.header('Access-Control-Allow-Origin', '*');
+	const origin = c.req.header('Origin') || '';
+	const allowedOrigin = isAllowedOrigin(origin) ? origin : '';
+	if (allowedOrigin) {
+		c.header('Access-Control-Allow-Origin', allowedOrigin);
+	}
 	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
 	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, channelId, userId, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Upload-Defer-Length, Upload-Concat');
 	c.header('Access-Control-Expose-Headers', 'Location, Tus-Resumable, Tus-Version, Tus-Max-Size, Tus-Extension, Upload-Offset, Upload-Length, Upload-Metadata');

@@ -5,14 +5,13 @@
  */
 
 import { getApiUrl } from "@/lib/runtime-config";
+import { logger } from "@/lib/logger-client";
 import {
   TranslationData,
   I18nConfig,
   I18nMetadata,
   SupportedLanguage,
 } from "@al-ummah/shared-types";
-
-const baseUrl = getApiUrl();
 
 // Cache for translations to avoid redundant fetches
 const translationsCache = new Map<string, { data: TranslationData; timestamp: number }>();
@@ -46,7 +45,9 @@ export async function getTranslations(
   }
 
   try {
-    const response = await fetch(`${baseUrl}/api/i18n/translations/${locale}`, {
+    const apiUrl = getApiUrl();
+    logger.info('i18n API fetch', { locale, apiUrl });
+    const response = await fetch(`${apiUrl}/api/i18n/translations/${locale}`, {
       headers: {
         Accept: "application/json",
       },
@@ -56,9 +57,7 @@ export async function getTranslations(
     });
 
     if (!response.ok) {
-      console.error(
-        `[i18n API] Failed to fetch translations for ${locale}: ${response.status}`
-      );
+      logger.error('Failed to fetch translations', { locale, status: response.status });
       return null;
     }
 
@@ -75,7 +74,7 @@ export async function getTranslations(
 
     return null;
   } catch (error) {
-    console.error(`[i18n API] Error fetching translations for ${locale}:`, error);
+    logger.error('Error fetching translations', { locale, error });
     return null;
   }
 }
@@ -85,7 +84,7 @@ export async function getTranslations(
  */
 export async function getI18nConfig(): Promise<I18nConfig | null> {
   try {
-    const response = await fetch(`${baseUrl}/api/i18n/config`, {
+    const response = await fetch(`${getApiUrl()}/api/i18n/config`, {
       headers: {
         Accept: "application/json",
       },
@@ -95,7 +94,7 @@ export async function getI18nConfig(): Promise<I18nConfig | null> {
     });
 
     if (!response.ok) {
-      console.error(`[i18n API] Failed to fetch i18n config: ${response.status}`);
+      logger.error('Failed to fetch i18n config', { status: response.status });
       return null;
     }
 
@@ -107,7 +106,7 @@ export async function getI18nConfig(): Promise<I18nConfig | null> {
 
     return null;
   } catch (error) {
-    console.error("[i18n API] Error fetching i18n config:", error);
+    logger.error('Error fetching i18n config', { error });
     return null;
   }
 }
@@ -117,7 +116,7 @@ export async function getI18nConfig(): Promise<I18nConfig | null> {
  */
 export async function getI18nMetadata(): Promise<I18nMetadata | null> {
   try {
-    const response = await fetch(`${baseUrl}/api/i18n/metadata`, {
+    const response = await fetch(`${getApiUrl()}/api/i18n/metadata`, {
       headers: {
         Accept: "application/json",
       },
@@ -128,7 +127,7 @@ export async function getI18nMetadata(): Promise<I18nMetadata | null> {
     });
 
     if (!response.ok) {
-      console.error(`[i18n API] Failed to fetch i18n metadata: ${response.status}`);
+      logger.error('Failed to fetch i18n metadata', { status: response.status });
       return null;
     }
 
@@ -140,7 +139,7 @@ export async function getI18nMetadata(): Promise<I18nMetadata | null> {
 
     return null;
   } catch (error) {
-    console.error("[i18n API] Error fetching i18n metadata:", error);
+    logger.error('Error fetching i18n metadata', { error });
     return null;
   }
 }

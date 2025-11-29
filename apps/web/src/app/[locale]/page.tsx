@@ -75,7 +75,7 @@ const VideosPage: React.FC = () => {
           }`}
           style={{ direction: isRTL ? "rtl" : "ltr" }}
         >
-          <h1 className="text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
+<h1 className="text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400">{t.common.loading}</p>
           ) : (

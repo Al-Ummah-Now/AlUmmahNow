@@ -194,11 +194,21 @@ export function formatCalendarHeader(
  * @param date - Date to format
  * @param locale - Locale for formatting
  * @param use24Hour - Whether to use 24-hour format
+ * @param compact - Whether to use compact format (hour only, no minutes if :00)
  * @returns Formatted time string
  */
-export function formatTime(date: Date, locale: 'en' | 'ar', use24Hour = false): string {
+export function formatTime(date: Date, locale: 'en' | 'ar', use24Hour = false, compact = false): string {
   // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals
   const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
+
+  // Compact format: show just the hour (e.g., "11 AM" instead of "11:00 AM")
+  if (compact) {
+    const options: Intl.DateTimeFormatOptions = {
+      hour: 'numeric',
+      hour12: !use24Hour,
+    };
+    return new Intl.DateTimeFormat(localeCode, options).format(date);
+  }
 
   const options: Intl.DateTimeFormatOptions = {
     hour: '2-digit',

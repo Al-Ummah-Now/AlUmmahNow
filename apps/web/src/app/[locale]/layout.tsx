@@ -15,7 +15,6 @@ import React from 'react';
 import { notFound } from 'next/navigation';
 import ProfileGuard from '@/components/ProfileGuard';
 import { isLocaleSupported, getTextDirection } from '@/lib/i18n/utils';
-import type { SupportedLocale } from '@/lib/i18n/locales';
 
 interface LocaleLayoutProps {
   children: React.ReactNode;
@@ -49,7 +48,7 @@ export default async function LocaleLayout({
   }
 
   return (
-    <ProfileGuard locale={locale as SupportedLocale}>
+    <ProfileGuard>
       <div dir={dir} lang={locale}>
         {children}
       </div>

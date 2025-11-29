@@ -60,9 +60,9 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
-  // Get minimum datetime (5 minutes from now)
+  // Get minimum datetime (15 minutes from now to account for upload time)
   const getMinDateTime = (): string => {
-    const min = minDate || new Date(Date.now() + 5 * 60 * 1000);
+    const min = minDate || new Date(Date.now() + 15 * 60 * 1000);
     return formatDateTimeLocal(min);
   };
 
@@ -86,7 +86,8 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
       // Convert local datetime to UTC
       const localDate = new Date(value);
       const now = new Date();
-      const minTime = minDate || new Date(now.getTime() + 5 * 60 * 1000);
+      // 15 minute minimum to account for upload time
+      const minTime = minDate || new Date(now.getTime() + 15 * 60 * 1000);
       const maxTime = maxDate || new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
       // Validate
@@ -97,7 +98,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
       }
 
       if (localDate < minTime) {
-        setError(t.schedule?.minimumScheduleTime || 'Videos must be scheduled at least 5 minutes in advance');
+        setError(t.schedule?.minimumScheduleTime || 'Videos must be scheduled at least 15 minutes in advance to allow for upload time');
         onScheduleChange(null);
         return;
       }

@@ -36,6 +36,13 @@ export interface VideoObject {
     comments?: Comments[]; // Optional array of Comments
     likes?: Likes[];       // Optional array of Likes
     dislikes?: Dislikes[]; // Optional array of Dislikes
+    // Scheduling fields
+    scheduledPublishDate?: string;        // ISO 8601 datetime in UTC
+    scheduledPublishTimezone?: string;    // IANA timezone (e.g., 'America/New_York')
+    scheduledPublishStatus?: 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled';
+    scheduledBy?: string;                 // User ID who scheduled
+    scheduledAt?: string;                 // When it was scheduled
+    publishedViaSchedule?: boolean;       // True if published via scheduler
 };
 
 export type ResponseError = {

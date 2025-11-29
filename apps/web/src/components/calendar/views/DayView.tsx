@@ -54,9 +54,11 @@ export function DayView({
     });
   }, [locale]);
 
-  // Custom time formatting for localized numbers
+  // Custom time formatting - show full time with minutes for each slot
+  // Hide event time range (position indicates time, tooltip shows details)
   const formats = useMemo(() => ({
-    timeGutterFormat: (date: Date) => formatTime(date, locale, true),
+    timeGutterFormat: (date: Date) => formatTime(date, locale, false, false),
+    eventTimeRangeFormat: () => '',
   }), [locale]);
 
   // Custom event component renderer
@@ -93,7 +95,7 @@ export function DayView({
   const CustomToolbar = () => null;
 
   return (
-    <div className="calendar-container h-[900px]" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="calendar-container calendar-day-view h-[900px]" dir={isRTL ? 'rtl' : 'ltr'}>
       <Calendar
         localizer={localizer}
         events={events}
@@ -105,8 +107,8 @@ export function DayView({
         onNavigate={onNavigate}
         onSelectEvent={handleSelectEvent}
         rtl={isRTL}
-        step={15}
-        timeslots={1}
+        step={5}
+        timeslots={3}
         formats={formats}
         components={{
           toolbar: CustomToolbar,
@@ -120,7 +122,7 @@ export function DayView({
         style={{ height: '100%' }}
         popup
         selectable={false}
-        className="scheduled-video-calendar"
+        className="scheduled-video-calendar scheduled-video-calendar-day"
       />
     </div>
   );

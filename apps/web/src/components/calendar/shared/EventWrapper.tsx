@@ -9,6 +9,7 @@
 import React from 'react';
 import { CalendarEvent } from '../../scheduled-videos/CalendarEvent';
 import type { VideoObject } from '@/interfaces';
+import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
 
 export interface CalendarEventData {
   id: string;
@@ -25,12 +26,16 @@ interface EventWrapperProps {
 }
 
 export const EventWrapper: React.FC<EventWrapperProps> = ({ event, onClick, locale }) => {
+  // Extract status from the video resource
+  const status = (event.resource as VideoObject & { scheduledPublishStatus?: ScheduledPublishStatus }).scheduledPublishStatus || 'scheduled';
+
   return (
     <CalendarEvent
       id={event.id}
       title={event.title}
       thumbnailUrl={event.resource.thumbnailUrl}
       scheduledDate={event.start}
+      status={status}
       onClick={onClick}
       locale={locale}
       className="h-full"

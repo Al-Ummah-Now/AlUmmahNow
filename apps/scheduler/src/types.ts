@@ -15,6 +15,7 @@ export interface Env {
   QUEUE: Queue;
   SCHEDULER_LOCKS: KVNamespace;
   SCHEDULER_METRICS: KVNamespace;
+  SCHEDULER_LOCK: DurableObjectNamespace;
   MAX_RETRIES: string;
   BATCH_SIZE: string;
   LOCK_TTL: string;

@@ -167,8 +167,8 @@ export default function ScheduledVideosPage() {
           limit: 100, // Fetch up to 100 scheduled videos
         },
         {
-          
-          channelId: auth.user.id, // Use user ID as fallback channel
+          // Use first channel ID (auth header requires a valid channel ID, not user ID)
+          channelId: channelIds[0],
         }
       );
 

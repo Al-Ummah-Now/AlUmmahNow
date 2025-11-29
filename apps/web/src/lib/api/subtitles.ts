@@ -1,43 +1,14 @@
 'use server';
 
-import { getApiUrl } from "@/lib/runtime-config";
 import { ApiResponse, ApiHeaders } from "./types";
+import { buildApiUrl } from "./api-client";
+import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
+import type { SubtitleTrack, SubtitleCue, SubtitleValidationResult } from "./subtitles-types";
 
-
-const baseUrl = getApiUrl();
-
-/**
- * Subtitle Track Type
- */
-export interface SubtitleTrack {
-  videoId: string;
-  language: string;
-  label: string;
-  url: string;
-  isDefault: boolean;
-  fileSize: number;
-  uploadDate: string;
-  status: 'active' | 'processing' | 'failed';
-}
-
-/**
- * Supported Languages (10 languages)
- */
-export const SUPPORTED_LANGUAGES = [
-  { code: 'ar', name: 'Arabic', nameAr: 'العربية', rtl: true, flag: '🇸🇦' },
-  { code: 'en', name: 'English', nameAr: 'الإنجليزية', rtl: false, flag: '🇬🇧' },
-  { code: 'ur', name: 'Urdu', nameAr: 'الأردية', rtl: true, flag: '🇵🇰' },
-  { code: 'fr', name: 'French', nameAr: 'الفرنسية', rtl: false, flag: '🇫🇷' },
-  { code: 'id', name: 'Indonesian', nameAr: 'الإندونيسية', rtl: false, flag: '🇮🇩' },
-  { code: 'tr', name: 'Turkish', nameAr: 'التركية', rtl: false, flag: '🇹🇷' },
-  { code: 'ms', name: 'Malay', nameAr: 'الملايو', rtl: false, flag: '🇲🇾' },
-  { code: 'bn', name: 'Bengali', nameAr: 'البنغالية', rtl: false, flag: '🇧🇩' },
-  { code: 'de', name: 'German', nameAr: 'الألمانية', rtl: false, flag: '🇩🇪' },
-  { code: 'es', name: 'Spanish', nameAr: 'الإسبانية', rtl: false, flag: '🇪🇸' },
-] as const;
-
-export type SupportedLanguageCode = typeof SUPPORTED_LANGUAGES[number]['code'];
+// Re-export types for convenience
+export type { SubtitleTrack, SubtitleCue, SubtitleValidationResult };
+export type { SupportedLanguageCode } from "./subtitles-types";
 
 /**
  * Upload subtitle file for a video
@@ -50,39 +21,38 @@ export async function uploadSubtitle(
   isDefault: boolean,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ subtitle: SubtitleTrack }> | null> {
-  try {
-    const formData = new FormData();
-    formData.append('subtitle', file);
-    formData.append('language', language);
-    formData.append('isDefault', isDefault.toString());
+  const formData = new FormData();
+  formData.append('subtitle', file);
+  formData.append('language', language);
+  formData.append('isDefault', isDefault.toString());
 
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/subtitles`,
-      {
-        method: 'POST',
-        headers: {
-          'channelId': headers.channelId,
-        },
-        body: formData,
-      }
-    );
+  const authContext = await getServerAuthContext();
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Error uploading subtitle: ${response.statusText}`);
+  const response = await fetch(
+    buildApiUrl(`/api/videos/${videoId}/subtitles`),
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authContext?.accessToken || ''}`,
+        'channelId': headers.channelId,
+      },
+      body: formData,
     }
+  );
 
-    return await response.json();
-  } catch (error) {
-    logger.error('uploadSubtitle error:', error);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    logger.error('uploadSubtitle error:', errorData);
     return {
       success: false,
       error: {
         code: 'UPLOAD_ERROR',
-        message: error instanceof Error ? error.message : 'Failed to upload subtitle'
+        message: errorData.error || `Error uploading subtitle: ${response.statusText}`
       }
     };
   }
+
+  return response.json();
 }
 
 /**
@@ -93,28 +63,27 @@ export async function listSubtitles(
   videoId: string,
   headers?: ApiHeaders
 ): Promise<SubtitleTrack[]> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/subtitles`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
+  const authContext = await getServerAuthContext();
 
-    if (!response.ok) {
-      throw new Error(`Error fetching subtitles: ${response.statusText}`);
+  const response = await fetch(
+    buildApiUrl(`/api/videos/${videoId}/subtitles`),
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authContext?.accessToken && { 'Authorization': `Bearer ${authContext.accessToken}` }),
+        ...(headers?.channelId && { 'channelId': headers.channelId }),
+      },
     }
+  );
 
-    const data = await response.json();
-    return data.subtitles || [];
-  } catch (error) {
-    logger.error('listSubtitles error:', error);
+  if (!response.ok) {
+    logger.error('listSubtitles error:', response.statusText);
     return [];
   }
+
+  const data = await response.json();
+  return data.subtitles || [];
 }
 
 /**
@@ -126,27 +95,26 @@ export async function getSubtitle(
   language: string,
   headers?: ApiHeaders
 ): Promise<string | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/subtitles/${language}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'text/plain',
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
+  const authContext = await getServerAuthContext();
 
-    if (!response.ok) {
-      throw new Error(`Error fetching subtitle: ${response.statusText}`);
+  const response = await fetch(
+    buildApiUrl(`/api/videos/${videoId}/subtitles/${language}`),
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'text/plain',
+        ...(authContext?.accessToken && { 'Authorization': `Bearer ${authContext.accessToken}` }),
+        ...(headers?.channelId && { 'channelId': headers.channelId }),
+      },
     }
+  );
 
-    return await response.text();
-  } catch (error) {
-    logger.error('getSubtitle error:', error);
+  if (!response.ok) {
+    logger.error('getSubtitle error:', response.statusText);
     return null;
   }
+
+  return response.text();
 }
 
 /**
@@ -158,33 +126,32 @@ export async function deleteSubtitle(
   language: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ success: boolean }> | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/subtitles/${language}`,
-      {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'channelId': headers.channelId,
-        },
-      }
-    );
+  const authContext = await getServerAuthContext();
 
-    if (!response.ok) {
-      throw new Error(`Error deleting subtitle: ${response.statusText}`);
+  const response = await fetch(
+    buildApiUrl(`/api/videos/${videoId}/subtitles/${language}`),
+    {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authContext?.accessToken || ''}`,
+        'channelId': headers.channelId,
+      },
     }
+  );
 
-    return await response.json();
-  } catch (error) {
-    logger.error('deleteSubtitle error:', error);
+  if (!response.ok) {
+    logger.error('deleteSubtitle error:', response.statusText);
     return {
       success: false,
       error: {
         code: 'DELETE_ERROR',
-        message: error instanceof Error ? error.message : 'Failed to delete subtitle'
+        message: `Error deleting subtitle: ${response.statusText}`
       }
     };
   }
+
+  return response.json();
 }
 
 /**
@@ -196,49 +163,32 @@ export async function setDefaultSubtitle(
   language: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ success: boolean }> | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/subtitles/${language}/default`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'channelId': headers.channelId,
-        },
-      }
-    );
+  const authContext = await getServerAuthContext();
 
-    if (!response.ok) {
-      throw new Error(`Error setting default subtitle: ${response.statusText}`);
+  const response = await fetch(
+    buildApiUrl(`/api/videos/${videoId}/subtitles/${language}/default`),
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authContext?.accessToken || ''}`,
+        'channelId': headers.channelId,
+      },
     }
+  );
 
-    return await response.json();
-  } catch (error) {
-    logger.error('setDefaultSubtitle error:', error);
+  if (!response.ok) {
+    logger.error('setDefaultSubtitle error:', response.statusText);
     return {
       success: false,
       error: {
         code: 'SET_DEFAULT_ERROR',
-        message: error instanceof Error ? error.message : 'Failed to set default subtitle'
+        message: `Error setting default subtitle: ${response.statusText}`
       }
     };
   }
-}
 
-/**
- * Client-side subtitle validation (before upload)
- */
-export interface SubtitleValidationResult {
-  valid: boolean;
-  errors: string[];
-  warnings: string[];
-  preview?: SubtitleCue[];
-}
-
-export interface SubtitleCue {
-  startTime: string;
-  endTime: string;
-  text: string;
+  return response.json();
 }
 
 /**
@@ -268,53 +218,47 @@ export async function validateSubtitleFile(
     return { valid: false, errors, warnings };
   }
 
-  try {
-    const content = await file.text();
+  const content = await file.text();
 
-    // Basic content validation
-    if (!content || content.trim().length === 0) {
-      errors.push('File is empty');
-      return { valid: false, errors, warnings };
-    }
-
-    // Parse and validate subtitle format
-    const cues = parseSubtitleContent(content, fileName);
-
-    if (cues.length === 0) {
-      errors.push('No valid subtitle cues found');
-      return { valid: false, errors, warnings };
-    }
-
-    // Validate max cues (10,000 limit)
-    if (cues.length > 10000) {
-      errors.push('File contains too many cues (max 10,000)');
-      return { valid: false, errors, warnings };
-    }
-
-    // Check for timing issues
-    const timingIssues = validateTiming(cues);
-    if (timingIssues.length > 0) {
-      warnings.push(...timingIssues);
-    }
-
-    // Get first 5 cues for preview
-    preview.push(...cues.slice(0, 5));
-
-    return {
-      valid: errors.length === 0,
-      errors,
-      warnings,
-      preview
-    };
-  } catch (_error) {
-    errors.push('Failed to parse subtitle file');
+  // Basic content validation
+  if (!content || content.trim().length === 0) {
+    errors.push('File is empty');
     return { valid: false, errors, warnings };
   }
+
+  // Parse and validate subtitle format
+  const cues = parseSubtitleContent(content, fileName);
+
+  if (cues.length === 0) {
+    errors.push('No valid subtitle cues found');
+    return { valid: false, errors, warnings };
+  }
+
+  // Validate max cues (10,000 limit)
+  if (cues.length > 10000) {
+    errors.push('File contains too many cues (max 10,000)');
+    return { valid: false, errors, warnings };
+  }
+
+  // Check for timing issues
+  const timingIssues = validateTiming(cues);
+  if (timingIssues.length > 0) {
+    warnings.push(...timingIssues);
+  }
+
+  // Get first 5 cues for preview
+  preview.push(...cues.slice(0, 5));
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    preview
+  };
 }
 
-/**
- * Parse subtitle content from different formats
- */
+// Internal helper functions (not exported)
+
 function parseSubtitleContent(content: string, fileName: string): SubtitleCue[] {
   if (fileName.endsWith('.srt')) {
     return parseSRT(content);
@@ -326,9 +270,6 @@ function parseSubtitleContent(content: string, fileName: string): SubtitleCue[] 
   return [];
 }
 
-/**
- * Parse SRT format
- */
 function parseSRT(content: string): SubtitleCue[] {
   const cues: SubtitleCue[] = [];
   const blocks = content.split(/\n\s*\n/).filter(block => block.trim());
@@ -352,9 +293,6 @@ function parseSRT(content: string): SubtitleCue[] {
   return cues;
 }
 
-/**
- * Parse WebVTT format
- */
 function parseVTT(content: string): SubtitleCue[] {
   const cues: SubtitleCue[] = [];
   const lines = content.split('\n');
@@ -390,9 +328,6 @@ function parseVTT(content: string): SubtitleCue[] {
   return cues;
 }
 
-/**
- * Parse SBV format (YouTube)
- */
 function parseSBV(content: string): SubtitleCue[] {
   const cues: SubtitleCue[] = [];
   const blocks = content.split(/\n\s*\n/).filter(block => block.trim());
@@ -416,16 +351,12 @@ function parseSBV(content: string): SubtitleCue[] {
   return cues;
 }
 
-/**
- * Validate timing of subtitle cues
- */
 function validateTiming(cues: SubtitleCue[]): string[] {
   const issues: string[] = [];
 
   for (let i = 0; i < cues.length; i++) {
     const current = cues[i];
 
-    // Check if start time is before end time
     const startSeconds = timeToSeconds(current.startTime);
     const endSeconds = timeToSeconds(current.endTime);
 
@@ -433,7 +364,6 @@ function validateTiming(cues: SubtitleCue[]): string[] {
       issues.push(`Cue ${i + 1}: Start time must be before end time`);
     }
 
-    // Check for overlaps with next cue
     if (i < cues.length - 1) {
       const next = cues[i + 1];
       const nextStartSeconds = timeToSeconds(next.startTime);
@@ -442,7 +372,6 @@ function validateTiming(cues: SubtitleCue[]): string[] {
         issues.push(`Cue ${i + 1}: Overlaps with next cue`);
       }
 
-      // Check for large gaps (> 5 seconds)
       const gap = nextStartSeconds - endSeconds;
       if (gap > 5) {
         issues.push(`Large gap (${gap.toFixed(1)}s) between cue ${i + 1} and ${i + 2}`);
@@ -453,9 +382,6 @@ function validateTiming(cues: SubtitleCue[]): string[] {
   return issues;
 }
 
-/**
- * Convert time string to seconds
- */
 function timeToSeconds(timeStr: string): number {
   const parts = timeStr.split(':');
   const hours = parseInt(parts[0]);
@@ -463,5 +389,3 @@ function timeToSeconds(timeStr: string): number {
   const seconds = parseFloat(parts[2].replace(',', '.'));
   return hours * 3600 + minutes * 60 + seconds;
 }
-
-// formatSubtitleTime moved to subtitle-utils.ts for client-side usage

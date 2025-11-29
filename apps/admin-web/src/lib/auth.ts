@@ -59,11 +59,22 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
       const userInfo = verified.subject.properties;
 
+      // Extract user roles and determine highest priority role
+      const userRoles = userInfo.roles || [];
+      const role = userRoles.includes('super_admin')
+        ? 'super_admin'
+        : userRoles.includes('admin')
+        ? 'admin'
+        : userRoles.includes('moderator')
+        ? 'moderator'
+        : undefined;
+
       // Create session from legacy cookies
       const session: AdminSession = {
         user: {
           id: userInfo.id,
           email: userInfo.email,
+          role,
         },
         accessToken: accessToken.value,
         refreshToken: refreshToken.value,
@@ -140,6 +151,26 @@ export async function requireAuth(): Promise<AdminSession> {
 
   if (!session) {
     redirect('/login');
+  }
+
+  return session;
+}
+
+/**
+ * Require admin role - redirect to access-denied if not admin/moderator
+ */
+export async function requireAdminRole(): Promise<AdminSession> {
+  const session = await getAdminSession();
+
+  if (!session) {
+    redirect('/login');
+  }
+
+  // Import hasAdminAccess here to avoid circular dependency
+  const { hasAdminAccess } = await import('./roles');
+
+  if (!hasAdminAccess(session.user.role)) {
+    redirect('/access-denied');
   }
 
   return session;

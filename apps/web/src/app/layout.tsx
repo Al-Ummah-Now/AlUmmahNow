@@ -9,6 +9,7 @@ import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
 import { WebSocketProvider } from "@/lib/websocket/WebSocketProvider";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { TranslationSyncProvider } from "@/components/TranslationSyncProvider";
 import { MultiAccountProvider } from "@/hooks/useMultiAccount";
 import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
 import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
@@ -97,14 +98,16 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                 <AuthProvider>
                   <ActiveChannelWrapper>
                     <WebSocketProvider user={user}>
-                      <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
-                        {/* Header */}
-                        <Navigation></Navigation>
-                        {children}
+                      <TranslationSyncProvider>
+                        <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                          {/* Header */}
+                          <Navigation></Navigation>
+                          {children}
 
-                        {/* Real-time notification center */}
-                        <NotificationCenter />
-                      </div>
+                          {/* Real-time notification center */}
+                          <NotificationCenter />
+                        </div>
+                      </TranslationSyncProvider>
                     </WebSocketProvider>
                   </ActiveChannelWrapper>
                 </AuthProvider>

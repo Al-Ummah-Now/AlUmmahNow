@@ -13,6 +13,23 @@ interface AuthPayload {
   iss?: string;
 }
 
+/**
+ * Mask email address to prevent PII exposure in logs
+ * Example: john.doe@example.com -> j***e@example.com
+ */
+function maskEmail(email?: string): string | undefined {
+  if (!email) return undefined;
+
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return email;
+
+  if (localPart.length <= 2) {
+    return `${localPart[0]}***@${domain}`;
+  }
+
+  return `${localPart[0]}***${localPart[localPart.length - 1]}@${domain}`;
+}
+
 export interface AuthContext {
   userId: string;
   email?: string;
@@ -43,7 +60,10 @@ export async function authMiddleware(c: Context, next: Next) {
       }, 401);
     }
 
-    const payload = AUTH_CONFIG.VERIFY_JWT_SIGNATURE
+    // Get dynamic auth config based on environment
+    const authConfig = getAuthConfig(c.env);
+
+    const payload = authConfig.VERIFY_JWT_SIGNATURE
       ? await validateJWTWithSignature(token, c.env)
       : await validateJWTBasic(token);
 
@@ -54,16 +74,15 @@ export async function authMiddleware(c: Context, next: Next) {
       }, 401);
     }
 
-    // Log the full token payload for debugging
+    // Log non-sensitive token data only
     logger.info('Auth token payload received', {
-      sub: payload.sub,
-      email: payload.email,
+      userId: payload.sub,
+      email: maskEmail(payload.email),
       roles: payload.roles,
       iat: payload.iat,
       exp: payload.exp,
       iss: payload.iss,
-      aud: payload.aud,
-      fullPayload: JSON.stringify(payload)
+      aud: payload.aud
     });
 
     c.set('auth', {
@@ -108,18 +127,17 @@ export async function adminMiddleware(c: Context, next: Next) {
 
     logger.info('Admin middleware checking roles', {
       userId: auth.userId,
-      email: auth.email,
+      email: maskEmail(auth.email),
       roles: roles,
       rolesLength: roles.length,
       isAdmin,
-      isModerator,
-      authPayload: JSON.stringify(auth.payload)
+      isModerator
     });
 
     if (!isAdmin && !isModerator) {
       logger.warn(`User ${auth.userId} attempted admin access without proper role`, {
         roles,
-        email: auth.email,
+        email: maskEmail(auth.email),
         payloadRoles: auth.payload?.roles
       });
       return c.json({
@@ -149,10 +167,13 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
 
     const payload = JSON.parse(atob(parts[1])) as AuthPayload;
 
-    // Log the raw JWT payload for debugging
-    logger.info('JWT basic validation - raw payload', {
-      fullPayload: JSON.stringify(payload),
-      allKeys: Object.keys(payload)
+    // Log non-sensitive JWT data only
+    logger.info('JWT basic validation', {
+      userId: payload.sub,
+      email: maskEmail(payload.email),
+      roles: payload.roles,
+      iat: payload.iat,
+      exp: payload.exp
     });
 
     const now = Math.floor(Date.now() / 1000);
@@ -179,14 +200,11 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     const client = await getClient(env);
     const result = await client.verify(AUTH_CONFIG.SUBJECTS, token, { refresh: undefined });
 
-    // Log the raw OpenAuth verification result
+    // Log non-sensitive OpenAuth verification result
     logger.info('OpenAuth verify result', {
       hasSubject: 'subject' in result,
       subjectType: 'subject' in result ? result.subject?.type : undefined,
-      subjectProperties: 'subject' in result ? JSON.stringify(result.subject?.properties) : undefined,
-      hasError: 'err' in result,
-      error: 'err' in result ? JSON.stringify(result.err) : undefined,
-      fullResult: JSON.stringify(result)
+      hasError: 'err' in result
     });
 
     if ('subject' in result && result.subject) {
@@ -205,7 +223,7 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
 
       logger.debug('Extracted auth payload from token', {
         userId: payload.sub,
-        email: payload.email,
+        email: maskEmail(payload.email),
         roles: payload.roles
       });
 

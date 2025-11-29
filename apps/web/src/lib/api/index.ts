@@ -1,6 +1,51 @@
-// Main API client exports
-export * as VideosAPI from './videos';
-export * as ChannelsAPI from './channels';
+// Main API client exports - use named exports for 'use server' files
+export {
+  listVideos,
+  getVideoById,
+  createVideo,
+  updateVideo,
+  deleteVideo,
+  bulkDeleteVideos,
+  uploadVideoThumbnail,
+  createVideoComment,
+  updateVideoComment,
+  deleteVideoComment,
+  likeVideo,
+  unlikeVideo,
+  dislikeVideo,
+  removeVideoDislike,
+  likeVideoComment,
+  unlikeVideoComment,
+  dislikeVideoComment,
+  searchVideos,
+  getSearchSuggestions,
+  getTrendingVideos,
+  getRecommendedVideos,
+  uploadVideo,
+  initiateVideoUploadApi,
+  completeVideoUploadApi,
+  initiateBatchUploadApi,
+  getVideoUploadStatusApi,
+  fetchVideoById,
+  fetchVideos,
+  fetchVideosWithPagination
+} from './videos';
+export {
+  listChannels,
+  listUserChannels,
+  getChannelById,
+  createChannel,
+  updateChannel,
+  deleteChannel,
+  subscribeToChannel,
+  unsubscribeFromChannel,
+  updateChannelAvatar,
+  updateChannelCover,
+  getChannelVideos,
+  getChannelShorts,
+  getChannelLiveStreams,
+  getChannelPlaylists
+} from './channels';
 export * as PlaylistsAPI from './playlists';
 export * as LiveStreamsAPI from './livestreams';
 export * as AnalyticsAPI from './analytics';
@@ -9,10 +54,31 @@ export { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI
 export { isProfileComplete } from './profiles-utils';
 export { fetchProfile, checkProfileExists, updateProfile, updateProfilePhoto, updateCoverPhoto } from './profiles-client';
 
-// Import for internal use
-import * as VideosAPI from './videos';
+// Import for internal use in APIClient class
+import {
+  listVideos,
+  getVideoById,
+  createVideo,
+  uploadVideo,
+  deleteVideo,
+  createVideoComment,
+  updateVideoComment,
+  deleteVideoComment,
+  likeVideo,
+  unlikeVideo,
+  dislikeVideo,
+  removeVideoDislike
+} from './videos';
 import { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI } from './profiles';
-import * as ChannelsAPI from './channels';
+import {
+  listChannels,
+  getChannelById,
+  createChannel,
+  updateChannel,
+  deleteChannel,
+  subscribeToChannel,
+  unsubscribeFromChannel
+} from './channels';
 import * as PlaylistsAPI from './playlists';
 import * as LiveStreamsAPI from './livestreams';
 import * as AnalyticsAPI from './analytics';
@@ -49,18 +115,18 @@ export class APIClient {
   // Videos
   get videos() {
     return {
-      list: (params?: ListQueryParams, headers?: ApiHeaders) => VideosAPI.listVideos(params, { ...this.headers, ...headers }),
-      getById: (id: string, headers?: ApiHeaders) => VideosAPI.getVideoById(id, { ...this.headers, ...headers }),
-      create: (data: VideoCreateRequest, headers?: ApiHeaders) => VideosAPI.createVideo(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      upload: (file: File, metadata: { title: string; description?: string; isPublic: boolean; tags?: string[] }, headers?: ApiHeaders) => VideosAPI.uploadVideo(file, metadata, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      delete: (id: string, headers?: ApiHeaders) => VideosAPI.deleteVideo(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      createComment: (videoId: string, data: CommentCreateRequest, headers?: ApiHeaders) => VideosAPI.createVideoComment(videoId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      updateComment: (videoId: string, commentId: string, data: CommentUpdateRequest, headers?: ApiHeaders) => VideosAPI.updateVideoComment(videoId, commentId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      deleteComment: (videoId: string, commentId: string, headers?: ApiHeaders) => VideosAPI.deleteVideoComment(videoId, commentId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      like: (videoId: string, headers?: ApiHeaders) => VideosAPI.likeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      unlike: (videoId: string, headers?: ApiHeaders) => VideosAPI.unlikeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      dislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.dislikeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      removeDislike: (videoId: string, headers?: ApiHeaders) => VideosAPI.removeVideoDislike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      list: (params?: ListQueryParams, headers?: ApiHeaders) => listVideos(params, { ...this.headers, ...headers }),
+      getById: (id: string, headers?: ApiHeaders) => getVideoById(id, { ...this.headers, ...headers }),
+      create: (data: VideoCreateRequest, headers?: ApiHeaders) => createVideo(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      upload: (file: File, metadata: { title: string; description?: string; isPublic: boolean; tags?: string[] }, headers?: ApiHeaders) => uploadVideo(file, metadata, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      delete: (id: string, headers?: ApiHeaders) => deleteVideo(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      createComment: (videoId: string, data: CommentCreateRequest, headers?: ApiHeaders) => createVideoComment(videoId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      updateComment: (videoId: string, commentId: string, data: CommentUpdateRequest, headers?: ApiHeaders) => updateVideoComment(videoId, commentId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      deleteComment: (videoId: string, commentId: string, headers?: ApiHeaders) => deleteVideoComment(videoId, commentId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      like: (videoId: string, headers?: ApiHeaders) => likeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      unlike: (videoId: string, headers?: ApiHeaders) => unlikeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      dislike: (videoId: string, headers?: ApiHeaders) => dislikeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      removeDislike: (videoId: string, headers?: ApiHeaders) => removeVideoDislike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
     };
   }
 
@@ -77,13 +143,13 @@ export class APIClient {
   // Channels
   get channels() {
     return {
-      list: (params?: ListQueryParams, headers?: ApiHeaders) => ChannelsAPI.listChannels(params, { ...this.headers, ...headers }),
-      getById: (id: string, headers?: ApiHeaders) => ChannelsAPI.getChannelById(id, { ...this.headers, ...headers }),
-      create: (data: ChannelCreateRequest, headers?: ApiHeaders) => ChannelsAPI.createChannel(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      update: (id: string, data: ChannelUpdateRequest, headers?: ApiHeaders) => ChannelsAPI.updateChannel(id, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      delete: (id: string, headers?: ApiHeaders) => ChannelsAPI.deleteChannel(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      subscribe: (channelId: string, data: SubscriptionRequest, headers?: ApiHeaders) => ChannelsAPI.subscribeToChannel(channelId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      unsubscribe: (channelId: string, headers?: ApiHeaders) => ChannelsAPI.unsubscribeFromChannel(channelId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      list: (params?: ListQueryParams, headers?: ApiHeaders) => listChannels(params, { ...this.headers, ...headers }),
+      getById: (id: string, headers?: ApiHeaders) => getChannelById(id, { ...this.headers, ...headers }),
+      create: (data: ChannelCreateRequest, headers?: ApiHeaders) => createChannel(data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      update: (id: string, data: ChannelUpdateRequest, headers?: ApiHeaders) => updateChannel(id, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      delete: (id: string, headers?: ApiHeaders) => deleteChannel(id, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      subscribe: (channelId: string, data: SubscriptionRequest, headers?: ApiHeaders) => subscribeToChannel(channelId, data, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
+      unsubscribe: (channelId: string, headers?: ApiHeaders) => unsubscribeFromChannel(channelId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
     };
   }
 

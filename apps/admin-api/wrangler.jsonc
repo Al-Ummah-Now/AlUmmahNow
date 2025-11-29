@@ -72,7 +72,9 @@
 	// Environment variables
 	"vars": {
 		"ENVIRONMENT": "production",
-		"LOG_LEVEL": "info"
+		"LOG_LEVEL": "info",
+		"WEBSOCKET_URL": "https://ws.alummahnow.net",
+		"INTERNAL_API_KEY": "your-internal-api-key"
 	},
 
 	// Environment-specific configurations
@@ -80,7 +82,9 @@
 		"development": {
 			"vars": {
 				"ENVIRONMENT": "development",
-				"LOG_LEVEL": "debug"
+				"LOG_LEVEL": "debug",
+				"WEBSOCKET_URL": "http://localhost:3087",
+				"INTERNAL_API_KEY": "dev-internal-api-key"
 			}
 		},
 		"staging": {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChannelGridProps } from './types';
 import { ChannelCard } from './ChannelCard';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 
 /**
  * ChannelGrid Component
@@ -17,9 +17,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   onView,
   onCreate,
   isLoading,
-  lang = 'en',
 }) => {
-  const { t } = useI18n(lang);
+  const { t, lang } = useLanguage();
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

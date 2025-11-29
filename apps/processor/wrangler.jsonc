@@ -17,12 +17,14 @@
 	"r2_buckets": [
 		{
 			"binding": "MESSAGES_BUCKET",
-			"bucket_name": "al-ummah-now-messages"
+			"bucket_name": "al-ummah-now-messages",
+			"remote": true
 		},
 		{
 			"binding": "community_posts",
 			"bucket_name": "community-posts",
-			"preview_bucket_name": "community-posts-preview"
+			"preview_bucket_name": "community-posts-preview",
+			"remote": true
 		}
 	],
 

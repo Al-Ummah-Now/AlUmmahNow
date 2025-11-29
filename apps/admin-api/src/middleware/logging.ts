@@ -2,6 +2,23 @@ import { Context, Next } from 'hono';
 import { logger } from '../lib/logger';
 
 /**
+ * Mask email address to prevent PII exposure in logs
+ * Example: john.doe@example.com -> j***e@example.com
+ */
+function maskEmail(email?: string): string | undefined {
+  if (!email) return undefined;
+
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return email;
+
+  if (localPart.length <= 2) {
+    return `${localPart[0]}***@${domain}`;
+  }
+
+  return `${localPart[0]}***${localPart[localPart.length - 1]}@${domain}`;
+}
+
+/**
  * Sanitize sensitive headers
  */
 function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
@@ -58,7 +75,7 @@ export async function loggingMiddleware(c: Context, next: Next) {
     query: query || undefined,
     userId,
     headers,
-    auth: auth ? { userId: auth.userId, email: auth.email, roles: auth.roles } : undefined,
+    auth: auth ? { userId: auth.userId, email: maskEmail(auth.email), roles: auth.roles } : undefined,
   };
 
   logger.info(`[API REQUEST] ${method} ${path}`, requestInfo);

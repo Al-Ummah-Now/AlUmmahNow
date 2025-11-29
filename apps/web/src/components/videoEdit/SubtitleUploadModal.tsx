@@ -4,12 +4,11 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
-  SUPPORTED_LANGUAGES,
   uploadSubtitle,
   validateSubtitleFile,
-  SubtitleValidationResult,
-  SubtitleTrack,
 } from '@/lib/api/subtitles';
+import type { SubtitleValidationResult, SubtitleTrack } from '@/lib/api/subtitles-types';
+import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitlePreview from './SubtitlePreview';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';

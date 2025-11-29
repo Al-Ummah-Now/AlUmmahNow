@@ -1,8 +1,7 @@
 "use client";
 import React from "react";
-import { usePathname } from "next/navigation";
 import { SearchFilters as SearchFiltersType } from "@/lib/api/types";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface SearchFiltersProps {
   filters: SearchFiltersType;
@@ -21,9 +20,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
   isOpen,
   onToggle,
 }) => {
-  const pathname = usePathname();
-  const locale = pathname.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t } = useLanguage();
 
   const categories = [
     { value: '', label: t.search.allCategories },

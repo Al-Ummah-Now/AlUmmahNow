@@ -2,19 +2,17 @@
 import React from "react";
 import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { UploadButton } from '@/components/UploadButton';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
   const router = useRouter();
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t, lang: locale } = useLanguage();
   const { user } = useAuth();
   const { user: multiAccountUser } = useMultiAccount();
   const activeChannel = multiAccountUser?.channel;

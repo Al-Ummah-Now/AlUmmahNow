@@ -59,12 +59,15 @@ export function ScheduledVideosList({
     if (!auth.user) return;
     if (!confirm(t.schedule?.confirmCancelSchedule ?? 'Are you sure?')) return;
 
+    // Find the video to get its channel ID
+    const video = videos.find(v => v.id === videoId);
+    if (!video?.channelId) return;
+
     try {
       setActionLoading(videoId);
 
       const result = await cancelSchedule(videoId, {
-        
-        channelId: auth.user.id,
+        channelId: video.channelId,
       });
 
       if (result?.success) {
@@ -86,12 +89,15 @@ export function ScheduledVideosList({
     if (!auth.user) return;
     if (!confirm(t.schedule?.confirmPublishNow ?? 'Are you sure?')) return;
 
+    // Find the video to get its channel ID
+    const video = videos.find(v => v.id === videoId);
+    if (!video?.channelId) return;
+
     try {
       setActionLoading(videoId);
 
       const result = await publishNow(videoId, {
-        
-        channelId: auth.user.id,
+        channelId: video.channelId,
       });
 
       if (result?.success) {

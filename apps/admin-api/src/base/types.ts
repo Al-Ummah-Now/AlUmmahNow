@@ -37,6 +37,10 @@ export interface AdminBindings {
   Issuer: string;
   Audience: string;
   ClientId: string;
+
+  // WebSocket integration
+  WEBSOCKET_URL?: string;
+  INTERNAL_API_KEY?: string;
 }
 
 /**

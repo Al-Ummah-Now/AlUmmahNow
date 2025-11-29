@@ -4,7 +4,7 @@
   "description": "Scheduled video publishing worker for Al Ummah Now",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --inspector-port 9235 --test-scheduled",
     "deploy": "wrangler deploy",
     "deploy:staging": "wrangler deploy --env staging",
     "type-check": "tsc --noEmit",

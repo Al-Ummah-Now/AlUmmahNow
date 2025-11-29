@@ -1,11 +1,10 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from "react";
-import { usePathname } from "next/navigation";
 import { VideoObject } from "@/interfaces";
 import * as VideosAPI from "@/lib/api/videos";
 import VideoCard from "@/components/videoCard/index";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface TrendingContentProps {
   period?: 'hour' | 'day' | 'week' | 'month';
@@ -20,9 +19,7 @@ export const TrendingContent: React.FC<TrendingContentProps> = ({
   limit = 8,
   className = ''
 }) => {
-  const pathname = usePathname();
-  const locale = pathname.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t } = useLanguage();
 
   const periodLabels = {
     hour: t.search.lastHour,

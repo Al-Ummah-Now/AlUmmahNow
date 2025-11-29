@@ -101,6 +101,8 @@ export interface UseLanguageResult {
  * Automatically detects language from URL pathname and provides
  * all necessary language-related information and utilities.
  *
+ * Uses API-based translations (from R2) with key-by-key fallback to static.
+ *
  * @returns Language information and translation utilities
  *
  * @example
@@ -128,8 +130,8 @@ export function useLanguage(): UseLanguageResult {
     [pathname]
   );
 
-  // Get translations for current language
-  const { t } = useI18n(lang);
+  // Get translations from API with static fallback (key-by-key)
+  const { t } = useI18nApi(lang);
 
   // Get language configuration
   const config = LANGUAGE_CONFIG[lang];

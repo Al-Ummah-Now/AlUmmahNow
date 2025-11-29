@@ -14,13 +14,9 @@ import {
   SearchSuggestion,
   RecommendationRequest
 } from "./types";
-import { getApiUrl } from "@/lib/runtime-config";
 import { apiRequestServer, buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
-
-
-const baseUrl = getApiUrl();
 
 /**
  * List Videos
@@ -33,35 +29,21 @@ export async function listVideos(
   },
   headers?: ApiHeaders
 ): Promise<PaginationResponse<VideoObject> | null> {
-  try {
-    const queryParams = new URLSearchParams();
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.cursor) queryParams.append('cursor', params.cursor);
-    if (params?.channelId) queryParams.append('channelId', params.channelId);
-    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
-    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+  const queryParams = new URLSearchParams();
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  if (params?.cursor) queryParams.append('cursor', params.cursor);
+  if (params?.channelId) queryParams.append('channelId', params.channelId);
+  if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+  if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
 
-    const response = await fetch(
-      `${baseUrl}/api/videos?${queryParams.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching videos: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('listVideos error:', error);
-    return null;
-  }
+  return apiRequestServer<PaginationResponse<VideoObject>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/videos?${queryParams.toString()}`),
+    functionName: 'listVideos'
+  }, async () => ({
+    channelId: headers?.channelId || '',
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), false);
 }
 
 /**
@@ -72,28 +54,14 @@ export async function getVideoById(
   id: string,
   headers?: ApiHeaders
 ): Promise<VideoObject | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${id}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching video: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('getVideoById error:', error);
-    return null;
-  }
+  return apiRequestServer<VideoObject>({
+    method: 'GET',
+    url: buildApiUrl(`/api/videos/${id}`),
+    functionName: 'getVideoById'
+  }, async () => ({
+    channelId: headers?.channelId || '',
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), false);
 }
 
 /**
@@ -105,24 +73,21 @@ export async function createVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ video: VideoObject }> | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos`,
+    logger.info('[createVideo] Creating video', { data });
+
+    return apiRequestServer<ApiResponse<{ video: VideoObject }>>(
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-        body: JSON.stringify(data),
-      }
+        url: buildApiUrl('/api/videos'),
+        body: data,
+        functionName: 'createVideo',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error creating video: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('createVideo error:', error);
     return null;
@@ -139,24 +104,21 @@ export async function updateVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ video: VideoObject }> | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}`,
+    logger.info('[updateVideo] Updating video', { videoId, data });
+
+    return apiRequestServer<ApiResponse<{ video: VideoObject }>>(
       {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-        body: JSON.stringify(data),
-      }
+        url: buildApiUrl(`/api/videos/${videoId}`),
+        body: data,
+        functionName: 'updateVideo',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error updating video: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('updateVideo error:', error);
     return null;
@@ -172,31 +134,20 @@ export async function deleteVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ success: boolean }> | null> {
   try {
-    logger.info('[deleteVideo] Attempting to delete video:', { videoId, headers });
+    logger.info('[deleteVideo] Attempting to delete video:', { videoId });
 
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}`,
+    return apiRequestServer<ApiResponse<{ success: boolean }>>(
       {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}`),
+        functionName: 'deleteVideo',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    logger.info('[deleteVideo] Response status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('[deleteVideo] Error response:', { status: response.status, statusText: response.statusText, errorText });
-      throw new Error(`Error deleting video: ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    logger.info('[deleteVideo] Success response:', result);
-    return result;
   } catch (error) {
     logger.error('deleteVideo error:', error);
     return null;
@@ -224,31 +175,25 @@ export async function bulkDeleteVideos(
   };
 } | null> {
   try {
-    logger.info('[bulkDeleteVideos] Attempting to delete videos:', { count: videoIds.length, videoIds, headers });
+    logger.info('[bulkDeleteVideos] Attempting to delete videos:', { count: videoIds.length, videoIds });
 
-    const response = await fetch(
-      `${baseUrl}/api/videos/bulk-delete`,
+    return apiRequestServer<{
+      success: boolean;
+      results: Array<{ videoId: string; success: boolean; error?: string }>;
+      summary: { total: number; succeeded: number; failed: number };
+    }>(
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'channelId': headers.channelId,
-        },
-        body: JSON.stringify({ videoIds }),
-      }
+        url: buildApiUrl('/api/videos/bulk-delete'),
+        body: { videoIds },
+        functionName: 'bulkDeleteVideos',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    logger.info('[bulkDeleteVideos] Response status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('[bulkDeleteVideos] Error response:', { status: response.status, statusText: response.statusText, errorText });
-      throw new Error(`Error bulk deleting videos: ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    logger.info('[bulkDeleteVideos] Success response:', result);
-    return result;
   } catch (error) {
     logger.error('bulkDeleteVideos error:', error);
     return null;
@@ -264,30 +209,29 @@ export async function uploadVideoThumbnail(
   file: File,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ thumbnailUrl: string }> | null> {
-  try {
-    const formData = new FormData();
-    formData.append('thumbnail', file);
+  const formData = new FormData();
+  formData.append('thumbnail', file);
 
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/thumbnail`,
-      {
-        method: 'POST',
-        headers: {
-          'channelId': headers.channelId,
-        },
-        body: formData,
-      }
-    );
+  const authContext = await getServerAuthContext();
 
-    if (!response.ok) {
-      throw new Error(`Error uploading thumbnail: ${response.statusText}`);
+  const response = await fetch(
+    buildApiUrl(`/api/videos/${videoId}/thumbnail`),
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authContext?.accessToken || ''}`,
+        'channelId': headers.channelId,
+      },
+      body: formData,
     }
+  );
 
-    return await response.json();
-  } catch (error) {
-    logger.error('uploadVideoThumbnail error:', error);
+  if (!response.ok) {
+    logger.error('uploadVideoThumbnail error:', response.statusText);
     return null;
   }
+
+  return response.json();
 }
 
 /**
@@ -300,24 +244,21 @@ export async function createVideoComment(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/comments`,
+    logger.info('[createVideoComment] Creating comment', { videoId });
+
+    return apiRequestServer<ApiResponse<{ comment: import('@/interfaces').Comments }>>(
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-        body: JSON.stringify(data),
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/comments`),
+        body: data,
+        functionName: 'createVideoComment',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error creating comment: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('createVideoComment error:', error);
     return null;
@@ -335,24 +276,21 @@ export async function updateVideoComment(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/comments/${commentId}`,
+    logger.info('[updateVideoComment] Updating comment', { videoId, commentId });
+
+    return apiRequestServer<ApiResponse<{ comment: import('@/interfaces').Comments }>>(
       {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-        body: JSON.stringify(data),
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}`),
+        body: data,
+        functionName: 'updateVideoComment',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error updating comment: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('updateVideoComment error:', error);
     return null;
@@ -369,23 +307,20 @@ export async function deleteVideoComment(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/comments/${commentId}`,
+    logger.info('[deleteVideoComment] Deleting comment', { videoId, commentId });
+
+    return apiRequestServer<{ success: boolean }>(
       {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}`),
+        functionName: 'deleteVideoComment',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error deleting comment: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('deleteVideoComment error:', error);
     return null;
@@ -401,23 +336,20 @@ export async function likeVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/likes`,
+    logger.info('[likeVideo] Liking video', { videoId });
+
+    return apiRequestServer<{ success: boolean }>(
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/likes`),
+        functionName: 'likeVideo',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error liking video: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('likeVideo error:', error);
     return null;
@@ -433,23 +365,20 @@ export async function unlikeVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/likes`,
+    logger.info('[unlikeVideo] Unliking video', { videoId });
+
+    return apiRequestServer<{ success: boolean }>(
       {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/likes`),
+        functionName: 'unlikeVideo',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error unliking video: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('unlikeVideo error:', error);
     return null;
@@ -465,23 +394,20 @@ export async function dislikeVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/dislikes`,
+    logger.info('[dislikeVideo] Disliking video', { videoId });
+
+    return apiRequestServer<{ success: boolean }>(
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/dislikes`),
+        functionName: 'dislikeVideo',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error disliking video: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('dislikeVideo error:', error);
     return null;
@@ -497,23 +423,20 @@ export async function removeVideoDislike(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/dislikes`,
+    logger.info('[removeVideoDislike] Removing dislike', { videoId });
+
+    return apiRequestServer<{ success: boolean }>(
       {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/dislikes`),
+        functionName: 'removeVideoDislike',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error removing dislike from video: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('removeVideoDislike error:', error);
     return null;
@@ -530,23 +453,20 @@ export async function likeVideoComment(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/comments/${commentId}/likes`,
+    logger.info('[likeVideoComment] Liking comment', { videoId, commentId });
+
+    return apiRequestServer<{ success: boolean }>(
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/likes`),
+        functionName: 'likeVideoComment',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error liking comment: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('likeVideoComment error:', error);
     return null;
@@ -563,23 +483,20 @@ export async function unlikeVideoComment(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/comments/${commentId}/likes`,
+    logger.info('[unlikeVideoComment] Unliking comment', { videoId, commentId });
+
+    return apiRequestServer<{ success: boolean }>(
       {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/likes`),
+        functionName: 'unlikeVideoComment',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error unliking comment: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('unlikeVideoComment error:', error);
     return null;
@@ -596,23 +513,20 @@ export async function dislikeVideoComment(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/videos/${videoId}/comments/${commentId}/dislikes`,
+    logger.info('[dislikeVideoComment] Disliking comment', { videoId, commentId });
+
+    return apiRequestServer<{ success: boolean }>(
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
+        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/dislikes`),
+        functionName: 'dislikeVideoComment',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
     );
-
-    if (!response.ok) {
-      throw new Error(`Error disliking comment: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     logger.error('dislikeVideoComment error:', error);
     return null;
@@ -675,15 +589,20 @@ export async function searchVideos(
       }
     }
 
-    const fullUrl = `${baseUrl}/api/videos/search?${queryParams.toString()}`;
-    const requestHeaders = {
+    const fullUrl = buildApiUrl(`/api/videos/search?${queryParams.toString()}`);
+
+    // Get auth token for authenticated searches (e.g., isOwner filter)
+    const authContext = await getServerAuthContext();
+    const accessToken = authContext?.accessToken;
+
+    const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(headers?.channelId && { 'channelId': headers.channelId }),
+      ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
     };
 
     logger.info('[searchVideos] Making request:', {
       url: fullUrl,
-      baseUrl,
       queryParams: queryParams.toString(),
       headers: requestHeaders,
       filters
@@ -914,12 +833,11 @@ export async function getSearchSuggestions(
     });
 
     const response = await fetch(
-      `${baseUrl}/api/search/suggestions?${queryParams.toString()}`,
+      buildApiUrl(`/api/search/suggestions?${queryParams.toString()}`),
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-
         },
       }
     );
@@ -961,12 +879,11 @@ export async function getTrendingVideos(
     }
 
     const response = await fetch(
-      `${baseUrl}/api/trending?${queryParams.toString()}`,
+      buildApiUrl(`/api/trending?${queryParams.toString()}`),
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-
         },
       }
     );
@@ -1000,12 +917,11 @@ export async function getRecommendedVideos(
     if (request.excludeWatched) queryParams.append('excludeWatched', 'true');
 
     const response = await fetch(
-      `${baseUrl}/api/recommendations?${queryParams.toString()}`,
+      buildApiUrl(`/api/recommendations?${queryParams.toString()}`),
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-
           ...(headers?.channelId && { 'channelId': headers.channelId }),
         },
       }
@@ -1048,12 +964,14 @@ export async function uploadVideo(
       formData.append('tags', JSON.stringify(metadata.tags));
     }
 
+    const authContext = await getServerAuthContext();
+
     const response = await fetch(
-      `${baseUrl}/api/upload/video`,
+      buildApiUrl('/api/upload/video'),
       {
         method: 'POST',
         headers: {
-
+          'Authorization': `Bearer ${authContext?.accessToken || ''}`,
           'channelId': headers.channelId,
         },
         body: formData,

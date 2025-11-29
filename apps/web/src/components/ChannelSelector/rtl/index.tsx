@@ -9,11 +9,11 @@
 
 import { useState } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/hooks/useLanguage';
 import { Tv, Plus, Check, ChevronDown, Crown } from 'lucide-react';
 
 export default function ChannelSelectorRTL() {
-  const { t } = useI18n('ar');
+  const { t } = useLanguage();
 
   const {
     user,

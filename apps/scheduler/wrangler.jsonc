@@ -1,0 +1,83 @@
+{
+	"name": "al-ummah-scheduler",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-20",
+	"compatibility_flags": ["nodejs_compat"],
+
+	// Run every minute
+	"triggers": {
+		"crons": ["* * * * *"]
+	},
+
+	// R2 Buckets
+	"r2_buckets": [
+		{
+			"binding": "VIDEOS",
+			"bucket_name": "videos",
+			"preview_bucket_name": "videos-preview",
+			"remote": true
+		},
+		{
+			"binding": "SCHEDULED_VIDEOS",
+			"bucket_name": "scheduled-videos",
+			"preview_bucket_name": "scheduled-videos-preview",
+			"remote": true
+		}
+	],
+
+	// Queue for events
+	"queues": {
+		"producers": [
+			{
+				"queue": "al-ummah-now-videos",
+				"binding": "QUEUE"
+			}
+		]
+	},
+
+	// KV for distributed locks
+	"kv_namespaces": [
+		{
+			"binding": "SCHEDULER_LOCKS",
+			"id": "scheduler-locks-kv",
+			"preview_id": "scheduler-locks-kv-preview"
+		},
+		{
+			"binding": "SCHEDULER_METRICS",
+			"id": "scheduler-metrics-kv",
+			"preview_id": "scheduler-metrics-kv-preview"
+		}
+	],
+
+	// Durable Objects for distributed locks (atomic)
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "SCHEDULER_LOCK",
+				"class_name": "SchedulerLock"
+			}
+		]
+	},
+
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": ["SchedulerLock"]
+		}
+	],
+
+	// Environment variables
+	"vars": {
+		"MAX_RETRIES": "3",
+		"BATCH_SIZE": "50",
+		"LOCK_TTL": "120",
+		"WEBSOCKET_URL": "https://ws.alummahnow.net"
+	},
+
+	// Development server configuration
+	"dev": {
+		"ip": "127.0.0.1",
+		"port": 3092,
+		"local_protocol": "http"
+	}
+}

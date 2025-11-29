@@ -8,8 +8,7 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus } from "@/lib/actions/upload";
-import { usePathname } from "next/navigation";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 import { UploadButton } from "@/components/UploadButton";
 import { ThumbnailUploadSection, ThumbnailData } from "./ThumbnailUploadSection";
 import { CategorySelector } from "./CategorySelector";
@@ -56,9 +55,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   onError,
   className = ""
 }) => {
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t } = useLanguage();
 
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -77,6 +74,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<tus.Upload | null>(null);
@@ -204,7 +202,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             en: metadata.descriptionEn || '',
             ar: metadata.descriptionAr || ''
           },
-          isPublic: metadata.isPublic,
+          // When scheduling is enabled, video must be private until scheduled publish date
+          isPublic: scheduleData ? false : metadata.isPublic,
           tags: tagsString,
           category: metadata.category,
           fileSize: selectedFile.size,
@@ -348,6 +347,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           setUploadProgress({ percentage: 100, state: 'complete' });
           onProgress(100);
 
+          // Track scheduling result for video object
+          let schedulingInfo: {
+            scheduledPublishDate?: string;
+            scheduledPublishTimezone?: string;
+            scheduledPublishStatus?: 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled';
+          } = {};
+
           // If scheduled, create schedule after upload
           if (scheduleData) {
             try {
@@ -359,13 +365,24 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 {  channelId }
               );
 
-              if (!scheduleResult?.success) {
-                logger.warn('Failed to schedule video:', scheduleResult?.error);
-                // Continue anyway - video is uploaded successfully
+              if (scheduleResult?.success && scheduleResult.result) {
+                // Store scheduling info to include in video object
+                schedulingInfo = {
+                  scheduledPublishDate: scheduleResult.result.scheduledPublishDate,
+                  scheduledPublishTimezone: scheduleResult.result.timezone,
+                  scheduledPublishStatus: scheduleResult.result.status,
+                };
+                logger.info('Video scheduled successfully:', schedulingInfo);
+                setScheduleError(null);
+              } else {
+                const errorMsg = scheduleResult?.error || 'Failed to schedule video';
+                logger.warn('Failed to schedule video:', errorMsg);
+                setScheduleError(`Video uploaded but scheduling failed: ${errorMsg}. You can schedule it from the video edit page.`);
               }
             } catch (schedError) {
+              const errorMsg = schedError instanceof Error ? schedError.message : 'Unknown error';
               logger.warn('Error scheduling video:', schedError);
-              // Continue anyway - video is uploaded successfully
+              setScheduleError(`Video uploaded but scheduling failed: ${errorMsg}. You can schedule it from the video edit page.`);
             }
           }
 
@@ -393,8 +410,15 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             comments: [],
             likes: [],
             dislikes: [],
-            isPublic: metadata.isPublic,
+            // When scheduled, video is private until scheduled publish date
+            isPublic: scheduleData ? false : metadata.isPublic,
             isLive: false,
+            // Include scheduling fields if video was scheduled
+            ...(schedulingInfo.scheduledPublishDate && {
+              scheduledPublishDate: schedulingInfo.scheduledPublishDate,
+              scheduledPublishTimezone: schedulingInfo.scheduledPublishTimezone,
+              scheduledPublishStatus: schedulingInfo.scheduledPublishStatus,
+            }),
           };
 
           // Reset form
@@ -454,6 +478,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     libraryIdRef.current = 0;
     setSelectedThumbnail(null);
     setScheduleData(null);
+    setScheduleError(null);
     setMetadata({
       title: '',
       titleEn: '',
@@ -558,6 +583,14 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 <span className="text-sm">{uploadProgress.error}</span>
               </div>
             )}
+
+            {/* Schedule error - shown after upload completes but scheduling failed */}
+            {scheduleError && uploadProgress.state === 'complete' && (
+              <div className="flex items-start mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
+                <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                <span className="text-sm">{scheduleError}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -659,18 +692,25 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             disabled={uploadProgress?.state === 'uploading'}
           />
 
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="isPublic"
-              checked={metadata.isPublic}
-              onChange={(e) => setMetadata(prev => ({ ...prev, isPublic: e.target.checked }))}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              disabled={uploadProgress?.state === 'uploading'}
-            />
-            <label htmlFor="isPublic" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-              {t.upload.makePublic}
-            </label>
+          <div className="space-y-1">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isPublic"
+                checked={scheduleData ? false : metadata.isPublic}
+                onChange={(e) => setMetadata(prev => ({ ...prev, isPublic: e.target.checked }))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+                disabled={uploadProgress?.state === 'uploading' || !!scheduleData}
+              />
+              <label htmlFor="isPublic" className={`ml-2 block text-sm ${scheduleData ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                {t.upload.makePublic}
+              </label>
+            </div>
+            {scheduleData && (
+              <p className="text-xs text-blue-600 dark:text-blue-400 ml-6">
+                Video will be private until scheduled publish date
+              </p>
+            )}
           </div>
 
           {/* Thumbnail Upload Section */}
@@ -680,13 +720,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             disabled={uploadProgress?.state === 'uploading'}
           />
 
-          {/* Schedule Selector - Only show when NOT public */}
-          {!metadata.isPublic && (
-            <ScheduleDateTimeSelector
-              onScheduleChange={setScheduleData}
-              disabled={uploadProgress?.state === 'uploading'}
-            />
-          )}
+          {/* Schedule Selector - Always available for scheduling future publish */}
+          <ScheduleDateTimeSelector
+            onScheduleChange={setScheduleData}
+            disabled={uploadProgress?.state === 'uploading'}
+          />
         </div>
 
         <div className="flex space-x-3">

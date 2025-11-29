@@ -2,14 +2,12 @@
 import React from "react";
 import Image from "next/image";
 import { VideoInfo } from "@/interfaces";
-import { redirect, usePathname } from "next/navigation";
+import { redirect } from "next/navigation";
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
-import { useI18n } from "@/lib/i18n";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const RelatedVideo: React.FC<VideoInfo> = (info) => {
-  const pathname = usePathname();
-  const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useI18n(locale);
+  const { t } = useLanguage();
 
   const handleClick = () => {
     redirect(`/en/video?vid=${info.id}`);

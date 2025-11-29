@@ -244,6 +244,41 @@ export class UpdateTranslationsEndpoint extends AdminRoute {
         httpMetadata: { contentType: 'application/json' },
       });
 
+      // Broadcast translation update via WebSocket
+      try {
+        const websocketUrl = c.env.WEBSOCKET_URL;
+        const internalApiKey = c.env.INTERNAL_API_KEY;
+
+        if (websocketUrl && internalApiKey) {
+          const broadcastResponse = await fetch(`${websocketUrl}/broadcast`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': internalApiKey,
+            },
+            body: JSON.stringify({
+              channel: 'system:i18n',
+              message: {
+                type: 'translations:updated',
+                locale,
+                version: newVersion,
+                updatedAt: now,
+                checksum: metadata.checksums[locale],
+              },
+            }),
+          });
+
+          if (broadcastResponse.ok) {
+            logger.info(`Broadcast translations update for ${locale}`);
+          } else {
+            logger.warn(`Failed to broadcast translations update: ${broadcastResponse.status}`);
+          }
+        }
+      } catch (broadcastError) {
+        // Don't fail the request if broadcast fails
+        logger.warn('Failed to broadcast translations update:', broadcastError);
+      }
+
       return c.json({
         success: true,
         result: {

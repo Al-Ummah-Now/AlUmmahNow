@@ -58,13 +58,13 @@
     border-color: rgb(55, 65, 81);
   }
 
-  /* Thicker lines every hour (every 4th slot for 15min intervals) */
-  .scheduled-video-calendar .rbc-time-slot:nth-child(4n+1) {
-    border-top: 4px solid rgb(156, 163, 175) !important;
+  /* Thicker lines every hour (every 12th slot for 5min intervals with 3 timeslots) */
+  .scheduled-video-calendar .rbc-time-slot:nth-child(12n+1) {
+    border-top: 1px solid rgb(209, 213, 219) !important;
   }
 
-  .dark .scheduled-video-calendar .rbc-time-slot:nth-child(4n+1) {
-    border-top: 4px solid rgb(55, 65, 81) !important;
+  .dark .scheduled-video-calendar .rbc-time-slot:nth-child(12n+1) {
+    border-top: 1px solid rgb(75, 85, 99) !important;
   }
 
   .scheduled-video-calendar .rbc-time-header {
@@ -85,11 +85,27 @@
 
   .scheduled-video-calendar .rbc-current-time-indicator {
     background-color: rgb(239, 68, 68);
+    height: 2px;
+    z-index: 10;
   }
 
-  /* Time gutter labels */
+  /* Time Gutter Styling - Outlook/Google Calendar style */
+  .scheduled-video-calendar .rbc-time-gutter {
+    background: linear-gradient(to right, rgb(249, 250, 251), rgb(249, 250, 251) 95%, transparent 95%);
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-gutter {
+    background: linear-gradient(to right, rgb(31, 41, 55), rgb(31, 41, 55) 95%, transparent 95%);
+  }
+
+  .scheduled-video-calendar .rbc-time-gutter .rbc-timeslot-group {
+    border-bottom: none;
+  }
+
+  /* Time gutter labels - cleaner look */
   .scheduled-video-calendar .rbc-time-slot {
-    color: rgb(75, 85, 99);
+    color: rgb(107, 114, 128);
+    font-size: 0.75rem;
   }
 
   .dark .scheduled-video-calendar .rbc-time-slot {
@@ -97,11 +113,72 @@
   }
 
   .scheduled-video-calendar .rbc-label {
-    color: rgb(75, 85, 99);
+    color: rgb(107, 114, 128);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0 8px;
+    text-align: right;
+    position: relative;
   }
 
   .dark .scheduled-video-calendar .rbc-label {
     color: rgb(156, 163, 175);
+  }
+
+  /* Add hour marker line extending from time label */
+  .scheduled-video-calendar .rbc-time-gutter .rbc-time-slot:first-child::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 8px;
+    height: 1px;
+    background-color: rgb(209, 213, 219);
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-gutter .rbc-time-slot:first-child::after {
+    background-color: rgb(75, 85, 99);
+  }
+
+  /* Day view specific - constrain event width for single-day view */
+  .scheduled-video-calendar-day .rbc-day-slot .rbc-events-container {
+    margin-right: 60% !important;
+  }
+
+  /* Week view - slightly narrower events for better visibility */
+  .scheduled-video-calendar:not(.scheduled-video-calendar-day) .rbc-day-slot .rbc-events-container {
+    margin-right: 5% !important;
+  }
+
+  /* Event row styling in day/week views */
+  .scheduled-video-calendar .rbc-day-slot .rbc-event {
+    border-radius: 4px;
+    min-height: 24px;
+  }
+
+  /* Day view events - more prominent styling */
+  .scheduled-video-calendar-day .rbc-day-slot .rbc-event {
+    max-width: 320px;
+    min-height: 28px;
+  }
+
+  /* Timeslot group styling */
+  .scheduled-video-calendar .rbc-timeslot-group {
+    min-height: 60px;
+    border-bottom: 1px solid rgb(243, 244, 246);
+  }
+
+  .dark .scheduled-video-calendar .rbc-timeslot-group {
+    border-bottom-color: rgb(55, 65, 81);
+  }
+
+  /* Day column in day view - add subtle left border for visual separation */
+  .scheduled-video-calendar-day .rbc-day-slot {
+    border-left: 1px solid rgb(229, 231, 235);
+  }
+
+  .dark .scheduled-video-calendar-day .rbc-day-slot {
+    border-left-color: rgb(55, 65, 81);
   }
 
   /* Month View Styles */

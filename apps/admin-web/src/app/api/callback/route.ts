@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthClient, setAdminSession } from '@/lib/auth';
 import { subjects } from '@/interfaces/subjects';
+import { hasAdminAccess } from '@/lib/roles';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -20,7 +22,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (exchanged.err) {
-      console.error('Token exchange failed:', exchanged.err);
+      logger.error('Token exchange failed', { error: exchanged.err });
       return NextResponse.redirect(new URL('/login?error=exchange_failed', request.url));
     }
 
@@ -30,21 +32,48 @@ export async function GET(request: NextRequest) {
     });
 
     if (verified.err || !verified.subject) {
-      console.error('Token verification failed:', verified.err);
+      logger.error('Token verification failed', { error: verified.err });
       return NextResponse.redirect(new URL('/login?error=verification_failed', request.url));
     }
 
     const userInfo = verified.subject.properties;
 
-    // For now, we'll allow all authenticated users
-    // Role checking will be done via the admin-api which validates against the auth server
-    // In production, you'd want to fetch user roles here and check them
+    // Extract user roles from the verified token
+    const userRoles = userInfo.roles || [];
 
-    // Create admin session
+    // Check if user has admin or moderator role
+    const hasAccess = userRoles.some((role: string) => hasAdminAccess(role));
+
+    if (!hasAccess) {
+      logger.warn('Unauthorized admin access attempt', {
+        userId: userInfo.id,
+        email: userInfo.email,
+        roles: userRoles,
+      });
+      return NextResponse.redirect(new URL('/access-denied', request.url));
+    }
+
+    // Determine the highest priority role
+    const role = userRoles.includes('super_admin')
+      ? 'super_admin'
+      : userRoles.includes('admin')
+      ? 'admin'
+      : userRoles.includes('moderator')
+      ? 'moderator'
+      : undefined;
+
+    logger.info('Admin login successful', {
+      userId: userInfo.id,
+      email: userInfo.email,
+      role,
+    });
+
+    // Create admin session with role information
     await setAdminSession({
       user: {
         id: userInfo.id,
         email: userInfo.email,
+        role,
       },
       accessToken: exchanged.tokens!.access,
       refreshToken: exchanged.tokens!.refresh,
@@ -52,7 +81,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(new URL('/dashboard', request.url));
   } catch (error) {
-    console.error('Auth callback error:', error);
+    logger.error('Auth callback error', { error });
     return NextResponse.redirect(new URL('/login?error=auth_failed', request.url));
   }
 }

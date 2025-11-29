@@ -36,6 +36,7 @@ import { VideoScheduleUpdate } from '../endpoints/video/scheduleUpdate';
 import { VideoScheduleDelete } from '../endpoints/video/scheduleDelete';
 import { VideoScheduleFetch } from '../endpoints/video/scheduleFetch';
 import { VideoScheduleList } from '../endpoints/video/scheduleList';
+import { VideoSchedulePublishNow } from '../endpoints/video/schedulePublishNow';
 
 // Video comment endpoints
 import { CommentCreate } from '../endpoints/video/commentCreate';
@@ -149,6 +150,9 @@ videoRouter.patch('/:id/schedule', VideoScheduleUpdate);
 
 // Delete schedule (authenticated)
 videoRouter.delete('/:id/schedule', VideoScheduleDelete);
+
+// Publish video immediately (authenticated)
+videoRouter.post('/:id/publish-now', VideoSchedulePublishNow);
 
 // ==========================================
 // VIDEO REACTIONS (LIKES/DISLIKES)
