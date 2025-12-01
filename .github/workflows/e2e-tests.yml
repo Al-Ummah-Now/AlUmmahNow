@@ -72,7 +72,7 @@ jobs:
         env:
           CI: true
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          OPENAUTH_URL: https://auth.alummahnow.net
+          OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: http://localhost:3001
 
       - name: Upload test results
@@ -149,7 +149,7 @@ jobs:
         env:
           CI: true
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          OPENAUTH_URL: https://auth.alummahnow.net
+          OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: http://localhost:3001
 
       - name: Generate HTML report
@@ -234,7 +234,7 @@ jobs:
         env:
           CI: true
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          OPENAUTH_URL: https://auth.alummahnow.net
+          OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: http://localhost:3001
 
       - name: Upload mobile test results
