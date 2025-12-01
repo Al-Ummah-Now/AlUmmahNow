@@ -1,0 +1,55 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "al-ummah-now-processor-qa",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "d1_databases": [
+    {
+      "binding": "REPORTS_DB",
+      "database_name": "al-ummah-now-reports-qa",
+      "database_id": "PLACEHOLDER_REPORTS_DB_QA_ID"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "MESSAGES_BUCKET",
+      "bucket_name": "al-ummah-now-messages-qa"
+    },
+    {
+      "binding": "community_posts",
+      "bucket_name": "community-posts-qa"
+    }
+  ],
+
+  "queues": {
+    "consumers": [
+      {
+        "queue": "al-ummah-now-videos-qa",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30,
+        "max_retries": 3,
+        "dead_letter_queue": "al-ummah-now-dlq-qa"
+      }
+    ]
+  },
+
+  "vars": {
+    "ENVIRONMENT": "qa",
+    "LOG_LEVEL": "debug"
+  },
+
+  "observability": {
+    "logs": {
+      "enabled": true
+    }
+  },
+
+  "dev": {
+    "ip": "127.0.0.1",
+    "port": 3088,
+    "local_protocol": "http"
+  }
+}

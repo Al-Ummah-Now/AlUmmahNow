@@ -1,0 +1,121 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "videos-qa",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "r2_buckets": [
+    {
+      "binding": "videos",
+      "bucket_name": "videos-qa"
+    },
+    {
+      "binding": "profiles",
+      "bucket_name": "profiles-qa"
+    },
+    {
+      "binding": "channels",
+      "bucket_name": "channels-qa"
+    },
+    {
+      "binding": "playlists",
+      "bucket_name": "playlists-qa"
+    },
+    {
+      "binding": "reports",
+      "bucket_name": "reports-qa"
+    },
+    {
+      "binding": "watch_history",
+      "bucket_name": "watch-history-qa"
+    },
+    {
+      "binding": "channel_sections",
+      "bucket_name": "channel-sections-qa"
+    },
+    {
+      "binding": "community_posts",
+      "bucket_name": "community-posts-qa"
+    },
+    {
+      "binding": "channel_tabs",
+      "bucket_name": "channel-tabs-qa"
+    },
+    {
+      "binding": "upload-defaults",
+      "bucket_name": "upload-defaults-qa"
+    },
+    {
+      "binding": "subtitles",
+      "bucket_name": "subtitles-qa"
+    },
+    {
+      "binding": "SCHEDULED_VIDEOS",
+      "bucket_name": "scheduled-videos-qa"
+    },
+    {
+      "binding": "scheduled-videos",
+      "bucket_name": "scheduled-videos-qa"
+    },
+    {
+      "binding": "global_settings",
+      "bucket_name": "global-settings-qa"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "AUTH_STORAGE",
+      "id": "PLACEHOLDER_AUTH_STORAGE_QA_ID"
+    },
+    {
+      "binding": "RATE_LIMIT_KV",
+      "id": "PLACEHOLDER_RATE_LIMIT_KV_QA_ID"
+    },
+    {
+      "binding": "TUS_SESSIONS",
+      "id": "PLACEHOLDER_TUS_SESSIONS_QA_ID"
+    }
+  ],
+  "queues": {
+    "consumers": [],
+    "producers": [
+      {
+        "queue": "al-ummah-now-videos-qa",
+        "binding": "queue"
+      }
+    ]
+  },
+  "secrets_store_secrets": [
+    {
+      "binding": "image_storage_key",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "al-ummah-now-images-key-qa"
+    },
+    {
+      "binding": "bunny-stream-key",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "bunny-stream-key-qa"
+    },
+    {
+      "binding": "bunny_stream_library_id",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "bunny_stream_library_id_qa"
+    }
+  ],
+  "vars": {
+    "ZONE": "al-ummah-now-images-qa",
+    "ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    "Issuer": "https://auth.qa.alummahnow.net",
+    "Audience": "https://videos.qa.alummahnow.net",
+    "SUBTITLE_CDN_URL": "https://subtitles.qa.alummahnow.net",
+    "bunny_hostname": "PLACEHOLDER_BUNNY_QA_HOSTNAME"
+  },
+  "dev": {
+    "ip": "127.0.0.1",
+    "port": 3086,
+    "local_protocol": "http"
+  }
+}

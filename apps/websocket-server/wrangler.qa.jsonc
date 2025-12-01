@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "al-ummah-now-comms-qa",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WEBSOCKET_DO",
+        "class_name": "WebSocketDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["WebSocketDurableObject"]
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "PRESENCE_KV",
+      "id": "PLACEHOLDER_PRESENCE_KV_QA_ID"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "qa"
+  },
+  "dev": {
+    "ip": "127.0.0.1",
+    "port": 3087,
+    "local_protocol": "http"
+  }
+}
