@@ -9,7 +9,7 @@
     {
       "binding": "REPORTS_DB",
       "database_name": "al-ummah-now-reports-qa",
-      "database_id": "PLACEHOLDER_REPORTS_DB_QA_ID",
+      "database_id": "eed66c4a-af26-4e07-9f9a-36f1e4ada555",
       "migrations_dir": "migrations"
     }
   ],
@@ -40,7 +40,7 @@
   "kv_namespaces": [
     {
       "binding": "AUTH_STORAGE",
-      "id": "PLACEHOLDER_AUTH_STORAGE_QA_ID"
+      "id": "14fd32ab385b496c88b5dba88c2492ea"
     }
   ],
 

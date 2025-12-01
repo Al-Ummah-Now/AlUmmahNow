@@ -68,15 +68,15 @@
   "kv_namespaces": [
     {
       "binding": "AUTH_STORAGE",
-      "id": "PLACEHOLDER_AUTH_STORAGE_QA_ID"
+      "id": "14fd32ab385b496c88b5dba88c2492ea"
     },
     {
       "binding": "RATE_LIMIT_KV",
-      "id": "PLACEHOLDER_RATE_LIMIT_KV_QA_ID"
+      "id": "7da4b66fae594a0e9e5af8ef1e0d698d"
     },
     {
       "binding": "TUS_SESSIONS",
-      "id": "PLACEHOLDER_TUS_SESSIONS_QA_ID"
+      "id": "89659e4b76fe4f41823ad956990e6731"
     }
   ],
   "queues": {
