@@ -224,7 +224,7 @@ interface SubtitleTrack {
   uploadedAt: string;             // ISO timestamp
   fileSize: number;               // Size in bytes
   format: 'vtt' | 'srt' | 'sbv'; // Original format
-  url: string;                    // CDN URL to WebVTT file
+  url: string;                    // API URL to WebVTT file
   status: 'processing' | 'ready' | 'error';
   error?: string;                 // Error message if failed
 }
@@ -908,9 +908,13 @@ async function generateSubtitles(videoUrl: string, language: string) {
 
 ### Recommendation
 
-**Phase 1**: Use R2 storage with manual upload (no external dependency)
-**Phase 2**: Integrate Bunny.net for CDN delivery
-**Phase 3**: Add AWS Transcribe for auto-generation
+**Phase 1**: Use R2 storage with manual upload, served via API (current implementation)
+**Phase 2**: Add AWS Transcribe for auto-generation
+**Phase 3**: Consider Bunny.net captions API if needed for advanced features
+
+> **Note**: Subtitles are stored in R2 and served directly via the API endpoint
+> `GET /api/videos/{videoId}/subtitles/{language}` with long-term caching headers.
+> No separate CDN domain is required.
 
 ---
 

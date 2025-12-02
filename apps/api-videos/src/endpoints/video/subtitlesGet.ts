@@ -97,15 +97,32 @@ export class SubtitlesGet extends PublicRoute {
         );
       }
 
+      // Get ETag from R2 object for cache validation
+      const etag = subtitleObject.etag;
+
+      // Check If-None-Match header for conditional request
+      const ifNoneMatch = c.req.header('If-None-Match');
+      if (ifNoneMatch && ifNoneMatch === etag) {
+        // Content hasn't changed, return 304 Not Modified
+        return new Response(null, {
+          status: 304,
+          headers: {
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+          },
+        });
+      }
+
       const content = await subtitleObject.text();
 
-      // Return raw subtitle content
+      // Return raw subtitle content with ETag for cache validation
       return new Response(content, {
         status: 200,
         headers: {
           'Content-Type': contentType,
           'Content-Disposition': `inline; filename="${videoId}-${language}.${format || 'vtt'}"`,
-          'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+          'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+          'ETag': etag,
         },
       });
     } catch (error: any) {

@@ -160,7 +160,6 @@
 		"ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
 		"Issuer": "https://auth.alummahnow.net",
 		"Audience": "https://videos.alummahnow.net",
-		"SUBTITLE_CDN_URL": "https://subtitles.alummahnow.net",
 		"bunny_hostname": "vz-25839d05-80d.b-cdn.net"
 	},
 	/**

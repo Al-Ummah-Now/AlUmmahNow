@@ -172,14 +172,15 @@ export class SubtitlesUpload extends AuthenticatedRoute {
         },
       });
 
-      // Generate CDN URL for WebVTT file
-      // Note: In production, this should use your CDN domain
-      const cdnUrl = `${c.env.SUBTITLE_CDN_URL || 'https://subtitles.alummahnow.net'}/${vttKey}`;
+      // Generate API URL for WebVTT file
+      // Subtitles are served directly via the API endpoint (no separate CDN needed)
+      const apiBaseUrl = c.env.Audience || 'https://videos.alummahnow.net';
+      const subtitleUrl = `${apiBaseUrl}/api/videos/${videoId}/subtitles/${language}`;
 
       // Create complete track with URL
       const track: SubtitleTrack = {
         ...result.track,
-        url: cdnUrl,
+        url: subtitleUrl,
         label: label || result.track.label,
         isDefault: isDefault || false,
       };
