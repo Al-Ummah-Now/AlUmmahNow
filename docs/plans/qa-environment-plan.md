@@ -65,7 +65,6 @@ Create `wrangler.qa.jsonc` for each app:
     // ... all buckets with -qa suffix
   ],
   "kv_namespaces": [
-    { "binding": "AUTH_STORAGE", "id": "<qa-kv-id>" },
     { "binding": "RATE_LIMIT_KV", "id": "<qa-rate-limit-id>" },
     { "binding": "TUS_SESSIONS", "id": "<qa-tus-id>" }
   ]
@@ -98,7 +97,6 @@ Create in Cloudflare Dashboard:
 - global-settings-qa
 
 #### 2.2 KV Namespaces (QA)
-- AUTH_STORAGE_QA
 - RATE_LIMIT_KV_QA
 - TUS_SESSIONS_QA
 - al-ummah-now-analytics-kv-qa

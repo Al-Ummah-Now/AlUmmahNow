@@ -50,16 +50,6 @@
 		}
 	],
 
-	// KV namespace for auth
-	"kv_namespaces": [
-		{
-			"binding": "AUTH_STORAGE",
-			"id": "ff057deb522f4b2bb81006b42462f20e",
-			"preview_id": "966e04e43b904ddeb26453291bf6c22d",
-			"remote": true
-		}
-	],
-
 	// Queue for notifications
 	"queues": {
 		"producers": [

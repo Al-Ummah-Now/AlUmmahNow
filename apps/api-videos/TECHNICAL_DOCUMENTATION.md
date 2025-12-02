@@ -464,7 +464,8 @@ The project uses Cloudflare Workers with these bindings:
   "main": "src/index.ts",
   "compatibility_date": "2024-01-01",
   "kv_namespaces": [
-    { "binding": "AUTH_STORAGE", "id": "preview_id", "preview_id": "dev_id" }
+    { "binding": "TUS_SESSIONS", "id": "preview_id", "preview_id": "dev_id" },
+    { "binding": "RATE_LIMIT_KV", "id": "preview_id", "preview_id": "dev_id" }
   ],
   "r2_buckets": [
     { "binding": "videos", "bucket_name": "videos", "preview_bucket_name": "videos-preview" },

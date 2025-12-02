@@ -41,7 +41,8 @@ Account: Al Ummah Now Production
     - `playlists` - Playlist data
     - `reports` - Moderation reports
   - **KV Namespaces:**
-    - `AUTH_STORAGE` (ID: ff057deb522f4b2bb81006b42462f20e)
+    - `TUS_SESSIONS` (ID: a7f78b8bf0984994a2cd2f4c92169ae1)
+    - `RATE_LIMIT_KV` (ID: 4771816fd0cc469383de67257280c516)
   - **Queue Producers:**
     - `al-ummah-now-videos` queue
   - **Secrets Store:**
@@ -162,8 +163,10 @@ Account: Al Ummah Now Production
 
 | Namespace | ID | Purpose | DELETE PROTECTION |
 |-----------|-----|---------|-------------------|
-| `AUTH_STORAGE` | ff057deb522f4b2bb81006b42462f20e | Authentication data | ⛔ **NEVER DELETE** |
-| `AUTH_STORAGE` (preview) | 966e04e43b904ddeb26453291bf6c22d | Auth (preview) | ⚠️ Safe to delete (dev only) |
+| `TUS_SESSIONS` | a7f78b8bf0984994a2cd2f4c92169ae1 | Resumable upload sessions | ⚠️ Temporary data |
+| `TUS_SESSIONS` (preview) | 56c4fbe8aec04166b9256bf951655c3a | TUS (preview) | ⚠️ Safe to delete (dev only) |
+| `RATE_LIMIT_KV` | 4771816fd0cc469383de67257280c516 | Rate limiting state | ⚠️ Recoverable |
+| `RATE_LIMIT_KV` (preview) | 0464af73f01045dc82dd2a1c25c3daa4 | Rate limit (preview) | ⚠️ Safe to delete (dev only) |
 | `PRESENCE_KV` | a3dbf9b2b80c4a3ea101281e19fd8407 | User presence tracking | ⛔ **NEVER DELETE** |
 | `PRESENCE_KV` (preview) | 156bbaeac14b4d0da721673e951bef3e | Presence (preview) | ⚠️ Safe to delete (dev only) |
 
@@ -232,8 +235,8 @@ Account: Al Ummah Now Production
    - **Delete comms worker = NO real-time features**
 
 3. **Authentication:**
-   - Web/API → OpenAuth → KV AUTH_STORAGE
-   - **Delete AUTH_STORAGE = ALL users logged out**
+   - Web/API → OpenAuth (external service, stateless JWT)
+   - No server-side session storage required
 
 ---
 
@@ -253,7 +256,8 @@ Account: Al Ummah Now Production
    - `web-assets`
 
 3. **Production KV Namespaces:**
-   - `AUTH_STORAGE` (ID: ff057deb522f4b2bb81006b42462f20e)
+   - `TUS_SESSIONS` (ID: a7f78b8bf0984994a2cd2f4c92169ae1)
+   - `RATE_LIMIT_KV` (ID: 4771816fd0cc469383de67257280c516)
    - `PRESENCE_KV` (ID: a3dbf9b2b80c4a3ea101281e19fd8407)
 
 4. **Queues:**

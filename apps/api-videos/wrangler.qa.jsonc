@@ -67,10 +67,6 @@
   ],
   "kv_namespaces": [
     {
-      "binding": "AUTH_STORAGE",
-      "id": "14fd32ab385b496c88b5dba88c2492ea"
-    },
-    {
       "binding": "RATE_LIMIT_KV",
       "id": "7da4b66fae594a0e9e5af8ef1e0d698d"
     },
@@ -92,7 +88,7 @@
     {
       "binding": "image_storage_key",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
-      "secret_name": "al-ummah-now-images-key-qa"
+      "secret_name": "al-ummah-now-images-key"
     },
     {
       "binding": "bunny-stream-key",
@@ -102,16 +98,16 @@
     {
       "binding": "bunny_stream_library_id",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
-      "secret_name": "bunny_stream_library_id_qa"
+      "secret_name": "bunny-stream-library-id-qa"
     }
   ],
   "vars": {
-    "ZONE": "al-ummah-now-images-qa",
+    "ZONE": "al-ummah-now-images",
     "ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
     "Issuer": "https://auth.qa.alummahnow.net",
     "Audience": "https://videos.qa.alummahnow.net",
     "SUBTITLE_CDN_URL": "https://subtitles.qa.alummahnow.net",
-    "bunny_hostname": "PLACEHOLDER_BUNNY_QA_HOSTNAME"
+    "bunny_hostname": "vz-cb79844a-c5d.b-cdn.net"
   },
   "dev": {
     "ip": "127.0.0.1",

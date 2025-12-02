@@ -144,7 +144,7 @@ pnpm wrangler deploy
 
 **Configuration:**
 - R2 buckets: videos, profiles, channels, playlists, reports, watch_history
-- KV namespace: AUTH_STORAGE
+- KV namespaces: TUS_SESSIONS, RATE_LIMIT_KV
 - Queue producer: al-ummah-now-videos
 
 #### Processor

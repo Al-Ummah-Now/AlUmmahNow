@@ -112,12 +112,6 @@
 	],
 	"kv_namespaces": [
 		{
-			"binding": "AUTH_STORAGE",
-			"id": "ff057deb522f4b2bb81006b42462f20e",
-			"preview_id": "966e04e43b904ddeb26453291bf6c22d",
-			"remote": true
-		},
-		{
 			"binding": "RATE_LIMIT_KV",
 			"id": "4771816fd0cc469383de67257280c516",
 			"preview_id": "0464af73f01045dc82dd2a1c25c3daa4",

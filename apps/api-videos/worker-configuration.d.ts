@@ -6,7 +6,6 @@ declare namespace Cloudflare {
 		mainModule: typeof import("./src/index");
 	}
 	interface Env {
-		AUTH_STORAGE: KVNamespace;
 		ZONE: "al-ummah-now-images";
 		Audience: "https://videos.alummahnow.net";
 		image_storage_key: string;

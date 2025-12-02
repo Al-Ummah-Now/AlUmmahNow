@@ -37,13 +37,6 @@
     }
   ],
 
-  "kv_namespaces": [
-    {
-      "binding": "AUTH_STORAGE",
-      "id": "14fd32ab385b496c88b5dba88c2492ea"
-    }
-  ],
-
   "queues": {
     "producers": [
       {

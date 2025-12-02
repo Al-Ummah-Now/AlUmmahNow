@@ -55,11 +55,10 @@ export class TusProxy {
   }
 
   /**
-   * Get or create KV namespace for TUS sessions
+   * Get KV namespace for TUS sessions
    */
   private getSessionStore() {
-    // Use KV namespace for session storage (configure in wrangler.jsonc)
-    return this.env.TUS_SESSIONS || this.env.AUTH_STORAGE;
+    return this.env.TUS_SESSIONS;
   }
 
   /**

@@ -95,9 +95,14 @@ pnpm wrangler deploy --config wrangler.production.jsonc
 ```jsonc
 "kv_namespaces": [
   {
-    "binding": "AUTH_STORAGE",
-    "id": "ff057deb522f4b2bb81006b42462f20e",
-    "preview_id": "966e04e43b904ddeb26453291bf6c22d"
+    "binding": "TUS_SESSIONS",
+    "id": "a7f78b8bf0984994a2cd2f4c92169ae1",
+    "preview_id": "56c4fbe8aec04166b9256bf951655c3a"
+  },
+  {
+    "binding": "RATE_LIMIT_KV",
+    "id": "4771816fd0cc469383de67257280c516",
+    "preview_id": "0464af73f01045dc82dd2a1c25c3daa4"
   }
 ]
 ```
@@ -325,14 +330,16 @@ const list = await bucket.list({
 
 | Namespace | ID | Purpose | TTL | Used By |
 |-----------|-----|---------|-----|---------|
-| `AUTH_STORAGE` | ff057deb522f4b2bb81006b42462f20e | Auth tokens & session data | Variable | API (videos) |
+| `TUS_SESSIONS` | a7f78b8bf0984994a2cd2f4c92169ae1 | Resumable upload sessions | 1 hour | API (videos) |
+| `RATE_LIMIT_KV` | 4771816fd0cc469383de67257280c516 | Rate limiting state | Variable | API (videos) |
 | `PRESENCE_KV` | a3dbf9b2b80c4a3ea101281e19fd8407 | User online/offline status | 15 min | WebSocket (comms) |
 
 ### Preview Namespaces
 
 | Namespace | ID | Purpose | Safe to Delete |
 |-----------|-----|---------|----------------|
-| `AUTH_STORAGE` (preview) | 966e04e43b904ddeb26453291bf6c22d | Auth (dev) | ⚠️ YES |
+| `TUS_SESSIONS` (preview) | 56c4fbe8aec04166b9256bf951655c3a | TUS (dev) | ⚠️ YES |
+| `RATE_LIMIT_KV` (preview) | 0464af73f01045dc82dd2a1c25c3daa4 | Rate limit (dev) | ⚠️ YES |
 | `PRESENCE_KV` (preview) | 156bbaeac14b4d0da721673e951bef3e | Presence (dev) | ⚠️ YES |
 
 ### KV Commands
@@ -363,12 +370,12 @@ wrangler kv:namespace delete --namespace-id {id}
 
 ### KV Storage Patterns
 
-**AUTH_STORAGE:**
+**TUS_SESSIONS:**
 ```typescript
-// Store JWT tokens and session data
-// Key: user:${userId}:session:${sessionId}
-// Value: { token, expiresAt, metadata }
-await env.AUTH_STORAGE.put(key, JSON.stringify(data), {
+// Store resumable upload session data
+// Key: tus:upload:${uploadId}
+// Value: { videoId, userId, bunnyUploadUrl, fileSize, uploadOffset, ... }
+await env.TUS_SESSIONS.put(key, JSON.stringify(sessionData), {
   expirationTtl: 3600, // 1 hour
 });
 ```
@@ -785,7 +792,8 @@ wrangler queues list
 ### Resource IDs Quick Lookup
 
 **KV Namespaces:**
-- AUTH_STORAGE: `ff057deb522f4b2bb81006b42462f20e`
+- TUS_SESSIONS: `a7f78b8bf0984994a2cd2f4c92169ae1`
+- RATE_LIMIT_KV: `4771816fd0cc469383de67257280c516`
 - PRESENCE_KV: `a3dbf9b2b80c4a3ea101281e19fd8407`
 
 **Secrets Store:**

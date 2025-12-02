@@ -80,7 +80,8 @@ These are automatically configured by Wrangler and don't need environment files:
 - `c.env.watch_history` - Watch history tracking
 
 ### KV Namespaces
-- `c.env.AUTH_STORAGE` - Authentication data
+- `c.env.TUS_SESSIONS` - Resumable upload sessions
+- `c.env.RATE_LIMIT_KV` - Rate limiting
 
 ### Queues
 - `c.env.queue` - Message queue (al-ummah-now-videos)

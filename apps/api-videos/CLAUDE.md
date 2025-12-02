@@ -140,7 +140,7 @@ export class MyEndpoint extends OpenAPIRoute {
 
 Configured in `wrangler.jsonc`:
 - **R2 Buckets:** `videos`, `profiles`, `channels`, `playlists` (with preview buckets)
-- **KV Namespaces:** `AUTH_STORAGE` for authentication data
+- **KV Namespaces:** `TUS_SESSIONS` for resumable upload sessions, `RATE_LIMIT_KV` for rate limiting
 - **Queues:** `queue` for event tracking and analytics
 - **Secrets Store:** `bunny-stream-key`, `bunny_stream_library_id`, `image_storage_key`
 - **Environment Variables:** `ZONE` for Bunny.net image storage zone

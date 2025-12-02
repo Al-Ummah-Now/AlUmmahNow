@@ -25,9 +25,6 @@ export interface AdminBindings {
   playlists: R2Bucket;
   global_settings: R2Bucket;
 
-  // KV
-  AUTH_STORAGE: KVNamespace;
-
   // Queue
   queue: any;
 

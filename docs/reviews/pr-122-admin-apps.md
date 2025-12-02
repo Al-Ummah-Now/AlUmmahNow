@@ -313,23 +313,6 @@ logger.info('Auth token payload received', {
 
 #### ORANGE-006: KV Namespace Placeholder IDs
 
-**Severity:** ORANGE Major
-**File:** `/home/meywd/AlUmmahNow/apps/admin-api/wrangler.jsonc:54-60`
-
-```jsonc
-"kv_namespaces": [
-  {
-    "binding": "AUTH_STORAGE",
-    "id": "YOUR_KV_ID",           // PLACEHOLDER!
-    "preview_id": "YOUR_PREVIEW_KV_ID"  // PLACEHOLDER!
-  }
-]
-```
-
-**Problem:** Production deployment will fail with placeholder KV IDs.
-
-**Recommendation:** Create KV namespace and update IDs before deployment.
-
 ---
 
 ### 4.3 Minor Issues
