@@ -41,6 +41,10 @@
       "dependsOn": ["build"],
       "cache": false
     },
+    "deploy:qa": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
     "clean": {
       "cache": false
     }

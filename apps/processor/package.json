@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "wrangler dev --inspector-port=4088",
     "deploy": "wrangler deploy",
+    "deploy:qa": "CI=true wrangler deploy --config wrangler.qa.jsonc",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:development": "wrangler deploy --env development",
     "build": "tsc --noEmit",

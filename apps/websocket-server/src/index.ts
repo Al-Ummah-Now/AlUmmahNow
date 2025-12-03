@@ -67,7 +67,18 @@ app.post('/broadcast', async (c) => {
   try {
     // Authenticate server-to-server request
     const apiKey = c.req.header('X-API-Key');
-    if (!apiKey || apiKey !== c.env.INTERNAL_API_KEY) {
+
+    // Get the expected API key from secret store binding or env var
+    let expectedApiKey: string | undefined;
+    if (c.env.INTERNAL_API_KEY) {
+      if (typeof c.env.INTERNAL_API_KEY === 'string') {
+        expectedApiKey = c.env.INTERNAL_API_KEY;
+      } else if (typeof c.env.INTERNAL_API_KEY.get === 'function') {
+        expectedApiKey = await c.env.INTERNAL_API_KEY.get();
+      }
+    }
+
+    if (!apiKey || !expectedApiKey || apiKey !== expectedApiKey) {
       logger.warn('Broadcast attempt with invalid API key');
       return c.json({
         error: 'Unauthorized - Invalid or missing API key',

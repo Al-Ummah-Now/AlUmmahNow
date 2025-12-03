@@ -30,8 +30,8 @@
     "Issuer": "https://auth.qa.alummahnow.net",
     "OPENAUTH_ISSUER": "https://auth.qa.alummahnow.net",
     "NEXTJS_ENV": "qa",
-    "API_URL": "https://videos.qa.api.alummahnow.net",
-    "WEBSOCKET_URL": "wss://ws.qa.alummahnow.net/ws"
+    "API_URL": "https://videos.api.qa.alummahnow.net",
+    "WEBSOCKET_URL": "wss://realtime.qa.alummahnow.net/ws"
   },
   "r2_buckets": [
     {

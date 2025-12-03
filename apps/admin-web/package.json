@@ -9,6 +9,7 @@
     "start": "next start --port 3091",
     "preview": "opennextjs-cloudflare build && wrangler dev",
     "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "deploy:qa": "opennextjs-cloudflare build && CI=true wrangler deploy --config wrangler.qa.jsonc",
     "lint": "eslint src",
     "type-check": "tsc --noEmit"
   },

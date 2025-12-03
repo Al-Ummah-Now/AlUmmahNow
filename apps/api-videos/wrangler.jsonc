@@ -148,6 +148,11 @@
 		"binding": "bunny_stream_library_id",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "bunny_stream_library_id"
+	  },
+	  {
+		"binding": "INTERNAL_API_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "internal-api-key"
 	  }
 	],
 	/**
@@ -160,7 +165,8 @@
 		"ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
 		"Issuer": "https://auth.alummahnow.net",
 		"Audience": "https://videos.alummahnow.net",
-		"bunny_hostname": "vz-25839d05-80d.b-cdn.net"
+		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",
+		"WEBSOCKET_URL": "https://ws.alummahnow.net"
 	},
 	/**
 	 * Note: Use secrets to store sensitive data.

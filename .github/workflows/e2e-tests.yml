@@ -8,8 +8,81 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Centralized auth setup - runs once, shares auth state with all test jobs
+  auth-setup:
+    name: Auth Setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.4
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+
+      - name: Install Playwright (chromium only for auth)
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Create auth directory
+        working-directory: apps/web
+        run: mkdir -p e2e/.auth
+
+      - name: Start web app
+        working-directory: apps/web
+        run: pnpm dev &
+
+      - name: Wait for web app
+        run: npx wait-on http://localhost:3001 --timeout 120000
+
+      - name: Run auth setup
+        working-directory: apps/web
+        run: npx tsx e2e/run-auth-setup.ts
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          OPENAUTH_URL: https://auth.qa.alummahnow.net
+          WEB_APP_URL: http://localhost:3001
+
+      - name: Upload auth state
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-state
+          path: apps/web/e2e/.auth/
+          retention-days: 1
+
   e2e-tests:
     name: E2E Tests - Video Upload
+    needs: auth-setup
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -59,6 +132,12 @@ jobs:
         # Always install chromium (needed by globalSetup) plus matrix browser
         run: pnpm exec playwright install --with-deps chromium ${{ matrix.browser }}
 
+      - name: Download auth state
+        uses: actions/download-artifact@v4
+        with:
+          name: auth-state
+          path: apps/web/e2e/.auth/
+
       - name: Start web app
         working-directory: apps/web
         run: pnpm dev &
@@ -71,6 +150,7 @@ jobs:
         run: pnpm exec playwright test --project=${{ matrix.browser }} e2e/*video-upload*.spec.ts
         env:
           CI: true
+          SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: http://localhost:3001
@@ -93,6 +173,7 @@ jobs:
 
   e2e-tests-full:
     name: Full E2E Test Suite
+    needs: auth-setup
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -136,6 +217,12 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps
 
+      - name: Download auth state
+        uses: actions/download-artifact@v4
+        with:
+          name: auth-state
+          path: apps/web/e2e/.auth/
+
       - name: Start web app
         working-directory: apps/web
         run: pnpm dev &
@@ -148,6 +235,7 @@ jobs:
         run: pnpm exec playwright test
         env:
           CI: true
+          SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: http://localhost:3001
@@ -182,6 +270,7 @@ jobs:
 
   e2e-mobile:
     name: Mobile E2E Tests
+    needs: auth-setup
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -216,6 +305,12 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium webkit
 
+      - name: Download auth state
+        uses: actions/download-artifact@v4
+        with:
+          name: auth-state
+          path: apps/web/e2e/.auth/
+
       - name: Start web app
         working-directory: apps/web
         run: pnpm dev &
@@ -233,6 +328,7 @@ jobs:
           fi
         env:
           CI: true
+          SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: http://localhost:3001

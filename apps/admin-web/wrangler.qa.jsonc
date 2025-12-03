@@ -18,9 +18,9 @@
     "Issuer": "https://auth.qa.alummahnow.net",
     "OPENAUTH_ISSUER": "https://auth.qa.alummahnow.net",
     "NEXTJS_ENV": "qa",
-    "API_URL": "https://videos.qa.api.alummahnow.net",
-    "ADMIN_API_URL": "https://admin.qa.api.alummahnow.net",
-    "NEXT_PUBLIC_API_URL": "https://videos.qa.api.alummahnow.net",
-    "NEXT_PUBLIC_BASE_URL": "https://admin.qa.alummahnow.net"
+    "API_URL": "https://videos.api.qa.alummahnow.net",
+    "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
+    "NEXT_PUBLIC_API_URL": "https://videos.api.qa.alummahnow.net",
+    "NEXT_PUBLIC_BASE_URL": "https://admin.api.qa.alummahnow.net"
   }
 }

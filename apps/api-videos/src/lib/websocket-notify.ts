@@ -6,11 +6,24 @@
 import { logger } from './logger';
 
 /**
+ * Get the API key value from either a string or a SecretStoreSecret binding
+ */
+export async function getApiKey(
+  apiKeyBinding: string | { get: () => Promise<string> } | undefined
+): Promise<string> {
+  if (!apiKeyBinding) return '';
+  if (typeof apiKeyBinding === 'string') return apiKeyBinding;
+  if (typeof apiKeyBinding.get === 'function') return await apiKeyBinding.get();
+  return '';
+}
+
+/**
  * Send a notification to the WebSocket server
  * This will broadcast the message to all clients subscribed to the channel
  */
 export async function sendWebSocketNotification(
   websocketUrl: string,
+  apiKey: string,
   channel: string,
   message: any
 ): Promise<boolean> {
@@ -19,6 +32,7 @@ export async function sendWebSocketNotification(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
       },
       body: JSON.stringify({
         channel,
@@ -38,6 +52,7 @@ export async function sendWebSocketNotification(
  */
 export async function notifyUser(
   websocketUrl: string,
+  apiKey: string,
   userId: string,
   notification: {
     id: string;
@@ -49,6 +64,7 @@ export async function notifyUser(
 ): Promise<boolean> {
   return sendWebSocketNotification(
     websocketUrl,
+    apiKey,
     `user:${userId}`,
     {
       type: 'notification',
@@ -66,12 +82,14 @@ export async function notifyUser(
  */
 export async function notifyVideoUpdate(
   websocketUrl: string,
+  apiKey: string,
   videoId: string,
   status: string,
   data: any
 ): Promise<boolean> {
   return sendWebSocketNotification(
     websocketUrl,
+    apiKey,
     `video:${videoId}`,
     {
       type: 'video_update',
@@ -87,11 +105,13 @@ export async function notifyVideoUpdate(
  */
 export async function notifyComment(
   websocketUrl: string,
+  apiKey: string,
   videoId: string,
   commentData: any
 ): Promise<boolean> {
   return sendWebSocketNotification(
     websocketUrl,
+    apiKey,
     `video:${videoId}`,
     {
       type: 'comment',
@@ -104,19 +124,21 @@ export async function notifyComment(
 
 /**
  * Example: Integrate with video like endpoint
- * 
+ *
  * Usage in api-videos/src/index.ts:
- * 
- * import { notifyUser } from './lib/websocket-notify';
- * 
+ *
+ * import { notifyUser, getApiKey } from './lib/websocket-notify';
+ *
  * // In video like handler
  * app.post('/api/videos/:id/like', authMiddleware, async (c) => {
  *   // ... existing like logic ...
- *   
+ *
  *   // Notify video owner
  *   const websocketUrl = c.env.WEBSOCKET_URL || 'http://localhost:3087';
+ *   const apiKey = await getApiKey(c.env.INTERNAL_API_KEY);
  *   await notifyUser(
  *     websocketUrl,
+ *     apiKey,
  *     video.userId,
  *     {
  *       id: crypto.randomUUID(),
@@ -126,7 +148,7 @@ export async function notifyComment(
  *       actionUrl: `/videos/${videoId}`
  *     }
  *   );
- *   
+ *
  *   return c.json({ success: true });
  * });
  */

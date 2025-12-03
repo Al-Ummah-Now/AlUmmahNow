@@ -9,6 +9,7 @@
     "build": "tsc --noEmit",
     "start": "wrangler dev",
     "deploy": "wrangler deploy",
+    "deploy:qa": "CI=true wrangler deploy --config wrangler.qa.jsonc",
     "cf-typegen": "wrangler types",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .wrangler",

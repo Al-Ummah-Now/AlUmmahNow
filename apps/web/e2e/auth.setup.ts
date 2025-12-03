@@ -1,6 +1,8 @@
 import { chromium, FullConfig } from '@playwright/test';
 import { ResendTestClient } from './test-utils/resend-client';
 import { logger } from '@/lib/logger-client';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface TestUser {
   email: string;
@@ -16,8 +18,33 @@ export interface TestUser {
  * for reuse across all tests.
  *
  * This eliminates the need for manual user registration or .env credentials.
+ *
+ * Set SKIP_AUTH_SETUP=true to skip registration (when auth state is pre-loaded from artifacts).
  */
 async function globalSetup(_config: FullConfig) {
+  // Skip auth setup if auth state files already exist (from centralized auth job)
+  if (process.env.SKIP_AUTH_SETUP === 'true') {
+    logger.info('[Global Setup] SKIP_AUTH_SETUP=true, checking for existing auth state...');
+
+    const authDir = path.join(process.cwd(), 'e2e/.auth');
+    const requiredFiles = ['user-single.json', 'user-multi.json', 'user-none.json'];
+    const allExist = requiredFiles.every(file => {
+      const filePath = path.join(authDir, file);
+      const exists = fs.existsSync(filePath);
+      if (!exists) {
+        logger.warn(`[Global Setup] Missing auth file: ${filePath}`);
+      }
+      return exists;
+    });
+
+    if (allExist) {
+      logger.info('[Global Setup] ✅ Auth state files found, skipping registration');
+      return;
+    }
+
+    logger.warn('[Global Setup] Auth files missing despite SKIP_AUTH_SETUP=true, proceeding with registration');
+  }
+
   logger.info('[Global Setup] Starting test user registration...');
 
   // Verify required environment variables

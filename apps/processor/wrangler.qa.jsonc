@@ -38,8 +38,17 @@
 
   "vars": {
     "ENVIRONMENT": "qa",
-    "LOG_LEVEL": "debug"
+    "LOG_LEVEL": "debug",
+    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net"
   },
+
+  "secrets_store_secrets": [
+    {
+      "binding": "INTERNAL_API_KEY",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "internal-api-key-qa"
+    }
+  ],
 
   "observability": {
     "logs": {

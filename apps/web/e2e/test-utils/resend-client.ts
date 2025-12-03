@@ -28,15 +28,17 @@ export class ResendTestClient {
    *
    * @param email - Email address to search for
    * @param maxAttempts - Maximum number of retry attempts (default: 10)
-   * @param delayMs - Delay between attempts in milliseconds (default: 2000)
+   * @param delayMs - Base delay between attempts in milliseconds (default: 3000)
    * @returns HTML content of the verification email, or null if not found
    */
   async getVerificationEmail(
     email: string,
     maxAttempts = 10,
-    delayMs = 2000
+    delayMs = 3000
   ): Promise<string | null> {
     logger.info('Waiting for verification email', { email, maxAttempts });
+
+    let consecutiveRateLimits = 0;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -48,6 +50,22 @@ export class ResendTestClient {
             'Content-Type': 'application/json',
           },
         });
+
+        // Handle rate limiting with exponential backoff
+        if (response.status === 429) {
+          consecutiveRateLimits++;
+          const backoffDelay = Math.min(delayMs * Math.pow(2, consecutiveRateLimits), 60000);
+          logger.warn('Rate limited by Resend API, backing off', {
+            attempt,
+            consecutiveRateLimits,
+            backoffDelay,
+          });
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          continue;
+        }
+
+        // Reset rate limit counter on successful request
+        consecutiveRateLimits = 0;
 
         if (!response.ok) {
           logger.error('Failed to fetch emails from Resend', {
@@ -89,8 +107,8 @@ export class ResendTestClient {
             emailId: verificationEmail.id
           });
 
-          // Fetch the full email content
-          const emailResponse = await fetch(
+          // Fetch the full email content with rate limit handling
+          let emailResponse = await fetch(
             `${this.baseUrl}/emails/${verificationEmail.id}`,
             {
               method: 'GET',
@@ -100,6 +118,23 @@ export class ResendTestClient {
               },
             }
           );
+
+          // Retry on rate limit for email content fetch
+          if (emailResponse.status === 429) {
+            const backoffDelay = Math.min(delayMs * 2, 30000);
+            logger.warn('Rate limited fetching email content, backing off', { backoffDelay });
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            emailResponse = await fetch(
+              `${this.baseUrl}/emails/${verificationEmail.id}`,
+              {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${this.apiKey}`,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
+          }
 
           if (!emailResponse.ok) {
             throw new Error(`Failed to fetch email content: ${emailResponse.statusText}`);
