@@ -88,14 +88,14 @@ export async function authenticated(): Promise<AuthSubject | false> {
   }
 }
 
-export async function login() {
+export async function login(locale: string = 'en') {
   // Check if already logged in via SessionManager
   try {
     const { SessionManager } = await import('./auth/session-manager');
     const session = await SessionManager.getActiveSession();
 
     if (session) {
-      redirect("/");
+      redirect(`/${locale}`);
     }
   } catch (_sessionError) {
     // SessionManager not available, continue with legacy check
@@ -117,27 +117,27 @@ export async function login() {
 
       if (!hasError && 'tokens' in verified) {
         await setTokens(verified.tokens!.access, verified.tokens!.refresh);
-        redirect("/");
+        redirect(`/${locale}`);
       } else if (!hasError) {
-        redirect("/");
+        redirect(`/${locale}`);
       }
     } catch (_loginVerifyError) {
       // Silent failure, proceed with new authorization
     }
   }
 
-  // Redirect to OAuth login
+  // Redirect to OAuth login with locale in callback URL
   const headers = await getHeaders()
   const host = headers.get("host")
   const protocol = host?.includes("localhost") ? "http" : "https"
   const { url } = await client.authorize(
-    `${protocol}://${host}/api/callback`,
+    `${protocol}://${host}/api/callback?locale=${locale}`,
     "code",
   )
   redirect(url)
 }
 
-export async function logout() {
+export async function logout(locale: string = 'en') {
   // Clear SessionManager if available
   try {
     const { SessionManager } = await import('./auth/session-manager');
@@ -151,5 +151,5 @@ export async function logout() {
   cookies.delete("access_token")
   cookies.delete("refresh_token")
 
-  redirect("/")
+  redirect(`/${locale}`)
 }

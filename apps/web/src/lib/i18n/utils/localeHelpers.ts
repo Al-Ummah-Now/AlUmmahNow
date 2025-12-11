@@ -310,3 +310,92 @@ export function toDynamicRoute(staticPath: string, _targetLocale?: string): stri
 export function getFallbackLocale(): string {
   return DEFAULT_LOCALE;
 }
+
+// ============================================================================
+// Language Preference Persistence
+// ============================================================================
+
+/** Cookie name for storing language preference (accessible in middleware) */
+export const LANGUAGE_PREFERENCE_COOKIE = 'preferred-language';
+
+/** LocalStorage key for storing language preference */
+export const LANGUAGE_PREFERENCE_KEY = 'preferred-language';
+
+/**
+ * Save language preference to both localStorage and cookie
+ * This allows the preference to be read both client-side and in middleware
+ *
+ * @param locale - The locale code to save (e.g., 'en', 'ar')
+ *
+ * @example
+ * ```tsx
+ * // When user switches language
+ * saveLanguagePreference('ar');
+ * ```
+ */
+export function saveLanguagePreference(locale: string): void {
+  if (typeof window === 'undefined') return;
+
+  // Validate locale before saving
+  const validLocale = getValidLocale(locale);
+
+  // Save to localStorage
+  try {
+    localStorage.setItem(LANGUAGE_PREFERENCE_KEY, validLocale);
+  } catch {
+    // localStorage may be disabled
+  }
+
+  // Save to cookie (accessible in middleware)
+  // Set cookie with 1 year expiry, SameSite=Lax for security
+  const expires = new Date();
+  expires.setFullYear(expires.getFullYear() + 1);
+  document.cookie = `${LANGUAGE_PREFERENCE_COOKIE}=${validLocale}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
+}
+
+/**
+ * Get saved language preference from localStorage
+ * Client-side only - returns null on server
+ *
+ * @returns The saved locale code or null if none saved
+ *
+ * @example
+ * ```tsx
+ * const savedLang = getLanguagePreference();
+ * if (savedLang && savedLang !== currentLocale) {
+ *   router.push(`/${savedLang}${pathname}`);
+ * }
+ * ```
+ */
+export function getLanguagePreference(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const saved = localStorage.getItem(LANGUAGE_PREFERENCE_KEY);
+    // Validate that saved value is still a supported locale
+    if (saved && isLocaleSupported(saved)) {
+      return saved;
+    }
+  } catch {
+    // localStorage may be disabled
+  }
+
+  return null;
+}
+
+/**
+ * Clear saved language preference
+ * Useful for resetting to browser/system default
+ */
+export function clearLanguagePreference(): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.removeItem(LANGUAGE_PREFERENCE_KEY);
+  } catch {
+    // localStorage may be disabled
+  }
+
+  // Clear cookie
+  document.cookie = `${LANGUAGE_PREFERENCE_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}

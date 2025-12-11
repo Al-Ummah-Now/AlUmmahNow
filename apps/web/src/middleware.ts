@@ -17,8 +17,11 @@ import type { NextRequest } from 'next/server';
 import {
   getValidLocale,
   getTextDirection,
-  getSupportedLocaleCodes
+  getSupportedLocaleCodes,
+  LANGUAGE_PREFERENCE_COOKIE,
+  isLocaleSupported
 } from '@/lib/i18n/utils';
+import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 
 /**
  * Generate CSP policy based on environment variables
@@ -95,6 +98,17 @@ const SECURITY_HEADERS = {
 };
 
 /**
+ * Get language preference from cookie
+ */
+function getLanguagePreferenceFromCookie(request: NextRequest): string | null {
+  const cookieValue = request.cookies.get(LANGUAGE_PREFERENCE_COOKIE)?.value;
+  if (cookieValue && isLocaleSupported(cookieValue)) {
+    return cookieValue;
+  }
+  return null;
+}
+
+/**
  * Middleware function to handle locale validation and security headers
  */
 export function middleware(request: NextRequest) {
@@ -102,6 +116,12 @@ export function middleware(request: NextRequest) {
 
   // Determine environment
   const isDevelopment = process.env.NODE_ENV === 'development';
+
+  // Handle root path - redirect to preferred locale or default
+  if (pathname === '/') {
+    const preferredLocale = getLanguagePreferenceFromCookie(request) || DEFAULT_LOCALE;
+    return NextResponse.redirect(new URL(`/${preferredLocale}`, request.url));
+  }
 
   // Handle locale routes
   // Check if the first path segment is a locale code

@@ -178,11 +178,20 @@ export async function createProfileAPI(
 ): Promise<ApiResponse<{ profile: Profile }> | null> {
   const fnName = 'createProfileAPI';
 
+  logger.info(`[${fnName}] Starting profile creation...`);
+
   const authContext = await getServerAuthContext();
   if (!authContext) {
+    logger.error(`[${fnName}] Not authenticated - no auth context`);
     logApiError(fnName, 'Not authenticated');
     return null;
   }
+
+  logger.info(`[${fnName}] Auth context:`, {
+    userId: authContext.userId,
+    hasToken: !!authContext.accessToken,
+    tokenLength: authContext.accessToken?.length
+  });
 
   logApiAuth(fnName, {
     userId: authContext.userId,
@@ -191,6 +200,7 @@ export async function createProfileAPI(
   });
 
   const requestBody = { ...data, id: authContext.userId };
+  logger.info(`[${fnName}] Request body:`, { ...requestBody, email: '***' });
 
   const result = await apiRequestServer<ApiResponse<{ profile: Profile }>>(
     {
@@ -205,6 +215,8 @@ export async function createProfileAPI(
 
   if (result) {
     logApiSuccess(fnName, 'Profile created successfully', result);
+  } else {
+    logger.error(`[${fnName}] Profile creation returned null`);
   }
 
   return result;

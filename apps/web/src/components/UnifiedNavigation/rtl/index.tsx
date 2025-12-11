@@ -186,7 +186,7 @@ export function UnifiedNavigationRTL() {
             >
               {/* Sign In */}
               <div className="p-3">
-                <form action={login}>
+                <form action={login.bind(null, 'ar')}>
                   <button
                     type="submit"
                     className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-gray-900 font-semibold transition-all shadow-md hover:shadow-lg"

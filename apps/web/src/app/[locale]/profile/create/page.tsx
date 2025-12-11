@@ -50,14 +50,14 @@ const ProfileCreatePage = () => {
     setErrorMessage('');
 
     const formData = new FormData(event.target as HTMLFormElement);
-    const firstNameEn = formData.get('firstNameEn') as string;
-    const firstNameAr = formData.get('firstNameAr') as string;
-    const lastNameEn = formData.get('lastNameEn') as string;
-    const lastNameAr = formData.get('lastNameAr') as string;
-    const displayNameEn = formData.get('displayNameEn') as string;
-    const displayNameAr = formData.get('displayNameAr') as string;
-    const bioEn = formData.get('bioEn') as string;
-    const bioAr = formData.get('bioAr') as string;
+    const firstNameEn = (formData.get('firstNameEn') as string) || '';
+    const firstNameAr = (formData.get('firstNameAr') as string) || '';
+    const lastNameEn = (formData.get('lastNameEn') as string) || '';
+    const lastNameAr = (formData.get('lastNameAr') as string) || '';
+    const displayNameEn = (formData.get('displayNameEn') as string) || '';
+    const displayNameAr = (formData.get('displayNameAr') as string) || '';
+    const bioEn = (formData.get('bioEn') as string) || '';
+    const bioAr = (formData.get('bioAr') as string) || '';
 
     // Validation
     if (!firstNameEn.trim()) {
@@ -93,6 +93,11 @@ const ProfileCreatePage = () => {
         coverUrl: profile.coverUrl,
         email: profile.email,
       });
+
+      // Check if API call failed (returns null on error)
+      if (!result) {
+        throw new Error(t.errors.failedToCreate || 'Failed to create profile');
+      }
 
       logger.debug('Profile created successfully:', result);
       setSaveState('success');

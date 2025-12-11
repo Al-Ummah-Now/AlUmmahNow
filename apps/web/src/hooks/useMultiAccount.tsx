@@ -79,7 +79,7 @@ const MultiAccountContext = createContext<MultiAccountContextValue | null>(null)
  */
 export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,13 +205,13 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const addAccount = useCallback(async () => {
     try {
       setError(null);
-      await addUserAccount();
+      await addUserAccount(lang);
       // This will redirect to OAuth flow
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to add account:', err);
       setError(t.errors.failedToCreate);
     }
-  }, [t]);
+  }, [t, lang]);
 
   // Switch to a different account
   const switchAccount = useCallback(async (userId: string) => {

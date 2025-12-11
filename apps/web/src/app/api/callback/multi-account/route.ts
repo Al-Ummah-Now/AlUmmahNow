@@ -4,6 +4,8 @@ import { getClient } from "@/lib/actions";
 import { User } from "@/interfaces";
 import { SessionManager } from "@/lib/auth/session-manager";
 import { logger } from '@/lib/logger-server';
+import { isLocaleSupported } from '@/lib/i18n/utils';
+import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 
 
 // Discriminated union type for clearer type safety
@@ -88,6 +90,11 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
+
+  // Get locale from query param, validate it, fallback to default
+  const localeParam = url.searchParams.get("locale");
+  const locale = localeParam && isLocaleSupported(localeParam) ? localeParam : DEFAULT_LOCALE;
+
   const result = await validate(code, url);
 
   logger.info("[Multi-Account Callback] result:", result);
@@ -97,7 +104,7 @@ export async function GET(req: NextRequest) {
     // Note: Could use state parameter to track where "Add Account" was clicked for better UX
     logger.info("[Multi-Account Callback] Redirecting to profile page");
     // Add query param to trigger session reload
-    return NextResponse.redirect(`${url.origin}/ar/profile?session_updated=true`);
+    return NextResponse.redirect(`${url.origin}/${locale}/profile?session_updated=true`);
   }
 
   logger.error("[Multi-Account Callback] Authentication failed:", result.error);

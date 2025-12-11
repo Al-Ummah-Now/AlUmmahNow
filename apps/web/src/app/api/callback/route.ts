@@ -2,9 +2,11 @@ import { InvalidAccessTokenError } from "@openauthjs/openauth/error";
 import { setTokens } from "@/lib/auth"
 import { type NextRequest, NextResponse } from "next/server"
 import { getClient } from "@/lib/actions";
-import { shouldRedirectToProfileCreation } from "@/lib/profile-helpers";
+import { getProfileCreationPath } from "@/lib/profile-helpers";
 import { User } from "@/interfaces";
 import { logger } from '@/lib/logger-server';
+import { isLocaleSupported } from '@/lib/i18n/utils';
+import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 
 
 // Discriminated union type for clearer type safety
@@ -76,24 +78,33 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
+
+  // Get locale from query param, validate it, fallback to default
+  const localeParam = url.searchParams.get("locale");
+  const locale = localeParam && isLocaleSupported(localeParam) ? localeParam : DEFAULT_LOCALE;
+
   const result = await validate(code, url);
   logger.debug("[result]", result)
 
   if (result.success) {
     // Check if user needs to create profile
     if (result.user) {
-      const profileCheck = await shouldRedirectToProfileCreation(result.user);
-      if (profileCheck.shouldRedirect && profileCheck.redirectPath) {
-        logger.info("Redirecting new user to profile creation", profileCheck.redirectPath);
-        // Add query param to trigger session reload
-        return NextResponse.redirect(`${url.origin}${profileCheck.redirectPath}?session_updated=true`);
+      const { checkProfileExists } = await import('@/lib/api/profiles-client');
+      try {
+        const profileExists = await checkProfileExists(result.user);
+        if (!profileExists) {
+          const profilePath = getProfileCreationPath(locale as 'en' | 'ar');
+          logger.info("Redirecting new user to profile creation", profilePath);
+          return NextResponse.redirect(`${url.origin}${profilePath}?session_updated=true`);
+        }
+      } catch (error) {
+        logger.error('Error checking profile status:', error);
       }
     }
 
-    // Redirect to Arabic locale (default) with session_updated param
-    // The app requires a locale (/en or /ar) to properly function
-    logger.debug("[redirect]", `${url.origin}/ar`)
-    return NextResponse.redirect(`${url.origin}/ar?session_updated=true`);
+    // Redirect to user's locale with session_updated param
+    logger.debug("[redirect]", `${url.origin}/${locale}`)
+    return NextResponse.redirect(`${url.origin}/${locale}?session_updated=true`);
   }
   return NextResponse.json(result.error, { status: 400 });
 

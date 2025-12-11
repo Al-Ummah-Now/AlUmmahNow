@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useTheme } from 'next-themes';
+import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { Sun, Moon, Globe } from 'lucide-react';
 
 interface NavItems {
@@ -52,6 +53,9 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     };
 
     const switchLanguage = () => {
+        // Save language preference to localStorage and cookie
+        saveLanguagePreference('en');
+
         const newPath = pathname?.replace('/ar', '/en') || '/en';
         const params = searchParams?.toString();
         const newUrl = params ? `${newPath}?${params}` : newPath;

@@ -31,4 +31,10 @@ export {
   parseLocaleFromPath,
   toDynamicRoute,
   getFallbackLocale,
+  // Language preference persistence
+  LANGUAGE_PREFERENCE_COOKIE,
+  LANGUAGE_PREFERENCE_KEY,
+  saveLanguagePreference,
+  getLanguagePreference,
+  clearLanguagePreference,
 } from './localeHelpers';

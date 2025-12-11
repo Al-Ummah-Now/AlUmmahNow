@@ -31,14 +31,14 @@ async function getAuthClient() {
 /**
  * Add a new user account (login with additional account)
  */
-export async function addUserAccount(): Promise<void> {
+export async function addUserAccount(locale: string = 'en'): Promise<void> {
   const headers = await getHeaders();
   const host = headers.get("host");
   const protocol = host?.includes("localhost") ? "http" : "https";
 
   const client = await getAuthClient();
   const { url } = await client.authorize(
-    `${protocol}://${host}/api/callback/multi-account`,
+    `${protocol}://${host}/api/callback/multi-account?locale=${locale}`,
     "code"
   );
 
