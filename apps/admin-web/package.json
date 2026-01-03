@@ -16,7 +16,7 @@
   "dependencies": {
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
-    "@openauthjs/openauth": "^0.4.3",
+    "@al-ummah-now/openauth": "1.0.15",
     "@opennextjs/cloudflare": "^1.11.1",
     "@tanstack/react-query": "^5.90.11",
     "next": "15.3.3",

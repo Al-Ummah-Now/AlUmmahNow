@@ -29,15 +29,15 @@ importers:
 
   apps/admin-api:
     dependencies:
+      '@al-ummah-now/openauth':
+        specifier: 1.0.15
+        version: 1.0.15(arctic@2.3.4)(hono@4.10.6)
       '@al-ummah/logger':
         specifier: workspace:*
         version: link:../../packages/logger
       '@al-ummah/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
-      '@openauthjs/openauth':
-        specifier: ^0.4.3
-        version: 0.4.3(arctic@2.3.4)(hono@4.10.6)
       chanfana:
         specifier: ^2.0.5
         version: 2.8.3
@@ -72,15 +72,15 @@ importers:
 
   apps/admin-web:
     dependencies:
+      '@al-ummah-now/openauth':
+        specifier: 1.0.15
+        version: 1.0.15(arctic@2.3.4)(hono@4.10.6)
       '@al-ummah/logger':
         specifier: workspace:*
         version: link:../../packages/logger
       '@al-ummah/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
-      '@openauthjs/openauth':
-        specifier: ^0.4.3
-        version: 0.4.3(arctic@2.3.4)(hono@4.10.6)
       '@opennextjs/cloudflare':
         specifier: ^1.11.1
         version: 1.12.0(wrangler@4.51.0(@cloudflare/workers-types@4.20251115.0))
@@ -130,6 +130,9 @@ importers:
 
   apps/api-videos:
     dependencies:
+      '@al-ummah-now/openauth':
+        specifier: 1.0.15
+        version: 1.0.15(arctic@2.3.4)(hono@4.10.6)
       '@al-ummah/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -139,9 +142,6 @@ importers:
       '@bunny.net/storage-sdk':
         specifier: 0.3.0
         version: 0.3.0
-      '@openauthjs/openauth':
-        specifier: ^0.4.3
-        version: 0.4.3(arctic@2.3.4)(hono@4.10.6)
       chanfana:
         specifier: ^2.8.0
         version: 2.8.3
@@ -246,10 +246,10 @@ importers:
         version: 9.39.1(jiti@2.6.1)
       jest:
         specifier: ^30.2.0
-        version: 30.2.0
+        version: 30.2.0(@types/node@22.19.1)
       ts-jest:
         specifier: ^29.4.5
-        version: 29.4.5(@babel/core@7.28.5)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.5))(jest-util@30.2.0)(jest@30.2.0)(typescript@5.9.3)
+        version: 29.4.5(@babel/core@7.28.5)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.5))(jest-util@30.2.0)(jest@30.2.0(@types/node@22.19.1))(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -293,6 +293,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@al-ummah-now/openauth':
+        specifier: 1.0.15
+        version: 1.0.15(arctic@2.3.4)(hono@4.10.6)
       '@al-ummah/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -311,9 +314,6 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@18.3.1)
-      '@openauthjs/openauth':
-        specifier: ^0.4.3
-        version: 0.4.3(arctic@2.3.4)(hono@4.10.6)
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.7
         version: 1.1.15(@types/react-dom@18.3.7(@types/react@18.2.19))(@types/react@18.2.19)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -504,15 +504,15 @@ importers:
 
   apps/websocket-server:
     dependencies:
+      '@al-ummah-now/openauth':
+        specifier: 1.0.15
+        version: 1.0.15(arctic@2.3.4)(hono@4.10.6)
       '@al-ummah/logger':
         specifier: workspace:*
         version: link:../../packages/logger
       '@al-ummah/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
-      '@openauthjs/openauth':
-        specifier: ^0.4.3
-        version: 0.4.3(arctic@2.3.4)(hono@4.10.6)
       hono:
         specifier: ^4.10.4
         version: 4.10.6
@@ -580,6 +580,13 @@ packages:
 
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
+
+  '@al-ummah-now/openauth@1.0.15':
+    resolution: {integrity: sha512-kYW9IE0TocrlU7u3XEOYwHSE9LDHBLAU0d0Imk9jVFTtIQN+R7gntW2ebCYmT1viycKfNB2bIbsymhOpD7pFKQ==, tarball: https://npm.pkg.github.com/download/@al-ummah-now/openauth/1.0.15/38907cde7cf9a7ad6a5af7cb7c91425b1a8e5e99}
+    hasBin: true
+    peerDependencies:
+      arctic: ^2.2.2
+      hono: ^4.0.0
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -2186,12 +2193,6 @@ packages:
   '@nolyfill/is-core-module@1.0.39':
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
-
-  '@openauthjs/openauth@0.4.3':
-    resolution: {integrity: sha512-RlnjqvHzqcbFVymEwhlUEuac4utA5h4nhSK/i2szZuQmxTIqbGUxZ+nM+avM+VV4Ing+/ZaNLKILoXS3yrkOOw==}
-    peerDependencies:
-      arctic: ^2.2.2
-      hono: ^4.0.0
 
   '@opennextjs/aws@3.8.5':
     resolution: {integrity: sha512-elpMb0fJZc0a1VtymedFa7P1lYcyOmt+Pwqyacpq2C/SvbETIeBlW/Xle/vY95ICtccKUxITI8MtonrCo2+2/Q==}
@@ -6890,6 +6891,14 @@ snapshots:
 
   '@adobe/css-tools@4.4.4': {}
 
+  '@al-ummah-now/openauth@1.0.15(arctic@2.3.4)(hono@4.10.6)':
+    dependencies:
+      '@standard-schema/spec': 1.0.0-beta.3
+      arctic: 2.3.4
+      aws4fetch: 1.0.20
+      hono: 4.10.6
+      jose: 5.9.6
+
   '@alloc/quick-lru@5.2.0': {}
 
   '@asamuzakjp/css-color@3.2.0':
@@ -9006,14 +9015,6 @@ snapshots:
       fastq: 1.19.1
 
   '@nolyfill/is-core-module@1.0.39': {}
-
-  '@openauthjs/openauth@0.4.3(arctic@2.3.4)(hono@4.10.6)':
-    dependencies:
-      '@standard-schema/spec': 1.0.0-beta.3
-      arctic: 2.3.4
-      aws4fetch: 1.0.20
-      hono: 4.10.6
-      jose: 5.9.6
 
   '@opennextjs/aws@3.8.5':
     dependencies:
@@ -12313,7 +12314,7 @@ snapshots:
       - babel-plugin-macros
       - supports-color
 
-  jest-cli@30.2.0:
+  jest-cli@30.2.0(@types/node@20.19.25):
     dependencies:
       '@jest/core': 30.2.0
       '@jest/test-result': 30.2.0
@@ -12321,7 +12322,7 @@ snapshots:
       chalk: 4.1.2
       exit-x: 0.2.2
       import-local: 3.2.0
-      jest-config: 30.2.0(@types/node@24.10.0)
+      jest-config: 30.2.0(@types/node@20.19.25)
       jest-util: 30.2.0
       jest-validate: 30.2.0
       yargs: 17.7.2
@@ -12332,7 +12333,7 @@ snapshots:
       - supports-color
       - ts-node
 
-  jest-cli@30.2.0(@types/node@20.19.25):
+  jest-cli@30.2.0(@types/node@22.19.1):
     dependencies:
       '@jest/core': 30.2.0
       '@jest/test-result': 30.2.0
@@ -12340,7 +12341,7 @@ snapshots:
       chalk: 4.1.2
       exit-x: 0.2.2
       import-local: 3.2.0
-      jest-config: 30.2.0(@types/node@20.19.25)
+      jest-config: 30.2.0(@types/node@22.19.1)
       jest-util: 30.2.0
       jest-validate: 30.2.0
       yargs: 17.7.2
@@ -12693,12 +12694,12 @@ snapshots:
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
-  jest@30.2.0:
+  jest@30.2.0(@types/node@20.19.25):
     dependencies:
       '@jest/core': 30.2.0
       '@jest/types': 30.2.0
       import-local: 3.2.0
-      jest-cli: 30.2.0
+      jest-cli: 30.2.0(@types/node@20.19.25)
     transitivePeerDependencies:
       - '@types/node'
       - babel-plugin-macros
@@ -12706,12 +12707,12 @@ snapshots:
       - supports-color
       - ts-node
 
-  jest@30.2.0(@types/node@20.19.25):
+  jest@30.2.0(@types/node@22.19.1):
     dependencies:
       '@jest/core': 30.2.0
       '@jest/types': 30.2.0
       import-local: 3.2.0
-      jest-cli: 30.2.0(@types/node@20.19.25)
+      jest-cli: 30.2.0(@types/node@22.19.1)
     transitivePeerDependencies:
       - '@types/node'
       - babel-plugin-macros
@@ -14081,12 +14082,12 @@ snapshots:
       babel-jest: 30.2.0(@babel/core@7.28.5)
       jest-util: 30.2.0
 
-  ts-jest@29.4.5(@babel/core@7.28.5)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.5))(jest-util@30.2.0)(jest@30.2.0)(typescript@5.9.3):
+  ts-jest@29.4.5(@babel/core@7.28.5)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.5))(jest-util@30.2.0)(jest@30.2.0(@types/node@22.19.1))(typescript@5.9.3):
     dependencies:
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0
       handlebars: 4.7.8
-      jest: 30.2.0
+      jest: 30.2.0(@types/node@22.19.1)
       json5: 2.2.3
       lodash.memoize: 4.1.2
       make-error: 1.3.6

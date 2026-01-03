@@ -3,9 +3,9 @@
  * Validates JWT tokens using OpenAuth subjects
  */
 
-import { createClient } from "@openauthjs/openauth/client";
+import { createClient } from "@al-ummah-now/openauth/client";
 import { z } from 'zod';
-import { createSubjects } from '@openauthjs/openauth/subject';
+import { createSubjects } from '@al-ummah-now/openauth/subject';
 import { logger } from './lib/logger';
 
 // Define the user subject schema (must match api-videos)
@@ -13,6 +13,9 @@ export const subjects = createSubjects({
   user: z.object({
     id: z.string(),
     email: z.string().email(),
+    tenantId: z.string().optional(),
+    roles: z.array(z.string()).optional(),
+    permissions: z.array(z.string()).optional(),
   }),
 });
 

@@ -1,4 +1,4 @@
-import { createClient } from "@openauthjs/openauth/client"
+import { createClient } from "@al-ummah-now/openauth/client"
 
 export async function getClient(env: any) {
   const client = createClient({

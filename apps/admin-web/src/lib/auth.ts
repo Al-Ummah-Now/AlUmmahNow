@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies as getCookies } from 'next/headers';
-import { createClient } from '@openauthjs/openauth/client';
+import { createClient } from '@al-ummah-now/openauth/client';
 import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
 import type { SystemRole } from './roles';

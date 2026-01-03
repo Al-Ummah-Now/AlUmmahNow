@@ -10,7 +10,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { headers as getHeaders } from "next/headers";
-import { createClient } from "@openauthjs/openauth/client";
+import { createClient } from "@al-ummah-now/openauth/client";
 import { SessionManager, type AccountInfo } from '../auth/session-manager';
 import { createChannel } from '../api/channels';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';

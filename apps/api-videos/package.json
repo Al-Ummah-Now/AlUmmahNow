@@ -22,7 +22,7 @@
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
     "@bunny.net/storage-sdk": "0.3.0",
-    "@openauthjs/openauth": "^0.4.3",
+    "@al-ummah-now/openauth": "1.0.15",
     "chanfana": "^2.8.0",
     "hono": "^4.10.4",
     "sanitize-html": "^2.14.0",

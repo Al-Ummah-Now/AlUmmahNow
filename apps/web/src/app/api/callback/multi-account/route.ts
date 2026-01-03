@@ -1,4 +1,4 @@
-import { InvalidAccessTokenError } from "@openauthjs/openauth/error";
+import { InvalidAccessTokenError } from "@al-ummah-now/openauth/error";
 import { type NextRequest, NextResponse } from "next/server";
 import { getClient } from "@/lib/actions";
 import { User } from "@/interfaces";

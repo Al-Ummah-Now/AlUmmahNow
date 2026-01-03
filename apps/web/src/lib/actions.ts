@@ -1,5 +1,5 @@
 "use server"
-import { createClient } from "@openauthjs/openauth/client"
+import { createClient } from "@al-ummah-now/openauth/client"
 import { redirect } from "next/navigation"
 import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"

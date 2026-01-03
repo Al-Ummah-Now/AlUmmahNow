@@ -11,7 +11,7 @@
 
 import { cookies } from 'next/headers';
 import type { Channel, User } from '@al-ummah/shared-types';
-import { createClient } from "@openauthjs/openauth/client";
+import { createClient } from "@al-ummah-now/openauth/client";
 import { subjects } from '../auth';
 import { logger } from '@/lib/logger-server';
 
