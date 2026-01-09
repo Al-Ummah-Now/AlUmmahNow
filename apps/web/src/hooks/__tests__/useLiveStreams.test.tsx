@@ -16,13 +16,10 @@ import React from 'react';
 import { useLiveStreams, useLiveNow, useScheduledStreams, useEndedStreams } from '../useLiveStreams';
 import { createMockLiveStreams, createMockPaginatedResponse, createMockApiResponse } from '@/__tests__/utils/mock-data';
 
-// Mock fetch globally
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
-
-// Mock runtime config
-jest.mock('@/lib/runtime-config', () => ({
-  getApiUrl: () => 'http://test-api.local',
+// Mock the server action
+const mockListLiveStreams = jest.fn();
+jest.mock('@/lib/api/livestreams', () => ({
+  listLiveStreams: (...args: unknown[]) => mockListLiveStreams(...args),
 }));
 
 // Mock logger
@@ -51,7 +48,7 @@ describe('useLiveStreams Hook', () => {
 
     // Clear all mocks
     jest.clearAllMocks();
-    mockFetch.mockReset();
+    mockListLiveStreams.mockReset();
   });
 
   afterEach(() => {
@@ -71,10 +68,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(5, 'live');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -89,7 +83,7 @@ describe('useLiveStreams Hook', () => {
     });
 
     it('starts with loading state', () => {
-      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockListLiveStreams.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -100,10 +94,7 @@ describe('useLiveStreams Hook', () => {
     it('returns empty array when no streams available', async () => {
       const mockResponse = createSuccessResponse([]);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -121,10 +112,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(3, 'live');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(
         () => useLiveStreams({ status: 'live' }),
@@ -135,9 +123,8 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('status=live'),
-        expect.any(Object)
+      expect(mockListLiveStreams).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'live' })
       );
       expect(result.current.streams).toHaveLength(3);
     });
@@ -146,10 +133,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(2, 'scheduled');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(
         () => useLiveStreams({ status: 'scheduled' }),
@@ -160,9 +144,8 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('status=scheduled'),
-        expect.any(Object)
+      expect(mockListLiveStreams).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'scheduled' })
       );
     });
 
@@ -170,10 +153,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(1, 'live');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(
         () => useLiveStreams({ channelId: 'channel-123' }),
@@ -184,9 +164,8 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('channelId=channel-123'),
-        expect.any(Object)
+      expect(mockListLiveStreams).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'channel-123' })
       );
     });
   });
@@ -199,15 +178,9 @@ describe('useLiveStreams Hook', () => {
       const page1Response = createSuccessResponse(page1Streams, true, 'cursor-page2');
       const page2Response = createSuccessResponse(page2Streams, false);
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(page1Response),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(page2Response),
-        });
+      mockListLiveStreams
+        .mockResolvedValueOnce(page1Response)
+        .mockResolvedValueOnce(page2Response);
 
       const { result } = renderHook(() => useLiveStreams({ limit: 5 }), {
         wrapper,
@@ -234,10 +207,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(5, 'live');
       const mockResponse = createSuccessResponse(mockStreams, false);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -252,10 +222,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(12, 'live');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useLiveStreams({ limit: 12 }), {
         wrapper,
@@ -265,19 +232,15 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('limit=12'),
-        expect.any(Object)
+      expect(mockListLiveStreams).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 12 })
       );
     });
   });
 
   describe('Error Handling', () => {
     it('handles API errors gracefully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: false }),
-      });
+      mockListLiveStreams.mockResolvedValueOnce({ success: false });
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -290,7 +253,7 @@ describe('useLiveStreams Hook', () => {
     });
 
     it('handles network errors', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      mockListLiveStreams.mockRejectedValueOnce(new Error('Network error'));
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -301,11 +264,8 @@ describe('useLiveStreams Hook', () => {
       expect(result.current.error).toBeTruthy();
     });
 
-    it('handles non-ok response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Internal Server Error',
-      });
+    it('handles null response from server action', async () => {
+      mockListLiveStreams.mockResolvedValueOnce(null);
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -313,7 +273,19 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isError).toBe(true);
       });
 
-      expect(result.current.error?.message).toContain('Error fetching live streams');
+      expect(result.current.error?.message).toContain('No response from API');
+    });
+
+    it('handles missing data in response', async () => {
+      mockListLiveStreams.mockResolvedValueOnce({ success: true, data: null });
+
+      const { result } = renderHook(() => useLiveStreams(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isError).toBe(true);
+      });
+
+      expect(result.current.error?.message).toContain('Invalid response format');
     });
   });
 
@@ -322,10 +294,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(3, 'live');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -333,13 +302,13 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockListLiveStreams).toHaveBeenCalledTimes(1);
 
       // Manual refetch
       await result.current.refetch();
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(mockListLiveStreams).toHaveBeenCalledTimes(2);
       });
     });
   });
@@ -349,10 +318,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(3, 'live');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useLiveNow(), { wrapper });
 
@@ -360,9 +326,8 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('status=live'),
-        expect.any(Object)
+      expect(mockListLiveStreams).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'live' })
       );
     });
 
@@ -370,10 +335,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(2, 'scheduled');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useScheduledStreams(), { wrapper });
 
@@ -381,9 +343,8 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('status=scheduled'),
-        expect.any(Object)
+      expect(mockListLiveStreams).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'scheduled' })
       );
     });
 
@@ -391,10 +352,7 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(4, 'ended');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useEndedStreams(), { wrapper });
 
@@ -402,9 +360,8 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('status=ended'),
-        expect.any(Object)
+      expect(mockListLiveStreams).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'ended' })
       );
     });
   });
@@ -420,7 +377,7 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       }, { timeout: 500 });
 
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockListLiveStreams).not.toHaveBeenCalled();
       expect(result.current.streams).toEqual([]);
     });
 
@@ -428,17 +385,14 @@ describe('useLiveStreams Hook', () => {
       const mockStreams = createMockLiveStreams(2, 'live');
       const mockResponse = createSuccessResponse(mockStreams);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      mockListLiveStreams.mockResolvedValueOnce(mockResponse);
 
       const { result, rerender } = renderHook(
         ({ enabled }) => useLiveStreams({ enabled }),
         { wrapper, initialProps: { enabled: false } }
       );
 
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockListLiveStreams).not.toHaveBeenCalled();
 
       rerender({ enabled: true });
 
@@ -446,7 +400,7 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalled();
+      expect(mockListLiveStreams).toHaveBeenCalled();
       expect(result.current.streams).toHaveLength(2);
     });
   });

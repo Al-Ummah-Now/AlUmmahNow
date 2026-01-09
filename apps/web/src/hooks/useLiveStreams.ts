@@ -2,38 +2,9 @@
 
 import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { LiveStream, PaginatedResponse, ApiResponse } from '@al-ummah/shared-types';
-import { getApiUrl } from '@/lib/runtime-config';
+import { LiveStream, PaginatedResponse } from '@al-ummah/shared-types';
+import { listLiveStreams } from '@/lib/api/livestreams';
 import { logger } from '@/lib/logger-client';
-
-/**
- * Client-side fetch for live streams
- */
-async function fetchLiveStreams(params: {
-  status?: string;
-  channelId?: string;
-  limit?: number;
-  cursor?: string;
-}): Promise<ApiResponse<PaginatedResponse<LiveStream>>> {
-  const baseUrl = getApiUrl();
-  const queryParams = new URLSearchParams();
-
-  if (params.limit) queryParams.append('limit', params.limit.toString());
-  if (params.cursor) queryParams.append('cursor', params.cursor);
-  if (params.status) queryParams.append('status', params.status);
-  if (params.channelId) queryParams.append('channelId', params.channelId);
-
-  const response = await fetch(`${baseUrl}/api/live-streams?${queryParams.toString()}`, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Error fetching live streams: ${response.statusText}`);
-  }
-
-  return response.json();
-}
 
 /**
  * Options for configuring the useLiveStreams hook
@@ -132,9 +103,10 @@ export interface UseLiveStreamsReturn {
  * - Infinite scroll pagination with cursor-based navigation
  * - Automatic refetching for live streams (30s interval)
  * - Smart caching strategy (5 minutes for ended, 30 seconds for live)
- * - Filter by status, category, or channel
+ * - Filter by status or channel
  * - Comprehensive error handling with retry logic
  * - Optimized performance with memoization
+ * - Uses server actions for API calls (proper auth handling)
  *
  * @example
  * ```tsx
@@ -200,7 +172,8 @@ export function useLiveStreams({
     queryFn: async ({ pageParam }) => {
       logger.debug('[useLiveStreams] Fetching streams', { status, cursor: pageParam || 'initial', limit });
 
-      const response = await fetchLiveStreams({
+      // Call the server action
+      const response = await listLiveStreams({
         status,
         channelId,
         limit,
