@@ -227,7 +227,7 @@ export function mockIntersectionObserver() {
     takeRecords() {
       return [];
     }
-  } as any;
+  } as unknown as typeof IntersectionObserver;
 
   return {
     /**
@@ -284,7 +284,7 @@ export function mockMatchMedia(query: string, matches: boolean = true) {
  * Create mock Next.js Image component
  * Avoids image loading issues in tests
  */
-export const MockNextImage = ({ src, alt, ...props }: any) => {
+export const MockNextImage = ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={alt} {...props} />;
 };

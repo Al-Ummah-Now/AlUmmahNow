@@ -288,17 +288,20 @@ describe('ViewerCount Component', () => {
     });
 
     it('handles string counts by converting to number', () => {
-      renderWithProviders(<ViewerCount count={'456' as any} />);
+      // @ts-expect-error - Testing edge case with string input
+      renderWithProviders(<ViewerCount count={'456'} />);
       expect(screen.getByText('456')).toBeInTheDocument();
     });
 
     it('handles undefined count as 0', () => {
-      renderWithProviders(<ViewerCount count={undefined as any} />);
+      // @ts-expect-error - Testing edge case with undefined
+      renderWithProviders(<ViewerCount count={undefined} />);
       expect(screen.getByText('0')).toBeInTheDocument();
     });
 
     it('handles null count as 0', () => {
-      renderWithProviders(<ViewerCount count={null as any} />);
+      // @ts-expect-error - Testing edge case with null
+      renderWithProviders(<ViewerCount count={null} />);
       expect(screen.getByText('0')).toBeInTheDocument();
     });
   });

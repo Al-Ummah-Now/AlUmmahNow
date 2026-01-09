@@ -209,7 +209,7 @@ describe('LiveStreamCard Component', () => {
 
     it('handles missing channel avatar', () => {
       const stream = createMockLiveStream({
-        channel: createMockChannel({ avatarUrl: undefined as any }),
+        channel: createMockChannel({ avatarUrl: undefined }),
       });
 
       renderWithProviders(<LiveStreamCard stream={stream} />);
@@ -476,18 +476,15 @@ describe('LiveStreamCard Component', () => {
 
   describe('Edge Cases', () => {
     it('handles missing optional fields gracefully', () => {
-      const minimalStream: LiveStream = {
+      const minimalStream = {
         id: 'test-id',
         title: 'Minimal Stream',
         thumbnailUrl: 'https://example.com/thumb.jpg',
-        status: 'live',
+        status: 'live' as const,
         channel: {
           id: 'channel-1',
           name: 'Test Channel',
-          avatarUrl: undefined as any,
-        } as any,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        },
       } as LiveStream;
 
       renderWithProviders(<LiveStreamCard stream={minimalStream} />);

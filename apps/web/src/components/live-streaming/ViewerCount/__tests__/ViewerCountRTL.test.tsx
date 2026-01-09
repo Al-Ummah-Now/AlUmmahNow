@@ -191,7 +191,8 @@ describe('ViewerCount RTL Component', () => {
     });
 
     it('handles undefined count', () => {
-      renderWithRTL(<ViewerCountRTL count={undefined as any} />);
+      // @ts-expect-error - Testing edge case with undefined
+      renderWithRTL(<ViewerCountRTL count={undefined} />);
       expect(screen.getByText('٠')).toBeInTheDocument();
     });
 
