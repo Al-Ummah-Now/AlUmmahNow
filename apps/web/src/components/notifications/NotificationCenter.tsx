@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRealTimeNotifications, Notification } from '@/hooks/useRealTimeNotifications';
-import { User } from '@/interfaces';
 import { X, Bell, Heart, MessageCircle, UserPlus, Video, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -15,6 +14,13 @@ interface NotificationToastProps {
 function NotificationToast({ notification, onClose, onAction }: NotificationToastProps) {
   const [isExiting, setIsExiting] = useState(false);
 
+  const handleClose = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onClose(notification.id);
+    }, 300); // Match animation duration
+  }, [notification.id, onClose]);
+
   useEffect(() => {
     // Auto-close after 5 seconds
     const timer = setTimeout(() => {
@@ -22,14 +28,7 @@ function NotificationToast({ notification, onClose, onAction }: NotificationToas
     }, 5000);
 
     return () => clearTimeout(timer);
-  }, []);
-
-  const handleClose = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onClose(notification.id);
-    }, 300); // Match animation duration
-  };
+  }, [handleClose]);
 
   const getIcon = () => {
     switch (notification.type) {
@@ -100,17 +99,12 @@ function NotificationToast({ notification, onClose, onAction }: NotificationToas
   );
 }
 
-interface NotificationCenterProps {
-  user?: User | null;
-}
-
-export function NotificationCenter({ user }: NotificationCenterProps) {
+export function NotificationCenter() {
   const {
     notifications,
     unreadCount,
     markAsRead
   } = useRealTimeNotifications({
-    userId: user?.id,
     maxNotifications: 10,
     autoRemoveAfter: 10000 // 10 seconds
   });
@@ -155,14 +149,15 @@ export function NotificationCenter({ user }: NotificationCenterProps) {
       )}
 
       {/* Toast notifications */}
-      <div className="fixed top-0 right-0 z-50 space-y-2 p-4">
+      <div className="fixed top-0 right-0 z-50 space-y-2 p-4 pointer-events-none">
         {notifications
           .filter(n => visibleToasts.includes(n.id))
           .slice(0, 3) // Only show 3 toasts at a time
           .map((notification, index) => (
             <div
               key={notification.id}
-              style={{ 
+              className="pointer-events-auto"
+              style={{
                 transform: `translateY(${index * 10}px)`,
                 zIndex: 50 - index
               }}

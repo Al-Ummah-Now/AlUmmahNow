@@ -1,12 +1,12 @@
-import { Bool, Num, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Num } from "chanfana";
 import { string, z } from "zod";
 import { Profile as BusinessProfile, PaginationResponse, ResponseError } from "../../lib/types";
 import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
+import { PublicRoute, AppContext } from "../../base";
 
-export class ProfilesList extends OpenAPIRoute {
+export class ProfilesList extends PublicRoute {
 	schema = {
 		tags: ["Profiles"],
 		summary: "List Profiles",
@@ -19,10 +19,6 @@ export class ProfilesList extends OpenAPIRoute {
 				cursor: string({
 					description: "The last cursor returned from the previous request",
 				}).optional(),
-			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -63,16 +59,15 @@ export class ProfilesList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated parameters
 		const { limit, cursor } = request.query;
-		const { channelId, userId } = request.headers;
 
 		// Get profiles from storage
-        const bucket = env.profiles;
+        const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
 		const profiles = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);

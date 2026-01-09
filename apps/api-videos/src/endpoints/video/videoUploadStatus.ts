@@ -1,10 +1,11 @@
 import { OpenAPIRoute, Str } from "chanfana";
+import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
+import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
 // Upload status type
 const UploadStatus = z.object({
@@ -31,7 +32,7 @@ const UploadStatus = z.object({
 	}).optional(),
 });
 
-export class VideoUploadStatus extends OpenAPIRoute {
+export class VideoUploadStatus extends OptionalAuthRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Get Video Upload Status",
@@ -39,6 +40,9 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		request: {
 			params: z.object({
 				id: Str({ description: "Video id" }),
+			}),
+			headers: z.object({
+				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -88,16 +92,16 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
+		const { channelId } = request.headers;
 		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
+		const effectiveUserId = this.getUserId(c);
 
-		if (!userId) {
+		if (!effectiveUserId) {
 			return c.json({
 				success: false,
 				error: "Authentication required"
@@ -105,7 +109,7 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		}
 
 		// Get video from storage
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		const video = await repository.getObject(id);
@@ -118,7 +122,7 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		}
 
 		// Check ownership - user must own the video to check status
-		if (video.userId !== userId) {
+		if (video.userId !== effectiveUserId) {
 			return c.json({
 				success: false,
 				error: "Forbidden - you can only check status of your own videos",
@@ -128,16 +132,26 @@ export class VideoUploadStatus extends OpenAPIRoute {
 		// Get status from Bunny Stream if possible
 		let bunnyStreamStatus = null;
 		try {
-			const key = await env["bunny-stream-key"].get();
+			const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 			if (key) {
+				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
-				const libraryId = parseInt(await env.bunny_stream_library_id.get());
-				
+
 				// Get video details from Bunny Stream
 				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);
+
+				// Log transcoding messages if video failed or has warnings
+				if (bunnyStreamStatus.status >= 4 || bunnyStreamStatus.transcodingMessages?.length) {
+					logger.warn('[VideoUploadStatus] Bunny.net transcoding messages', {
+						videoId: id,
+						status: bunnyStreamStatus.status,
+						messages: bunnyStreamStatus.transcodingMessages,
+					});
+				}
 			}
 		} catch (error) {
-			console.warn("Could not fetch Bunny Stream status:", error);
+			logger.warn("Could not fetch Bunny Stream status:", error);
 		}
 
 		// Determine status based on video data and Bunny Stream info
@@ -192,6 +206,58 @@ export class VideoUploadStatus extends OpenAPIRoute {
 			status = "failed";
 			progress = 0;
 			message = "Upload or processing failed";
+		}
+
+		// Update R2 object if status changed or resolutions need updating
+		const needsUpdate = bunnyStreamStatus && (
+			video.uploadStatus !== status ||
+			(bunnyStreamStatus.availableResolutions && video.availableResolutions.length === 0) ||
+			(bunnyStreamStatus.length && !video.duration)
+		);
+
+		if (needsUpdate) {
+			try {
+				logger.info('[VideoUploadStatus] Updating video status in R2', {
+					videoId: id,
+					oldStatus: video.uploadStatus,
+					newStatus: status,
+					bunnyStatus: bunnyStreamStatus.status,
+				});
+
+				video.uploadStatus = status as any;
+				video.dateModified = new Date().toISOString();
+
+				// Update available resolutions if Bunny.net has them
+				if (bunnyStreamStatus.availableResolutions) {
+					video.availableResolutions = bunnyStreamStatus.availableResolutions
+						.split(',')
+						.map(r => r.trim())
+						.filter(r => r.length > 0);
+				}
+
+				// Update duration if available
+				if (bunnyStreamStatus.length) {
+					video.duration = bunnyStreamStatus.length;
+				}
+
+				// Update storage size if available
+				if (bunnyStreamStatus.storageSize) {
+					video.fileSize = bunnyStreamStatus.storageSize;
+				}
+
+				// Set playUrl for HLS streaming
+				if (!video.playUrl && bunnyStreamStatus.guid) {
+					video.playUrl = `https://${c.env.bunny_hostname}/${bunnyStreamStatus.guid}/playlist.m3u8`;
+				}
+
+				await repository.putObject(id, video);
+				logger.info('[VideoUploadStatus] Video status updated in R2', { videoId: id, status });
+			} catch (error) {
+				logger.error('[VideoUploadStatus] Failed to update video status in R2', {
+					videoId: id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 		}
 
 		// Build response

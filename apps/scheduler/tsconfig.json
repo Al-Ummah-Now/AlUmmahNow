@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["@cloudflare/workers-types"],
+    "lib": ["ES2021"],
+    "moduleResolution": "bundler",
+    "module": "esnext",
+    "target": "es2021"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

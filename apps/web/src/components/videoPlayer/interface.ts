@@ -4,10 +4,13 @@ export interface PlayerOptions {
   id: string;
   title: string;
   channel: string;
+  channelName: string;
   channelAvatar: string;
+  channelCover?: string;
   description: string;
   views: string;
   url: string;
+  playUrl?: string; // HLS streaming URL from Bunny.net
   poster?: string; // Video thumbnail/poster image URL
   autoplay: boolean;
   type: string;

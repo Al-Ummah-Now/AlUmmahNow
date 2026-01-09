@@ -3,6 +3,8 @@
  * Manages user online/offline status using Cloudflare KV
  */
 
+import { logger } from './lib/logger';
+
 export class PresenceManager {
   private kv: KVNamespace;
 
@@ -27,7 +29,7 @@ export class PresenceManager {
       });
       return true;
     } catch (error) {
-      console.error('Error setting user online:', error);
+      logger.error('Error setting user online:', error);
       return false;
     }
   }
@@ -54,7 +56,7 @@ export class PresenceManager {
       }
       return true;
     } catch (error) {
-      console.error('Error setting user offline:', error);
+      logger.error('Error setting user offline:', error);
       return false;
     }
   }
@@ -68,7 +70,7 @@ export class PresenceManager {
       const value = await this.kv.get(key);
       return value !== null;
     } catch (error) {
-      console.error('Error checking user online status:', error);
+      logger.error('Error checking user online status:', error);
       return false;
     }
   }
@@ -88,7 +90,7 @@ export class PresenceManager {
       
       return new Set();
     } catch (error) {
-      console.error('Error getting user sessions:', error);
+      logger.error('Error getting user sessions:', error);
       return new Set();
     }
   }
@@ -110,7 +112,7 @@ export class PresenceManager {
       }
       return false;
     } catch (error) {
-      console.error('Error refreshing presence:', error);
+      logger.error('Error refreshing presence:', error);
       return false;
     }
   }
@@ -129,7 +131,7 @@ export class PresenceManager {
         })
       );
     } catch (error) {
-      console.error('Error getting bulk presence:', error);
+      logger.error('Error getting bulk presence:', error);
     }
 
     return presence;

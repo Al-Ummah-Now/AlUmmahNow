@@ -1,0 +1,1 @@
+Use APIs under log service(http://localhost:3089/) to read and monitor app logs

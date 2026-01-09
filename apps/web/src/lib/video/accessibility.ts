@@ -28,6 +28,8 @@
  */
 
 import type { ExtendedPlayer } from './videojs';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Configuration options for accessibility
@@ -200,12 +202,12 @@ export function setupAccessibility(
   const announcementManager = new AnnouncementManager();
 
   // Track all event handlers for cleanup
-  const eventHandlers: Array<{ event: string; handler: (...args: any[]) => void }> = [];
+  const eventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
 
   // Get player element
   const playerEl = player.el();
   if (!playerEl) {
-    console.warn('[Accessibility] Player element not found');
+    logger.warn('[Accessibility] Player element not found');
     return () => {};
   }
 

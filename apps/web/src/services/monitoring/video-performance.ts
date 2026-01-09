@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 interface PerformanceMetrics {
   timeToFirstFrame: number;
   rebufferCount: number;
@@ -179,7 +180,7 @@ export class VideoPerformanceMonitor {
 
   private getCurrentBitrate(): number {
     if ('getVideoPlaybackQuality' in this.videoElement) {
-      const quality = (this.videoElement as any).getVideoPlaybackQuality();
+      const quality = (this.videoElement as HTMLVideoElement & { getVideoPlaybackQuality: () => VideoPlaybackQuality }).getVideoPlaybackQuality();
       const totalBytes = quality.totalVideoFrames || 0;
       const totalFrames = quality.droppedVideoFrames || 1;
       return totalBytes > 0 ? (totalBytes * 8) / (totalFrames * 0.033) : 0;
@@ -189,7 +190,7 @@ export class VideoPerformanceMonitor {
 
   private getCurrentQuality(): string {
     if ('webkitVideoDecodedByteCount' in this.videoElement) {
-      const bytes = (this.videoElement as any).webkitVideoDecodedByteCount;
+      const bytes = (this.videoElement as HTMLVideoElement & { webkitVideoDecodedByteCount: number }).webkitVideoDecodedByteCount;
       return bytes > 1000000 ? 'high' : bytes > 500000 ? 'medium' : 'low';
     }
     return 'unknown';
@@ -274,7 +275,7 @@ export class VideoPerformanceMonitor {
         throw new Error(`Failed to send metrics: ${response.status}`);
       }
     } catch (error) {
-      console.error('Failed to send performance metrics:', error);
+      logger.error('Failed to send performance metrics:', error);
     }
   }
 

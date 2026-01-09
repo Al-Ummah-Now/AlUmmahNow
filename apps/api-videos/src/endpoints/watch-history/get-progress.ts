@@ -4,12 +4,14 @@
  * Retrieves the current watch progress for a video
  */
 
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type { WatchHistoryEntry } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Path parameter schema
 const ProgressParams = z.object({
@@ -26,7 +28,7 @@ const ProgressResponseSchema = z.object({
   lastWatchedAt: z.string().describe("Timestamp of last watch"),
 });
 
-export class GetWatchProgress extends OpenAPIRoute {
+export class GetWatchProgress extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -34,6 +36,9 @@ export class GetWatchProgress extends OpenAPIRoute {
       description:
         "Retrieves the current playback progress for a video. Used to resume playback from where the user left off.",
       request: {
+        headers: z.object({
+          channelId: z.string().optional().nullable(),
+        }),
         params: ProgressParams,
       },
       responses: {
@@ -60,8 +65,10 @@ export class GetWatchProgress extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
-    const auth = c.get("auth");
-    const userId = auth.userId;
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { channelId } = request.headers;
+
+    const userId = this.getUserId(c);
 
     // Get videoId from path params
     const { videoId } = c.req.param();
@@ -101,7 +108,7 @@ export class GetWatchProgress extends OpenAPIRoute {
         200
       );
     } catch (error) {
-      console.error("Error getting watch progress:", error);
+      logger.error("Error getting watch progress:", error);
       return c.json(
         {
           error: "Failed to retrieve watch progress",

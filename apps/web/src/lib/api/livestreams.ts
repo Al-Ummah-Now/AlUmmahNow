@@ -1,4 +1,6 @@
-import { LiveStream } from "@al-ummah/shared-types";
+'use server';
+
+import { LiveStream } from "@/interfaces";
 import {
   ApiResponse,
   PaginationResponse,
@@ -7,278 +9,259 @@ import {
   LiveStreamQueryParams,
   ApiHeaders,
 } from "./types";
+import { getApiUrl } from "@/lib/runtime-config";
+import { logger } from '@/lib/logger-server';
 
-// Get API URL - log error if not configured but don't crash the app
-const baseUrl = process.env.API_URL;
-if (!baseUrl) {
-  console.error(
-    '[LiveStreamsAPI] API_URL environment variable is not configured. API calls will fail.'
+
+const baseUrl = getApiUrl();
+
+/**
+ * List Live Streams
+ * GET /api/live-streams
+ */
+export async function listLiveStreams(
+  params?: LiveStreamQueryParams,
+  headers?: ApiHeaders
+): Promise<ApiResponse<PaginationResponse<LiveStream>> | null> {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.cursor) queryParams.append('cursor', params.cursor);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.channelId) queryParams.append('channelId', params.channelId);
+
+    const response = await fetch(
+      `${baseUrl}/api/live-streams?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+
+          ...(headers?.channelId && { 'channelId': headers.channelId }),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Error fetching live streams: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    logger.error('listLiveStreams error:', error);
+    return null;
+  }
+}
+
+/**
+ * Create a new Live Stream
+ * POST /api/live-streams
+ */
+export async function createLiveStream(
+  data: LiveStreamCreateRequest,
+  authToken: string
+): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+  // Input validation
+  if (!authToken || authToken.trim() === '') {
+    logger.error('createLiveStream: authToken is required');
+    return null;
+  }
+  if (!data || typeof data !== 'object') {
+    logger.error('createLiveStream: data is required and must be an object');
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/live-streams`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(data),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || `Error creating live stream: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    logger.error('createLiveStream error:', error);
+    return null;
+  }
+}
+
+/**
+ * Update a Live Stream
+ * PATCH /api/live-streams/{id}
+ */
+export async function updateLiveStream(
+  streamId: string,
+  data: LiveStreamUpdateRequest,
+  authToken: string
+): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+  // Input validation
+  if (!streamId || streamId.trim() === '') {
+    logger.error('updateLiveStream: streamId is required');
+    return null;
+  }
+  if (!authToken || authToken.trim() === '') {
+    logger.error('updateLiveStream: authToken is required');
+    return null;
+  }
+  if (!data || typeof data !== 'object') {
+    logger.error('updateLiveStream: data is required and must be an object');
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/live-streams/${streamId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(data),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || `Error updating live stream: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    logger.error('updateLiveStream error:', error);
+    return null;
+  }
+}
+
+/**
+ * Go Live - Update stream status to 'live'
+ */
+export async function goLive(
+  streamId: string,
+  authToken: string
+): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+  return updateLiveStream(
+    streamId,
+    { status: 'live', actualStartTime: new Date().toISOString() },
+    authToken
   );
 }
 
-export class LiveStreamsAPI {
-  /**
-   * List Live Streams
-   * GET /api/live-streams
-   */
-  static async list(
-    params?: LiveStreamQueryParams,
-    headers?: ApiHeaders
-  ): Promise<ApiResponse<PaginationResponse<LiveStream>> | null> {
-    if (!baseUrl) {
-      console.error('[LiveStreamsAPI.list] API URL not configured');
-      return null;
-    }
+/**
+ * End Live Stream - Update stream status to 'ended'
+ */
+export async function endLiveStream(
+  streamId: string,
+  authToken: string
+): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+  return updateLiveStream(
+    streamId,
+    { status: 'ended', actualEndTime: new Date().toISOString() },
+    authToken
+  );
+}
 
-    try {
-      const queryParams = new URLSearchParams();
-      if (params?.limit) queryParams.append('limit', params.limit.toString());
-      if (params?.cursor) queryParams.append('cursor', params.cursor);
-      if (params?.status) queryParams.append('status', params.status);
-      if (params?.channelId) queryParams.append('channelId', params.channelId);
-      if (params?.category) queryParams.append('category', params.category);
+/**
+ * Cancel Live Stream
+ */
+export async function cancelLiveStream(
+  streamId: string,
+  authToken: string
+): Promise<ApiResponse<{ stream: LiveStream }> | null> {
+  return updateLiveStream(
+    streamId,
+    { status: 'cancelled' },
+    authToken
+  );
+}
 
-      const response = await fetch(
-        `${baseUrl}/api/live-streams?${queryParams.toString()}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(headers?.channelId && { 'channelId': headers.channelId }),
-            ...(headers?.userId && { 'userId': headers.userId }),
-          },
-        }
-      );
+/**
+ * Get currently live streams
+ */
+export async function getLiveNow(
+  limit: number = 12
+): Promise<LiveStream[]> {
+  try {
+    const response = await listLiveStreams({
+      status: 'live',
+      limit,
+    });
 
-      if (!response.ok) {
-        throw new Error(`Error fetching live streams: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('[LiveStreamsAPI.list]', error);
-      return null;
-    }
-  }
-
-  /**
-   * Create a new Live Stream
-   * POST /api/live-streams
-   */
-  static async create(
-    data: LiveStreamCreateRequest,
-    authToken: string
-  ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
-    if (!baseUrl) {
-      console.error('[LiveStreamsAPI.create] API URL not configured');
-      return null;
-    }
-
-    // Input validation
-    if (!authToken || authToken.trim() === '') {
-      console.error('[LiveStreamsAPI.create] authToken is required');
-      return null;
-    }
-    if (!data || typeof data !== 'object') {
-      console.error('[LiveStreamsAPI.create] data is required and must be an object');
-      return null;
-    }
-
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/live-streams`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(data),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Error creating live stream: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('[LiveStreamsAPI.create]', error);
-      return null;
-    }
-  }
-
-  /**
-   * Update a Live Stream
-   * PATCH /api/live-streams/{id}
-   */
-  static async update(
-    streamId: string,
-    data: LiveStreamUpdateRequest,
-    authToken: string
-  ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
-    if (!baseUrl) {
-      console.error('[LiveStreamsAPI.update] API URL not configured');
-      return null;
-    }
-
-    // Input validation
-    if (!streamId || streamId.trim() === '') {
-      console.error('[LiveStreamsAPI.update] streamId is required');
-      return null;
-    }
-    if (!authToken || authToken.trim() === '') {
-      console.error('[LiveStreamsAPI.update] authToken is required');
-      return null;
-    }
-    if (!data || typeof data !== 'object') {
-      console.error('[LiveStreamsAPI.update] data is required and must be an object');
-      return null;
-    }
-
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/live-streams/${streamId}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(data),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Error updating live stream: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('[LiveStreamsAPI.update]', error);
-      return null;
-    }
-  }
-
-  /**
-   * Go Live - Update stream status to 'live'
-   */
-  static async goLive(
-    streamId: string,
-    authToken: string
-  ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
-    return this.update(
-      streamId,
-      { status: 'live', actualStartTime: new Date().toISOString() },
-      authToken
-    );
-  }
-
-  /**
-   * End Live Stream - Update stream status to 'ended'
-   */
-  static async endStream(
-    streamId: string,
-    authToken: string
-  ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
-    return this.update(
-      streamId,
-      { status: 'ended', actualEndTime: new Date().toISOString() },
-      authToken
-    );
-  }
-
-  /**
-   * Cancel Live Stream
-   */
-  static async cancelStream(
-    streamId: string,
-    authToken: string
-  ): Promise<ApiResponse<{ stream: LiveStream }> | null> {
-    return this.update(
-      streamId,
-      { status: 'cancelled' },
-      authToken
-    );
-  }
-
-  /**
-   * Get currently live streams
-   */
-  static async getLiveNow(
-    limit: number = 12
-  ): Promise<LiveStream[]> {
-    try {
-      const response = await this.list({
-        status: 'live',
-        limit,
-      });
-
-      if (!response || !response.success || !response.result) {
-        return [];
-      }
-
-      return response.result.data || [];
-    } catch (error) {
-      console.error('[LiveStreamsAPI.getLiveNow]', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get scheduled streams
-   */
-  static async getScheduled(
-    limit: number = 12
-  ): Promise<LiveStream[]> {
-    try {
-      const response = await this.list({
-        status: 'scheduled',
-        limit,
-      });
-
-      if (!response || !response.success || !response.result) {
-        return [];
-      }
-
-      return response.result.data || [];
-    } catch (error) {
-      console.error('[LiveStreamsAPI.getScheduled]', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get streams by channel
-   */
-  static async getByChannel(
-    channelId: string,
-    status?: 'scheduled' | 'live' | 'ended' | 'cancelled',
-    limit: number = 20
-  ): Promise<LiveStream[]> {
-    // Input validation
-    if (!channelId || channelId.trim() === '') {
-      console.error('[LiveStreamsAPI.getByChannel] channelId is required');
+    if (!response || !response.success || !response.data) {
       return [];
     }
 
-    try {
-      const response = await this.list({
-        channelId,
-        status,
-        limit,
-      });
+    return response.data.data || [];
+  } catch (error) {
+    logger.error('getLiveNow error:', error);
+    return [];
+  }
+}
 
-      if (!response || !response.success || !response.result) {
-        return [];
-      }
+/**
+ * Get scheduled streams
+ */
+export async function getScheduledStreams(
+  limit: number = 12
+): Promise<LiveStream[]> {
+  try {
+    const response = await listLiveStreams({
+      status: 'scheduled',
+      limit,
+    });
 
-      return response.result.data || [];
-    } catch (error) {
-      console.error('[LiveStreamsAPI.getByChannel]', error);
+    if (!response || !response.success || !response.data) {
       return [];
     }
+
+    return response.data.data || [];
+  } catch (error) {
+    logger.error('getScheduledStreams error:', error);
+    return [];
+  }
+}
+
+/**
+ * Get streams by channel
+ */
+export async function getStreamsByChannel(
+  channelId: string,
+  status?: 'scheduled' | 'live' | 'ended' | 'cancelled',
+  limit: number = 20
+): Promise<LiveStream[]> {
+  // Input validation
+  if (!channelId || channelId.trim() === '') {
+    logger.error('getStreamsByChannel: channelId is required');
+    return [];
+  }
+
+  try {
+    const response = await listLiveStreams({
+      channelId,
+      status,
+      limit,
+    });
+
+    if (!response || !response.success || !response.data) {
+      return [];
+    }
+
+    return response.data.data || [];
+  } catch (error) {
+    logger.error('getStreamsByChannel error:', error);
+    return [];
   }
 }

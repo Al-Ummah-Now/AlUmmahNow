@@ -107,7 +107,7 @@ src/
 ### Cloudflare Workers Bindings
 The app uses these Cloudflare resources (configured in wrangler.jsonc):
 - **R2 Buckets**: videos, profiles, channels, playlists
-- **KV Storage**: AUTH_STORAGE for authentication data
+- **KV Storage**: TUS_SESSIONS for resumable uploads, RATE_LIMIT_KV for rate limiting
 - **Queues**: Event tracking and analytics
 - **Secrets**: Bunny.net streaming keys and image storage keys
 

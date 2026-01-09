@@ -1,23 +1,14 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool } from "chanfana";
 import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ProfileDelete extends OpenAPIRoute {
+export class ProfileDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Profiles"],
-		summary: "Delete a Profile",
-		request: {
-			params: z.object({
-				id: Str({ description: "Profile ID" }),
-			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
-			}),
-		},
+		summary: "Delete the authenticated user's profile",
 		responses: {
 			"200": {
 				description: "Returns if the profile was deleted successfully",
@@ -48,26 +39,21 @@ export class ProfileDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
-		// Get validated data
-		const request = await this.getValidatedData<typeof this.schema>();
+	async handle(c: AppContext) {
+		// Get user ID from auth - profile ID is always the user ID
+		const userId = this.getUserId(c);
 
-		// Retrieve the validated id
-		const { id } = request.params;
-		const { channelId, userId } = request.headers;
-
-		// Delete profile from storage
-        const bucket = env.profiles;
+		// Delete profile from storage (profile ID = user ID)
+		const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
-		await repository.deleteObject(id);
+		await repository.deleteObject(userId);
 
 		// Send queue message for profile deletion
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ProfileDelete, {
-			profileId: id,
+			profileId: userId,
 			userId: userId,
-			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});
 

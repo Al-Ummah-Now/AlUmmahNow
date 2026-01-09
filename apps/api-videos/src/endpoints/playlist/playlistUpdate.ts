@@ -1,14 +1,14 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import { PlaylistUpdateInput } from "../../lib/model/input";
 import { PlaylistView } from "../../lib/model/view";
 import { transformPlaylistToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class PlaylistUpdate extends OpenAPIRoute {
+export class PlaylistUpdate extends AuthenticatedRoute {
     schema = {
         tags: ["Playlists"],
         summary: "Update a playlist",
@@ -18,7 +18,6 @@ export class PlaylistUpdate extends OpenAPIRoute {
             }),
             headers: z.object({
                 channelId: Str({ description: "Channel ID" }),
-                userId: Str({ description: "User ID" }),
             }),
             body: {
                 content: {
@@ -74,17 +73,18 @@ export class PlaylistUpdate extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated parameters
         const { id } = request.params;
-        const { channelId, userId } = request.headers;
+        const { channelId } = request.headers;
+        const userId = this.getUserId(c);
         const updateData = request.body;
 
         // Get existing playlist
-        const bucket = env.playlists;
+        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof BusinessPlaylist>;
         const repository = new R2Repository<PlaylistType>(bucket);
         
@@ -115,7 +115,7 @@ export class PlaylistUpdate extends OpenAPIRoute {
         await repository.putObject(id, updatedPlaylist);
 
         // Send queue message for playlist update
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.PlaylistEdit, {
             playlistId: id,
             userId: userId,

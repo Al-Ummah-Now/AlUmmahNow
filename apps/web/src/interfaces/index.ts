@@ -7,16 +7,23 @@ export type PaginationResponse<T> = {
 export interface VideoObject {
     id: string;
     title: string;
+    titleLocalized?: Record<string, string>; // Multi-language titles
     description: string | null;
+    descriptionLocalized?: Record<string, string>; // Multi-language descriptions
     thumbnailUrl: string;
     videoUrl: string;
+    playUrl?: string; // HLS streaming URL (e.g., https://vz-xxx.b-cdn.net/{videoGuid}/playlist.m3u8)
     userId: string;
     channel: string;
     channelId: string | null;
     channelAvatarUrl: string; // Updated to match shared-types interface
+    channelCoverUrl?: string; // Channel cover/banner image
     channelName: string;
     dateCreated: string;
     dateModified: string;
+    createdAt: string; // For compatibility with shared-types
+    updatedAt?: string; // For compatibility with shared-types - made optional
+    duration?: number; // Video duration in seconds
     views?: number;
     width?: number;
     height?: number;
@@ -29,11 +36,18 @@ export interface VideoObject {
     comments?: Comments[]; // Optional array of Comments
     likes?: Likes[];       // Optional array of Likes
     dislikes?: Dislikes[]; // Optional array of Dislikes
+    // Scheduling fields
+    scheduledPublishDate?: string;        // ISO 8601 datetime in UTC
+    scheduledPublishTimezone?: string;    // IANA timezone (e.g., 'America/New_York')
+    scheduledPublishStatus?: 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled';
+    scheduledBy?: string;                 // User ID who scheduled
+    scheduledAt?: string;                 // When it was scheduled
+    publishedViaSchedule?: boolean;       // True if published via scheduler
 };
 
 export type ResponseError = {
     message: string;
-    error?: any;
+    error?: unknown;
 };
 
 export interface VideoInfo {
@@ -60,10 +74,16 @@ export interface Profile {
     id: string;
     email: string;
     displayName?: string;
+    displayNameLocalized?: Record<string, string>; // Multi-language display names
     firstName?: string;
+    firstNameLocalized?: Record<string, string>; // Multi-language first names
     lastName?: string;
+    lastNameLocalized?: Record<string, string>; // Multi-language last names
     avatarUrl?: string;
     coverUrl?: string;
+    bio?: string;
+    bioLocalized?: Record<string, string>; // Multi-language bios
+    timezone?: string; // IANA timezone (e.g., 'America/New_York', 'Asia/Dubai')
     channelsCount?: number;
     dateCreated?: string;
     dateModified?: string;
@@ -72,19 +92,23 @@ export interface Profile {
     subscriptions?: string[];
 }
 
+// Re-export auth types from shared-types
+export type { AuthUser, AuthSubject } from '@al-ummah/shared-types';
+
+// Extended User interface for web app (includes channel context)
 export interface User {
     id: string;
     email: string;
-    role?: 'user' | 'moderator' | 'admin'; // Add role field for moderation access
-}
-
-export interface AuthSubject {
-    properties: User
+    roles?: string[]; // User roles from auth token (e.g., ['user'], ['admin', 'moderator'])
+    channel?: Partial<Channel> | null; // Optional channel reference (Partial for ChannelInfo compatibility)
+    channelName?: string; // Channel display name
+    name?: string; // User display name
 }
 
 export interface Playlist {
     id: string;
     title: string;
+    name: string; // Required for compatibility with shared-types
     description?: string;
     thumbnailUrl?: string;
     userId: string; // Made required to match API spec
@@ -92,6 +116,8 @@ export interface Playlist {
     channelName?: string; // Added from API spec
     dateCreated: string;
     dateModified: string;
+    createdAt: string; // Required for compatibility with shared-types (from Timestamps)
+    updatedAt?: string; // Optional for compatibility with shared-types (from Timestamps)
     videos?: string[];
     videosCount?: number; // Added from API spec
     isPublic?: boolean;
@@ -102,6 +128,9 @@ export interface Channel {
     userId: string;
     email: string;
     name: string;
+    nameLocalized?: Record<string, string>; // Multi-language names
+    description?: string;
+    descriptionLocalized?: Record<string, string>; // Multi-language descriptions
     isMain: boolean; // Added from API spec
     avatarUrl?: string;
     coverUrl?: string;

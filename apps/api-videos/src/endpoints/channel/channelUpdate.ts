@@ -1,14 +1,14 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { ChannelUpdateInput } from "../../lib/model/input";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ChannelUpdate extends OpenAPIRoute {
+export class ChannelUpdate extends AuthenticatedRoute {
     schema = {
         tags: ["Channels"],
         summary: "Update a Channel",
@@ -16,10 +16,6 @@ export class ChannelUpdate extends OpenAPIRoute {
             params: z.object({
                 id: Str({ description: "Channel id" }),
             }),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
-			}),
             body: {
                 content: {
                     "application/json": {
@@ -50,6 +46,22 @@ export class ChannelUpdate extends OpenAPIRoute {
                     },
                 },
             },
+            "403": {
+                description: "Forbidden - user does not own this channel",
+                content: {
+                    "application/json": {
+                        schema: ResponseError,
+                    },
+                },
+            },
+            "404": {
+                description: "Channel not found",
+                content: {
+                    "application/json": {
+                        schema: ResponseError,
+                    },
+                },
+            },
             "500": {
                 description: "Internal server error",
                 content: {
@@ -61,19 +73,19 @@ export class ChannelUpdate extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated id
         const { id } = request.params;
-		const { channelId, userId } = request.headers;
+        const userId = this.getUserId(c);
 
         // Retrieve the validated request body
         const channelUpdateInput = request.body;
 
         // Implement your own object update here
-        const bucket = env.channels;
+        const bucket = c.env.channels;
         type ChannelType = z.infer<typeof BusinessChannel>;
         const repository = new R2Repository<ChannelType>(bucket);
         
@@ -86,17 +98,28 @@ export class ChannelUpdate extends OpenAPIRoute {
             }, 404);
         }
 
+        // Verify user owns this channel
+        if (existingChannel.userId !== userId) {
+            return c.json({
+                success: false,
+                error: "You do not have permission to update this channel",
+            }, 403);
+        }
+
         // Update the channel with new values
         const updatedChannel = {
             ...existingChannel,
             ...channelUpdateInput,
             dateModified: new Date().toISOString(),
+            // Preserve localized fields if provided
+            nameLocalized: channelUpdateInput.nameLocalized ?? existingChannel.nameLocalized,
+            descriptionLocalized: channelUpdateInput.descriptionLocalized ?? existingChannel.descriptionLocalized,
         };
 
         await repository.putObject(id, updatedChannel);
         
         // Send queue message for channel update
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ChannelUpdate, {
 			channelId: id,
 			userId: userId,

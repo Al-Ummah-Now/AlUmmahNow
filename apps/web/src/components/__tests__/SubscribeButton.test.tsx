@@ -4,7 +4,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SubscribeButton } from '@/components/subscription/SubscribeButton';
-import { ChannelsAPI } from '@/lib/api/channels';
+import * as ChannelsAPI from '@/lib/api/channels';
+import type { User, Profile } from '@/interfaces';
 
 // Mock dependencies
 jest.mock('@/components/AuthProvider/authContext', () => ({
@@ -16,10 +17,8 @@ jest.mock('@/hooks/useProfile', () => ({
 }));
 
 jest.mock('@/lib/api/channels', () => ({
-  ChannelsAPI: {
-    subscribe: jest.fn(),
-    unsubscribe: jest.fn(),
-  },
+  subscribeToChannel: jest.fn(),
+  unsubscribeFromChannel: jest.fn(),
 }));
 
 jest.mock('next/navigation', () => ({
@@ -40,8 +39,8 @@ describe('SubscribeButton', () => {
   });
 
   it('should render subscribe button for unauthenticated users', () => {
-    mockUseAuth.mockReturnValue({ user: null } as any);
-    mockUseProfile.mockReturnValue({ profile: null } as any);
+    mockUseAuth.mockReturnValue({ user: null });
+    mockUseProfile.mockReturnValue({ profile: null, isLoading: false, error: null });
 
     render(
       <SubscribeButton
@@ -54,12 +53,14 @@ describe('SubscribeButton', () => {
   });
 
   it('should show subscribed state when initially subscribed', () => {
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as any);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton
@@ -76,14 +77,16 @@ describe('SubscribeButton', () => {
 
   it('should handle subscribe action', async () => {
     const mockSubscribe = jest.fn().mockResolvedValue({ success: true });
-    (ChannelsAPI.subscribe as jest.Mock).mockImplementation(mockSubscribe);
+    (ChannelsAPI.subscribeToChannel as jest.Mock).mockImplementation(mockSubscribe);
 
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as any);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton
@@ -101,7 +104,7 @@ describe('SubscribeButton', () => {
         'channel-789',
         { notificationsEnabled: true },
         expect.objectContaining({
-          userId: 'user-123',
+          
           channelId: 'channel-456'
         })
       );
@@ -115,14 +118,16 @@ describe('SubscribeButton', () => {
 
   it('should handle unsubscribe action', async () => {
     const mockUnsubscribe = jest.fn().mockResolvedValue({ success: true });
-    (ChannelsAPI.unsubscribe as jest.Mock).mockImplementation(mockUnsubscribe);
+    (ChannelsAPI.unsubscribeFromChannel as jest.Mock).mockImplementation(mockUnsubscribe);
 
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as any);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton
@@ -140,7 +145,7 @@ describe('SubscribeButton', () => {
       expect(mockUnsubscribe).toHaveBeenCalledWith(
         'channel-789',
         expect.objectContaining({
-          userId: 'user-123',
+          
           channelId: 'channel-456'
         })
       );
@@ -156,14 +161,16 @@ describe('SubscribeButton', () => {
     const mockSubscribe = jest.fn().mockImplementation(
       () => new Promise(resolve => setTimeout(() => resolve({ success: true }), 100))
     );
-    (ChannelsAPI.subscribe as jest.Mock).mockImplementation(mockSubscribe);
+    (ChannelsAPI.subscribeToChannel as jest.Mock).mockImplementation(mockSubscribe);
 
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as any);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton
@@ -183,14 +190,16 @@ describe('SubscribeButton', () => {
 
   it('should not update count below zero when unsubscribing', async () => {
     const mockUnsubscribe = jest.fn().mockResolvedValue({ success: true });
-    (ChannelsAPI.unsubscribe as jest.Mock).mockImplementation(mockUnsubscribe);
+    (ChannelsAPI.unsubscribeFromChannel as jest.Mock).mockImplementation(mockUnsubscribe);
 
-    mockUseAuth.mockReturnValue({ 
-      user: { id: 'user-123' } 
-    } as any);
-    mockUseProfile.mockReturnValue({ 
-      profile: { channels: ['channel-456'] } 
-    } as any);
+    mockUseAuth.mockReturnValue({
+      user: { id: 'user-123' } as User
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { channels: ['channel-456'] } as Profile,
+      isLoading: false,
+      error: null
+    });
 
     render(
       <SubscribeButton

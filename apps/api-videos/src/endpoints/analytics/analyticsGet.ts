@@ -1,14 +1,16 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { AnalyticsData as BusinessAnalyticsData, ResponseError } from "../../lib/types";
 import { AnalyticsQueryInput } from "../../lib/model/input";
 import { AnalyticsSummaryView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient } from "../../lib/bunny/stream";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
-export class AnalyticsGet extends OpenAPIRoute {
+export class AnalyticsGet extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Analytics"],
 		summary: "Get Analytics Data",
@@ -17,7 +19,6 @@ export class AnalyticsGet extends OpenAPIRoute {
 			query: AnalyticsQueryInput,
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional(),
-				userId: Str({ description: "User ID (automatically set from JWT token)" }).optional(),
 			}),
 		},
 		responses: {
@@ -69,7 +70,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
 		const { 
 			entityType = 'video', 
@@ -79,7 +80,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 			metrics = ['views', 'likes', 'comments'], 
 			granularity = 'day' 
 		} = request.query;
-		const { userId } = request.headers;
+		const userId = this.getUserId(c);
 
 		try {
 			// Date range handling
@@ -88,6 +89,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 
 			// Get analytics data from Bunny and built-in metrics
 			const analyticsData = await this.getAnalyticsData(
+				c,
 				entityType,
 				entityId,
 				userId,
@@ -104,7 +106,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 				},
 			};
 		} catch (error) {
-			console.error("Error fetching analytics:", error);
+			logger.error("Error fetching analytics:", error);
 			return c.json(
 				{
 					success: false,
@@ -116,6 +118,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 	}
 
 	private async getAnalyticsData(
+		c: any,
 		entityType: string,
 		entityId: string | undefined,
 		userId: string,
@@ -124,17 +127,18 @@ export class AnalyticsGet extends OpenAPIRoute {
 		metrics: string[],
 		granularity: string
 	) {
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		
 		try {
 			// Try to get analytics from Bunny.net first
 			let bunnyAnalytics = null;
 			try {
-				const bunnyKey = await env["bunny-stream-key"].get();
+				const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 				if (bunnyKey) {
 					const { BunnyStreamClient } = await import("../../lib/bunny/stream");
+					const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
+					const libraryId = parseInt(libraryIdStr);
 					const bunnyStream = new BunnyStreamClient(bunnyKey);
-					const libraryId = parseInt(await env.bunny_stream_library_id.get());
 					
 					const dateFrom = startDate.toISOString().split('T')[0];
 					const dateTo = endDate.toISOString().split('T')[0];
@@ -149,7 +153,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 					}
 				}
 			} catch (bunnyError) {
-				console.warn("Failed to fetch Bunny analytics, falling back to local data:", bunnyError);
+				logger.warn("Failed to fetch Bunny analytics, falling back to local data:", bunnyError);
 			}
 
 			// Get built-in view metrics from R2 storage
@@ -160,7 +164,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 			
 			return combinedMetrics;
 		} catch (error) {
-			console.error("Error fetching analytics:", error);
+			logger.error("Error fetching analytics:", error);
 			// Fall back to mock data if all else fails
 			return this.generateMockAnalyticsData(entityType, entityId, userId, startDate, endDate, metrics, granularity);
 		}
@@ -210,7 +214,7 @@ export class AnalyticsGet extends OpenAPIRoute {
 				}
 			}
 		} catch (error) {
-			console.warn("Failed to get local metrics:", error);
+			logger.warn("Failed to get local metrics:", error);
 		}
 
 		return localMetrics;

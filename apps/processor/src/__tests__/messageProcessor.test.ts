@@ -1,14 +1,13 @@
 import { MessageProcessor } from '../messageProcessor';
-import Logger from '../logger';
+import { createLogger } from '@al-ummah/logger';
 import { AlUmmahMessage, MessageType, QueueEnvironment } from '../types';
 
 describe('MessageProcessor', () => {
   let processor: MessageProcessor;
-  let logger: Logger;
   let mockEnv: QueueEnvironment;
 
   beforeEach(() => {
-    logger = new Logger('debug');
+    const logger = createLogger('processor-test', { logLevel: 'debug' });
     processor = new MessageProcessor(logger);
     
     // Mock environment

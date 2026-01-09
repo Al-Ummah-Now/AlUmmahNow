@@ -5,8 +5,9 @@
   "description": "Cloudflare Worker for processing AlUmmah queue messages",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev --inspector-port=9231",
+    "dev": "wrangler dev --inspector-port=4088",
     "deploy": "wrangler deploy",
+    "deploy:qa": "CI=true wrangler deploy --config wrangler.qa.jsonc",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:development": "wrangler deploy --env development",
     "build": "tsc --noEmit",
@@ -24,17 +25,21 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251106.1",
+    "@eslint/js": "^9.39.1",
     "@types/jest": "^30.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.46.3",
-    "@typescript-eslint/parser": "^8.46.3",
-    "eslint": "^8.57.0",
+    "@types/uuid": "^11.0.0",
+    "@typescript-eslint/eslint-plugin": "8.46.4",
+    "@typescript-eslint/parser": "8.46.4",
+    "eslint": "9.39.1",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4",
     "wrangler": "^4.46.0"
   }
 }

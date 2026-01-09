@@ -8,10 +8,11 @@
  * to prevent accidental production use.
  */
 
-import { OpenAPIRoute } from "chanfana";
+import { PublicRoute, AppContext } from "../../base";
+import { } from "chanfana";
 import { z } from "zod";
 
-export class SyncR2Buckets extends OpenAPIRoute {
+export class SyncR2Buckets extends PublicRoute {
   schema = {
     summary: "Sync R2 Buckets (Dev Only)",
     description: "List or sync objects from production buckets to preview buckets. DEV MODE ONLY.",

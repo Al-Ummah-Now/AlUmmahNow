@@ -254,6 +254,7 @@ export function ResumePrompt({
           <div className="vjs-resume-prompt-header">
             {thumbnailUrl && (
               <div className="vjs-resume-prompt-thumbnail">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={thumbnailUrl}
                   alt={videoTitle}

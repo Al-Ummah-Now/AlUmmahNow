@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "al-ummah-logs": {
+      "command": "node",
+      "args": ["/home/meywd/AlUmmahNow/packages/mcp-log-server/dist/index.js"],
+      "env": {
+        "LOG_SERVICE_URL": "http://localhost:3089"
+      }
+    }
+  }
+}

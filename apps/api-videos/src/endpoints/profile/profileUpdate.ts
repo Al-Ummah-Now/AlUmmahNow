@@ -1,25 +1,18 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileUpdateInput } from "../../lib/model/input";
 import { ProfileView } from "../../lib/model/view";
 import { transformProfileToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ProfileUpdate extends OpenAPIRoute {
+export class ProfileUpdate extends AuthenticatedRoute {
     schema = {
         tags: ["Profiles"],
-        summary: "Update a Profile",
+        summary: "Update the authenticated user's profile",
         request: {
-            params: z.object({
-                id: Str({ description: "Profile id" }),
-            }),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
-			}),
             body: {
                 content: {
                     "application/json": {
@@ -61,30 +54,57 @@ export class ProfileUpdate extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
-        // Retrieve the validated id
-        const { id } = request.params;
-		const { channelId, userId } = request.headers;
+        // Get user ID from auth - profile ID is always the user ID
+        const userId = this.getUserId(c);
 
         // Retrieve the validated request body
-        const profile = request.body;
+        const profileUpdateInput = request.body;
 
-        // Implement your own object insertion here
-        const bucket = env.profiles;
+        // Get existing profile from storage (profile ID = user ID)
+        const bucket = c.env.profiles;
         type ProfileType = z.infer<typeof BusinessProfile>;
         const repository = new R2Repository<ProfileType>(bucket);
-        await repository.putObject(id, profile);
-        try {
-            let updated = await repository.getObject(id);
-            return updated;
-        }
-        catch (error) {
-            console.error("Error fetching old profile:", error);
+        const existingProfile = await repository.getObject(userId);
+
+        if (!existingProfile) {
+            return c.json({
+                success: false,
+                error: "Profile not found",
+            }, 404);
         }
 
-        return profile;
+        // Update the profile with new values
+        const updatedProfile = {
+            ...existingProfile,
+            ...profileUpdateInput,
+            dateModified: new Date().toISOString(),
+            // Preserve localized fields if provided
+            displayNameLocalized: profileUpdateInput.displayNameLocalized ?? existingProfile.displayNameLocalized,
+            bioLocalized: profileUpdateInput.bioLocalized ?? existingProfile.bioLocalized,
+        };
+
+        await repository.putObject(userId, updatedProfile);
+
+        // Send queue message for profile update
+        const queue = new Queue(c.env.queue);
+        await queue.send(MessageType.ProfileUpdate, {
+            profileId: userId,
+            userId: userId,
+            timestamp: new Date().toISOString(),
+        });
+
+        // Transform to view model for response
+        const profileView = transformProfileToView(updatedProfile);
+
+        return {
+            success: true,
+            result: {
+                profile: profileView,
+            },
+        };
     }
 }

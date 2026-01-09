@@ -1,7 +1,9 @@
-"use client";
+'use client';
+import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useRef } from "react";
 import { SearchSuggestion } from "@/lib/api/types";
-import { VideosAPI } from "@/lib/api/videos";
+import * as VideosAPI from "@/lib/api/videos";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface SearchSuggestionsProps {
   query: string;
@@ -17,9 +19,11 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
   onSuggestionSelect,
   onQueryChange,
   onSearch,
-  placeholder = "Search for videos...",
+  placeholder,
   debounceDelay = 300 // Default 300ms debounce delay
 }) => {
+  const { t } = useLanguage();
+  const defaultPlaceholder = placeholder || t.search.searchPlaceholder;
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,7 +42,7 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
           setSuggestions(results);
           setShowSuggestions(true);
         } catch (error) {
-          console.error('Error fetching suggestions:', error);
+          logger.error('Error fetching suggestions:', error);
         } finally {
           setLoading(false);
         }
@@ -148,7 +152,7 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
           onKeyDown={handleKeyDown}
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
-          placeholder={placeholder}
+          placeholder={defaultPlaceholder}
           className="w-full px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         

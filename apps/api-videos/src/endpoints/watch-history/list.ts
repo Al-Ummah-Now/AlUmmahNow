@@ -4,7 +4,7 @@
  * Returns the authenticated user's watch history
  */
 
-import { OpenAPIRoute } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -14,6 +14,7 @@ import type {
   WatchHistoryResponse,
   WatchHistoryListRequest
 } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Request query parameters schema
 const ListWatchHistoryQuery = z.object({
@@ -62,7 +63,7 @@ const WatchHistoryResponseSchema = z.object({
   cursor: z.string().optional(),
 });
 
-export class ListWatchHistory extends OpenAPIRoute {
+export class ListWatchHistory extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -70,6 +71,9 @@ export class ListWatchHistory extends OpenAPIRoute {
       description:
         "Returns paginated list of videos watched by the authenticated user, sorted by most recent by default.",
       request: {
+        headers: z.object({
+          channelId: z.string().optional().nullable(),
+        }),
         query: ListWatchHistoryQuery,
       },
       responses: {
@@ -96,8 +100,10 @@ export class ListWatchHistory extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
-    const auth = c.get("auth");
-    const userId = auth.userId;
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { channelId } = request.headers;
+
+    const userId = this.getUserId(c);
 
     // Parse and validate query parameters
     const query = c.req.query();
@@ -166,7 +172,7 @@ export class ListWatchHistory extends OpenAPIRoute {
 
       return c.json(response, 200);
     } catch (error) {
-      console.error("Error listing watch history:", error);
+      logger.error("Error listing watch history:", error);
       return c.json(
         {
           error: "Failed to retrieve watch history",

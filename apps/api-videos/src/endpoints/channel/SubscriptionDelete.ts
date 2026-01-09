@@ -1,11 +1,12 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { z } from "zod";
-import { Channel, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
+import { Channel, Profile, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class SubscriptionDelete extends OpenAPIRoute {
+export class SubscriptionDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Subscriptions"],
 		summary: "Unsubscripe from a channel",
@@ -16,7 +17,6 @@ export class SubscriptionDelete extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 		},
 		responses: {
@@ -55,17 +55,18 @@ export class SubscriptionDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Extract channel ID and subscriber ID
 		const { id, cid } = request.params;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Implement your own object insertion here
 		try {
-			const bucket = env.channels;
+			const bucket = c.env.channels;
 			type ChannelType = z.infer<typeof Channel>;
 			const repository = new R2Repository<ChannelType>(bucket);
 			let channel = await repository.getObject(id);
@@ -91,7 +92,7 @@ export class SubscriptionDelete extends OpenAPIRoute {
 			const subscription = channel.subscriptions.find(s => s.channelId === channelId);
 			channel.subscriptions = channel.subscriptions.filter(s => s.channelId !== channelId);
 						
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.Unsubscribe, {
 				subscriptionId: subscription.id,
 				targetChannelId: id,
@@ -102,10 +103,31 @@ export class SubscriptionDelete extends OpenAPIRoute {
 
 			await repository.putObject(id, channel);
 
+			// Update reverse index on subscriber's profile
+			try {
+				const profileBucket = c.env.profiles;
+				type ProfileType = z.infer<typeof Profile>;
+				const profileRepository = new R2Repository<ProfileType>(profileBucket);
+				const profile = await profileRepository.getObject(userId);
+
+				if (profile && profile.subscribedTo) {
+					// Remove target channel from subscribedTo
+					const index = profile.subscribedTo.indexOf(id);
+					if (index !== -1) {
+						profile.subscribedTo.splice(index, 1);
+						await profileRepository.putObject(userId, profile);
+						logger.debug('Updated profile subscribedTo reverse index (removed)', { userId, targetChannelId: id });
+					}
+				}
+			} catch (profileError) {
+				// Log but don't fail the unsubscription - reverse index is for optimization
+				logger.warn('Failed to update profile subscribedTo index:', profileError);
+			}
+
 			return channel;
 		}
 		catch (error) {
-			console.error("Error fetching Profile:", error);
+			logger.error("Error fetching Profile:", error);
 			return Response.json(
 				{
 					success: false,

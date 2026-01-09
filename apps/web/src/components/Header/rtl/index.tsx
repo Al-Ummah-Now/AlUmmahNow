@@ -2,27 +2,28 @@
 import React from "react";
 import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { HeaderProps } from "../interfaces";
-import { useRealTimeNotifications } from '@/hooks/useRealTimeNotifications';
-import { useAuth } from '@/components/AuthProvider/authContext';
+import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
+import { useLanguage } from '@/hooks/useLanguage';
+import { useAuth } from "@/components/AuthProvider/authContext";
+import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { UploadButton } from '@/components/UploadButton';
 
-const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollapse, profile }) => {
+const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse }) => {
+  const router = useRouter();
+  const { t, lang: locale } = useLanguage();
   const { user } = useAuth();
-  const { isConnected } = useRealTimeNotifications({
-    userId: user?.id,
-    maxNotifications: 10,
-    autoRemoveAfter: 10000
-  });
-
+  const { user: multiAccountUser } = useMultiAccount();
+  const activeChannel = multiAccountUser?.channel;
   const handleClick = () => {
-    redirect('/ar/');
+    router.push(`/${locale}/`);
   };
 
   return (
     <header className="header flex items-center justify-between px-2 bg-[#093041]  text-black dark:text-white " dir="rtl">
       {/* Menu Section */}
-      <div className="flex items-center space-x-reverse space-x-4 ">
+      <div className="flex-1 flex items-center justify-start space-x-reverse space-x-4 ">
         <IcoButton
           style="fa-bars"
           size="text-lg"
@@ -34,27 +35,26 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, toggleAccountCollaps
       {/* Logo Section */}
       <div className="flex-1 flex justify-center items-center space-x-2">
         <div className="flex rounded-4xl p-1 cursor-pointer justify-center items-center" onClick={handleClick}>
-          <div className="relative left-0 w-13 h-13 rounded-full overflow-hidden">
+          {/* <div className="relative left-0 w-13 h-13 rounded-full overflow-hidden">
             <Image src="/logo.png" alt="Logo" sizes="10vw" fill />
+          </div> */}
+          <div className="relative left-0 w-30 h-13 overflow-hidden">
+            <Image src="/Al Ummah Now Name.png" alt="Name" sizes="10vw" fill />
           </div>
-          <h2 className="text-2xl font-[farsi] text-[#ffa037] cursor-pointer">الأمة الآن</h2>
         </div>
       </div>
 
-      {/* User Account Section */}
-      <div className="flex items-center space-x-4">
-        {/* Avatar with connection status ring */}
-        <div className="relative w-12 h-12 flex items-center justify-center cursor-pointer" onClick={toggleAccountCollapse}>
-          {/* Connection status ring - only show in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className={`absolute inset-0 rounded-full border-2 ${
-              isConnected ? 'border-green-500' : 'border-red-500'
-            } animate-pulse`} />
-          )}
-          <div className="w-10 h-10 rounded-full overflow-hidden relative">
-            <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" objectFit="cover" className="bg-gray-500" fill />
-          </div>
-        </div>
+      {/* Unified Navigation and Upload Button */}
+      <div className="flex-1 flex items-center justify-end gap-2">
+        {user && activeChannel && (
+          <UploadButton
+            href={`/${locale}/upload`}
+            text={t.upload.uploadVideo}
+            hideTextOnMobile
+            size="sm"
+          />
+        )}
+        <UnifiedNavigationRTL />
       </div>
     </header>
   );

@@ -2,13 +2,13 @@
 import React, { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import IcoButton from "@/components/iconButton";
-import Image from 'next/image';
 import Link from "next/link";
 import { AccountNavigationProps, NavItem } from "./../interfaces";
 import { useTheme } from "next-themes"
 import LoginWrapper from "@/components/login/loginButton/rtl";
 import LogoutWrapper from "@/components/login/logoutButton/rtl";
 import DialogDefault from "@/components/login/rtl";
+import UserAvatar from '@/components/UserAvatar';
 
 const AccountNavigation: React.FC<AccountNavigationProps> = ({
     isVisible,
@@ -20,8 +20,8 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
     const [login, setLogin] = React.useState(false);
     const [logout, setLogout] = React.useState(false);
     const { theme, setTheme } = useTheme();
-    let path = usePathname();
-    let params = useSearchParams()?.toString();
+    const path = usePathname();
+    const params = useSearchParams()?.toString();
 
     const newPath = path.replace("ar", "en");
     const newParams = params ? `?${params}` : "";
@@ -38,7 +38,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             }
         };
 
-        let items: NavItem[] = [
+        const items: NavItem[] = [
             {
                 label: "الوضع الداكن",
                 icon: `${theme === "dark" ? "fa-sun" : "fa-moon"}`,
@@ -57,14 +57,15 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             items.push({ label: "الإعدادات", icon: "fa-cog", href: "/ar/settings", onClick: onClose });
             
             // Add moderation link for admin/moderator users
-            if (user.role === 'admin' || user.role === 'moderator') {
+            if (user.roles?.includes('admin') || user.roles?.includes('moderator')) {
                 items.push({ label: "الإشراف", icon: "fa-shield-alt", href: "/ar/moderation", onClick: onClose });
             }
         }
-        user
-            ? items.push({ label: "تسجيل الخروج", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout })
-            : items.push({ label: "تسجيل الدخول", icon: "fa-sign-in-alt", href: "#", onClick: handleLogin });
-
+        if (user) {
+            items.push({ label: "تسجيل الخروج", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout });
+        } else {
+            items.push({ label: "تسجيل الدخول", icon: "fa-sign-in-alt", href: "#", onClick: handleLogin });
+        }
         setNaveItems(items);
     }, [user, newUrl, login, logout, profile, theme, setTheme, onClose]);
 
@@ -83,10 +84,8 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
                 ${isVisible ? "w-44" : "w-0 hidden"}`}
                 style={{ direction: "rtl" }} // Set RTL direction
             >
-                <div className="flex justify-end px-2 py-2.5">
-                    <div className="w-10 h-10 rounded-full overflow-hidden relative">
-                        <Image src={profile?.avatarUrl ? profile.avatarUrl : "/avatar.png"} alt="User" fill objectFit="cover" className="bg-gray-500" />
-                    </div>
+                <div className="flex justify-end px-2 py-1.5">
+                    <UserAvatar avatarUrl={profile?.avatarUrl} alt="User" />
                 </div>
                 <ul className="bg-white dark:bg-gray-900 h-screen">
                     {naveItems.map((item, index) => (

@@ -1,7 +1,13 @@
 "use client";
 import React from "react";
 import IcoButton from "@/components/iconButton";
-import Link from 'next/link'
+import Link from 'next/link';
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { useTheme } from 'next-themes';
+import { useLanguage } from '@/hooks/useLanguage';
+import { saveLanguagePreference } from '@/lib/i18n/utils';
+import { Sun, Moon, Globe } from 'lucide-react';
 
 interface NavItems {
     label: string;
@@ -21,13 +27,40 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     onCollapse,
     withOverlay = false, // Default to no overlay
 }) => {
-    const navItems: NavItems[] = [
-        { label: "Home", icon: "fa-house", href: "/en/" },
-        { label: "Trending", icon: "fa-magnifying-glass", href: "/en/search" },
-        { label: "Upload", icon: "fa-upload", href: "/en/upload" },
-        { label: "Subscriptions", icon: "fa-tv", href: "#" },
-        { label: "Library", icon: "fa-bookmark", href: "#" },
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const { user } = useMultiAccount();
+    const activeChannel = user?.channel;
+    const { theme, setTheme } = useTheme();
+    const { t, lang, oppositeLanguage, languages } = useLanguage();
+
+    const allNavItems: NavItems[] = [
+        { label: lang === 'ar' ? "الرئيسية" : "Home", icon: "fa-house", href: `/${lang}/` },
+        { label: lang === 'ar' ? "بحث" : "Search", icon: "fa-magnifying-glass", href: `/${lang}/search` },
+        { label: lang === 'ar' ? "رفع" : "Upload", icon: "fa-upload", href: `/${lang}/upload` },
+        { label: lang === 'ar' ? "الاشتراكات" : "Subscriptions", icon: "fa-tv", href: "#" },
+        { label: lang === 'ar' ? "المكتبة" : "Library", icon: "fa-bookmark", href: "#" },
     ];
+
+    // Filter out Upload if user has no active channel
+    const navItems = activeChannel
+        ? allNavItems
+        : allNavItems.filter(item => item.icon !== "fa-upload");
+
+    const toggleTheme = () => {
+        setTheme(theme === 'dark' ? 'light' : 'dark');
+    };
+
+    const switchLanguage = () => {
+        // Save language preference to localStorage and cookie
+        saveLanguagePreference(oppositeLanguage);
+
+        const newPath = pathname?.replace(`/${lang}`, `/${oppositeLanguage}`) || `/${oppositeLanguage}`;
+        const params = searchParams?.toString();
+        const newUrl = params ? `${newPath}?${params}` : newPath;
+        router.push(newUrl);
+    };
 
     return (
         <>
@@ -56,11 +89,66 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                         />
                     </div>
                 )}
-                <ul className="bg-white dark:bg-gray-900 h-screen">
+                <ul className="bg-white dark:bg-gray-900 h-screen flex flex-col overflow-y-auto">
+                    {/* Enhanced Controls Section - AT TOP */}
+                    <li className="px-3 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div className="space-y-2.5">
+                            {/* Dark Mode Toggle */}
+                            <button
+                                onClick={toggleTheme}
+                                className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
+                                aria-label={theme === 'dark' ? t.navigation?.light || 'Light Mode' : t.navigation?.dark || 'Dark Mode'}
+                                suppressHydrationWarning
+                            >
+                                <div
+                                    className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 ${
+                                        theme === 'dark'
+                                            ? 'bg-yellow-500/10 text-yellow-500 group-hover:bg-yellow-500/20'
+                                            : 'bg-blue-500/10 text-blue-600 group-hover:bg-blue-500/20'
+                                    }`}
+                                    suppressHydrationWarning
+                                >
+                                    {theme === 'dark' ? (
+                                        <Sun className="h-5 w-5" />
+                                    ) : (
+                                        <Moon className="h-5 w-5" />
+                                    )}
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                        Theme
+                                    </div>
+                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100" suppressHydrationWarning>
+                                        {theme === 'dark' ? 'Light' : 'Dark'}
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* Language Selector */}
+                            <button
+                                onClick={switchLanguage}
+                                className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
+                                aria-label={`Switch to ${languages[oppositeLanguage].displayName}`}
+                            >
+                                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500/20 transition-all duration-200">
+                                    <Globe className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                        Language
+                                    </div>
+                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                        {languages[oppositeLanguage].displayName}
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
+                    </li>
+
                     {navItems.map((item, index) => (
                         <li
                             key={index}
-                            className=" hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
+                            className="hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
                         >
                             <Link
                                 href={item.href}

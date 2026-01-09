@@ -1,7 +1,24 @@
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
+import { VideoCategory } from "@al-ummah/shared-types";
 
 // Pure business/database models - represent data as stored in R2
+
+// Common fields for soft delete
+const SoftDeleteFields = {
+    isDeleted: z.boolean().optional(),
+    deletedAt: DateTime().optional(),
+    markedForDeletion: z.boolean().optional(),
+    markedForDeletionAt: DateTime().optional(),
+};
+
+// Common fields for moderation
+const ModerationFields = {
+    isHidden: z.boolean().optional(),
+    hiddenAt: DateTime().optional(),
+    hiddenByUserId: Str().optional(),
+    hiddenReason: Str().optional(),
+};
 
 export const Like = z.object({
     id: Str(),
@@ -51,9 +68,14 @@ export const Comment = BaseComment.extend({
 export const Video = z.object({
     id: Str(),
     title: Str(),
+    titleLocalized: z.record(z.string()).optional(),
     description: Str().optional(),
+    descriptionLocalized: z.record(z.string()).optional(),
     thumbnailUrl: Str().optional(),
+    thumbnailType: z.enum(['auto', 'custom']).optional(),
+    thumbnailSizes: z.record(z.string()).optional(),
     videoUrl: Str().optional(),
+    playUrl: Str().optional(),
     userId: Str(),
     channelId: Str(),
     dateCreated: DateTime(),
@@ -66,12 +88,24 @@ export const Video = z.object({
     originalFormat: z.string().optional(),
     uploadStatus: z.enum(['initiated', 'uploading', 'processing', 'ready', 'failed']).optional(),
     tags: z.array(z.string()).default([]),
+    category: z.nativeEnum(VideoCategory).optional(),
+    language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),
     availableResolutions: z.array(z.string()).default([]),
     comments: z.array(Comment).default([]),
     likes: z.array(Like).default([]),
     dislikes: z.array(Dislike).default([]),
     isPublic: z.boolean().default(true),
     isLive: z.boolean().default(false),
+    // Scheduling fields
+    scheduledPublishDate: DateTime().optional(),
+    scheduledPublishTimezone: Str().optional(),
+    scheduledPublishStatus: z.enum(['scheduled', 'publishing', 'published', 'failed', 'cancelled']).optional(),
+    scheduledBy: Str().optional(),
+    scheduledAt: DateTime().optional(),
+    publishedViaSchedule: z.boolean().optional(),
+    // Soft delete and moderation fields
+    ...SoftDeleteFields,
+    ...ModerationFields,
 });
 
 export const Playlist = z.object({
@@ -85,6 +119,9 @@ export const Playlist = z.object({
     dateModified: DateTime(),
     videos: z.array(Str()).default([]), // Array of video IDs
     isPublic: z.boolean().default(true),
+    // Soft delete and moderation fields
+    ...SoftDeleteFields,
+    ...ModerationFields,
 });
 
 // Watch history entry type
@@ -101,14 +138,22 @@ export const Profile = z.object({
     id: Str(),
     email: Str().email(),
     userName: Str().optional(),
+    displayName: Str().optional(),
+    displayNameLocalized: z.record(z.string()).optional(),
     firstName: Str().optional(),
+    firstNameLocalized: z.record(z.string()).optional().describe("Multi-language first names"),
     lastName: Str().optional(),
+    lastNameLocalized: z.record(z.string()).optional().describe("Multi-language last names"),
+    bio: Str().optional(),
+    bioLocalized: z.record(z.string()).optional(),
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
+    timezone: Str().optional().describe("User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     channels: z.array(Str()).default([]), // Array of channel IDs
     watchHistory: z.array(WatchHistoryEntry).default([]), // Watch history tracking
+    subscribedTo: z.array(Str()).default([]), // Channel IDs user is subscribed to (reverse index)
 });
 
 export const Channel = z.object({
@@ -116,7 +161,11 @@ export const Channel = z.object({
     userId: Str(),
     email: Str().email(),
     name: Str(),
+    nameLocalized: z.record(z.string()).optional(),
+    description: Str().optional(),
+    descriptionLocalized: z.record(z.string()).optional(),
     isMain: Bool().default(false),
+    isPrivate: z.boolean().optional(), // User-controlled privacy
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     dateCreated: DateTime(),
@@ -126,6 +175,42 @@ export const Channel = z.object({
     subscribers: z.array(Subscription).default([]),
     subscriptions: z.array(Subscription).default([]),
     likes: z.array(Like).default([]),
+    // Soft delete and moderation fields
+    ...SoftDeleteFields,
+    ...ModerationFields,
+});
+
+// Channel Tab Configuration
+export const ChannelTab = z.object({
+    id: Str({ description: "Tab identifier (home, videos, shorts, etc.)" }),
+    name: Str({ description: "Default display name" }),
+    nameLocalized: z.record(z.string()).optional(),
+    icon: Str().optional(),
+    type: z.enum(['system', 'custom']),
+    visible: Bool({ description: "Whether the tab is visible" }),
+    position: z.number().int().min(0),
+    url: Str().optional(),
+    metadata: z.record(z.any()).optional(),
+});
+
+export const ChannelTabConfig = z.object({
+    channelId: Str(),
+    defaultTab: Str({ description: "Default tab ID when visiting channel" }),
+    tabs: z.array(ChannelTab),
+    version: z.number().int().default(1),
+    lastModifiedBy: Str().optional(),
+    dateCreated: DateTime(),
+    dateModified: DateTime(),
+});
+
+export const ChannelTabConfigUpdateInput = z.object({
+    defaultTab: Str().optional(),
+    tabs: z.array(z.object({
+        id: Str(),
+        visible: Bool().optional(),
+        position: z.number().int().min(0).optional(),
+        nameLocalized: z.record(z.string()).optional(),
+    })).optional(),
 });
 
 // Phase 2: Live Streaming models

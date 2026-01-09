@@ -1,12 +1,12 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from '../../base';
 
 
-export class CommentUpdate extends OpenAPIRoute {
+export class CommentUpdate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Comments"],
 		summary: "Update a comment for a video",
@@ -17,7 +17,6 @@ export class CommentUpdate extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 			body: {
 				content: {
@@ -66,14 +65,15 @@ export class CommentUpdate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id, cid } = request.params;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Get the video and find the comment
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof Video>;
 		const repository = new R2Repository<VideoType>(bucket);
 		let video = await repository.getObject(id);
@@ -112,7 +112,7 @@ export class CommentUpdate extends OpenAPIRoute {
 		video.comments[commentIndex] = updatedComment;
 
 		// Send queue message for comment edit
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.CommentEdit, {
 			commentId: cid,
 			videoId: id,

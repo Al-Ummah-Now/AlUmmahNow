@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "concurrency": "12",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -37,6 +38,10 @@
       "cache": false
     },
     "deploy:production": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "deploy:qa": {
       "dependsOn": ["build"],
       "cache": false
     },

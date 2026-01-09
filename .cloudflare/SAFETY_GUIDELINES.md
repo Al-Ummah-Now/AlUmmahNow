@@ -32,8 +32,9 @@ This document prevents accidental deletion of critical Cloudflare Workers and re
 - `al-ummah-now-messages` ⛔ - Event messages
 - `web-assets` ⛔ - Static website files
 
-**KV Namespaces (2):**
-- `AUTH_STORAGE` (ID: ff057deb522f4b2bb81006b42462f20e) ⛔ - Auth tokens
+**KV Namespaces (3):**
+- `TUS_SESSIONS` (ID: a7f78b8bf0984994a2cd2f4c92169ae1) ⛔ - Upload sessions
+- `RATE_LIMIT_KV` (ID: 4771816fd0cc469383de67257280c516) ⛔ - Rate limiting
 - `PRESENCE_KV` (ID: a3dbf9b2b80c4a3ea101281e19fd8407) ⛔ - User presence
 
 **Queues (2):**
@@ -223,14 +224,14 @@ wrangler deployments list --name {worker-name} | grep -A 20 "Bindings"
 ### If KV Namespace Deleted
 
 **Impact:**
-- `AUTH_STORAGE` deleted = All users logged out
+- `TUS_SESSIONS` deleted = Active uploads will fail (temporary data, recoverable)
+- `RATE_LIMIT_KV` deleted = Rate limits reset (recoverable)
 - `PRESENCE_KV` deleted = Presence tracking broken
 
 **Recovery:**
 1. Recreate KV namespace with same name
 2. Update wrangler.jsonc with new ID
 3. Redeploy affected workers
-4. Users must re-authenticate
 
 ### If Queue Deleted
 

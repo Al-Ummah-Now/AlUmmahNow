@@ -1,7 +1,8 @@
-import videojs from 'video.js';
+import { logger } from '@/lib/logger-client';
+import videojs, { Player } from 'video.js';
 
 interface VideoJSPlugin {
-  (player: any, options?: any): void;
+  (player: Player, options?: Record<string, unknown>): void;
 }
 
 interface PluginLoaderOptions {
@@ -16,7 +17,7 @@ const pluginRegistry = {
   'sprite-thumbnails': () => import('videojs-sprite-thumbnails')
 };
 
-const loadedPlugins = new Map<string, any>();
+const loadedPlugins = new Map<string, VideoJSPlugin>();
 
 export async function loadPlugin(
   pluginName: keyof typeof pluginRegistry,
@@ -25,11 +26,12 @@ export async function loadPlugin(
   const { timeout = 5000, retries = 2 } = options;
 
   if (loadedPlugins.has(pluginName)) {
-    return loadedPlugins.get(pluginName);
+    return loadedPlugins.get(pluginName) ?? null;
   }
 
-  if (videojs.getPlugin?.(pluginName)) {
-    const plugin = videojs.getPlugin(pluginName);
+  const videojsTyped = videojs as typeof videojs & { getPlugin?: (name: string) => VideoJSPlugin | undefined };
+  if (videojsTyped.getPlugin?.(pluginName)) {
+    const plugin = videojsTyped.getPlugin(pluginName);
     if (plugin && typeof plugin === 'function') {
       loadedPlugins.set(pluginName, plugin as VideoJSPlugin);
       return plugin as VideoJSPlugin;
@@ -38,7 +40,7 @@ export async function loadPlugin(
 
   const pluginLoader = pluginRegistry[pluginName];
   if (!pluginLoader) {
-    console.warn(`Plugin ${pluginName} not found in registry`);
+    logger.warn(`Plugin ${pluginName} not found in registry`);
     return null;
   }
 
@@ -51,15 +53,15 @@ export async function loadPlugin(
       });
 
       const pluginPromise = pluginLoader();
-      const moduleImport = await Promise.race([pluginPromise, timeoutPromise]) as any;
+      const moduleImport = await Promise.race([pluginPromise, timeoutPromise]) as { default?: VideoJSPlugin | { default?: VideoJSPlugin } };
 
       let plugin: VideoJSPlugin;
-      if (moduleImport.default?.default) {
-        plugin = moduleImport.default.default;
+      if (moduleImport.default && typeof moduleImport.default === 'object' && 'default' in moduleImport.default) {
+        plugin = moduleImport.default.default as VideoJSPlugin;
       } else if (moduleImport.default) {
-        plugin = moduleImport.default;
+        plugin = moduleImport.default as VideoJSPlugin;
       } else {
-        plugin = moduleImport;
+        plugin = moduleImport as unknown as VideoJSPlugin;
       }
 
       loadedPlugins.set(pluginName, plugin);
@@ -67,7 +69,7 @@ export async function loadPlugin(
 
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Attempt ${attempt + 1} failed to load plugin ${pluginName}:`, error);
+      logger.warn(`Attempt ${attempt + 1} failed to load plugin ${pluginName}:`, error);
 
       if (attempt < retries) {
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -75,7 +77,7 @@ export async function loadPlugin(
     }
   }
 
-  console.error(`Failed to load plugin ${pluginName} after ${retries + 1} attempts:`, lastError);
+  logger.error(`Failed to load plugin ${pluginName} after ${retries + 1} attempts:`, lastError);
   return null;
 }
 
@@ -125,9 +127,11 @@ export async function preloadPlugins(
 }
 
 export function isPluginLoaded(pluginName: string): boolean {
-  return loadedPlugins.has(pluginName) || Boolean(videojs.getPlugin?.(pluginName));
+  const videojsTyped = videojs as typeof videojs & { getPlugin?: (name: string) => VideoJSPlugin | undefined };
+  return loadedPlugins.has(pluginName) || Boolean(videojsTyped.getPlugin?.(pluginName));
 }
 
 export function getLoadedPlugin(pluginName: string): VideoJSPlugin | null {
-  return loadedPlugins.get(pluginName) || videojs.getPlugin?.(pluginName) || null;
+  const videojsTyped = videojs as typeof videojs & { getPlugin?: (name: string) => VideoJSPlugin | undefined };
+  return loadedPlugins.get(pluginName) ?? videojsTyped.getPlugin?.(pluginName) ?? null;
 }

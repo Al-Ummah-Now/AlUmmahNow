@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 interface PreloadResult {
   success: boolean;
   segmentsLoaded: number;
@@ -28,8 +29,8 @@ export const preloadVideo = async (
             if (response.ok) {
               loadedSegments++;
             }
-          } catch (error) {
-            console.warn('Failed to preload segment:', segmentUrl);
+          } catch (_error) {
+            logger.warn('Failed to preload segment:', segmentUrl);
           }
         })
       );
@@ -41,7 +42,7 @@ export const preloadVideo = async (
       };
     }
   } catch (error) {
-    console.warn('Preload failed:', error);
+    logger.warn('Preload failed:', error);
   }
 
   return {

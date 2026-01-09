@@ -60,13 +60,68 @@
 			"bucket_name": "watch-history",
 			"preview_bucket_name": "watch-history-preview",
 			"remote": true
+		},
+		{
+			"binding": "channel_sections",
+			"bucket_name": "channel-sections",
+			"preview_bucket_name": "channel-sections-preview",
+			"remote": true
+		},
+		{
+			"binding": "community_posts",
+			"bucket_name": "community-posts",
+			"preview_bucket_name": "community-posts-preview",
+			"remote": true
+		},
+		{
+			"binding": "channel_tabs",
+			"bucket_name": "channel-tabs",
+			"preview_bucket_name": "channel-tabs-preview",
+			"remote": true
+		},
+		{
+			"binding": "upload-defaults",
+			"bucket_name": "upload-defaults",
+			"preview_bucket_name": "upload-defaults-preview",
+			"remote": true
+		},
+		{
+			"binding": "subtitles",
+			"bucket_name": "subtitles",
+			"preview_bucket_name": "subtitles-preview",
+			"remote": true
+		},
+		{
+			"binding": "SCHEDULED_VIDEOS",
+			"bucket_name": "scheduled-videos",
+			"preview_bucket_name": "scheduled-videos-preview",
+			"remote": true
+		},
+		{
+			"binding": "scheduled-videos",
+			"bucket_name": "scheduled-videos",
+			"preview_bucket_name": "scheduled-videos-preview",
+			"remote": true
+		},
+		{
+			"binding": "global_settings",
+			"bucket_name": "global-settings",
+			"preview_bucket_name": "global-settings-preview",
+			"remote": true
 		}
 	],
 	"kv_namespaces": [
 		{
-			"binding": "AUTH_STORAGE",
-			"id": "ff057deb522f4b2bb81006b42462f20e",
-			"preview_id": "966e04e43b904ddeb26453291bf6c22d"
+			"binding": "RATE_LIMIT_KV",
+			"id": "4771816fd0cc469383de67257280c516",
+			"preview_id": "0464af73f01045dc82dd2a1c25c3daa4",
+			"remote": true
+		},
+		{
+			"binding": "TUS_SESSIONS",
+			"id": "a7f78b8bf0984994a2cd2f4c92169ae1",
+			"preview_id": "56c4fbe8aec04166b9256bf951655c3a",
+			"remote": true
 		}
 	],
 	"queues": {
@@ -93,6 +148,11 @@
 		"binding": "bunny_stream_library_id",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "bunny_stream_library_id"
+	  },
+	  {
+		"binding": "INTERNAL_API_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "internal-api-key"
 	  }
 	],
 	/**
@@ -101,7 +161,12 @@
 	 */
 	// "vars": { "MY_VARIABLE": "production_value" },
 	"vars": {
-		"ZONE": "al-ummah-now-images"
+		"ZONE": "al-ummah-now-images",
+		"ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+		"Issuer": "https://auth.alummahnow.net",
+		"Audience": "https://videos.alummahnow.net",
+		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",
+		"WEBSOCKET_URL": "https://ws.alummahnow.net"
 	},
 	/**
 	 * Note: Use secrets to store sensitive data.

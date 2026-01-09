@@ -1,11 +1,13 @@
 import { cookies as getCookies } from "next/headers"
+import { logger } from '@/lib/logger-server';
+
 export { subjects } from "@/interfaces/subjects"
 
 export async function setTokens(access: string, refresh: string) {
   try {
     const cookies = await getCookies()
-    console.log("Setting tokens - access token length:", access?.length)
-    console.log("Setting tokens - refresh token length:", refresh?.length)
+    logger.info("Setting tokens - access token length:", access?.length)
+    logger.info("Setting tokens - refresh token length:", refresh?.length)
 
     cookies.set({
       name: "access_token",
@@ -26,8 +28,8 @@ export async function setTokens(access: string, refresh: string) {
       secure: process.env.NODE_ENV === "production", // Only secure in production
     })
     
-    console.log("Tokens set successfully")
+    logger.info("Tokens set successfully")
   } catch (error) {
-    console.error("Error setting tokens:", error)
+    logger.error("Error setting tokens:", error)
   }
 }

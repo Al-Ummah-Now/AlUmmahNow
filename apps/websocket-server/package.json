@@ -4,16 +4,19 @@
   "private": true,
   "description": "Al Ummah Now - WebSocket Server with Cloudflare Durable Objects",
   "scripts": {
-    "dev": "wrangler dev --inspector-port=9232",
+    "dev": "wrangler dev --inspector-port=4087",
     "build": "tsc --noEmit",
     "deploy": "wrangler deploy",
+    "deploy:qa": "CI=true wrangler deploy --config wrangler.qa.jsonc",
     "cf-typegen": "wrangler types",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .wrangler",
     "verify": "node verify.js"
   },
   "dependencies": {
-    "@openauthjs/openauth": "^0.4.3",
+    "@al-ummah/logger": "workspace:*",
+    "@al-ummah/shared-types": "workspace:*",
+    "@al-ummah-now/openauth": "1.0.15",
     "hono": "^4.10.4",
     "ws": "^8.18.3",
     "zod": "^3.25.76"

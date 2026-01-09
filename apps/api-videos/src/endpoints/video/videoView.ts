@@ -1,12 +1,11 @@
 import { OpenAPIRoute, Str } from "chanfana";
+import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
-export class VideoView extends OpenAPIRoute {
+export class VideoView extends OptionalAuthRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Track Video View",
@@ -78,19 +77,18 @@ export class VideoView extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
 		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
+		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 		const viewData = request.body;
 
 		// Get video from storage
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		const video = await repository.getObject(id);
@@ -121,7 +119,7 @@ export class VideoView extends OpenAPIRoute {
 		await repository.putObject(id, updatedVideo);
 
 		// Send detailed analytics event
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoView, {
 			videoId: id,
 			videoTitle: video.title,

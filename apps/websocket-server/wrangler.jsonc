@@ -42,13 +42,27 @@
 		{
 			"binding": "PRESENCE_KV",
 			"id": "a3dbf9b2b80c4a3ea101281e19fd8407",
-			"preview_id": "156bbaeac14b4d0da721673e951bef3e"
+			"preview_id": "156bbaeac14b4d0da721673e951bef3e",
+			"remote": true
 		}
 	],
 	/**
 	 * Environment Variables
 	 */
-	"vars": {},
+	"vars": {
+		"ENVIRONMENT": "production",
+		"WEBSOCKET_URL": "https://ws.alummahnow.net"
+	},
+	/**
+	 * Secrets Store
+	 */
+	"secrets_store_secrets": [
+		{
+			"binding": "INTERNAL_API_KEY",
+			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+			"secret_name": "internal-api-key"
+		}
+	],
 	/**
 	 * Development settings
 	 */

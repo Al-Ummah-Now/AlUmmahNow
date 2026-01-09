@@ -3,8 +3,8 @@ import BunnyStorageClient from "../../lib/bunny/storage";
 import R2Repository from "../../lib/r2Repo";
 import { Channel } from "../../lib/types";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import Queue, { MessageType } from "../../lib/queue";
+import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 
 const app = new Hono();
 
@@ -33,8 +33,8 @@ const handleAvatarUpdate = async (c) => {
             return c.json({ success: false, error: "Invalid file type" }, 400);
         }
 
-        // Mocked R2 bucket and repository
-        const bucket: R2Bucket = env.channels;
+        // Get R2 bucket from context
+        const bucket: R2Bucket = c.c.env.channels;
         type ChannelType = z.infer<typeof Channel>;
         const repository = new R2Repository<ChannelType>(bucket);
 
@@ -44,13 +44,25 @@ const handleAvatarUpdate = async (c) => {
             return c.json({ success: false, error: "Channel not found" }, 404);
         }
 
+        // Verify user owns this channel
+        const auth = c.get('auth');
+        const userId = auth?.userId;
+        if (channel.userId !== userId) {
+            return c.json({
+                success: false,
+                error: "You do not have permission to update this channel",
+            }, 403);
+        }
+
         // Define the file path
         const photoId = crypto.randomUUID();
         const path = `/${photoId}_avatar.${file.type.split("/")[1]}`;
 
-        // Mocked file storage logic
-        var key = await env.image_storage_key.get();
-        const bunnyStorageClient = new BunnyStorageClient(env.ZONE, key);
+        // Get Bunny.net storage key and zone from environment
+        const key = await requireSecret(c.c.env.image_storage_key, 'image_storage_key');
+        const zone = requireEnvVar(c.env, 'ZONE');
+
+        const bunnyStorageClient = new BunnyStorageClient(zone, key);
         const stream: ReadableStream = new ReadableStream({
             start(controller) {
                 const reader = file.stream().getReader();
@@ -71,11 +83,11 @@ const handleAvatarUpdate = async (c) => {
 
         //Update the Channel's avatar URL
         channel.avatarUrl = `https://images.alummahnow.net${path}`;
-        
-        const queue = new Queue();
+
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ChannelUpdate, {
 			channelId: id,
-			userId: c.req.header('userId'),
+			userId: userId,
 			timestamp: new Date().toISOString(),
 		});
 
@@ -83,11 +95,10 @@ const handleAvatarUpdate = async (c) => {
 
         return c.json(channel, 200);
     } catch (error) {
-        console.error("Error updating avatar photo:", error);
         return c.json(
             {
                 success: false,
-                error: "Failed to update avatar photo",
+                error: error instanceof Error ? error.message : "Failed to update avatar photo",
             },
             500
         );

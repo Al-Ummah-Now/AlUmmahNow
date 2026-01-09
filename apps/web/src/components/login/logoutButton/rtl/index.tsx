@@ -1,9 +1,15 @@
 import React from "react";
 import { logout } from "@/lib/actions";
 
-const LoginWrapper: React.FC = () => {
+interface LogoutWrapperProps {
+    locale?: string;
+}
+
+const LogoutWrapper: React.FC<LogoutWrapperProps> = ({ locale = 'ar' }) => {
+    const logoutWithLocale = logout.bind(null, locale);
+
     return (
-        <form action={logout}>
+        <form action={logoutWithLocale}>
             <button
                 type="submit"
                 className="bg-blue-500 text-white px-4 py-2 rounded"
@@ -14,4 +20,4 @@ const LoginWrapper: React.FC = () => {
     );
 };
 
-export default LoginWrapper;
+export default LogoutWrapper;

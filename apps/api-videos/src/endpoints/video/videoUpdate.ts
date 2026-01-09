@@ -1,16 +1,17 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { VideoUpdateInput } from "../../lib/model/input";
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
-import { getAuthContext, getUserId } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
+import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from '../../base';
 
-export class VideoUpdate extends OpenAPIRoute {
+export class VideoUpdate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Update a Video",
@@ -87,26 +88,19 @@ export class VideoUpdate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
 		const { channelId } = request.headers;
 		const videoUpdateInput = request.body;
 
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
+		// Get authenticated user ID
+		const effectiveUserId = this.getUserId(c);
 
 		// Get existing video from storage
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		const existingVideo = await repository.getObject(id);
@@ -122,7 +116,7 @@ export class VideoUpdate extends OpenAPIRoute {
 		}
 
 		// Check ownership - user must own the video to update it
-		if (existingVideo.userId !== userId) {
+		if (existingVideo.userId !== effectiveUserId) {
 			return c.json(
 				{
 					success: false,
@@ -137,20 +131,24 @@ export class VideoUpdate extends OpenAPIRoute {
 			...existingVideo,
 			...videoUpdateInput,
 			dateModified: new Date().toISOString(),
+			// Preserve localized fields if provided
+			titleLocalized: videoUpdateInput.titleLocalized ?? existingVideo.titleLocalized,
+			descriptionLocalized: videoUpdateInput.descriptionLocalized ?? existingVideo.descriptionLocalized,
 		};
 
 		// Update the video in Bunny Stream if title changed
 		if (videoUpdateInput.title && videoUpdateInput.title !== existingVideo.title) {
 			try {
-				const key = await env["bunny-stream-key"].get();
+				const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
-				const libraryId = parseInt(await env.bunny_stream_library_id.get());
 
 				await bunnyStream.updateVideo(libraryId, id, {
 					title: videoUpdateInput.title,
 				});
 			} catch (error) {
-				console.error("Error updating video in Bunny Stream:", error);
+				logger.error("Error updating video in Bunny Stream:", error);
 				// Continue with local update even if Bunny Stream update fails
 			}
 		}
@@ -159,10 +157,10 @@ export class VideoUpdate extends OpenAPIRoute {
 		await repository.putObject(id, updatedVideo);
 
 		// Send queue message for video update
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoEdit, {
 			videoId: id,
-			userId: userId,
+			userId: effectiveUserId,
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});

@@ -10,4 +10,11 @@ module.exports = {
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
+  moduleNameMapper: {
+    '^@al-ummah/shared-types$': '<rootDir>/../../packages/shared-types/src/index.ts',
+    '^@al-ummah/logger$': '<rootDir>/../../packages/logger/src/index.ts',
+  },
+  transformIgnorePatterns: [
+    'node_modules/(?!(@al-ummah)/)',
+  ],
 };

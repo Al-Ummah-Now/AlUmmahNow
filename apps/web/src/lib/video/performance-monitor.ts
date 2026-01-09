@@ -14,6 +14,8 @@
  */
 
 import type { ExtendedPlayer } from './videojs';
+import { logger } from '@/lib/logger-server';
+
 
 interface PerformanceMetrics {
   fps: number;
@@ -68,7 +70,7 @@ export class VideoPerformanceMonitor {
     this.frameTimes = [];
     this.warnings = [];
 
-    console.log('[VideoPerformance] Starting monitoring');
+    logger.info('[VideoPerformance] Starting monitoring');
     
     this.startFrameMonitoring();
     this.startInteractionMonitoring();
@@ -93,7 +95,7 @@ export class VideoPerformanceMonitor {
     // Clear warning throttle state
     this.lastWarningTime.clear();
 
-    console.log('[VideoPerformance] Stopped monitoring');
+    logger.info('[VideoPerformance] Stopped monitoring');
   }
 
   /**
@@ -197,7 +199,7 @@ export class VideoPerformanceMonitor {
       observer.observe({ entryTypes: ['measure'] });
       this.observers.push(observer);
     } catch (error) {
-      console.warn('[VideoPerformance] Performance observer not supported:', error);
+      logger.warn('[VideoPerformance] Performance observer not supported:', error);
     }
   }
 
@@ -210,7 +212,7 @@ export class VideoPerformanceMonitor {
     const checkMemory = () => {
       if (!this.isMonitoring) return;
 
-      const memory = (performance as any).memory;
+      const memory = (performance as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number; totalJSHeapSize: number } }).memory;
       if (memory && memory.usedJSHeapSize) {
         const usage = memory.usedJSHeapSize;
         
@@ -232,7 +234,8 @@ export class VideoPerformanceMonitor {
    */
   private getMemoryUsage(): number | undefined {
     if ('memory' in performance) {
-      return (performance as any).memory?.usedJSHeapSize;
+      const perfWithMemory = performance as { memory?: { usedJSHeapSize: number } };
+      return perfWithMemory.memory?.usedJSHeapSize;
     }
     return undefined;
   }
@@ -264,7 +267,7 @@ export class VideoPerformanceMonitor {
       this.warnings.shift();
     }
 
-    console.warn(`[VideoPerformance] ${message}`);
+    logger.warn(`[VideoPerformance] ${message}`);
   }
 
   /**

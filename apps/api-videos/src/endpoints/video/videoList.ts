@@ -1,10 +1,13 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
+import { VideoCategory, Channel } from "@al-ummah/shared-types";
+import { OptionalAuthRoute, AppContext } from '../../base';
+import { logger } from "../../lib/logger";
 
-export class VideosList extends OpenAPIRoute {
+export class VideosList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "List Videos",
@@ -17,15 +20,15 @@ export class VideosList extends OpenAPIRoute {
 				}),
 				cursor: string({
 					description: "The last cursor returned from the previous request",
-					
+
 				}).optional(),
 				sort: z.enum(["date", "views", "title", "likes"]).optional().default("date").describe("Sort order for videos"),
 				filter: z.enum(["all", "public", "private", "live"]).optional().default("all").describe("Filter videos by type"),
 				channelId: Str({ description: "Filter by specific channel ID" }).optional(),
+				category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID (automatically set from JWT token if authenticated)" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -56,13 +59,14 @@ export class VideosList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated parameters
-		const { limit, cursor, sort, filter, channelId: queryChannelId } = request.query;
-		const { channelId, userId } = request.headers;
+		const { limit, cursor, sort, filter, channelId: queryChannelId, category } = request.query;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Use channelId from query parameter if provided, otherwise from headers
 		const filterChannelId = queryChannelId || channelId;
@@ -77,21 +81,36 @@ export class VideosList extends OpenAPIRoute {
 		
 		// Filter videos based on privacy settings, user context, and filters
 		let filteredVideos = (videos.items || []).filter(video => {
+			// Filter out soft-deleted videos
+			if (video.isDeleted) {
+				return false;
+			}
+
+			// Filter out moderation-hidden videos
+			if (video.isHidden) {
+				return false;
+			}
+
 			// Apply channel filter if specified
 			if (filterChannelId && video.channelId !== filterChannelId) {
 				return false;
 			}
-			
+
+			// Apply category filter if specified
+			if (category && video.category !== category) {
+				return false;
+			}
+
 			// Apply type filter
 			if (filter === "public" && video.isPublic === false) return false;
 			if (filter === "private" && video.isPublic !== false) return false;
 			if (filter === "live" && !video.isLive) return false;
-			
+
 			// If video is explicitly private (false), only show if user owns it
 			if (video.isPublic === false) {
 				return userId && video.userId === userId;
 			}
-			
+
 			// If video is public (true) or undefined/null (default to public), always show it
 			return true;
 		});
@@ -113,16 +132,42 @@ export class VideosList extends OpenAPIRoute {
 					return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
 			}
 		});
-		
+
+		// Fetch channel data for all videos
+		const channelIds = [...new Set(filteredVideos.map(v => v.channelId).filter(Boolean))];
+		const channelMap = new Map<string, Channel>();
+
+		if (channelIds.length > 0) {
+			const channelBucket = c.env.channels;
+			const channelRepo = new R2Repository<Channel>(channelBucket);
+
+			// Fetch channels in parallel
+			const channelPromises = channelIds.map(async (channelId) => {
+				try {
+					const channel = await channelRepo.getObject(channelId);
+					if (channel) {
+						channelMap.set(channelId, channel);
+					}
+				} catch (error) {
+					logger.warn('[VideosList] Failed to fetch channel', { channelId, error });
+				}
+			});
+
+			await Promise.all(channelPromises);
+		}
+
 		// Transform business videos to view models
-		const transformToView = (video: VideoType) => ({
-			...video,
-			channelName: "", // TODO: Fetch from channel data
-			channelAvatarUrl: undefined,
-			likesCount: video.likes?.length || 0,
-			dislikesCount: video.dislikes?.length || 0,
-			commentsCount: video.comments?.length || 0,
-		});
+		const transformToView = (video: VideoType) => {
+			const channel = video.channelId ? channelMap.get(video.channelId) : undefined;
+			return {
+				...video,
+				channelName: channel?.name || "",
+				channelAvatarUrl: channel?.avatarUrl,
+				likesCount: video.likes?.length || 0,
+				dislikesCount: video.dislikes?.length || 0,
+				commentsCount: video.comments?.length || 0,
+			};
+		};
 
 		// Return response using R2's native cursor
 		const response: PaginationResponse<ReturnType<typeof transformToView>> = {

@@ -1,12 +1,11 @@
 /**
- * Next.js Middleware for Content Security Policy
- * 
- * Implements strict CSP headers to prevent XSS attacks and enhance security.
- * Specifically configured for video player requirements including Video.js CDN,
- * Bunny CDN for media, and WebSocket connections.
- * 
+ * Next.js Middleware for Content Security Policy and Locale Routing
+ *
  * Features:
- * - Strict CSP policy with minimal permissions
+ * - Content Security Policy (CSP) headers
+ * - Locale validation based on LOCALES config (supports any locale with isSupported: true)
+ * - Automatic redirect of unsupported locales to default locale
+ * - RTL/LTR direction headers
  * - Video.js CDN whitelisting with integrity checks
  * - Bunny CDN media source allowance
  * - WebSocket secure connection support
@@ -15,6 +14,14 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import {
+  getValidLocale,
+  getTextDirection,
+  getSupportedLocaleCodes,
+  LANGUAGE_PREFERENCE_COOKIE,
+  isLocaleSupported
+} from '@/lib/i18n/utils';
+import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 
 /**
  * Generate CSP policy based on environment variables
@@ -91,13 +98,84 @@ const SECURITY_HEADERS = {
 };
 
 /**
- * Middleware function to add security headers
+ * Get language preference from cookie
  */
-export function middleware(_request: NextRequest) {
-  const response = NextResponse.next();
+function getLanguagePreferenceFromCookie(request: NextRequest): string | null {
+  const cookieValue = request.cookies.get(LANGUAGE_PREFERENCE_COOKIE)?.value;
+  if (cookieValue && isLocaleSupported(cookieValue)) {
+    return cookieValue;
+  }
+  return null;
+}
+
+/**
+ * Middleware function to handle locale validation and security headers
+ */
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
 
   // Determine environment
   const isDevelopment = process.env.NODE_ENV === 'development';
+
+  // Handle root path - redirect to preferred locale or default
+  if (pathname === '/') {
+    const preferredLocale = getLanguagePreferenceFromCookie(request) || DEFAULT_LOCALE;
+    return NextResponse.redirect(new URL(`/${preferredLocale}`, request.url));
+  }
+
+  // Handle locale routes
+  // Check if the first path segment is a locale code
+  const localeMatch = pathname.match(/^\/([^\/]+)/);
+
+  if (localeMatch) {
+    const potentialLocale = localeMatch[1];
+    const supportedLocaleCodes = getSupportedLocaleCodes();
+
+    // Skip Next.js internals (_next), API routes (api), and static files
+    const isNextInternal = potentialLocale.startsWith('_next');
+    const isApiRoute = potentialLocale === 'api';
+    const isPublicFile = potentialLocale === 'public' || pathname.includes('.');
+
+    if (!isNextInternal && !isApiRoute && !isPublicFile) {
+      // Check if this looks like a locale code (2 letters)
+      if (potentialLocale.length === 2) {
+        // Check if the locale is supported
+        if (supportedLocaleCodes.includes(potentialLocale)) {
+          // Valid supported locale - continue processing
+          const response = NextResponse.next();
+
+          // Add locale and direction headers for the response
+          const direction = getTextDirection(potentialLocale);
+          response.headers.set('X-Locale', potentialLocale);
+          response.headers.set('X-Text-Direction', direction);
+
+          // Add CSP and security headers
+          const csp = generateCSP(isDevelopment);
+          response.headers.set('Content-Security-Policy', csp);
+
+          Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
+            response.headers.set(header, value);
+          });
+
+          if (isDevelopment) {
+            response.headers.set('X-CSP-Debug', 'development-mode');
+            response.headers.set('X-Security-Headers', 'enabled');
+          }
+
+          return response;
+        } else {
+          // Looks like a locale code but not supported - redirect to default locale
+          const defaultLocale = getValidLocale(potentialLocale);
+          const redirectPath = pathname.replace(`/${potentialLocale}`, `/${defaultLocale}`);
+
+          return NextResponse.redirect(new URL(redirectPath, request.url));
+        }
+      }
+    }
+  }
+
+  // Default response for all other routes
+  const response = NextResponse.next();
 
   // Generate and add Content Security Policy
   const csp = generateCSP(isDevelopment);

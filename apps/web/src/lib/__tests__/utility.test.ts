@@ -114,26 +114,16 @@ describe('removeUnwantedChars', () => {
 });
 
 describe('createApiHeaders', () => {
-  it('should return undefined for null user', () => {
-    expect(createApiHeaders(null)).toBeUndefined();
+  it('should return undefined when no channelId provided', () => {
+    expect(createApiHeaders()).toBeUndefined();
   });
 
-  it('should return undefined for undefined user', () => {
+  it('should return undefined for undefined channelId', () => {
     expect(createApiHeaders(undefined)).toBeUndefined();
   });
 
-  it('should create headers with userId only', () => {
-    const user = { id: 'user-123' };
-    const headers = createApiHeaders(user);
-    expect(headers).toEqual({ userId: 'user-123' });
-  });
-
-  it('should create headers with userId and channelId', () => {
-    const user = { id: 'user-123' };
-    const headers = createApiHeaders(user, 'channel-456');
-    expect(headers).toEqual({ 
-      userId: 'user-123',
-      channelId: 'channel-456'
-    });
+  it('should create headers with channelId only', () => {
+    const headers = createApiHeaders('channel-456');
+    expect(headers).toEqual({ channelId: 'channel-456' });
   });
 });

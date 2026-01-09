@@ -1,0 +1,238 @@
+/**
+ * Scheduled Video Calendar Styles
+ *
+ * Using shadcn CSS variables for automatic light/dark theme support
+ */
+
+@layer components {
+  /* Base Calendar Styles */
+  .scheduled-video-calendar {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  .scheduled-video-calendar .rbc-event {
+    background: transparent !important;
+    border: none !important;
+    padding: 2px !important;
+  }
+
+  .scheduled-video-calendar .rbc-event-content {
+    padding: 0 !important;
+  }
+
+  .scheduled-video-calendar .rbc-event-label {
+    display: none;
+  }
+
+  .scheduled-video-calendar .rbc-today {
+    background-color: hsl(var(--primary) / 0.1) !important;
+  }
+
+  .scheduled-video-calendar .rbc-header {
+    padding: 0.25rem 0.5rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    border-bottom: 1px solid hsl(var(--border));
+    border-right: 1px solid hsl(var(--border));
+  }
+
+  .scheduled-video-calendar .rbc-header:last-child {
+    border-right: none;
+  }
+
+  /* Off-range cells (other months in month view) */
+  .scheduled-video-calendar .rbc-off-range {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .scheduled-video-calendar .rbc-off-range-bg {
+    background-color: hsl(var(--muted)) !important;
+  }
+
+  /* Time View Styles (Week & Day) */
+  .scheduled-video-calendar .rbc-time-view {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+  }
+
+  .scheduled-video-calendar .rbc-time-slot {
+    border-color: hsl(var(--border) / 0.15);
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-slot,
+  .dark .scheduled-video-calendar .rbc-day-slot .rbc-time-slot {
+    border-color: rgba(255, 255, 255, 0.03) !important;
+    border-top-color: rgba(255, 255, 255, 0.03) !important;
+  }
+
+  /* Thicker lines every hour (every 12th slot for 5min intervals with 3 timeslots) */
+  .scheduled-video-calendar .rbc-time-slot:nth-child(12n+1) {
+    border-top: 1px solid hsl(var(--border) / 0.3) !important;
+  }
+
+  .dark .scheduled-video-calendar .rbc-time-slot:nth-child(12n+1),
+  .dark .scheduled-video-calendar .rbc-day-slot .rbc-time-slot:nth-child(12n+1) {
+    border-top: 1px solid rgba(255, 255, 255, 0.3) !important;
+    border-top-color: rgba(255, 255, 255, 0.3) !important;
+  }
+
+  /* Target all time slot borders in dark mode */
+  .dark .scheduled-video-calendar .rbc-time-content .rbc-time-slot {
+    border-top: 1px solid rgba(255, 255, 255, 0.03) !important;
+  }
+
+  .scheduled-video-calendar .rbc-time-header {
+    border-color: hsl(var(--border));
+    background-color: hsl(var(--card));
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  .scheduled-video-calendar .rbc-time-content {
+    border-top: 1px solid hsl(var(--border));
+  }
+
+  .scheduled-video-calendar .rbc-current-time-indicator {
+    background-color: hsl(var(--destructive));
+    border-top: 2px solid hsl(var(--destructive)) !important;
+    height: 2px;
+    z-index: 10;
+  }
+
+  /* Time Gutter Styling */
+  .scheduled-video-calendar .rbc-time-gutter {
+    background-color: hsl(var(--card));
+  }
+
+  .scheduled-video-calendar .rbc-time-gutter .rbc-timeslot-group {
+    border-bottom: none;
+  }
+
+  .scheduled-video-calendar .rbc-label {
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0 8px;
+    text-align: right;
+    position: relative;
+  }
+
+  /* Hour marker line extending from time label */
+  .scheduled-video-calendar .rbc-time-gutter .rbc-time-slot:first-child::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 8px;
+    height: 1px;
+    background-color: hsl(var(--border));
+  }
+
+  /* Day view specific - constrain event width */
+  .scheduled-video-calendar-day .rbc-day-slot .rbc-events-container {
+    margin-right: 60% !important;
+  }
+
+  /* Week view - slightly narrower events */
+  .scheduled-video-calendar:not(.scheduled-video-calendar-day) .rbc-day-slot .rbc-events-container {
+    margin-right: 5% !important;
+  }
+
+  /* Event styling in day/week views */
+  .scheduled-video-calendar .rbc-day-slot .rbc-event {
+    border-radius: var(--radius);
+    min-height: 24px;
+  }
+
+  .scheduled-video-calendar-day .rbc-day-slot .rbc-event {
+    max-width: 320px;
+    min-height: 28px;
+  }
+
+  /* Timeslot group styling */
+  .scheduled-video-calendar .rbc-timeslot-group {
+    min-height: 60px;
+    border-bottom: 1px solid hsl(var(--border) / 0.15);
+  }
+
+  .dark .scheduled-video-calendar .rbc-timeslot-group {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  }
+
+  /* Day column border */
+  .scheduled-video-calendar-day .rbc-day-slot {
+    border-left: 1px solid hsl(var(--border));
+  }
+
+  /* Day backgrounds */
+  .scheduled-video-calendar .rbc-day-bg {
+    background-color: hsl(var(--background));
+    border-right: 1px solid hsl(var(--border));
+  }
+
+  .scheduled-video-calendar .rbc-day-bg:last-child {
+    border-right: none;
+  }
+
+  /* Month View Styles */
+  .scheduled-video-calendar .rbc-month-view {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+  }
+
+  .scheduled-video-calendar .rbc-month-row {
+    height: 140px;
+    min-height: 140px;
+    max-height: 140px;
+    border-top: 1px solid hsl(var(--border));
+  }
+
+  .scheduled-video-calendar .rbc-month-row:first-child {
+    border-top: none;
+  }
+
+  /* Show more link */
+  .scheduled-video-calendar .rbc-show-more {
+    background-color: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    padding: 2px 4px;
+    border-radius: var(--radius);
+    font-weight: 500;
+    font-size: 0.75rem;
+  }
+
+  /* Selected cell */
+  .scheduled-video-calendar .rbc-selected-cell {
+    background-color: hsl(var(--primary) / 0.1);
+  }
+
+  /* Overlay popup */
+  .scheduled-video-calendar .rbc-overlay {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  }
+
+  .scheduled-video-calendar .rbc-overlay-header {
+    border-bottom: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .scheduled-video-calendar .rbc-month-row {
+      height: 100px;
+      min-height: 100px;
+      max-height: 100px;
+    }
+
+    .scheduled-video-calendar .rbc-header {
+      padding: 0.25rem 0.125rem;
+      font-size: 0.875rem;
+    }
+  }
+}

@@ -278,7 +278,7 @@ describe('LocalStorageQuotaManager', () => {
   describe('SSR compatibility', () => {
     it('should handle missing window gracefully', () => {
       const originalWindow = global.window;
-      // @ts-ignore - simulating SSR
+      // @ts-expect-error - simulating SSR
       delete global.window;
 
       const quotaInfo = quotaManager.checkQuota();

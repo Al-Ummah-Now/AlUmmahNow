@@ -1,11 +1,12 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { z } from "zod";
-import { Channel, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
+import { Channel, Profile, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class SubscriptionCreate extends OpenAPIRoute {
+export class SubscriptionCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Subscriptions"],
 		summary: "Subscripe to a channel",
@@ -15,7 +16,6 @@ export class SubscriptionCreate extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 		},
 		responses: {
@@ -54,17 +54,18 @@ export class SubscriptionCreate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const data = await this.getValidatedData<typeof this.schema>();
 
 		// Extract channel ID and subscriber ID
 		const { id } = data.params;
-		const { channelId, userId } = data.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = data.headers;
 
 		// Implement your own object insertion here
 		try {
-			const bucket = env.channels;
+			const bucket = c.env.channels;
 			type ChannelType = z.infer<typeof Channel>;
 			const repository = new R2Repository<ChannelType>(bucket);
 			let channel = await repository.getObject(channelId);
@@ -94,7 +95,7 @@ export class SubscriptionCreate extends OpenAPIRoute {
 				dateCreated: new Date().toISOString(),
 			};
 			
-			const queue = new Queue();
+			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.Subscribe, {
 				subscriptionId: subscription.id,
 				targetChannelId: id,
@@ -118,10 +119,33 @@ export class SubscriptionCreate extends OpenAPIRoute {
 			channel.subscriptions.push(subscription);
 			await repository.putObject(id, channel);
 
+			// Update reverse index on subscriber's profile
+			try {
+				const profileBucket = c.env.profiles;
+				type ProfileType = z.infer<typeof Profile>;
+				const profileRepository = new R2Repository<ProfileType>(profileBucket);
+				const profile = await profileRepository.getObject(userId);
+
+				if (profile) {
+					if (!profile.subscribedTo) {
+						profile.subscribedTo = [];
+					}
+					// Add target channel to subscribedTo if not already there
+					if (!profile.subscribedTo.includes(id)) {
+						profile.subscribedTo.push(id);
+						await profileRepository.putObject(userId, profile);
+						logger.debug('Updated profile subscribedTo reverse index', { userId, targetChannelId: id });
+					}
+				}
+			} catch (profileError) {
+				// Log but don't fail the subscription - reverse index is for optimization
+				logger.warn('Failed to update profile subscribedTo index:', profileError);
+			}
+
 			return channel;
 		}
 		catch (error) {
-			console.error("Error fetching Channel:", error);
+			logger.error("Error fetching Channel:", error);
 			return c.json(
 				{
 					success: false,

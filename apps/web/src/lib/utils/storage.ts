@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger-server';
+
 /**
  * Storage Manager Utility
  *
@@ -51,7 +53,7 @@ export class StorageManager {
         }
       }
     } catch (error) {
-      console.warn('[StorageManager] Error calculating storage size:', error);
+      logger.warn('[StorageManager] Error calculating storage size:', error);
     }
 
     return size;
@@ -112,7 +114,7 @@ export class StorageManager {
 
         // Handle object with nested items (like watchProgress)
         if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-          const cleaned: Record<string, any> = {};
+          const cleaned: Record<string, unknown> = {};
           let hasChanges = false;
 
           Object.keys(parsed).forEach(subKey => {
@@ -156,12 +158,12 @@ export class StorageManager {
           }
         }
       } catch (error) {
-        console.warn(`[StorageManager] Failed to cleanup ${key}:`, error);
+        logger.warn(`[StorageManager] Failed to cleanup ${key}:`, error);
       }
     });
 
     if (itemsRemoved > 0) {
-      console.log(`[StorageManager] Cleaned up ${itemsRemoved} old items`);
+      logger.info(`[StorageManager] Cleaned up ${itemsRemoved} old items`);
     }
 
     return itemsRemoved;
@@ -170,24 +172,26 @@ export class StorageManager {
   /**
    * Extract timestamp from an object
    */
-  private static extractTimestamp(item: any): number | null {
+  private static extractTimestamp(item: unknown): number | null {
     if (!item || typeof item !== 'object') {
       return null;
     }
 
+    const record = item as Record<string, unknown>;
+
     // Check for various timestamp formats
-    if (item.timestamp) {
-      if (typeof item.timestamp === 'number') {
-        return item.timestamp;
+    if ('timestamp' in record) {
+      if (typeof record.timestamp === 'number') {
+        return record.timestamp;
       }
-      if (typeof item.timestamp === 'string') {
-        const parsed = Date.parse(item.timestamp);
+      if (typeof record.timestamp === 'string') {
+        const parsed = Date.parse(record.timestamp);
         return isNaN(parsed) ? null : parsed;
       }
     }
 
-    if (item.expiresAt && typeof item.expiresAt === 'number') {
-      return item.expiresAt;
+    if ('expiresAt' in record && typeof record.expiresAt === 'number') {
+      return record.expiresAt;
     }
 
     return null;
@@ -208,7 +212,7 @@ export class StorageManager {
     try {
       // Check size first
       if (!this.canStore(key, value)) {
-        console.warn('[StorageManager] Storage quota would be exceeded, attempting cleanup...');
+        logger.warn('[StorageManager] Storage quota would be exceeded, attempting cleanup...');
 
         // Try cleanup with default keys
         const defaultKeys = ['watchProgress', 'video_views_tracked', 'videoAnalytics'];
@@ -216,14 +220,14 @@ export class StorageManager {
 
         // Check again after cleanup
         if (!this.canStore(key, value)) {
-          console.warn('[StorageManager] Storage quota still exceeded after cleanup');
+          logger.warn('[StorageManager] Storage quota still exceeded after cleanup');
 
           // Try emergency cleanup
           this.emergencyCleanup();
 
           // Final check
           if (!this.canStore(key, value)) {
-            console.error('[StorageManager] Cannot store item, quota exceeded even after emergency cleanup');
+            logger.error('[StorageManager] Cannot store item, quota exceeded even after emergency cleanup');
             return false;
           }
         }
@@ -235,15 +239,16 @@ export class StorageManager {
       // Log warning if approaching quota
       if (this.isApproachingQuota()) {
         const usage = this.getStorageUsagePercentage();
-        console.warn(`[StorageManager] Storage usage at ${usage.toFixed(1)}% of quota`);
+        logger.warn(`[StorageManager] Storage usage at ${usage.toFixed(1)}% of quota`);
       }
 
       return true;
-    } catch (error: any) {
-      if (error?.name === 'QuotaExceededError' ||
-          error?.code === 22 || // QUOTA_EXCEEDED_ERR
-          error?.code === 1014) { // NS_ERROR_DOM_QUOTA_REACHED (Firefox)
-        console.error('[StorageManager] QuotaExceededError caught, running emergency cleanup');
+    } catch (error: unknown) {
+      const err = error as { name?: string; code?: number };
+      if (err?.name === 'QuotaExceededError' ||
+          err?.code === 22 || // QUOTA_EXCEEDED_ERR
+          err?.code === 1014) { // NS_ERROR_DOM_QUOTA_REACHED (Firefox)
+        logger.error('[StorageManager] QuotaExceededError caught, running emergency cleanup');
         this.emergencyCleanup();
 
         // Try one more time after emergency cleanup
@@ -251,11 +256,11 @@ export class StorageManager {
           localStorage.setItem(key, value);
           return true;
         } catch (retryError) {
-          console.error('[StorageManager] Failed to store even after emergency cleanup:', retryError);
+          logger.error('[StorageManager] Failed to store even after emergency cleanup:', retryError);
           return false;
         }
       } else {
-        console.error('[StorageManager] Storage error:', error);
+        logger.error('[StorageManager] Storage error:', error);
         return false;
       }
     }
@@ -269,7 +274,7 @@ export class StorageManager {
       return;
     }
 
-    console.warn('[StorageManager] Running emergency localStorage cleanup');
+    logger.warn('[StorageManager] Running emergency localStorage cleanup');
 
     try {
       // Priority 1: Clean up watch progress (keep only 10 most recent)
@@ -280,7 +285,7 @@ export class StorageManager {
           const entries = Object.entries(parsed);
 
           // Sort by timestamp, keep only 10 most recent
-          entries.sort((a: any, b: any) => {
+          entries.sort((a: [string, unknown], b: [string, unknown]) => {
             const timeA = this.extractTimestamp(a[1]) || 0;
             const timeB = this.extractTimestamp(b[1]) || 0;
             return timeB - timeA; // Most recent first
@@ -290,7 +295,7 @@ export class StorageManager {
           const cleaned = Object.fromEntries(recentEntries);
           localStorage.setItem('watchProgress', JSON.stringify(cleaned));
         } catch (error) {
-          console.error('[StorageManager] Failed to clean watchProgress:', error);
+          logger.error('[StorageManager] Failed to clean watchProgress:', error);
           localStorage.removeItem('watchProgress');
         }
       }
@@ -316,7 +321,7 @@ export class StorageManager {
             localStorage.removeItem('video_views_tracked');
           }
         } catch (error) {
-          console.error('[StorageManager] Failed to clean video_views_tracked:', error);
+          logger.error('[StorageManager] Failed to clean video_views_tracked:', error);
           localStorage.removeItem('video_views_tracked');
         }
       }
@@ -335,14 +340,14 @@ export class StorageManager {
             localStorage.removeItem(key);
           }
         } catch (error) {
-          console.warn(`[StorageManager] Failed to remove ${key}:`, error);
+          logger.warn(`[StorageManager] Failed to remove ${key}:`, error);
         }
       });
 
       const newUsage = this.getStorageUsagePercentage();
-      console.log(`[StorageManager] Emergency cleanup complete. New usage: ${newUsage.toFixed(1)}%`);
+      logger.info(`[StorageManager] Emergency cleanup complete. New usage: ${newUsage.toFixed(1)}%`);
     } catch (error) {
-      console.error('[StorageManager] Emergency cleanup failed:', error);
+      logger.error('[StorageManager] Emergency cleanup failed:', error);
     }
   }
 
@@ -381,7 +386,7 @@ export class StorageManager {
         }
       }
     } catch (error) {
-      console.warn('[StorageManager] Error getting storage stats:', error);
+      logger.warn('[StorageManager] Error getting storage stats:', error);
     }
 
     // Sort by size descending
@@ -409,9 +414,9 @@ export class StorageManager {
 
     try {
       localStorage.clear();
-      console.log('[StorageManager] All localStorage cleared');
+      logger.info('[StorageManager] All localStorage cleared');
     } catch (error) {
-      console.error('[StorageManager] Failed to clear localStorage:', error);
+      logger.error('[StorageManager] Failed to clear localStorage:', error);
     }
   }
 }
@@ -427,12 +432,12 @@ export function monitorStorage(): void {
   const stats = StorageManager.getStorageStats();
 
   console.group('[StorageManager] Storage Statistics');
-  console.log(`Total Used: ${(stats.used / 1024).toFixed(2)} KB / ${(stats.max / 1024 / 1024).toFixed(2)} MB`);
-  console.log(`Usage: ${stats.percentage.toFixed(1)}%`);
-  console.log(`Warning Level: ${stats.isWarning ? 'YES' : 'No'}`);
-  console.log('\nTop 5 Storage Items:');
+  logger.info(`Total Used: ${(stats.used / 1024).toFixed(2)} KB / ${(stats.max / 1024 / 1024).toFixed(2)} MB`);
+  logger.info(`Usage: ${stats.percentage.toFixed(1)}%`);
+  logger.info(`Warning Level: ${stats.isWarning ? 'YES' : 'No'}`);
+  logger.info('\nTop 5 Storage Items:');
   stats.items.slice(0, 5).forEach(item => {
-    console.log(`  ${item.key}: ${(item.size / 1024).toFixed(2)} KB`);
+    logger.info(`  ${item.key}: ${(item.size / 1024).toFixed(2)} KB`);
   });
   console.groupEnd();
 }

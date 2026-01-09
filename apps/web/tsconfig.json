@@ -10,8 +10,7 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@al-ummah/shared-types": ["../../packages/shared-types/dist"]
+      "@/*": ["./src/*"]
     },
     "skipLibCheck": true,
     "strict": true,
@@ -26,5 +25,8 @@
     "types": ["@testing-library/jest-dom"]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "**/example.tsx"]
+  "exclude": ["node_modules"],
+  "references": [
+    { "path": "../../packages/shared-types" }
+  ]
 }

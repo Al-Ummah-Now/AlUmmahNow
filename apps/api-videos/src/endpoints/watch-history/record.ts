@@ -4,9 +4,7 @@
  * Records a video view in the user's watch history
  */
 
-import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type {
@@ -14,6 +12,8 @@ import type {
   RecordWatchRequest,
   WatchHistoryEvent
 } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from "../../base";
 
 // Request schema
 const RecordWatchRequestSchema = z.object({
@@ -40,7 +40,7 @@ const WatchHistoryEntrySchema = z.object({
   percentageWatched: z.number(),
 });
 
-export class RecordWatchHistory extends OpenAPIRoute {
+export class RecordWatchHistory extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -48,6 +48,9 @@ export class RecordWatchHistory extends OpenAPIRoute {
       description:
         "Records a video view for the authenticated user. Creates a new entry or updates existing watch history for this video.",
       request: {
+        headers: z.object({
+          channelId: z.string().optional().nullable(),
+        }),
         body: {
           content: {
             "application/json": {
@@ -82,9 +85,11 @@ export class RecordWatchHistory extends OpenAPIRoute {
     "required"
   );
 
-  async handle(c: Context) {
-    const auth = c.get("auth");
-    const userId = auth.userId;
+  async handle(c: AppContext) {
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { channelId } = request.headers;
+
+    const effectiveUserId = this.getUserId(c);
 
     // Parse and validate request body
     const body = await c.req.json<RecordWatchRequest>();
@@ -103,8 +108,8 @@ export class RecordWatchHistory extends OpenAPIRoute {
         return c.json({ error: "Video not found" }, 404);
       }
 
-      // Generate watch history entry ID (userId:videoId)
-      const entryId = `${userId}:${videoId}`;
+      // Generate watch history entry ID (effectiveUserId:videoId)
+      const entryId = `${effectiveUserId}:${videoId}`;
 
       // Check if watch history entry already exists
       const existingEntry = await watchHistoryRepo.getObject(entryId);
@@ -133,7 +138,7 @@ export class RecordWatchHistory extends OpenAPIRoute {
         // Create new entry
         watchEntry = {
           id: entryId,
-          userId,
+          userId: effectiveUserId,
           videoId,
           videoTitle: video.title || "Untitled",
           videoThumbnail: video.thumbnailUrl || video.thumbnail,
@@ -155,7 +160,7 @@ export class RecordWatchHistory extends OpenAPIRoute {
       // Queue analytics event
       const event: WatchHistoryEvent = {
         type: "watch_started",
-        userId,
+        userId: effectiveUserId,
         videoId,
         progress,
         duration,
@@ -169,7 +174,7 @@ export class RecordWatchHistory extends OpenAPIRoute {
 
       return c.json(watchEntry, 201);
     } catch (error) {
-      console.error("Error recording watch history:", error);
+      logger.error("Error recording watch history:", error);
       return c.json(
         {
           error: "Failed to record watch history",

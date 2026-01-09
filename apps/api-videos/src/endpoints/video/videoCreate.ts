@@ -1,16 +1,17 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { VideoInput } from "../../lib/model/input";
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
-import { getAuthContext, getUserId } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
+import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
+import { AuthenticatedRoute, AppContext } from '../../base';
 
-export class VideoCreate extends OpenAPIRoute {
+export class VideoCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Create a new Video",
@@ -68,28 +69,21 @@ export class VideoCreate extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
 		const { channelId } = request.headers;
 		const inputVideo = request.body;
 
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
+		// Get authenticated user ID
+		const effectiveUserId = this.getUserId(c);
 
 		// Create the business video object
 		const video = {
 			...inputVideo,
 			id: crypto.randomUUID(), // Generate a unique ID for the video
-			userId,
+			userId: effectiveUserId,
 			channelId,
 			dateCreated: new Date().toISOString(),
 			dateModified: new Date().toISOString(),
@@ -100,12 +94,16 @@ export class VideoCreate extends OpenAPIRoute {
 			dislikes: [],
 			isPublic: inputVideo.isPublic ?? true,
 			isLive: inputVideo.isLive ?? false,
+			// Ensure localized fields are stored
+			titleLocalized: inputVideo.titleLocalized,
+			descriptionLocalized: inputVideo.descriptionLocalized,
 		};
 
 		// create the video in Bunny Stream
-		const key = await env["bunny-stream-key"].get();
+		const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+		const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
+		const libraryId = parseInt(libraryIdStr);
 		const bunnyStream = new stream(key);
-		const libraryId = parseInt(await env.bunny_stream_library_id.get());
 
 		let collectionId = null;
 		// check if collection exists
@@ -119,7 +117,7 @@ export class VideoCreate extends OpenAPIRoute {
 				collectionId = result.guid;
 			} else {
 				// Handle other errors
-				console.error("Error fetching collection:", e);
+				logger.error("Error fetching collection:", e);
 				return c.json(
 					{
 						success: false,
@@ -136,16 +134,16 @@ export class VideoCreate extends OpenAPIRoute {
 		});
 
 		// Save the video to the repository
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		await repository.putObject(video.id, video);
 
 		// Send queue message for video creation
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoCreate, {
 			videoId: video.id,
-			userId: userId,
+			userId: effectiveUserId,
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});

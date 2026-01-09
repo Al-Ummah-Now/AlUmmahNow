@@ -1,0 +1,32 @@
+{
+  "name": "@al-ummah/log-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local development logging service - receives logs via HTTP and writes to files",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.6",
+    "chanfana": "^2.8.3",
+    "hono": "^4.10.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.10.0",
+    "@vitest/ui": "^4.0.9",
+    "tsx": "^4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "^4.0.9"
+  }
+}

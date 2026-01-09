@@ -1,13 +1,13 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelsToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { OptionalAuthRoute, AppContext } from "../../base";
 
-export class ChannelsList extends OpenAPIRoute {
+export class ChannelsList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "List Channels",
@@ -23,7 +23,6 @@ export class ChannelsList extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -54,25 +53,51 @@ export class ChannelsList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated parameters
 		const { limit, cursor } = request.query;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Implement your own object list here
-		const bucket = env.channels;
+		const bucket = c.env.channels;
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
 		let Channels = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
-		
+
+		// Filter channels by userId if provided, and apply privacy/moderation filters
+		let filteredChannels = (Channels.items || []).filter(channel => {
+			// Filter out soft-deleted channels
+			if (channel.isDeleted) {
+				return false;
+			}
+
+			// Filter out moderation-hidden channels
+			if (channel.isHidden) {
+				return false;
+			}
+
+			// Filter out private channels (except for owner)
+			if (channel.isPrivate && channel.userId !== userId) {
+				return false;
+			}
+
+			return true;
+		});
+
+		// Additional filter by userId if requested (to show only user's channels)
+		if (userId) {
+			filteredChannels = filteredChannels.filter(channel => channel.userId === userId);
+		}
+
 		// Transform business channels to view models
-		const channelViews = transformChannelsToView(Channels.items || []);
-		
+		const channelViews = transformChannelsToView(filteredChannels);
+
 		let response: PaginationResponse<any>;
-		if (!Channels.items || Channels.items.length === 0) {
+		if (!filteredChannels || filteredChannels.length === 0) {
 			response = {
 				cursor: "",
 				limit,

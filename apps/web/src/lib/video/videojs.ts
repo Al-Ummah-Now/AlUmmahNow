@@ -7,8 +7,22 @@
 
 import type { Player as VideoJsPlayer } from 'video.js';
 
-// Component type from video.js - using any for now as Component is not exported properly
-type Component = any;
+/**
+ * Video.js Component base type
+ */
+export interface VideoJsComponent {
+  hide(): void;
+  show(): void;
+  el(): HTMLElement;
+  dispose(): void;
+}
+
+/**
+ * Control Bar type with Picture-in-Picture toggle
+ */
+export interface ControlBar extends VideoJsComponent {
+  pictureInPictureToggle?: VideoJsComponent;
+}
 
 /**
  * Quality Level interface for Video.js quality selector plugin
@@ -87,7 +101,7 @@ export interface ExtendedPlayer extends VideoJsPlayer {
    * Get the control bar component
    * @returns Control bar component
    */
-  controlBar: Component;
+  controlBar: ControlBar;
 
   /**
    * Get or set the player volume

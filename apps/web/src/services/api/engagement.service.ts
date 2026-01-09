@@ -14,8 +14,9 @@
  * - Automatic quota management with StorageManager
  */
 
-import { VideosAPI } from '@/lib/api/videos';
+import * as VideosAPI from '@/lib/api/videos';
 import { StorageManager } from '@/lib/utils/storage';
+import { logger } from '@/lib/logger-client';
 
 /**
  * Share platform types
@@ -77,26 +78,6 @@ function sanitizeVideoId(videoId: string): string {
   return encodeURIComponent(videoId.trim());
 }
 
-/**
- * Security: Validate user/channel ID format
- *
- * @param id - The ID to validate
- * @returns True if valid, false otherwise
- */
-function isValidUserId(id: string | undefined): boolean {
-  if (!id || typeof id !== 'string') {
-    return false;
-  }
-
-  // Length check
-  if (id.length === 0 || id.length > 100) {
-    return false;
-  }
-
-  // Pattern check - alphanumeric, hyphens, underscores (typical for user/channel IDs)
-  const idRegex = /^[a-zA-Z0-9_-]+$/;
-  return idRegex.test(id);
-}
 
 /**
  * Video Engagement Service Class
@@ -133,7 +114,7 @@ export class VideoEngagementService {
       // Clean up expired views
       this.cleanupExpiredViews();
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to load tracked views:', error);
+      logger.error('[VideoEngagementService] Failed to load tracked views:', error);
     }
   }
 
@@ -163,7 +144,7 @@ export class VideoEngagementService {
       const success = StorageManager.safeSetItem(this.STORAGE_KEY, jsonStr);
 
       if (!success) {
-        console.warn('[VideoEngagementService] Failed to save tracked views (quota exceeded)');
+        logger.warn('[VideoEngagementService] Failed to save tracked views (quota exceeded)');
 
         // Try to save with reduced data - keep only last 24 hours
         const oneDayAgo = now - (24 * 60 * 60 * 1000);
@@ -180,11 +161,11 @@ export class VideoEngagementService {
         const retrySuccess = StorageManager.safeSetItem(this.STORAGE_KEY, reducedJson);
 
         if (retrySuccess) {
-          console.log('[VideoEngagementService] Saved tracked views with reduced data');
+          logger.debug('[VideoEngagementService] Saved tracked views with reduced data');
         }
       }
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to save tracked views:', error);
+      logger.error('[VideoEngagementService] Failed to save tracked views:', error);
     }
   }
 
@@ -211,7 +192,7 @@ export class VideoEngagementService {
       const jsonStr = JSON.stringify(cleaned);
       StorageManager.safeSetItem(this.STORAGE_KEY, jsonStr);
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to cleanup expired views:', error);
+      logger.error('[VideoEngagementService] Failed to cleanup expired views:', error);
     }
   }
 
@@ -221,7 +202,7 @@ export class VideoEngagementService {
   isViewTracked(videoId: string): boolean {
     // Security: Validate video ID
     if (!isValidVideoId(videoId)) {
-      console.error('[VideoEngagementService] Invalid video ID format');
+      logger.error('[VideoEngagementService] Invalid video ID format');
       return false;
     }
     return this.viewTracked.has(videoId);
@@ -231,22 +212,14 @@ export class VideoEngagementService {
    * Track a video view (once per session)
    *
    * @param videoId - The video ID
-   * @param userId - Optional user ID for authenticated tracking
    * @returns Promise resolving to success status
    */
-  async trackView(videoId: string, userId?: string): Promise<EngagementResult> {
+  async trackView(videoId: string): Promise<EngagementResult> {
     // Security: Validate input parameters
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
         error: 'Invalid video ID format'
-      };
-    }
-
-    if (userId && !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user ID format'
       };
     }
 
@@ -266,7 +239,7 @@ export class VideoEngagementService {
 
       return { success: true };
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to track view:', error);
+      logger.error('[VideoEngagementService] Failed to track view:', error);
 
       // Rollback on error
       this.viewTracked.delete(videoId);
@@ -284,15 +257,13 @@ export class VideoEngagementService {
    *
    * @param videoId - The video ID
    * @param channelId - User's channel ID (required for API)
-   * @param userId - User ID (required for API)
    * @returns Promise resolving to success status
    */
   async likeVideo(
     videoId: string,
-    channelId: string,
-    userId: string
+    channelId: string
   ): Promise<EngagementResult> {
-    // Security: Validate all input parameters
+    // Security: Validate video ID format
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
@@ -300,15 +271,8 @@ export class VideoEngagementService {
       };
     }
 
-    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user or channel ID format'
-      };
-    }
-
     try {
-      const result = await VideosAPI.like(videoId, { channelId, userId });
+      const result = await VideosAPI.likeVideo(videoId, { channelId });
 
       if (!result || !result.success) {
         throw new Error('Failed to like video');
@@ -316,7 +280,7 @@ export class VideoEngagementService {
 
       return { success: true };
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to like video:', error);
+      logger.error('[VideoEngagementService] Failed to like video:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to like video'
@@ -329,15 +293,13 @@ export class VideoEngagementService {
    *
    * @param videoId - The video ID
    * @param channelId - User's channel ID (required for API)
-   * @param userId - User ID (required for API)
    * @returns Promise resolving to success status
    */
   async unlikeVideo(
     videoId: string,
-    channelId: string,
-    userId: string
+    channelId: string
   ): Promise<EngagementResult> {
-    // Security: Validate all input parameters
+    // Security: Validate video ID format
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
@@ -345,15 +307,8 @@ export class VideoEngagementService {
       };
     }
 
-    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user or channel ID format'
-      };
-    }
-
     try {
-      const result = await VideosAPI.unlike(videoId, { channelId, userId });
+      const result = await VideosAPI.unlikeVideo(videoId, { channelId });
 
       if (!result || !result.success) {
         throw new Error('Failed to unlike video');
@@ -361,7 +316,7 @@ export class VideoEngagementService {
 
       return { success: true };
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to unlike video:', error);
+      logger.error('[VideoEngagementService] Failed to unlike video:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to unlike video'
@@ -374,15 +329,13 @@ export class VideoEngagementService {
    *
    * @param videoId - The video ID
    * @param channelId - User's channel ID (required for API)
-   * @param userId - User ID (required for API)
    * @returns Promise resolving to success status
    */
   async dislikeVideo(
     videoId: string,
-    channelId: string,
-    userId: string
+    channelId: string
   ): Promise<EngagementResult> {
-    // Security: Validate all input parameters
+    // Security: Validate video ID format
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
@@ -390,15 +343,8 @@ export class VideoEngagementService {
       };
     }
 
-    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user or channel ID format'
-      };
-    }
-
     try {
-      const result = await VideosAPI.dislike(videoId, { channelId, userId });
+      const result = await VideosAPI.dislikeVideo(videoId, { channelId });
 
       if (!result || !result.success) {
         throw new Error('Failed to dislike video');
@@ -406,7 +352,7 @@ export class VideoEngagementService {
 
       return { success: true };
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to dislike video:', error);
+      logger.error('[VideoEngagementService] Failed to dislike video:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to dislike video'
@@ -419,15 +365,13 @@ export class VideoEngagementService {
    *
    * @param videoId - The video ID
    * @param channelId - User's channel ID (required for API)
-   * @param userId - User ID (required for API)
    * @returns Promise resolving to success status
    */
   async removeDislike(
     videoId: string,
-    channelId: string,
-    userId: string
+    channelId: string
   ): Promise<EngagementResult> {
-    // Security: Validate all input parameters
+    // Security: Validate video ID format
     if (!isValidVideoId(videoId)) {
       return {
         success: false,
@@ -435,15 +379,8 @@ export class VideoEngagementService {
       };
     }
 
-    if (!isValidUserId(channelId) || !isValidUserId(userId)) {
-      return {
-        success: false,
-        error: 'Invalid user or channel ID format'
-      };
-    }
-
     try {
-      const result = await VideosAPI.removeDislike(videoId, { channelId, userId });
+      const result = await VideosAPI.removeVideoDislike(videoId, { channelId });
 
       if (!result || !result.success) {
         throw new Error('Failed to remove dislike');
@@ -451,7 +388,7 @@ export class VideoEngagementService {
 
       return { success: true };
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to remove dislike:', error);
+      logger.error('[VideoEngagementService] Failed to remove dislike:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to remove dislike'
@@ -480,12 +417,12 @@ export class VideoEngagementService {
       // This will be sent to the analytics endpoint
       // For now, we just log it
       if (process.env.NODE_ENV === 'development') {
-        console.log('[VideoEngagementService] Share tracked:', { videoId, platform });
+        logger.debug('[VideoEngagementService] Share tracked:', { videoId, platform });
       }
 
       return { success: true };
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to track share:', error);
+      logger.error('[VideoEngagementService] Failed to track share:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to track share'
@@ -505,7 +442,7 @@ export class VideoEngagementService {
 
     // Security: Validate and sanitize video ID to prevent XSS attacks
     if (!isValidVideoId(videoId)) {
-      console.error('[VideoEngagementService] Invalid video ID format - potential XSS attempt');
+      logger.error('[VideoEngagementService] Invalid video ID format - potential XSS attempt');
       return null;
     }
 
@@ -563,7 +500,7 @@ export class VideoEngagementService {
 
       return { success: true };
     } catch (error) {
-      console.error('[VideoEngagementService] Failed to copy URL:', error);
+      logger.error('[VideoEngagementService] Failed to copy URL:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to copy URL'

@@ -1,11 +1,11 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from '../../base';
 
-export class CommentDelete extends OpenAPIRoute {
+export class CommentDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Comments"],
 		summary: "Delete a comment for a video",
@@ -16,7 +16,6 @@ export class CommentDelete extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 		},
 		responses: {
@@ -49,14 +48,15 @@ export class CommentDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id, cid } = request.params;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
 		// Get the video and find the comment
-		const bucket = env.videos;
+		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof Video>;
 		const repository = new R2Repository<VideoType>(bucket);
 		let video = await repository.getObject(id);
@@ -85,7 +85,7 @@ export class CommentDelete extends OpenAPIRoute {
 		}
 
 		// Send queue message for comment deletion
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.CommentDelete, {
 			commentId: cid,
 			videoId: id,

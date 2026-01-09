@@ -4,7 +4,8 @@
  * Updates the playback progress for a video
  */
 
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
@@ -14,6 +15,7 @@ import type {
   WatchProgressUpdate,
   WatchHistoryEvent
 } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Path parameter schema
 const ProgressParams = z.object({
@@ -36,7 +38,7 @@ const ProgressResponseSchema = z.object({
   timestamp: z.string(),
 });
 
-export class UpdateWatchProgress extends OpenAPIRoute {
+export class UpdateWatchProgress extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -44,6 +46,9 @@ export class UpdateWatchProgress extends OpenAPIRoute {
       description:
         "Updates the current playback position for a video. Should be called periodically (every 10 seconds) during video playback.",
       request: {
+        headers: z.object({
+          channelId: z.string().optional().nullable(),
+        }),
         params: ProgressParams,
         body: {
           content: {
@@ -80,8 +85,10 @@ export class UpdateWatchProgress extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
-    const auth = c.get("auth");
-    const userId = auth.userId;
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { channelId } = request.headers;
+
+    const userId = this.getUserId(c);
 
     // Get videoId from path params
     const { videoId } = c.req.param();
@@ -136,7 +143,7 @@ export class UpdateWatchProgress extends OpenAPIRoute {
       // Queue progress event
       const event: WatchHistoryEvent = {
         type: completed ? "watch_completed" : "watch_progress",
-        userId,
+        userId: userId,
         videoId,
         progress,
         duration,
@@ -160,7 +167,7 @@ export class UpdateWatchProgress extends OpenAPIRoute {
         200
       );
     } catch (error) {
-      console.error("Error updating watch progress:", error);
+      logger.error("Error updating watch progress:", error);
       return c.json(
         {
           error: "Failed to update watch progress",

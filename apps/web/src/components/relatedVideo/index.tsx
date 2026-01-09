@@ -4,8 +4,11 @@ import Image from "next/image";
 import { VideoInfo } from "@/interfaces";
 import { redirect } from "next/navigation";
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const RelatedVideo: React.FC<VideoInfo> = (info) => {
+  const { t } = useLanguage();
+
   const handleClick = () => {
     redirect(`/en/video?vid=${info.id}`);
   };
@@ -31,7 +34,7 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
         </h3>
         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{info.channel}</p>
         <p className="text-xs text-gray-500">
-          {info.views} views • {info?.dateModified?.toLocaleDateString()}
+          {info.views} {t.video.videoViews.toLowerCase()} • {info?.dateModified?.toLocaleDateString()}
         </p>
       </div>
     </div>

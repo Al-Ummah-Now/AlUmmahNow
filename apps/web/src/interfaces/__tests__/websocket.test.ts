@@ -199,7 +199,7 @@ describe('WebSocket Interfaces', () => {
         reconnectInterval: 3000,
         maxReconnectAttempts: 5,
         heartbeatInterval: 30000,
-        userId: 'user-1',
+        
         authToken: 'token-123',
       };
 

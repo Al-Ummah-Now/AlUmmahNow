@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { abTestingEngine, ExperimentResult } from '@/services/experiments/ab-testing';
 import { getExperiment, isUserInTargetAudience, Experiment } from '@/services/experiments/feature-flags';
+import { logger } from '@/lib/logger-client';
+import { useAuth } from '@/components/AuthProvider/authContext';
+
 
 interface UseExperimentOptions {
   autoTrack?: boolean;
@@ -22,13 +25,15 @@ interface ExperimentState {
 
 export function useExperiment(
   experimentId: string,
-  userId: string | null,
   options: UseExperimentOptions = {}
 ): ExperimentState & {
   trackConversion: (value?: number) => void;
   reset: () => void;
-  getVariantConfig: () => any;
+  getVariantConfig: () => unknown;
 } {
+  const { user } = useAuth();
+  const userId = user?.id;
+
   const [state, setState] = useState<ExperimentState>({
     isLoading: true,
     variant: null,
@@ -38,7 +43,6 @@ export function useExperiment(
   });
 
   const {
-    autoTrack = true,
     enableConversionTracking = true,
     userContext = {}
   } = options;
@@ -115,7 +119,7 @@ export function useExperiment(
         error: error instanceof Error ? error.message : 'Failed to assign variant'
       }));
     }
-  }, [userId, experiment, experimentId, userContext, autoTrack]);
+  }, [userId, experiment, experimentId, userContext]);
 
   const trackConversion = useCallback((value?: number) => {
     if (!enableConversionTracking || !state.isInExperiment) return;
@@ -123,7 +127,7 @@ export function useExperiment(
     try {
       abTestingEngine.trackConversion(experimentId, value);
     } catch (error) {
-      console.error('Failed to track conversion:', error);
+      logger.error('Failed to track conversion:', error);
     }
   }, [enableConversionTracking, state.isInExperiment, experimentId]);
 
@@ -158,9 +162,11 @@ export function useExperiment(
 
 export function useExperiments(
   experimentIds: string[],
-  userId: string | null,
   options: UseExperimentOptions = {}
 ) {
+  const { user } = useAuth();
+  const userId = user?.id;
+
   const [experiments, setExperiments] = useState<Record<string, ExperimentState>>({});
 
   useEffect(() => {
@@ -206,7 +212,7 @@ export function useExperiments(
 
   const getActiveVariants = useCallback(() => {
     return Object.entries(experiments)
-      .filter(([_, state]) => state.isInExperiment)
+      .filter(([, state]) => state.isInExperiment)
       .reduce((acc, [id, state]) => {
         if (state.variant) {
           acc[id] = state.variant;

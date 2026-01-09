@@ -1,13 +1,15 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamUpdateInput } from "../../lib/model/input";
 import { LiveStreamView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import Queue, { MessageType } from "../../lib/queue";
+import { logger } from '../../lib/logger';
 
-export class LiveStreamUpdate extends OpenAPIRoute {
+export class LiveStreamUpdate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Live Streams"],
 		summary: "Update Live Stream Status",
@@ -18,7 +20,6 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional(),
-				userId: Str({ description: "User ID (automatically set from JWT token)" }).optional(),
 			}),
 			body: {
 				content: {
@@ -85,16 +86,17 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 		const updateData = request.body;
 
 		try {
-			const bucket = env.videos;
+			const bucket = c.env.videos;
 			type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 			const repository = new R2Repository<LiveStreamType>(bucket);
 
@@ -147,6 +149,16 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 			// Save updated stream
 			await repository.putObject(`livestream:${id}`, updatedStream);
 
+			// Send queue message for live stream update
+			const queue = new Queue(c.env.queue);
+			await queue.send(MessageType.LiveStreamUpdate, {
+				liveStreamId: id,
+				userId,
+				channelId,
+				timestamp: new Date().toISOString(),
+				status: updatedStream.status,
+			});
+
 			// Transform to view model for response
 			const streamView = {
 				...updatedStream,
@@ -166,7 +178,7 @@ export class LiveStreamUpdate extends OpenAPIRoute {
 				result: { stream: streamView },
 			};
 		} catch (error) {
-			console.error("Error updating live stream:", error);
+			logger.error("Error updating live stream:", error);
 			return c.json(
 				{
 					success: false,

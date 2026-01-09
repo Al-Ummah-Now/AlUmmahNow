@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 /**
  * Example usage of BunnyStreamService
  * 
@@ -22,7 +23,7 @@ export function example1_ManualConfig() {
 
   // Generate HLS URL
   const hlsUrl = service.getHlsUrl(videoId);
-  console.log('HLS URL:', hlsUrl);
+  logger.debug('HLS URL:', hlsUrl);
   // Output: https://vz-example.b-cdn.net/abc123-def456-ghi789/playlist.m3u8
 }
 
@@ -38,7 +39,7 @@ export function example2_EnvironmentConfig() {
   const videoId = 'abc123-def456-ghi789';
 
   const hlsUrl = service.getHlsUrl(videoId);
-  console.log('HLS URL:', hlsUrl);
+  logger.debug('HLS URL:', hlsUrl);
 }
 
 // ============================================================================
@@ -54,7 +55,7 @@ export function example3_AllUrls() {
     { srclang: 'ar', label: 'Arabic' },
   ]);
 
-  console.log('All URLs:', {
+  logger.debug('All URLs:', {
     hls: urls.hls,
     mp4_720p: urls.mp4['720p'],
     thumbnail: urls.thumbnail,
@@ -115,7 +116,7 @@ export function example5_QualitySelector(videoId: string) {
     resolution: parseInt(quality), // 240, 360, 480, 720, 1080
   }));
 
-  console.log('Quality options:', qualityOptions);
+  logger.debug('Quality options:', qualityOptions);
   return qualityOptions;
 }
 
@@ -138,7 +139,7 @@ export function example6_ThumbnailGallery(videoId: string) {
     });
   }
 
-  console.log('Thumbnail gallery:', thumbnails);
+  logger.debug('Thumbnail gallery:', thumbnails);
   return thumbnails;
 }
 
@@ -211,7 +212,7 @@ export function example8_DownloadLinks(videoId: string) {
     label: `Download ${quality}`,
   }));
 
-  console.log('Download links:', downloadLinks);
+  logger.debug('Download links:', downloadLinks);
   return downloadLinks;
 }
 
@@ -280,10 +281,10 @@ export function example11_ErrorHandling() {
     const service = createBunnyStreamService();
     const videoId = 'test-video';
     const hlsUrl = service.getHlsUrl(videoId);
-    console.log('HLS URL:', hlsUrl);
+    logger.debug('HLS URL:', hlsUrl);
   } catch (error) {
     if (error instanceof Error) {
-      console.error('Configuration error:', error.message);
+      logger.error('Configuration error:', error.message);
       // Handle missing configuration
     }
   }

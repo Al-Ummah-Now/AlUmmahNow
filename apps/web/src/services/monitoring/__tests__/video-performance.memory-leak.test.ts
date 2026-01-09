@@ -16,7 +16,7 @@ const mockVideoElement = {
 // Mock performance.now
 global.performance = {
   now: jest.fn(() => 1000),
-} as any;
+} as unknown as Performance;
 
 // Mock fetch
 global.fetch = jest.fn(() =>
@@ -24,7 +24,7 @@ global.fetch = jest.fn(() =>
     ok: true,
     status: 200,
   })
-) as any;
+) as unknown as typeof fetch;
 
 // Mock auth module
 jest.mock('@/lib/auth/client-token', () => ({
@@ -55,6 +55,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     });
 
     // Access private property for testing (TypeScript hack)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getMapSize = () => (monitor as any).watchStartTimes.size;
 
     // Initial state
@@ -82,6 +83,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
       enableAutoSend: false,
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getMapSize = () => (monitor as any).watchStartTimes.size;
     const playHandler = (mockVideoElement.addEventListener as jest.Mock).mock.calls
       .find(call => call[0] === 'play')?.[1];
@@ -101,6 +103,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     jest.advanceTimersByTime(3700000); // 1 hour + 100 seconds
 
     // Trigger cleanup
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (monitor as any).cleanupStaleEntries();
 
     // All entries should be removed as stale
@@ -144,6 +147,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     }
 
     // Check that currentWatchStartTime is set
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((monitor as any).currentWatchStartTime).toBeGreaterThan(0);
 
     // Advance time and pause
@@ -153,9 +157,11 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     }
 
     // currentWatchStartTime should be reset
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((monitor as any).currentWatchStartTime).toBe(0);
 
     // totalDurationWatched should have increased
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((monitor as any).totalDurationWatched).toBeGreaterThan(0);
   });
 
@@ -174,6 +180,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
       playHandler();
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getMapSize = () => (monitor as any).watchStartTimes.size;
     expect(getMapSize()).toBeGreaterThan(0);
 
@@ -184,7 +191,9 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     expect(getMapSize()).toBe(0);
 
     // Timers should be null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((monitor as any).sendTimer).toBeNull();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((monitor as any).cleanupTimer).toBeNull();
   });
 
@@ -207,6 +216,7 @@ describe('VideoPerformanceMonitor - Memory Leak Fix', () => {
     }
 
     // Map size should still be bounded
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getMapSize = () => (monitor as any).watchStartTimes.size;
     expect(getMapSize()).toBeLessThanOrEqual(10);
 

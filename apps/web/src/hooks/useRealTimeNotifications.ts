@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { NotificationEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
+import { logger } from '@/lib/logger-client';
+
 
 export interface Notification {
   id: string;
@@ -33,7 +35,7 @@ export interface UseRealTimeNotificationsReturn {
 export function useRealTimeNotifications(
   options: UseRealTimeNotificationsOptions = {}
 ): UseRealTimeNotificationsReturn {
-  const { userId, maxNotifications = 50, autoRemoveAfter } = options;
+  const {  maxNotifications = 50, autoRemoveAfter } = options;
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Remove specific notification
@@ -55,19 +57,25 @@ export function useRealTimeNotifications(
     autoRemoveAfterRef.current = autoRemoveAfter;
   }, [removeNotification, maxNotifications, autoRemoveAfter]);
 
-  const handleNotificationUpdate = useCallback((eventData: NotificationEvent) => {
-    console.log('📥 Real-time notification:', eventData);
+  const handleNotificationUpdate = useCallback((eventData: unknown) => {
+    // Type guard to ensure eventData is NotificationEvent
+    if (!eventData || typeof eventData !== 'object' || !('type' in eventData)) {
+      return;
+    }
 
-    if (eventData.type === 'notification') {
+    const event = eventData as NotificationEvent;
+    logger.info('📥 Real-time notification:', event);
+
+    if (event.type === 'notification') {
       const notification: Notification = {
-        id: eventData.notificationId,
-        title: eventData.title,
-        message: eventData.message,
-        type: eventData.notificationType,
-        actionUrl: eventData.actionUrl,
+        id: event.notificationId,
+        title: event.title,
+        message: event.message,
+        type: event.notificationType,
+        actionUrl: event.actionUrl,
         timestamp: new Date(),
         read: false,
-        userId: eventData.userId
+        userId: event.userId
       };
 
       setNotifications(prevNotifications => {
@@ -103,9 +111,9 @@ export function useRealTimeNotifications(
   // Subscribe to real-time notifications
   // Note: handleNotificationUpdate should NOT be in dependencies as it would cause re-subscriptions
   const isConnected = useWebSocketSubscription(
-    userId ? `user:${userId}:notifications` : 'notifications',
+    options.userId ? `user:${options.userId}:notifications` : 'notifications',
     handleNotificationUpdate,
-    [userId]
+    [options.userId]
   );
   
   // Add notification manually (for testing or local notifications)
@@ -150,7 +158,7 @@ export function useRealTimeNotifications(
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().then(permission => {
-        console.log('Notification permission:', permission);
+        logger.info('Notification permission:', permission);
       });
     }
   }, []);

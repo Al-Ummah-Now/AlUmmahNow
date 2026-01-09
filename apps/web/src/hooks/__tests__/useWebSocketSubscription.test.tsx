@@ -21,7 +21,7 @@ import React from 'react';
 
 // Mock WebSocketManager
 jest.mock('@/lib/websocket/WebSocketManager', () => {
-  let subscriptions: Map<string, Array<(data: any) => void>> = new Map();
+  let subscriptions: Map<string, Array<(data: unknown) => void>> = new Map();
   let connectionState = { status: 'connected' };
 
   return {
@@ -29,7 +29,7 @@ jest.mock('@/lib/websocket/WebSocketManager', () => {
       connect: jest.fn().mockResolvedValue(undefined),
       disconnect: jest.fn(),
       isConnected: jest.fn(() => connectionState.status === 'connected'),
-      subscribe: jest.fn((channel: string, callback: (data: any) => void) => {
+      subscribe: jest.fn((channel: string, callback: (data: unknown) => void) => {
         if (!subscriptions.has(channel)) {
           subscriptions.set(channel, []);
         }
@@ -53,7 +53,7 @@ jest.mock('@/lib/websocket/WebSocketManager', () => {
       }),
       getState: jest.fn(() => connectionState),
       // Test helper to trigger events
-      _triggerEvent: (channel: string, data: any) => {
+      _triggerEvent: (channel: string, data: unknown) => {
         const callbacks = subscriptions.get(channel);
         if (callbacks) {
           callbacks.forEach(cb => cb(data));
@@ -181,7 +181,7 @@ describe('useRealTimeNotifications', () => {
 
     const { result } = renderHook(
       () => useRealTimeNotifications({
-        userId: 'test-user',
+        
         maxNotifications: 50
       }),
       { wrapper }
@@ -230,7 +230,7 @@ describe('useRealTimeNotifications', () => {
 
     const { result } = renderHook(
       () => useRealTimeNotifications({
-        userId: 'test-user',
+        
         maxNotifications: 50,
         autoRemoveAfter: 100 // 100ms auto-remove
       }),

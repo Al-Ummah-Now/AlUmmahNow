@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 export interface ExperimentEvent {
   eventType: 'assignment' | 'conversion' | 'exposure';
   experimentId: string;
@@ -6,13 +7,13 @@ export interface ExperimentEvent {
   timestamp: number;
   conversionValue?: number;
   sessionId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AnalyticsResponse {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: unknown;
 }
 
 class ExperimentAnalytics {
@@ -47,11 +48,11 @@ class ExperimentAnalytics {
 
       if (!response.success && response.error) {
         this.eventQueue.unshift(...eventsToSend);
-        console.error('Failed to send A/B test events:', response.error);
+        logger.error('Failed to send A/B test events:', response.error);
       }
     } catch (error) {
       this.eventQueue.unshift(...eventsToSend);
-      console.error('Network error sending A/B test events:', error);
+      logger.error('Network error sending A/B test events:', error);
     } finally {
       this.isProcessing = false;
     }
@@ -106,7 +107,7 @@ class ExperimentAnalytics {
     }
   }
 
-  async getExperimentResults(experimentId: string): Promise<any> {
+  async getExperimentResults(experimentId: string): Promise<unknown> {
     try {
       // Get auth token from cookies (client-side)
       const { getAuthHeaders } = await import('@/lib/auth/client-token');
@@ -125,12 +126,12 @@ class ExperimentAnalytics {
 
       return data;
     } catch (error) {
-      console.error('Failed to fetch experiment results:', error);
+      logger.error('Failed to fetch experiment results:', error);
       throw error;
     }
   }
 
-  async getExperimentStatistics(experimentId: string): Promise<any> {
+  async getExperimentStatistics(experimentId: string): Promise<unknown> {
     try {
       // Get auth token from cookies (client-side)
       const { getAuthHeaders } = await import('@/lib/auth/client-token');
@@ -149,7 +150,7 @@ class ExperimentAnalytics {
 
       return data;
     } catch (error) {
-      console.error('Failed to fetch experiment statistics:', error);
+      logger.error('Failed to fetch experiment statistics:', error);
       throw error;
     }
   }
@@ -165,7 +166,7 @@ export function trackExperimentAssignment(
   experimentId: string,
   variant: 'control' | 'treatment',
   userId: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): void {
   trackExperimentEvent({
     eventType: 'assignment',
@@ -182,7 +183,7 @@ export function trackExperimentConversion(
   variant: 'control' | 'treatment',
   userId: string,
   conversionValue?: number,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): void {
   trackExperimentEvent({
     eventType: 'conversion',
@@ -199,7 +200,7 @@ export function trackExperimentExposure(
   experimentId: string,
   variant: 'control' | 'treatment',
   userId: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): void {
   trackExperimentEvent({
     eventType: 'exposure',

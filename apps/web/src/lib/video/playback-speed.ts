@@ -12,6 +12,8 @@
 
 import type { Player } from 'video.js';
 import type { ExtendedPlayer } from './videojs';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * localStorage key for persisting playback rate
@@ -48,13 +50,13 @@ export function loadPlaybackRate(): number {
 
     // Validate rate is a valid number and within available rates
     if (isNaN(rate) || !AVAILABLE_RATES.includes(rate)) {
-      console.warn('[PlaybackSpeed] Invalid saved rate:', saved);
+      logger.warn('[PlaybackSpeed] Invalid saved rate:', saved);
       return DEFAULT_PLAYBACK_RATE;
     }
 
     return rate;
   } catch (error) {
-    console.error('[PlaybackSpeed] Failed to load playback rate:', error);
+    logger.error('[PlaybackSpeed] Failed to load playback rate:', error);
     return DEFAULT_PLAYBACK_RATE;
   }
 }
@@ -72,13 +74,13 @@ export function savePlaybackRate(rate: number): void {
 
     // Validate rate
     if (isNaN(rate) || !AVAILABLE_RATES.includes(rate)) {
-      console.warn('[PlaybackSpeed] Invalid rate, not saving:', rate);
+      logger.warn('[PlaybackSpeed] Invalid rate, not saving:', rate);
       return;
     }
 
     localStorage.setItem(PLAYBACK_RATE_KEY, rate.toString());
   } catch (error) {
-    console.error('[PlaybackSpeed] Failed to save playback rate:', error);
+    logger.error('[PlaybackSpeed] Failed to save playback rate:', error);
   }
 }
 
@@ -121,7 +123,7 @@ function getPreviousRate(currentRate: number): number {
  */
 export function setupPlaybackSpeedKeyboardShortcuts(player: Player | ExtendedPlayer): void {
   if (!player) {
-    console.warn('[PlaybackSpeed] Cannot setup keyboard shortcuts: player is null');
+    logger.warn('[PlaybackSpeed] Cannot setup keyboard shortcuts: player is null');
     return;
   }
 
@@ -162,7 +164,7 @@ export function setupPlaybackSpeedKeyboardShortcuts(player: Player | ExtendedPla
   // Store cleanup function on player for later removal
   const playerEl = (player as ExtendedPlayer).el();
   if (playerEl) {
-    (playerEl as any).__playbackSpeedKeydownHandler = handleKeyDown;
+    (playerEl as HTMLElement & { __playbackSpeedKeydownHandler?: typeof handleKeyDown }).__playbackSpeedKeydownHandler = handleKeyDown;
   }
 }
 
@@ -178,10 +180,11 @@ export function cleanupPlaybackSpeedKeyboardShortcuts(player: Player | ExtendedP
 
   const playerEl = (player as ExtendedPlayer).el();
   if (playerEl) {
-    const handler = (playerEl as any).__playbackSpeedKeydownHandler;
+    const extPlayerEl = playerEl as HTMLElement & { __playbackSpeedKeydownHandler?: (event: KeyboardEvent) => void };
+    const handler = extPlayerEl.__playbackSpeedKeydownHandler;
     if (handler) {
       document.removeEventListener('keydown', handler);
-      delete (playerEl as any).__playbackSpeedKeydownHandler;
+      delete extPlayerEl.__playbackSpeedKeydownHandler;
     }
   }
 }
@@ -202,7 +205,7 @@ export function initializePlaybackSpeed(
   onSpeedChange?: (rate: number, previousRate: number) => void
 ): void {
   if (!player) {
-    console.warn('[PlaybackSpeed] Cannot initialize: player is null');
+    logger.warn('[PlaybackSpeed] Cannot initialize: player is null');
     return;
   }
 

@@ -179,10 +179,11 @@ export function VideoKeyboardHelp({ isOpen, onClose, language }: VideoKeyboardHe
   useEffect(() => {
     if (!isOpen || !modalRef.current) return;
 
-    const focusableElements = modalRef.current.querySelectorAll(
+    const modal = modalRef.current; // Copy ref value for cleanup
+    const focusableElements = modal.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
-    
+
     const firstElement = focusableElements[0] as HTMLElement;
     const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
@@ -202,9 +203,9 @@ export function VideoKeyboardHelp({ isOpen, onClose, language }: VideoKeyboardHe
       }
     };
 
-    modalRef.current.addEventListener('keydown', handleTabKey);
+    modal.addEventListener('keydown', handleTabKey);
     return () => {
-      modalRef.current?.removeEventListener('keydown', handleTabKey);
+      modal.removeEventListener('keydown', handleTabKey);
     };
   }, [isOpen]);
 

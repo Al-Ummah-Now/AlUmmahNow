@@ -5,6 +5,7 @@ import {
   WebSocketSubscription,
   WebSocketEventType
 } from '@/interfaces/websocket';
+import { logger } from '@/lib/logger-client';
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -14,7 +15,7 @@ export class WebSocketManager {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private messageQueue: WebSocketMessage[] = [];
-  private eventListeners: Map<string, Set<(data: any) => void>> = new Map();
+  private eventListeners: Map<string, Set<(data: WebSocketConnectionState) => void>> = new Map();
 
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -44,31 +45,34 @@ export class WebSocketManager {
       this.state.status = 'connecting';
 
       try {
-        // Build WebSocket URL with authentication if available
+        // Build WebSocket URL - SECURITY: Never send token in URL
+        // Token is sent via first message after connection (industry standard)
         let wsUrl = this.config.url;
         const params = new URLSearchParams();
 
+        // Only userId in URL (not sensitive)
         if (userId || this.config.userId) {
           params.append('userId', userId || this.config.userId!);
-        }
-
-        if (this.config.authToken) {
-          params.append('token', this.config.authToken);
         }
 
         if (params.toString()) {
           wsUrl += `?${params.toString()}`;
         }
 
-        console.log('🔌 Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+        logger.info('🔌 Connecting to WebSocket:', wsUrl);
 
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          console.log('✅ WebSocket connected');
+          logger.info('✅ WebSocket connected');
           this.state.status = 'connected';
           this.state.lastConnected = new Date();
           this.state.reconnectAttempts = 0;
+
+          // SECURITY: Send auth token via first message, not URL
+          if (this.config.authToken) {
+            this.sendAuthMessage(this.config.authToken);
+          }
 
           this.startHeartbeat();
           this.flushMessageQueue();
@@ -82,12 +86,12 @@ export class WebSocketManager {
             const message: WebSocketMessage = JSON.parse(event.data);
             this.handleMessage(message);
           } catch (error) {
-            console.error('❌ Error parsing WebSocket message:', error);
+            logger.error('❌ Error parsing WebSocket message:', error);
           }
         };
 
         this.ws.onclose = (event) => {
-          console.log('🔌 WebSocket closed:', event.code, event.reason);
+          logger.info('🔌 WebSocket closed', { code: event.code, reason: event.reason });
           this.state.status = 'disconnected';
           this.stopHeartbeat();
           this.notifyStateChange();
@@ -98,7 +102,7 @@ export class WebSocketManager {
         };
 
         this.ws.onerror = (error) => {
-          console.error('❌ WebSocket error:', error);
+          logger.error('❌ WebSocket error:', error);
           this.state.status = 'error';
           this.notifyStateChange();
           reject(error);
@@ -135,7 +139,7 @@ export class WebSocketManager {
   /**
    * Subscribe to a channel for real-time updates
    */
-  subscribe(channel: string, callback: (data: any) => void): () => void {
+  subscribe(channel: string, callback: (data: unknown) => void): () => void {
     if (!this.subscriptions.has(channel)) {
       this.subscriptions.set(channel, []);
     }
@@ -148,7 +152,7 @@ export class WebSocketManager {
       this.sendMessage('subscribe', { channel });
     }
 
-    console.log(`📡 Subscribed to channel: ${channel}`);
+    logger.info(`📡 Subscribed to channel: ${channel}`);
 
     // Return unsubscribe function
     return () => {
@@ -157,7 +161,7 @@ export class WebSocketManager {
         const index = channelSubs.findIndex(sub => sub === subscription);
         if (index !== -1) {
           channelSubs.splice(index, 1);
-          console.log(`📡 Unsubscribed from channel: ${channel}`);
+          logger.info(`📡 Unsubscribed from channel: ${channel}`);
 
           if (channelSubs.length === 0) {
             this.subscriptions.delete(channel);
@@ -173,7 +177,7 @@ export class WebSocketManager {
   /**
    * Send a message to the WebSocket server
    */
-  sendMessage(type: WebSocketEventType, data: any): void {
+  sendMessage(type: WebSocketEventType, data: unknown): void {
     const message: WebSocketMessage = {
       id: this.generateMessageId(),
       type,
@@ -184,14 +188,14 @@ export class WebSocketManager {
     if (this.state.status === 'connected' && this.ws) {
       try {
         this.ws.send(JSON.stringify(message));
-        console.log('📤 Sent message:', type, data);
+        logger.info('📤 Sent message', { type, data });
       } catch (error) {
-        console.error('❌ Error sending message:', error);
+        logger.error('❌ Error sending message:', error);
         this.messageQueue.push(message);
       }
     } else {
       this.messageQueue.push(message);
-      console.log('📤 Message queued:', type, data);
+      logger.info('📤 Message queued', { type, data });
     }
   }
 
@@ -223,11 +227,23 @@ export class WebSocketManager {
   }
 
   private handleMessage(message: WebSocketMessage): void {
-    console.log('📥 Received message:', message.type, message.data);
+    logger.info('📥 Received message', { type: message.type, data: message.data });
 
     // Handle connection acknowledgment
     if (message.type === 'connection_acknowledged') {
-      console.log('✅ Connection acknowledged by server');
+      logger.info('✅ Connection acknowledged by server');
+      return;
+    }
+
+    // Handle authentication response
+    if (message.type === 'authenticated') {
+      logger.info('🔐 Authentication successful', { userId: (message.data as { userId?: string })?.userId });
+      return;
+    }
+
+    // Handle auth error
+    if (message.type === 'error' && (message.data as { code?: string })?.code?.startsWith('AUTH')) {
+      logger.error('🔐 Authentication failed:', message.data);
       return;
     }
 
@@ -246,7 +262,7 @@ export class WebSocketManager {
           try {
             sub.callback(message.data);
           } catch (error) {
-            console.error('❌ Error in subscription callback:', error);
+            logger.error('❌ Error in subscription callback:', error);
           }
         });
       }
@@ -259,7 +275,7 @@ export class WebSocketManager {
           try {
             sub.callback(message.data);
           } catch (error) {
-            console.error('❌ Error in broadcast callback:', error);
+            logger.error('❌ Error in broadcast callback:', error);
           }
         });
       });
@@ -269,6 +285,15 @@ export class WebSocketManager {
   private getChannelKeyFromMessage(message: WebSocketMessage): string | null {
     const { type, data } = message;
 
+    // Type guard to check if data has videoId or channelId
+    const hasVideoId = (obj: unknown): obj is { videoId: string } => {
+      return typeof obj === 'object' && obj !== null && 'videoId' in obj && typeof (obj as { videoId: string }).videoId === 'string';
+    };
+
+    const hasChannelId = (obj: unknown): obj is { channelId: string } => {
+      return typeof obj === 'object' && obj !== null && 'channelId' in obj && typeof (obj as { channelId: string }).channelId === 'string';
+    };
+
     switch (type) {
       case 'comment_added':
       case 'comment_updated':
@@ -276,10 +301,10 @@ export class WebSocketManager {
       case 'video_liked':
       case 'video_unliked':
       case 'view_count_updated':
-        return data.videoId ? `video:${data.videoId}` : null;
+        return hasVideoId(data) ? `video:${data.videoId}` : null;
       case 'user_joined':
       case 'user_left':
-        return data.channelId ? `channel:${data.channelId}` : null;
+        return hasChannelId(data) ? `channel:${data.channelId}` : null;
       default:
         return null;
     }
@@ -296,12 +321,12 @@ export class WebSocketManager {
       30000 // Max 30 seconds
     );
 
-    console.log(`🔄 Scheduling reconnect attempt ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`);
+    logger.info(`🔄 Scheduling reconnect attempt ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`);
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect().catch(error => {
-        console.error('❌ Reconnect failed:', error);
+        logger.error('❌ Reconnect failed:', error);
         if (this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
           this.scheduleReconnect();
         }
@@ -332,9 +357,9 @@ export class WebSocketManager {
       if (message && this.ws) {
         try {
           this.ws.send(JSON.stringify(message));
-          console.log('📤 Sent queued message:', message.type, message.data);
+          logger.info('📤 Sent queued message', { type: message.type, data: message.data });
         } catch (error) {
-          console.error('❌ Error sending queued message:', error);
+          logger.error('❌ Error sending queued message:', error);
           this.messageQueue.unshift(message);
           break;
         }
@@ -349,7 +374,7 @@ export class WebSocketManager {
         try {
           callback(this.state);
         } catch (error) {
-          console.error('❌ Error in state change callback:', error);
+          logger.error('❌ Error in state change callback:', error);
         }
       });
     }
@@ -357,5 +382,28 @@ export class WebSocketManager {
 
   private generateMessageId(): string {
     return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Send authentication message to server
+   * SECURITY: Token sent via message, not URL (prevents logging/exposure)
+   */
+  private sendAuthMessage(token: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      logger.error('❌ Cannot send auth message: WebSocket not open');
+      return;
+    }
+
+    try {
+      // Send in format expected by server's ClientMessageSchema
+      const authMessage = {
+        type: 'authenticate',
+        token: token,
+      };
+      this.ws.send(JSON.stringify(authMessage));
+      logger.info('🔐 Sent authentication message');
+    } catch (error) {
+      logger.error('❌ Error sending auth message:', error);
+    }
   }
 }

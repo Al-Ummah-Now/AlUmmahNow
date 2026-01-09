@@ -1,88 +1,80 @@
 import { fromHono } from "chanfana";
 import { Hono } from "hono";
 import { cors } from 'hono/cors'
-import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth";
-import { VideoCreate } from "./endpoints/video/videoCreate";
-import { VideoUpdate } from "./endpoints/video/videoUpdate";
-import { VideoDelete } from "./endpoints/video/videoDelete";
-import { VideoFetch } from "./endpoints/video/videoFetch";
-import { VideosList } from "./endpoints/video/videoList";
-import { VideoSearch } from "./endpoints/video/videoSearch";
-import { VideoView } from "./endpoints/video/videoView";
-import { VideoUploadStatus } from "./endpoints/video/videoUploadStatus";
-import { VideoUpload } from "./endpoints/video/videoUpload";
-import { UploadInitiateEndpoint } from "./endpoints/video/uploadInitiate";
-import { UploadCompleteEndpoint } from "./endpoints/video/uploadComplete";
-import { ProfileCreate } from "./endpoints/profile/profileCreate";
-import { ProfileDelete } from "./endpoints/profile/profileDelete";
-import { ProfileFetch } from "./endpoints/profile/profileFetch";
-import { ProfilesList } from "./endpoints/profile/profileList";
-import { ProfileUpdate } from "./endpoints/profile/profileUpdate";
-import { WatchHistoryAdd } from "./endpoints/profile/watchHistoryAdd";
-import { WatchHistoryList } from "./endpoints/profile/watchHistoryList";
+import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
+import { loggingMiddleware } from "./middleware/logging";
+import { errorHandler } from "./middleware/error-handler";
+import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { logger } from './lib/logger';
+import { registerAllRouters } from './routers';
+
+// TUS Proxy import (not in routers yet)
+import { createTusRouter } from "./endpoints/video/tus";
+// Profile/Channel image upload handlers (not in routers yet)
 import handleAvatarUpdate from "./endpoints/profile/profileAvatarUpdate";
-// Watch History endpoints (new system)
-import { RecordWatchHistory } from "./endpoints/watch-history/record";
-import { ListWatchHistory } from "./endpoints/watch-history/list";
-import { DeleteWatchHistory } from "./endpoints/watch-history/delete";
-import { ClearWatchHistory } from "./endpoints/watch-history/clear";
-import { UpdateWatchProgress } from "./endpoints/watch-history/update-progress";
-import { GetWatchProgress } from "./endpoints/watch-history/get-progress";
 import handleCoverUpdate from "./endpoints/profile/profileCoverUpdate";
-import { PlaylistCreate } from "./endpoints/playlist/playlistCreate";
-import { PlaylistFetch } from "./endpoints/playlist/playlistFetch";
-import { PlaylistDelete } from "./endpoints/playlist/playlistDelete";
-import { PlaylistsList } from "./endpoints/playlist/playlistsList";
-import { PlaylistUpdate } from "./endpoints/playlist/playlistUpdate";
-import { PlaylistAddVideo } from "./endpoints/playlist/playlistAddVideo";
-import { PlaylistRemoveVideo } from "./endpoints/playlist/playlistRemoveVideo";
-import { ChannelCreate } from "./endpoints/channel/channelCreate";
-import { ChannelUpdate } from "./endpoints/channel/channelUpdate";
-import { ChannelFetch } from "./endpoints/channel/channelFetch";
-import { ChannelDelete } from "./endpoints/channel/channelDelete";
-import { ChannelsList } from "./endpoints/channel/channelList";
-import { SubscriptionCreate } from "./endpoints/channel/SubscriptionCreate";
-import { SubscriptionDelete } from "./endpoints/channel/SubscriptionDelete";
-import { CommentCreate } from "./endpoints/video/commentCreate";
-import { CommentUpdate } from "./endpoints/video/commentUpdate";
-import { CommentDelete } from "./endpoints/video/commentDelete";
-import { LikeCreate } from "./endpoints/video/videoLikeCreate";
-import { LikeDelete } from "./endpoints/video/videoLikeDelete";
-import { DislikeCreate } from "./endpoints/video/videoDislikeCreate";
-import { DislikeDelete } from "./endpoints/video/videoDislikeDelete";
-import { AuthTest } from "./endpoints/auth/authTest";
-import { HealthCheck } from "./endpoints/monitoring/healthCheck";
-import { TestRunner } from "./endpoints/monitoring/testRunner";
-import { Metrics } from "./endpoints/monitoring/metrics";
-import { StatusPage } from "./endpoints/monitoring/statusPage";
-import { SyncR2Buckets } from "./endpoints/monitoring/sync-r2";
-// Phase 2: Live Streaming imports
-import { LiveStreamCreate } from "./endpoints/live/liveStreamCreate";
-import { LiveStreamsList } from "./endpoints/live/liveStreamsList";
-import { LiveStreamUpdate } from "./endpoints/live/liveStreamUpdate";
-// Phase 2: Analytics imports
-import { AnalyticsGet } from "./endpoints/analytics/analyticsGet";
-// Phase 2: Content Moderation imports
-import { ReportCreate } from "./endpoints/moderation/reportCreate";
-import { ModerationAction } from "./endpoints/moderation/moderationAction";
+import handleChannelAvatarUpdate from "./endpoints/channel/channelAvatarUpdate";
+import handleChannelCoverUpdate from "./endpoints/channel/channelCoverUpdate";
 
+// ==========================================
+// APP SETUP
+// ==========================================
 
-// Start a Hono app - testing reload
 const app = new Hono();
+
+// Register global error handler (catches all unhandled errors)
+app.onError(errorHandler);
+
+// ==========================================
+// GLOBAL MIDDLEWARE
+// ==========================================
+
+// CORS origin validation
+const isAllowedOrigin = (origin: string): boolean => {
+	const allowedOrigins = [
+		// Production
+		'https://alummahnow.net',
+		'https://www.alummahnow.net',
+		'https://admin.alummahnow.net',
+		// Staging
+		'https://staging.alummahnow.net',
+		'https://admin-staging.alummahnow.net',
+		// Development
+		'http://localhost:3000',
+		'http://localhost:3001',
+		'http://localhost:3090',
+		'http://127.0.0.1:3000',
+		'http://127.0.0.1:3001',
+		'http://127.0.0.1:3086',
+		'http://127.0.0.1:3090',
+	];
+	return allowedOrigins.includes(origin);
+};
 
 // Setup CORS for all routes
 app.use('*', cors({
-	origin: '*',
-	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId'],
-	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow'],
+	origin: (origin) => isAllowedOrigin(origin) ? origin : '',
+	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
+	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata'],
 	maxAge: 600,
 	credentials: false,
 }));
 
+// Add comprehensive logging middleware for ALL routes
+app.use('*', loggingMiddleware);
+
+// ==========================================
+// OPTIONS HANDLERS
+// ==========================================
+
 // Explicit OPTIONS handler for profile endpoints
 app.options('/api/profile*', (c) => {
-	c.header('Access-Control-Allow-Origin', '*');
+	const origin = c.req.header('Origin') || '';
+	const allowedOrigin = isAllowedOrigin(origin) ? origin : '';
+	if (allowedOrigin) {
+		c.header('Access-Control-Allow-Origin', allowedOrigin);
+	}
 	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
 	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, channelId, userId');
 	c.header('Access-Control-Max-Age', '600');
@@ -92,23 +84,78 @@ app.options('/api/profile*', (c) => {
 
 // Explicit OPTIONS handler for all API endpoints
 app.options('/api/*', (c) => {
-	c.header('Access-Control-Allow-Origin', '*');
-	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, channelId, userId');
+	const origin = c.req.header('Origin') || '';
+	const allowedOrigin = isAllowedOrigin(origin) ? origin : '';
+	if (allowedOrigin) {
+		c.header('Access-Control-Allow-Origin', allowedOrigin);
+	}
+	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, channelId, userId, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Upload-Defer-Length, Upload-Concat');
+	c.header('Access-Control-Expose-Headers', 'Location, Tus-Resumable, Tus-Version, Tus-Max-Size, Tus-Extension, Upload-Offset, Upload-Length, Upload-Metadata');
 	c.header('Access-Control-Max-Age', '600');
-	c.header('Allow', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+	c.header('Allow', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
 	return new Response('', { status: 204 });
 });
+
+// ==========================================
+// AUTHENTICATION MIDDLEWARE
+// ==========================================
 
 // Add authentication middleware to all API routes
 // Use optionalAuthMiddleware for GET endpoints (allow both authenticated and public access)
 // Use authMiddleware for CUD operations (require authentication)
 app.use('/api/*', optionalAuthMiddleware);
 
-// For routes that require authentication, we'll add authMiddleware later
-// or use it selectively based on the operation type
+// Validate channelId header when present
+// This middleware verifies that the channelId belongs to the authenticated user
+// It must run after auth middleware so the user context is available
+app.use('/api/*', channelIdMiddleware);
 
-// Setup OpenAPI registry
+// ==========================================
+// RATE LIMITING
+// ==========================================
+
+// SECURITY: Apply rate limiting to video upload endpoints
+app.use('/api/videos/upload', rateLimitMiddleware('video_upload'));
+app.use('/api/videos/upload/initiate', rateLimitMiddleware('video_upload'));
+app.use('/api/videos/upload/batch/initiate', rateLimitMiddleware('video_upload'));
+app.use('/api/videos/upload/complete', rateLimitMiddleware('video_upload'));
+app.use('/api/videos/upload/resume/:videoId', rateLimitMiddleware('video_upload'));
+
+// SECURITY: Apply rate limiting to community media uploads
+app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
+app.use('/api/community/media/upload/gif', rateLimitMiddleware('image_upload'));
+
+// ==========================================
+// TUS PROXY
+// ==========================================
+
+// TUS Proxy: Apply authentication and rate limiting
+app.use('/api/videos/tus', authMiddleware); // Require authentication for all TUS operations
+app.use('/api/videos/tus/*', authMiddleware);
+app.use('/api/videos/tus', rateLimitMiddleware('video_upload')); // Apply rate limiting
+app.use('/api/videos/tus/*', rateLimitMiddleware('video_upload'));
+
+// Mount the TUS proxy router
+const tusRouter = createTusRouter();
+app.route('/api/videos/tus', tusRouter);
+
+// ==========================================
+// PROFILE/CHANNEL IMAGE UPLOADS
+// ==========================================
+
+// Profile photo/cover routes (require auth)
+app.put("/api/profile/avatar", authMiddleware, handleAvatarUpdate);
+app.put("/api/profile/cover", authMiddleware, handleCoverUpdate);
+
+// Channel photo/cover routes (require auth)
+app.put("/api/channels/:id/avatar", authMiddleware, handleChannelAvatarUpdate);
+app.put("/api/channels/:id/cover", authMiddleware, handleChannelCoverUpdate);
+
+// ==========================================
+// OPENAPI SETUP
+// ==========================================
+
 const openapi = fromHono(app, {
 	docs_url: "/",
 	schema: {
@@ -134,155 +181,26 @@ const openapi = fromHono(app, {
 		]
 	}
 });
+
 openapi.registry.registerComponent("securitySchemes", "BearerToken", {
 	type: "http",
 	scheme: 'bearer',
 	bearerFormat: 'JWT'
 });
 
-// Register OpenAPI endpoints
-// PUBLIC endpoints (optional auth - work without authentication)
-openapi.get("/api/videos", VideosList);
-openapi.get("/api/videos/search", VideoSearch);
-openapi.get("/api/videos/:id", VideoFetch);
-openapi.post("/api/videos/:id/view", VideoView); // View tracking (analytics)
-openapi.get("/api/profiles", ProfilesList);
-openapi.get("/api/profiles/:id", ProfileFetch);
-openapi.get("/api/playlists", PlaylistsList);
-openapi.get("/api/playlists/:id", PlaylistFetch);
-openapi.get("/api/channels", ChannelsList);
-openapi.get("/api/channels/:id", ChannelFetch);
-// Phase 2: Live Streaming endpoints
-openapi.get("/api/live-streams", LiveStreamsList);
-// Phase 2: Analytics endpoints  
-openapi.get("/api/analytics", AnalyticsGet);
+// CRITICAL: Add logging middleware to OpenAPI router
+// Chanfana creates a new router, so we need to register middleware on it too
+openapi.original.use('*', loggingMiddleware);
 
-// Monitoring and testing endpoints (public)
-openapi.get("/health", HealthCheck);
-openapi.get("/metrics", Metrics);
-openapi.get("/test", TestRunner);
-openapi.get("/status", StatusPage);
+// ==========================================
+// REGISTER ALL ROUTES
+// ==========================================
 
-// Internal sync endpoint (dev only)
-openapi.get("/internal/sync-r2", SyncR2Buckets);
+registerAllRouters(openapi);
 
-// Authentication test endpoint (requires auth)
-openapi.get("/auth-test", AuthTest);
-
-// Apply authentication middleware to routes that require login
-app.use('/auth-test', authMiddleware);
-
-app.use('/api/videos', (c, next) => {
-	// Allow GET requests and POST to /:id/view (view tracking) without authentication
-	if (c.req.method === 'GET' || 
-		(c.req.method === 'POST' && c.req.path.endsWith('/view'))) {
-		return next();
-	}
-	return authMiddleware(c, next);
-});
-
-app.use('/api/profiles', (c, next) => {
-	if (c.req.method !== 'GET') {
-		return authMiddleware(c, next);
-	}
-	return next();
-});
-
-app.use('/api/playlists', (c, next) => {
-	if (c.req.method !== 'GET') {
-		return authMiddleware(c, next);
-	}
-	return next();
-});
-
-app.use('/api/channels', (c, next) => {
-	if (c.req.method !== 'GET') {
-		return authMiddleware(c, next);
-	}
-	return next();
-});
-
-// Phase 2: Apply authentication middleware to new endpoints
-app.use('/api/live-streams', (c, next) => {
-	if (c.req.method !== 'GET') {
-		return authMiddleware(c, next);
-	}
-	return next();
-});
-
-app.use('/api/analytics', authMiddleware);
-app.use('/api/moderation/*', authMiddleware);
-app.use('/api/watch-history/*', authMiddleware);
-app.use('/api/watch-history', authMiddleware);
-
-// AUTHENTICATED endpoints (require valid JWT token)
-openapi.post("/api/videos", VideoCreate);
-openapi.post("/api/videos/upload", VideoUpload);
-openapi.post("/api/videos/upload/initiate", UploadInitiateEndpoint);
-openapi.post("/api/videos/upload/complete", UploadCompleteEndpoint);
-openapi.put("/api/videos/:id", VideoUpdate);
-openapi.delete("/api/videos/:id", VideoDelete);
-openapi.get("/api/videos/:id/upload-status", VideoUploadStatus);
-
-openapi.post("/api/profiles", ProfileCreate);
-openapi.put("/api/profiles/:id", ProfileUpdate);
-openapi.delete("/api/profiles/:id", ProfileDelete);
-
-// Watch history management (require auth)
-openapi.post("/api/profiles/watch-history", WatchHistoryAdd);
-openapi.get("/api/profiles/watch-history", WatchHistoryList);
-
-// New Watch History System (require auth)
-openapi.post("/api/watch-history", RecordWatchHistory);
-openapi.get("/api/watch-history", ListWatchHistory);
-openapi.delete("/api/watch-history", ClearWatchHistory);
-openapi.delete("/api/watch-history/:videoId", DeleteWatchHistory);
-openapi.post("/api/watch-history/:videoId/progress", UpdateWatchProgress);
-openapi.get("/api/watch-history/:videoId/progress", GetWatchProgress);
-
-// Profile photo/cover routes (also require auth)
-app.put("/api/profiles/:id/avatar", authMiddleware, handleAvatarUpdate);
-app.put("/api/profiles/:id/cover", authMiddleware, handleCoverUpdate);
-
-// Playlist management (require auth)
-openapi.post("/api/playlists", PlaylistCreate);
-openapi.patch("/api/playlists/:id", PlaylistUpdate);
-openapi.delete("/api/playlists/:id", PlaylistDelete);
-openapi.post("/api/playlists/:id/videos", PlaylistAddVideo);
-openapi.delete("/api/playlists/:id/videos/:videoId", PlaylistRemoveVideo);
-
-// Channel management (require auth)
-openapi.post("/api/channels", ChannelCreate);
-openapi.put("/api/channels/:id", ChannelUpdate);
-openapi.delete("/api/channels/:id", ChannelDelete);
-
-// Subscription management (require auth)
-openapi.post("/api/channels/:id/subscriptions", SubscriptionCreate);
-openapi.delete("/api/channels/:id/subscriptions", SubscriptionDelete);
-
-// Comment management (require auth)
-openapi.post("/api/videos/:id/comments", CommentCreate);
-openapi.put("/api/videos/:id/comments/:cid", CommentUpdate);
-openapi.delete("/api/videos/:id/comments/:cid", CommentDelete);
-openapi.post("/api/videos/:id/comments/:cid/likes", LikeCreate);
-openapi.delete("/api/videos/:id/comments/:cid/likes", LikeDelete);
-openapi.post("/api/videos/:id/comments/:cid/dislikes", DislikeCreate);
-openapi.delete("/api/videos/:id/comments/:cid/dislikes", DislikeDelete);
-
-// Video likes/dislikes (require auth)
-openapi.post("/api/videos/:id/likes", LikeCreate);
-openapi.delete("/api/videos/:id/likes", LikeDelete);
-openapi.post("/api/videos/:id/dislikes", DislikeCreate);
-openapi.delete("/api/videos/:id/dislikes", DislikeDelete);
-
-// Phase 2: AUTHENTICATED endpoints (require valid JWT token)
-// Live Streaming management (require auth)
-openapi.post("/api/live-streams", LiveStreamCreate);
-openapi.patch("/api/live-streams/:id", LiveStreamUpdate);
-
-// Content Moderation (require auth)
-openapi.post("/api/moderation/report", ReportCreate);
-openapi.post("/api/moderation/actions/:reportId", ModerationAction);
+// ==========================================
+// OPENAPI CUSTOMIZATION
+// ==========================================
 
 // Override the default OpenAPI document to include authentication
 app.get("/openapi.json", async (c) => {
@@ -334,80 +252,6 @@ app.get("/openapi.json", async (c) => {
 			}
 		}
 	};
-
-	// Add security requirements to authenticated endpoints
-	const authenticatedPaths = [
-		// Authentication test
-		'/auth-test', // GET (for testing)
-		// Video management
-		'/api/videos', // POST
-		'/api/videos/upload/initiate', // POST
-		'/api/videos/upload/complete', // POST
-		'/api/videos/{id}', // PUT, DELETE
-		'/api/videos/{id}/likes', // POST, DELETE
-		'/api/videos/{id}/dislikes', // POST, DELETE
-		'/api/videos/{id}/comments', // POST
-		'/api/videos/{id}/comments/{cid}', // PUT, DELETE
-		'/api/videos/{id}/comments/{cid}/likes', // POST, DELETE
-		'/api/videos/{id}/comments/{cid}/dislikes', // POST, DELETE
-		// Profile management
-		'/api/profiles', // POST
-		'/api/profiles/{id}', // PUT, DELETE
-		'/api/profiles/{id}/avatar', // PUT
-		'/api/profiles/{id}/cover', // PUT
-		// Channel management
-		'/api/channels', // POST
-		'/api/channels/{id}', // PUT, DELETE
-		'/api/channels/{id}/avatar', // PUT
-		'/api/channels/{id}/cover', // PUT
-		'/api/channels/{id}/subscriptions', // POST, DELETE
-		// Playlist management
-		'/api/playlists', // POST
-		'/api/playlists/{id}', // PUT, DELETE
-		'/api/playlists/{id}/videos', // POST, DELETE
-		// Watch History (new system)
-		'/api/watch-history', // POST, GET, DELETE
-		'/api/watch-history/{videoId}', // DELETE
-		'/api/watch-history/{videoId}/progress', // POST, GET
-		// Phase 2: Live Streaming management
-		'/api/live-streams', // POST
-		'/api/live-streams/{id}', // PATCH
-		// Phase 2: Analytics
-		'/api/analytics', // GET (requires auth)
-		// Phase 2: Content Moderation
-		'/api/moderation/report', // POST
-		'/api/moderation/actions/{reportId}', // POST
-	];
-
-	// Add security requirements to authenticated endpoints
-	for (const path of authenticatedPaths) {
-		if (originalDoc.paths && originalDoc.paths[path]) {
-			const methods = path === '/auth-test' ? ['get'] : ['post', 'put', 'patch', 'delete'];
-			for (const method of methods) {
-				if (originalDoc.paths[path][method]) {
-					// Add security requirement
-					originalDoc.paths[path][method].security = [{ BearerAuth: [] }];
-
-					// Add authentication error responses if not already present
-					if (!originalDoc.paths[path][method].responses) {
-						originalDoc.paths[path][method].responses = {};
-					}
-
-					if (!originalDoc.paths[path][method].responses['401']) {
-						originalDoc.paths[path][method].responses['401'] = {
-							"$ref": "#/components/responses/UnauthorizedError"
-						};
-					}
-
-					if (!originalDoc.paths[path][method].responses['403']) {
-						originalDoc.paths[path][method].responses['403'] = {
-							"$ref": "#/components/responses/ForbiddenError"
-						};
-					}
-				}
-			}
-		}
-	}
 
 	return c.json(originalDoc);
 });
@@ -484,7 +328,7 @@ app.get("/", async (c) => {
 					useBasicAuthenticationWithAccessCodeGrant: false,
 					usePkceWithAuthorizationCodeGrant: true
 				});
-				console.log("OAuth2 initialized for Swagger UI");
+				logger.info("OAuth2 initialized for Swagger UI");
 			}
 		}, 1000);
 	});
@@ -496,5 +340,8 @@ app.get("/", async (c) => {
 	return c.html(html);
 });
 
-// Export the Hono app
+// ==========================================
+// EXPORT
+// ==========================================
+
 export default app;

@@ -22,6 +22,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 import { WatchHistoryService, WatchProgress } from '@/services/api/watch-history';
+import { logger } from '@/lib/logger-client';
+
 
 interface UseWatchProgressOptions {
   /**
@@ -81,7 +83,7 @@ export function useWatchProgress(
    */
   const debugLog = useCallback((...args: unknown[]) => {
     if (enableDebugLogging) {
-      console.log('[useWatchProgress]', ...args);
+      logger.info('[useWatchProgress]', ...args);
     }
   }, [enableDebugLogging]);
 

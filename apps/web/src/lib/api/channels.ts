@@ -1,7 +1,7 @@
-import { Profile } from "@/interfaces";
+'use server';
+
 import {
   ApiResponse,
-  ProfileUpdateRequest,
   ApiHeaders,
   ListQueryParams,
   ChannelCreateRequest,
@@ -9,368 +9,390 @@ import {
   SubscriptionRequest,
   PaginationResponse
 } from "./types";
-import { getApiUrl } from "@/lib/runtime-config";
+import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
+import { getServerAuthContext } from "./server-auth";
+import { Channel, VideoObject, Playlist } from "@al-ummah/shared-types";
+import { logger } from '@/lib/logger-server';
 
-const baseUrl = getApiUrl();
 
-export class ProfilesAPI {
-  /**
-   * Get a user's profile by ID
-   * GET /api/profiles/{id}
-   */
-  static async getCurrent(
-    userId: string,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<Profile | null> {
-    try {
-      const url = `${baseUrl}/api/profiles/${userId}`;
-      console.log('ProfilesAPI.getCurrent: Calling', url, 'with headers:', headers);
-      
-      const response = await fetch(
-        url,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-        }
-      );
+/**
+ * List channels
+ * GET /api/channels
+ */
+export async function listChannels(
+  params?: ListQueryParams,
+  _headers?: ApiHeaders
+): Promise<PaginationResponse<Channel> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
 
-      console.log('ProfilesAPI.getCurrent: Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('ProfilesAPI.getCurrent: Error response:', response.status, response.statusText, errorText);
-        throw new Error(`Error fetching profile: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      console.log('ProfilesAPI.getCurrent: Success response:', result);
-      
-      // Handle different response formats
-      if (result && typeof result === 'object') {
-        const resultAny = result as any;
-        
-        // If it's already a Profile object
-        if (resultAny.id && resultAny.email) {
-          return resultAny as Profile;
-        }
-        // If it's wrapped in a success/result structure
-        if (resultAny.success && resultAny.result && resultAny.result.profile) {
-          return resultAny.result.profile as Profile;
-        }
-        // If it's wrapped differently
-        if (resultAny.profile) {
-          return resultAny.profile as Profile;
-        }
-      }
-      
-      console.log('ProfilesAPI.getCurrent: Response format not recognized, returning null');
-      return null;
-    } catch (error) {
-      console.error('ProfilesAPI.getCurrent error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Update the current user's profile
-   * PUT /api/profile
-   */
-  static async update(
-    data: ProfileUpdateRequest,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<ApiResponse<{ profile: Profile }> | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/profile`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-          body: JSON.stringify(data),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error updating profile: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('ProfilesAPI.update error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Delete the current user's profile
-   * DELETE /api/profile
-   */
-  static async delete(
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<{ success: boolean } | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/profile`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error deleting profile: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('ProfilesAPI.delete error:', error);
-      return null;
-    }
-  }
+  return apiRequestServer<PaginationResponse<Channel>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels${queryString}`),
+    functionName: 'listChannels'
+  }, getServerAuthContext, false);
 }
 
-export class ChannelsAPI {
-  /**
-   * List channels
-   * GET /api/channels
-   */
-  static async list(
-    params?: ListQueryParams,
-    headers?: ApiHeaders
-  ): Promise<PaginationResponse<any> | null> {
-    try {
-      const queryParams = new URLSearchParams();
-      if (params?.limit) queryParams.append('limit', params.limit.toString());
-      if (params?.cursor) queryParams.append('cursor', params.cursor);
-      
-      const response = await fetch(
-        `${baseUrl}/api/channels?${queryParams.toString()}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(headers?.channelId && { 'channelId': headers.channelId }),
-            ...(headers?.userId && { 'userId': headers.userId }),
-          },
-        }
-      );
+/**
+ * List channels for the authenticated user
+ * GET /api/channels (userId extracted from JWT token)
+ */
+export async function listUserChannels(
+  params?: ListQueryParams
+): Promise<PaginationResponse<Channel> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
 
-      if (!response.ok) {
-        throw new Error(`Error fetching channels: ${response.statusText}`);
-      }
+  return apiRequestServer<PaginationResponse<Channel>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels${queryString}`),
+    functionName: 'listUserChannels'
+  }, getServerAuthContext, false);
+}
 
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.list error:', error);
-      return null;
-    }
+/**
+ * Get a channel by id
+ * GET /api/channels/{id}
+ */
+export async function getChannelById(
+  id: string,
+  _headers?: ApiHeaders
+): Promise<Channel | null> {
+  return apiRequestServer<Channel>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${id}`),
+    functionName: 'getChannelById'
+  }, getServerAuthContext, false);
+}
+
+/**
+ * Create a new channel
+ * POST /api/channels
+ */
+export async function createChannel(
+  data: ChannelCreateRequest,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<ApiResponse<{ channel: Channel }> | null> {
+  return apiRequestServer<ApiResponse<{ channel: Channel }>>({
+    method: 'POST',
+    url: buildApiUrl('/api/channels'),
+    body: data,
+    functionName: 'createChannel'
+  }, async () => ({
+    
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
+
+/**
+ * Update a channel
+ * PUT /api/channels/{id}
+ */
+export async function updateChannel(
+  id: string,
+  data: ChannelUpdateRequest,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<ApiResponse<{ channel: Channel }> | null> {
+  return apiRequestServer<ApiResponse<{ channel: Channel }>>({
+    method: 'PUT',
+    url: buildApiUrl(`/api/channels/${id}`),
+    body: data,
+    functionName: 'updateChannel'
+  }, async () => ({
+    
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
+
+/**
+ * Delete a channel
+ * DELETE /api/channels/{id}
+ */
+export async function deleteChannel(
+  id: string,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<{ success: boolean } | null> {
+  return apiRequestServer<{ success: boolean }>({
+    method: 'DELETE',
+    url: buildApiUrl(`/api/channels/${id}`),
+    functionName: 'deleteChannel'
+  }, async () => ({
+    
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
+
+/**
+ * Subscribe to a channel
+ * POST /api/channels/{id}/subscribe
+ */
+export async function subscribeToChannel(
+  channelId: string,
+  data: SubscriptionRequest,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<{ success: boolean } | null> {
+  return apiRequestServer<{ success: boolean }>({
+    method: 'POST',
+    url: buildApiUrl(`/api/channels/${channelId}/subscribe`),
+    body: data,
+    functionName: 'subscribeToChannel'
+  }, async () => ({
+    
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
+
+/**
+ * Unsubscribe from a channel
+ * DELETE /api/channels/{id}/subscribe
+ */
+export async function unsubscribeFromChannel(
+  channelId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<{ success: boolean } | null> {
+  return apiRequestServer<{ success: boolean }>({
+    method: 'DELETE',
+    url: buildApiUrl(`/api/channels/${channelId}/subscribe`),
+    functionName: 'unsubscribeFromChannel'
+  }, async () => ({
+    
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
+
+/**
+ * Update channel avatar
+ * PUT /api/channels/{id}/avatar
+ */
+export async function updateChannelAvatar(
+  channelId: string,
+  file: File,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<Channel | null> {
+  const formData = new FormData();
+  formData.append('photo', file);
+
+  const authContext = await getServerAuthContext();
+
+  logger.info('[updateChannelAvatar] Auth context', {
+    hasToken: !!authContext?.accessToken,
+    tokenLength: authContext?.accessToken?.length,
+
+    channelId: authContext?.channelId,
+    headersChannelId: headers.channelId,
+  });
+
+  const requestHeaders = {
+    'Authorization': `Bearer ${authContext?.accessToken || ''}`,
+    'channelId': headers.channelId,
+  };
+
+  logger.info('[updateChannelAvatar] Request headers', {
+    hasAuth: requestHeaders.Authorization.length > 10,
+    channelId: requestHeaders.channelId,
+    
+  });
+
+  const response = await fetch(buildApiUrl(`/api/channels/${channelId}/avatar`), {
+    method: 'PUT',
+    headers: requestHeaders,
+    body: formData,
+  });
+
+  logger.info('[updateChannelAvatar] Response', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error('[updateChannelAvatar] Failed', {
+      status: response.status,
+      statusText: response.statusText,
+      errorBody: errorText,
+    });
+    return null;
   }
 
-  /**
-   * Get a channel by id
-   * GET /api/channels/{id}
-   */
-  static async getById(
-    id: string,
-    headers?: ApiHeaders
-  ): Promise<any | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${id}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(headers?.channelId && { 'channelId': headers.channelId }),
-            ...(headers?.userId && { 'userId': headers.userId }),
-          },
-        }
-      );
+  return response.json();
+}
 
-      if (!response.ok) {
-        throw new Error(`Error fetching channel: ${response.statusText}`);
-      }
+/**
+ * Update channel cover
+ * PUT /api/channels/{id}/cover
+ */
+export async function updateChannelCover(
+  channelId: string,
+  file: File,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<Channel | null> {
+  const formData = new FormData();
+  formData.append('photo', file);
 
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.getById error:', error);
-      return null;
-    }
+  const authContext = await getServerAuthContext();
+
+  logger.info('[updateChannelCover] Auth context', {
+    hasToken: !!authContext?.accessToken,
+    tokenLength: authContext?.accessToken?.length,
+
+    channelId: authContext?.channelId,
+    headersChannelId: headers.channelId,
+  });
+
+  const requestHeaders = {
+    'Authorization': `Bearer ${authContext?.accessToken || ''}`,
+    'channelId': headers.channelId,
+  };
+
+  logger.info('[updateChannelCover] Request headers', {
+    hasAuth: requestHeaders.Authorization.length > 10,
+    channelId: requestHeaders.channelId,
+    
+  });
+
+  const response = await fetch(buildApiUrl(`/api/channels/${channelId}/cover`), {
+    method: 'PUT',
+    headers: requestHeaders,
+    body: formData,
+  });
+
+  logger.info('[updateChannelCover] Response', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error('[updateChannelCover] Failed', {
+      status: response.status,
+      statusText: response.statusText,
+      errorBody: errorText,
+    });
+    return null;
   }
 
-  /**
-   * Create a new channel
-   * POST /api/channels
-   */
-  static async create(
-    data: ChannelCreateRequest,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<ApiResponse<{ channel: any }> | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-          body: JSON.stringify(data),
-        }
-      );
+  return response.json();
+}
 
-      if (!response.ok) {
-        throw new Error(`Error creating channel: ${response.statusText}`);
-      }
+/**
+ * Get channel videos
+ * GET /api/channels/{id}/videos
+ */
+export async function getChannelVideos(
+  channelId: string,
+  params?: ListQueryParams
+): Promise<PaginationResponse<VideoObject> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
 
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.create error:', error);
-      return null;
-    }
-  }
+  return apiRequestServer<PaginationResponse<VideoObject>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/videos${queryString}`),
+    functionName: 'getChannelVideos'
+  }, getServerAuthContext, false);
+}
 
-  /**
-   * Update a channel
-   * PUT /api/channels/{id}
-   */
-  static async update(
-    id: string,
-    data: ChannelUpdateRequest,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<ApiResponse<{ channel: any }> | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-          body: JSON.stringify(data),
-        }
-      );
+/**
+ * Get channel shorts
+ * GET /api/channels/{id}/shorts
+ */
+export async function getChannelShorts(
+  channelId: string,
+  params?: ListQueryParams
+): Promise<PaginationResponse<VideoObject> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
 
-      if (!response.ok) {
-        throw new Error(`Error updating channel: ${response.statusText}`);
-      }
+  return apiRequestServer<PaginationResponse<VideoObject>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/shorts${queryString}`),
+    functionName: 'getChannelShorts'
+  }, getServerAuthContext, false);
+}
 
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.update error:', error);
-      return null;
-    }
-  }
+/**
+ * Get channel live streams
+ * GET /api/channels/{id}/live
+ */
+export async function getChannelLiveStreams(
+  channelId: string,
+  params?: ListQueryParams & { active?: boolean }
+): Promise<PaginationResponse<VideoObject> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor,
+    active: params?.active
+  });
 
-  /**
-   * Delete a channel
-   * DELETE /api/channels/{id}
-   */
-  static async delete(
-    id: string,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<{ success: boolean } | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${id}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-        }
-      );
+  return apiRequestServer<PaginationResponse<VideoObject>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/live${queryString}`),
+    functionName: 'getChannelLiveStreams'
+  }, getServerAuthContext, false);
+}
 
-      if (!response.ok) {
-        throw new Error(`Error deleting channel: ${response.statusText}`);
-      }
+/**
+ * Get channel playlists
+ * GET /api/channels/{id}/playlists
+ */
+export async function getChannelPlaylists(
+  channelId: string,
+  params?: ListQueryParams
+): Promise<PaginationResponse<Playlist> | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor
+  });
 
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.delete error:', error);
-      return null;
-    }
-  }
+  return apiRequestServer<PaginationResponse<Playlist>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/playlists${queryString}`),
+    functionName: 'getChannelPlaylists'
+  }, getServerAuthContext, false);
+}
 
-  /**
-   * Subscribe to a channel
-   * POST /api/channels/{id}/subscribe
-   */
-  static async subscribe(
-    channelId: string,
-    data: SubscriptionRequest,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<{ success: boolean } | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${channelId}/subscribe`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-          body: JSON.stringify(data),
-        }
-      );
+/**
+ * Get user's subscriptions (channels they're subscribed to)
+ * GET /api/profile/subscriptions
+ */
+export async function getUserSubscriptions(
+  params?: { page?: number; pageSize?: number }
+): Promise<{
+  success: boolean;
+  data: Channel[];
+  total: number;
+  page: number;
+  pageSize: number;
+} | null> {
+  const queryString = buildQueryParams({
+    page: params?.page,
+    pageSize: params?.pageSize
+  });
 
-      if (!response.ok) {
-        throw new Error(`Error subscribing to channel: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.subscribe error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Unsubscribe from a channel
-   * DELETE /api/channels/{id}/subscribe
-   */
-  static async unsubscribe(
-    channelId: string,
-    headers: Required<Pick<ApiHeaders, 'channelId' | 'userId'>>
-  ): Promise<{ success: boolean } | null> {
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/channels/${channelId}/subscribe`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'channelId': headers.channelId,
-            'userId': headers.userId,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error unsubscribing from channel: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('ChannelsAPI.unsubscribe error:', error);
-      return null;
-    }
-  }
+  return apiRequestServer<{
+    success: boolean;
+    data: Channel[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>({
+    method: 'GET',
+    url: buildApiUrl(`/api/profile/subscriptions${queryString}`),
+    functionName: 'getUserSubscriptions'
+  }, getServerAuthContext, true);
 }

@@ -2,13 +2,14 @@ name: Deploy Al Ummah Now Monorepo
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
   pull-requests: write
+  packages: read
 
 jobs:
   test:
@@ -29,6 +30,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
         timeout-minutes: 5
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run type checking (all packages)
         run: pnpm type-check
@@ -43,8 +46,8 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
 
-  # Build shared types first (dependency for other apps)
-  build-shared-types:
+  # Build shared packages first (dependency for other apps)
+  build-shared-packages:
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -62,14 +65,18 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build shared types
-        run: pnpm --filter @al-ummah/shared-types build
+      - name: Build shared packages (types + logger)
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
         timeout-minutes: 2
 
   # Build Web App
   build-web:
-    needs: build-shared-types
+    needs: build-shared-packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +93,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Build shared types
         run: pnpm --filter @al-ummah/shared-types build
@@ -121,7 +136,7 @@ jobs:
 
   # Validate API Videos
   validate-api:
-    needs: build-shared-types
+    needs: build-shared-packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,6 +153,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Type check API
         run: pnpm --filter @al-ummah/api-videos type-check
@@ -152,7 +175,7 @@ jobs:
 
   # Validate Processor
   validate-processor:
-    needs: build-shared-types
+    needs: build-shared-packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -169,6 +192,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Type check processor
         run: pnpm --filter @al-ummah/processor type-check
@@ -181,7 +212,7 @@ jobs:
 
   # Validate WebSocket Server
   validate-websocket:
-    needs: build-shared-types
+    needs: build-shared-packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -198,6 +229,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Type check websocket-server
         run: pnpm --filter @al-ummah/websocket-server type-check
@@ -208,6 +247,94 @@ jobs:
           cd apps/websocket-server
           pnpm wrangler deploy --dry-run
         timeout-minutes: 2
+
+  # Validate Admin API
+  validate-admin-api:
+    needs: build-shared-packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
+      - name: Type check Admin API
+        run: pnpm --filter @al-ummah/admin-api type-check
+        timeout-minutes: 3
+
+      - name: Validate Admin API deployment
+        run: |
+          cd apps/admin-api
+          pnpm wrangler deploy --dry-run
+        timeout-minutes: 2
+
+  # Build Admin Web App
+  build-admin-web:
+    needs: build-shared-packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
+      - name: Build admin-web application
+        run: |
+          pnpm --filter @al-ummah/admin-web build
+          cd apps/admin-web && pnpm opennextjs-cloudflare build
+        timeout-minutes: 30
+
+      - name: Prepare admin-web artifacts
+        run: |
+          mkdir -p /tmp/admin-web-artifacts
+          cp -r apps/admin-web/.open-next /tmp/admin-web-artifacts/
+          cp apps/admin-web/package.json /tmp/admin-web-artifacts/
+          cp apps/admin-web/wrangler.jsonc /tmp/admin-web-artifacts/
+          cp apps/admin-web/wrangler.production.jsonc /tmp/admin-web-artifacts/
+
+      - name: Upload admin-web build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-web-build-artifacts
+          path: /tmp/admin-web-artifacts
+          retention-days: 30
+          include-hidden-files: true
 
   # Deploy Web App Preview (PRs only, when requested via label)
   deploy-web-preview:
@@ -230,6 +357,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download web build artifacts
         uses: actions/download-artifact@v6
@@ -331,6 +460,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Generate preview name
         id: preview-name
@@ -417,6 +554,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Generate preview name
         id: preview-name
@@ -501,6 +646,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Generate preview name
         id: preview-name
@@ -566,6 +719,192 @@ jobs:
               });
             }
 
+  # Deploy Admin API Preview (PRs only, when requested via label)
+  deploy-admin-api-preview:
+    needs: validate-admin-api
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
+    environment: preview
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
+      - name: Generate preview name
+        id: preview-name
+        run: |
+          PREVIEW_NAME="al-ummah-admin-api-pr-${{ github.event.number }}"
+          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
+          echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
+
+      - name: Deploy Admin API Preview to Cloudflare Workers
+        run: |
+          cd apps/admin-api
+          pnpm wrangler deploy \
+            --name ${{ steps.preview-name.outputs.name }} \
+            --compatibility-date $(date +%Y-%m-%d)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Comment PR with Admin API preview link
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            const previewUrl = '${{ steps.preview-name.outputs.url }}';
+
+            const body = `## 🚀 Admin API Preview Deployment
+
+            Your Admin API preview deployment is ready!
+
+            **API URL**: ${previewUrl}
+            **Swagger UI**: ${previewUrl}/
+            **OpenAPI Spec**: ${previewUrl}/openapi.json
+
+            This preview will be automatically cleaned up when the PR is closed.
+
+            ---
+            <sub>Deployed via Cloudflare Workers Preview</sub>`;
+
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: number,
+            });
+
+            const existingComment = comments.data.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('Admin API Preview Deployment')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: number,
+                body
+              });
+            }
+
+  # Deploy Admin Web Preview (PRs only, when requested via label)
+  deploy-admin-web-preview:
+    needs: build-admin-web
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
+    environment: preview
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download admin-web build artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: admin-web-build-artifacts
+          path: apps/admin-web/
+
+      - name: Generate preview name
+        id: preview-name
+        run: |
+          PREVIEW_NAME="al-ummah-admin-web-pr-${{ github.event.number }}"
+          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
+          echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
+
+      - name: Deploy Admin Web Preview to Cloudflare Workers
+        run: |
+          cd apps/admin-web
+          pnpm wrangler deploy \
+            --name ${{ steps.preview-name.outputs.name }} \
+            --compatibility-date $(date +%Y-%m-%d)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Comment PR with Admin Web preview link
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            const previewUrl = '${{ steps.preview-name.outputs.url }}';
+
+            const body = `## 🚀 Admin Web Preview Deployment
+
+            Your Admin Web preview deployment is ready!
+
+            **Preview URL**: ${previewUrl}
+
+            This preview will be automatically cleaned up when the PR is closed.
+
+            ---
+            <sub>Deployed via Cloudflare Workers Preview</sub>`;
+
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: number,
+            });
+
+            const existingComment = comments.data.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('Admin Web Preview Deployment')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: number,
+                body
+              });
+            }
+
   # Cleanup previews when PR is closed
   cleanup-previews:
     runs-on: ubuntu-latest
@@ -585,6 +924,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate preview names
         id: preview-names
@@ -593,6 +934,8 @@ jobs:
           echo "api=al-ummah-api-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
           echo "processor=al-ummah-processor-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
           echo "websocket=al-ummah-comms-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+          echo "admin_api=al-ummah-admin-api-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+          echo "admin_web=al-ummah-admin-web-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
 
       - name: Delete web preview
         continue-on-error: true
@@ -630,6 +973,24 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Delete admin-api preview
+        continue-on-error: true
+        run: |
+          cd apps/admin-api
+          pnpm wrangler delete ${{ steps.preview-names.outputs.admin_api }} || echo "Admin API preview already deleted or doesn't exist"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Delete admin-web preview
+        continue-on-error: true
+        run: |
+          cd apps/admin-web
+          pnpm wrangler delete ${{ steps.preview-names.outputs.admin_web }} || echo "Admin Web preview already deleted or doesn't exist"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Cleanup summary
         run: |
           echo "🧹 Preview cleanup completed for PR #${{ github.event.number }}"
@@ -639,12 +1000,119 @@ jobs:
           echo "  • ${{ steps.preview-names.outputs.api }}"
           echo "  • ${{ steps.preview-names.outputs.processor }}"
           echo "  • ${{ steps.preview-names.outputs.websocket }}"
+          echo "  • ${{ steps.preview-names.outputs.admin_api }}"
+          echo "  • ${{ steps.preview-names.outputs.admin_web }}"
           echo ""
           echo "Note: Some workers may not exist if deployment failed earlier."
 
+  # Deploy to QA Environment (develop branch only, requires approval)
+  deploy-qa:
+    needs: [build-web, build-admin-web, validate-api, validate-processor, validate-websocket, validate-admin-api]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment: qa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
+
+      - name: Download web build artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: web-build-artifacts
+          path: apps/web/
+
+      - name: Download admin-web build artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: admin-web-build-artifacts
+          path: apps/admin-web/
+
+      - name: Deploy Web to QA
+        run: |
+          cd apps/web
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy API to QA
+        run: |
+          cd apps/api-videos
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Processor to QA
+        run: |
+          cd apps/processor
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy WebSocket Server to QA
+        run: |
+          cd apps/websocket-server
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Admin API to QA
+        run: |
+          cd apps/admin-api
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Admin Web to QA
+        run: |
+          cd apps/admin-web
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Notify QA deployment success
+        if: success()
+        run: |
+          echo "🧪 QA deployment successful!"
+          echo ""
+          echo "QA Workers deployed:"
+          echo "  • al-ummah-web-qa → qa.alummahnow.net"
+          echo "  • videos-qa → videos.qa.api.alummahnow.net"
+          echo "  • al-ummah-now-processor-qa"
+          echo "  • al-ummah-now-comms-qa → ws.qa.alummahnow.net"
+          echo "  • al-ummah-admin-api-qa → admin.qa.api.alummahnow.net"
+          echo "  • al-ummah-admin-web-qa → admin.qa.alummahnow.net"
+          echo ""
+          echo "All 6 QA workers are live!"
+
   # Deploy to Production (main branch only)
   deploy-production:
-    needs: [build-web, validate-api, validate-processor, validate-websocket]
+    needs: [build-web, build-admin-web, validate-api, validate-processor, validate-websocket, validate-admin-api]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
@@ -663,12 +1131,26 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Download web build artifacts
         uses: actions/download-artifact@v6
         with:
           name: web-build-artifacts
           path: apps/web/
+
+      - name: Download admin-web build artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: admin-web-build-artifacts
+          path: apps/admin-web/
 
       - name: Deploy Web to Production
         run: |
@@ -702,6 +1184,22 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Deploy Admin API to Production
+        run: |
+          cd apps/admin-api
+          pnpm wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Admin Web to Production
+        run: |
+          cd apps/admin-web
+          pnpm wrangler deploy --config wrangler.production.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Notify production deployment success
         if: success()
         run: |
@@ -712,8 +1210,10 @@ jobs:
           echo "  • videos (Hono API backend)"
           echo "  • al-ummah-now-processor (Queue consumer)"
           echo "  • al-ummah-now-comms (WebSocket server)"
+          echo "  • al-ummah-admin-api (Admin API backend)"
+          echo "  • al-ummah-admin-web (Admin Web frontend)"
           echo ""
-          echo "All 4 production workers are live!"
+          echo "All 6 production workers are live!"
 
       - name: Notify production deployment failure
         if: failure()

@@ -1,11 +1,11 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { Str } from "chanfana";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from '../../base';
 
-export class LikeCreate extends OpenAPIRoute {
+export class LikeCreate extends AuthenticatedRoute {
     schema = {
         tags: ["Likes"],
         summary: "Like a video",
@@ -15,7 +15,6 @@ export class LikeCreate extends OpenAPIRoute {
             }),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
         },
         responses: {
@@ -48,16 +47,17 @@ export class LikeCreate extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated slug
         const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
+		const { channelId } = request.headers;
 
         // Implement your own object fetch here
-        const bucket = env.videos;
+        const bucket = c.env.videos;
         type VideoType = z.infer<typeof Video>;
         const repository = new R2Repository<VideoType>(bucket);
         let video = await repository.getObject(id);
@@ -82,7 +82,7 @@ export class LikeCreate extends OpenAPIRoute {
             dateCreated: new Date().toISOString(),
         }
 
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoLike, {
 			likeId: like.id,
 			videoId: id,

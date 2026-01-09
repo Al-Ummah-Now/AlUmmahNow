@@ -4,19 +4,21 @@
  * Removes a specific video from the user's watch history
  */
 
-import { OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Str } from "chanfana";
 import { z } from "zod";
 import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type { WatchHistoryEntry } from "@al-ummah/shared-types";
+import { logger } from '../../lib/logger';
 
 // Path parameter schema
 const DeleteWatchHistoryParams = z.object({
   videoId: Str({ description: "ID of the video to remove from watch history" }),
 });
 
-export class DeleteWatchHistory extends OpenAPIRoute {
+export class DeleteWatchHistory extends AuthenticatedRoute {
   schema = addAuthToSchema(
     {
       tags: ["Watch History"],
@@ -24,6 +26,9 @@ export class DeleteWatchHistory extends OpenAPIRoute {
       description:
         "Removes a specific video from the authenticated user's watch history.",
       request: {
+        headers: z.object({
+          channelId: z.string().optional().nullable(),
+        }),
         params: DeleteWatchHistoryParams,
       },
       responses: {
@@ -45,8 +50,10 @@ export class DeleteWatchHistory extends OpenAPIRoute {
   );
 
   async handle(c: Context) {
-    const auth = c.get("auth");
-    const userId = auth.userId;
+    const request = await this.getValidatedData<typeof this.schema>();
+    const { channelId } = request.headers;
+
+    const userId = this.getUserId(c);
 
     // Get videoId from path params
     const { videoId } = c.req.param();
@@ -79,7 +86,7 @@ export class DeleteWatchHistory extends OpenAPIRoute {
 
       return c.body(null, 204);
     } catch (error) {
-      console.error("Error deleting watch history:", error);
+      logger.error("Error deleting watch history:", error);
       return c.json(
         {
           error: "Failed to delete watch history entry",

@@ -12,6 +12,8 @@
  */
 
 import type { ExtendedPlayer } from './videojs';
+import { logger } from '@/lib/logger-server';
+
 
 /**
  * Constants for progress preview behavior
@@ -92,13 +94,16 @@ export function initializeSpriteThumbnails(
   config: SpriteThumbnailConfig
 ): void {
   if (!player || player.isDisposed()) {
-    console.warn('[ProgressPreview] Player instance is not available or disposed. Sprite thumbnails will not be initialized.');
+    logger.warn('[ProgressPreview] Player instance is not available or disposed. Sprite thumbnails will not be initialized.');
     return;
   }
 
   // Check if plugin is available
-  if (typeof (player as any).spriteThumbnails !== 'function') {
-    console.warn('[ProgressPreview] videojs-sprite-thumbnails plugin is not loaded. Sprite thumbnails will not be available.');
+  interface PlayerWithSpriteThumbnailsCheck {
+    spriteThumbnails?: (...args: unknown[]) => void;
+  }
+  if (typeof (player as PlayerWithSpriteThumbnailsCheck).spriteThumbnails !== 'function') {
+    logger.warn('[ProgressPreview] videojs-sprite-thumbnails plugin is not loaded. Sprite thumbnails will not be available.');
     return;
   }
 
@@ -115,7 +120,18 @@ export function initializeSpriteThumbnails(
     const previewUrl = getBunnyPreviewUrl(bunnyVideoId, libraryId);
 
     // Initialize sprite thumbnails plugin
-    (player as any).spriteThumbnails({
+    interface PlayerWithSpriteThumbnails extends ExtendedPlayer {
+      spriteThumbnails(config: {
+        interval: number;
+        url: string;
+        width: number;
+        height: number;
+        downlink?: number;
+        responsive: number;
+      }): void;
+    }
+
+    (player as PlayerWithSpriteThumbnails).spriteThumbnails({
       interval,
       url: previewUrl,
       width,
@@ -125,7 +141,7 @@ export function initializeSpriteThumbnails(
       responsive: width * height
     });
 
-    console.log('[ProgressPreview] Sprite thumbnails initialized:', {
+    logger.info('[ProgressPreview] Sprite thumbnails initialized:', {
       url: previewUrl,
       interval,
       width,
@@ -133,7 +149,7 @@ export function initializeSpriteThumbnails(
       rtl
     });
   } catch (error) {
-    console.warn('[ProgressPreview] Failed to initialize sprite thumbnails:', error);
+    logger.warn('[ProgressPreview] Failed to initialize sprite thumbnails:', error);
     // Graceful degradation: sprite thumbnails unavailable but playback continues
   }
 }
@@ -153,7 +169,7 @@ export function initializeSpriteThumbnails(
  *   { start: 0, end: 30 },
  *   { start: 60, end: 90 }
  * ], (segments) => {
- *   console.log('Updated segments:', segments);
+ *   logger.info('Updated segments:', segments);
  * });
  */
 export function setupWatchedSegments(
@@ -162,7 +178,7 @@ export function setupWatchedSegments(
   onSegmentUpdate?: (segments: WatchedSegment[]) => void
 ): () => void {
   if (!player || player.isDisposed()) {
-    console.warn('[ProgressPreview] Player instance is not available or disposed. Watched segments tracking will not be initialized.');
+    logger.warn('[ProgressPreview] Player instance is not available or disposed. Watched segments tracking will not be initialized.');
     // Return no-op cleanup function for graceful degradation
     return () => {};
   }
@@ -306,7 +322,7 @@ export function setupWatchedSegments(
     updateProgressBarSegments();
   }
 
-  console.log('[ProgressPreview] Watched segments tracking initialized');
+  logger.info('[ProgressPreview] Watched segments tracking initialized');
 
   // Return cleanup function
   return () => {

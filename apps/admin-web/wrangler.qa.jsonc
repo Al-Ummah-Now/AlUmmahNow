@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "al-ummah-admin-web-qa",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-04-12",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "logpush": true,
+  "minify": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true,
+  "vars": {
+    "Issuer": "https://auth.qa.alummahnow.net",
+    "OPENAUTH_ISSUER": "https://auth.qa.alummahnow.net",
+    "NEXTJS_ENV": "qa",
+    "API_URL": "https://videos.api.qa.alummahnow.net",
+    "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
+    "NEXT_PUBLIC_API_URL": "https://videos.api.qa.alummahnow.net",
+    "NEXT_PUBLIC_BASE_URL": "https://admin.api.qa.alummahnow.net"
+  }
+}

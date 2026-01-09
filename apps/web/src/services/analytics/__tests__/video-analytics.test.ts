@@ -11,6 +11,8 @@
  * - Cleanup
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- Test file requires accessing private properties for verification */
+
 import { VideoAnalytics, getVideoAnalytics, destroyVideoAnalytics, clearAllAnalytics } from '../video-analytics';
 import { VideoEventType, type AnalyticsEvent } from '../types';
 

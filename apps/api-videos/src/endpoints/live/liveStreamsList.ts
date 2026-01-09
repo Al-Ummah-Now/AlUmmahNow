@@ -1,16 +1,20 @@
-import { OpenAPIRoute, Num } from "chanfana";
+import { OptionalAuthRoute, AppContext } from "../../base";
+import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
 import { LiveStreamView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
+import { logger } from '../../lib/logger';
 
-export class LiveStreamsList extends OpenAPIRoute {
+export class LiveStreamsList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Live Streams"],
 		summary: "List Live Streams",
 		description: "Get a paginated list of live streams. Public endpoint that returns both scheduled and active streams.",
 		request: {
+			headers: z.object({
+				channelId: Str({ description: "User's selected channel ID" }).optional(),
+			}),
 			query: z.object({
 				cursor: z.string().optional().openapi({ example: "" }),
 				limit: Num({ default: 9 }).openapi({ example: 9 }),
@@ -51,12 +55,12 @@ export class LiveStreamsList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
 		const { cursor = "", limit = 9, status, channelId } = request.query;
 
 		try {
-			const bucket = env.videos;
+			const bucket = c.env.videos;
 			type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 			const repository = new R2Repository<LiveStreamType>(bucket);
 
@@ -80,7 +84,7 @@ export class LiveStreamsList extends OpenAPIRoute {
 								streams.push(stream);
 							}
 						} catch (error) {
-							console.error(`Error loading stream ${obj.key}:`, error);
+							logger.error(`Error loading stream ${obj.key}:`, error);
 							// Continue with other streams
 						}
 					}
@@ -139,7 +143,7 @@ export class LiveStreamsList extends OpenAPIRoute {
 				},
 			};
 		} catch (error) {
-			console.error("Error listing live streams:", error);
+			logger.error("Error listing live streams:", error);
 			return c.json(
 				{
 					success: false,

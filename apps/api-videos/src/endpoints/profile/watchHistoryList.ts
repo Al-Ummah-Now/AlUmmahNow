@@ -1,9 +1,8 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
-import { getAuthContext } from "../../middleware/auth";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
 // Watch history entry type for response
 const WatchHistoryEntry = z.object({
@@ -15,13 +14,15 @@ const WatchHistoryEntry = z.object({
 	completed: z.boolean().optional().describe("Whether the video was watched to completion"),
 });
 
-export class WatchHistoryList extends OpenAPIRoute {
+export class WatchHistoryList extends AuthenticatedRoute {
 	schema = {
 		tags: ["Profiles"],
 		summary: "Get Watch History",
 		description: "🔒 **Authentication Required**: Get the user's watch history with pagination.",
 		request: {
-			query: z.object({
+			headers: z.object({
+        }),
+        query: z.object({
 				limit: Num({
 					description: "Limit the number of history entries to return",
 					default: 20,
@@ -88,25 +89,17 @@ export class WatchHistoryList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		// Get auth context for user information
-		const authContext = getAuthContext(c);
-		const userId = authContext?.userId;
-
-		if (!userId) {
-			return c.json({
-				success: false,
-				error: "Authentication required"
-			}, 401);
-		}
+		// Get user ID from auth
+		const userId = this.getUserId(c);
 
 		const { limit, offset, filter } = request.query;
 
 		// Get user profile from storage
-		const bucket = env.profiles;
+		const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
 		const profile = await repository.getObject(userId);

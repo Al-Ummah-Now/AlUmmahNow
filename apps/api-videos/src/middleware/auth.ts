@@ -1,7 +1,7 @@
 import { Context, Next } from 'hono';
-import { env } from 'cloudflare:workers';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
+import { logger } from '../lib/logger';
 
 // Type for the decoded JWT payload from OpenAuth
 interface AuthPayload {
@@ -46,10 +46,8 @@ export async function authMiddleware(c: Context, next: Next) {
       }, 401);
     }
 
-    // Validate the JWT token using the configured method
-    const payload = AUTH_CONFIG.VERIFY_JWT_SIGNATURE 
-      ? await validateJWTWithSignature(token, c.env) 
-      : await validateJWTBasic(token);
+    // Validate the JWT token with signature verification
+    const payload = await validateJWTWithSignature(token, c.env);
     
     if (!payload) {
       return c.json({
@@ -70,7 +68,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     return await next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    logger.error('Auth middleware error:', error);
     return c.json({
       success: false,
       error: 'Authentication failed'
@@ -79,44 +77,12 @@ export async function authMiddleware(c: Context, next: Next) {
 }
 
 /**
- * Basic JWT validation (payload only, no signature verification)
- * Used when VERIFY_JWT_SIGNATURE is false
- */
-async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
-
-    // Decode the payload (we'll do basic validation for now)
-    const payload = JSON.parse(atob(parts[1])) as AuthPayload;
-
-    // Check expiration
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
-      return null;
-    }
-
-    // TODO: Verify signature with public key from your auth service
-    // For now, we'll do basic validation
-    // In production, you should verify the signature using your auth service's public key
-    
-    return payload;
-  } catch (error) {
-    console.error('JWT validation error:', error);
-    return null;
-  }
-}
-
-/**
- * Enhanced JWT validation that verifies signature with OpenAuth subjects
- * This should be used in production
+ * JWT validation that verifies signature with OpenAuth subjects
  */
 async function validateJWTWithSignature(token: string, env?: any): Promise<AuthPayload | null> {
   try {
     if (!env) {
-      console.error('Environment not provided for JWT signature validation');
+      logger.error('Environment not provided for JWT signature validation');
       return null;
     }
 
@@ -146,19 +112,19 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
       };
 
       // Additional validation with environment config
-      console.log(`JWT validated for issuer: ${authConfig.JWT.ISSUER}, audience: ${authConfig.JWT.AUDIENCE}`);
+      logger.info(`JWT validated for issuer: ${authConfig.JWT.ISSUER}, audience: ${authConfig.JWT.AUDIENCE}`);
       
       return payload;
     }
     
     // If result is an error, log it
     if ('error' in result) {
-      console.error('OpenAuth verification error:', result.error);
+      logger.error('OpenAuth verification error:', result.error);
     }
     
     return null;
   } catch (error) {
-    console.error('JWT signature validation error:', error);
+    logger.error('JWT signature validation error:', error);
     return null;
   }
 }
@@ -173,9 +139,7 @@ export async function optionalAuthMiddleware(c: Context, next: Next) {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const payload = AUTH_CONFIG.VERIFY_JWT_SIGNATURE
-        ? await validateJWTWithSignature(token, c.env)
-        : await validateJWTBasic(token);
+      const payload = await validateJWTWithSignature(token, c.env);
 
       if (payload) {
         c.set('auth', {
@@ -192,7 +156,7 @@ export async function optionalAuthMiddleware(c: Context, next: Next) {
     return await next();
   } catch (error) {
     // Log error but don't fail the request for optional auth
-    console.error('Optional auth middleware error:', error);
+    logger.error('Optional auth middleware error:', error);
     return await next();
   }
 }
@@ -210,4 +174,77 @@ export function getAuthContext(c: Context): AuthContext | null {
 export function getUserId(c: Context): string | null {
   const auth = getAuthContext(c);
   return auth?.userId || null;
+}
+
+/**
+ * Middleware to validate channelId header
+ * Must be used AFTER authMiddleware
+ * Validates that the channelId in the header:
+ * 1. Exists as a channel in R2
+ * 2. Belongs to the authenticated user
+ *
+ * If channelId header is not provided, middleware passes through
+ * If channelId is invalid or doesn't belong to user, returns 403
+ */
+export async function channelIdMiddleware(c: Context, next: Next) {
+  try {
+    // Get channelId from header
+    const channelId = c.req.header('channelId');
+
+    // If no channelId header, pass through (some endpoints may not need it)
+    if (!channelId) {
+      return await next();
+    }
+
+    // Get auth context - must have been set by authMiddleware
+    const auth = getAuthContext(c);
+    if (!auth) {
+      return c.json({
+        success: false,
+        error: 'Authentication required'
+      }, 401);
+    }
+
+    // Fetch channel from R2
+    const channelsBucket = c.env.channels;
+    if (!channelsBucket) {
+      logger.error('Channels bucket not available');
+      return c.json({
+        success: false,
+        error: 'Internal server error'
+      }, 500);
+    }
+
+    const channelObject = await channelsBucket.get(channelId);
+    if (!channelObject) {
+      logger.warn(`Channel not found: ${channelId}`);
+      return c.json({
+        success: false,
+        error: 'Channel not found'
+      }, 404);
+    }
+
+    // Parse channel data
+    const channelData = await channelObject.json() as { userId: string };
+
+    // Verify ownership
+    if (channelData.userId !== auth.userId) {
+      logger.warn(`User ${auth.userId} attempted to use channel ${channelId} owned by ${channelData.userId}`);
+      return c.json({
+        success: false,
+        error: 'You do not have permission to perform actions on behalf of this channel'
+      }, 403);
+    }
+
+    // Set channelId in context for use by endpoints
+    c.set('channelId', channelId);
+
+    return await next();
+  } catch (error) {
+    logger.error('Channel ID middleware error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to validate channel'
+    }, 500);
+  }
 }

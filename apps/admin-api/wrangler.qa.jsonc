@@ -1,0 +1,75 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "al-ummah-admin-api-qa",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "d1_databases": [
+    {
+      "binding": "REPORTS_DB",
+      "database_name": "al-ummah-now-reports-qa",
+      "database_id": "eed66c4a-af26-4e07-9f9a-36f1e4ada555",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "videos",
+      "bucket_name": "videos-qa"
+    },
+    {
+      "binding": "channels",
+      "bucket_name": "channels-qa"
+    },
+    {
+      "binding": "profiles",
+      "bucket_name": "profiles-qa"
+    },
+    {
+      "binding": "playlists",
+      "bucket_name": "playlists-qa"
+    },
+    {
+      "binding": "global_settings",
+      "bucket_name": "global-settings-qa"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "queue",
+        "queue": "al-ummah-now-videos-qa"
+      }
+    ]
+  },
+
+  "vars": {
+    "ENVIRONMENT": "qa",
+    "LOG_LEVEL": "debug",
+    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
+    "Issuer": "https://auth.qa.alummahnow.net"
+  },
+
+  "secrets_store_secrets": [
+    {
+      "binding": "INTERNAL_API_KEY",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "internal-api-key-qa"
+    }
+  ],
+
+  "observability": {
+    "logs": {
+      "enabled": true
+    }
+  },
+
+  "dev": {
+    "ip": "127.0.0.1",
+    "port": 3090,
+    "local_protocol": "http"
+  }
+}

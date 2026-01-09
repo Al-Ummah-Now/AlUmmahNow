@@ -36,12 +36,21 @@ export interface ApiError {
 
 export interface Timestamps {
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface SoftDelete {
-  deletedAt?: string;
   isDeleted?: boolean;
+  deletedAt?: string;
+  markedForDeletion?: boolean;
+  markedForDeletionAt?: string;
+}
+
+export interface Moderation {
+  isHidden?: boolean;
+  hiddenAt?: string;
+  hiddenByUserId?: string;
+  hiddenReason?: string;
 }
 
 export type Locale = 'en' | 'ar';

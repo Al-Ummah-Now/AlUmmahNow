@@ -6,6 +6,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { WebSocketDurableObject } from './websocket';
+import { createLogger } from '@al-ummah/logger';
+
+// Create logger instance
+const logger = createLogger('websocket-server', { logLevel: 'info', forceHttpLogging: true });
 
 // Export the Durable Object
 export { WebSocketDurableObject };
@@ -24,6 +28,7 @@ app.use('/*', cors({
  * Health check endpoint
  */
 app.get('/health', (c) => {
+  logger.debug('Health check requested');
   return c.json({
     status: 'healthy',
     service: 'websocket-server',
@@ -37,6 +42,8 @@ app.get('/health', (c) => {
  */
 app.get('/ws', async (c) => {
   try {
+    logger.info('WebSocket connection request received');
+
     // Get Durable Object ID (use a single instance for now, can be sharded later)
     const id = c.env.WEBSOCKET_DO.idFromName('websocket-instance');
     const stub = c.env.WEBSOCKET_DO.get(id);
@@ -44,7 +51,7 @@ app.get('/ws', async (c) => {
     // Forward the request to the Durable Object
     return await stub.fetch(c.req.raw);
   } catch (error) {
-    console.error('Error connecting to WebSocket Durable Object:', error);
+    logger.error('Error connecting to WebSocket Durable Object', error);
     return c.json({
       error: 'Failed to establish WebSocket connection',
     }, 500);
@@ -60,7 +67,19 @@ app.post('/broadcast', async (c) => {
   try {
     // Authenticate server-to-server request
     const apiKey = c.req.header('X-API-Key');
-    if (!apiKey || apiKey !== c.env.INTERNAL_API_KEY) {
+
+    // Get the expected API key from secret store binding or env var
+    let expectedApiKey: string | undefined;
+    if (c.env.INTERNAL_API_KEY) {
+      if (typeof c.env.INTERNAL_API_KEY === 'string') {
+        expectedApiKey = c.env.INTERNAL_API_KEY;
+      } else if (typeof c.env.INTERNAL_API_KEY.get === 'function') {
+        expectedApiKey = await c.env.INTERNAL_API_KEY.get();
+      }
+    }
+
+    if (!apiKey || !expectedApiKey || apiKey !== expectedApiKey) {
+      logger.warn('Broadcast attempt with invalid API key');
       return c.json({
         error: 'Unauthorized - Invalid or missing API key',
       }, 401);
@@ -69,10 +88,13 @@ app.post('/broadcast', async (c) => {
     const { channel, message } = await c.req.json();
 
     if (!channel || !message) {
+      logger.warn('Broadcast request missing required fields');
       return c.json({
         error: 'Missing required fields: channel and message',
       }, 400);
     }
+
+    logger.info(`Broadcasting message to channel: ${channel}`);
 
     // Get Durable Object
     const id = c.env.WEBSOCKET_DO.idFromName('websocket-instance');
@@ -87,12 +109,14 @@ app.post('/broadcast', async (c) => {
     }));
 
     if (response.ok) {
+      logger.info(`Successfully broadcast message to channel: ${channel}`);
       return c.json({ success: true });
     } else {
+      logger.error(`Failed to broadcast message to channel: ${channel}`);
       return c.json({ error: 'Failed to broadcast message' }, 500);
     }
   } catch (error) {
-    console.error('Error broadcasting message:', error);
+    logger.error('Error broadcasting message', error);
     return c.json({
       error: 'Failed to broadcast message',
     }, 500);
@@ -105,20 +129,23 @@ app.post('/broadcast', async (c) => {
  */
 app.get('/stats', async (c) => {
   try {
+    logger.debug('Stats requested');
+
     // Get Durable Object
     const id = c.env.WEBSOCKET_DO.idFromName('websocket-instance');
     const stub = c.env.WEBSOCKET_DO.get(id);
 
     // Request stats
     const response = await stub.fetch(new Request('http://internal/stats'));
-    
+
     if (response.ok) {
       return response;
     } else {
+      logger.error('Failed to get stats from Durable Object');
       return c.json({ error: 'Failed to get stats' }, 500);
     }
   } catch (error) {
-    console.error('Error getting stats:', error);
+    logger.error('Error getting stats', error);
     return c.json({
       error: 'Failed to get stats',
     }, 500);
@@ -129,6 +156,7 @@ app.get('/stats', async (c) => {
  * Default route
  */
 app.get('/', (c) => {
+  logger.debug('Root endpoint accessed');
   return c.json({
     service: 'Al Ummah Now - WebSocket Server',
     version: '1.0.0',

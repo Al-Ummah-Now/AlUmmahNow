@@ -1,4 +1,4 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useEffect, useRef, useState } from 'react';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
@@ -34,15 +34,15 @@ export default function VideoPlayerTest() {
 
         // Announce play/pause to screen readers
         player.on('play', () => {
-          console.log('Video playback started');
+          logger.debug('Video playback started');
         });
 
         player.on('pause', () => {
-          console.log('Video playback paused');
+          logger.debug('Video playback paused');
         });
 
         player.on('ended', () => {
-          console.log('Video playback ended');
+          logger.debug('Video playback ended');
         });
       });
     }

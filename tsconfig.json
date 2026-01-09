@@ -3,6 +3,7 @@
   "files": [],
   "references": [
     { "path": "./packages/shared-types" },
+    { "path": "./packages/logger" },
     { "path": "./apps/web" },
     { "path": "./apps/api-videos" },
     { "path": "./apps/processor" }

@@ -1,21 +1,17 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import R2Repository from "../../lib/r2Repo";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class ChannelDelete extends OpenAPIRoute {
+export class ChannelDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Delete a Channel",
 		request: {
 			params: z.object({
 				id: Str({ description: "Channel ID" }),
-			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
 		},
 		responses: {
@@ -37,6 +33,22 @@ export class ChannelDelete extends OpenAPIRoute {
 					},
 				},
 			},
+			"403": {
+				description: "Forbidden - user does not own this channel",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
+			"404": {
+				description: "Channel not found",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
 			"500": {
 				description: "Internal server error",
 				content: {
@@ -48,16 +60,16 @@ export class ChannelDelete extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated id
 		const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const userId = this.getUserId(c);
 
 		// Get the channel before deletion
-		const bucket = env.channels;
+		const bucket = c.env.channels;
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
 		
@@ -69,8 +81,16 @@ export class ChannelDelete extends OpenAPIRoute {
 			}, 404);
 		}
 
+		// Verify user owns this channel
+		if (channel.userId !== userId) {
+			return c.json({
+				success: false,
+				error: "You do not have permission to delete this channel",
+			}, 403);
+		}
+
 		// Send queue message for channel deletion
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.ChannelDelete, {
 			channelId: id,
 			userId: userId,

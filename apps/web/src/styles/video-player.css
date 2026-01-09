@@ -113,7 +113,7 @@
   bottom: 0 !important; /* Stick to bottom */
   left: 0 !important;
   right: 0 !important;
-  z-index: 1000 !important; /* Very high z-index to be above everything */
+  z-index: 10 !important; /* Low z-index to stay below modals/popups */
   overflow: visible !important; /* Allow quality menu to extend outside control bar */
 }
 

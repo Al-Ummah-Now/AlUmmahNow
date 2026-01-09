@@ -1,9 +1,10 @@
-import { OpenAPIRoute } from "chanfana";
+import { PublicRoute, AppContext } from "../../base";
+import { } from "chanfana";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
+import { logger } from '../../lib/logger';
 
-export class Metrics extends OpenAPIRoute {
+export class Metrics extends PublicRoute {
 schema = {
 tags: ["Monitoring"],
 summary: "API Metrics",
@@ -56,15 +57,15 @@ responseTime: z.number(),
 },
 };
 
-async handle(c) {
+async handle(c: AppContext) {
 const startTime = Date.now();
 
 try {
 // Get storage metrics
-const videosRepository = new R2Repository(env.videos);
-const profilesRepository = new R2Repository(env.profiles);
-const channelsRepository = new R2Repository(env.channels);
-const playlistsRepository = new R2Repository(env.playlists);
+const videosRepository = new R2Repository(c.env.videos);
+const profilesRepository = new R2Repository(c.env.profiles);
+const channelsRepository = new R2Repository(c.env.channels);
+const playlistsRepository = new R2Repository(c.env.playlists);
 
 // Get basic counts (limit to avoid performance issues)
 const videosResult = await videosRepository.listObjects(1000);
@@ -119,7 +120,7 @@ responseTime,
 });
 
 } catch (error) {
-console.error("Metrics error:", error);
+logger.error("Metrics error:", error);
 return c.json({
 timestamp: new Date().toISOString(),
 error: "Failed to retrieve metrics",

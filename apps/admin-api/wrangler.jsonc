@@ -1,0 +1,110 @@
+{
+	"name": "al-ummah-admin-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2024-09-01",
+	"compatibility_flags": ["nodejs_compat"],
+
+	// D1 database for moderation reports
+	"d1_databases": [
+		{
+			"binding": "REPORTS_DB",
+			"database_name": "al-ummah-now-reports",
+			"database_id": "7bee932d-c6b1-47c2-ab70-7dba349104af",
+			"preview_database_id": "2d6a536c-6546-48c2-840a-40f9ddc21ab8",
+			"migrations_dir": "migrations",
+			"remote": true
+		}
+	],
+
+	// R2 buckets for content access (read/update for moderation)
+	"r2_buckets": [
+		{
+			"binding": "videos",
+			"bucket_name": "videos",
+			"preview_bucket_name": "videos-preview",
+			"remote": true
+		},
+		{
+			"binding": "channels",
+			"bucket_name": "channels",
+			"preview_bucket_name": "channels-preview",
+			"remote": true
+		},
+		{
+			"binding": "profiles",
+			"bucket_name": "profiles",
+			"preview_bucket_name": "profiles-preview",
+			"remote": true
+		},
+		{
+			"binding": "playlists",
+			"bucket_name": "playlists",
+			"preview_bucket_name": "playlists-preview",
+			"remote": true
+		},
+		{
+			"binding": "global_settings",
+			"bucket_name": "global-settings",
+			"preview_bucket_name": "global-settings-preview",
+			"remote": true
+		}
+	],
+
+	// Queue for notifications
+	"queues": {
+		"producers": [
+			{
+				"binding": "queue",
+				"queue": "al-ummah-now-videos"
+			}
+		]
+	},
+
+	// Environment variables
+	"vars": {
+		"ENVIRONMENT": "production",
+		"LOG_LEVEL": "info",
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net"
+	},
+
+	// Secrets Store
+	"secrets_store_secrets": [
+		{
+			"binding": "INTERNAL_API_KEY",
+			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+			"secret_name": "internal-api-key"
+		}
+	],
+
+	// Environment-specific configurations
+	"env": {
+		"development": {
+			"vars": {
+				"ENVIRONMENT": "development",
+				"LOG_LEVEL": "debug",
+				"WEBSOCKET_URL": "http://localhost:3087",
+				"INTERNAL_API_KEY": "dev-internal-api-key"
+			}
+		},
+		"staging": {
+			"vars": {
+				"ENVIRONMENT": "staging",
+				"LOG_LEVEL": "info"
+			}
+		}
+	},
+
+	// Observability
+	"observability": {
+		"logs": {
+			"enabled": true
+		}
+	},
+
+	// Development server configuration
+	"dev": {
+		"ip": "127.0.0.1",
+		"port": 3090,
+		"local_protocol": "http"
+	}
+}

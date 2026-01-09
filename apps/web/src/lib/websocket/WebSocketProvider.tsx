@@ -1,15 +1,16 @@
 'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
-import { WebSocketConnectionState, WebSocketConfig } from '@/interfaces/websocket';
+import { WebSocketConnectionState, WebSocketConfig, WebSocketEventType } from '@/interfaces/websocket';
 import { User } from '@/interfaces';
 
 interface WebSocketContextType {
   wsManager: WebSocketManager | null;
   connectionState: WebSocketConnectionState;
-  subscribe: (channel: string, callback: (data: any) => void) => (() => void) | null;
-  sendMessage: (type: any, data: any) => void;
+  subscribe: (channel: string, callback: (data: unknown) => void) => (() => void) | null;
+  sendMessage: (type: string, data: unknown) => void;
   isConnected: boolean;
 }
 
@@ -34,7 +35,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   // Initialize WebSocket manager
   useEffect(() => {
     // Get WebSocket URL from runtime config or environment variable
-    const wsUrl = (typeof window !== 'undefined' && window.__RUNTIME_CONFIG__?.WEBSOCKET_URL)
+    const wsUrl = (typeof window !== 'undefined' && (window as {__RUNTIME_CONFIG__?: {WEBSOCKET_URL?: string}}).__RUNTIME_CONFIG__?.WEBSOCKET_URL)
       || process.env.NEXT_PUBLIC_WEBSOCKET_URL
       || '';
 
@@ -63,9 +64,8 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
     // Auto-connect for both authenticated and anonymous users
     // Anonymous users can view real-time updates but cannot post
-    const userId = user?.id || `anonymous_${Date.now()}`;
-    wsManagerRef.current.connect(userId).catch((error) => {
-      console.error('Failed to connect to WebSocket:', error);
+    wsManagerRef.current.connect(user?.id).catch((error) => {
+      logger.error('Failed to connect to WebSocket:', error);
     });
 
     return () => {
@@ -83,24 +83,23 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   useEffect(() => {
     if (wsManagerRef.current) {
       if (!wsManagerRef.current.isConnected()) {
-        const userId = user?.id || `anonymous_${Date.now()}`;
-        wsManagerRef.current.connect(userId).catch((error) => {
-          console.error('Failed to reconnect to WebSocket:', error);
+        wsManagerRef.current.connect(user?.id).catch((error) => {
+          logger.error('Failed to reconnect to WebSocket:', error);
         });
       }
     }
   }, [user?.id]);
 
-  const subscribe = useCallback((channel: string, callback: (data: any) => void): (() => void) | null => {
+  const subscribe = useCallback((channel: string, callback: (data: unknown) => void): (() => void) | null => {
     if (wsManagerRef.current) {
       return wsManagerRef.current.subscribe(channel, callback);
     }
     return null;
   }, []);
 
-  const sendMessage = useCallback((type: any, data: any): void => {
+  const sendMessage = useCallback((type: string, data: unknown): void => {
     if (wsManagerRef.current) {
-      wsManagerRef.current.sendMessage(type, data);
+      wsManagerRef.current.sendMessage(type as WebSocketEventType, data);
     }
   }, []);
 
@@ -129,7 +128,7 @@ export function useWebSocket(): WebSocketContextType {
 
 export function useWebSocketSubscription(
   channel: string,
-  callback: (data: any) => void,
+  callback: (data: unknown) => void,
   deps: React.DependencyList = []
 ): boolean {
   const { subscribe, isConnected } = useWebSocket();
@@ -145,7 +144,7 @@ export function useWebSocketSubscription(
     if (!channel) return;
 
     // Use stable callback from ref
-    const unsubscribe = subscribe(channel, (data: any) => {
+    const unsubscribe = subscribe(channel, (data: unknown) => {
       callbackRef.current(data);
     });
 

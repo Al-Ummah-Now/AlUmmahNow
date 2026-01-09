@@ -1,10 +1,10 @@
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
+import { OptionalAuthRoute, AppContext } from "../../base";
 
-export class PlaylistsList extends OpenAPIRoute {
+export class PlaylistsList extends OptionalAuthRoute {
     schema = {
         tags: ["Playlists"],
         summary: "List Playlists",
@@ -20,7 +20,6 @@ export class PlaylistsList extends OpenAPIRoute {
             }),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
-				userId: Str({ description: "User ID" }).optional().nullable(),
 			}),
         },
         responses: {
@@ -51,29 +50,40 @@ export class PlaylistsList extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated parameters
         const { limit, cursor } = request.query;
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 
         // Implement your own object list here
-        const bucket = env.playlists;
+        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof Playlist>;
         const repository = new R2Repository<PlaylistType>(bucket);
         let playlists = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
         
-        // Filter playlists based on privacy settings and user context
+        // Filter playlists based on privacy settings, soft delete, moderation, and user context
         const filteredPlaylists = {
             ...playlists,
             items: (playlists.items || []).filter(playlist => {
+                // Filter out soft-deleted playlists
+                if (playlist.isDeleted) {
+                    return false;
+                }
+
+                // Filter out moderation-hidden playlists
+                if (playlist.isHidden) {
+                    return false;
+                }
+
                 // If playlist is explicitly private (false), only show if user owns it
                 if (playlist.isPublic === false) {
                     return userId && playlist.userId === userId;
                 }
-                
+
                 // If playlist is public (true) or undefined/null (default to public), always show it
                 return true;
             })

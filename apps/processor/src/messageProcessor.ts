@@ -1,5 +1,10 @@
 import { AlUmmahMessage, ProcessingResult, MessageType, QueueEnvironment } from './types';
-import Logger from './logger';
+import { Logger } from '@al-ummah/logger';
+import { handleChannelSectionEvent } from './handlers/channel-section';
+import { handlePollVoteEvent } from './handlers/poll-vote';
+import { handlePostLikeEvent } from './handlers/post-like';
+// Channel tabs are frontend-only, no backend processing needed
+// import { handleChannelTabEvent } from './handlers/channel-tab';
 
 export class MessageProcessor {
   private logger: Logger;
@@ -22,8 +27,8 @@ export class MessageProcessor {
       await this.saveMessageToR2(message, env);
 
       // Process based on message type
-      await this.processByType(message);
-      
+      await this.processByType(message, env);
+
       const processingTime = Date.now() - startTime;
       this.logger.info(`Successfully processed message ${message.id} in ${processingTime}ms`);
       
@@ -54,7 +59,7 @@ export class MessageProcessor {
     );
   }
 
-  private async processByType(message: AlUmmahMessage): Promise<void> {
+  private async processByType(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
     switch (message.type) {
       // Profile-related messages
       case MessageType.ProfileCreate:
@@ -115,6 +120,59 @@ export class MessageProcessor {
       case MessageType.WatchHistory:
         await this.processWatchHistoryMessage(message);
         break;
+
+      // Community post comment events
+      case MessageType.PostCommentCreated:
+      case MessageType.PostCommentUpdated:
+      case MessageType.PostCommentLiked:
+      case MessageType.PostCommentUnliked:
+      case MessageType.PostCommentDeleted:
+      case MessageType.PostCommentPinned:
+      case MessageType.PostCommentHearted:
+        await this.processPostCommentMessage(message);
+        break;
+
+      // Community post events
+      case MessageType.CommunityPostCreated:
+      case MessageType.CommunityPostUpdated:
+      case MessageType.CommunityPostDeleted:
+        await this.processCommunityPostMessage(message);
+        break;
+
+      // Post like/unlike events - handled separately for like count calculation
+      case MessageType.CommunityPostLiked:
+      case MessageType.CommunityPostUnliked:
+        await handlePostLikeEvent(message, env, this.logger);
+        break;
+
+      // Poll vote event - handled separately for score calculation
+      case MessageType.PollVoted:
+        await handlePollVoteEvent(message, env, this.logger);
+        break;
+
+      // Channel section events
+      case MessageType.ChannelSectionCreate:
+      case MessageType.ChannelSectionUpdate:
+      case MessageType.ChannelSectionDelete:
+      case MessageType.ChannelSectionReorder:
+      case MessageType.ChannelSectionView:
+        await handleChannelSectionEvent(message, env, this.logger);
+        break;
+
+      // Content moderation events
+      case MessageType.ReportCreate:
+      case MessageType.ReportResolve:
+        await this.processReportMessage(message, env);
+        break;
+
+      // Channel tab events - REMOVED: tabs are frontend-only, no backend processing
+      // case MessageType.ChannelTabCreate:
+      // case MessageType.ChannelTabUpdate:
+      // case MessageType.ChannelTabDelete:
+      // case MessageType.ChannelTabReorder:
+      // case MessageType.ChannelTabSwitch:
+      //   await handleChannelTabEvent(message, env, this.logger);
+      //   break;
 
       default:
         throw new Error(`Unknown message type: ${message.type}`);
@@ -377,6 +435,140 @@ export class MessageProcessor {
         break;
       default:
         this.logger.warn(`Unknown watch history event type: ${type}`);
+    }
+  }
+
+  private async processCommunityPostMessage(message: AlUmmahMessage): Promise<void> {
+    this.logger.debug(`Processing community post message: ${MessageType[message.type]}`, message.payload);
+
+    const { postId, channelId, actor } = message.payload as {
+      postId: string;
+      channelId: string;
+      actor?: { userId: string; channelId?: string };
+    };
+
+    if (!postId || !channelId) {
+      throw new Error('Community post message missing required fields: postId, channelId');
+    }
+
+    // Process community post actions
+    switch (message.type) {
+      case MessageType.CommunityPostCreated:
+        this.logger.info(`Community post ${postId} created on channel ${channelId} by actor`, { actor });
+        break;
+      case MessageType.CommunityPostUpdated:
+        this.logger.info(`Community post ${postId} updated on channel ${channelId} by actor`, { actor });
+        break;
+      case MessageType.CommunityPostDeleted:
+        this.logger.info(`Community post ${postId} deleted from channel ${channelId} by actor`, { actor });
+        break;
+      // CommunityPostLiked/Unliked are now handled by dedicated handlePostLikeEvent handler
+      // PollVoted is now handled by dedicated handlePollVoteEvent handler
+    }
+  }
+
+  private async processPostCommentMessage(message: AlUmmahMessage): Promise<void> {
+    this.logger.debug(`Processing post comment message: ${MessageType[message.type]}`, message.payload);
+
+    const { postId, commentId, actor } = message.payload as {
+      postId: string;
+      commentId: string;
+      channelId?: string;
+      actor?: { userId: string; channelId?: string };
+      parentCommentId?: string;
+    };
+
+    if (!postId || !commentId) {
+      throw new Error('Post comment message missing required fields: postId, commentId');
+    }
+
+    // Process post comment actions
+    switch (message.type) {
+      case MessageType.PostCommentCreated:
+        this.logger.info(`Comment ${commentId} created on post ${postId} by actor`, { actor });
+        break;
+      case MessageType.PostCommentUpdated:
+        this.logger.info(`Comment ${commentId} updated on post ${postId} by actor`, { actor });
+        break;
+      case MessageType.PostCommentLiked:
+        this.logger.info(`Comment ${commentId} liked on post ${postId} by actor`, { actor });
+        break;
+      case MessageType.PostCommentUnliked:
+        this.logger.info(`Comment ${commentId} unliked on post ${postId} by actor`, { actor });
+        break;
+      case MessageType.PostCommentDeleted:
+        this.logger.info(`Comment ${commentId} deleted from post ${postId} by actor`, { actor });
+        break;
+      case MessageType.PostCommentPinned:
+        this.logger.info(`Comment ${commentId} pinned on post ${postId} by actor`, { actor });
+        break;
+      case MessageType.PostCommentHearted:
+        this.logger.info(`Comment ${commentId} hearted on post ${postId} by actor`, { actor });
+        break;
+    }
+  }
+
+  private async processReportMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    this.logger.debug(`Processing report message: ${MessageType[message.type]}`, message.payload);
+
+    const { reportId, entityType, entityId, reporterId, reason, timestamp } = message.payload as {
+      reportId: string;
+      entityType: string;
+      entityId: string;
+      reporterId: string;
+      reason: string;
+      timestamp: string;
+      description?: string;
+      moderatorId?: string;
+      action?: string;
+      moderatorNotes?: string;
+    };
+
+    if (!reportId || !entityType || !entityId) {
+      throw new Error('Report message missing required fields: reportId, entityType, entityId');
+    }
+
+    switch (message.type) {
+      case MessageType.ReportCreate:
+        const { description } = message.payload as { description?: string };
+        const createdAt = timestamp || new Date().toISOString();
+
+        await env.REPORTS_DB.prepare(`
+          INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+        `).bind(reportId, entityType, entityId, reporterId, reason, description || null, createdAt).run();
+
+        this.logger.info(`Report ${reportId} saved for ${entityType} ${entityId}`, {
+          reason,
+          reporterId,
+        });
+        break;
+
+      case MessageType.ReportResolve:
+        const { moderatorId, action, moderatorNotes } = message.payload as {
+          moderatorId?: string;
+          action?: string;
+          moderatorNotes?: string;
+        };
+        const resolvedAt = new Date().toISOString();
+
+        await env.REPORTS_DB.prepare(`
+          UPDATE reports
+          SET status = 'resolved',
+              moderator_id = ?,
+              action = ?,
+              moderator_notes = ?,
+              resolved_at = ?,
+              updated_at = ?
+          WHERE id = ?
+        `).bind(moderatorId, action, moderatorNotes || null, resolvedAt, resolvedAt, reportId).run();
+
+        this.logger.info(`Report ${reportId} resolved by moderator ${moderatorId}`, {
+          action,
+          entityType,
+          entityId,
+        });
+        break;
     }
   }
 

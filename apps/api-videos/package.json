@@ -4,11 +4,12 @@
   "private": true,
   "description": "Al Ummah Now - Video API Backend with Cloudflare Workers",
   "scripts": {
-    "dev": "wrangler dev --inspector-port=9230",
+    "dev": "wrangler dev --inspector-port=4086",
     "dev:node": "tsx watch --inspect --env-file=.env.dev src/index.ts",
     "build": "tsc --noEmit",
     "start": "wrangler dev",
     "deploy": "wrangler deploy",
+    "deploy:qa": "CI=true wrangler deploy --config wrangler.qa.jsonc",
     "cf-typegen": "wrangler types",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .wrangler",
@@ -18,16 +19,20 @@
     "test:metrics": "curl -s http://127.0.0.1:3086/metrics | jq ."
   },
   "dependencies": {
+    "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
     "@bunny.net/storage-sdk": "0.3.0",
-    "@openauthjs/openauth": "^0.4.3",
+    "@al-ummah-now/openauth": "1.0.15",
     "chanfana": "^2.8.0",
     "hono": "^4.10.4",
+    "sanitize-html": "^2.14.0",
+    "tus-js-client": "^4.3.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251106.1",
     "@types/node": "24.10.0",
+    "@types/sanitize-html": "^2.13.0",
     "@types/service-worker-mock": "^2.0.1",
     "tsx": "^4.19.2",
     "typescript": "5.9.3",

@@ -1,19 +1,25 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, memo } from "react";
+import dynamic from "next/dynamic";
 import Header from "@/components/Header/index";
-import LeftNavigation from "@/components/LeftNavigation/index";
 import HeaderRtl from "@/components/Header/rtl/index";
-import LeftNavigationRtl from "@/components/LeftNavigation/rtl/index";
-import AccountNavigation from "@/components/accountNavigation";
-import AccountNavigationRtl from "@/components/accountNavigation/rtl";
 import { usePathname } from "next/navigation";
 import { Profile } from "@/interfaces";
-import { fetchProfile } from "@/lib/clients/profiles";
+import { fetchProfile } from "@/lib/api/profiles-client";
 import { useAuth } from "../AuthProvider/authContext";
 
-const Navigation: React.FC = () => {
+// Lazy load navigation components for better FID
+const LeftNavigation = dynamic(() => import("@/components/LeftNavigation/index"), {
+  ssr: true,
+  loading: () => null,
+});
+const LeftNavigationRtl = dynamic(() => import("@/components/LeftNavigation/rtl/index"), {
+  ssr: true,
+  loading: () => null,
+});
+
+const Navigation: React.FC = memo(() => {
     const [isCollapsed, setIsCollapsed] = useState(true);
-    const [isAccountCollapsed, setIsAccountCollapsed] = useState(true);
     const [profile, setProfile] = React.useState<Profile | null>(null);
     const auth = useAuth();
     const path = usePathname();
@@ -21,10 +27,6 @@ const Navigation: React.FC = () => {
 
     const toggleCollapse = () => {
         setIsCollapsed(!isCollapsed);
-    };
-
-    const toggleAccountCollapse = () => {
-        setIsAccountCollapsed(!isAccountCollapsed);
     };
 
     useEffect(() => {
@@ -36,26 +38,20 @@ const Navigation: React.FC = () => {
     }, [auth]);
 
     return (
-        <>
-            <div style={{ direction: rtl ? "rtl" : "ltr" }}>
-                {rtl
-                    ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />
-                    : <Header profile={profile} toggleCollapse={toggleCollapse} toggleAccountCollapse={toggleAccountCollapse} />}
-                <div className="flex flex-1">
-                    {/* Left Navigation */}
-                    {path.indexOf('/ar') > -1
-                        ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
-                        : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
-
-                    {/* Account Navigation */}
-                    {path.indexOf('/ar') > -1
-                        ? <AccountNavigationRtl profile={profile} user={auth.user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />
-                        : <AccountNavigation profile={profile} user={auth.user} isVisible={!isAccountCollapsed} onClose={() => setIsAccountCollapsed(true)} />}
-
-                </div>
+        <div style={{ direction: rtl ? "rtl" : "ltr" }}>
+            {rtl
+                ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} />
+                : <Header profile={profile} toggleCollapse={toggleCollapse} />}
+            <div className="flex flex-1">
+                {/* Left Navigation */}
+                {path.indexOf('/ar') > -1
+                    ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
+                    : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
             </div>
-        </>
+        </div>
     );
-};
+});
+
+Navigation.displayName = 'Navigation';
 
 export default Navigation;

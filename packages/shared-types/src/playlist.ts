@@ -2,9 +2,9 @@
  * Playlist types
  */
 
-import { Timestamps } from './common';
+import { Timestamps, SoftDelete, Moderation } from './common';
 
-export interface Playlist extends Timestamps {
+export interface Playlist extends Timestamps, SoftDelete, Moderation {
   id: string;
   name: string;
   description?: string;

@@ -6,11 +6,15 @@ import { Video as BusinessVideo, Channel as BusinessChannel, Profile as Business
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
 
 // Transform a business video to a view model
-export function transformVideoToView(video: z.infer<typeof BusinessVideo>): z.infer<typeof VideoView> {
+export function transformVideoToView(
+    video: z.infer<typeof BusinessVideo>,
+    channel?: z.infer<typeof BusinessChannel> | null
+): z.infer<typeof VideoView> {
     return {
         ...video,
-        channelName: "", // TODO: Resolve from channel data
-        channelAvatarUrl: undefined, // TODO: Resolve from channel data
+        channelName: channel?.name || "",
+        channelAvatarUrl: channel?.avatarUrl,
+        channelCoverUrl: channel?.coverUrl,
         likesCount: video.likes?.length || 0,
         dislikesCount: video.dislikes?.length || 0,
         commentsCount: video.comments?.length || 0,
@@ -31,22 +35,22 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
 
 // Transform a business profile to a view model
 export function transformProfileToView(profile: z.infer<typeof BusinessProfile>): z.infer<typeof ProfileView> {
-    // Compute display name
-    const displayName = profile.userName || 
-                       (profile.firstName && profile.lastName ? `${profile.firstName} ${profile.lastName}` : null) ||
-                       profile.firstName ||
-                       profile.lastName ||
-                       undefined;
-
+   
     return {
         id: profile.id,
         email: profile.email,
         userName: profile.userName,
         firstName: profile.firstName,
+        firstNameLocalized: profile.firstNameLocalized,
         lastName: profile.lastName,
-        displayName,
+        lastNameLocalized: profile.lastNameLocalized,
+        displayName: profile.displayName,
+        displayNameLocalized: profile.displayNameLocalized,
+        bio: profile.bio,
+        bioLocalized: profile.bioLocalized,
         avatarUrl: profile.avatarUrl,
         coverUrl: profile.coverUrl,
+        timezone: profile.timezone,
         dateCreated: profile.dateCreated,
         dateModified: profile.dateModified,
         channelsCount: profile.channels?.length || 0,
@@ -56,7 +60,10 @@ export function transformProfileToView(profile: z.infer<typeof BusinessProfile>)
 }
 
 // Transform a business playlist to a view model
-export function transformPlaylistToView(playlist: z.infer<typeof BusinessPlaylist>): z.infer<typeof PlaylistView> {
+export function transformPlaylistToView(
+    playlist: z.infer<typeof BusinessPlaylist>,
+    channel?: z.infer<typeof BusinessChannel> | null
+): z.infer<typeof PlaylistView> {
     return {
         id: playlist.id,
         title: playlist.title,
@@ -64,7 +71,7 @@ export function transformPlaylistToView(playlist: z.infer<typeof BusinessPlaylis
         thumbnailUrl: playlist.thumbnailUrl,
         userId: playlist.userId,
         channelId: playlist.channelId,
-        channelName: "", // TODO: Resolve from channel data
+        channelName: channel?.name || "",
         dateCreated: playlist.dateCreated,
         dateModified: playlist.dateModified,
         videosCount: playlist.videos?.length || 0,
@@ -86,7 +93,7 @@ export function transformCommentToView(comment: z.infer<typeof BusinessComment>)
 
 // Batch transformation functions for arrays
 export function transformVideosToView(videos: z.infer<typeof BusinessVideo>[]): z.infer<typeof VideoView>[] {
-    return (videos || []).map(transformVideoToView);
+    return (videos || []).map(video => transformVideoToView(video));
 }
 
 export function transformChannelsToView(channels: z.infer<typeof BusinessChannel>[]): z.infer<typeof ChannelView>[] {
@@ -97,8 +104,14 @@ export function transformProfilesToView(profiles: z.infer<typeof BusinessProfile
     return (profiles || []).map(transformProfileToView);
 }
 
-export function transformPlaylistsToView(playlists: z.infer<typeof BusinessPlaylist>[]): z.infer<typeof PlaylistView>[] {
-    return (playlists || []).map(transformPlaylistToView);
+export function transformPlaylistsToView(
+    playlists: z.infer<typeof BusinessPlaylist>[],
+    channelMap?: Map<string, z.infer<typeof BusinessChannel>>
+): z.infer<typeof PlaylistView>[] {
+    return (playlists || []).map(playlist => {
+        const channel = playlist.channelId && channelMap ? channelMap.get(playlist.channelId) : undefined;
+        return transformPlaylistToView(playlist, channel);
+    });
 }
 
 export function transformCommentsToView(comments: z.infer<typeof BusinessComment>[]): z.infer<typeof CommentView>[] {
@@ -121,5 +134,105 @@ export function createEntityDefaults() {
         id: generateEntityId(),
         dateCreated: getCurrentTimestamp(),
         dateModified: getCurrentTimestamp(),
+    };
+}
+
+// ============================================================================
+// Channel Section Transformations
+// ============================================================================
+
+import {
+    ChannelSection,
+    ChannelSectionView,
+    ChannelSectionCreateInput,
+    ChannelSectionUpdateInput,
+    AUTO_POPULATED_TYPES,
+    CONTENT_REQUIRED_TYPES
+} from '@al-ummah/shared-types';
+
+/**
+ * Transform business channel section to view model
+ */
+export function transformChannelSectionToView(section: ChannelSection): ChannelSectionView {
+    return {
+        id: section.id,
+        channelId: section.channelId,
+        type: section.type,
+        title: section.title,
+        titleLocalized: section.titleLocalized,
+        position: section.position,
+        style: section.style,
+        itemCount: section.itemCount,
+        showTimestamp: section.showTimestamp,
+        showChannelName: section.showChannelName,
+        content: {
+            videoIds: section.videoIds && section.videoIds.length > 0 ? section.videoIds : undefined,
+            playlistId: section.playlistId,
+            playlistIds: section.playlistIds && section.playlistIds.length > 0 ? section.playlistIds : undefined,
+            channelIds: section.channelIds && section.channelIds.length > 0 ? section.channelIds : undefined,
+        },
+        dateCreated: section.dateCreated,
+        dateModified: section.dateModified,
+    };
+}
+
+/**
+ * Transform multiple channel sections to view models
+ */
+export function transformChannelSectionsToView(sections: ChannelSection[]): ChannelSectionView[] {
+    return sections.map(transformChannelSectionToView);
+}
+
+/**
+ * Validate section content based on type
+ */
+export function validateSectionContent(
+    type: string,
+    input: ChannelSectionCreateInput | ChannelSectionUpdateInput
+): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // Check required fields for specific types
+    if (CONTENT_REQUIRED_TYPES[type]) {
+        const requiredFields = CONTENT_REQUIRED_TYPES[type];
+
+        if (requiredFields.includes('videoIds')) {
+            if (!input.videoIds || input.videoIds.length === 0) {
+                errors.push(`${type} type requires at least one video ID`);
+            }
+        }
+
+        if (requiredFields.includes('playlistId')) {
+            if (!input.playlistId) {
+                errors.push(`${type} type requires playlistId`);
+            }
+        }
+
+        if (requiredFields.includes('playlistIds')) {
+            if (!input.playlistIds || input.playlistIds.length === 0) {
+                errors.push(`${type} type requires at least one playlist ID`);
+            }
+        }
+    }
+
+    // Auto-populated types shouldn't have content
+    if (AUTO_POPULATED_TYPES.includes(type as any)) {
+        if (input.videoIds && input.videoIds.length > 0) {
+            errors.push(`${type} sections are auto-populated, remove videoIds`);
+        }
+        if (input.playlistId) {
+            errors.push(`${type} sections are auto-populated, remove playlistId`);
+        }
+        if (input.playlistIds && input.playlistIds.length > 0) {
+            errors.push(`${type} sections are auto-populated, remove playlistIds`);
+        }
+        if (input.channelIds && input.channelIds.length > 0) {
+            errors.push(`${type} sections are auto-populated, remove channelIds`);
+        }
+    }
+
+    return {
+        valid: errors.length === 0,
+        errors,
     };
 }

@@ -1,15 +1,17 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamInput } from "../../lib/model/input";
 import { LiveStreamView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { requireSecret } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 
-export class LiveStreamCreate extends OpenAPIRoute {
+export class LiveStreamCreate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Live Streams"],
 		summary: "Create a new Live Stream",
@@ -17,7 +19,6 @@ export class LiveStreamCreate extends OpenAPIRoute {
 		request: {
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional(),
-				userId: Str({ description: "User ID (automatically set from JWT token)" }).optional(),
 			}),
 			body: {
 				content: {
@@ -68,11 +69,12 @@ export class LiveStreamCreate extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 		const inputStream = request.body;
 
 		// Create the business live stream object
@@ -104,10 +106,11 @@ export class LiveStreamCreate extends OpenAPIRoute {
 
 		// Create the live stream in Bunny Stream if possible
 		try {
-			const key = await env["bunny-stream-key"].get();
+			const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 			if (key) {
+				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
+				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key);
-				const libraryId = parseInt(await env.bunny_stream_library_id.get());
 				
 				// Create a video entry for the live stream
 				const videoId = await bunnyStream.createVideo(libraryId, {
@@ -118,18 +121,18 @@ export class LiveStreamCreate extends OpenAPIRoute {
 				liveStream.streamUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}`;
 			}
 		} catch (error) {
-			console.error("Error creating Bunny stream:", error);
+			logger.error("Error creating Bunny stream:", error);
 			// Continue without Bunny integration - the stream will still work with basic functionality
 		}
 
 		// Save the live stream to the repository
-		const bucket = env.videos; // Using videos bucket for now, could be separate livestreams bucket
+		const bucket = c.env.videos; // Using videos bucket for now, could be separate livestreams bucket
 		type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 		const repository = new R2Repository<LiveStreamType>(bucket);
 		await repository.putObject(`livestream:${liveStream.id}`, liveStream);
 
 		// Send queue message for live stream creation
-		const queue = new Queue();
+		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.LiveStreamCreate, { // Using dedicated LiveStreamCreate message type
 			liveStreamId: liveStream.id,
 			userId: userId,

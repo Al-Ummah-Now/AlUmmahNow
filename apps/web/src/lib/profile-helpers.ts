@@ -1,5 +1,7 @@
 import { User } from '@/interfaces';
-import { checkProfileExists } from '@/lib/clients/profiles';
+import { checkProfileExists } from '@/lib/api/profiles-client';
+import { logger } from '@/lib/logger-server';
+
 
 export async function shouldRedirectToProfileCreation(user: User | null): Promise<{ shouldRedirect: boolean; redirectPath: string | null }> {
   if (!user) {
@@ -11,17 +13,17 @@ export async function shouldRedirectToProfileCreation(user: User | null): Promis
     
     // If profile doesn't exist, redirect to profile creation
     if (!profileExists) {
-      return { shouldRedirect: true, redirectPath: '/en/profile/create' };
+      return { shouldRedirect: true, redirectPath: '/ar/profile/create' };
     }
     
     return { shouldRedirect: false, redirectPath: null };
   } catch (error) {
-    console.error('Error checking profile status:', error);
+    logger.error('Error checking profile status:', error);
     // On error, don't redirect to avoid breaking the flow
     return { shouldRedirect: false, redirectPath: null };
   }
 }
 
-export function getProfileCreationPath(locale: 'en' | 'ar' = 'en'): string {
+export function getProfileCreationPath(locale: 'en' | 'ar' = 'ar'): string {
   return `/${locale}/profile/create`;
 }

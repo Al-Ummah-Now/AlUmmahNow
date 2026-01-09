@@ -25,13 +25,9 @@
     "noPropertyAccessFromIndexSignature": false,
     "resolveJsonModule": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "sourceMap": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "paths": {
-      "@al-ummah/shared-types": ["../../packages/shared-types/src"]
-    }
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

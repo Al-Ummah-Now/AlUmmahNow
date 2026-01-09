@@ -3,6 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "description": "Al Ummah Now - Islamic content platform monorepo",
+  "pnpm": {
+    "overrides": {
+      "glob": ">=11.1.0",
+      "esbuild": ">=0.25.0",
+      "body-parser": ">=2.2.1",
+      "next": ">=16.1.1",
+      "qs": ">=6.14.1"
+    }
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -10,22 +19,41 @@
     "type-check": "turbo run type-check",
     "test": "turbo run test",
     "clean": "turbo run clean && rm -rf node_modules",
+    "log-service:dev": "turbo run dev --filter=@al-ummah/log-service",
+    "log-service:start": "turbo run start --filter=@al-ummah/log-service",
+    "logs:monitor": "tsx monitor-logs.ts",
+    "logs:monitor:web": "tsx monitor-logs.ts web",
+    "logs:monitor:api": "tsx monitor-logs.ts api-videos",
+    "logs:monitor:errors": "tsx monitor-logs.ts --level=error",
     "web:dev": "turbo run dev --filter=@al-ummah/web",
     "web:build": "turbo run build --filter=@al-ummah/web",
     "web:deploy": "turbo run deploy --filter=@al-ummah/web",
+    "web:deploy:qa": "turbo run deploy:qa --filter=@al-ummah/web",
     "web:deploy:production": "turbo run deploy:production --filter=@al-ummah/web",
     "api:dev": "turbo run dev --filter=@al-ummah/api-videos",
     "api:build": "turbo run build --filter=@al-ummah/api-videos",
     "api:deploy": "turbo run deploy --filter=@al-ummah/api-videos",
+    "api:deploy:qa": "turbo run deploy:qa --filter=@al-ummah/api-videos",
     "processor:dev": "turbo run dev --filter=@al-ummah/processor",
     "processor:build": "turbo run build --filter=@al-ummah/processor",
     "processor:deploy": "turbo run deploy --filter=@al-ummah/processor",
+    "processor:deploy:qa": "turbo run deploy:qa --filter=@al-ummah/processor",
     "websocket:dev": "turbo run dev --filter=@al-ummah/websocket-server",
     "websocket:build": "turbo run build --filter=@al-ummah/websocket-server",
     "websocket:deploy": "turbo run deploy --filter=@al-ummah/websocket-server",
-    "deploy:all": "pnpm run web:deploy:production && pnpm run api:deploy && pnpm run processor:deploy && pnpm run websocket:deploy"
+    "websocket:deploy:qa": "turbo run deploy:qa --filter=@al-ummah/websocket-server",
+    "admin:dev": "turbo run dev --filter=@al-ummah/admin-api",
+    "admin:build": "turbo run build --filter=@al-ummah/admin-api",
+    "admin:deploy": "turbo run deploy --filter=@al-ummah/admin-api",
+    "admin:deploy:qa": "turbo run deploy:qa --filter=@al-ummah/admin-api",
+    "admin-web:dev": "turbo run dev --filter=@al-ummah/admin-web",
+    "admin-web:build": "turbo run build --filter=@al-ummah/admin-web",
+    "admin-web:deploy:qa": "turbo run deploy:qa --filter=@al-ummah/admin-web",
+    "deploy:all": "pnpm run web:deploy:production && pnpm run api:deploy && pnpm run processor:deploy && pnpm run websocket:deploy && pnpm run admin:deploy",
+    "deploy:qa": "pnpm run web:deploy:qa && pnpm run api:deploy:qa && pnpm run processor:deploy:qa && pnpm run websocket:deploy:qa && pnpm run admin:deploy:qa && pnpm run admin-web:deploy:qa"
   },
   "devDependencies": {
+    "tsx": "^4.20.6",
     "turbo": "^2.6.0",
     "typescript": "5.9.3",
     "wrangler": "^4.46.0"

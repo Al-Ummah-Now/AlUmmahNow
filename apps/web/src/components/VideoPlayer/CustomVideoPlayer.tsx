@@ -41,6 +41,7 @@
  */
 
 'use client';
+import { logger } from '@/lib/logger-client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
@@ -144,7 +145,7 @@ export default function CustomVideoPlayer({
   // WebSocket integration for real-time metrics
   // Memoize onError to prevent re-creating on every render
   const handleWebSocketError = useCallback((error: Error) => {
-    console.error('[CustomVideoPlayer] WebSocket error:', error);
+    logger.error('[CustomVideoPlayer] WebSocket error:', error);
   }, []);
 
   const { viewerCount, isConnected: wsConnected } = useVideoWebSocket({
@@ -171,7 +172,7 @@ export default function CustomVideoPlayer({
   // Log saved progress for debugging (will be used in Issue #58 for resume UI)
   useEffect(() => {
     if (savedProgress && process.env.NODE_ENV === 'development') {
-      console.log('[CustomVideoPlayer] Saved watch progress:', savedProgress);
+      logger.debug('[CustomVideoPlayer] Saved watch progress:', savedProgress);
     }
   }, [savedProgress]);
 
@@ -193,7 +194,7 @@ export default function CustomVideoPlayer({
 
       setCurrentError(null);
     } catch (err) {
-      console.error('[CustomVideoPlayer] Source change error:', err);
+      logger.error('[CustomVideoPlayer] Source change error:', err);
     }
   }, [onSourceChange]);
 
@@ -213,8 +214,8 @@ export default function CustomVideoPlayer({
     );
 
     setCurrentError(categorizedError);
-    console.error('[CustomVideoPlayer] Error:', categorizedError);
-    console.error('[CustomVideoPlayer] Error Details (JSON):', JSON.stringify(categorizedError, null, 2));
+    logger.error('[CustomVideoPlayer] Error:', categorizedError);
+    logger.error('[CustomVideoPlayer] Error Details (JSON):', JSON.stringify(categorizedError, null, 2));
 
     // Track error in analytics
     analyticsRef.current?.trackError({
@@ -291,18 +292,18 @@ export default function CustomVideoPlayer({
     // DON'T dispose the player here - let the cleanup useEffect handle it
     // This prevents issues with React Strict Mode's double-mount cycle
     if (!videoElement) {
-      console.log('[CustomVideoPlayer] Ref callback called with null (likely Strict Mode), skipping disposal');
+      logger.debug('[CustomVideoPlayer] Ref callback called with null (likely Strict Mode), skipping disposal');
       return;
     }
 
     // Prevent double initialization
     if (playerRef.current || isInitializingRef.current) {
-      console.log('[CustomVideoPlayer] Player already initialized or initializing, skipping');
+      logger.debug('[CustomVideoPlayer] Player already initialized or initializing, skipping');
       return;
     }
 
     isInitializingRef.current = true;
-    console.log('[CustomVideoPlayer] Initializing player...');
+    logger.debug('[CustomVideoPlayer] Initializing player...');
 
     try {
       // Initialize error handler (Phase 1.4)
@@ -385,7 +386,7 @@ export default function CustomVideoPlayer({
           const isFullscreen = extPlayer.isFullscreen();
           analyticsRef.current?.trackFullscreenChange(isFullscreen);
           lockOrientationLandscape(isFullscreen).catch((err) => {
-            console.error('[CustomVideoPlayer] Orientation lock failed:', err);
+            logger.error('[CustomVideoPlayer] Orientation lock failed:', err);
           });
         });
 
@@ -558,7 +559,7 @@ export default function CustomVideoPlayer({
           } catch (err) {
             // Quality levels API not available, skip quality tracking
             if (process.env.NODE_ENV === 'development') {
-              console.log('[CustomVideoPlayer] Quality levels API not available:', err);
+              logger.debug('[CustomVideoPlayer] Quality levels API not available:', err);
             }
           }
         }
@@ -586,7 +587,7 @@ export default function CustomVideoPlayer({
 
     // Only update if the source actually changed
     if (currentSrc && currentSrc !== newSrc) {
-      console.log(`[CustomVideoPlayer] Video ID changed, updating source to ${videoId}`);
+      logger.debug(`[CustomVideoPlayer] Video ID changed, updating source to ${videoId}`);
 
       // Reset quartiles for new video
       quartilesFiredRef.current.clear();
@@ -628,17 +629,17 @@ export default function CustomVideoPlayer({
       // the player because the element will be re-attached during the second mount.
       // Only dispose when this is a TRUE unmount (component being removed from tree).
       if (!videoElementRef.current) {
-        console.log('[CustomVideoPlayer] Cleanup skipped - video element ref is null (likely Strict Mode simulated unmount)');
+        logger.debug('[CustomVideoPlayer] Cleanup skipped - video element ref is null (likely Strict Mode simulated unmount)');
         return;
       }
 
       // Only cleanup if player was actually initialized
       if (!playerRef.current) {
-        console.log('[CustomVideoPlayer] Cleanup skipped - player not initialized');
+        logger.debug('[CustomVideoPlayer] Cleanup skipped - player not initialized');
         return;
       }
 
-      console.log('[CustomVideoPlayer] Component unmounting, cleaning up...');
+      logger.debug('[CustomVideoPlayer] Component unmounting, cleaning up...');
       isInitializingRef.current = false;
 
       // Cleanup analytics

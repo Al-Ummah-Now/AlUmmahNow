@@ -3,6 +3,8 @@
  * Utility to send notifications to the WebSocket server from other services
  */
 
+import { logger } from './lib/logger';
+
 /**
  * Send a notification to the WebSocket server
  * This will broadcast the message to all clients subscribed to the channel
@@ -26,7 +28,7 @@ export async function sendWebSocketNotification(
 
     return response.ok;
   } catch (error) {
-    console.error('Failed to send WebSocket notification:', error);
+    logger.error('Failed to send WebSocket notification:', error);
     return false;
   }
 }

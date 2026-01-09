@@ -1,10 +1,11 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import { Playlist, ResponseError } from "../../lib/types";
+import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class PlaylistDelete extends OpenAPIRoute {
+export class PlaylistDelete extends AuthenticatedRoute {
     schema = {
         tags: ["Playlists"],
         summary: "Delete a Playlist",
@@ -14,7 +15,6 @@ export class PlaylistDelete extends OpenAPIRoute {
             }),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
-				userId: Str({ description: "User ID" }),
 			}),
         },
         responses: {
@@ -47,16 +47,17 @@ export class PlaylistDelete extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated playlist ID
         const { id } = request.params;
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
 
         // Fetch the playlist first to check ownership and privacy
-        const bucket = env.playlists;
+        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof Playlist>;
         const repository = new R2Repository<PlaylistType>(bucket);
         const playlist = await repository.getObject(id);
@@ -83,6 +84,15 @@ export class PlaylistDelete extends OpenAPIRoute {
                 error: "Unauthorized",
             }, 403);
         }
+
+        // Send queue message for playlist deletion
+        const queue = new Queue(c.env.queue);
+        await queue.send(MessageType.PlaylistDelete, {
+            playlistId: id,
+            userId: userId,
+            channelId: channelId,
+            timestamp: new Date().toISOString(),
+        });
 
         // Delete the playlist from the R2 bucket
         await repository.deleteObject(id);

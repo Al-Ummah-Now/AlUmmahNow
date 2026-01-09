@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger-server';
+
 /**
  * Client-side authentication token utilities
  *
@@ -19,15 +21,22 @@ export function getClientAuthToken(): string | null {
 
   try {
     const cookies = document.cookie.split(';');
+    logger.info('[getClientAuthToken] All cookies:', document.cookie);
+    logger.info('[getClientAuthToken] Parsed cookies:', cookies);
+
     for (const cookie of cookies) {
       const [name, value] = cookie.trim().split('=');
+      logger.info('[getClientAuthToken] Checking cookie:', { name, hasValue: !!value });
       if (name === 'access_token') {
-        return decodeURIComponent(value);
+        const token = decodeURIComponent(value);
+        logger.info('[getClientAuthToken] Found access_token, length:', token?.length);
+        return token;
       }
     }
+    logger.warn('[getClientAuthToken] access_token cookie not found');
     return null;
   } catch (error) {
-    console.error('[getClientAuthToken] Failed to read token from cookies:', error);
+    logger.error('[getClientAuthToken] Failed to read token from cookies:', error);
     return null;
   }
 }

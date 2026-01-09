@@ -1,13 +1,13 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Playlist as BusinessPlaylist, Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { PlaylistView } from "../../lib/model/view";
 import { transformPlaylistToView } from "../../lib/transformations";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { AuthenticatedRoute, AppContext } from "../../base";
 
-export class PlaylistAddVideo extends OpenAPIRoute {
+export class PlaylistAddVideo extends AuthenticatedRoute {
     schema = {
         tags: ["Playlists"],
         summary: "Add a video to a playlist",
@@ -17,7 +17,6 @@ export class PlaylistAddVideo extends OpenAPIRoute {
             }),
             headers: z.object({
                 channelId: Str({ description: "Channel ID" }),
-                userId: Str({ description: "User ID" }),
             }),
             body: {
                 content: {
@@ -70,17 +69,18 @@ export class PlaylistAddVideo extends OpenAPIRoute {
         },
     };
 
-    async handle(c) {
+    async handle(c: AppContext) {
         // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
 
         // Retrieve the validated parameters
         const { id } = request.params;
-        const { channelId, userId } = request.headers;
+        const { channelId } = request.headers;
+        const userId = this.getUserId(c);
         const { videoId } = request.body;
 
         // Get existing playlist
-        const playlistsBucket = env.playlists;
+        const playlistsBucket = c.env.playlists;
         type PlaylistType = z.infer<typeof BusinessPlaylist>;
         const playlistRepository = new R2Repository<PlaylistType>(playlistsBucket);
         
@@ -101,7 +101,7 @@ export class PlaylistAddVideo extends OpenAPIRoute {
         }
 
         // Verify video exists
-        const videosBucket = env.videos;
+        const videosBucket = c.env.videos;
         type VideoType = z.infer<typeof BusinessVideo>;
         const videoRepository = new R2Repository<VideoType>(videosBucket);
         
@@ -132,7 +132,7 @@ export class PlaylistAddVideo extends OpenAPIRoute {
         await playlistRepository.putObject(id, updatedPlaylist);
 
         // Send queue message for playlist add
-        const queue = new Queue();
+        const queue = new Queue(c.env.queue);
         await queue.send(MessageType.PlaylistAdd, {
             playlistId: id,
             videoId: videoId,

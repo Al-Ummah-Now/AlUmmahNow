@@ -2,13 +2,15 @@
  * Performance Monitor Tests - Simplified Version
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- Test file requires mocking global objects */
+
 // Mock performance before importing module
 const mockPerformanceNow = jest.fn();
 const mockPerformanceMark = jest.fn();
 const mockPerformanceMeasure = jest.fn();
 
 // Mock performance observer
-const mockPerfObserver = jest.fn().mockImplementation((_callback) => ({
+const mockPerfObserver = jest.fn().mockImplementation(() => ({
   observe: jest.fn(),
   disconnect: jest.fn(),
   takeRecords: jest.fn(() => []),
@@ -184,12 +186,12 @@ describe('VideoPerformanceMonitor', () => {
       // Mock server environment
       const originalWindow = global.window;
       delete (global as any).window;
-      
+
       const serverMonitor = new VideoPerformanceMonitor(mockPlayer);
       serverMonitor.start();
-      
+
       expect(serverMonitor.getMetrics().fps).toBe(0);
-      
+
       // Restore window
       global.window = originalWindow;
     });

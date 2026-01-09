@@ -17,7 +17,7 @@ All apps share TypeScript types via `@al-ummah/shared-types` workspace package.
 
 ## Development Process
 
-**CRITICAL**: Before writing ANY code, read and follow the development process in `BEFORE YOU CODE.MD`.
+**CRITICAL**: Before writing ANY code, read and follow the development process in `BEFORE_YOU_CODE.md`.
 
 This file contains the mandatory 10-step development workflow that MUST be followed for all development work:
 
@@ -32,7 +32,7 @@ This file contains the mandatory 10-step development workflow that MUST be follo
 9. **REVIEW CODE** - Self-review before opening PRs
 10. **OPEN PRs** - With proper descriptions and all checks passing
 
-**See `BEFORE YOU CODE.MD` for complete details, checklists, and code examples.**
+**See `BEFORE_YOU_CODE.md` for complete details, checklists, and code examples.**
 
 ## Code Quality Standards
 
@@ -91,6 +91,234 @@ function fetchData() {
 
 **Enforcement**: Code reviews will reject PRs containing TODO comments.
 
+### Logging Standards
+
+**CRITICAL**: Use ONLY the centralized logger libraries. NEVER use `console.log`, `console.error`, or other console methods.
+
+**Rationale**: Centralized logging provides structured log aggregation, filtering, and viewing through the log service. Console logging bypasses this system and creates maintenance issues.
+
+#### Server-Side Logging (API, Processor, WebSocket)
+
+Use the server logger library for all backend applications:
+
+```typescript
+import { logger } from '@/lib/logger'; // or appropriate path
+
+// Structured logging with context
+logger.info('Video created', { videoId, userId, channelId });
+logger.error('Failed to process queue message', { error, messageId });
+logger.warn('Rate limit approaching', { userId, requestCount });
+logger.debug('Cache hit', { key, ttl });
+```
+
+#### Client-Side Logging (Web App)
+
+Use the client logger library for all frontend code:
+
+```typescript
+import { logger } from '@/lib/logger-client'; // or appropriate path
+
+// Client-side structured logging
+logger.info('Page viewed', { route, userId });
+logger.error('API request failed', { endpoint, status, error });
+logger.warn('Slow network detected', { latency });
+```
+
+#### Viewing Logs
+
+**Log Service** runs at http://localhost:3089/ and provides centralized log aggregation from all apps.
+
+**Real-Time Log Streaming (SSE)**:
+```bash
+# Stream all logs in real-time
+curl -N http://localhost:3089/logs/stream/realtime
+
+# Filter by log level
+curl -N "http://localhost:3089/logs/stream/realtime?level=error"
+
+# Filter by app
+curl -N "http://localhost:3089/logs/stream/realtime?app=api-videos"
+
+# Combine filters
+curl -N "http://localhost:3089/logs/stream/realtime?level=error&app=api-videos"
+```
+
+**Web Viewer** (recommended for visual monitoring):
+- URL: http://localhost:3089/viewer/viewer.html
+- Features: Real-time updates, color-coded levels, auto-scroll, filtering
+- Dark theme optimized for terminal aesthetics
+
+**Snapshot API** (for one-time queries):
+```bash
+# Get last 100 lines (all apps combined)
+curl "http://localhost:3089/logs/stream?lines=100&tail=true" | jq
+
+# Get last 50 ERROR logs
+curl "http://localhost:3089/logs/stream?lines=50&level=error&tail=true" | jq
+
+# Get logs from specific app
+curl "http://localhost:3089/logs/api-videos?lines=200" | jq
+```
+
+**Available Filters**:
+- `level`: debug, info, warn, error
+- `app`: web, api-videos, processor, websocket, log-service
+- `lines`: number of lines to return (default: 100)
+- `tail`: true (newest first) or false (oldest first)
+
+**API Documentation**: http://localhost:3089/ (Swagger UI)
+
+#### Enforcement
+
+❌ **WRONG - Never do this:**
+```typescript
+console.log('User logged in');
+console.error('Something went wrong', error);
+console.warn('Deprecated feature used');
+```
+
+✅ **CORRECT - Always do this:**
+```typescript
+logger.info('User logged in', { userId, timestamp });
+logger.error('Authentication failed', { error, userId, attempt });
+logger.warn('Deprecated API endpoint accessed', { endpoint, userId });
+```
+
+### Internationalization (i18n) Standards
+
+**CRITICAL**: Always use i18n for all user-facing text. NEVER hardcode strings.
+
+**Rationale**: The platform supports bilingual content (English/Arabic) with RTL support. All text must be translatable.
+
+#### Server-Side i18n (API Responses)
+
+Use i18n for API error messages and user-facing responses:
+
+```typescript
+import { t } from '@/lib/i18n';
+
+// Error messages
+return c.json({
+  success: false,
+  error: t('errors.video_not_found'),
+  details: t('errors.video_not_found_description', { videoId })
+});
+
+// Success messages
+return c.json({
+  success: true,
+  message: t('success.video_created')
+});
+```
+
+#### Client-Side i18n (React Components)
+
+**MANDATORY**: Use the `useLanguage()` hook in ALL client pages and components:
+
+```typescript
+import { useLanguage } from '@/hooks/useLanguage';
+
+export default function VideoPage() {
+  const { t, locale, isRTL } = useLanguage();
+
+  return (
+    <div dir={isRTL ? 'rtl' : 'ltr'}>
+      <h1>{t('video.title')}</h1>
+      <p>{t('video.description')}</p>
+      <button>{t('common.save')}</button>
+    </div>
+  );
+}
+```
+
+#### Translation Keys
+
+Organize translation keys by feature:
+
+```typescript
+// en/common.json
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "video": {
+    "title": "Video Title",
+    "description": "Description",
+    "upload": "Upload Video"
+  },
+  "errors": {
+    "video_not_found": "Video not found",
+    "unauthorized": "You are not authorized"
+  }
+}
+
+// ar/common.json
+{
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف"
+  },
+  "video": {
+    "title": "عنوان الفيديو",
+    "description": "الوصف",
+    "upload": "رفع فيديو"
+  },
+  "errors": {
+    "video_not_found": "الفيديو غير موجود",
+    "unauthorized": "غير مصرح لك"
+  }
+}
+```
+
+#### Enforcement
+
+❌ **WRONG - Never do this:**
+```typescript
+// Hardcoded strings
+<h1>Featured Videos</h1>
+<button>Save</button>
+return c.json({ error: 'Video not found' });
+```
+
+✅ **CORRECT - Always do this:**
+```typescript
+// Using i18n
+const { t } = useLanguage();
+<h1>{t('video.featured_videos')}</h1>
+<button>{t('common.save')}</button>
+return c.json({ error: t('errors.video_not_found') });
+```
+
+#### Special Cases
+
+**Dynamic content with placeholders:**
+```typescript
+// English: "Video {title} was created by {author}"
+// Arabic: "تم إنشاء الفيديو {title} بواسطة {author}"
+t('video.created_by', { title: video.title, author: video.author })
+```
+
+**RTL-aware styling:**
+```typescript
+const { isRTL } = useLanguage();
+
+// Adjust layout for RTL
+<div className={isRTL ? 'flex-row-reverse' : 'flex-row'}>
+  {/* Content */}
+</div>
+```
+
+**Date and number formatting:**
+```typescript
+import { formatDate, formatNumber } from '@/lib/i18n-helpers';
+
+const formattedDate = formatDate(date, locale); // Locale-aware formatting
+const formattedCount = formatNumber(count, locale); // e.g., "١٢٣" in Arabic
+```
+
 ## Monorepo Structure
 
 ```
@@ -121,10 +349,10 @@ pnpm --filter @al-ummah/shared-types build # Build shared types (required first)
 ### Development
 ```bash
 pnpm dev                 # Run all apps in parallel
-pnpm web:dev             # Web app: http://localhost:3000
-pnpm api:dev             # API: http://127.0.0.1:8686
-pnpm processor:dev       # Processor: http://localhost:8787
-pnpm websocket:dev       # WebSocket server: http://localhost:8787
+pnpm web:dev             # Web app: http://localhost:3001
+pnpm api:dev             # API: http://127.0.0.1:3086
+pnpm processor:dev       # Processor: http://localhost:3088
+pnpm websocket:dev       # WebSocket server: http://localhost:3087
 ```
 
 ### Build & Validation
@@ -450,7 +678,7 @@ Each app has its own detailed documentation:
 2. Register in `apps/api-videos/src/index.ts`
 3. Add authentication middleware if needed
 4. Use `addAuthToSchema()` helper for OpenAPI docs
-5. Test with Swagger UI at http://127.0.0.1:8686/
+5. Test with Swagger UI at http://127.0.0.1:3086/
 
 ### Adding a New Page (Bilingual)
 
@@ -458,7 +686,7 @@ Each app has its own detailed documentation:
 2. Create Arabic version in `apps/web/src/app/ar/{route}/page.tsx`
 3. Create component in `apps/web/src/components/{name}/index.tsx` (LTR)
 4. Create RTL variant in `apps/web/src/components/{name}/rtl/index.tsx`
-5. Test both routes: http://localhost:3000/en/{route} and /ar/{route}
+5. Test both routes: http://localhost:3001/en/{route} and /ar/{route}
 
 ### Deploying to Production
 
@@ -691,13 +919,13 @@ For current information, always refer to:
   working on.
   2. Always use port-specific killing:
   # Target ONLY the specific ports for this project
-  lsof -ti:3000,3001,3086,3087,3088 | xargs kill -9
+  lsof -ti:3001,3086,3087,3088,3089 | xargs kill -9
   3. Prefer the project's own restart script when available:
   bash /home/meywd/AlUmmahNow/restart-dev.sh
   4. Always ask before restarting services if I'm uncertain about what's
   running.
   5. Check what's running first before killing anything:
-  lsof -i:3000,3001,3086,3087,3088  # See what's on these ports
+  lsof -i:3001,3086,3087,3088,3089  # See what's on these ports
 
   Why I Made This Mistake:
 

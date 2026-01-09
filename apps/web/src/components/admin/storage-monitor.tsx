@@ -12,6 +12,7 @@
  */
 
 'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect } from 'react';
 import { StorageManager } from '@/lib/utils/storage';
@@ -52,7 +53,7 @@ export function StorageMonitor() {
       const storageStats = StorageManager.getStorageStats();
       setStats(storageStats);
     } catch (error) {
-      console.error('[StorageMonitor] Failed to load stats:', error);
+      logger.error('[StorageMonitor] Failed to load stats:', error);
     } finally {
       setIsLoading(false);
     }
@@ -84,7 +85,7 @@ export function StorageMonitor() {
       // Reload stats
       loadStats();
     } catch (error) {
-      console.error('[StorageMonitor] Cleanup failed:', error);
+      logger.error('[StorageMonitor] Cleanup failed:', error);
       alert('Cleanup failed. Check console for details.');
     }
   };
@@ -106,7 +107,7 @@ export function StorageMonitor() {
           alert('All localStorage data has been cleared.');
           loadStats();
         } catch (error) {
-          console.error('[StorageMonitor] Clear all failed:', error);
+          logger.error('[StorageMonitor] Clear all failed:', error);
           alert('Failed to clear storage. Check console for details.');
         }
       }
@@ -269,7 +270,7 @@ export function StorageHealthIndicator() {
         setPercentage(stats.percentage);
         setIsWarning(stats.isWarning);
       } catch (error) {
-        console.error('[StorageHealthIndicator] Failed to check health:', error);
+        logger.error('[StorageHealthIndicator] Failed to check health:', error);
       }
     };
 

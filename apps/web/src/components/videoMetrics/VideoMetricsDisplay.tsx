@@ -1,9 +1,9 @@
-'use client';
+import { logger } from '@/lib/logger-client';
 
 import React, { useState } from 'react';
 import { useRealTimeVideoMetrics, useRealTimePresence } from '@/hooks/useRealTimeVideoMetrics';
 import { Eye, Heart, MessageCircle, Users, ThumbsDown } from 'lucide-react';
-import { VideosAPI } from '@/lib/api/videos';
+import * as VideosAPI from '@/lib/api/videos';
 import { useAuth } from '@/components/AuthProvider/authContext';
 
 interface VideoMetricsDisplayProps {
@@ -13,7 +13,7 @@ interface VideoMetricsDisplayProps {
   initialLikesCount?: number;
   initialDislikesCount?: number;
   initialCommentsCount?: number;
-  onMetricsUpdate?: (metrics: any) => void;
+  onMetricsUpdate?: (metrics: unknown) => void;
 }
 
 export function VideoMetricsDisplay({
@@ -30,7 +30,7 @@ export function VideoMetricsDisplay({
   const [isDisliked, setIsDisliked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { metrics, isConnected } = useRealTimeVideoMetrics({
+  const { metrics, isConnected, updateMetrics } = useRealTimeVideoMetrics({
     videoId,
     initialMetrics: {
       viewCount: initialViewCount,
@@ -64,20 +64,40 @@ export function VideoMetricsDisplay({
       };
 
       if (isLiked) {
-        await VideosAPI.unlike(videoId, headers);
+        // Optimistically update UI before API call
+        updateMetrics({ likesCount: Math.max(0, metrics.likesCount - 1) });
         setIsLiked(false);
-        console.log('👍 Video unliked');
+
+        await VideosAPI.unlikeVideo(videoId, headers);
+        logger.debug('👍 Video unliked');
       } else {
+        // If currently disliked, remove dislike first
         if (isDisliked) {
-          await VideosAPI.removeDislike(videoId, headers);
+          updateMetrics({
+            dislikesCount: Math.max(0, metrics.dislikesCount - 1),
+            likesCount: metrics.likesCount + 1
+          });
           setIsDisliked(false);
+          await VideosAPI.removeVideoDislike(videoId, headers);
+        } else {
+          // Just add like
+          updateMetrics({ likesCount: metrics.likesCount + 1 });
         }
-        await VideosAPI.like(videoId, headers);
+
         setIsLiked(true);
-        console.log('👍 Video liked');
+        await VideosAPI.likeVideo(videoId, headers);
+        logger.debug('👍 Video liked');
       }
     } catch (error) {
-      console.error('Failed to toggle like:', error);
+      logger.error('Failed to toggle like:', error);
+      // Revert optimistic update on error
+      if (isLiked) {
+        updateMetrics({ likesCount: metrics.likesCount + 1 });
+        setIsLiked(true);
+      } else {
+        updateMetrics({ likesCount: Math.max(0, metrics.likesCount - 1) });
+        setIsLiked(false);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -94,20 +114,40 @@ export function VideoMetricsDisplay({
       };
 
       if (isDisliked) {
-        await VideosAPI.removeDislike(videoId, headers);
+        // Optimistically update UI before API call
+        updateMetrics({ dislikesCount: Math.max(0, metrics.dislikesCount - 1) });
         setIsDisliked(false);
-        console.log('👎 Video dislike removed');
+
+        await VideosAPI.removeVideoDislike(videoId, headers);
+        logger.debug('👎 Video dislike removed');
       } else {
+        // If currently liked, remove like first
         if (isLiked) {
-          await VideosAPI.unlike(videoId, headers);
+          updateMetrics({
+            likesCount: Math.max(0, metrics.likesCount - 1),
+            dislikesCount: metrics.dislikesCount + 1
+          });
           setIsLiked(false);
+          await VideosAPI.unlikeVideo(videoId, headers);
+        } else {
+          // Just add dislike
+          updateMetrics({ dislikesCount: metrics.dislikesCount + 1 });
         }
-        await VideosAPI.dislike(videoId, headers);
+
         setIsDisliked(true);
-        console.log('👎 Video disliked');
+        await VideosAPI.dislikeVideo(videoId, headers);
+        logger.debug('👎 Video disliked');
       }
     } catch (error) {
-      console.error('Failed to toggle dislike:', error);
+      logger.error('Failed to toggle dislike:', error);
+      // Revert optimistic update on error
+      if (isDisliked) {
+        updateMetrics({ dislikesCount: metrics.dislikesCount + 1 });
+        setIsDisliked(true);
+      } else {
+        updateMetrics({ dislikesCount: Math.max(0, metrics.dislikesCount - 1) });
+        setIsDisliked(false);
+      }
     } finally {
       setIsLoading(false);
     }

@@ -2,9 +2,9 @@
  * Comment types
  */
 
-import { Timestamps, SoftDelete } from './common';
+import { Timestamps, SoftDelete, Moderation } from './common';
 
-export interface Comment extends Timestamps, SoftDelete {
+export interface Comment extends Timestamps, SoftDelete, Moderation {
   id: string;
   videoId: string;
   userId: string;

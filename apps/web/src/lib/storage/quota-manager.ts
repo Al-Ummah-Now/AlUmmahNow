@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger-server';
+
 /**
  * localStorage Quota Management System
  *
@@ -74,7 +76,7 @@ export class LocalStorageQuotaManager {
         }
       }
     } catch (error) {
-      console.error('Error calculating localStorage usage:', error);
+      logger.error('Error calculating localStorage usage:', error);
     }
     return totalSize;
   }
@@ -140,12 +142,12 @@ export class LocalStorageQuotaManager {
 
       if (removedCount > 0) {
         localStorage.setItem(storageKey, JSON.stringify(parsed));
-        console.log(`[QuotaManager] Cleaned up ${removedCount} old assignments`);
+        logger.info(`[QuotaManager] Cleaned up ${removedCount} old assignments`);
       }
 
       return removedCount;
     } catch (error) {
-      console.error('[QuotaManager] Error during cleanup:', error);
+      logger.error('[QuotaManager] Error during cleanup:', error);
       return 0;
     }
   }
@@ -200,12 +202,12 @@ export class LocalStorageQuotaManager {
 
       if (removedCount > 0) {
         localStorage.setItem(storageKey, JSON.stringify(parsed));
-        console.log(`[QuotaManager] Evicted ${removedCount} LRU items`);
+        logger.info(`[QuotaManager] Evicted ${removedCount} LRU items`);
       }
 
       return removedCount;
     } catch (error) {
-      console.error('[QuotaManager] Error during LRU eviction:', error);
+      logger.error('[QuotaManager] Error during LRU eviction:', error);
       return 0;
     }
   }
@@ -223,7 +225,7 @@ export class LocalStorageQuotaManager {
       const parsed = JSON.parse(data);
       return parsed[userId] ? Object.keys(parsed[userId]).length : 0;
     } catch (error) {
-      console.error('[QuotaManager] Error counting user items:', error);
+      logger.error('[QuotaManager] Error counting user items:', error);
       return 0;
     }
   }
@@ -254,7 +256,7 @@ export class LocalStorageQuotaManager {
       // Check item size
       const itemSize = this.estimateSize(key) + this.estimateSize(value);
       if (itemSize > MAX_ITEM_SIZE) {
-        console.error(`[QuotaManager] Item size ${itemSize} exceeds limit ${MAX_ITEM_SIZE}`);
+        logger.error(`[QuotaManager] Item size ${itemSize} exceeds limit ${MAX_ITEM_SIZE}`);
         return {
           success: false,
           error: 'SIZE_LIMIT_EXCEEDED',
@@ -266,7 +268,7 @@ export class LocalStorageQuotaManager {
       if (opts.userId) {
         const userItemCount = this.countUserItems(key, opts.userId);
         if (userItemCount >= opts.maxUserItems) {
-          console.warn(`[QuotaManager] User ${opts.userId} has ${userItemCount} items, performing LRU eviction`);
+          logger.warn(`[QuotaManager] User ${opts.userId} has ${userItemCount} items, performing LRU eviction`);
           this.evictLRUItems(key, Math.floor(opts.maxUserItems * 0.8)); // Keep 80% of max
         }
       }
@@ -274,7 +276,7 @@ export class LocalStorageQuotaManager {
       // Check quota
       const quotaInfo = this.checkQuota(itemSize);
       if (!quotaInfo.available) {
-        console.warn(`[QuotaManager] Quota check failed, current usage: ${quotaInfo.estimatedUsage} bytes`);
+        logger.warn(`[QuotaManager] Quota check failed, current usage: ${quotaInfo.estimatedUsage} bytes`);
 
         // Attempt cleanup before failing
         if (opts.enableCleanup) {
@@ -300,7 +302,7 @@ export class LocalStorageQuotaManager {
       if (error instanceof DOMException &&
           (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
 
-        console.error('[QuotaManager] QuotaExceededError caught, attempting recovery');
+        logger.error('[QuotaManager] QuotaExceededError caught, attempting recovery');
 
         // Emergency cleanup
         if (opts.enableCleanup) {
@@ -310,10 +312,10 @@ export class LocalStorageQuotaManager {
           // Final retry
           try {
             localStorage.setItem(key, value);
-            console.log('[QuotaManager] Recovery successful after emergency cleanup');
+            logger.info('[QuotaManager] Recovery successful after emergency cleanup');
             return { success: true };
           } catch (retryError) {
-            console.error('[QuotaManager] Recovery failed:', retryError);
+            logger.error('[QuotaManager] Recovery failed:', retryError);
           }
         }
 
@@ -325,7 +327,7 @@ export class LocalStorageQuotaManager {
       }
 
       // Other storage errors
-      console.error('[QuotaManager] Storage error:', error);
+      logger.error('[QuotaManager] Storage error:', error);
       return {
         success: false,
         error: 'STORAGE_ERROR',
@@ -343,7 +345,7 @@ export class LocalStorageQuotaManager {
     try {
       return localStorage.getItem(key);
     } catch (error) {
-      console.error('[QuotaManager] Error getting item:', error);
+      logger.error('[QuotaManager] Error getting item:', error);
       return null;
     }
   }
@@ -358,7 +360,7 @@ export class LocalStorageQuotaManager {
       localStorage.removeItem(key);
       return true;
     } catch (error) {
-      console.error('[QuotaManager] Error removing item:', error);
+      logger.error('[QuotaManager] Error removing item:', error);
       return false;
     }
   }
@@ -379,7 +381,7 @@ export class LocalStorageQuotaManager {
         localStorage.setItem(storageKey, JSON.stringify(parsed));
       }
     } catch (error) {
-      console.error('[QuotaManager] Error updating last accessed time:', error);
+      logger.error('[QuotaManager] Error updating last accessed time:', error);
     }
   }
 

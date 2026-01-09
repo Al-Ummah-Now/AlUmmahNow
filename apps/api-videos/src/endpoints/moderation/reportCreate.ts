@@ -1,13 +1,15 @@
-import { Bool, OpenAPIRoute, Str } from "chanfana";
+import { AuthenticatedRoute, AppContext } from "../../base";
+import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Report as BusinessReport, ResponseError } from "../../lib/types";
 import { ReportInput } from "../../lib/model/input";
 import { ReportView } from "../../lib/model/view";
-import { env } from 'cloudflare:workers';
 import R2Repository from "../../lib/r2Repo";
+import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { logger } from '../../lib/logger';
 
-export class ReportCreate extends OpenAPIRoute {
+export class ReportCreate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Content Moderation"],
 		summary: "Report Content",
@@ -15,7 +17,6 @@ export class ReportCreate extends OpenAPIRoute {
 		request: {
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional(),
-				userId: Str({ description: "User ID (automatically set from JWT token)" }).optional(),
 			}),
 			body: {
 				content: {
@@ -74,16 +75,17 @@ export class ReportCreate extends OpenAPIRoute {
 		},
 	});
 
-	async handle(c) {
+	async handle(c: AppContext) {
 		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
 
-		const { channelId, userId } = request.headers;
+		const { channelId } = request.headers;
+		const userId = this.getUserId(c);
 		const inputReport = request.body;
 
 		try {
 			// Check if user has already reported this entity (prevent spam)
-			const bucket = env.reports; // Use dedicated reports bucket for reports storage
+			const bucket = c.env.reports; // Use dedicated reports bucket for reports storage
 			type ReportType = z.infer<typeof BusinessReport>;
 			const repository = new R2Repository<ReportType>(bucket);
 
@@ -121,10 +123,16 @@ export class ReportCreate extends OpenAPIRoute {
 			// Save the report to the repository
 			await repository.putObject(`report:${report.entityId}:${report.id}:${userId}`, report);
 
-			// TODO: In production, trigger content moderation workflow
-			// - Queue for automated analysis
-			// - Notify moderation team for severe violations
-			// - Update content visibility if needed
+			// Queue report for content moderation processing
+			const queue = new Queue(c.env.queue);
+			await queue.send(MessageType.ReportCreate, {
+				reportId: report.id,
+				entityType: report.entityType,
+				entityId: report.entityId,
+				reporterId: userId,
+				reason: report.reason,
+				timestamp: new Date().toISOString(),
+			});
 
 			// Transform to view model for response (excluding sensitive data)
 			const reportView: z.infer<typeof ReportView> = {
@@ -148,7 +156,7 @@ export class ReportCreate extends OpenAPIRoute {
 				result: { report: reportView },
 			};
 		} catch (error) {
-			console.error("Error creating report:", error);
+			logger.error("Error creating report:", error);
 			return c.json(
 				{
 					success: false,

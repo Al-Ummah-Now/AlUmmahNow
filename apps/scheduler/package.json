@@ -1,0 +1,27 @@
+{
+  "name": "@al-ummah/scheduler",
+  "version": "1.0.0",
+  "description": "Scheduled video publishing worker for Al Ummah Now",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --inspector-port 9235 --test-scheduled",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
+  },
+  "dependencies": {
+    "@al-ummah/shared-types": "workspace:*",
+    "@al-ummah/logger": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^20.0.0",
+    "eslint": "9.39.1",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.46.4",
+    "wrangler": "^3.103.0"
+  }
+}

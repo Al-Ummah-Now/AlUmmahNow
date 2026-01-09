@@ -8,6 +8,7 @@
 import type { SupportedLanguage, VideoPlayerTranslations } from '../types';
 import { EN_TRANSLATIONS, AR_TRANSLATIONS } from '../translations';
 
+
 /**
  * Translation map for supported languages
  */
@@ -25,7 +26,7 @@ const TRANSLATIONS: Record<SupportedLanguage, VideoPlayerTranslations> = {
  * @example
  * ```typescript
  * const translations = getTranslations('ar');
- * console.log(translations.player.loading); // "جاري تحميل مشغل الفيديو..."
+ * logger.info(translations.player.loading); // "جاري تحميل مشغل الفيديو..."
  * ```
  */
 export function getTranslations(

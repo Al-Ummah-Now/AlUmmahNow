@@ -1,10 +1,12 @@
 "use client";
 import React, { useState } from "react";
 import { useAuth } from "@/components/AuthProvider/authContext";
-import { ModerationAPI, ReportCreateRequest } from "@/lib/api/moderation";
+import * as ModerationAPI from "@/lib/api/moderation";
+import type { ReportCreateRequest } from "@/lib/api/moderation";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createApiHeaders } from "@/lib/utility";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface ReportContentButtonProps {
   contentType: 'video' | 'comment' | 'channel' | 'playlist';
@@ -21,6 +23,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
   className = "",
   children
 }) => {
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -41,12 +44,12 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
     e.preventDefault();
     
     if (!auth?.user) {
-      setError("You must be logged in to report content.");
+      setError(t.errors.loginRequired);
       return;
     }
 
     if (!reportForm.reason) {
-      setError("Please select a reason for reporting this content.");
+      setError(t.errors.reportReasonRequired);
       return;
     }
 
@@ -62,7 +65,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
         ...(reportForm.description && { description: reportForm.description }),
       };
 
-      const headers = createApiHeaders(auth.user, contentType === 'channel' ? contentId : undefined);
+      const headers = createApiHeaders(contentType === 'channel' ? contentId : undefined);
       await ModerationAPI.createReport(reportData, headers);
 
       setSuccess(true);

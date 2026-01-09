@@ -4,11 +4,22 @@ const nextConfig = {
     productionBrowserSourceMaps: true, // Enable source maps in production for better error tracking
 
     // Enable server-side source maps with webpack (more stable than Turbopack for Cloudflare Workers)
-    webpack: (config: any, { isServer }: { isServer: boolean }) => {
+    webpack: (config: Record<string, unknown>, { isServer }: { isServer: boolean }) => {
         if (isServer) {
             config.devtool = 'source-map';
         }
         return config;
+    },
+
+    // Empty turbopack config to silence Next.js 16 warning
+    turbopack: {},
+
+    // Increase body size limit for file uploads (default is 1MB)
+    // Server Actions have a 1MB limit by default - increase to 10MB for image uploads
+    experimental: {
+        serverActions: {
+            bodySizeLimit: '10mb',
+        },
     },
 
     images: {
@@ -18,49 +29,42 @@ const nextConfig = {
             hostname: "images.alummahnow.net",
             port: "",
             pathname: "**",
-            search: "",
           },
           {
             protocol: "https",
             hostname: "al-ummah-now-images.b-cdn.net",
             port: "",
             pathname: "**",
-            search: "",
           },
           {
             protocol: "https",
             hostname: "vz-215a1ffd-a5a.b-cdn.net",
             port: "",
             pathname: "**",
-            search: "",
           },
           {
             protocol: "https",
             hostname: "iframe.mediadelivery.net",
             port: "",
             pathname: "**",
-            search: "",
           },
           {
             protocol: "https",
             hostname: "cdn.alummahnow.net",
             port: "",
             pathname: "**",
-            search: "",
           },
           {
             protocol: "https",
             hostname: "stream.alummahnow.net",
             port: "",
             pathname: "**",
-            search: "",
           },
           {
             protocol: "https",
             hostname: "auth.alummahnow.net",
             port: "",
             pathname: "**",
-            search: "",
           },
         ],
       },
