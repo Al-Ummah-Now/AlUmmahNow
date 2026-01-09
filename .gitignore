@@ -69,4 +69,3 @@ logs/
 bmad/
 *.backup
 logs/
-.npmrc
