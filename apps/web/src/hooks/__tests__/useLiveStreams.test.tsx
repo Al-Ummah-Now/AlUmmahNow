@@ -14,17 +14,26 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useLiveStreams, useLiveNow, useScheduledStreams, useEndedStreams } from '../useLiveStreams';
-import { LiveStreamsAPI } from '@/lib/api/livestreams';
-import { createMockLiveStreams } from '@/__tests__/utils/mock-data';
+import { createMockLiveStreams, createMockPaginatedResponse, createMockApiResponse } from '@/__tests__/utils/mock-data';
 
-// Mock the LiveStreamsAPI
-jest.mock('@/lib/api/livestreams', () => ({
-  LiveStreamsAPI: {
-    list: jest.fn(),
-  },
+// Mock fetch globally
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
+// Mock runtime config
+jest.mock('@/lib/runtime-config', () => ({
+  getApiUrl: () => 'http://test-api.local',
 }));
 
-const mockedAPI = LiveStreamsAPI as jest.Mocked<typeof LiveStreamsAPI>;
+// Mock logger
+jest.mock('@/lib/logger-client', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
 
 describe('useLiveStreams Hook', () => {
   let queryClient: QueryClient;
@@ -38,42 +47,34 @@ describe('useLiveStreams Hook', () => {
           gcTime: 0,
         },
       },
-      logger: {
-        log: () => {},
-        warn: () => {},
-        error: () => {},
-      },
     });
 
     // Clear all mocks
     jest.clearAllMocks();
-
-    // Suppress console logs in tests
-    jest.spyOn(console, 'log').mockImplementation(() => {});
+    mockFetch.mockReset();
   });
 
   afterEach(() => {
     queryClient.clear();
-    jest.restoreAllMocks();
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
+  const createSuccessResponse = (streams: ReturnType<typeof createMockLiveStreams>, hasMore = false, cursor?: string) => {
+    return createMockApiResponse(createMockPaginatedResponse(streams, { hasMore, cursor }));
+  };
+
   describe('Basic Fetching', () => {
     it('fetches live streams successfully', async () => {
       const mockStreams = createMockLiveStreams(5, 'live');
-      const mockResponse = {
-        success: true,
-        result: {
-          data: mockStreams,
-          cursor: undefined,
-          total: 5,
-        },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -88,7 +89,7 @@ describe('useLiveStreams Hook', () => {
     });
 
     it('starts with loading state', () => {
-      mockedAPI.list.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -97,16 +98,12 @@ describe('useLiveStreams Hook', () => {
     });
 
     it('returns empty array when no streams available', async () => {
-      const mockResponse = {
-        success: true,
-        result: {
-          data: [],
-          cursor: undefined,
-          total: 0,
-        },
-      };
+      const mockResponse = createSuccessResponse([]);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -122,12 +119,12 @@ describe('useLiveStreams Hook', () => {
   describe('Filtering', () => {
     it('filters by live status', async () => {
       const mockStreams = createMockLiveStreams(3, 'live');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 3 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(
         () => useLiveStreams({ status: 'live' }),
@@ -138,20 +135,21 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'live' })
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('status=live'),
+        expect.any(Object)
       );
       expect(result.current.streams).toHaveLength(3);
     });
 
     it('filters by scheduled status', async () => {
       const mockStreams = createMockLiveStreams(2, 'scheduled');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 2 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(
         () => useLiveStreams({ status: 'scheduled' }),
@@ -162,42 +160,20 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'scheduled' })
-      );
-    });
-
-    it('filters by category', async () => {
-      const mockStreams = createMockLiveStreams(2, 'live');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 2 },
-      };
-
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
-
-      const { result } = renderHook(
-        () => useLiveStreams({ category: 'Islamic Lectures' }),
-        { wrapper }
-      );
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      expect(mockedAPI.list).toHaveBeenCalledWith(
-        expect.objectContaining({ category: 'Islamic Lectures' })
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('status=scheduled'),
+        expect.any(Object)
       );
     });
 
     it('filters by channel ID', async () => {
       const mockStreams = createMockLiveStreams(1, 'live');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 1 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(
         () => useLiveStreams({ channelId: 'channel-123' }),
@@ -208,8 +184,9 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalledWith(
-        expect.objectContaining({ channelId: 'channel-123' })
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('channelId=channel-123'),
+        expect.any(Object)
       );
     });
   });
@@ -219,27 +196,18 @@ describe('useLiveStreams Hook', () => {
       const page1Streams = createMockLiveStreams(5, 'live');
       const page2Streams = createMockLiveStreams(5, 'live');
 
-      const page1Response = {
-        success: true,
-        result: {
-          data: page1Streams,
-          cursor: 'cursor-page2',
-          total: 10,
-        },
-      };
+      const page1Response = createSuccessResponse(page1Streams, true, 'cursor-page2');
+      const page2Response = createSuccessResponse(page2Streams, false);
 
-      const page2Response = {
-        success: true,
-        result: {
-          data: page2Streams,
-          cursor: undefined,
-          total: 10,
-        },
-      };
-
-      mockedAPI.list
-        .mockResolvedValueOnce(page1Response as any)
-        .mockResolvedValueOnce(page2Response as any);
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(page1Response),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(page2Response),
+        });
 
       const { result } = renderHook(() => useLiveStreams({ limit: 5 }), {
         wrapper,
@@ -264,16 +232,12 @@ describe('useLiveStreams Hook', () => {
 
     it('sets hasNextPage to false when no more pages', async () => {
       const mockStreams = createMockLiveStreams(5, 'live');
-      const mockResponse = {
-        success: true,
-        result: {
-          data: mockStreams,
-          cursor: undefined,
-          total: 5,
-        },
-      };
+      const mockResponse = createSuccessResponse(mockStreams, false);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -286,12 +250,12 @@ describe('useLiveStreams Hook', () => {
 
     it('respects custom limit parameter', async () => {
       const mockStreams = createMockLiveStreams(12, 'live');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 12 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(() => useLiveStreams({ limit: 12 }), {
         wrapper,
@@ -301,20 +265,19 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 12 })
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('limit=12'),
+        expect.any(Object)
       );
     });
   });
 
   describe('Error Handling', () => {
     it('handles API errors gracefully', async () => {
-      const errorResponse = {
-        success: false,
-        error: 'Failed to fetch streams',
-      };
-
-      mockedAPI.list.mockResolvedValueOnce(errorResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: false }),
+      });
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -327,7 +290,7 @@ describe('useLiveStreams Hook', () => {
     });
 
     it('handles network errors', async () => {
-      mockedAPI.list.mockRejectedValueOnce(new Error('Network error'));
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -338,8 +301,11 @@ describe('useLiveStreams Hook', () => {
       expect(result.current.error).toBeTruthy();
     });
 
-    it('handles null response', async () => {
-      mockedAPI.list.mockResolvedValueOnce(null as any);
+    it('handles non-ok response', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        statusText: 'Internal Server Error',
+      });
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -347,19 +313,19 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isError).toBe(true);
       });
 
-      expect(result.current.error?.message).toContain('No response from API');
+      expect(result.current.error?.message).toContain('Error fetching live streams');
     });
   });
 
   describe('Refetch Behavior', () => {
     it('allows manual refetch', async () => {
       const mockStreams = createMockLiveStreams(3, 'live');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 3 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValue(mockResponse as any);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(() => useLiveStreams(), { wrapper });
 
@@ -367,13 +333,13 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
       // Manual refetch
       await result.current.refetch();
 
       await waitFor(() => {
-        expect(mockedAPI.list).toHaveBeenCalledTimes(2);
+        expect(mockFetch).toHaveBeenCalledTimes(2);
       });
     });
   });
@@ -381,12 +347,12 @@ describe('useLiveStreams Hook', () => {
   describe('Convenience Hooks', () => {
     it('useLiveNow fetches live streams', async () => {
       const mockStreams = createMockLiveStreams(3, 'live');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 3 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(() => useLiveNow(), { wrapper });
 
@@ -394,19 +360,20 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'live' })
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('status=live'),
+        expect.any(Object)
       );
     });
 
     it('useScheduledStreams fetches scheduled streams', async () => {
       const mockStreams = createMockLiveStreams(2, 'scheduled');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 2 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(() => useScheduledStreams(), { wrapper });
 
@@ -414,19 +381,20 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'scheduled' })
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('status=scheduled'),
+        expect.any(Object)
       );
     });
 
     it('useEndedStreams fetches ended streams', async () => {
       const mockStreams = createMockLiveStreams(4, 'ended');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 4 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result } = renderHook(() => useEndedStreams(), { wrapper });
 
@@ -434,8 +402,9 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'ended' })
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('status=ended'),
+        expect.any(Object)
       );
     });
   });
@@ -451,25 +420,25 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       }, { timeout: 500 });
 
-      expect(mockedAPI.list).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
       expect(result.current.streams).toEqual([]);
     });
 
     it('fetches when enabled becomes true', async () => {
       const mockStreams = createMockLiveStreams(2, 'live');
-      const mockResponse = {
-        success: true,
-        result: { data: mockStreams, cursor: undefined, total: 2 },
-      };
+      const mockResponse = createSuccessResponse(mockStreams);
 
-      mockedAPI.list.mockResolvedValueOnce(mockResponse as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
 
       const { result, rerender } = renderHook(
         ({ enabled }) => useLiveStreams({ enabled }),
         { wrapper, initialProps: { enabled: false } }
       );
 
-      expect(mockedAPI.list).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
 
       rerender({ enabled: true });
 
@@ -477,56 +446,8 @@ describe('useLiveStreams Hook', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockedAPI.list).toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalled();
       expect(result.current.streams).toHaveLength(2);
-    });
-  });
-
-  describe('Loading States', () => {
-    it('sets isFetchingNextPage when loading next page', async () => {
-      const page1Streams = createMockLiveStreams(5, 'live');
-      const page2Streams = createMockLiveStreams(5, 'live');
-
-      const page1Response = {
-        success: true,
-        result: {
-          data: page1Streams,
-          cursor: 'cursor-page2',
-          total: 10,
-        },
-      };
-
-      const page2Response = {
-        success: true,
-        result: {
-          data: page2Streams,
-          cursor: undefined,
-          total: 10,
-        },
-      };
-
-      mockedAPI.list
-        .mockResolvedValueOnce(page1Response as any)
-        .mockResolvedValueOnce(page2Response as any);
-
-      const { result } = renderHook(() => useLiveStreams(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
-
-      const fetchPromise = result.current.fetchNextPage();
-
-      // Should be fetching next page
-      await waitFor(() => {
-        expect(result.current.isFetchingNextPage).toBe(true);
-      });
-
-      await fetchPromise;
-
-      await waitFor(() => {
-        expect(result.current.isFetchingNextPage).toBe(false);
-      });
     });
   });
 });

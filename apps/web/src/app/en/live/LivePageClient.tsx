@@ -18,7 +18,7 @@ import { useLiveStreams } from '@/hooks/useLiveStreams';
 import { LiveStreamCard, LiveStreamCardSkeleton } from '@/components/live-streaming/LiveStreamCard';
 import { AlertCircle, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { logger } from '@/lib/utils/logger';
+import { logger } from '@/lib/logger-client';
 
 /**
  * Grid layout component for live stream cards

@@ -21,7 +21,7 @@ import { LiveStreamCardRTL } from '@/components/live-streaming/LiveStreamCard/rt
 import { LiveStreamCardSkeleton } from '@/components/live-streaming/LiveStreamCard/Skeleton';
 import { AlertCircle, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { logger } from '@/lib/utils/logger';
+import { logger } from '@/lib/logger-client';
 
 /**
  * Grid layout component for live stream cards (RTL)

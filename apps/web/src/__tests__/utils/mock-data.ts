@@ -6,18 +6,16 @@
  * following the actual data structures used in the application.
  */
 
-import type { LiveStream } from '@al-ummah/shared-types';
+import type { LiveStream, StreamStatus } from '@al-ummah/shared-types';
 
 /**
  * Generate a mock channel
  */
-export function createMockChannel(overrides: Partial<LiveStream['channel']> = {}) {
+export function createMockChannel(overrides: Partial<LiveStream['channel']> = {}): LiveStream['channel'] {
   return {
     id: `channel-${Math.random().toString(36).substr(2, 9)}`,
     name: 'Test Channel',
     avatarUrl: 'https://placehold.co/128x128/png',
-    isVerified: false,
-    subscriberCount: 1000,
     ...overrides,
   };
 }
@@ -29,20 +27,15 @@ export function createMockLiveStream(
   overrides: Partial<LiveStream> = {}
 ): LiveStream {
   const now = new Date();
-  const status = overrides.status || 'live';
+  const status: StreamStatus = (overrides.status as StreamStatus) || 'live';
 
   const baseStream: LiveStream = {
     id: `stream-${Math.random().toString(36).substr(2, 9)}`,
     title: 'Test Live Stream',
-    description: 'This is a test live stream for testing purposes',
     thumbnailUrl: 'https://placehold.co/1280x720/png',
-    status: status as LiveStream['status'],
+    status,
     channel: createMockChannel(),
     category: 'Islamic Lectures',
-    tags: ['islam', 'lecture', 'quran'],
-    language: 'en',
-    createdAt: new Date(now.getTime() - 3600000), // 1 hour ago
-    updatedAt: now,
     ...overrides,
   };
 
@@ -52,15 +45,14 @@ export function createMockLiveStream(
       ...baseStream,
       viewerCount: 1234,
       startedAt: new Date(now.getTime() - 1800000), // 30 min ago
-      streamUrl: 'https://example.com/stream.m3u8',
-    } as LiveStream;
+    };
   }
 
   if (status === 'scheduled') {
     return {
       ...baseStream,
       scheduledStartTime: new Date(now.getTime() + 3600000), // 1 hour from now
-    } as LiveStream;
+    };
   }
 
   if (status === 'ended') {
@@ -69,8 +61,8 @@ export function createMockLiveStream(
       viewerCount: 5678,
       startedAt: new Date(now.getTime() - 7200000), // 2 hours ago
       endedAt: new Date(now.getTime() - 3600000), // 1 hour ago
-      recordingUrl: 'https://example.com/recording.mp4',
-    } as LiveStream;
+      duration: 3600, // 1 hour
+    };
   }
 
   return baseStream;
@@ -81,7 +73,7 @@ export function createMockLiveStream(
  */
 export function createMockLiveStreams(
   count: number,
-  status?: LiveStream['status']
+  status?: StreamStatus
 ): LiveStream[] {
   return Array.from({ length: count }, (_, index) =>
     createMockLiveStream({
@@ -99,205 +91,71 @@ export function createMixedMockStreams(counts: {
   live?: number;
   scheduled?: number;
   ended?: number;
+  offline?: number;
 }): LiveStream[] {
   const streams: LiveStream[] = [];
 
   if (counts.live) {
     streams.push(...createMockLiveStreams(counts.live, 'live'));
   }
-
   if (counts.scheduled) {
     streams.push(...createMockLiveStreams(counts.scheduled, 'scheduled'));
   }
-
   if (counts.ended) {
     streams.push(...createMockLiveStreams(counts.ended, 'ended'));
+  }
+  if (counts.offline) {
+    streams.push(...createMockLiveStreams(counts.offline, 'offline'));
   }
 
   return streams;
 }
 
 /**
- * Mock API response structure
- */
-export interface MockAPIResponse<T> {
-  data: T;
-  success: boolean;
-  message?: string;
-}
-
-/**
- * Create mock API response
- */
-export function createMockAPIResponse<T>(
-  data: T,
-  options: { success?: boolean; message?: string } = {}
-): MockAPIResponse<T> {
-  return {
-    data,
-    success: options.success ?? true,
-    message: options.message,
-  };
-}
-
-/**
- * Mock paginated response
- */
-export interface MockPaginatedResponse<T> {
-  data: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    hasMore: boolean;
-  };
-}
-
-/**
- * Create mock paginated response
+ * Generate paginated response for mock data
  */
 export function createMockPaginatedResponse<T>(
   data: T[],
   options: {
-    page?: number;
+    cursor?: string;
+    hasMore?: boolean;
     limit?: number;
-    total?: number;
   } = {}
-): MockPaginatedResponse<T> {
-  const page = options.page ?? 1;
-  const limit = options.limit ?? 20;
-  const total = options.total ?? data.length;
-
+) {
   return {
     data,
     pagination: {
-      page,
-      limit,
-      total,
-      hasMore: page * limit < total,
+      limit: options.limit ?? data.length,
+      cursor: options.cursor,
+      hasMore: options.hasMore ?? false,
     },
   };
 }
 
 /**
- * Mock error response
+ * Generate API response wrapper
  */
-export function createMockError(
-  message: string = 'An error occurred',
-  statusCode: number = 500
-) {
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = statusCode;
-  return error;
-}
-
-/**
- * Create mock fetch response
- */
-export function createMockFetchResponse<T>(
+export function createMockApiResponse<T>(
   data: T,
-  options: {
-    ok?: boolean;
-    status?: number;
-    statusText?: string;
-  } = {}
-): Response {
+  success: boolean = true
+) {
   return {
-    ok: options.ok ?? true,
-    status: options.status ?? 200,
-    statusText: options.statusText ?? 'OK',
-    json: async () => data,
-    text: async () => JSON.stringify(data),
-    headers: new Headers(),
-    redirected: false,
-    type: 'basic',
-    url: '',
-    clone: function () {
-      return this;
-    },
-    body: null,
-    bodyUsed: false,
-    arrayBuffer: async () => new ArrayBuffer(0),
-    blob: async () => new Blob(),
-    formData: async () => new FormData(),
-  } as Response;
+    success,
+    data,
+  };
 }
 
 /**
- * Viewer count test cases
+ * Viewer count test cases for number formatting tests
  */
 export const viewerCountTestCases = [
-  { count: 0, formatted: '0', label: '0 viewers watching' },
-  { count: 1, formatted: '1', label: '1 viewer watching' },
-  { count: 42, formatted: '42', label: '42 viewers watching' },
-  { count: 999, formatted: '999', label: '999 viewers watching' },
-  { count: 1000, formatted: '1K', label: '1,000 viewers watching' },
-  { count: 1234, formatted: '1.2K', label: '1,234 viewers watching' },
-  { count: 5678, formatted: '5.7K', label: '5,678 viewers watching' },
-  { count: 10000, formatted: '10K', label: '10,000 viewers watching' },
-  { count: 99999, formatted: '100K', label: '99,999 viewers watching' },
-  { count: 1000000, formatted: '1M', label: '1,000,000 viewers watching' },
+  { count: 0, formatted: '0' },
+  { count: 999, formatted: '999' },
+  { count: 1000, formatted: '1K' },
+  { count: 1234, formatted: '1.2K' },
+  { count: 10000, formatted: '10K' },
+  { count: 12345, formatted: '12.3K' },
+  { count: 100000, formatted: '100K' },
+  { count: 1000000, formatted: '1M' },
+  { count: 1234567, formatted: '1.2M' },
 ];
-
-/**
- * Popular channel names for testing
- */
-export const mockChannelNames = [
-  'Islamic Guidance',
-  'Quran Recitation',
-  'Hadith Studies',
-  'Islamic History',
-  'Tafsir Lessons',
-  'Fiqh Academy',
-  'Islamic Sciences',
-  'Sheikh Ahmed',
-  'Imam Hassan',
-  'Muslim Community',
-];
-
-/**
- * Popular stream titles for testing
- */
-export const mockStreamTitles = [
-  'Live Quran Recitation - Surah Al-Baqarah',
-  'Friday Prayer - Jummah Live',
-  'Islamic Lecture: Understanding Tawhid',
-  'Hadith Study Circle - Sahih Bukhari',
-  'Live Q&A with Sheikh Abdullah',
-  'Tafsir Class - Stories of the Prophets',
-  'Ramadan Special: Night Prayer',
-  'Islamic History: The Battle of Badr',
-  'Fiqh Lesson: Prayer Rulings',
-  'Dhikr Gathering - Live',
-];
-
-/**
- * Generate realistic stream with random data
- */
-export function createRealisticLiveStream(
-  status: LiveStream['status'] = 'live'
-): LiveStream {
-  const channelName = mockChannelNames[Math.floor(Math.random() * mockChannelNames.length)];
-  const title = mockStreamTitles[Math.floor(Math.random() * mockStreamTitles.length)];
-  const viewerCount = Math.floor(Math.random() * 10000) + 100;
-
-  return createMockLiveStream({
-    channel: createMockChannel({
-      name: channelName,
-      isVerified: Math.random() > 0.5,
-    }),
-    title,
-    viewerCount,
-    status,
-  });
-}
-
-/**
- * Generate a batch of realistic streams
- */
-export function createRealisticStreams(
-  count: number,
-  status?: LiveStream['status']
-): LiveStream[] {
-  return Array.from({ length: count }, () => createRealisticLiveStream(status));
-}

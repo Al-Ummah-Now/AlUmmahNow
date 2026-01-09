@@ -1,9 +1,39 @@
+'use client';
+
 import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { LiveStream } from '@al-ummah/shared-types';
-import { LiveStreamsAPI } from '@/lib/api/livestreams';
-import { PaginationResponse } from '@/lib/api/types';
-import { logger } from '@/lib/utils/logger';
+import { LiveStream, PaginatedResponse, ApiResponse } from '@al-ummah/shared-types';
+import { getApiUrl } from '@/lib/runtime-config';
+import { logger } from '@/lib/logger-client';
+
+/**
+ * Client-side fetch for live streams
+ */
+async function fetchLiveStreams(params: {
+  status?: string;
+  channelId?: string;
+  limit?: number;
+  cursor?: string;
+}): Promise<ApiResponse<PaginatedResponse<LiveStream>>> {
+  const baseUrl = getApiUrl();
+  const queryParams = new URLSearchParams();
+
+  if (params.limit) queryParams.append('limit', params.limit.toString());
+  if (params.cursor) queryParams.append('cursor', params.cursor);
+  if (params.status) queryParams.append('status', params.status);
+  if (params.channelId) queryParams.append('channelId', params.channelId);
+
+  const response = await fetch(`${baseUrl}/api/live-streams?${queryParams.toString()}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error fetching live streams: ${response.statusText}`);
+  }
+
+  return response.json();
+}
 
 /**
  * Options for configuring the useLiveStreams hook
@@ -14,11 +44,6 @@ export interface UseLiveStreamsOptions {
    * @default 'live'
    */
   status?: 'live' | 'scheduled' | 'ended' | 'cancelled';
-
-  /**
-   * Filter streams by category
-   */
-  category?: string;
 
   /**
    * Filter streams by channel ID
@@ -145,14 +170,13 @@ export interface UseLiveStreamsReturn {
  */
 export function useLiveStreams({
   status = 'live',
-  category,
   channelId,
   limit = 20,
   enabled = true,
   refetchInterval
 }: UseLiveStreamsOptions = {}): UseLiveStreamsReturn {
   // Build query key for React Query caching
-  const queryKey = ['live-streams', { status, category, channelId, limit }];
+  const queryKey = ['live-streams', { status, channelId, limit }];
 
   // Determine refetch interval based on status
   const effectiveRefetchInterval = refetchInterval !== undefined
@@ -176,9 +200,8 @@ export function useLiveStreams({
     queryFn: async ({ pageParam }) => {
       logger.debug('[useLiveStreams] Fetching streams', { status, cursor: pageParam || 'initial', limit });
 
-      const response = await LiveStreamsAPI.list({
+      const response = await fetchLiveStreams({
         status,
-        category,
         channelId,
         limit,
         cursor: pageParam
@@ -190,19 +213,20 @@ export function useLiveStreams({
       }
 
       if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch live streams');
+        throw new Error('Failed to fetch live streams');
       }
 
-      if (!response.result) {
+      if (!response.data) {
         throw new Error('Failed to fetch live streams: Invalid response format');
       }
 
-      logger.debug('[useLiveStreams] Fetched streams', { count: response.result.data.length });
-      return response.result;
+      logger.debug('[useLiveStreams] Fetched streams', { count: response.data.data?.length ?? 0 });
+      return response.data;
     },
-    getNextPageParam: (lastPage: PaginationResponse<LiveStream>) => {
+    getNextPageParam: (lastPage: PaginatedResponse<LiveStream>) => {
       // Return the cursor for the next page, or undefined if no more pages
-      return lastPage.cursor || undefined;
+      if (!lastPage.pagination?.hasMore) return undefined;
+      return lastPage.pagination?.nextCursor ?? lastPage.pagination?.cursor ?? undefined;
     },
     initialPageParam: undefined as string | undefined,
     enabled,

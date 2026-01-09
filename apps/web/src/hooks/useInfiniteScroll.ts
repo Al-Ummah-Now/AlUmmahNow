@@ -9,7 +9,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { logger } from '@/lib/utils/logger';
+import { logger } from '@/lib/logger-client';
 
 /**
  * Options for configuring the useInfiniteScroll hook
