@@ -1024,4 +1024,16 @@ export const AR_TRANSLATIONS: AppTranslations = {
     collapse: 'طي',
     expand: 'توسيع',
   },
+
+  live: {
+    liveStreams: 'البث المباشر',
+    liveStreamsDescription: 'شاهد المحاضرات الإسلامية المباشرة والنقاشات والمحتوى التعليمي',
+    failedToLoadStreams: 'فشل تحميل البثوث المباشرة',
+    failedToLoadStreamsDescription: 'حدث خطأ أثناء تحميل البثوث المباشرة. يرجى المحاولة مرة أخرى.',
+    tryAgain: 'حاول مرة أخرى',
+    noLiveStreams: 'لا توجد بثوث مباشرة',
+    noLiveStreamsDescription: 'لا توجد بثوث مباشرة في الوقت الحالي. تحقق لاحقًا أو استكشف البثوث المجدولة.',
+    updatingLiveStreams: 'جاري تحديث البثوث المباشرة...',
+    showingStreamsCount: 'عرض {count} بث مباشر',
+  },
 };

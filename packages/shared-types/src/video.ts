@@ -266,3 +266,26 @@ export interface ScheduledVideoInfo {
   canEdit: boolean;
   canCancel: boolean;
 }
+
+/**
+ * Live Stream Types
+ */
+export type StreamStatus = 'live' | 'scheduled' | 'ended' | 'offline';
+
+export interface LiveStream {
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  status: StreamStatus;
+  viewerCount?: number;
+  channel: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+  };
+  category?: string;
+  startedAt?: Date;
+  scheduledStartTime?: Date;
+  endedAt?: Date;
+  duration?: number; // seconds
+}

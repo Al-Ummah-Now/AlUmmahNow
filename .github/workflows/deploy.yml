@@ -102,6 +102,10 @@ jobs:
           pnpm --filter @al-ummah/logger build
         timeout-minutes: 2
 
+      - name: Build shared types
+        run: pnpm --filter @al-ummah/shared-types build
+        timeout-minutes: 2
+
       - name: Build web application
         run: |
           pnpm --filter @al-ummah/web build

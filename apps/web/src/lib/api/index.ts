@@ -166,15 +166,15 @@ export class APIClient {
     };
   }
 
-  // Live Streams
+  // Live Streams (server actions - auth handled internally via getServerAuthContext)
   get liveStreams() {
     return {
-      list: (params?: import('./types').LiveStreamQueryParams, headers?: ApiHeaders) => LiveStreamsAPI.listLiveStreams(params, { ...this.headers, ...headers }),
-      create: (data: import('./types').LiveStreamCreateRequest, authToken: string) => LiveStreamsAPI.createLiveStream(data, authToken),
-      update: (streamId: string, data: import('./types').LiveStreamUpdateRequest, authToken: string) => LiveStreamsAPI.updateLiveStream(streamId, data, authToken),
-      goLive: (streamId: string, authToken: string) => LiveStreamsAPI.goLive(streamId, authToken),
-      endStream: (streamId: string, authToken: string) => LiveStreamsAPI.endLiveStream(streamId, authToken),
-      cancelStream: (streamId: string, authToken: string) => LiveStreamsAPI.cancelLiveStream(streamId, authToken),
+      list: (params?: import('./types').LiveStreamQueryParams) => LiveStreamsAPI.listLiveStreams(params),
+      create: (data: import('./types').LiveStreamCreateRequest) => LiveStreamsAPI.createLiveStream(data),
+      update: (streamId: string, data: import('./types').LiveStreamUpdateRequest) => LiveStreamsAPI.updateLiveStream(streamId, data),
+      goLive: (streamId: string) => LiveStreamsAPI.goLive(streamId),
+      endStream: (streamId: string) => LiveStreamsAPI.endLiveStream(streamId),
+      cancelStream: (streamId: string) => LiveStreamsAPI.cancelLiveStream(streamId),
       getLiveNow: (limit?: number) => LiveStreamsAPI.getLiveNow(limit),
       getScheduled: (limit?: number) => LiveStreamsAPI.getScheduledStreams(limit),
       getByChannel: (channelId: string, status?: 'scheduled' | 'live' | 'ended' | 'cancelled', limit?: number) => LiveStreamsAPI.getStreamsByChannel(channelId, status, limit),

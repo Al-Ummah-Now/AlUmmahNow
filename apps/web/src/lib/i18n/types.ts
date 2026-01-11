@@ -1205,6 +1205,21 @@ export interface AppTranslations {
   };
 
   /**
+   * Live streaming page related
+   */
+  live?: {
+    liveStreams?: string;
+    liveStreamsDescription?: string;
+    failedToLoadStreams?: string;
+    failedToLoadStreamsDescription?: string;
+    tryAgain?: string;
+    noLiveStreams?: string;
+    noLiveStreamsDescription?: string;
+    updatingLiveStreams?: string;
+    showingStreamsCount?: string;
+  };
+
+  /**
    * Settings page related
    */
   settings?: {
