@@ -1120,4 +1120,16 @@ export const EN_TRANSLATIONS: AppTranslations = {
     categoryChannel: 'Channel Info',
     categoryVideo: 'Video Info',
   },
+
+  live: {
+    liveStreams: 'Live Streams',
+    liveStreamsDescription: 'Watch live Islamic lectures, discussions, and educational content',
+    failedToLoadStreams: 'Failed to Load Streams',
+    failedToLoadStreamsDescription: 'An error occurred while loading live streams. Please try again.',
+    tryAgain: 'Try Again',
+    noLiveStreams: 'No Live Streams',
+    noLiveStreamsDescription: 'There are no live streams at the moment. Check back later or explore scheduled streams.',
+    updatingLiveStreams: 'Updating live streams...',
+    showingStreamsCount: 'Showing {count} live stream',
+  },
 };

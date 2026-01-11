@@ -12,6 +12,71 @@ import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 
+// Validation patterns
+const CURSOR_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALID_STATUSES = ['live', 'scheduled', 'ended', 'cancelled'] as const;
+const MAX_LIMIT = 100;
+
+/**
+ * Validate and sanitize livestream query parameters
+ */
+function validateQueryParams(params?: LiveStreamQueryParams): {
+  limit?: number;
+  cursor?: string;
+  status?: string;
+  channelId?: string;
+} {
+  const validated: {
+    limit?: number;
+    cursor?: string;
+    status?: string;
+    channelId?: string;
+  } = {};
+
+  if (params?.limit !== undefined) {
+    const limitNum = typeof params.limit === 'string' ? parseInt(params.limit, 10) : params.limit;
+    if (typeof limitNum === 'number' && !isNaN(limitNum) && limitNum > 0 && limitNum <= MAX_LIMIT) {
+      validated.limit = limitNum;
+    } else {
+      logger.warn('[listLiveStreams] Invalid limit parameter, must be a positive number <= 100', {
+        provided: params.limit
+      });
+    }
+  }
+
+  if (params?.cursor !== undefined) {
+    if (typeof params.cursor === 'string' && CURSOR_PATTERN.test(params.cursor)) {
+      validated.cursor = params.cursor;
+    } else {
+      logger.warn('[listLiveStreams] Invalid cursor parameter, must be alphanumeric', {
+        provided: params.cursor
+      });
+    }
+  }
+
+  if (params?.status !== undefined) {
+    if (typeof params.status === 'string' && VALID_STATUSES.includes(params.status as typeof VALID_STATUSES[number])) {
+      validated.status = params.status;
+    } else {
+      logger.warn('[listLiveStreams] Invalid status parameter, must be one of: live, scheduled, ended, cancelled', {
+        provided: params.status
+      });
+    }
+  }
+
+  if (params?.channelId !== undefined) {
+    if (typeof params.channelId === 'string' && UUID_PATTERN.test(params.channelId)) {
+      validated.channelId = params.channelId;
+    } else {
+      logger.warn('[listLiveStreams] Invalid channelId parameter, must be a valid UUID', {
+        provided: params.channelId
+      });
+    }
+  }
+
+  return validated;
+}
 
 /**
  * List Live Streams
@@ -20,11 +85,13 @@ import { logger } from '@/lib/logger-server';
 export async function listLiveStreams(
   params?: LiveStreamQueryParams
 ): Promise<ApiResponse<PaginationResponse<LiveStream>> | null> {
+  const validatedParams = validateQueryParams(params);
+
   const queryString = buildQueryParams({
-    limit: params?.limit,
-    cursor: params?.cursor,
-    status: params?.status,
-    channelId: params?.channelId
+    limit: validatedParams.limit,
+    cursor: validatedParams.cursor,
+    status: validatedParams.status,
+    channelId: validatedParams.channelId
   });
 
   return apiRequestServer<ApiResponse<PaginationResponse<LiveStream>>>({
