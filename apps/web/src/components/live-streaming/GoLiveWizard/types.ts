@@ -261,7 +261,7 @@ export interface StepValidationResult {
   /**
    * Validated data (if valid)
    */
-  data?: any;
+  data?: unknown;
 }
 
 /**
