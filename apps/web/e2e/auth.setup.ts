@@ -1,8 +1,29 @@
 import { chromium, FullConfig } from '@playwright/test';
 import { ResendTestClient } from './test-utils/resend-client';
-import { logger } from '@/lib/logger-client';
 import * as fs from 'fs';
 import * as path from 'path';
+
+/**
+ * CI-friendly logger that always outputs to console.
+ * The @/lib/logger-client filters out 'info' level in production,
+ * which makes debugging CI failures impossible.
+ */
+const ciLogger = {
+  info: (message: string, data?: unknown) => {
+    console.log(`[INFO] ${message}`, data !== undefined ? JSON.stringify(data) : '');
+  },
+  warn: (message: string, data?: unknown) => {
+    console.warn(`[WARN] ${message}`, data !== undefined ? JSON.stringify(data) : '');
+  },
+  error: (message: string, data?: unknown) => {
+    console.error(`[ERROR] ${message}`, data !== undefined ? JSON.stringify(data) : '');
+  },
+  debug: (message: string, data?: unknown) => {
+    if (process.env.DEBUG) {
+      console.log(`[DEBUG] ${message}`, data !== undefined ? JSON.stringify(data) : '');
+    }
+  },
+};
 
 export interface TestUser {
   email: string;
@@ -24,7 +45,7 @@ export interface TestUser {
 async function globalSetup(_config: FullConfig) {
   // Skip auth setup if auth state files already exist (from centralized auth job)
   if (process.env.SKIP_AUTH_SETUP === 'true') {
-    logger.info('[Global Setup] SKIP_AUTH_SETUP=true, checking for existing auth state...');
+    ciLogger.info('[Global Setup] SKIP_AUTH_SETUP=true, checking for existing auth state...');
 
     const authDir = path.join(process.cwd(), 'e2e/.auth');
     const requiredFiles = ['user-single.json', 'user-multi.json', 'user-none.json'];
@@ -32,20 +53,20 @@ async function globalSetup(_config: FullConfig) {
       const filePath = path.join(authDir, file);
       const exists = fs.existsSync(filePath);
       if (!exists) {
-        logger.warn(`[Global Setup] Missing auth file: ${filePath}`);
+        ciLogger.warn(`[Global Setup] Missing auth file: ${filePath}`);
       }
       return exists;
     });
 
     if (allExist) {
-      logger.info('[Global Setup] ✅ Auth state files found, skipping registration');
+      ciLogger.info('[Global Setup] ✅ Auth state files found, skipping registration');
       return;
     }
 
-    logger.warn('[Global Setup] Auth files missing despite SKIP_AUTH_SETUP=true, proceeding with registration');
+    ciLogger.warn('[Global Setup] Auth files missing despite SKIP_AUTH_SETUP=true, proceeding with registration');
   }
 
-  logger.info('[Global Setup] Starting test user registration...');
+  ciLogger.info('[Global Setup] Starting test user registration...');
 
   // Verify required environment variables
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -60,11 +81,23 @@ async function globalSetup(_config: FullConfig) {
   const webAppUrl = process.env.WEB_APP_URL || 'http://localhost:3001';
   const clientId = process.env.OPENAUTH_CLIENT_ID || 'alummah-web';
 
-  logger.info('[Global Setup] Configuration', {
+  // Log working directory for debugging path issues
+  const cwd = process.cwd();
+  const authDir = path.join(cwd, 'e2e/.auth');
+
+  ciLogger.info('[Global Setup] Configuration', {
     openAuthUrl,
     webAppUrl,
-    clientId
+    clientId,
+    cwd,
+    authDir
   });
+
+  // Ensure auth directory exists
+  if (!fs.existsSync(authDir)) {
+    ciLogger.info(`[Global Setup] Creating auth directory: ${authDir}`);
+    fs.mkdirSync(authDir, { recursive: true });
+  }
 
   const resendClient = new ResendTestClient(resendApiKey);
 
@@ -75,19 +108,19 @@ async function globalSetup(_config: FullConfig) {
       email: `test-single-${timestamp}@delivered.resend.dev`,
       password: 'TestPassword123!',
       name: 'Single Channel User',
-      storageStatePath: 'e2e/.auth/user-single.json',
+      storageStatePath: path.join(authDir, 'user-single.json'),
     },
     {
       email: `test-multi-${timestamp}@delivered.resend.dev`,
       password: 'TestPassword456!',
       name: 'Multi Channel User',
-      storageStatePath: 'e2e/.auth/user-multi.json',
+      storageStatePath: path.join(authDir, 'user-multi.json'),
     },
     {
       email: `test-none-${timestamp}@delivered.resend.dev`,
       password: 'TestPassword789!',
       name: 'No Channels User',
-      storageStatePath: 'e2e/.auth/user-none.json',
+      storageStatePath: path.join(authDir, 'user-none.json'),
     },
   ];
 
@@ -99,7 +132,7 @@ async function globalSetup(_config: FullConfig) {
   const errors: Array<{ email: string; error: unknown }> = [];
 
   for (const user of testUsers) {
-    logger.info(`[Setup] Registering user: ${user.email}`);
+    ciLogger.info(`[Setup] Registering user: ${user.email}`);
 
     const context = await browser.newContext({
       baseURL: webAppUrl,
@@ -111,7 +144,7 @@ async function globalSetup(_config: FullConfig) {
       const callbackUrl = `${webAppUrl}/api/callback`;
       const authorizeUrl = `${openAuthUrl}/authorize?redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&client_id=${clientId}`;
 
-      logger.info(`[Setup] Starting OAuth flow for ${user.email}`);
+      ciLogger.info(`[Setup] Starting OAuth flow for ${user.email}`);
       await page.goto(authorizeUrl, { waitUntil: 'networkidle' });
 
       // Click the "Register" link to go to registration page
@@ -121,7 +154,7 @@ async function globalSetup(_config: FullConfig) {
         await page.waitForLoadState('networkidle');
       }
 
-      logger.info(`[Setup] Filling registration form for ${user.email}`);
+      ciLogger.info(`[Setup] Filling registration form for ${user.email}`);
 
       // Fill registration form - OpenAuth uses name attributes
       await page.fill('input[name="email"]', user.email);
@@ -130,7 +163,7 @@ async function globalSetup(_config: FullConfig) {
       await page.click('button[data-component="button"]');
 
       // Wait for verification code page or direct redirect
-      logger.info(`[Setup] Waiting for next step for ${user.email}`);
+      ciLogger.info(`[Setup] Waiting for next step for ${user.email}`);
 
       // Wait a moment for the page to transition
       await page.waitForTimeout(2000);
@@ -139,7 +172,7 @@ async function globalSetup(_config: FullConfig) {
       const codeInput = await page.$('input[placeholder*="Code"], input[placeholder*="code"], input[name="code"]');
 
       if (codeInput) {
-        logger.info(`[Setup] Verification code required for ${user.email}`);
+        ciLogger.info(`[Setup] Verification code required for ${user.email}`);
 
         // Get verification code from Resend
         const emailHtml = await resendClient.getVerificationEmail(user.email);
@@ -154,7 +187,7 @@ async function globalSetup(_config: FullConfig) {
           throw new Error('Failed to extract verification code from email');
         }
 
-        logger.info(`[Setup] Entering verification code for ${user.email}`);
+        ciLogger.info(`[Setup] Entering verification code for ${user.email}`);
 
         // Enter verification code
         await codeInput.fill(code);
@@ -162,7 +195,7 @@ async function globalSetup(_config: FullConfig) {
       }
 
       // Wait for successful authentication - callback URL or home page
-      logger.info(`[Setup] Waiting for authentication to complete for ${user.email}`);
+      ciLogger.info(`[Setup] Waiting for authentication to complete for ${user.email}`);
 
       // Wait for callback URL and then navigate to verify auth
       try {
@@ -175,15 +208,21 @@ async function globalSetup(_config: FullConfig) {
         await page.goto(`${webAppUrl}/en`, { waitUntil: 'networkidle' });
       } catch {
         // Already on home page or elsewhere - continue
-        logger.debug(`[Setup] Current URL after auth: ${page.url()}`);
+        ciLogger.debug(`[Setup] Current URL after auth: ${page.url()}`);
       }
 
       // Save authenticated state
-      logger.info(`[Setup] Saving authentication state for ${user.email}`);
+      ciLogger.info(`[Setup] Saving authentication state for ${user.email} to ${user.storageStatePath}`);
       await context.storageState({ path: user.storageStatePath });
 
-      logger.info(`[Setup] ✅ Successfully registered and saved state: ${user.email}`);
-      successCount++;
+      // Verify file was created
+      if (fs.existsSync(user.storageStatePath)) {
+        const stats = fs.statSync(user.storageStatePath);
+        ciLogger.info(`[Setup] ✅ Successfully registered and saved state: ${user.email} (${stats.size} bytes)`);
+        successCount++;
+      } else {
+        throw new Error(`Auth state file was not created at ${user.storageStatePath}`);
+      }
 
       await context.close();
 
@@ -191,16 +230,16 @@ async function globalSetup(_config: FullConfig) {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
     } catch (error) {
-      logger.error(`[Setup] ❌ Failed to register ${user.email}`, { error });
+      ciLogger.error(`[Setup] ❌ Failed to register ${user.email}`, { error });
       errors.push({ email: user.email, error });
 
       // Take screenshot for debugging
       try {
-        const screenshotPath = `e2e/.auth/error-${user.email}-${timestamp}.png`;
+        const screenshotPath = path.join(authDir, `error-${user.name.replace(/\s+/g, '-')}-${timestamp}.png`);
         await page.screenshot({ path: screenshotPath, fullPage: true });
-        logger.info(`[Setup] Screenshot saved to ${screenshotPath}`);
+        ciLogger.info(`[Setup] Screenshot saved to ${screenshotPath}`);
       } catch (screenshotError) {
-        logger.error('[Setup] Failed to save screenshot', { screenshotError });
+        ciLogger.error('[Setup] Failed to save screenshot', { screenshotError });
       }
 
       await context.close();
@@ -213,20 +252,28 @@ async function globalSetup(_config: FullConfig) {
   await browser.close();
 
   // Summary
-  logger.info('[Global Setup] Registration Summary', {
+  ciLogger.info('[Global Setup] Registration Summary', {
     total: testUsers.length,
     success: successCount,
     failed: errors.length
   });
 
+  // List files in auth directory for debugging
+  try {
+    const files = fs.readdirSync(authDir);
+    ciLogger.info('[Global Setup] Files in auth directory:', { authDir, files });
+  } catch (listError) {
+    ciLogger.error('[Global Setup] Failed to list auth directory:', { listError });
+  }
+
   if (errors.length > 0) {
-    logger.error('[Global Setup] Failed registrations:', errors);
+    ciLogger.error('[Global Setup] Failed registrations:', errors);
     throw new Error(
       `Failed to register ${errors.length} test user(s). See logs for details.`
     );
   }
 
-  logger.info('[Global Setup] ✅ All test users registered successfully!');
+  ciLogger.info('[Global Setup] ✅ All test users registered successfully!');
 }
 
 export default globalSetup;
