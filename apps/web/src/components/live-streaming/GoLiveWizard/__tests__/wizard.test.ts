@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import type { GoLiveFormState, WizardStep, StreamDetailsData } from '../types';
+import type { GoLiveFormState, WizardStep } from '../types';
 
 /**
  * Helper function to check if a step is valid

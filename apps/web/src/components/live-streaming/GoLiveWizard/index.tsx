@@ -8,19 +8,16 @@
 
 'use client';
 
-import React, { useReducer, useEffect, useCallback, useMemo } from 'react';
+import React, { useReducer, useEffect, useCallback, useMemo, useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { cn } from '@/lib/utils';
-import { logger } from '@al-ummah/logger';
+import { logger } from '@/lib/logger-client';
 import type {
   GoLiveWizardProps,
   GoLiveFormState,
   WizardAction,
   WizardStep,
   DraftRecoveryData,
-  StreamDetailsData,
-  ThumbnailData,
-  RTMPConfig,
 } from './types';
 import { WIZARD_STEPS, DRAFT_STORAGE_KEY } from './types';
 
@@ -215,6 +212,11 @@ function isStepValid(state: GoLiveFormState, step: WizardStep): boolean {
  * - RTL support (via separate component)
  * - Accessibility (ARIA, focus management)
  */
+/**
+ * Confirmation dialog types
+ */
+type ConfirmDialogType = 'draft-recovery' | 'leave-warning' | null;
+
 export const GoLiveWizard: React.FC<GoLiveWizardProps> = ({
   channelId,
   userId,
@@ -224,9 +226,41 @@ export const GoLiveWizard: React.FC<GoLiveWizardProps> = ({
   className,
 }) => {
   const { t, isRTL } = useLanguage();
-  const [state, dispatch] = useReducer(wizardReducer, initialState);
 
-  logger.info('[GoLiveWizard] Component mounted', { channelId, userId, isRTL });
+  // Initialize state with initialData if provided
+  const getInitialState = useCallback((): GoLiveFormState => {
+    if (initialData) {
+      return {
+        ...initialState,
+        streamDetails: initialData.title ? {
+          title: initialData.title,
+          description: initialData.description,
+          category: initialData.category || '',
+          tags: initialData.tags,
+          scheduledStartTime: initialData.scheduledStartTime,
+          notifySubscribers: initialData.notifySubscribers,
+        } : null,
+        thumbnailData: initialData.thumbnailUrl ? {
+          thumbnailUrl: initialData.thumbnailUrl,
+        } : null,
+        rtmpConfig: initialData.serverUrl ? {
+          serverUrl: initialData.serverUrl,
+          streamKey: initialData.streamKey || '',
+          streamId: initialData.streamId || '',
+        } : null,
+        streamId: initialData.streamId || null,
+      };
+    }
+    return initialState;
+  }, [initialData]);
+
+  const [state, dispatch] = useReducer(wizardReducer, initialState, getInitialState);
+
+  // Confirmation dialog state (replaces window.confirm)
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogType>(null);
+  const [pendingDraft, setPendingDraft] = useState<DraftRecoveryData | null>(null);
+
+  logger.info('[GoLiveWizard] Component mounted', { channelId, userId, isRTL, hasInitialData: !!initialData });
 
   /**
    * Save draft to sessionStorage
@@ -288,20 +322,26 @@ export const GoLiveWizard: React.FC<GoLiveWizardProps> = ({
   useEffect(() => {
     const draft = loadDraft();
     if (draft && !state.draftRecoveryShown) {
-      // Show recovery prompt
-      const confirmed = window.confirm(
-        t.live?.wizard?.recoverDraftMessage?.replace('{time}', new Date(draft.savedAt).toLocaleTimeString()) ||
-        'You have an unsaved draft. Continue where you left off?'
-      );
-
-      if (confirmed) {
-        dispatch({ type: 'RESTORE_DRAFT', state: draft.state });
-      } else {
-        clearDraft();
-        dispatch({ type: 'MARK_DRAFT_SHOWN' });
-      }
+      // Show recovery dialog (non-blocking)
+      setPendingDraft(draft);
+      setConfirmDialog('draft-recovery');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount
+
+  /**
+   * Handle draft recovery confirmation
+   */
+  const handleDraftRecoveryConfirm = useCallback((confirmed: boolean) => {
+    if (confirmed && pendingDraft) {
+      dispatch({ type: 'RESTORE_DRAFT', state: pendingDraft.state });
+    } else {
+      clearDraft();
+      dispatch({ type: 'MARK_DRAFT_SHOWN' });
+    }
+    setPendingDraft(null);
+    setConfirmDialog(null);
+  }, [pendingDraft, clearDraft]);
 
   /**
    * Auto-save draft every 30 seconds
@@ -367,19 +407,28 @@ export const GoLiveWizard: React.FC<GoLiveWizardProps> = ({
   }, []);
 
   /**
-   * Handle cancel
+   * Handle cancel - shows confirmation dialog if dirty
    */
   const handleCancel = useCallback(() => {
     if (state.isDirty) {
-      const confirmed = window.confirm(
-        t.live?.wizard?.leavingWarningMessage || 'You have unsaved changes. Are you sure you want to leave?'
-      );
-      if (!confirmed) return;
+      setConfirmDialog('leave-warning');
+      return;
     }
 
     clearDraft();
     onCancel();
-  }, [state.isDirty, clearDraft, onCancel, t]);
+  }, [state.isDirty, clearDraft, onCancel]);
+
+  /**
+   * Handle leave confirmation
+   */
+  const handleLeaveConfirm = useCallback((confirmed: boolean) => {
+    setConfirmDialog(null);
+    if (confirmed) {
+      clearDraft();
+      onCancel();
+    }
+  }, [clearDraft, onCancel]);
 
   /**
    * Handle form submission (step 4)
@@ -557,6 +606,66 @@ export const GoLiveWizard: React.FC<GoLiveWizardProps> = ({
           <p className="text-sm text-red-800 dark:text-red-200">
             {state.errors.submit || Object.values(state.errors)[0]}
           </p>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {confirmDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-dialog-title"
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h2 id="confirm-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              {confirmDialog === 'draft-recovery'
+                ? (t.live?.wizard?.recoverDraft || 'Recover Draft')
+                : (t.live?.wizard?.leavingWarning || 'Leave Without Saving?')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              {confirmDialog === 'draft-recovery'
+                ? (t.live?.wizard?.recoverDraftMessage?.replace(
+                    '{time}',
+                    pendingDraft ? new Date(pendingDraft.savedAt).toLocaleTimeString() : ''
+                  ) || 'You have an unsaved draft. Continue where you left off?')
+                : (t.live?.wizard?.leavingWarningMessage || 'You have unsaved changes. Are you sure you want to leave?')}
+            </p>
+            <div className={cn('flex gap-3', isRTL ? 'flex-row-reverse' : 'justify-end')}>
+              <button
+                onClick={() =>
+                  confirmDialog === 'draft-recovery'
+                    ? handleDraftRecoveryConfirm(false)
+                    : handleLeaveConfirm(false)
+                }
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                type="button"
+              >
+                {confirmDialog === 'draft-recovery'
+                  ? (t.live?.wizard?.startFresh || 'Start Fresh')
+                  : (t.live?.wizard?.stayOnPage || 'Stay')}
+              </button>
+              <button
+                onClick={() =>
+                  confirmDialog === 'draft-recovery'
+                    ? handleDraftRecoveryConfirm(true)
+                    : handleLeaveConfirm(true)
+                }
+                className={cn(
+                  'px-4 py-2 text-sm font-medium text-white rounded-md transition-colors',
+                  confirmDialog === 'draft-recovery'
+                    ? 'bg-primary hover:bg-primary/90'
+                    : 'bg-red-600 hover:bg-red-700'
+                )}
+                type="button"
+                autoFocus
+              >
+                {confirmDialog === 'draft-recovery'
+                  ? (t.live?.wizard?.continueWithDraft || 'Continue with Draft')
+                  : (t.live?.wizard?.leavePage || 'Leave')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
