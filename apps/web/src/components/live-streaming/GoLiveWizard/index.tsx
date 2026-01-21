@@ -372,21 +372,6 @@ export const GoLiveWizard: React.FC<GoLiveWizardProps> = ({
   }, [state.isDirty]);
 
   /**
-   * Handle keyboard navigation
-   */
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Escape to cancel (with confirmation if dirty)
-      if (e.key === 'Escape') {
-        handleCancel();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleCancel]);
-
-  /**
    * Handle next step
    */
   const handleNext = useCallback(() => {
@@ -429,6 +414,21 @@ export const GoLiveWizard: React.FC<GoLiveWizardProps> = ({
       onCancel();
     }
   }, [clearDraft, onCancel]);
+
+  /**
+   * Handle keyboard navigation
+   */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape to cancel (with confirmation if dirty)
+      if (e.key === 'Escape') {
+        handleCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleCancel]);
 
   /**
    * Handle form submission (step 4)
