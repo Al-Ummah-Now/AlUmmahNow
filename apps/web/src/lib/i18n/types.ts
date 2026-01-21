@@ -1217,6 +1217,149 @@ export interface AppTranslations {
     noLiveStreamsDescription?: string;
     updatingLiveStreams?: string;
     showingStreamsCount?: string;
+    // Go Live Wizard
+    wizard?: {
+      // Main Wizard
+      title?: string;
+      subtitle?: string;
+      saveDraft?: string;
+      draftSaved?: string;
+      draftSavedAt?: string;
+      recoverDraft?: string;
+      recoverDraftMessage?: string;
+      continueWithDraft?: string;
+      startFresh?: string;
+      leavingWarning?: string;
+      leavingWarningMessage?: string;
+      leavePage?: string;
+      stayOnPage?: string;
+      // Step Indicator
+      stepOf?: string;
+      stepComplete?: string;
+      stepCurrent?: string;
+      stepIncomplete?: string;
+      // Navigation
+      nextStep?: string;
+      previousStep?: string;
+      backToStep?: string;
+      finishSetup?: string;
+      goingLive?: string;
+      // Steps
+      steps?: {
+        details?: {
+          title?: string;
+          description?: string;
+          streamTitle?: string;
+          streamTitlePlaceholder?: string;
+          streamDescription?: string;
+          streamDescriptionPlaceholder?: string;
+          category?: string;
+          selectCategory?: string;
+          tags?: string;
+          tagsPlaceholder?: string;
+          addTag?: string;
+          scheduledStart?: string;
+          scheduleOptional?: string;
+          notifySubscribers?: string;
+          notifySubscribersDescription?: string;
+          // Validation
+          titleRequired?: string;
+          titleMinLength?: string;
+          titleMaxLength?: string;
+          categoryRequired?: string;
+        };
+        thumbnail?: {
+          title?: string;
+          description?: string;
+          optional?: string;
+          uploadThumbnail?: string;
+          selectFile?: string;
+          dragDropThumbnail?: string;
+          thumbnailRequirements?: string;
+          uploading?: string;
+          uploadProgress?: string;
+          uploadSuccess?: string;
+          uploadFailed?: string;
+          removeThumbnail?: string;
+          changeThumbnail?: string;
+          skipStep?: string;
+        };
+        rtmp?: {
+          title?: string;
+          description?: string;
+          generating?: string;
+          generated?: string;
+          serverUrl?: string;
+          streamKey?: string;
+          backupServerUrl?: string;
+          copyUrl?: string;
+          copyKey?: string;
+          copied?: string;
+          showKey?: string;
+          hideKey?: string;
+          keyWarning?: string;
+          keyWarningMessage?: string;
+          instructions?: string;
+          step1?: string;
+          step2?: string;
+          step3?: string;
+          softwareGuide?: string;
+          testConnection?: string;
+          connectionStatus?: string;
+          connected?: string;
+          disconnected?: string;
+          testing?: string;
+        };
+        review?: {
+          title?: string;
+          description?: string;
+          streamDetails?: string;
+          streamTitle?: string;
+          streamDescription?: string;
+          category?: string;
+          tags?: string;
+          thumbnail?: string;
+          noThumbnail?: string;
+          rtmpConfig?: string;
+          serverUrl?: string;
+          streamKey?: string;
+          streamId?: string;
+          editDetails?: string;
+          editThumbnail?: string;
+          editRTMP?: string;
+          confirmAndCreate?: string;
+          creating?: string;
+          createSuccess?: string;
+          createFailed?: string;
+          finalChecklist?: string;
+          checkStreamSoftware?: string;
+          checkMicCamera?: string;
+          checkInternetConnection?: string;
+          checkStreamContent?: string;
+        };
+      };
+      // Validation Messages
+      validation?: {
+        required?: string;
+        invalidFormat?: string;
+        uploadFailed?: string;
+        generationFailed?: string;
+        creationFailed?: string;
+      };
+      // Success / Error
+      success?: {
+        streamCreated?: string;
+        streamCreatedMessage?: string;
+        redirecting?: string;
+      };
+      errors?: {
+        failedToSave?: string;
+        failedToGenerate?: string;
+        failedToCreate?: string;
+        networkError?: string;
+        tryAgain?: string;
+      };
+    };
   };
 
   /**
