@@ -87,6 +87,7 @@ jobs:
           path: apps/web/e2e/.auth/
           retention-days: 1
           if-no-files-found: error
+          include-hidden-files: true
 
   e2e-tests:
     name: E2E Tests - Video Upload
