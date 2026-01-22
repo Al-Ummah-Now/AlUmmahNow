@@ -9,6 +9,13 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '.env.test.local') });
 
 /**
+ * Use WEB_APP_URL for deployed environments (QA, staging, production)
+ * Fall back to localhost for local development
+ */
+const baseURL = process.env.WEB_APP_URL || 'http://localhost:3001';
+const isRemoteTarget = baseURL.startsWith('https://');
+
+/**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
@@ -40,7 +47,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://localhost:3001',
+    baseURL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -126,13 +133,15 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:3001',
-    // Always reuse if server is already running (CI starts it manually for globalSetup)
-    reuseExistingServer: true,
-    // CI runners are slower - allow 5 minutes for Next.js to start
-    timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
-  },
+  /* Run your local dev server before starting the tests (only for local development) */
+  webServer: isRemoteTarget
+    ? undefined
+    : {
+        command: 'pnpm dev',
+        url: 'http://localhost:3001',
+        // Always reuse if server is already running (CI starts it manually for globalSetup)
+        reuseExistingServer: true,
+        // CI runners are slower - allow 5 minutes for Next.js to start
+        timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
+      },
 });
