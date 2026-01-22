@@ -70,7 +70,7 @@ jobs:
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://qa.alummahnow.net
+          WEB_APP_URL: https://videos.qa.alummahnow.net
 
       - name: Debug - List auth files
         run: |
@@ -157,7 +157,7 @@ jobs:
           SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://qa.alummahnow.net
+          WEB_APP_URL: https://videos.qa.alummahnow.net
 
       - name: Upload test results
         if: always()
@@ -237,7 +237,7 @@ jobs:
           SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://qa.alummahnow.net
+          WEB_APP_URL: https://videos.qa.alummahnow.net
 
       - name: Generate HTML report
         if: always()
@@ -325,7 +325,7 @@ jobs:
           SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://qa.alummahnow.net
+          WEB_APP_URL: https://videos.qa.alummahnow.net
 
       - name: Upload mobile test results
         if: always()
