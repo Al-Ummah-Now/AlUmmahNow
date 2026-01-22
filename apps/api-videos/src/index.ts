@@ -7,6 +7,7 @@ import { errorHandler } from "./middleware/error-handler";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
+import type { AppBindings } from './base';
 
 // TUS Proxy import (not in routers yet)
 import { createTusRouter } from "./endpoints/video/tus";
@@ -20,7 +21,7 @@ import handleChannelCoverUpdate from "./endpoints/channel/channelCoverUpdate";
 // APP SETUP
 // ==========================================
 
-const app = new Hono();
+const app = new Hono<{ Bindings: AppBindings }>();
 
 // Register global error handler (catches all unhandled errors)
 app.onError(errorHandler);
@@ -29,31 +30,28 @@ app.onError(errorHandler);
 // GLOBAL MIDDLEWARE
 // ==========================================
 
-// CORS origin validation
-const isAllowedOrigin = (origin: string): boolean => {
-	const allowedOrigins = [
-		// Production
-		'https://alummahnow.net',
-		'https://www.alummahnow.net',
-		'https://admin.alummahnow.net',
-		// Staging
-		'https://staging.alummahnow.net',
-		'https://admin-staging.alummahnow.net',
-		// Development
-		'http://localhost:3000',
-		'http://localhost:3001',
-		'http://localhost:3090',
-		'http://127.0.0.1:3000',
-		'http://127.0.0.1:3001',
-		'http://127.0.0.1:3086',
-		'http://127.0.0.1:3090',
-	];
+// Default allowed origins for development
+const DEFAULT_CORS_ORIGINS = [
+	'http://localhost:3000',
+	'http://localhost:3001',
+	'http://localhost:3090',
+	'http://127.0.0.1:3000',
+	'http://127.0.0.1:3001',
+	'http://127.0.0.1:3086',
+	'http://127.0.0.1:3090',
+];
+
+// CORS origin validation - uses CORS_ORIGINS env var if set, otherwise defaults
+const isAllowedOrigin = (origin: string, corsOrigins?: string): boolean => {
+	const envOrigins = corsOrigins?.split(',').map(o => o.trim()) || [];
+	const allowedOrigins = envOrigins.length > 0 ? envOrigins : DEFAULT_CORS_ORIGINS;
 	return allowedOrigins.includes(origin);
 };
 
 // Setup CORS for all routes
 app.use('*', cors({
-	origin: (origin) => isAllowedOrigin(origin) ? origin : '',
+	// origin callback receives (origin, context) - context has env access
+	origin: (origin, c) => isAllowedOrigin(origin, c.env.CORS_ORIGINS) ? origin : '',
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
 	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
 	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata'],
@@ -71,7 +69,7 @@ app.use('*', loggingMiddleware);
 // Explicit OPTIONS handler for profile endpoints
 app.options('/api/profile*', (c) => {
 	const origin = c.req.header('Origin') || '';
-	const allowedOrigin = isAllowedOrigin(origin) ? origin : '';
+	const allowedOrigin = isAllowedOrigin(origin, c.env.CORS_ORIGINS) ? origin : '';
 	if (allowedOrigin) {
 		c.header('Access-Control-Allow-Origin', allowedOrigin);
 	}
@@ -85,7 +83,7 @@ app.options('/api/profile*', (c) => {
 // Explicit OPTIONS handler for all API endpoints
 app.options('/api/*', (c) => {
 	const origin = c.req.header('Origin') || '';
-	const allowedOrigin = isAllowedOrigin(origin) ? origin : '';
+	const allowedOrigin = isAllowedOrigin(origin, c.env.CORS_ORIGINS) ? origin : '';
 	if (allowedOrigin) {
 		c.header('Access-Control-Allow-Origin', allowedOrigin);
 	}

@@ -13,11 +13,55 @@ export interface AuthContext {
 }
 
 /**
+ * Cloudflare Workers environment bindings
+ * These are configured in wrangler.jsonc and wrangler.qa.jsonc
+ */
+export interface AppBindings {
+  // R2 Buckets
+  videos: R2Bucket;
+  profiles: R2Bucket;
+  channels: R2Bucket;
+  playlists: R2Bucket;
+  reports: R2Bucket;
+  watch_history: R2Bucket;
+  channel_sections: R2Bucket;
+  community_posts: R2Bucket;
+  channel_tabs: R2Bucket;
+  'upload-defaults': R2Bucket;
+  subtitles: R2Bucket;
+  SCHEDULED_VIDEOS: R2Bucket;
+  'scheduled-videos': R2Bucket;
+  global_settings: R2Bucket;
+
+  // KV Namespaces
+  RATE_LIMIT_KV: KVNamespace;
+  TUS_SESSIONS: KVNamespace;
+
+  // Queues
+  queue: Queue;
+
+  // Secrets (accessed via .text() method)
+  image_storage_key: { text(): Promise<string> };
+  'bunny-stream-key': { text(): Promise<string> };
+  bunny_stream_library_id: { text(): Promise<string> };
+  INTERNAL_API_KEY: { text(): Promise<string> };
+
+  // Environment Variables
+  ZONE: string;
+  ClientId: string;
+  Issuer: string;
+  Audience?: string;
+  bunny_hostname?: string;
+  WEBSOCKET_URL?: string;
+  CORS_ORIGINS?: string;
+}
+
+/**
  * Application context type with auth bindings
  * This is the context type that all endpoints receive
  */
 export type AppContext = Context<{
-  Bindings: any;
+  Bindings: AppBindings;
   Variables: {
     auth?: AuthContext;
     userId?: string;

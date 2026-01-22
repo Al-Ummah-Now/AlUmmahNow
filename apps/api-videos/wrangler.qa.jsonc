@@ -112,7 +112,8 @@
     "Issuer": "https://auth.qa.alummahnow.net",
     "Audience": "https://videos.qa.alummahnow.net",
     "bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
-    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net"
+    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
+    "CORS_ORIGINS": "https://videos.qa.alummahnow.net,https://admin.qa.alummahnow.net"
   },
   "dev": {
     "ip": "127.0.0.1",
