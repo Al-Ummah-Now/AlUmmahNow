@@ -16,7 +16,7 @@
     "@al-ummah/shared-types": "workspace:*",
     "@al-ummah-now/openauth": "1.0.15",
     "chanfana": "^2.0.5",
-    "hono": "^4.7.4",
+    "hono": "^4.12.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -26,6 +26,6 @@
     "eslint": "9.39.1",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.46.4",
-    "wrangler": "^4.14.1"
+    "wrangler": "^4.59.1"
   }
 }
