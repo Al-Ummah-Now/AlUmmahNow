@@ -47,7 +47,7 @@ export class GetCommunityPost extends OptionalAuthRoute {
         return c.json({ error: 'Post not found' }, 404);
       }
 
-      const post = await postData.json();
+      const post = (await postData.json()) as CommunityPost;
 
       // Don't show deleted posts
       if (post.status === PostStatus.DELETED) {

@@ -93,7 +93,7 @@ export class ListCommunityPosts extends OptionalAuthRoute {
         const postData = await c.env.community_posts.get(postKey);
 
         if (postData) {
-          const post = await postData.json();
+          const post = (await postData.json()) as CommunityPost;
 
           // Filter out soft-deleted posts
           if (post.isDeleted) {

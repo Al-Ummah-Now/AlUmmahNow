@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Channel } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
@@ -75,7 +76,7 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
         return c.json({ error: 'Channel not found' }, 404);
       }
 
-      const channel = await channelData.json();
+      const channel = (await channelData.json()) as Channel;
       if (channel.userId !== userId) {
         return c.json({ error: 'User does not own this channel' }, 403);
       }
