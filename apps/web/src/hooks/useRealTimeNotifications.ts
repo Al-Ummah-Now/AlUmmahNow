@@ -50,12 +50,24 @@ export function useRealTimeNotifications(
   const removeNotificationRef = useRef(removeNotification);
   const maxNotificationsRef = useRef(maxNotifications);
   const autoRemoveAfterRef = useRef(autoRemoveAfter);
+  // Track pending auto-remove timers so they can be cleared on unmount (prevents
+  // leaked timers keeping the event loop alive and setState-after-unmount warnings)
+  const autoRemoveTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   useEffect(() => {
     removeNotificationRef.current = removeNotification;
     maxNotificationsRef.current = maxNotifications;
     autoRemoveAfterRef.current = autoRemoveAfter;
   }, [removeNotification, maxNotifications, autoRemoveAfter]);
+
+  // Clear any pending auto-remove timers on unmount
+  useEffect(() => {
+    const timers = autoRemoveTimersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
+  }, []);
 
   const handleNotificationUpdate = useCallback((eventData: unknown) => {
     // Type guard to ensure eventData is NotificationEvent
@@ -92,9 +104,11 @@ export function useRealTimeNotifications(
 
       // Auto-remove notification after specified time
       if (autoRemoveAfterRef.current) {
-        setTimeout(() => {
+        const timerId = setTimeout(() => {
+          autoRemoveTimersRef.current.delete(timerId);
           removeNotificationRef.current(notification.id);
         }, autoRemoveAfterRef.current);
+        autoRemoveTimersRef.current.add(timerId);
       }
 
       // Show browser notification if supported and permission granted
