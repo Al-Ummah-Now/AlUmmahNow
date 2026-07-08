@@ -58,7 +58,7 @@ describe('Channel Section Event Handler', () => {
       // Verify the creation metrics save
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/sections/creation/'),
-        expect.stringContaining('"event": "section_created"'),
+        expect.stringContaining('"event":"section_created"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -101,7 +101,7 @@ describe('Channel Section Event Handler', () => {
       // Verify view metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/sections/views/'),
-        expect.stringContaining('"event": "section_viewed"'),
+        expect.stringContaining('"event":"section_viewed"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -128,7 +128,7 @@ describe('Channel Section Event Handler', () => {
       // Verify reorder metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/sections/reorders/'),
-        expect.stringContaining('"event": "sections_reordered"'),
+        expect.stringContaining('"event":"sections_reordered"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -156,7 +156,7 @@ describe('Channel Section Event Handler', () => {
       // Verify update metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/sections/updates/'),
-        expect.stringContaining('"event": "section_updated"'),
+        expect.stringContaining('"event":"section_updated"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -182,7 +182,7 @@ describe('Channel Section Event Handler', () => {
       // Verify deletion metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/sections/deletions/'),
-        expect.stringContaining('"event": "section_deleted"'),
+        expect.stringContaining('"event":"section_deleted"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })

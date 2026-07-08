@@ -32,7 +32,7 @@ describe('MessageProcessor', () => {
         id: 'test-1',
         type: MessageType.ProfileCreate,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           userId: 'user-123',
           profileData: { name: 'John Doe', email: 'john@example.com' },
         },
@@ -51,7 +51,7 @@ describe('MessageProcessor', () => {
         id: 'test-2',
         type: MessageType.ChannelCreate,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           channelId: 'channel-456',
           userId: 'user-123',
         },
@@ -69,7 +69,7 @@ describe('MessageProcessor', () => {
         id: 'test-3',
         type: MessageType.Subscribe,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           userId: 'user-123',
           channelId: 'channel-456',
         },
@@ -87,7 +87,7 @@ describe('MessageProcessor', () => {
         id: 'test-4',
         type: MessageType.VideoView,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           videoId: 'video-789',
           userId: 'user-123',
         },
@@ -105,7 +105,7 @@ describe('MessageProcessor', () => {
         id: 'test-5',
         type: MessageType.CommentCreate,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           commentId: 'comment-101',
           userId: 'user-123',
           videoId: 'video-789',
@@ -124,7 +124,7 @@ describe('MessageProcessor', () => {
         id: 'test-6',
         type: MessageType.PlaylistCreate,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           playlistId: 'playlist-202',
           userId: 'user-123',
         },
@@ -142,7 +142,7 @@ describe('MessageProcessor', () => {
         id: 'test-7',
         type: MessageType.ProfileCreate,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           // Missing userId
           profileData: { name: 'John Doe' },
         },
@@ -161,7 +161,7 @@ describe('MessageProcessor', () => {
         id: 'test-8',
         type: MessageType.ChannelCreate,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           userId: 'user-123',
           // Missing channelId
         },
@@ -180,7 +180,7 @@ describe('MessageProcessor', () => {
         id: 'test-9',
         type: MessageType.VideoView,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           userId: 'user-123',
           // Missing videoId
         },
@@ -189,7 +189,7 @@ describe('MessageProcessor', () => {
       const result = await processor.processMessage(message, mockEnv);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('missing required fields: videoId, userId');
+      expect(result.error).toContain('missing required field: videoId');
       expect(result.shouldRetry).toBe(false);
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalled();
     });
@@ -199,7 +199,7 @@ describe('MessageProcessor', () => {
         id: '', // Invalid empty ID
         type: MessageType.VideoView,
         timestamp: new Date().toISOString(),
-        data: {},
+        payload: {},
       };
 
       const result = await processor.processMessage(message, mockEnv);
@@ -216,7 +216,7 @@ describe('MessageProcessor', () => {
         id: 'test-10',
         type: MessageType.VideoView,
         timestamp: '2024-09-22T10:30:45.123Z',
-        data: {
+        payload: {
           videoId: 'video-789',
           userId: 'user-123',
         },
@@ -226,7 +226,8 @@ describe('MessageProcessor', () => {
 
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         '2024-09-22T10-30-45.test-10',
-        expect.stringContaining('"id": "test-10"')
+        expect.stringContaining('"id": "test-10"'),
+        expect.anything()
       );
     });
 
@@ -235,7 +236,7 @@ describe('MessageProcessor', () => {
         id: 'test-11',
         type: MessageType.VideoView,
         timestamp: new Date().toISOString(),
-        data: {
+        payload: {
           videoId: 'video-789',
           userId: 'user-123',
         },
