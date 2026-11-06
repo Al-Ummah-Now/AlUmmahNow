@@ -13,8 +13,8 @@ class R2Repository<T> {
     this.bucket = bucket;
   }
 
-  async listObjects(limit: number, cursor?: string): Promise<PaginationResponse<T>> {
-    const listResult = await this.bucket.list({ limit, cursor });
+  async listObjects(limit: number, cursor?: string, prefix?: string): Promise<PaginationResponse<T>> {
+    const listResult = await this.bucket.list(prefix ? { limit, cursor, prefix } : { limit, cursor });
 
     if (!listResult.objects) {
       return {
