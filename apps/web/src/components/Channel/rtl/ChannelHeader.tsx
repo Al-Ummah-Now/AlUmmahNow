@@ -2,8 +2,8 @@
 
 import { Channel } from '@al-ummah/shared-types';
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { useChannelSubscription } from '@/hooks/useChannelSubscription';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
 import { getTranslations } from '@/lib/i18n';
@@ -17,94 +17,31 @@ interface ChannelHeaderProps {
 
 export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeaderProps) {
   const { user } = useMultiAccount();
-  const [isSubscribed, setIsSubscribed] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [checkingSubscription, setCheckingSubscription] = useState(true);
-
   const t = getTranslations(locale as 'en' | 'ar');
   const displayName = channel.nameLocalized?.[locale] || channel.name;
   const displayDescription = channel.descriptionLocalized?.[locale] || channel.description;
 
-  // Check initial subscription status
-  useEffect(() => {
-    async function checkSubscription() {
-      if (!user || isOwner) {
-        setCheckingSubscription(false);
-        return;
-      }
-
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3086';
-        const response = await fetch(`${apiUrl}/api/channels/${channel.id}/subscriptions/check`, {
-          headers: {
-            'userId': user.id,
-            'channelId': user.channel?.id || '',
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setIsSubscribed(data.isSubscribed || false);
-        }
-      } catch (error) {
-        logger.error('[ChannelHeader RTL] Error checking subscription status:', error);
-      } finally {
-        setCheckingSubscription(false);
-      }
-    }
-
-    checkSubscription();
-  }, [user, channel.id, isOwner]);
+  const {
+    isSubscribed,
+    subscriberCount,
+    isChecking: checkingSubscription,
+    isUpdating: isLoading,
+    error: subscriptionError,
+    toggle,
+  } = useChannelSubscription({
+    channelId: channel.id,
+    enabled: !!user && !isOwner,
+    initialSubscriberCount: channel.subscribersCount,
+  });
 
   const handleSubscribe = async () => {
     if (!user) {
-      logger.warn('[ChannelHeader] Subscribe clicked but user not logged in');
-      // Redirect to login or show login modal
+      logger.warn('[ChannelHeader RTL] Subscribe clicked but user not logged in');
       window.location.href = `/${locale}/login?redirect=${encodeURIComponent(window.location.pathname)}`;
       return;
     }
-
-    setIsLoading(true);
-
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3086';
-      const endpoint = isSubscribed
-        ? `${apiUrl}/api/channels/${channel.id}/subscriptions`
-        : `${apiUrl}/api/channels/${channel.id}/subscriptions`;
-
-      const method = isSubscribed ? 'DELETE' : 'POST';
-
-      logger.info(`[ChannelHeader] ${isSubscribed ? 'Unsubscribing from' : 'Subscribing to'} channel`, {
-        channelId: channel.id,
-        
-        method,
-      });
-
-      const response = await fetch(endpoint, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'userId': user.id,
-          'channelId': user.channel?.id || '',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Failed to ${isSubscribed ? 'unsubscribe' : 'subscribe'}`);
-      }
-
-      setIsSubscribed(!isSubscribed);
-      logger.info(`[ChannelHeader] Successfully ${isSubscribed ? 'unsubscribed' : 'subscribed'}`, {
-        channelId: channel.id,
-        newState: !isSubscribed,
-      });
-    } catch (error) {
-      logger.error('[ChannelHeader] Subscription error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to update subscription');
-    } finally {
-      setIsLoading(false);
-    }
+    const ok = await toggle();
+    logger.info('[ChannelHeader RTL] Subscription toggle finished', { channelId: channel.id, ok });
   };
 
   return (
@@ -220,9 +157,9 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
             </div>
 
             <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
-              {channel.subscribersCount !== undefined && (
+              {subscriberCount !== undefined && (
                 <span>
-                  {formatSubscriberCount(channel.subscribersCount)} {t.channel.subscribers}
+                  {formatSubscriberCount(subscriberCount)} {t.channel.subscribers}
                 </span>
               )}
               {channel.videosCount !== undefined && channel.videosCount > 0 && (
@@ -234,6 +171,24 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                 </>
               )}
             </div>
+
+            {subscriptionError && (
+              <p className="text-sm text-red-600 dark:text-red-400 mb-2" role="alert">
+                {subscriptionError === 'auth'
+                  ? t.errors.loginRequired
+                  : subscriptionError === 'channel'
+                    ? t.errors.channelRequired
+                    : t.errors.failedToUpdate}
+                {subscriptionError === 'channel' && (
+                  <>
+                    {' '}
+                    <Link href={`/${locale}/profile`} className="underline font-medium">
+                      {t.navigation.createChannel}
+                    </Link>
+                  </>
+                )}
+              </p>
+            )}
 
             {displayDescription && (
               <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 mb-4">

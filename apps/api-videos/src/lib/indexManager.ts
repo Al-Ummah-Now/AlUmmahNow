@@ -5,6 +5,7 @@
 
 import { logger } from './logger';
 import { VideoObject } from '@al-ummah/shared-types';
+import { isVideoPubliclyVisible } from './visibility';
 
 /**
  * Time-based index for recent videos
@@ -202,7 +203,7 @@ export class IndexManager {
   async updateRecentVideosIndex(videos: VideoObject[]): Promise<void> {
     // Sort by date created (newest first) and take top 100
     const sortedVideos = videos
-      .filter(v => v.isPublic !== false) // Only public videos
+      .filter(v => isVideoPubliclyVisible(v)) // Only public videos
       .sort((a, b) => {
         const dateA = new Date(a.dateCreated || 0).getTime();
         const dateB = new Date(b.dateCreated || 0).getTime();
@@ -233,7 +234,7 @@ export class IndexManager {
     // Filter videos based on period
     const now = Date.now();
     const filteredVideos = videos.filter(v => {
-      if (v.isPublic === false) return false; // Only public videos
+      if (!isVideoPubliclyVisible(v)) return false; // Only public videos
       if (period === 'all') return true;
 
       const videoDate = new Date(v.dateCreated || 0).getTime();
@@ -286,7 +287,7 @@ export class IndexManager {
     // This will be implemented using the trending algorithm
     // For now, we'll use a simple placeholder
     const videosWithScores = videos
-      .filter(v => v.isPublic !== false) // Only public videos
+      .filter(v => isVideoPubliclyVisible(v)) // Only public videos
       .map(v => ({
         videoId: v.id,
         trendingScore: 0, // Will be calculated by trending algorithm
@@ -316,7 +317,7 @@ export class IndexManager {
   async updateCategoryVideosIndex(videos: VideoObject[], category: string): Promise<void> {
     // Filter videos by category
     const categoryVideos = videos
-      .filter(v => v.isPublic !== false && v.category === category)
+      .filter(v => isVideoPubliclyVisible(v) && v.category === category)
       .sort((a, b) => {
         // Sort by a combination of recency and popularity
         const scoreA = (a.views || 0) + (new Date(a.dateCreated || 0).getTime() / 1000000);

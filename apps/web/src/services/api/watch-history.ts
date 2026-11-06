@@ -11,13 +11,48 @@ import { logger } from '@/lib/logger-client';
  * - Efficient throttling to prevent API spam
  * - Automatic quota management with StorageManager
  *
- * API Endpoint: POST /api/profile/watch-history
+ * API Endpoints (api-videos):
+ * - POST   /api/watch-history                     record a watch (creates entry)
+ * - POST   /api/watch-history/:videoId/progress   update progress of an entry
+ * - GET    /api/watch-history/:videoId/progress   get progress for resume
+ * - GET    /api/watch-history                     list history (paginated)
+ * - DELETE /api/watch-history/:videoId            remove one entry
+ * - DELETE /api/watch-history                     clear all history
  */
 
 import { StorageManager } from '@/lib/utils/storage';
 import { getApiUrl } from '@/lib/runtime-config';
+import { getClientAuthHeaders } from '@/lib/auth/client-token';
 
-const baseUrl = getApiUrl();
+/** Resolved per call: runtime config is injected after module evaluation. */
+const apiBase = (): string => getApiUrl();
+
+/**
+ * Watch history entry as returned by GET /api/watch-history
+ */
+export interface WatchHistoryItem {
+  id: string;
+  userId: string;
+  videoId: string;
+  videoTitle: string;
+  videoThumbnail?: string;
+  videoDuration: number;
+  channelId: string;
+  channelName: string;
+  firstWatchedAt: string;
+  lastWatchedAt: string;
+  watchCount: number;
+  progress: number;
+  completed: boolean;
+  percentageWatched: number;
+}
+
+export interface WatchHistoryPage {
+  entries: WatchHistoryItem[];
+  total: number;
+  hasMore: boolean;
+  cursor?: string;
+}
 
 /**
  * Watch progress data structure
@@ -52,23 +87,32 @@ export class WatchHistoryService {
     authToken: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(
-        `${baseUrl}/api/profile/watch-history`,
-        {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      };
+      const body = JSON.stringify({
+        progress: progress.currentTime,
+        duration: progress.duration,
+      });
+
+      // Update the existing entry; create it on first save (404)
+      let response = await fetch(
+        `${apiBase()}/api/watch-history/${encodeURIComponent(progress.videoId)}/progress`,
+        { method: 'POST', headers, body }
+      );
+
+      if (response.status === 404) {
+        response = await fetch(`${apiBase()}/api/watch-history`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-          },
+          headers,
           body: JSON.stringify({
             videoId: progress.videoId,
-            currentTime: progress.currentTime,
+            progress: progress.currentTime,
             duration: progress.duration,
-            completed: progress.completed,
-            timestamp: progress.timestamp,
           }),
-        }
-      );
+        });
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -101,7 +145,7 @@ export class WatchHistoryService {
   ): Promise<WatchProgress | null> {
     try {
       const response = await fetch(
-        `${baseUrl}/api/profile/watch-history/${videoId}`,
+        `${apiBase()}/api/watch-history/${encodeURIComponent(videoId)}/progress`,
         {
           method: 'GET',
           headers: {
@@ -117,8 +161,20 @@ export class WatchHistoryService {
         throw new Error(`Failed to get progress: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      return data.result || data;
+      const data: {
+        videoId: string;
+        progress: number;
+        duration: number;
+        completed: boolean;
+        lastWatchedAt?: string;
+      } = await response.json();
+      return {
+        videoId: data.videoId || videoId,
+        currentTime: data.progress || 0,
+        duration: data.duration || 0,
+        completed: !!data.completed,
+        timestamp: data.lastWatchedAt || new Date().toISOString(),
+      };
     } catch (error) {
       logger.error('[WatchHistoryService] Failed to get progress:', error);
       return null;
@@ -272,7 +328,7 @@ export class WatchHistoryService {
     try {
       if (authToken) {
         await fetch(
-          `${baseUrl}/api/profile/watch-history/${videoId}`,
+          `${apiBase()}/api/watch-history/${encodeURIComponent(videoId)}`,
           {
             method: 'DELETE',
             headers: {
@@ -287,6 +343,68 @@ export class WatchHistoryService {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
     } catch (error) {
       logger.error('[WatchHistoryService] Failed to clear progress:', error);
+    }
+  }
+
+  /**
+   * List the active account's watch history (newest first).
+   * Uses the browser auth token (cookies are httpOnly).
+   */
+  static async list(
+    params: { limit?: number; cursor?: string } = {}
+  ): Promise<WatchHistoryPage | null> {
+    try {
+      const query = new URLSearchParams({ sort: 'newest', limit: String(params.limit ?? 20) });
+      if (params.cursor) query.set('cursor', params.cursor);
+      const response = await fetch(`${apiBase()}/api/watch-history?${query.toString()}`, {
+        headers: await getClientAuthHeaders(),
+      });
+      if (!response.ok) {
+        logger.warn('[WatchHistoryService] List failed', { status: response.status });
+        return null;
+      }
+      return (await response.json()) as WatchHistoryPage;
+    } catch (error) {
+      logger.error('[WatchHistoryService] Failed to list history:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Remove a single video from the active account's watch history.
+   */
+  static async remove(videoId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${apiBase()}/api/watch-history/${encodeURIComponent(videoId)}`, {
+        method: 'DELETE',
+        headers: await getClientAuthHeaders(),
+      });
+      if (!response.ok) {
+        logger.warn('[WatchHistoryService] Remove failed', { videoId, status: response.status });
+      }
+      return response.ok;
+    } catch (error) {
+      logger.error('[WatchHistoryService] Failed to remove history entry:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear the active account's entire watch history.
+   */
+  static async clearAll(): Promise<boolean> {
+    try {
+      const response = await fetch(`${apiBase()}/api/watch-history`, {
+        method: 'DELETE',
+        headers: await getClientAuthHeaders(),
+      });
+      if (!response.ok) {
+        logger.warn('[WatchHistoryService] Clear failed', { status: response.status });
+      }
+      return response.ok;
+    } catch (error) {
+      logger.error('[WatchHistoryService] Failed to clear history:', error);
+      return false;
     }
   }
 

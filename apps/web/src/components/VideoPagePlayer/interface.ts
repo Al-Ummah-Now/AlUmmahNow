@@ -21,4 +21,6 @@ export interface PlayerOptions {
   likesCount?: number;
   dislikesCount?: number;
   commentsCount?: number;
+  userId?: string; // Owner of the video (may delete any comment)
+  channelId?: string | null;
 }

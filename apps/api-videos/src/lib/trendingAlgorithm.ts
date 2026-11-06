@@ -5,6 +5,7 @@
 
 import { VideoObject } from '@al-ummah/shared-types';
 import { logger } from './logger';
+import { isVideoPubliclyVisible } from './visibility';
 
 /**
  * Extended video metrics for trending calculations
@@ -207,7 +208,7 @@ export function processTrendingVideos(
 
   // Calculate trending scores for all videos
   const trendingVideos = videos
-    .filter(v => v.isPublic !== false) // Only public videos
+    .filter(v => isVideoPubliclyVisible(v)) // Only public videos
     .map(video => {
       const trendingScore = calculateTrendingScore(video, algorithm);
       const viewVelocity = calculateViewVelocity(video);

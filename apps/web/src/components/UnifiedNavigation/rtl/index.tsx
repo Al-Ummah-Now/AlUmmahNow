@@ -32,7 +32,12 @@ import {
   Crown,
   Video,
   Calendar,
+  History,
+  Rss,
 } from 'lucide-react';
+import { getTranslations } from '@/lib/i18n';
+
+const tAr = getTranslations('ar');
 
 export function UnifiedNavigationRTL() {
   const {
@@ -219,19 +224,31 @@ export function UnifiedNavigationRTL() {
     }
   };
 
-  // Only show video-related links if user has channels
-  const navItems = channels.length > 0 ? [
+  // Feed/history for every signed-in account; video links only with channels
+  const navItems = [
     {
-      label: 'فيديوهاتي',
-      icon: Video,
-      href: '/ar/dashboard/videos',
+      label: tAr.subscriptions.subscriptionFeed,
+      icon: Rss,
+      href: '/ar/feed',
     },
     {
-      label: 'الفيديوهات المجدولة',
-      icon: Calendar,
-      href: '/ar/scheduled-videos',
+      label: tAr.feed.history,
+      icon: History,
+      href: '/ar/history',
     },
-  ] : [];
+    ...(channels.length > 0 ? [
+      {
+        label: 'فيديوهاتي',
+        icon: Video,
+        href: '/ar/dashboard/videos',
+      },
+      {
+        label: 'الفيديوهات المجدولة',
+        icon: Calendar,
+        href: '/ar/scheduled-videos',
+      },
+    ] : []),
+  ];
 
   return (
     <div className="relative">

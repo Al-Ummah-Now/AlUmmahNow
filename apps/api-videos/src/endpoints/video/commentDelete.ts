@@ -84,6 +84,14 @@ export class CommentDelete extends AuthenticatedRoute {
 			}, 404);
 		}
 
+		// The comment author or the video owner may delete a comment
+		if (comment.userId !== userId && video.userId !== userId) {
+			return c.json({
+				success: false,
+				error: "Forbidden",
+			}, 403);
+		}
+
 		// Send queue message for comment deletion
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.CommentDelete, {

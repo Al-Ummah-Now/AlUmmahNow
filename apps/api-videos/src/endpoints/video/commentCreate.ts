@@ -1,10 +1,12 @@
 import { Str } from "chanfana";
-import { date, z } from "zod";
-import { Video, ResponseError } from "../../lib/types";
+import { z } from "zod";
+import { Video, Channel, Profile, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
-import { Comment } from "../../lib/model/input";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { logger } from "../../lib/logger";
+import { isVideoRemoved } from "../../lib/visibility";
+import { MAX_COMMENT_LENGTH, normalizeCommentText, resolveCommentAuthor, toCommentListItem } from "../../lib/comments";
 
 
 export class CommentCreate extends AuthenticatedRoute {
@@ -21,14 +23,18 @@ export class CommentCreate extends AuthenticatedRoute {
 			body: {
 				content: {
 					"application/json": {
-						schema: Comment,
+						// Accepts `text` (preferred) or `content` (shared-types CommentCreateRequest)
+						schema: z.object({
+							text: z.string().optional(),
+							content: z.string().optional(),
+						}),
 					},
 				},
 			},
 		},
 		responses: {
 			"200": {
-				description: "Returns the created comment",
+				description: "Returns the created comment with its author",
 				content: {
 					"application/json": {
 						schema: z.object({
@@ -37,8 +43,11 @@ export class CommentCreate extends AuthenticatedRoute {
 								comment: z.object({
 									id: z.string(),
 									text: z.string(),
-									author: z.string(),
 									videoId: z.string(),
+									author: z.object({
+										displayName: z.string(),
+										avatarUrl: z.string().optional(),
+									}),
 								}),
 							}),
 						}),
@@ -53,8 +62,8 @@ export class CommentCreate extends AuthenticatedRoute {
 					},
 				},
 			},
-			"500": {
-				description: "Internal server error",
+			"404": {
+				description: "Video not found",
 				content: {
 					"application/json": {
 						schema: ResponseError,
@@ -71,72 +80,83 @@ export class CommentCreate extends AuthenticatedRoute {
 		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
-		// Implement your own object fetch here
-		const bucket = c.env.videos;
+		const text = normalizeCommentText(request.body);
+		if (!text) {
+			return c.json({ success: false, error: "Comment text is required" }, 400);
+		}
+		if (text.length > MAX_COMMENT_LENGTH) {
+			return c.json({ success: false, error: `Comment text must be at most ${MAX_COMMENT_LENGTH} characters` }, 400);
+		}
+
 		type VideoType = z.infer<typeof Video>;
-		const repository = new R2Repository<VideoType>(bucket);
-		let video = await repository.getObject(id);
+		const repository = new R2Repository<VideoType>(c.env.videos);
+		const video = await repository.getObject(id);
 
-		const exists = video !== null;
-
-		if (!exists) {
-			return c.json(
-				{
-					success: false,
-					error: "Object not found",
-				},
-				404
-			);
+		if (!video || isVideoRemoved(video)) {
+			return c.json({ success: false, error: "Object not found" }, 404);
 		}
 
 		// Check privacy permissions for commenting on videos
-		if (video.isPublic === false && (!userId || video.userId !== userId)) {
-			return c.json(
-				{
-					success: false,
-					error: "Object not found", // Don't reveal that private video exists
-				},
-				404
-			);
+		if (video.isPublic === false && video.userId !== userId) {
+			// Don't reveal that private video exists
+			return c.json({ success: false, error: "Object not found" }, 404);
 		}
 
+		if (!video.comments) {
+			video.comments = [];
+		}
+
+		const now = new Date().toISOString();
 		const comment = {
 			id: crypto.randomUUID(),
 			videoId: id,
-			userId: userId,
-			channelId: channelId,
-			...request.body,
-			dateCreated: new Date().toISOString(),
-			dateModified: new Date().toISOString(),
+			userId,
+			channelId,
+			text,
+			likes: [],
+			dislikes: [],
+			replies: [],
+			isEdited: false,
+			isDeleted: false,
+			isPinned: false,
+			dateCreated: now,
+			dateModified: now,
 		};
+
+		video.comments.push(comment);
+		// Note: commentsCount is calculated in view layer, not stored
+		await repository.putObject(video.id, video);
 
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.CommentCreate, {
 			commentId: comment.id,
 			videoId: id,
-			userId: userId,
-			channelId: channelId,
-			timestamp: new Date().toISOString(),
+			userId,
+			channelId,
+			timestamp: now,
 		});
 
-		const alreadyCommented = video.comments.find((existingComment) => existingComment.text === comment.text && existingComment.channelId === comment.channelId);
-		if (alreadyCommented) {
-			return c.json(
-				{
-					success: true,
-				},
-				201
-			);
+		// Resolve the author so the client can render the comment immediately
+		type ChannelType = z.infer<typeof Channel>;
+		type ProfileType = z.infer<typeof Profile>;
+		let channel: ChannelType | null = null;
+		let profile: ProfileType | null = null;
+		try {
+			channel = await new R2Repository<ChannelType>(c.env.channels).getObject(channelId);
+			if (!channel?.name) {
+				profile = await new R2Repository<ProfileType>(c.env.profiles).getObject(userId);
+			}
+		} catch (error) {
+			logger.warn('[CommentCreate] Failed to resolve comment author', { videoId: id, channelId, error: error instanceof Error ? error.message : String(error) });
 		}
 
-		video.comments.push(comment);
-		// Note: commentsCount is calculated in view layer, not stored
-
-		await repository.putObject(video.id, video);
+		logger.info('[CommentCreate] Comment created', { videoId: id, commentId: comment.id, channelId });
 
 		return {
 			success: true,
-			result: { comment },
+			result: {
+				comment: toCommentListItem(comment, resolveCommentAuthor(comment, channel, profile), channelId),
+			},
 		};
 	}
 }

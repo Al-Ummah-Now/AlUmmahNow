@@ -7,7 +7,7 @@
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { z } from "zod";
 import { Context } from "hono";
-import R2Repository from "../../lib/r2Repo";
+import { listUserWatchHistory } from "./user-entries";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type {
   WatchHistoryEntry,
@@ -113,18 +113,8 @@ export class ListWatchHistory extends AuthenticatedRoute {
     const sort = (query.sort || "newest") as "newest" | "oldest" | "alphabetical";
 
     try {
-      const watchHistoryRepo = new R2Repository<WatchHistoryEntry>(
-        c.env.watch_history
-      );
-
-      // List all watch history entries for this user
-      // Entries are stored with key pattern: userId:videoId
-      const allEntriesResponse = await watchHistoryRepo.listObjects(1000); // Fetch up to 1000 entries
-
-      // Filter entries for this user only
-      let userEntries = allEntriesResponse.items.filter(
-        (entry) => entry.userId === userId
-      );
+      // Entries are stored with key pattern userId:videoId (prefix listing)
+      let userEntries = await listUserWatchHistory(c.env.watch_history, userId);
 
       // Apply completed filter if specified
       if (completed !== undefined) {

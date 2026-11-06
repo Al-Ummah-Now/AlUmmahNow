@@ -1,16 +1,21 @@
 'use server';
 
 import { ApiHeaders } from "./types";
-import { getApiUrl } from "@/lib/runtime-config";
+import { buildApiUrl } from "./api-client";
+import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 
-const baseUrl = getApiUrl();
+/** Entity types accepted by api-videos ReportInput */
+export type ReportContentType = 'video' | 'comment' | 'channel' | 'livestream';
+
+/** Reasons accepted by api-videos ReportInput */
+export type ReportReason = 'inappropriate' | 'spam' | 'harassment' | 'copyright' | 'misinformation' | 'other';
 
 // Types for user-facing report creation
 export interface ReportCreateRequest {
-  contentType: 'video' | 'comment' | 'channel' | 'playlist';
+  contentType: ReportContentType;
   contentId: string;
-  reason: string;
+  reason: ReportReason;
   customReason?: string;
   description?: string;
 }
@@ -22,6 +27,18 @@ export interface ReportCreateResponse {
   reason: string;
   status: string;
   dateCreated: string;
+}
+
+export type ReportCreateErrorCode = 'auth' | 'duplicate' | 'invalid' | 'failed';
+
+/**
+ * Server actions cannot surface thrown error messages to the client in
+ * production builds, so failures are returned as codes.
+ */
+export interface ReportCreateResult {
+  success: boolean;
+  report?: ReportCreateResponse;
+  error?: ReportCreateErrorCode;
 }
 
 // API response type (matches api-videos response format)
@@ -41,34 +58,48 @@ interface ReportApiResponse {
 export async function createReport(
   reportData: ReportCreateRequest,
   headers?: ApiHeaders
-): Promise<ReportCreateResponse | null> {
+): Promise<ReportCreateResult> {
   try {
-    const response = await fetch(
-      `${baseUrl}/api/moderation/reports`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-        body: JSON.stringify({
-          entityType: reportData.contentType,
-          entityId: reportData.contentId,
-          reason: reportData.reason,
-          description: reportData.description || reportData.customReason,
-        }),
-      }
-    );
+    const auth = await getServerAuthContext();
+    if (!auth?.accessToken) {
+      logger.warn('[createReport] No authenticated session');
+      return { success: false, error: 'auth' };
+    }
+
+    // The channelId header must be a channel the reporter owns (api-videos
+    // verifies ownership), so use the session's active channel.
+    const reporterChannelId = auth.channelId || headers?.channelId;
+    const description = [reportData.customReason, reportData.description].filter(Boolean).join(' — ') || undefined;
+
+    const response = await fetch(buildApiUrl('/api/moderation/reports'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${auth.accessToken}`,
+        ...(reporterChannelId && { 'channelId': reporterChannelId }),
+      },
+      body: JSON.stringify({
+        entityType: reportData.contentType,
+        entityId: reportData.contentId,
+        reason: reportData.reason,
+        description,
+      }),
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Error creating report: ${response.statusText}`);
+      logger.warn('[createReport] API rejected report', { status: response.status, error: errorData?.error });
+      if (response.status === 401) return { success: false, error: 'auth' };
+      if (response.status === 409) return { success: false, error: 'duplicate' };
+      if (response.status === 400) return { success: false, error: 'invalid' };
+      return { success: false, error: 'failed' };
     }
 
     const data: ReportApiResponse = await response.json();
-    return data.result?.report || null;
+    logger.info('[createReport] Report created', { entityType: reportData.contentType, entityId: reportData.contentId });
+    return { success: true, report: data.result?.report };
   } catch (error) {
     logger.error('createReport failed:', error);
-    throw error;
+    return { success: false, error: 'failed' };
   }
 }

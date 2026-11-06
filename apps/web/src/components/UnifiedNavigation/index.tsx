@@ -32,6 +32,8 @@ import {
   Crown,
   Video,
   Calendar,
+  History,
+  Rss,
 } from 'lucide-react';
 
 export function UnifiedNavigation() {
@@ -235,19 +237,31 @@ export function UnifiedNavigation() {
     }
   };
 
-  // Only show video-related links if user has channels
-  const navItems = channels.length > 0 ? [
+  // Feed/history for every signed-in account; video links only with channels
+  const navItems = [
     {
-      label: t.video.myVideos || 'My Videos',
-      icon: Video,
-      href: `/${lang}/dashboard/videos`,
+      label: t.subscriptions.subscriptionFeed,
+      icon: Rss,
+      href: `/${lang}/feed`,
     },
     {
-      label: t.schedule?.scheduledVideos || 'Scheduled Videos',
-      icon: Calendar,
-      href: `/${lang}/scheduled-videos`,
+      label: t.feed.history,
+      icon: History,
+      href: `/${lang}/history`,
     },
-  ] : [];
+    ...(channels.length > 0 ? [
+      {
+        label: t.video.myVideos || 'My Videos',
+        icon: Video,
+        href: `/${lang}/dashboard/videos`,
+      },
+      {
+        label: t.schedule?.scheduledVideos || 'Scheduled Videos',
+        icon: Calendar,
+        href: `/${lang}/scheduled-videos`,
+      },
+    ] : []),
+  ];
 
   return (
     <div className="relative">

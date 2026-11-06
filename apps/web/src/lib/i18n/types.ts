@@ -665,7 +665,8 @@ export interface AppTranslations {
     noVideosInFeed: string;
     subscribeToSeeVideos: string;
     discoverChannels: string;
-    loadMoreComingSoon: string;
+    loadMore: string;
+    loadFailed: string;
     showingVideosFrom: string;
     wantMore: string;
   };
@@ -870,6 +871,18 @@ export interface AppTranslations {
     liveUpdates: string;
     live: string;
     offline: string;
+    like: string;
+    dislike: string;
+    deleteComment: string;
+    confirmDelete: string;
+    edited: string;
+    unknownAuthor: string;
+    loadMore: string;
+    loading: string;
+    loadFailed: string;
+    actionFailed: string;
+    yourAvatar: string;
+    authorAvatar: string;
   };
 
   /**
@@ -1222,6 +1235,62 @@ export interface AppTranslations {
   /**
    * Settings page related
    */
+  /**
+   * Report content dialog
+   */
+  reportContent: {
+    report: string;
+    title: string;
+    reporting: string;
+    whyReporting: string;
+    selectReason: string;
+    pleaseSpecify: string;
+    briefDescription: string;
+    additionalDetails: string;
+    additionalDetailsPlaceholder: string;
+    charactersCount: string;
+    reviewNotice: string;
+    submit: string;
+    submitting: string;
+    cancel: string;
+    close: string;
+    thankYou: string;
+    failed: string;
+    alreadyReported: string;
+    reasons: {
+      inappropriate: string;
+      spam: string;
+      harassment: string;
+      copyright: string;
+      misinformation: string;
+      other: string;
+    };
+  };
+
+  /**
+   * Watch history page
+   */
+  watchHistory: {
+    title: string;
+    subtitle: string;
+    signInRequired: string;
+    empty: string;
+    emptyDescription: string;
+    browseVideos: string;
+    clearAll: string;
+    clearing: string;
+    confirmClear: string;
+    remove: string;
+    lastWatched: string;
+    percentWatched: string;
+    completed: string;
+    loadMore: string;
+    loadFailed: string;
+    removeFailed: string;
+    clearFailed: string;
+    totalCount: string;
+  };
+
   settings?: {
     uploadDefaults?: string;
     uploadDefaultsDesc?: string;

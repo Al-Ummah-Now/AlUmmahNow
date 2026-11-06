@@ -129,44 +129,99 @@ export async function deleteChannel(
   }), true);
 }
 
+export interface SubscriptionStatusResponse {
+  success: boolean;
+  result?: {
+    channelId: string;
+    isSubscribed: boolean;
+    subscriberCount: number;
+  };
+  error?: string;
+}
+
+/**
+ * Resolve the subscriber channel: the session's active channel wins over a
+ * caller-supplied id (which may be stale), so the API's channel ownership
+ * check passes.
+ */
+async function subscriberAuthContext(fallbackChannelId?: string) {
+  const auth = await getServerAuthContext();
+  return {
+    channelId: auth?.channelId || fallbackChannelId || '',
+    accessToken: auth?.accessToken || '',
+  };
+}
+
 /**
  * Subscribe to a channel
- * POST /api/channels/{id}/subscribe
+ * POST /api/channels/{id}/subscriptions
  */
 export async function subscribeToChannel(
   channelId: string,
   data: SubscriptionRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
-  return apiRequestServer<{ success: boolean }>({
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<SubscriptionStatusResponse | null> {
+  return apiRequestServer<SubscriptionStatusResponse>({
     method: 'POST',
-    url: buildApiUrl(`/api/channels/${channelId}/subscribe`),
+    url: buildApiUrl(`/api/channels/${channelId}/subscriptions`),
     body: data,
     functionName: 'subscribeToChannel'
-  }, async () => ({
-    
-    channelId: headers.channelId,
-    accessToken: (await getServerAuthContext())?.accessToken || '',
-  }), true);
+  }, () => subscriberAuthContext(headers?.channelId), true);
 }
 
 /**
  * Unsubscribe from a channel
- * DELETE /api/channels/{id}/subscribe
+ * DELETE /api/channels/{id}/subscriptions
  */
 export async function unsubscribeFromChannel(
   channelId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
-  return apiRequestServer<{ success: boolean }>({
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<SubscriptionStatusResponse | null> {
+  return apiRequestServer<SubscriptionStatusResponse>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/channels/${channelId}/subscribe`),
+    url: buildApiUrl(`/api/channels/${channelId}/subscriptions`),
     functionName: 'unsubscribeFromChannel'
-  }, async () => ({
-    
-    channelId: headers.channelId,
-    accessToken: (await getServerAuthContext())?.accessToken || '',
-  }), true);
+  }, () => subscriberAuthContext(headers?.channelId), true);
+}
+
+/**
+ * Subscription status of the active account for a channel
+ * GET /api/channels/{id}/subscriptions/status
+ */
+export async function getChannelSubscriptionStatus(
+  channelId: string
+): Promise<SubscriptionStatusResponse | null> {
+  return apiRequestServer<SubscriptionStatusResponse>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${channelId}/subscriptions/status`),
+    functionName: 'getChannelSubscriptionStatus'
+  }, () => subscriberAuthContext(), false);
+}
+
+export interface SubscriptionFeedResponse {
+  success: boolean;
+  data: VideoObject[];
+  cursor: string | null;
+  total: number;
+}
+
+/**
+ * Videos from channels the active account is subscribed to (newest first)
+ * GET /api/profile/subscriptions/feed
+ */
+export async function getSubscriptionFeed(
+  params?: { limit?: number; cursor?: string | null }
+): Promise<SubscriptionFeedResponse | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor || undefined,
+  });
+
+  return apiRequestServer<SubscriptionFeedResponse>({
+    method: 'GET',
+    url: buildApiUrl(`/api/profile/subscriptions/feed${queryString}`),
+    functionName: 'getSubscriptionFeed'
+  }, getServerAuthContext, true);
 }
 
 /**

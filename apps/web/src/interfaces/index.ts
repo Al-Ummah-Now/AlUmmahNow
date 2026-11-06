@@ -159,6 +159,16 @@ export interface Comments {
     isEdited: boolean;       // Made required to match API spec
     isDeleted: boolean;      // Made required to match API spec
     isPinned: boolean;       // Made required to match API spec
+    isLiked?: boolean;       // Viewer channel liked this comment (GET /api/videos/:id/comments)
+    isDisliked?: boolean;    // Viewer channel disliked this comment
+    author?: CommentAuthor;  // Resolved author (channel name/avatar, falling back to profile)
+}
+
+export interface CommentAuthor {
+    userId: string;
+    channelId: string;
+    displayName: string;
+    avatarUrl?: string;
 }
 
 export interface Likes {

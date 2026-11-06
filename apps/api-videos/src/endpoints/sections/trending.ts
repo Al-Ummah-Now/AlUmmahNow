@@ -1,4 +1,5 @@
 import { PublicRoute, AppContext } from "../../base";
+import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
@@ -145,7 +146,7 @@ export class TrendingVideosSection extends PublicRoute {
         trendingVideos = await Promise.all(
           pageVideos.map(async (trendingVideo, index) => {
             const video = await videoRepo.getObject(trendingVideo.videoId);
-            if (!video) return null;
+            if (!isVideoPubliclyVisible(video)) return null;
 
             // Apply category filter
             if (category && video.category !== category) return null;
@@ -161,7 +162,7 @@ export class TrendingVideosSection extends PublicRoute {
               },
             };
           })
-        ).then(results => results.filter(v => v !== null));
+        ).then(results => results.filter(v => isVideoPubliclyVisible(v)));
 
         // Create next cursor if there are more results
         const nextCursor = endIndex < trendingIndex.videos.length
@@ -214,7 +215,7 @@ export class TrendingVideosSection extends PublicRoute {
         trendingVideos = await Promise.all(
           trendingData.map(async (trending) => {
             const video = allVideos.find(v => v.id === trending.videoId);
-            if (!video) return null;
+            if (!isVideoPubliclyVisible(video)) return null;
 
             return {
               ...video,
@@ -227,7 +228,7 @@ export class TrendingVideosSection extends PublicRoute {
               },
             };
           })
-        ).then(results => results.filter(v => v !== null));
+        ).then(results => results.filter(v => isVideoPubliclyVisible(v)));
 
         // Trigger index rebuild in background (fire and forget)
         c.executionCtx.waitUntil(
