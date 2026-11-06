@@ -19,7 +19,7 @@ Visual markers on the video progress bar showing chapter positions.
 
 **Usage:**
 ```tsx
-import { ChapterMarkers } from '@/components/videoPlayer/ChapterMarkers';
+import { ChapterMarkers } from '@/components/VideoPagePlayer/ChapterMarkers';
 
 <ChapterMarkers
   chapters={chapters}
@@ -44,7 +44,7 @@ Collapsible side panel/bottom drawer showing all video chapters.
 
 **Usage:**
 ```tsx
-import { ChapterList } from '@/components/videoPlayer/ChapterList';
+import { ChapterList } from '@/components/VideoPagePlayer/ChapterList';
 
 <ChapterList
   chapters={chapters}
@@ -68,7 +68,7 @@ Small overlay showing the current chapter title.
 
 **Usage:**
 ```tsx
-import { CurrentChapter } from '@/components/videoPlayer/CurrentChapter';
+import { CurrentChapter } from '@/components/VideoPagePlayer/CurrentChapter';
 
 <CurrentChapter
   chapter={currentChapter}
@@ -91,7 +91,7 @@ Integration example showing how to combine all chapter components with CustomVid
 
 **Usage:**
 ```tsx
-import { VideoPlayerWithChapters } from '@/components/videoPlayer/VideoPlayerWithChapters';
+import { VideoPlayerWithChapters } from '@/components/VideoPagePlayer/VideoPlayerWithChapters';
 
 <VideoPlayerWithChapters
   videoId={videoId}
@@ -262,9 +262,9 @@ If you need more control, integrate components manually:
 
 ```tsx
 import { useVideoChapters } from '@/hooks/useVideoChapters';
-import { ChapterMarkers } from '@/components/videoPlayer/ChapterMarkers';
-import { ChapterList } from '@/components/videoPlayer/ChapterList';
-import { CurrentChapter } from '@/components/videoPlayer/CurrentChapter';
+import { ChapterMarkers } from '@/components/VideoPagePlayer/ChapterMarkers';
+import { ChapterList } from '@/components/VideoPagePlayer/ChapterList';
+import { CurrentChapter } from '@/components/VideoPagePlayer/CurrentChapter';
 
 function MyVideoPlayer({ videoId }) {
   const [player, setPlayer] = useState<Player | null>(null);
@@ -375,7 +375,7 @@ These components are pending implementation and should include:
 ## File Structure
 
 ```
-apps/web/src/components/videoPlayer/
+apps/web/src/components/VideoPagePlayer/
 ├── ChapterMarkers.tsx                 # Chapter markers on progress bar
 ├── ChapterList.tsx                    # Collapsible chapter list panel
 ├── CurrentChapter.tsx                 # Current chapter overlay

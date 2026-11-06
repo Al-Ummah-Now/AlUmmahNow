@@ -9,6 +9,13 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '.env.test.local') });
 
 /**
+ * Use WEB_APP_URL for deployed environments (QA, staging, production)
+ * Fall back to localhost for local development
+ */
+const baseURL = process.env.WEB_APP_URL || 'http://localhost:3001';
+const isRemoteTarget = baseURL.startsWith('https://');
+
+/**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
@@ -21,12 +28,19 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry on CI only (1 retry — 2 tripled the cost of every broken test) */
+  retries: process.env.CI ? 1 : 0,
   /* Opt out of parallel tests on CI. Limit workers for upload tests */
   workers: process.env.CI ? 1 : 2,
   /* Timeout for each test (3 minutes for video uploads) */
   timeout: 180000,
+  /*
+   * Failure ceilings so a stuck/broken test fails fast instead of consuming the
+   * whole 60-90min job (previously the E2E jobs hit their timeout-minutes and
+   * were cancelled). globalTimeout caps the whole run; maxFailures aborts early.
+   */
+  globalTimeout: process.env.CI ? 15 * 60 * 1000 : undefined,
+  maxFailures: process.env.CI ? 5 : 0,
   /* Expect timeout */
   expect: {
     timeout: 30000,
@@ -40,7 +54,15 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://localhost:3001',
+    baseURL,
+
+    /*
+     * Bound individual actions/navigations so a single stuck operation (e.g. a
+     * never-settling load) fails in seconds instead of blocking for the full
+     * per-test timeout. Key to preventing runaway jobs against a remote target.
+     */
+    actionTimeout: 15000,
+    navigationTimeout: 30000,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -126,13 +148,15 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:3001',
-    // Always reuse if server is already running (CI starts it manually for globalSetup)
-    reuseExistingServer: true,
-    // CI runners are slower - allow 5 minutes for Next.js to start
-    timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
-  },
+  /* Run your local dev server before starting the tests (only for local development) */
+  webServer: isRemoteTarget
+    ? undefined
+    : {
+        command: 'pnpm dev',
+        url: 'http://localhost:3001',
+        // Always reuse if server is already running (CI starts it manually for globalSetup)
+        reuseExistingServer: true,
+        // CI runners are slower - allow 5 minutes for Next.js to start
+        timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
+      },
 });

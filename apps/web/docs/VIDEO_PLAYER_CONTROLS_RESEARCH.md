@@ -36,8 +36,8 @@ Researched how Video.js, Plyr, and MediaElement.js handle control menus to preve
 #### File Structure
 - **Component:** `apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx`
 - **Styles:** `apps/web/src/styles/video-player.css`
-- **LTR Wrapper:** `apps/web/src/components/videoPlayer/index.tsx`
-- **RTL Wrapper:** `apps/web/src/components/videoPlayer/rtl/index.tsx`
+- **LTR Wrapper:** `apps/web/src/components/VideoPagePlayer/index.tsx`
+- **RTL Wrapper:** `apps/web/src/components/VideoPagePlayer/rtl/index.tsx`
 
 #### Current CSS (video-player.css:241-252)
 

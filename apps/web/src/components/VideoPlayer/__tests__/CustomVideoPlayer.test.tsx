@@ -13,7 +13,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import CustomVideoPlayer from '../CustomVideoPlayer';
 import type { VideoError } from '@/lib/video/error-handler';
 import { VideoErrorType, VideoErrorSeverity } from '@/lib/video/error-handler';
-import { disposeVideoPlayer } from '@/lib/video/videojs-setup';
+import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
+import { VideoAnalytics } from '@/services/analytics/video-analytics';
 
 // Mock Video.js setup
 const mockDispose = jest.fn();
@@ -26,15 +27,25 @@ const mockPlayer = {
   ready: mockReady,
   src: mockSrc,
   error: jest.fn(() => null),
+  // Methods the component calls in its effects (video.js Player API)
+  currentSrc: jest.fn(() => ''),
+  currentTime: jest.fn(() => 0),
+  duration: jest.fn(() => 0),
+  load: jest.fn(),
+  poster: jest.fn(),
+  one: jest.fn(),
+  off: jest.fn(),
+  readyState: jest.fn(() => 4),
 };
 
-const mockCreateVideoPlayer = jest.fn(() => mockPlayer);
-const mockDisposeVideoPlayer = jest.fn();
-
 jest.mock('@/lib/video/videojs-setup', () => ({
-  createVideoPlayer: mockCreateVideoPlayer,
-  disposeVideoPlayer: mockDisposeVideoPlayer,
+  createVideoPlayer: jest.fn(),
+  disposeVideoPlayer: jest.fn(),
 }));
+// Typed refs to the mocked exports (assigned after the hoisted jest.mock runs).
+// Their behaviour is configured in beforeEach — referencing module-scope consts
+// inside the hoisted factory throws a TDZ "Cannot access ... before initialization".
+const mockCreateVideoPlayer = createVideoPlayer as jest.Mock;
 
 // Mock VideoAnalytics
 const mockTrackReady = jest.fn();
@@ -45,19 +56,10 @@ const mockTrackError = jest.fn();
 const mockDestroy = jest.fn();
 const mockGetSessionId = jest.fn(() => '12345-abcde');
 
-const mockVideoAnalytics = jest.fn().mockImplementation(() => ({
-  trackReady: mockTrackReady,
-  trackPlay: mockTrackPlay,
-  trackPause: mockTrackPause,
-  trackComplete: mockTrackComplete,
-  trackError: mockTrackError,
-  destroy: mockDestroy,
-  getSessionId: mockGetSessionId,
-}));
-
 jest.mock('@/services/analytics/video-analytics', () => ({
-  VideoAnalytics: mockVideoAnalytics,
+  VideoAnalytics: jest.fn(),
 }));
+const mockVideoAnalytics = VideoAnalytics as jest.Mock;
 
 // Mock error handler
 const mockCategorizeError = jest.fn();
@@ -129,6 +131,19 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+
+    // Configure the mocked module exports here (kept out of the hoisted jest.mock
+    // factories to avoid a TDZ error referencing module-scope consts).
+    mockCreateVideoPlayer.mockReturnValue(mockPlayer);
+    mockVideoAnalytics.mockImplementation(() => ({
+      trackReady: mockTrackReady,
+      trackPlay: mockTrackPlay,
+      trackPause: mockTrackPause,
+      trackComplete: mockTrackComplete,
+      trackError: mockTrackError,
+      destroy: mockDestroy,
+      getSessionId: mockGetSessionId,
+    }));
 
     // Set up default mock return value for categorizeError to prevent undefined errors
     mockCategorizeError.mockReturnValue({

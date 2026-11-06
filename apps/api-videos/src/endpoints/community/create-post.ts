@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import sanitizeHtml from 'sanitize-html';
 import {
+  Channel,
   CommunityPost,
   PostType,
   PostStatus,
@@ -146,7 +147,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         return c.json({ error: 'Channel not found' }, 404);
       }
 
-      const channel = await channelData.json();
+      const channel = (await channelData.json()) as Channel;
 
       // Verify user owns this channel
       if (channel.userId !== userId) {
@@ -199,8 +200,8 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         visibility: body.visibility || PostVisibility.PUBLIC,
         commentsEnabled: body.commentsEnabled !== false,
         channelName: channel.name,
-        channelAvatar: channel.avatar,
-        channelVerified: channel.verified || false
+        channelAvatar: channel.avatarUrl,
+        channelVerified: channel.isVerified || false
       };
 
       // Save to R2

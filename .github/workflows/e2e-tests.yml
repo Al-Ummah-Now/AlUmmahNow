@@ -64,20 +64,21 @@ jobs:
         working-directory: apps/web
         run: mkdir -p e2e/.auth
 
-      - name: Start web app
-        working-directory: apps/web
-        run: pnpm dev &
-
-      - name: Wait for web app
-        run: npx wait-on http://localhost:3001 --timeout 120000
-
       - name: Run auth setup
         working-directory: apps/web
         run: npx tsx e2e/run-auth-setup.ts
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: http://localhost:3001
+          WEB_APP_URL: https://videos.qa.alummahnow.net
+
+      - name: Debug - List auth files
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Contents of apps/web/e2e/.auth/:"
+          ls -la apps/web/e2e/.auth/ || echo "Directory not found"
+          echo "Full path check:"
+          ls -la ${{ github.workspace }}/apps/web/e2e/.auth/ || echo "Full path directory not found"
 
       - name: Upload auth state
         uses: actions/upload-artifact@v4
@@ -85,6 +86,8 @@ jobs:
           name: auth-state
           path: apps/web/e2e/.auth/
           retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
 
   e2e-tests:
     name: E2E Tests - Video Upload
@@ -146,13 +149,6 @@ jobs:
           name: auth-state
           path: apps/web/e2e/.auth/
 
-      - name: Start web app
-        working-directory: apps/web
-        run: pnpm dev &
-
-      - name: Wait for web app
-        run: npx wait-on http://localhost:3001 --timeout 120000
-
       - name: Run E2E tests
         working-directory: apps/web
         run: pnpm exec playwright test --project=${{ matrix.browser }} e2e/*video-upload*.spec.ts
@@ -161,7 +157,7 @@ jobs:
           SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: http://localhost:3001
+          WEB_APP_URL: https://videos.qa.alummahnow.net
 
       - name: Upload test results
         if: always()
@@ -233,13 +229,6 @@ jobs:
           name: auth-state
           path: apps/web/e2e/.auth/
 
-      - name: Start web app
-        working-directory: apps/web
-        run: pnpm dev &
-
-      - name: Wait for web app
-        run: npx wait-on http://localhost:3001 --timeout 120000
-
       - name: Run all E2E tests
         working-directory: apps/web
         run: pnpm exec playwright test
@@ -248,7 +237,7 @@ jobs:
           SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: http://localhost:3001
+          WEB_APP_URL: https://videos.qa.alummahnow.net
 
       - name: Generate HTML report
         if: always()
@@ -323,13 +312,6 @@ jobs:
           name: auth-state
           path: apps/web/e2e/.auth/
 
-      - name: Start web app
-        working-directory: apps/web
-        run: pnpm dev &
-
-      - name: Wait for web app
-        run: npx wait-on http://localhost:3001 --timeout 120000
-
       - name: Run mobile E2E tests
         working-directory: apps/web
         run: |
@@ -343,7 +325,7 @@ jobs:
           SKIP_AUTH_SETUP: 'true'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: http://localhost:3001
+          WEB_APP_URL: https://videos.qa.alummahnow.net
 
       - name: Upload mobile test results
         if: always()

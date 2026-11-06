@@ -10,6 +10,15 @@ const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jest-environment-jsdom',
   moduleNameMapper: {
+    // Force a single React copy under jest. @tanstack/react-query resolves its
+    // peer to React 19 (nested in its own node_modules) because admin-web
+    // declares react ^19 in this workspace, while web is on react 18.3.1. Mixing
+    // the two yields a null dispatcher ("Cannot read properties of null (reading
+    // 'useEffect')"). Map react/react-dom to the workspace-root 18.3.1 copy.
+    '^react$': '<rootDir>/../../node_modules/react',
+    '^react-dom$': '<rootDir>/../../node_modules/react-dom',
+    '^react/(.*)$': '<rootDir>/../../node_modules/react/$1',
+    '^react-dom/(.*)$': '<rootDir>/../../node_modules/react-dom/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
     // Mock CSS and style imports
     '\\.(css|less|sass|scss)$': 'identity-obj-proxy',

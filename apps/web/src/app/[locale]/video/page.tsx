@@ -2,13 +2,13 @@
 
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from "react";
-import VideoPlayer from "@/components/videoPlayer/index";
+import VideoPlayer from "@/components/VideoPagePlayer/index";
 import RelatedVideosSection from "@/components/related/index";
 import CommentsSection from "@/components/commentsSection/index";
 import { VideoMetricsDisplay } from "@/components/videoMetrics/VideoMetricsDisplay";
 import { useQueryState } from "nuqs";
 import { VideoInfo } from "@/interfaces";
-import { PlayerOptions } from "@/components/videoPlayer/interface";
+import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";

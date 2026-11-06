@@ -4,7 +4,7 @@ This guide shows how to migrate from the existing iframe-based video player to t
 
 ## Current Implementation
 
-### Old Player (apps/web/src/components/videoPlayer/index.tsx)
+### Old Player (apps/web/src/components/VideoPagePlayer/index.tsx)
 
 ```tsx
 "use client";
@@ -68,7 +68,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
 The old interface needs a `bunnyVideoId` field:
 
 ```typescript
-// apps/web/src/components/videoPlayer/interface.ts (or wherever it's defined)
+// apps/web/src/components/VideoPagePlayer/interface.ts (or wherever it's defined)
 
 export interface PlayerOptions {
   id: string;              // Your internal video ID
@@ -110,7 +110,7 @@ export async function fetchVideoById(videoId: string): Promise<PlayerOptions | n
 
 #### Option A: Direct Replacement (Recommended)
 
-Replace the iframe in `apps/web/src/components/videoPlayer/index.tsx`:
+Replace the iframe in `apps/web/src/components/VideoPagePlayer/index.tsx`:
 
 ```tsx
 "use client";

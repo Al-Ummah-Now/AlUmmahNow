@@ -74,7 +74,7 @@ export class ListPostComments extends OptionalAuthRoute {
     const cursor = query.cursor;
     const sortBy = query.sortBy || 'top';
 
-    const bucket = c.env.COMMUNITY_POSTS;
+    const bucket = c.env.community_posts;
 
     // 1. Verify post exists (O(1) lookup)
     const postKey = `posts/${postChannelId}/${postId}.json`;
