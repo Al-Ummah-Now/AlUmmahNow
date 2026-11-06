@@ -7,6 +7,7 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { Channel } from "@al-ummah/shared-types";
 import { logger } from "../../lib/logger";
+import { isVideoRemoved } from "../../lib/visibility";
 
 export class VideoSearch extends OptionalAuthRoute {
 	schema = {
@@ -161,6 +162,11 @@ export class VideoSearch extends OptionalAuthRoute {
 		// Filter and score videos
 		const scoredVideos = (videos.items || [])
 			.filter(video => {
+				// Soft-deleted and moderation-hidden videos never appear in search
+				if (isVideoRemoved(video)) {
+					return false;
+				}
+
 				// Channel filtering
 				if (channelIdList.length > 0 && !channelIdList.includes(video.channelId)) {
 					return false;

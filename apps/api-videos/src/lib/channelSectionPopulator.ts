@@ -11,6 +11,7 @@
 import R2Repository from './r2Repo';
 import { VideoObject, ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
 import { logger } from './logger';
+import { isVideoRemoved } from './visibility';
 
 export interface SectionContent {
   videos?: VideoObject[];
@@ -96,7 +97,7 @@ async function getRecentUploads(
     const videos: VideoObject[] = [];
     for (const obj of listResult.objects) {
       const video = await videoRepo.getObject(obj.key);
-      if (video && video.channelId === channelId && video.isPublic) {
+      if (video && video.channelId === channelId && video.isPublic && !isVideoRemoved(video)) {
         videos.push(video);
       }
     }
@@ -131,7 +132,7 @@ async function getPopularUploads(
     const videos: VideoObject[] = [];
     for (const obj of listResult.objects) {
       const video = await videoRepo.getObject(obj.key);
-      if (video && video.channelId === channelId && video.isPublic) {
+      if (video && video.channelId === channelId && video.isPublic && !isVideoRemoved(video)) {
         videos.push(video);
       }
     }
@@ -197,7 +198,7 @@ async function getVideosByIds(
 
     for (const videoId of videoIds) {
       const video = await videoRepo.getObject(videoId);
-      if (video && video.isPublic) {
+      if (video && video.isPublic && !isVideoRemoved(video)) {
         videos.push(video);
       }
     }
