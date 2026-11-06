@@ -74,6 +74,7 @@ import { useWatchProgress } from '@/hooks/useWatchProgress';
 import '@/styles/video-player.css';
 import type { Player } from 'video.js';
 import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
+import type { PlayerTextTrack } from '@/lib/video/subtitle-tracks';
 
 export interface CustomVideoPlayerProps {
   videoId: string;
@@ -94,6 +95,10 @@ export interface CustomVideoPlayerProps {
   lang?: 'en' | 'ar';
   onError?: (error: VideoError) => void;
   onSourceChange?: (source: VideoSource) => void;
+  /** Subtitle/caption tracks (WebVTT URLs) to attach to the player */
+  textTracks?: PlayerTextTrack[];
+  /** Called once the Video.js player is ready (e.g. for chapter integration) */
+  onPlayerReady?: (player: Player) => void;
 }
 
 /**
@@ -115,6 +120,8 @@ export default function CustomVideoPlayer({
   lang = 'en',
   onError,
   onSourceChange,
+  textTracks,
+  onPlayerReady,
 }: CustomVideoPlayerProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
   const playerRef = useRef<Player | null>(null);
@@ -130,6 +137,8 @@ export default function CustomVideoPlayer({
   const accessibilityCleanupRef = useRef<(() => void) | null>(null);
   const qualityLevelsCleanupRef = useRef<(() => void) | null>(null);
   const isInitializingRef = useRef(false);
+  const onPlayerReadyRef = useRef(onPlayerReady);
+  const addedTextTracksRef = useRef<Array<{ track: unknown }>>([]);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -243,6 +252,55 @@ export default function CustomVideoPlayer({
     handleVideoErrorRef.current = handleVideoError;
   }, [handleVideoError]);
 
+  // Keep latest onPlayerReady without re-initializing the player
+  useEffect(() => {
+    onPlayerReadyRef.current = onPlayerReady;
+  }, [onPlayerReady]);
+
+  /**
+   * Attach subtitle tracks. Previously added remote tracks are removed first so
+   * switching videos (or reloading the track list) never duplicates tracks.
+   */
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!playerReady || !player || typeof player.addRemoteTextTrack !== 'function') return;
+
+    for (const added of addedTextTracksRef.current) {
+      try {
+        player.removeRemoteTextTrack?.(added.track);
+      } catch (err) {
+        logger.debug('[CustomVideoPlayer] Failed to remove text track', err);
+      }
+    }
+    addedTextTracksRef.current = [];
+
+    for (const track of textTracks || []) {
+      try {
+        const element = player.addRemoteTextTrack(
+          {
+            kind: track.kind,
+            src: track.src,
+            srclang: track.srclang,
+            label: track.label,
+            default: track.default,
+            mode: track.default ? 'showing' : 'disabled',
+          },
+          false
+        );
+        if (element) addedTextTracksRef.current.push(element);
+      } catch (err) {
+        logger.error('[CustomVideoPlayer] Failed to add text track', { srclang: track.srclang, err });
+      }
+    }
+
+    if ((textTracks || []).length > 0) {
+      logger.debug('[CustomVideoPlayer] Attached subtitle tracks', {
+        videoId,
+        languages: (textTracks || []).map((t) => t.srclang),
+      });
+    }
+  }, [playerReady, textTracks, videoId]);
+
   /**
    * Handle retry button click
    */
@@ -346,6 +404,7 @@ export default function CustomVideoPlayer({
         isInitializingRef.current = false;
         setPlayerReady(true);
         analyticsRef.current?.trackReady();
+        onPlayerReadyRef.current?.(player);
 
         // Reset quartiles when video loads
         quartilesFiredRef.current.clear();

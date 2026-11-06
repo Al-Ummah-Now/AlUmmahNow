@@ -16,6 +16,7 @@
 import { useCallback } from 'react';
 import type { VideoChapter } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getChapterTitle } from '@/lib/video/chapters';
 
 interface ChapterMarkersProps {
   chapters: VideoChapter[];
@@ -23,6 +24,12 @@ interface ChapterMarkersProps {
   duration: number;
   onSeek: (chapter: VideoChapter) => void;
   className?: string;
+  /**
+   * Direction of the progress bar the markers sit on. The Video.js seek bar
+   * fills left-to-right even on RTL pages, so callers pass 'ltr' there.
+   * Defaults to the page direction.
+   */
+  direction?: 'ltr' | 'rtl';
 }
 
 /**
@@ -45,8 +52,10 @@ export function ChapterMarkers({
   duration,
   onSeek,
   className = '',
+  direction,
 }: ChapterMarkersProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL: pageIsRTL, lang } = useLanguage();
+  const isRTL = direction ? direction === 'rtl' : pageIsRTL;
 
   const handleMarkerClick = useCallback((e: React.MouseEvent, chapter: VideoChapter) => {
     e.stopPropagation();
@@ -61,9 +70,8 @@ export function ChapterMarkers({
     <div
       className={`
         absolute
-        inset-x-0
-        bottom-0
-        h-1
+        inset-0
+        z-10
         pointer-events-none
         ${className}
       `}
@@ -72,7 +80,10 @@ export function ChapterMarkers({
       aria-label={t.video.chapters}
     >
       {chapters.map((chapter) => {
-        const position = (chapter.startTime / duration) * 100;
+        // The first chapter starts at 0:00 - a marker at the very start adds nothing
+        if (chapter.startTime <= 0) return null;
+        const position = Math.min(100, (chapter.startTime / duration) * 100);
+        const title = getChapterTitle(chapter, lang);
         const isCurrent = currentChapter?.id === chapter.id;
 
         return (
@@ -101,8 +112,8 @@ export function ChapterMarkers({
             style={{
               [isRTL ? 'right' : 'left']: `${position}%`,
             }}
-            aria-label={`${t.video.chapter}: ${chapter.title} (${formatTime(chapter.startTime)})`}
-            title={chapter.title}
+            aria-label={`${t.video.chapter}: ${title} (${formatTime(chapter.startTime)})`}
+            title={title}
           >
             {/* Tooltip on hover - Desktop only */}
             <span
@@ -131,7 +142,7 @@ export function ChapterMarkers({
                 {formatTime(chapter.startTime)}
               </span>
               <span className="block max-w-[200px] truncate">
-                {chapter.title}
+                {title}
               </span>
               {/* Tooltip arrow */}
               <span

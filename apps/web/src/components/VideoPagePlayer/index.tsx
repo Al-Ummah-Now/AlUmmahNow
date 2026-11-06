@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "./interface";
-import CustomVideoPlayer from "@/components/VideoPlayer/CustomVideoPlayer";
+import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlayerWithChapters";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -40,8 +40,8 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
     <>
       <div className="flex w-full mt-0 relative dark:bg-gray-900">
         <div className="w-full rounded-lg overflow-visible 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
-          {/* New Custom Video.js Player */}
-          <CustomVideoPlayer
+          {/* Video.js player with chapters and subtitles */}
+          <VideoPlayerWithChapters
             videoId={options.id}
             userId={user?.id}
             sources={videoSources}

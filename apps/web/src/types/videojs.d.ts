@@ -28,6 +28,19 @@ declare module 'video.js' {
     off(event: string, callback?: VideoJsEventCallback): void;
     one(event: string, callback: VideoJsEventCallback): void;
     ready(callback: () => void): void;
+    el(): Element;
+    addRemoteTextTrack?(
+      options: {
+        kind?: string;
+        src?: string;
+        srclang?: string;
+        label?: string;
+        default?: boolean;
+        mode?: 'showing' | 'hidden' | 'disabled';
+      },
+      manualCleanup?: boolean
+    ): { track: unknown } | undefined;
+    removeRemoteTextTrack?(track: unknown): void;
   }
 
   export interface PlayerOptions {
@@ -47,6 +60,7 @@ declare module 'video.js' {
     fluid?: boolean;
     playbackRates?: number[];
     html5?: {
+      nativeTextTracks?: boolean;
       hls?: {
         enableLowInitialPlaylist?: boolean;
         smoothQualityChange?: boolean;
