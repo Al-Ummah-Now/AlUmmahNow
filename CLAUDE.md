@@ -4,14 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Al Ummah Now** is an Islamic content platform monorepo with four Cloudflare Workers applications:
+**Al Ummah Now** is an Islamic content platform monorepo with 8 applications across `apps/` and 3 shared packages in `packages/`.
 
-1. **web** - Next.js 15 frontend with bilingual support (English/Arabic, RTL)
+**Applications (8):**
+1. **web** - Next.js 16 user-facing frontend with bilingual support (English/Arabic, RTL)
 2. **api-videos** - Hono API backend with OpenAPI 3.1 (chanfana)
 3. **processor** - Queue consumer for message processing and analytics
 4. **websocket-server** - Real-time WebSocket server with Durable Objects
+5. **admin-api** - Hono admin API backend (content moderation, D1 database)
+6. **admin-web** - Next.js 16 admin frontend (OpenNext on Cloudflare Workers)
+7. **scheduler** - Cron worker for automated scheduled video publishing (not in CI)
+8. **log-service** - Local-development-only HTTP log aggregator (not deployed)
 
-All apps share TypeScript types via `@al-ummah/shared-types` workspace package.
+**Packages (3):**
+- `@al-ummah/shared-types` - Shared TypeScript types used by all apps
+- `@al-ummah/logger` - Shared logging utility (console + file output)
+- `@al-ummah/mcp-log-server` - MCP server for watching logs via AI tools
 
 **Repository**: https://github.com/meywd/AlUmmahNow
 
@@ -324,12 +332,18 @@ const formattedCount = formatNumber(count, locale); // e.g., "١٢٣" in Arabic
 ```
 al-ummah-now/
 ├── apps/
-│   ├── web/              Next.js frontend (Cloudflare Workers + OpenNext)
-│   ├── api-videos/       Hono API backend (Cloudflare Workers + R2)
+│   ├── web/              Next.js 16 user-facing frontend (Cloudflare Workers + OpenNext)
+│   ├── api-videos/       Hono video API backend (Cloudflare Workers + R2)
+│   ├── admin-api/        Hono admin API backend (Cloudflare Workers + D1 + R2)
+│   ├── admin-web/        Next.js 16 admin frontend (Cloudflare Workers + OpenNext)
 │   ├── processor/        Queue consumer (Cloudflare Workers + R2)
-│   └── websocket-server/ WebSocket server (Cloudflare Durable Objects + KV)
+│   ├── websocket-server/ WebSocket server (Cloudflare Durable Objects + KV)
+│   ├── scheduler/        Cron worker for scheduled video publishing (Cloudflare Workers)
+│   └── log-service/      Local-dev HTTP log aggregator (NOT deployed)
 ├── packages/
-│   └── shared-types/     Shared TypeScript types
+│   ├── shared-types/     Shared TypeScript types (@al-ummah/shared-types)
+│   ├── logger/           Shared logging utility (@al-ummah/logger)
+│   └── mcp-log-server/   MCP server for log watching (@al-ummah/mcp-log-server)
 ├── package.json          Root workspace config
 ├── pnpm-workspace.yaml   pnpm workspaces
 ├── turbo.json            Turborepo orchestration
@@ -344,6 +358,7 @@ al-ummah-now/
 ```bash
 pnpm install                              # Install all dependencies (1-2 min)
 pnpm --filter @al-ummah/shared-types build # Build shared types (required first)
+pnpm --filter @al-ummah/logger build      # Build shared logger (required first)
 ```
 
 ### Development
@@ -353,6 +368,9 @@ pnpm web:dev             # Web app: http://localhost:3001
 pnpm api:dev             # API: http://127.0.0.1:3086
 pnpm processor:dev       # Processor: http://localhost:3088
 pnpm websocket:dev       # WebSocket server: http://localhost:3087
+pnpm admin:dev           # Admin API: http://127.0.0.1:3090
+pnpm admin-web:dev       # Admin web: http://localhost:3091
+pnpm log-service:dev     # Log service: http://localhost:3089 (local dev only)
 ```
 
 ### Build & Validation
@@ -368,6 +386,12 @@ pnpm web:deploy:production      # Deploy web to production
 pnpm api:deploy                 # Deploy API to production
 pnpm processor:deploy           # Deploy processor to production
 pnpm websocket:deploy           # Deploy WebSocket server to production
+pnpm admin:deploy               # Deploy admin API to production
+pnpm admin:deploy:qa            # Deploy admin API to QA
+pnpm admin-web:deploy:qa        # Deploy admin web to QA
+# Deploy admin-web to production: cd apps/admin-web && pnpm deploy
+pnpm deploy:all                 # Deploy all 6 CI-managed apps to production
+pnpm deploy:qa                  # Deploy all 6 CI-managed apps to QA
 ```
 
 ### Per-App Commands
@@ -389,14 +413,16 @@ cd apps/processor && pnpm lint:fix
 
 | Component | Technology |
 |-----------|-----------|
-| **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS |
-| **API Backend** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
+| **User Frontend** | Next.js 16 (App Router), React 19, Tailwind CSS |
+| **Admin Frontend** | Next.js 16 (App Router), React 19, TanStack Query |
+| **API Backends** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
 | **Processor** | TypeScript, Cloudflare Queue Consumer |
 | **WebSocket Server** | Cloudflare Durable Objects, WebSocket API |
+| **Scheduler** | TypeScript, Cloudflare Cron Triggers |
 | **Authentication** | OpenAuth (JWT/OAuth2) via auth.alummahnow.net |
-| **Storage** | Cloudflare R2 (object storage), KV (key-value) |
+| **Storage** | Cloudflare R2 (object storage), D1 (admin DB), KV (key-value) |
 | **CDN** | Bunny.net (video streaming + image storage) |
-| **Deployment** | Cloudflare Workers (all 4 apps) |
+| **Deployment** | Cloudflare Workers (6 apps; scheduler + log-service excluded from CI) |
 | **Package Manager** | pnpm v9.15.4 with workspaces |
 | **Build System** | Turborepo v2 with caching |
 
@@ -436,47 +462,93 @@ cd apps/processor && pnpm lint:fix
 - Message broadcasting and real-time notifications
 - See: `apps/websocket-server/README.md`
 
+**apps/admin-api** - Admin API backend
+- Hono v4 + chanfana (OpenAPI 3.1) admin-only REST API; dev port 3090
+- D1 database (`al-ummah-now-reports`) for moderation reports
+- R2 read/write access to videos, channels, profiles, playlists for moderation
+- JWT authentication + admin role middleware (OpenAuth)
+- Config: `wrangler.jsonc` (production), `wrangler.qa.jsonc` (QA)
+- See: `apps/admin-api/README.md`
+
+**apps/admin-web** - Admin web frontend
+- Next.js 16 + @opennextjs/cloudflare admin dashboard; dev port 3091
+- TanStack Query for server-state management; Tailwind CSS v4
+- Connects to admin-api (`http://127.0.0.1:3090` locally)
+- Config: `wrangler.jsonc` (default), `wrangler.qa.jsonc` (QA), `wrangler.production.jsonc` (production)
+- See: `apps/admin-web/README.md`
+
+**apps/scheduler** - Scheduled video publishing worker
+- Cloudflare Worker with cron trigger (every minute) to auto-publish scheduled videos
+- Reads scheduling metadata from R2 (`SCHEDULED_VIDEOS`), updates video status in `VIDEOS`
+- Distributed locking via KV (`SCHEDULER_LOCKS`), metrics in KV (`SCHEDULER_METRICS`)
+- Retry logic (exponential backoff, up to 4 attempts); queue-based event logging
+- NOT included in CI/CD pipeline — deploy manually via `cd apps/scheduler && pnpm deploy`
+- See: `apps/scheduler/README.md`
+
+**apps/log-service** - Local development log aggregator
+- Node.js HTTP server (Hono + @hono/node-server) that receives structured logs from all apps
+- Writes logs to per-app files; exposes SSE streaming and snapshot query endpoints
+- Swagger UI at http://localhost:3089/; web viewer at http://localhost:3089/viewer/viewer.html
+- **Local development only — NOT deployed to any environment (no wrangler config)**
+- See: `apps/log-service/README.md`
+
 **packages/shared-types** - Shared TypeScript types
 - Video, Channel, Playlist, User, Comment, Analytics types
 - Used by all apps via workspace protocol: `@al-ummah/shared-types`
 - Must be built before other apps: `pnpm --filter @al-ummah/shared-types build`
 
+**packages/logger** - Shared logging utility
+- `@al-ummah/logger` — structured logging with console + HTTP transport to log-service
+- Used by all apps (api-videos, admin-api, admin-web, scheduler, websocket-server, processor)
+- Must be built before other apps: `pnpm --filter @al-ummah/logger build`
+
+**packages/mcp-log-server** - MCP log server
+- `@al-ummah/mcp-log-server` — MCP server that exposes log-watching tools to AI agents
+- Provides `get_logs`, `list_log_apps`, `search_logs`, `watch_logs` MCP tools
+- Used via Claude Code's MCP integration; not imported by application code
+
 ## CI/CD Pipeline
 
 ### GitHub Actions Workflow (`.github/workflows/deploy.yml`)
 
-**Trigger**: Push to `main` or pull requests
+**Trigger**: Push to `main` or `develop`, or pull requests to either branch
 
 **Pipeline Stages**:
 
-1. **Test** - Type check + lint all packages (5 min)
-2. **Build shared-types** - Required dependency for all apps (2 min)
-3. **Build & Validate** - Parallel jobs:
-   - `build-web`: Build Next.js app (up to 120 min)
+1. **test** - Type check + lint + tests (all packages, 5 min)
+2. **build-shared-packages** - Build `@al-ummah/shared-types` + `@al-ummah/logger` (2 min)
+3. **Build & Validate** - 6 parallel jobs (all depend on build-shared-packages):
+   - `build-web`: Build Next.js user app (up to 120 min)
    - `validate-api`: Type check + dry-run deployment
    - `validate-processor`: Type check + run tests
+   - `validate-websocket`: Type check + dry-run deployment
+   - `validate-admin-api`: Type check + dry-run deployment
+   - `build-admin-web`: Build Next.js admin app
+
+Note: **scheduler** and **log-service** have no CI validation or deployment jobs.
 
 **Pull Request Previews** (opt-in only):
 - **Disabled by default** - preview deployments only run when requested
 - **To deploy previews**: Add `deploy-preview` label to your PR
-- **Workers deployed** (when label is present):
-  - **Web**: `al-ummah-web-pr-{number}.workers.dev`
-  - **API**: `al-ummah-api-pr-{number}.workers.dev` (with Swagger UI)
-  - **Processor**: `al-ummah-processor-pr-{number}` (development env)
-  - **WebSocket**: `al-ummah-comms-pr-{number}.workers.dev`
+- **Workers deployed** (when label is present) — all 6 CI-managed apps:
+  - **Web**: preview worker on workers.dev
+  - **API**: preview worker on workers.dev (with Swagger UI)
+  - **Processor**: preview worker (development env)
+  - **WebSocket**: preview worker on workers.dev
+  - **Admin API**: preview worker on workers.dev
+  - **Admin Web**: preview worker on workers.dev
 - Each app posts separate PR comment with deployment info
 - Auto-cleanup when PR closes
 - **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
-**Staging Deployment** (main branch):
-- All 4 apps deployed in parallel after validation
-- Web uses `wrangler.staging.jsonc`
-- API, Processor, and WebSocket use `--env staging`
+**QA Deployment** (`develop` branch):
+- All 6 apps deployed in a single `deploy-qa` job after validation
+- QA URLs: `qa.alummahnow.net`, `videos.qa.api.alummahnow.net`, `ws.qa.alummahnow.net`, `admin.qa.alummahnow.net`, `admin.qa.api.alummahnow.net`
+- Web and admin-web use `wrangler.qa.jsonc`; others use per-app `wrangler.qa.jsonc`
 
-**Production Deployment** (after staging):
-- All 3 apps deployed to production
-- Web uses `wrangler.production.jsonc`
-- API and Processor use default configs
+**Production Deployment** (`main` branch):
+- All 6 apps deployed in a single `deploy-production` job after validation
+- Web uses `wrangler.production.jsonc`; admin-web uses `wrangler.production.jsonc`; other apps use default wrangler config
 
 **Required Secrets**:
 - `CLOUDFLARE_API_TOKEN` - For all deployments
@@ -490,9 +562,10 @@ cd apps/processor && pnpm lint:fix
    pnpm install
    ```
 
-2. **Build shared types** (required before other apps):
+2. **Build shared packages** (required before other apps):
    ```bash
    pnpm --filter @al-ummah/shared-types build
+   pnpm --filter @al-ummah/logger build
    ```
 
 3. **Start development**:
@@ -663,6 +736,30 @@ Each app has its own detailed documentation:
 - **KV Namespaces**: `al-ummah-now-analytics-kv` (presence state)
 - **Deployment**: `wss://ws.alummahnow.net` (production)
 
+### Admin API (`apps/admin-api/`)
+- **Overview**: `apps/admin-api/README.md`
+- **Architecture**: Hono + chanfana, D1 database for reports, R2 for content moderation
+- **Dev port**: 3090 (`http://127.0.0.1:3090`)
+- **Config**: `wrangler.jsonc` (production), `wrangler.qa.jsonc` (QA)
+
+### Admin Web (`apps/admin-web/`)
+- **Overview**: `apps/admin-web/README.md`
+- **Architecture**: Next.js 16 + OpenNext on Cloudflare Workers
+- **Dev port**: 3091 (`http://localhost:3091`)
+- **Config**: `wrangler.jsonc`, `wrangler.qa.jsonc`, `wrangler.production.jsonc`
+
+### Scheduler (`apps/scheduler/`)
+- **Overview**: `apps/scheduler/README.md`
+- **Architecture**: Cloudflare Worker with cron trigger (every minute)
+- **Config**: `wrangler.jsonc` (production), `--env staging` for staging
+- **Note**: Not in CI/CD — deploy manually
+
+### Log Service (`apps/log-service/`)
+- **Overview**: `apps/log-service/README.md`
+- **Architecture**: Hono + @hono/node-server (plain Node.js, not a Worker)
+- **Dev port**: 3089 (`http://localhost:3089`)
+- **Note**: Local development only, never deployed
+
 ## Common Tasks
 
 ### Adding a New Shared Type
@@ -671,6 +768,8 @@ Each app has its own detailed documentation:
 2. Export from `packages/shared-types/src/index.ts`
 3. Rebuild: `pnpm --filter @al-ummah/shared-types build`
 4. Use in apps: `import { VideoObject } from '@al-ummah/shared-types'`
+
+Note: If modifying `packages/logger`, rebuild it too: `pnpm --filter @al-ummah/logger build`
 
 ### Adding a New API Endpoint
 
@@ -691,22 +790,29 @@ Each app has its own detailed documentation:
 ### Deploying to Production
 
 ```bash
-# Deploy all apps
+# Deploy all 6 CI-managed apps to production in one command
+pnpm deploy:all
+
+# Or deploy individually
 pnpm web:deploy:production
 pnpm api:deploy
 pnpm processor:deploy
 pnpm websocket:deploy
+pnpm admin:deploy
+# Admin web production deploy (no root alias):
+cd apps/admin-web && pnpm deploy
 
-# Or push to main branch → GitHub Actions handles it
+# Or push to main branch → GitHub Actions handles all 6 apps automatically
 git push origin main
 ```
 
 ## Troubleshooting
 
-### "Cannot find module '@al-ummah/shared-types'"
+### "Cannot find module '@al-ummah/shared-types'" or "'@al-ummah/logger'"
 ```bash
-# Rebuild shared types
+# Rebuild shared packages
 pnpm --filter @al-ummah/shared-types build
+pnpm --filter @al-ummah/logger build
 
 # Restart VS Code TypeScript server
 # Ctrl+Shift+P → "TypeScript: Restart TS Server"
@@ -737,7 +843,7 @@ Network-restricted environments may block Google Fonts. See `.github/CLAUDE.md` 
 ## Important Notes
 
 1. **Always use pnpm**, never npm or yarn
-2. **Build shared-types first** before other apps
+2. **Build shared packages first** — `pnpm --filter @al-ummah/shared-types build && pnpm --filter @al-ummah/logger build`
 3. **Restart VS Code** after TypeScript config changes
 4. **Never cancel long builds** - web app can take up to 120 minutes
 5. **Test bilingual support** - verify both `/en/*` and `/ar/*` routes

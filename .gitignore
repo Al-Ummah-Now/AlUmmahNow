@@ -44,12 +44,15 @@ yarn-error.log*
 .wrangler/
 .dev.vars
 
-# IDEs
+# IDEs and tools
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+# Serena regenerates project.yml on every run (tool config, not source);
+# ignore only it — .serena/memories/ is intentionally tracked knowledge.
+.serena/project.yml
 
 # OS
 .DS_Store
