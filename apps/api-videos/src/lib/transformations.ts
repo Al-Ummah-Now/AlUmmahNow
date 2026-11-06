@@ -76,6 +76,8 @@ export function transformPlaylistToView(
         dateModified: playlist.dateModified,
         videosCount: playlist.videos?.length || 0,
         isPublic: playlist.isPublic,
+        name: playlist.title,
+        videos: playlist.videos || [],
     };
 }
 

@@ -3,6 +3,12 @@ import { string, z } from "zod";
 import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { toPlaylistResponse, canViewPlaylist } from "../../lib/playlists";
+import { logger } from "../../lib/logger";
+
+// Bounds for scanning the playlists bucket when filtering by channel
+const CHANNEL_SCAN_PAGE_SIZE = 100;
+const CHANNEL_SCAN_MAX_PAGES = 20;
 
 export class PlaylistsList extends OptionalAuthRoute {
     schema = {
@@ -16,6 +22,9 @@ export class PlaylistsList extends OptionalAuthRoute {
                 }),
                 cursor: string({
                     description: "The last cursor returned from the previous request",
+                }).optional(),
+                channelId: string({
+                    description: "Only return playlists that belong to this channel (cursor is ignored; up to `limit` newest playlists)",
                 }).optional(),
             }),
 			headers: z.object({
@@ -51,58 +60,50 @@ export class PlaylistsList extends OptionalAuthRoute {
     };
 
     async handle(c: AppContext) {
-        // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
-
-        // Retrieve the validated parameters
-        const { limit, cursor } = request.query;
-		const { channelId } = request.headers;
+        const { limit, cursor, channelId: channelFilter } = request.query;
         const userId = this.getUserId(c);
 
-        // Implement your own object list here
-        const bucket = c.env.playlists;
         type PlaylistType = z.infer<typeof Playlist>;
-        const repository = new R2Repository<PlaylistType>(bucket);
-        let playlists = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
-        
-        // Filter playlists based on privacy settings, soft delete, moderation, and user context
-        const filteredPlaylists = {
-            ...playlists,
-            items: (playlists.items || []).filter(playlist => {
-                // Filter out soft-deleted playlists
-                if (playlist.isDeleted) {
-                    return false;
-                }
+        const repository = new R2Repository<PlaylistType>(c.env.playlists);
 
-                // Filter out moderation-hidden playlists
-                if (playlist.isHidden) {
-                    return false;
+        if (channelFilter) {
+            // R2 has no secondary index, so scan pages and filter by channel.
+            const matches: PlaylistType[] = [];
+            let scanCursor: string | undefined;
+            for (let page = 0; page < CHANNEL_SCAN_MAX_PAGES; page++) {
+                const result = await repository.listObjects(CHANNEL_SCAN_PAGE_SIZE, scanCursor);
+                for (const playlist of result.items || []) {
+                    if (playlist.channelId === channelFilter && canViewPlaylist(playlist, userId)) {
+                        matches.push(playlist);
+                    }
                 }
+                if (!result.cursor) break;
+                scanCursor = result.cursor;
+            }
 
-                // If playlist is explicitly private (false), only show if user owns it
-                if (playlist.isPublic === false) {
-                    return userId && playlist.userId === userId;
-                }
+            matches.sort((a, b) => (b.dateModified || '').localeCompare(a.dateModified || ''));
 
-                // If playlist is public (true) or undefined/null (default to public), always show it
-                return true;
-            })
-        };
-        
-        let response: PaginationResponse<PlaylistType>;
-        if (!filteredPlaylists.items || filteredPlaylists.items.length === 0) {
-            response = {
+            logger.info('[PlaylistsList] Channel playlists listed', {
+                channelId: channelFilter,
+                count: matches.length,
+            });
+
+            return {
                 cursor: "",
                 limit,
-                data: [],
-            };
-        } else {
-            response = {
-                cursor: filteredPlaylists.cursor,
-                limit,
-                data: filteredPlaylists.items || [],
+                data: matches.slice(0, limit).map(toPlaylistResponse),
             };
         }
+
+        const playlists = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
+        const visible = (playlists.items || []).filter((playlist) => canViewPlaylist(playlist, userId));
+
+        const response: PaginationResponse<ReturnType<typeof toPlaylistResponse>> = {
+            cursor: playlists.cursor || "",
+            limit,
+            data: visible.map(toPlaylistResponse),
+        };
 
         return response;
     }

@@ -1,8 +1,14 @@
 import { Str } from "chanfana";
 import { z } from "zod";
-import { Playlist, ResponseError } from "../../lib/types";
+import { Playlist, Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { transformVideoToView } from "../../lib/transformations";
+import { toPlaylistResponse, canViewPlaylist, canViewVideo, PlaylistType, VideoType } from "../../lib/playlists";
+import { logger } from "../../lib/logger";
+
+// Upper bound on videos resolved for a single playlist page
+const MAX_EXPANDED_VIDEOS = 200;
 
 export class PlaylistFetch extends OptionalAuthRoute {
     schema = {
@@ -11,6 +17,10 @@ export class PlaylistFetch extends OptionalAuthRoute {
         request: {
             params: z.object({
                 id: Str({ description: "Playlist id" }),
+            }),
+            query: z.object({
+                includeVideos: z.enum(["true", "false"]).optional()
+                    .describe("When 'true', include `videoItems`: the playlist's viewable videos in playlist order"),
             }),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
@@ -53,39 +63,53 @@ export class PlaylistFetch extends OptionalAuthRoute {
     };
 
     async handle(c: AppContext) {
-        // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
-
-        // Retrieve the validated slug
         const { id } = request.params;
-		const { channelId } = request.headers;
+        const includeVideos = request.query?.includeVideos === "true";
         const userId = this.getUserId(c);
 
-        // Implement your own object fetch here
-        const bucket = c.env.playlists;
-        type PlaylistType = z.infer<typeof Playlist>;
-        const repository = new R2Repository<PlaylistType>(bucket);
-        let playlist = await repository.getObject(id);
+        const repository = new R2Repository<PlaylistType>(c.env.playlists);
+        const playlist = await repository.getObject(id);
 
-        if (!playlist) {
+        // Deleted, hidden and other users' private playlists all look "not found"
+        if (!playlist || !canViewPlaylist(playlist, userId)) {
             return c.json({ success: false, error: "Playlist not found" }, 404);
         }
 
-        // Check if playlist is deleted (soft delete)
-        if (playlist.isDeleted) {
-            return c.json({ success: false, error: "Playlist not found" }, 404);
+        const response: ReturnType<typeof toPlaylistResponse> & {
+            channelName?: string;
+            videoItems?: ReturnType<typeof transformVideoToView>[];
+        } = toPlaylistResponse(playlist);
+
+        if (playlist.channelId) {
+            try {
+                const channelRepo = new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels);
+                const channel = await channelRepo.getObject(playlist.channelId);
+                response.channelName = channel?.name || "";
+            } catch (error) {
+                logger.warn("[PlaylistFetch] Failed to load channel", {
+                    playlistId: id,
+                    channelId: playlist.channelId,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
         }
 
-        // Check if playlist is hidden (moderation) - blocks everyone
-        if (playlist.isHidden) {
-            return c.json({ success: false, error: "Playlist not found" }, 404);
+        if (includeVideos) {
+            const videoRepo = new R2Repository<VideoType>(c.env.videos);
+            const ids = (playlist.videos || []).slice(0, MAX_EXPANDED_VIDEOS);
+            const videos = await Promise.all(ids.map((videoId) => videoRepo.getObject(videoId)));
+            response.videoItems = videos
+                .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
+                .map((video) => transformVideoToView(video));
+
+            logger.info("[PlaylistFetch] Expanded playlist videos", {
+                playlistId: id,
+                requested: ids.length,
+                returned: response.videoItems.length,
+            });
         }
 
-        // Check privacy permissions
-        if (playlist.isPublic === false && (!userId || playlist.userId !== userId)) {
-            return c.json({ success: false, error: "Playlist not found" }, 404); // Don't reveal that private playlist exists
-        }
-
-        return playlist;
+        return response;
     }
 }

@@ -11,6 +11,7 @@ import { VideosList } from '../endpoints/video/videoList';
 import { VideoSearch } from '../endpoints/video/videoSearch';
 import { VideoView } from '../endpoints/video/videoView';
 import { VideoUploadStatus } from '../endpoints/video/videoUploadStatus';
+import { VideoThumbnailUpload } from '../endpoints/video/videoThumbnailUpload';
 
 // Video upload endpoints
 import { VideoUpload } from '../endpoints/video/videoUpload';
@@ -29,6 +30,7 @@ import { SubtitlesUpload } from '../endpoints/video/subtitlesUpload';
 import { SubtitlesList } from '../endpoints/video/subtitlesList';
 import { SubtitlesGet } from '../endpoints/video/subtitlesGet';
 import { SubtitlesDelete } from '../endpoints/video/subtitlesDelete';
+import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
 
 // Video scheduling endpoints
 import { VideoScheduleCreate } from '../endpoints/video/scheduleCreate';
@@ -87,6 +89,9 @@ videoRouter.post('/bulk-delete', VideoBulkDelete);
 // Get video upload status (authenticated)
 videoRouter.get('/:id/upload-status', VideoUploadStatus);
 
+// Upload custom thumbnail (authenticated, owner only)
+videoRouter.post('/:id/thumbnail', VideoThumbnailUpload);
+
 // ==========================================
 // VIDEO UPLOAD OPERATIONS
 // ==========================================
@@ -131,6 +136,9 @@ videoRouter.get('/:videoId/subtitles/:language', SubtitlesGet);
 
 // Upload subtitle track (authenticated)
 videoRouter.post('/:videoId/subtitles', SubtitlesUpload);
+
+// Set default subtitle track (authenticated, owner only)
+videoRouter.put('/:videoId/subtitles/:language/default', SubtitlesSetDefault);
 
 // Delete subtitle track (authenticated)
 videoRouter.delete('/:videoId/subtitles/:language', SubtitlesDelete);

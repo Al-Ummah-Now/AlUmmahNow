@@ -77,11 +77,11 @@ export class SubtitlesGet extends PublicRoute {
 
       if (format === 'vtt' || !format) {
         key = `${videoId}/${language}.vtt`;
-        contentType = 'text/vtt';
+        contentType = 'text/vtt; charset=utf-8';
       } else {
         // Try to get original format
         key = `${videoId}/original/${language}.${format}`;
-        contentType = 'text/plain';
+        contentType = 'text/plain; charset=utf-8';
       }
 
       // Fetch subtitle file

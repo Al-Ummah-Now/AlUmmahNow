@@ -149,7 +149,7 @@ export function base64ToBuffer(base64: string): ArrayBuffer {
 /**
  * Detect MIME type from file signature (magic bytes)
  */
-function detectMimeType(bytes: Uint8Array): string | null {
+export function detectMimeType(bytes: Uint8Array): string | null {
   // JPEG
   if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
     return 'image/jpeg';

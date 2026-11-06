@@ -138,6 +138,7 @@ app.use('/api/videos/upload/resume/:videoId', rateLimitMiddleware('video_upload'
 // SECURITY: Apply rate limiting to community media uploads
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
 app.use('/api/community/media/upload/gif', rateLimitMiddleware('image_upload'));
+app.use('/api/videos/:id/thumbnail', rateLimitMiddleware('image_upload'));
 
 // ==========================================
 // TUS PROXY
