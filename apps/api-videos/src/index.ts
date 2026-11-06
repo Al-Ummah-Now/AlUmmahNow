@@ -59,6 +59,21 @@ app.use('*', cors({
 	credentials: false,
 }));
 
+// Internal / diagnostic endpoints require the service-to-service key
+// (X-API-Key == INTERNAL_API_KEY). They mutate storage or expose internals.
+const INTERNAL_PATHS = ['/internal/*', '/test', '/test-error', '/api/i18n/sync'];
+for (const p of INTERNAL_PATHS) {
+	app.use(p, async (c, next) => {
+		const binding = (c.env as unknown as { INTERNAL_API_KEY?: string | { get(): Promise<string> } }).INTERNAL_API_KEY;
+		const expected = typeof binding === 'string' ? binding : await binding?.get();
+		const provided = c.req.header('X-API-Key');
+		if (!expected || !provided || provided !== expected) {
+			return c.json({ success: false, error: 'Unauthorized' }, 401);
+		}
+		return next();
+	});
+}
+
 // Add comprehensive logging middleware for ALL routes
 app.use('*', loggingMiddleware);
 

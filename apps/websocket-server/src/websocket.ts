@@ -61,7 +61,6 @@ export class WebSocketDurableObject extends DurableObject {
 
     // Parse URL for authentication parameters
     const token = url.searchParams.get('token');
-    const userId = url.searchParams.get('userId');
 
     // Create WebSocket pair
     const pair = new WebSocketPair();
@@ -77,7 +76,8 @@ export class WebSocketDurableObject extends DurableObject {
     const connection: WebSocketConnection = {
       webSocket: server,
       sessionId,
-      userId: userId || undefined,
+      // userId is only trusted after token authentication (see handleAuthentication)
+      userId: undefined,
       authenticated: false,
       connectedAt: Date.now(),
     };
@@ -252,11 +252,14 @@ export class WebSocketDurableObject extends DurableObject {
 
       // Try full validation first (requires env vars to be set)
       const env = this.env as Env;
-      if ('Issuer' in env && 'ClientId' in env && env.Issuer && env.ClientId) {
+      const isDev = ['development', 'dev', 'local'].includes(String((env as { ENVIRONMENT?: string }).ENVIRONMENT ?? '').toLowerCase());
+      if (env.Issuer) {
         authPayload = await validateJWT(token, env);
-      } else {
-        // Fallback to basic validation for development
+      } else if (isDev) {
+        // Unsigned decode is only acceptable for local development
         authPayload = await validateJWTBasic(token);
+      } else {
+        logger.error('Issuer not configured; refusing unsigned token validation');
       }
 
       if (!authPayload) {

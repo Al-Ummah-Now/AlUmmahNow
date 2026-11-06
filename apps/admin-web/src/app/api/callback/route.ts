@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthClient, setAdminSession } from '@/lib/auth';
 import { subjects } from '@/interfaces/subjects';
-import { hasAdminAccess } from '@/lib/roles';
+import { hasAdminAccess, normalizeRole } from "@/lib/roles";
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     // Exchange code for tokens
     const exchanged = await client.exchange(
       code,
-      `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3091'}/api/callback`,
+      callbackUrl(request),
     );
 
     if (exchanged.err) {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const userInfo = verified.subject.properties;
 
     // Extract user roles from the verified token
-    const userRoles = userInfo.roles || [];
+    const userRoles: string[] = (userInfo.roles || []).map((r: string) => normalizeRole(r));
 
     // Check if user has admin or moderator role
     const hasAccess = userRoles.some((role: string) => hasAdminAccess(role));
@@ -84,4 +84,14 @@ export async function GET(request: NextRequest) {
     logger.error('Auth callback error', { error });
     return NextResponse.redirect(new URL('/login?error=auth_failed', request.url));
   }
+}
+
+/**
+ * Must be byte-identical to the redirect_uri sent at /authorize
+ * (see app/login/page.tsx, which derives it from the Host header).
+ */
+function callbackUrl(request: NextRequest): string {
+  const host = request.headers.get('host') ?? new URL(request.url).host;
+  const protocol = host.includes('localhost') ? 'http' : 'https';
+  return `${protocol}://${host}/api/callback`;
 }

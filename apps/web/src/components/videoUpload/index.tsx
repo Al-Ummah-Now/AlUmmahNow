@@ -17,6 +17,7 @@ import { ScheduleDateTimeSelector, ScheduleData } from "./ScheduleDateTimeSelect
 import { VideoCategory } from "@al-ummah/shared-types";
 import type { ProcessedMetadata } from "@/lib/upload/template-variables";
 import { scheduleVideo } from "@/lib/api/scheduling";
+import { getApiUrl } from "@/lib/runtime-config";
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -242,7 +243,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
       const upload = new tus.Upload(selectedFile, {
         // Use TUS proxy endpoint (NOT Bunny.net directly)
-        endpoint: `${process.env.NEXT_PUBLIC_API_URL}/api/videos/tus`,
+        endpoint: `${getApiUrl()}/api/videos/tus`,
         retryDelays: [0, 3000, 5000, 10000, 20000],
         chunkSize: 5 * 1024 * 1024, // 5MB chunks
         // Include Authorization header since cookies don't cross origins

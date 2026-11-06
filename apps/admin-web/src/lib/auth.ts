@@ -1,10 +1,10 @@
 'use server';
 
-import { cookies as getCookies } from 'next/headers';
+import { cookies as getCookies, headers } from 'next/headers';
 import { createClient } from '@al-ummah-now/openauth/client';
 import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
-import type { SystemRole } from './roles';
+import { normalizeRole, type SystemRole } from './roles';
 
 // Session configuration
 const SESSION_COOKIE_NAME = 'admin_session';
@@ -60,7 +60,7 @@ export async function getAdminSession(): Promise<AdminSession | null> {
       const userInfo = verified.subject.properties;
 
       // Extract user roles and determine highest priority role
-      const userRoles = userInfo.roles || [];
+      const userRoles: string[] = (userInfo.roles || []).map((r: string) => normalizeRole(r));
       const role = userRoles.includes('super_admin')
         ? 'super_admin'
         : userRoles.includes('admin')
@@ -185,9 +185,12 @@ export async function login(): Promise<void> {
     redirect('/dashboard');
   }
 
+  const headersData = await headers();
+  const host = headersData.get("host") ?? "localhost:3091";
+  const protocol = host.includes("localhost") ? "http" : "https";
   const client = await getAuthClient();
   const { url } = await client.authorize(
-    `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3091'}/api/callback`,
+    `${protocol}://${host}/api/callback`,
     'code',
   );
   redirect(url);

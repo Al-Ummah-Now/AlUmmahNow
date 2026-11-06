@@ -17,6 +17,14 @@ export class WebSocketManager {
   private messageQueue: WebSocketMessage[] = [];
   private eventListeners: Map<string, Set<(data: WebSocketConnectionState) => void>> = new Map();
 
+  /** Set the token sent in the authenticate message on (re)connect. */
+  setAuthToken(token: string | undefined): void {
+    this.config.authToken = token;
+    if (token && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.sendAuthMessage(token);
+    }
+  }
+
   constructor(config: WebSocketConfig) {
     this.config = {
       ...config,

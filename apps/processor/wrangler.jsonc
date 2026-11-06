@@ -9,7 +9,7 @@
 		{
 			"binding": "REPORTS_DB",
 			"database_name": "al-ummah-now-reports",
-			"database_id": "YOUR_DATABASE_ID"
+			"database_id": "7bee932d-c6b1-47c2-ab70-7dba349104af"
 		}
 	],
 
@@ -45,7 +45,7 @@
 	"vars": {
 		"ENVIRONMENT": "production",
 		"LOG_LEVEL": "info",
-		"WEBSOCKET_URL": "https://ws.alummahnow.net"
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net"
 	},
 
 	// Secrets Store

@@ -1,8 +1,11 @@
 {
-  "name": "al-ummah-admin-web",
+  "name": "al-ummah-admin-web-dev",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-04-12",
-  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env"
+  ],
   "logpush": true,
   "minify": true,
   "assets": {
@@ -19,7 +22,8 @@
     "API_URL": "http://127.0.0.1:3086",
     "ADMIN_API_URL": "http://127.0.0.1:3090",
     "NEXT_PUBLIC_API_URL": "http://127.0.0.1:3086",
-    "NEXT_PUBLIC_BASE_URL": "http://localhost:3091"
+    "NEXT_PUBLIC_BASE_URL": "http://localhost:3091",
+    "ClientId": "a24e39de-601d-463b-b50d-37a0a94e986b"
   },
   "dev": {
     "ip": "127.0.0.1",

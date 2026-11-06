@@ -5,6 +5,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { WebSocketConnectionState, WebSocketConfig, WebSocketEventType } from '@/interfaces/websocket';
 import { User } from '@/interfaces';
+import { fetchClientAuthToken } from '@/lib/auth/client-token';
 
 interface WebSocketContextType {
   wsManager: WebSocketManager | null;
@@ -50,11 +51,10 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
     if (user?.id) {
       defaultConfig.userId = user.id;
-      // In production, you would get this from your auth token
-      // defaultConfig.authToken = getAuthToken();
     }
-
-    wsManagerRef.current = new WebSocketManager(defaultConfig);
+    let cancelled = false;
+    const manager = new WebSocketManager(defaultConfig);
+    wsManagerRef.current = manager;
 
     // Listen for connection state changes
     const unsubscribeStateChange = wsManagerRef.current.onStateChange((state) => {
@@ -62,13 +62,22 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
       setIsConnected(state.status === 'connected');
     });
 
-    // Auto-connect for both authenticated and anonymous users
-    // Anonymous users can view real-time updates but cannot post
-    wsManagerRef.current.connect(user?.id).catch((error) => {
-      logger.error('Failed to connect to WebSocket:', error);
-    });
+    // Auto-connect for both authenticated and anonymous users.
+    // Authenticated users get their access token from the same-origin token
+    // endpoint (cookies are httpOnly) and authenticate via the first message.
+    void (async () => {
+      if (user?.id) {
+        const token = await fetchClientAuthToken();
+        if (token) manager.setAuthToken(token);
+      }
+      if (cancelled) return;
+      manager.connect(user?.id).catch((error) => {
+        logger.error("Failed to connect to WebSocket:", error);
+      });
+    })();
 
     return () => {
+      cancelled = true;
       unsubscribeStateChange();
       if (wsManagerRef.current) {
         wsManagerRef.current.disconnect();

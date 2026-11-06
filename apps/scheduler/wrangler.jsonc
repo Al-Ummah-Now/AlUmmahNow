@@ -73,7 +73,7 @@
 		"MAX_RETRIES": "3",
 		"BATCH_SIZE": "50",
 		"LOCK_TTL": "120",
-		"WEBSOCKET_URL": "https://ws.alummahnow.net"
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net"
 	},
 
 	// Development server configuration
