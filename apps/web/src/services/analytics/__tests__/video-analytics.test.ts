@@ -41,15 +41,11 @@ Object.defineProperty(global, 'localStorage', {
   value: localStorageMock
 });
 
-// Mock document for visibility API
-Object.defineProperty(global, 'document', {
-  value: {
-    hidden: false,
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn()
-  },
-  writable: true
-});
+// Note: jsdom (testEnvironment) already provides `document` with the visibility
+// API (hidden/addEventListener/removeEventListener). Redefining global.document
+// throws "Cannot redefine property: document" under jest-environment-jsdom 30
+// (it's a non-configurable global), so we rely on jsdom's document and spy on it
+// per-test instead (see jest.spyOn(document, 'addEventListener') below).
 
 describe('VideoAnalytics', () => {
   beforeEach(() => {
