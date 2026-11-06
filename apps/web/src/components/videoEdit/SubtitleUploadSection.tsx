@@ -8,6 +8,7 @@ import {
   deleteSubtitle,
   setDefaultSubtitle,
 } from '@/lib/api/subtitles';
+import { upsertSubtitleTrack } from '@/lib/api/subtitle-utils';
 import type { SubtitleTrack } from '@/lib/api/subtitles-types';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitleUploadModal from './SubtitleUploadModal';
@@ -66,7 +67,8 @@ export default function SubtitleUploadSection({
   }, [loadSubtitles]);
 
   const handleUploadSuccess = (subtitle: SubtitleTrack) => {
-    setSubtitles((prev) => [...prev, subtitle]);
+    // Re-uploading a language replaces its track
+    setSubtitles((prev) => upsertSubtitleTrack(prev, subtitle));
   };
 
   const handleSetDefault = async (language: string) => {

@@ -5,6 +5,7 @@ import { buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 import type { SubtitleTrack, SubtitleCue, SubtitleValidationResult } from "./subtitles-types";
+import { normalizeSubtitleTrack, type ApiSubtitleTrack } from "./subtitle-utils";
 
 // Re-export types for convenience
 export type { SubtitleTrack, SubtitleCue, SubtitleValidationResult };
@@ -52,7 +53,12 @@ export async function uploadSubtitle(
     };
   }
 
-  return response.json();
+  // API responds with { success, data: { track, video } }
+  const data = await response.json();
+  return {
+    success: !!data?.success,
+    data: data?.data?.track ? { subtitle: normalizeSubtitleTrack(data.data.track as ApiSubtitleTrack, videoId) } : undefined,
+  };
 }
 
 /**
@@ -82,8 +88,10 @@ export async function listSubtitles(
     return [];
   }
 
+  // API responds with { success, data: { tracks, defaultLanguage } }
   const data = await response.json();
-  return data.subtitles || [];
+  const tracks = (data?.data?.tracks || []) as ApiSubtitleTrack[];
+  return tracks.map((track) => normalizeSubtitleTrack(track, videoId));
 }
 
 /**

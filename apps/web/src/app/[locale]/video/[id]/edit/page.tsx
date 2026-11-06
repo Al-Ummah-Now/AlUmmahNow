@@ -123,7 +123,7 @@ export default function VideoEditPage() {
         <VideoEdit
           video={video}
           userId={user.id}
-          channelId={user.id}
+          channelId={video.channelId || user.id}
           onSave={handleSave}
           onCancel={handleCancel}
         />

@@ -32,8 +32,9 @@ export interface ChapterUpdateRequest {
  */
 export async function getChapters(
   videoId: string
-): Promise<{ success: boolean; result?: ChapterData; error?: string } | null> {
-  return apiRequestServer<{ success: boolean; result?: ChapterData; error?: string }>({
+): Promise<{ success: boolean; chapters?: ChapterData; result?: ChapterData; error?: string } | null> {
+  // The API responds with { success, chapters } (result kept for compatibility)
+  return apiRequestServer<{ success: boolean; chapters?: ChapterData; result?: ChapterData; error?: string }>({
     method: 'GET',
     url: buildApiUrl(`/api/videos/${videoId}/chapters`),
     functionName: 'getChapters'
