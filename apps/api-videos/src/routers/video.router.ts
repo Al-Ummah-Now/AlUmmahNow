@@ -42,6 +42,7 @@ import { VideoSchedulePublishNow } from '../endpoints/video/schedulePublishNow';
 import { CommentCreate } from '../endpoints/video/commentCreate';
 import { CommentUpdate } from '../endpoints/video/commentUpdate';
 import { CommentDelete } from '../endpoints/video/commentDelete';
+import { CommentList } from '../endpoints/video/commentList';
 
 // Video like/dislike endpoints
 import { LikeCreate } from '../endpoints/video/videoLikeCreate';
@@ -49,8 +50,11 @@ import { LikeDelete } from '../endpoints/video/videoLikeDelete';
 import { DislikeCreate } from '../endpoints/video/videoDislikeCreate';
 import { DislikeDelete } from '../endpoints/video/videoDislikeDelete';
 
-// Comment like/dislike endpoints (re-using video like/dislike classes with different paths)
-// Note: Comment likes/dislikes are handled by the same endpoint classes but with comment-specific paths
+// Comment like/dislike endpoints
+import { CommentLikeCreate } from '../endpoints/video/commentLikeCreate';
+import { CommentLikeDelete } from '../endpoints/video/commentLikeDelete';
+import { CommentDislikeCreate } from '../endpoints/video/commentDislikeCreate';
+import { CommentDislikeDelete } from '../endpoints/video/commentDislikeDelete';
 
 const app = new Hono();
 
@@ -174,6 +178,9 @@ videoRouter.delete('/:id/dislikes', DislikeDelete);
 // VIDEO COMMENTS
 // ==========================================
 
+// List comments (public; reaction flags when authenticated)
+videoRouter.get('/:id/comments', CommentList);
+
 // Create comment (authenticated)
 videoRouter.post('/:id/comments', CommentCreate);
 
@@ -184,16 +191,16 @@ videoRouter.put('/:id/comments/:cid', CommentUpdate);
 videoRouter.delete('/:id/comments/:cid', CommentDelete);
 
 // Like comment (authenticated)
-videoRouter.post('/:id/comments/:cid/likes', LikeCreate);
+videoRouter.post('/:id/comments/:cid/likes', CommentLikeCreate);
 
 // Remove like from comment (authenticated)
-videoRouter.delete('/:id/comments/:cid/likes', LikeDelete);
+videoRouter.delete('/:id/comments/:cid/likes', CommentLikeDelete);
 
 // Dislike comment (authenticated)
-videoRouter.post('/:id/comments/:cid/dislikes', DislikeCreate);
+videoRouter.post('/:id/comments/:cid/dislikes', CommentDislikeCreate);
 
 // Remove dislike from comment (authenticated)
-videoRouter.delete('/:id/comments/:cid/dislikes', DislikeDelete);
+videoRouter.delete('/:id/comments/:cid/dislikes', CommentDislikeDelete);
 
 // ==========================================
 // VIDEO ANALYTICS

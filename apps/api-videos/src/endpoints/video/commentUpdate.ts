@@ -4,6 +4,7 @@ import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { MAX_COMMENT_LENGTH, normalizeCommentText } from "../../lib/comments";
 
 
 export class CommentUpdate extends AuthenticatedRoute {
@@ -21,8 +22,10 @@ export class CommentUpdate extends AuthenticatedRoute {
 			body: {
 				content: {
 					"application/json": {
+						// Accepts `text` (preferred) or `content` (shared-types CommentUpdateRequest)
 						schema: z.object({
-							text: z.string(),
+							text: z.string().optional(),
+							content: z.string().optional(),
 						}),
 					},
 				},
@@ -101,10 +104,26 @@ export class CommentUpdate extends AuthenticatedRoute {
 			}, 404);
 		}
 
+		// Only the comment author may edit it
+		if (video.comments[commentIndex].userId !== userId) {
+			return c.json({
+				success: false,
+				error: "Forbidden",
+			}, 403);
+		}
+
+		const text = normalizeCommentText(request.body);
+		if (!text) {
+			return c.json({ success: false, error: "Comment text is required" }, 400);
+		}
+		if (text.length > MAX_COMMENT_LENGTH) {
+			return c.json({ success: false, error: `Comment text must be at most ${MAX_COMMENT_LENGTH} characters` }, 400);
+		}
+
 		// Update the comment
 		const updatedComment = {
 			...video.comments[commentIndex],
-			...request.body,
+			text,
 			dateModified: new Date().toISOString(),
 			isEdited: true,
 		};
