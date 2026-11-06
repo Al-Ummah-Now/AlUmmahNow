@@ -14,6 +14,7 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .wrangler",
     "test": "npm run test:api",
+    "test:unit": "tsx --test test/*.spec.ts",
     "test:api": "curl -s http://127.0.0.1:3086/test | jq .",
     "test:health": "curl -s http://127.0.0.1:3086/health | jq .",
     "test:metrics": "curl -s http://127.0.0.1:3086/metrics | jq ."
