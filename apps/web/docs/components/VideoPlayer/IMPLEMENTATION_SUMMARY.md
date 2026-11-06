@@ -215,7 +215,7 @@ npm test -- CustomVideoPlayer.test.tsx
 The current implementation uses Bunny.net iframe:
 
 ```tsx
-// Old: apps/web/src/components/videoPlayer/index.tsx
+// Old: apps/web/src/components/VideoPagePlayer/index.tsx
 <iframe src={`https://iframe.mediadelivery.net/embed/...`} />
 ```
 

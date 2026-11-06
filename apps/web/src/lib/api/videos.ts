@@ -1,7 +1,7 @@
 'use server';
 
 import { VideoObject, VideoInfo } from "@/interfaces";
-import { PlayerOptions } from "@/components/videoPlayer/interface";
+import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import {
   ApiResponse,
   PaginationResponse,
