@@ -392,7 +392,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with preview link
         uses: actions/github-script@v8
@@ -484,7 +484,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with API preview link
         uses: actions/github-script@v8
@@ -577,7 +577,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with processor preview info
         uses: actions/github-script@v8
@@ -670,7 +670,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with websocket preview link
         uses: actions/github-script@v8
@@ -764,7 +764,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with Admin API preview link
         uses: actions/github-script@v8
@@ -858,7 +858,7 @@ jobs:
             --compatibility-date $(date +%Y-%m-%d)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment PR with Admin Web preview link
         uses: actions/github-script@v8
@@ -944,7 +944,7 @@ jobs:
           pnpm wrangler delete ${{ steps.preview-names.outputs.web }} || echo "Web preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Delete API preview
         continue-on-error: true
@@ -953,7 +953,7 @@ jobs:
           pnpm wrangler delete ${{ steps.preview-names.outputs.api }} || echo "API preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Delete processor preview
         continue-on-error: true
@@ -962,7 +962,7 @@ jobs:
           pnpm wrangler delete ${{ steps.preview-names.outputs.processor }} || echo "Processor preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Delete websocket preview
         continue-on-error: true
@@ -971,7 +971,7 @@ jobs:
           pnpm wrangler delete ${{ steps.preview-names.outputs.websocket }} || echo "WebSocket preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Delete admin-api preview
         continue-on-error: true
@@ -980,7 +980,7 @@ jobs:
           pnpm wrangler delete ${{ steps.preview-names.outputs.admin_api }} || echo "Admin API preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Delete admin-web preview
         continue-on-error: true
@@ -989,7 +989,7 @@ jobs:
           pnpm wrangler delete ${{ steps.preview-names.outputs.admin_web }} || echo "Admin Web preview already deleted or doesn't exist"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Cleanup summary
         run: |
@@ -1053,7 +1053,7 @@ jobs:
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy API to QA
         run: |
@@ -1061,7 +1061,7 @@ jobs:
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Processor to QA
         run: |
@@ -1069,7 +1069,7 @@ jobs:
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy WebSocket Server to QA
         run: |
@@ -1077,7 +1077,7 @@ jobs:
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Admin API to QA
         run: |
@@ -1085,7 +1085,7 @@ jobs:
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Admin Web to QA
         run: |
@@ -1093,7 +1093,15 @@ jobs:
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Scheduler to QA
+        run: |
+          cd apps/scheduler
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Notify QA deployment success
         if: success()
@@ -1101,14 +1109,15 @@ jobs:
           echo "🧪 QA deployment successful!"
           echo ""
           echo "QA Workers deployed:"
-          echo "  • al-ummah-web-qa → qa.alummahnow.net"
-          echo "  • videos-qa → videos.qa.api.alummahnow.net"
+          echo "  • al-ummah-web-qa → videos.qa.alummahnow.net"
+          echo "  • videos-qa → videos.api.qa.alummahnow.net"
           echo "  • al-ummah-now-processor-qa"
-          echo "  • al-ummah-now-comms-qa → ws.qa.alummahnow.net"
-          echo "  • al-ummah-admin-api-qa → admin.qa.api.alummahnow.net"
+          echo "  • al-ummah-now-comms-qa → realtime.qa.alummahnow.net"
+          echo "  • al-ummah-admin-api-qa → admin.api.qa.alummahnow.net"
+          echo "  • al-ummah-scheduler-qa (cron)"
           echo "  • al-ummah-admin-web-qa → admin.qa.alummahnow.net"
           echo ""
-          echo "All 6 QA workers are live!"
+          echo "All 7 QA workers are live!"
 
   # Deploy to Production (main branch only)
   deploy-production:
@@ -1158,7 +1167,7 @@ jobs:
           pnpm wrangler deploy --config wrangler.production.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy API to Production
         run: |
@@ -1166,7 +1175,7 @@ jobs:
           pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Processor to Production
         run: |
@@ -1174,7 +1183,7 @@ jobs:
           pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy WebSocket Server to Production
         run: |
@@ -1182,7 +1191,7 @@ jobs:
           pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Admin API to Production
         run: |
@@ -1190,7 +1199,7 @@ jobs:
           pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Admin Web to Production
         run: |
@@ -1198,7 +1207,15 @@ jobs:
           pnpm wrangler deploy --config wrangler.production.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Scheduler to Production
+        run: |
+          cd apps/scheduler
+          pnpm wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Notify production deployment success
         if: success()
@@ -1212,8 +1229,9 @@ jobs:
           echo "  • al-ummah-now-comms (WebSocket server)"
           echo "  • al-ummah-admin-api (Admin API backend)"
           echo "  • al-ummah-admin-web (Admin Web frontend)"
+          echo "  • al-ummah-scheduler (cron)"
           echo ""
-          echo "All 6 production workers are live!"
+          echo "All 7 production workers are live!"
 
       - name: Notify production deployment failure
         if: failure()
