@@ -59,7 +59,7 @@ describe('Channel Tab Event Handler', () => {
       // Verify the creation metrics save
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/tabs/creation/'),
-        expect.stringContaining('"event": "tab_created"'),
+        expect.stringContaining('"event":"tab_created"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -105,7 +105,7 @@ describe('Channel Tab Event Handler', () => {
       // Verify popularity metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/tabs/popularity/'),
-        expect.stringContaining('"event": "tab_switched"'),
+        expect.stringContaining('"event":"tab_switched"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -114,7 +114,7 @@ describe('Channel Tab Event Handler', () => {
       // Verify user behavior metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/tabs/user-behavior/'),
-        expect.stringContaining('"sessionDuration": 120'),
+        expect.stringContaining('"sessionDuration":120'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -123,7 +123,7 @@ describe('Channel Tab Event Handler', () => {
       // Verify session duration metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/tabs/sessions/'),
-        expect.stringContaining('"event": "tab_session_ended"'),
+        expect.stringContaining('"event":"tab_session_ended"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -177,7 +177,7 @@ describe('Channel Tab Event Handler', () => {
       // Verify reorder metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/tabs/reorders/'),
-        expect.stringContaining('"event": "tabs_reordered"'),
+        expect.stringContaining('"event":"tabs_reordered"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -205,7 +205,7 @@ describe('Channel Tab Event Handler', () => {
       // Verify update metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/tabs/updates/'),
-        expect.stringContaining('"event": "tab_updated"'),
+        expect.stringContaining('"event":"tab_updated"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
@@ -231,7 +231,7 @@ describe('Channel Tab Event Handler', () => {
       // Verify deletion metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
         expect.stringContaining('analytics/tabs/deletions/'),
-        expect.stringContaining('"event": "tab_deleted"'),
+        expect.stringContaining('"event":"tab_deleted"'),
         expect.objectContaining({
           httpMetadata: { contentType: 'application/json' },
         })
