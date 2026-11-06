@@ -161,6 +161,7 @@
 	 */
 	// "vars": { "MY_VARIABLE": "production_value" },
 	"vars": {
+		"ENVIRONMENT": "production",
 		"ZONE": "al-ummah-now-images",
 		"ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
 		"Issuer": "https://auth.alummahnow.net",
