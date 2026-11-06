@@ -1,6 +1,6 @@
 import * as tus from 'tus-js-client';
 import { TusConfig, TusCallbacks } from '@al-ummah/shared-types';
-import { logger } from '@/lib/logger-server';
+import { logger } from '@/lib/logger-client';
 
 
 /**
@@ -35,6 +35,8 @@ export class TusParallelManager {
       metadata: {
         filename: file.name,
         filetype: file.type,
+        // e.g. tusSessionId + videoId for the API TUS proxy
+        ...(config.metadata || {}),
       },
 
       onError: (error) => {
