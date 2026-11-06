@@ -641,233 +641,59 @@ export async function searchVideos(
   }
 }
 
-// Helper functions for mock data
-
-function isLocalhost(): boolean {
-  return typeof window !== 'undefined' && window.location.hostname === 'localhost';
-}
-
-function getMockSuggestions(query: string): SearchSuggestion[] {
-  const suggestions = [
-    { text: 'Islamic lectures', type: 'category' as const, count: 150 },
-    { text: 'Quran recitation', type: 'category' as const, count: 89 },
-    { text: 'Islamic history', type: 'category' as const, count: 67 },
-    { text: 'Prayer guidance', type: 'category' as const, count: 45 },
-    { text: 'Islamic stories', type: 'category' as const, count: 34 }
-  ];
-
-  return suggestions
-    .filter(s => s.text.toLowerCase().includes(query.toLowerCase()))
-    .slice(0, 5);
-}
-
-// Constants for base64-encoded SVG data URIs
-const VIDEO_THUMBNAIL_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMzUgNzVMMTY1IDkwTDEzNSAxMDVWNzVaIiBmaWxsPSIjNjM2NzZEIi8+Cjx0ZXh0IHg9IjE2MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2MzY3NkQiPklzbGFtaWMgVmlkZW88L3RleHQ+Cjwvc3ZnPgo=';
-const AVATAR_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iIzlCA0E0QjEiLz4KPHBhdGggZD0iTTggMzJDOCAyNi40NzcyIDEyLjQ3NzIgMjIgMTggMjJIMjJDMjcuNTIyOCAyMiAzMiAyNi40NzcyIDMyIDMyVjMySDhaIiBmaWxsPSIjOUNBM0FGIS8+Cjwvc3ZnPgo=';
-
-function getMockTrendingVideos(): VideoObject[] {
-  const videoThumbnail = VIDEO_THUMBNAIL_PLACEHOLDER;
-  const avatarPlaceholder = AVATAR_PLACEHOLDER;
-
-  return [
-    {
-      id: 'trending-1',
-      title: 'Understanding Islamic Ethics in Modern Times',
-      description: 'A comprehensive guide to applying Islamic principles in contemporary life',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-1',
-      channel: 'Islamic Studies',
-      channelId: 'channel-1',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Islamic Studies',
-      dateCreated: new Date(Date.now() - 86400000).toISOString(),
-      dateModified: new Date(Date.now() - 86400000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 15420,
-      likesCount: 342,
-      dislikesCount: 12,
-      commentsCount: 89,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: 'trending-2',
-      title: 'The Beauty of Quran Recitation',
-      description: 'Experience the divine beauty of Quranic verses with proper Tajweed',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-2',
-      channel: 'Quran Academy',
-      channelId: 'channel-2',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Quran Academy',
-      dateCreated: new Date(Date.now() - 172800000).toISOString(),
-      dateModified: new Date(Date.now() - 172800000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 8734,
-      likesCount: 234,
-      dislikesCount: 8,
-      commentsCount: 56,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: 'trending-3',
-      title: 'Islamic History: The Golden Age',
-      description: 'Discover the remarkable achievements during the Islamic Golden Age',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-3',
-      channel: 'History Channel',
-      channelId: 'channel-3',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'History Channel',
-      dateCreated: new Date(Date.now() - 259200000).toISOString(),
-      dateModified: new Date(Date.now() - 259200000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 12450,
-      likesCount: 567,
-      dislikesCount: 15,
-      commentsCount: 123,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: 'trending-4',
-      title: 'Prayer Guidance for New Muslims',
-      description: 'Step-by-step guide to performing the five daily prayers',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-4',
-      channel: 'Islamic Guidance',
-      channelId: 'channel-4',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Islamic Guidance',
-      dateCreated: new Date(Date.now() - 345600000).toISOString(),
-      dateModified: new Date(Date.now() - 345600000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 9876,
-      likesCount: 423,
-      dislikesCount: 7,
-      commentsCount: 89,
-      isPublic: true,
-      isLive: false
-    }
-  ];
-}
-
-function getMockRecommendations(): VideoObject[] {
-  const videoThumbnail = VIDEO_THUMBNAIL_PLACEHOLDER;
-  const avatarPlaceholder = AVATAR_PLACEHOLDER;
-
-  return [
-    {
-      id: 'rec-1',
-      title: 'Recommended: Islamic Architecture Through Ages',
-      description: 'Explore the beautiful architectural heritage of Islamic civilization',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-2',
-      channel: 'Islamic Heritage',
-      channelId: 'channel-2',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Islamic Heritage',
-      dateCreated: new Date(Date.now() - 172800000).toISOString(),
-      dateModified: new Date(Date.now() - 172800000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 8734,
-      likesCount: 234,
-      dislikesCount: 8,
-      commentsCount: 56,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: 'rec-2',
-      title: 'Islamic Calligraphy: Art of Divine Words',
-      description: 'Learn the sacred art of Arabic calligraphy and its spiritual significance',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-5',
-      channel: 'Islamic Arts',
-      channelId: 'channel-5',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Islamic Arts',
-      dateCreated: new Date(Date.now() - 432000000).toISOString(),
-      dateModified: new Date(Date.now() - 432000000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 6543,
-      likesCount: 198,
-      dislikesCount: 4,
-      commentsCount: 67,
-      isPublic: true,
-      isLive: false
-    }
-  ];
+async function discoveryHeaders(): Promise<Record<string, string>> {
+  const accessToken = (await getServerAuthContext())?.accessToken;
+  return {
+    'Content-Type': 'application/json',
+    ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
+  };
 }
 
 /**
  * Get Search Suggestions
  * GET /api/search/suggestions
+ * Returns an empty list when nothing matches or the API is unavailable.
  */
 export async function getSearchSuggestions(
   query: string,
   limit: number = 5
 ): Promise<SearchSuggestion[]> {
-  // In development/demo environment, return mock data immediately
-  if (isLocalhost()) {
-    return getMockSuggestions(query);
-  }
+  if (!query.trim()) return [];
 
   try {
     const queryParams = new URLSearchParams({
-      q: query,
+      q: query.trim(),
       limit: limit.toString()
     });
 
     const response = await fetch(
       buildApiUrl(`/api/search/suggestions?${queryParams.toString()}`),
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
     );
 
     if (!response.ok) {
-      // Return mock suggestions for development
-      return getMockSuggestions(query);
+      logger.warn('[getSearchSuggestions] API error', { status: response.status });
+      return [];
     }
 
-    return await response.json();
+    const data = await response.json() as SearchSuggestion[] | { data?: SearchSuggestion[] };
+    return Array.isArray(data) ? data : data.data ?? [];
   } catch (error) {
-    logger.error('getSearchSuggestions error:', error);
-    return getMockSuggestions(query);
+    logger.error('[getSearchSuggestions] Request failed', { error });
+    return [];
   }
 }
 
 /**
  * Get Trending Content
  * GET /api/trending
+ * Returns an empty list when there is no trending activity or the API is unavailable.
  */
 export async function getTrendingVideos(
   period: 'hour' | 'day' | 'week' | 'month' = 'day',
   category?: string,
   limit: number = 20
 ): Promise<VideoObject[]> {
-  // In development/demo environment, return mock data immediately to avoid network errors
-  if (isLocalhost()) {
-    return getMockTrendingVideos();
-  }
-
   try {
     const queryParams = new URLSearchParams({
       period,
@@ -880,30 +706,26 @@ export async function getTrendingVideos(
 
     const response = await fetch(
       buildApiUrl(`/api/trending?${queryParams.toString()}`),
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
     );
 
     if (!response.ok) {
-      // Return mock trending content for development
-      return getMockTrendingVideos();
+      logger.warn('[getTrendingVideos] API error', { status: response.status });
+      return [];
     }
 
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
-    return data.videos || data.data || [];
+    return data.data || data.videos || [];
   } catch (error) {
-    logger.error('getTrendingVideos error:', error);
-    return getMockTrendingVideos();
+    logger.error('[getTrendingVideos] Request failed', { error });
+    return [];
   }
 }
 
 /**
  * Get Recommended Videos
  * GET /api/recommendations
+ * Sends the session token (when signed in) so the API can use watch history.
  */
 export async function getRecommendedVideos(
   request: RecommendationRequest,
@@ -921,22 +743,22 @@ export async function getRecommendedVideos(
       {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          ...(await discoveryHeaders()),
           ...(headers?.channelId && { 'channelId': headers.channelId }),
         },
       }
     );
 
     if (!response.ok) {
-      // Return mock recommendations for development
-      return getMockRecommendations();
+      logger.warn('[getRecommendedVideos] API error', { status: response.status });
+      return [];
     }
 
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
-    return data.videos || data.data || [];
+    return data.data || data.videos || [];
   } catch (error) {
-    logger.error('getRecommendedVideos error:', error);
-    return getMockRecommendations();
+    logger.error('[getRecommendedVideos] Request failed', { error });
+    return [];
   }
 }
 

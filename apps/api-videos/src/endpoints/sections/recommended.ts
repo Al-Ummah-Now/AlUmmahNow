@@ -115,7 +115,7 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
       // Get user's watch history if excludeWatched is true and user is authenticated
       if (excludeWatched && userId) {
         try {
-          const watchHistoryBucket = c.env['watch-history'];
+          const watchHistoryBucket = c.env.watch_history;
           if (watchHistoryBucket) {
             const watchHistory = await getWatchHistory(watchHistoryBucket, userId);
             watchedVideoIds = new Set(watchHistory);
@@ -309,13 +309,10 @@ async function getRandomRecommendations(
  */
 async function getWatchHistory(watchHistoryBucket: R2Bucket, userId: string): Promise<string[]> {
   try {
-    const historyKey = `user:${userId}:history`;
-    const historyObject = await watchHistoryBucket.get(historyKey);
-
-    if (!historyObject) return [];
-
-    const history = await historyObject.json() as any;
-    return history.videos?.map((v: any) => v.videoId) || [];
+    // Watch history entries are stored one per video with key `<userId>:<videoId>`
+    const prefix = `${userId}:`;
+    const listing = await watchHistoryBucket.list({ prefix, limit: 1000 });
+    return listing.objects.map(object => object.key.slice(prefix.length)).filter(Boolean);
   } catch (error) {
     logger.error("Failed to get watch history", { error, userId });
     return [];
