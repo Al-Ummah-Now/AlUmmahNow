@@ -79,7 +79,9 @@ async function globalSetup(_config: FullConfig) {
 
   const openAuthUrl = process.env.OPENAUTH_URL || 'http://localhost:3301';
   const webAppUrl = process.env.WEB_APP_URL || 'http://localhost:3001';
-  const clientId = process.env.OPENAUTH_CLIENT_ID || 'alummah-web';
+  // Must be the web app's registered client id (QA: e0de3c30-…); the web
+  // callback exchanges the code with its own ClientId.
+  const clientId = process.env.OPENAUTH_CLIENT_ID || 'e0de3c30-0304-4ac4-86d6-1e185dec0439';
 
   // Log working directory for debugging path issues
   const cwd = process.cwd();
@@ -209,6 +211,12 @@ async function globalSetup(_config: FullConfig) {
       } catch {
         // Already on home page or elsewhere - continue
         ciLogger.debug(`[Setup] Current URL after auth: ${page.url()}`);
+      }
+
+      // Fail fast if the web app did not establish a session (e.g. wrong client id)
+      const webCookies = await context.cookies(webAppUrl);
+      if (!webCookies.some((c) => c.name === "al_ummah_session" || c.name === "access_token")) {
+        throw new Error("Web session cookie not set after OAuth callback");
       }
 
       // Save authenticated state
