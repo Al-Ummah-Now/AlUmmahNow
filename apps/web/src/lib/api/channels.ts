@@ -36,6 +36,36 @@ export async function listChannels(
 }
 
 /**
+ * List all publicly visible channels (channel directory)
+ * GET /api/channels?scope=all
+ *
+ * Unlike listChannels, this is not narrowed to the signed-in user's own channels.
+ * The API returns a top-level `cursor` for the next page ('' when there are no more).
+ */
+export async function listDirectoryChannels(
+  params?: ListQueryParams
+): Promise<{ data: Channel[]; cursor: string } | null> {
+  const queryString = buildQueryParams({
+    limit: params?.limit,
+    cursor: params?.cursor,
+    scope: 'all'
+  });
+
+  const response = await apiRequestServer<{ data?: Channel[]; cursor?: string }>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels${queryString}`),
+    functionName: 'listDirectoryChannels'
+  }, getServerAuthContext, false);
+
+  if (!response) {
+    logger.warn('[listDirectoryChannels] Empty response', { cursor: params?.cursor });
+    return null;
+  }
+
+  return { data: response.data ?? [], cursor: response.cursor ?? '' };
+}
+
+/**
  * List channels for the authenticated user
  * GET /api/channels (userId extracted from JWT token)
  */
