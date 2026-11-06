@@ -42,11 +42,31 @@ export function useRealTimeVideoMetrics(
   });
 
   // Use the anonymous video WebSocket (works without authentication)
-  const { viewerCount, isConnected } = useVideoWebSocket({
+  const { viewerCount, liveCounts, isConnected } = useVideoWebSocket({
     videoId,
     userId, // Optional - can be undefined for anonymous users
     autoConnect: true
   });
+
+  // Apply counters pushed by the server (views, likes, new comments)
+  const commentsBaseRef = useRef<number | null>(null);
+  useEffect(() => {
+    setMetrics(prev => {
+      if (commentsBaseRef.current === null) commentsBaseRef.current = prev.commentsCount;
+      const next = { ...prev };
+      if (liveCounts.viewCount !== undefined) next.viewCount = liveCounts.viewCount;
+      if (liveCounts.likesCount !== undefined) next.likesCount = liveCounts.likesCount;
+      if (liveCounts.dislikesCount !== undefined) next.dislikesCount = liveCounts.dislikesCount;
+      if (liveCounts.commentsAdded !== undefined) {
+        next.commentsCount = commentsBaseRef.current + liveCounts.commentsAdded;
+      }
+      if (next.viewCount === prev.viewCount && next.likesCount === prev.likesCount &&
+        next.dislikesCount === prev.dislikesCount && next.commentsCount === prev.commentsCount) {
+        return prev;
+      }
+      return { ...next, lastUpdated: new Date() };
+    });
+  }, [liveCounts]);
 
   // Update liveViewers when viewerCount changes
   useEffect(() => {

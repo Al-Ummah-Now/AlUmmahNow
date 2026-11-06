@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { broadcastInBackground } from "../../lib/websocket-notify";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class LikeDelete extends AuthenticatedRoute {
@@ -89,6 +90,13 @@ export class LikeDelete extends AuthenticatedRoute {
 		// Note: likesCount is calculated in view layer, not stored
 
 		await repository.putObject(video.id, video);
+
+		broadcastInBackground(c, `video:${id}`, 'video_unliked', {
+			videoId: id,
+			userId,
+			likesCount: video.likes.length,
+			dislikesCount: video.dislikes?.length || 0,
+		});
 
 		return true;
 	}

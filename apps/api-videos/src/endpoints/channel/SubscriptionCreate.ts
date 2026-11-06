@@ -4,6 +4,7 @@ import { Channel, Profile, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
+import { inBackground, notifyUser } from '../../lib/websocket-notify';
 import { AuthenticatedRoute, AppContext } from "../../base";
 
 export class SubscriptionCreate extends AuthenticatedRoute {
@@ -118,6 +119,19 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 
 			channel.subscriptions.push(subscription);
 			await repository.putObject(id, channel);
+
+			// Realtime: tell the subscribed-to channel's owner (looked up after the response)
+			inBackground(c, 'new-subscriber', async () => {
+				const target = await repository.getObject(id);
+				if (target?.userId && target.userId !== userId) {
+					await notifyUser(c.env, target.userId, {
+						notificationType: 'subscription',
+						notificationKey: 'newSubscriber',
+						params: { channelName: target.name || '' },
+						actionUrl: `/channel/${id}`,
+					});
+				}
+			});
 
 			// Update reverse index on subscriber's profile
 			try {

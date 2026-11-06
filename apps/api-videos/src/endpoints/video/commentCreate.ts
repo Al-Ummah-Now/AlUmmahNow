@@ -3,6 +3,7 @@ import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { broadcastInBackground, notifyUserInBackground } from "../../lib/websocket-notify";
 import { Comment } from "../../lib/model/input";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
@@ -133,6 +134,29 @@ export class CommentCreate extends AuthenticatedRoute {
 		// Note: commentsCount is calculated in view layer, not stored
 
 		await repository.putObject(video.id, video);
+
+		// Realtime: new comment for viewers of the video, notification for its owner
+		broadcastInBackground(c, `video:${id}`, 'comment_added', {
+			videoId: id,
+			commentId: comment.id,
+			comment: {
+				...comment,
+				likesCount: 0,
+				dislikesCount: 0,
+				repliesCount: 0,
+				isEdited: false,
+				isDeleted: false,
+				isPinned: false,
+			},
+		});
+		if (video.userId && video.userId !== userId) {
+			notifyUserInBackground(c, video.userId, {
+				notificationType: 'comment',
+				notificationKey: 'newComment',
+				params: { videoTitle: video.title || '' },
+				actionUrl: `/video/${id}`,
+			});
+		}
 
 		return {
 			success: true,

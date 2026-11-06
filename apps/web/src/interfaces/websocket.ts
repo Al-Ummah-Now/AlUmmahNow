@@ -4,6 +4,8 @@ export interface WebSocketMessage<T = unknown> {
   type: WebSocketEventType;
   timestamp: number;
   data: T;
+  /** Channel the server broadcast this message on (e.g. `video:<id>`, `live-streams`) */
+  channel?: string;
 }
 
 export type WebSocketEventType =
@@ -24,7 +26,9 @@ export type WebSocketEventType =
   | 'subscribe'
   | 'unsubscribe'
   | 'viewing'
-  | 'viewer_count';
+  | 'viewer_count'
+  | 'video_processing_update'
+  | 'live_stream_updated';
 
 export interface CommentEvent {
   type: 'comment_added' | 'comment_updated' | 'comment_deleted';
@@ -63,14 +67,41 @@ export interface ViewCountEvent {
   viewCount: number;
 }
 
+/**
+ * Keys the servers send instead of text so notifications render in the viewer's
+ * language (see `t.notifications.realtime`).
+ */
+export type RealtimeNotificationKey = 'newComment' | 'newSubscriber' | 'uploadReady' | 'uploadFailed';
+
 export interface NotificationEvent {
   type: 'notification';
   notificationId: string;
   userId: string;
-  title: string;
-  message: string;
+  /** Legacy pre-rendered text; servers now send notificationKey + params instead */
+  title?: string;
+  message?: string;
+  notificationKey?: RealtimeNotificationKey;
+  params?: Record<string, string | number>;
   actionUrl?: string;
   notificationType: 'like' | 'comment' | 'subscription' | 'upload' | 'system';
+}
+
+export interface VideoProcessingEvent {
+  type: 'video_processing_update';
+  videoId: string;
+  status: 'uploading' | 'processing' | 'ready' | 'failed' | 'cancelled';
+  title?: string;
+  error?: string;
+  duration?: number;
+}
+
+export interface LiveStreamUpdatedEvent {
+  type: 'live_stream_updated';
+  liveStreamId: string;
+  event: 'created' | 'updated';
+  status?: string;
+  channelId?: string;
+  title?: string;
 }
 
 export interface PresenceEvent {
