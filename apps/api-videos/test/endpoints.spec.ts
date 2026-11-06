@@ -209,6 +209,35 @@ describe('subscriptions', () => {
 		assert.equal((await app.request('/api/channels/target/subscriptions', { method: 'DELETE', headers: { channelId: 'my-ch' } }, e)).status, 200);
 	});
 
+	it('stores a subscription to a second channel (duplicate check is per target)', async () => {
+		const channels = new MemoryBucket({
+			first: { id: 'first', userId: 'c1', name: 'First', subscriptions: [] },
+			second: { id: 'second', userId: 'c2', name: 'Second', subscriptions: [] },
+			'my-ch': { id: 'my-ch', userId: 'me', name: 'Mine', subscriptions: [] },
+		});
+		const profiles = new MemoryBucket({ me: { id: 'me', subscribedTo: [] } });
+		const app = buildApp(subscriptionRoutes, { userId: 'me' });
+		const e = env({ channels, profiles });
+
+		assert.equal((await app.request('/api/channels/first/subscriptions', { method: 'POST', headers: { channelId: 'my-ch' } }, e)).status, 201);
+		const second = await app.request('/api/channels/second/subscriptions', { method: 'POST', headers: { channelId: 'my-ch' } }, e);
+		assert.equal(second.status, 201);
+		assert.equal(channels.read('second').subscriptions.length, 1);
+		assert.deepEqual(profiles.read('me').subscribedTo, ['first', 'second']);
+
+		// Re-subscribing to the same target is idempotent
+		const again = await app.request('/api/channels/second/subscriptions', { method: 'POST', headers: { channelId: 'my-ch' } }, e);
+		assert.equal(again.status, 200);
+		assert.equal(channels.read('second').subscriptions.length, 1);
+	});
+
+	it('rejects subscribing a channel to itself', async () => {
+		const channels = new MemoryBucket({ 'my-ch': { id: 'my-ch', userId: 'me', name: 'Mine', subscriptions: [] } });
+		const app = buildApp(subscriptionRoutes, { userId: 'me' });
+		const res = await app.request('/api/channels/my-ch/subscriptions', { method: 'POST', headers: { channelId: 'my-ch' } }, env({ channels }));
+		assert.equal(res.status, 400);
+	});
+
 	it('reports not subscribed for anonymous viewers', async () => {
 		const channels = new MemoryBucket({ target: { id: 'target', subscriptions: [{ id: 's', userId: 'x', channelId: 'y' }] } });
 		const app = buildApp(subscriptionRoutes, null);
