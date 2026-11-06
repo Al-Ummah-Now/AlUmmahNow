@@ -235,28 +235,121 @@ export async function uploadVideoThumbnail(
 }
 
 /**
+ * Comment auth: the session's active channel wins over a caller-supplied id
+ * (which may be a profile id), so api-videos' channel ownership check passes.
+ */
+async function commentAuthContext(fallbackChannelId?: string) {
+  const auth = await getServerAuthContext();
+  return {
+    channelId: auth?.channelId || fallbackChannelId || '',
+    accessToken: auth?.accessToken || '',
+  };
+}
+
+/** api-videos comment create/update response: { success, result: { comment } } */
+export interface CommentMutationResponse {
+  success: boolean;
+  result?: { comment: import('@/interfaces').Comments };
+  error?: string;
+}
+
+export interface CommentReactionResponse {
+  success: boolean;
+  result?: {
+    commentId: string;
+    likesCount: number;
+    dislikesCount: number;
+    isLiked: boolean;
+    isDisliked: boolean;
+  };
+  error?: string;
+}
+
+export interface CommentListResponse {
+  success: boolean;
+  result?: {
+    comments: import('@/interfaces').Comments[];
+    nextCursor: string | null;
+    total: number;
+  };
+  error?: string;
+}
+
+/**
+ * List comments for a video (pinned first, then newest first)
+ * GET /api/videos/{id}/comments
+ */
+export async function listVideoComments(
+  videoId: string,
+  params?: { limit?: number; cursor?: string | null }
+): Promise<CommentListResponse | null> {
+  const query = new URLSearchParams();
+  if (params?.limit) query.set('limit', String(params.limit));
+  if (params?.cursor) query.set('cursor', params.cursor);
+  const qs = query.toString();
+
+  return apiRequestServer<CommentListResponse>(
+    {
+      method: 'GET',
+      url: buildApiUrl(`/api/videos/${videoId}/comments${qs ? `?${qs}` : ''}`),
+      functionName: 'listVideoComments',
+    },
+    async () => {
+      const auth = await getServerAuthContext();
+      // Anonymous viewers get a public listing without reaction flags
+      return auth?.accessToken ? { channelId: auth.channelId || '', accessToken: auth.accessToken } : null;
+    },
+    false
+  );
+}
+
+/**
+ * Remove dislike from a comment
+ * DELETE /api/videos/{id}/comments/{cid}/dislikes
+ */
+export async function removeVideoCommentDislike(
+  videoId: string,
+  commentId: string,
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentReactionResponse | null> {
+  try {
+    logger.info('[removeVideoCommentDislike] Removing comment dislike', { videoId, commentId });
+
+    return apiRequestServer<CommentReactionResponse>(
+      {
+        method: 'DELETE',
+        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/dislikes`),
+        functionName: 'removeVideoCommentDislike',
+      },
+      () => commentAuthContext(headers?.channelId),
+      true
+    );
+  } catch (error) {
+    logger.error('removeVideoCommentDislike error:', error);
+    return null;
+  }
+}
+
+/**
  * Create a new comment for a video
  * POST /api/videos/{id}/comments
  */
 export async function createVideoComment(
   videoId: string,
   data: CommentCreateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentMutationResponse | null> {
   try {
     logger.info('[createVideoComment] Creating comment', { videoId });
 
-    return apiRequestServer<ApiResponse<{ comment: import('@/interfaces').Comments }>>(
+    return apiRequestServer<CommentMutationResponse>(
       {
         method: 'POST',
         url: buildApiUrl(`/api/videos/${videoId}/comments`),
-        body: data,
+        body: { text: data.content, content: data.content },
         functionName: 'createVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -273,22 +366,19 @@ export async function updateVideoComment(
   videoId: string,
   commentId: string,
   data: CommentUpdateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentMutationResponse | null> {
   try {
     logger.info('[updateVideoComment] Updating comment', { videoId, commentId });
 
-    return apiRequestServer<ApiResponse<{ comment: import('@/interfaces').Comments }>>(
+    return apiRequestServer<CommentMutationResponse>(
       {
         method: 'PUT',
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}`),
-        body: data,
+        body: { text: data.content, content: data.content },
         functionName: 'updateVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -304,7 +394,7 @@ export async function updateVideoComment(
 export async function deleteVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<{ success: boolean } | null> {
   try {
     logger.info('[deleteVideoComment] Deleting comment', { videoId, commentId });
@@ -315,10 +405,7 @@ export async function deleteVideoComment(
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}`),
         functionName: 'deleteVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -450,21 +537,18 @@ export async function removeVideoDislike(
 export async function likeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentReactionResponse | null> {
   try {
     logger.info('[likeVideoComment] Liking comment', { videoId, commentId });
 
-    return apiRequestServer<{ success: boolean }>(
+    return apiRequestServer<CommentReactionResponse>(
       {
         method: 'POST',
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/likes`),
         functionName: 'likeVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -480,21 +564,18 @@ export async function likeVideoComment(
 export async function unlikeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentReactionResponse | null> {
   try {
     logger.info('[unlikeVideoComment] Unliking comment', { videoId, commentId });
 
-    return apiRequestServer<{ success: boolean }>(
+    return apiRequestServer<CommentReactionResponse>(
       {
         method: 'DELETE',
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/likes`),
         functionName: 'unlikeVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -510,21 +591,18 @@ export async function unlikeVideoComment(
 export async function dislikeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentReactionResponse | null> {
   try {
     logger.info('[dislikeVideoComment] Disliking comment', { videoId, commentId });
 
-    return apiRequestServer<{ success: boolean }>(
+    return apiRequestServer<CommentReactionResponse>(
       {
         method: 'POST',
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/dislikes`),
         functionName: 'dislikeVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -1254,6 +1332,8 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             likesCount: video.likesCount,
             dislikesCount: video.dislikesCount,
             commentsCount: video.commentsCount,
+            userId: video.userId,
+            channelId: video.channelId,
         };
 
         logger.info('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);

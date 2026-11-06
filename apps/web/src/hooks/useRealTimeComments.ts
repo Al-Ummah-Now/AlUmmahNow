@@ -3,7 +3,21 @@ import { Comments } from '@/interfaces';
 import { CommentEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
 import { logger } from '@/lib/logger-client';
-import { createVideoComment, updateVideoComment, deleteVideoComment } from '@/lib/api/videos';
+import {
+  createVideoComment,
+  updateVideoComment,
+  deleteVideoComment,
+  listVideoComments,
+  likeVideoComment,
+  unlikeVideoComment,
+  dislikeVideoComment,
+  removeVideoCommentDislike,
+  CommentReactionResponse,
+} from '@/lib/api/videos';
+
+const COMMENTS_PAGE_SIZE = 20;
+// Stable default so the initialComments sync effect does not reset state on every render
+const EMPTY_COMMENTS: Comments[] = [];
 
 
 export interface UseRealTimeCommentsOptions {
@@ -13,20 +27,35 @@ export interface UseRealTimeCommentsOptions {
   onCommentAdded?: (comment: Comments) => void;
   onCommentUpdated?: (comment: Comments) => void;
   onCommentDeleted?: (commentId: string) => void;
+  /** Load the first page from GET /api/videos/:id/comments on mount (default true) */
+  loadFromApi?: boolean;
 }
+
+export type CommentReaction = 'like' | 'dislike';
 
 export interface UseRealTimeCommentsReturn {
   comments: Comments[];
-  addComment: (comment: Omit<Comments, 'id' | 'dateCreated' | 'dateModified' | 'likesCount' | 'dislikesCount' | 'repliesCount' | 'isEdited' | 'isDeleted' | 'isPinned'>) => Promise<void>;
+  addComment: (comment: Omit<Comments, 'id' | 'dateCreated' | 'dateModified' | 'likesCount' | 'dislikesCount' | 'repliesCount' | 'isEdited' | 'isDeleted' | 'isPinned'>) => Promise<boolean>;
   updateComment: (commentId: string, updates: Partial<Comments>) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
+  toggleReaction: (commentId: string, reaction: CommentReaction) => Promise<boolean>;
+  loadMore: () => Promise<void>;
+  hasMore: boolean;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  loadError: boolean;
   isConnected: boolean;
   commentsCount: number;
 }
 
 export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRealTimeCommentsReturn {
-  const { videoId, channelId, initialComments = [], onCommentAdded, onCommentUpdated, onCommentDeleted } = options;
+  const { videoId, channelId, initialComments = EMPTY_COMMENTS, onCommentAdded, onCommentUpdated, onCommentDeleted, loadFromApi = true } = options;
   const [comments, setComments] = useState<Comments[]>(initialComments);
+  const [total, setTotal] = useState<number>(initialComments.length);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(loadFromApi);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // Store callbacks in refs to prevent re-subscription on every render
   const onCommentAddedRef = useRef(onCommentAdded);
@@ -98,6 +127,60 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     setComments(initialComments);
   }, [initialComments]);
 
+  // Load the first page of comments from the API
+  useEffect(() => {
+    if (!loadFromApi || !videoId) return;
+    let cancelled = false;
+    (async () => {
+      setIsLoading(true);
+      setLoadError(false);
+      try {
+        const response = await listVideoComments(videoId, { limit: COMMENTS_PAGE_SIZE });
+        if (cancelled) return;
+        if (!response?.success || !response.result) {
+          logger.warn('[useRealTimeComments] Failed to load comments', { videoId });
+          setLoadError(true);
+          return;
+        }
+        setComments(response.result.comments);
+        setTotal(response.result.total);
+        setNextCursor(response.result.nextCursor);
+      } catch (error) {
+        logger.error('[useRealTimeComments] Error loading comments', { videoId, error });
+        if (!cancelled) setLoadError(true);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId, loadFromApi]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    setIsLoadingMore(true);
+    try {
+      const response = await listVideoComments(videoId, { limit: COMMENTS_PAGE_SIZE, cursor: nextCursor });
+      if (!response?.success || !response.result) {
+        setLoadError(true);
+        return;
+      }
+      const page = response.result;
+      setComments(prev => {
+        const seen = new Set(prev.map(c => c.id));
+        return [...prev, ...page.comments.filter(c => !seen.has(c.id))];
+      });
+      setTotal(page.total);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      logger.error('[useRealTimeComments] Error loading more comments', { videoId, error });
+      setLoadError(true);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [videoId, nextCursor]);
+
   // Optimistic comment addition
   const addComment = useCallback(async (commentData: Omit<Comments, 'id' | 'dateCreated' | 'dateModified' | 'likesCount' | 'dislikesCount' | 'repliesCount' | 'isEdited' | 'isDeleted' | 'isPinned'>) => {
     const tempId = `temp_${Date.now()}`;
@@ -116,27 +199,73 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
 
     // Add optimistically to local state
     setComments(prevComments => [optimisticComment, ...prevComments]);
+    setTotal(n => n + 1);
     logger.info('Adding comment:', optimisticComment);
 
     try {
-      // Send comment to API - the API broadcasts the real comment via WebSocket
       const result = await createVideoComment(
         videoId,
         { content: commentData.text },
         { channelId }
       );
 
-      if (!result || !result.success) {
+      if (!result || !result.success || !result.result?.comment) {
         // Rollback on failure
         logger.error('Failed to create comment:', result?.error || 'Unknown error');
         setComments(prevComments => prevComments.filter(c => c.id !== tempId));
+        setTotal(n => Math.max(0, n - 1));
+        return false;
       }
+
+      // Replace the optimistic entry with the stored comment (real id + author)
+      const saved = result.result.comment;
+      setComments(prevComments => {
+        const withoutTemp = prevComments.filter(c => c.id !== tempId);
+        return withoutTemp.some(c => c.id === saved.id) ? withoutTemp : [saved, ...withoutTemp];
+      });
+      return true;
     } catch (error) {
       // Rollback on error
       logger.error('Error creating comment:', error);
       setComments(prevComments => prevComments.filter(c => c.id !== tempId));
+      setTotal(n => Math.max(0, n - 1));
+      return false;
     }
   }, [videoId, channelId]);
+
+  // Like/dislike toggle; the API keeps a channel's reaction exclusive
+  const toggleReaction = useCallback(async (commentId: string, reaction: CommentReaction): Promise<boolean> => {
+    const current = comments.find(c => c.id === commentId);
+    if (!current) return false;
+    const active = reaction === 'like' ? current.isLiked : current.isDisliked;
+
+    let response: CommentReactionResponse | null = null;
+    try {
+      if (reaction === 'like') {
+        response = active
+          ? await unlikeVideoComment(videoId, commentId, { channelId })
+          : await likeVideoComment(videoId, commentId, { channelId });
+      } else {
+        response = active
+          ? await removeVideoCommentDislike(videoId, commentId, { channelId })
+          : await dislikeVideoComment(videoId, commentId, { channelId });
+      }
+    } catch (error) {
+      logger.error('[useRealTimeComments] Reaction failed', { videoId, commentId, reaction, error });
+      return false;
+    }
+
+    if (!response?.success || !response.result) {
+      logger.warn('[useRealTimeComments] Reaction rejected', { videoId, commentId, reaction, error: response?.error });
+      return false;
+    }
+
+    const r = response.result;
+    setComments(prev => prev.map(c => c.id === commentId
+      ? { ...c, likesCount: r.likesCount, dislikesCount: r.dislikesCount, isLiked: r.isLiked, isDisliked: r.isDisliked }
+      : c));
+    return true;
+  }, [comments, videoId, channelId]);
 
   // Optimistic comment update
   const updateComment = useCallback(async (commentId: string, updates: Partial<Comments>) => {
@@ -192,6 +321,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
       deletedComment = prevComments.find(c => c.id === commentId);
       return prevComments.filter(comment => comment.id !== commentId);
     });
+    setTotal(n => Math.max(0, n - 1));
 
     logger.info('Deleting comment:', commentId);
 
@@ -204,6 +334,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
         logger.error('Failed to delete comment:', 'Unknown error');
         if (deletedComment) {
           setComments(prevComments => [deletedComment!, ...prevComments]);
+          setTotal(n => n + 1);
         }
       }
     } catch (error) {
@@ -220,7 +351,13 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     addComment,
     updateComment,
     deleteComment,
+    toggleReaction,
+    loadMore,
+    hasMore: !!nextCursor,
+    isLoading,
+    isLoadingMore,
+    loadError,
     isConnected,
-    commentsCount: comments.length
+    commentsCount: Math.max(total, comments.length)
   };
 }
