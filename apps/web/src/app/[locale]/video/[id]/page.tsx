@@ -13,6 +13,8 @@ import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useRealTimeNotifications } from "@/hooks/useRealTimeNotifications";
 import { Button } from "@/components/ui/button";
+import SaveToPlaylist from "@/components/SaveToPlaylist";
+import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
 
 export default function VideoViewPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -111,6 +113,13 @@ export default function VideoViewPage() {
                   }}
                 />
               </div>
+
+              {/* Save to playlist (logged-in users with a channel) */}
+              {user && (
+                <div className="w-full max-w-4xl mt-4 px-4">
+                  {locale === 'ar' ? <SaveToPlaylistRTL videoId={videoId} /> : <SaveToPlaylist videoId={videoId} />}
+                </div>
+              )}
 
               {/* Demo buttons for testing (development only) */}
               {process.env.NODE_ENV === 'development' && user && (

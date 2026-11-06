@@ -14,9 +14,12 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import Link from "next/link";
 import { Edit } from "lucide-react";
+import SaveToPlaylist from "@/components/SaveToPlaylist";
+import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
 
 export default function Home() {
-  const { t, lang } = useLanguage();
+  const { t, lang, isRTL } = useLanguage();
+  const SaveToPlaylistControl = isRTL ? SaveToPlaylistRTL : SaveToPlaylist;
   const [isMounted, setIsMounted] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [videoDetails, setVideoDetails] = useState<PlayerOptions | null>(null);
@@ -93,6 +96,13 @@ export default function Home() {
                   }}
                 />
               </div>
+
+              {/* Save to playlist (logged-in users with a channel) */}
+              {user && (
+                <div className="w-full max-w-4xl mt-4 px-4">
+                  <SaveToPlaylistControl videoId={vid} />
+                </div>
+              )}
 
               {/* Edit button for video owner */}
               {user && videoOwner && user.id === videoOwner && (
