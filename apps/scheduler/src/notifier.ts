@@ -18,7 +18,7 @@ export async function sendNotification(
   try {
     // Send notification via WebSocket server
     await notifyUser(
-      env.WEBSOCKET_URL,
+      env,
       metadata.userId,
       {
         id: crypto.randomUUID(),
@@ -53,7 +53,7 @@ export async function sendFailureNotification(
   try {
     // Send notification via WebSocket server
     await notifyUser(
-      env.WEBSOCKET_URL,
+      env,
       metadata.userId,
       {
         id: crypto.randomUUID(),
@@ -77,12 +77,12 @@ export async function sendFailureNotification(
 
 /**
  * Notify user via WebSocket server
- * @param websocketUrl WebSocket server URL
+ * @param env Worker env (WEBSOCKET_URL, INTERNAL_API_KEY)
  * @param userId User ID to notify
  * @param notification Notification data
  */
 async function notifyUser(
-  websocketUrl: string,
+  env: Env,
   userId: string,
   notification: {
     id: string;
@@ -93,12 +93,23 @@ async function notifyUser(
   }
 ): Promise<void> {
   try {
-    const response = await fetch(`${websocketUrl}/notify/${userId}`, {
-      method: 'POST',
+    const binding = env.INTERNAL_API_KEY;
+    const apiKey = typeof binding === "string" ? binding : await binding?.get();
+    if (!apiKey) {
+      throw new Error("INTERNAL_API_KEY not configured");
+    }
+    // The websocket server delivers to subscribers of the user channel,
+    // which every authenticated session joins automatically.
+    const response = await fetch(`${env.WEBSOCKET_URL}/broadcast`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
       },
-      body: JSON.stringify(notification),
+      body: JSON.stringify({
+        channel: `user:${userId}`,
+        message: { type: "notification", notification },
+      }),
     });
 
     if (!response.ok) {

@@ -1,0 +1,73 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "al-ummah-scheduler-qa",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "r2_buckets": [
+    {
+      "binding": "VIDEOS",
+      "bucket_name": "videos-qa"
+    },
+    {
+      "binding": "SCHEDULED_VIDEOS",
+      "bucket_name": "scheduled-videos-qa"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "queue": "al-ummah-now-videos-qa",
+        "binding": "QUEUE"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SCHEDULER_LOCKS",
+      "id": "880e2243aeb0438bac571f51fc2a4e6f"
+    },
+    {
+      "binding": "SCHEDULER_METRICS",
+      "id": "e5e932fe2da74e4a9192a93ee95937e7"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SCHEDULER_LOCK",
+        "class_name": "SchedulerLock"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["SchedulerLock"]
+    }
+  ],
+  "secrets_store_secrets": [
+    {
+      "binding": "INTERNAL_API_KEY",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "internal-api-key-qa"
+    }
+  ],
+  "vars": {
+    "MAX_RETRIES": "3",
+    "BATCH_SIZE": "50",
+    "LOCK_TTL": "120",
+    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "dev": {
+    "ip": "127.0.0.1",
+    "port": 3092,
+    "local_protocol": "http"
+  }
+}
