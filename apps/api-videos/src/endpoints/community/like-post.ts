@@ -6,7 +6,7 @@ import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 
 export class LikeCommunityPost extends AuthenticatedRoute {
-  static schema = addAuthToSchema({
+  schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Like a community post',
     request: {
@@ -87,11 +87,12 @@ export class LikeCommunityPost extends AuthenticatedRoute {
           timestamp: new Date().toISOString()
         });
 
-        // Return current count without incrementing (processor will handle it)
+        // The stored counter is updated by the processor; return the projected
+        // count so clients do not roll back their optimistic increment.
         return c.json({
           success: true,
           liked: true,
-          totalLikes: post.likes || 0,
+          totalLikes: (post.likes || 0) + 1,
         });
       } else {
         // Already liked

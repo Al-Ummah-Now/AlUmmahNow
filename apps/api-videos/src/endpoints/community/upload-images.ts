@@ -7,6 +7,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateImageMagicBytes, readFileHeader } from '../../lib/security/magic-bytes';
 import { generateUniqueFilename } from '../../lib/security/filename-sanitize';
 import { logger } from '../../lib/logger';
+import { getChannelObject } from './post-comment-helpers';
 
 const MAX_IMAGES = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
@@ -72,8 +73,7 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
       const { channelId } = request.headers;
 
       // Verify channel ownership
-      const channelKey = `${channelId}/channel.json`;
-      const channelData = await c.env.channels.get(channelKey);
+      const channelData = await getChannelObject(c.env.channels, channelId);
 
       if (!channelData) {
         return c.json({ error: 'Channel not found' }, 404);

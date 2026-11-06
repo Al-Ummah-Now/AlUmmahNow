@@ -1,8 +1,11 @@
+'use client';
+
 import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { likeCommunityPost, unlikeCommunityPost } from '@/lib/api/community-posts';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface LikeButtonProps {
   postChannelId: string;
@@ -23,6 +26,7 @@ export default function LikeButton({
   channelId,
   userId,
 }: LikeButtonProps) {
+  const { t } = useLanguage();
   const [liked, setLiked] = useState(initialLiked);
   const [likes, setLikes] = useState(initialLikes);
   const [loading, setLoading] = useState(false);
@@ -50,7 +54,7 @@ export default function LikeButton({
         setLikes(previousLikes);
       }
     } catch (error) {
-      logger.error('Failed to toggle like:', error);
+      logger.error('[LikeButton] Failed to toggle post like', { postId, error });
       setLiked(previousLiked);
       setLikes(previousLikes);
     } finally {
@@ -78,7 +82,8 @@ export default function LikeButton({
         'disabled:opacity-50 disabled:cursor-not-allowed',
         isRTL && 'flex-row-reverse'
       )}
-      aria-label={liked ? (isRTL ? 'إلغاء الإعجاب' : 'Unlike') : (isRTL ? 'إعجاب' : 'Like')}
+      aria-label={liked ? t.community.unlike : t.community.like}
+      aria-pressed={liked}
     >
       <svg
         className={cn(

@@ -19,7 +19,7 @@ const updatePostSchema = z.object({
 });
 
 export class UpdateCommunityPost extends AuthenticatedRoute {
-  static schema = addAuthToSchema({
+  schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Update a community post',
     request: {

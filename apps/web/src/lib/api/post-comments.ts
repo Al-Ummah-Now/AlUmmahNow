@@ -7,6 +7,8 @@ import {
   PostCommentUpdateRequest,
   PostCommentCreateResponse,
   PostCommentLikeResponse,
+  PostCommentPinResponse,
+  PostCommentHeartResponse,
 } from '@al-ummah/shared-types';
 import { apiRequestServer, buildApiUrl, buildQueryParams } from './api-client';
 import { getServerAuthContext } from './server-auth';
@@ -200,24 +202,24 @@ export async function unlikePostComment(
   );
 }
 
-/**
- * Pin a comment (post owner only)
- * POST /api/community/channels/{channelId}/posts/{postId}/comments/{commentId}/pin
- */
-export async function pinPostComment(
+type CommentModerationAction = 'pin' | 'heart';
+
+function moderatePostComment<T>(
+  method: 'POST' | 'DELETE',
+  action: CommentModerationAction,
+  functionName: string,
   channelId: string,
   postId: string,
   commentId: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
-  return apiRequestServer<{ success: boolean }>(
+): Promise<T | null> {
+  return apiRequestServer<T>(
     {
-      method: 'POST',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}/pin`),
-      functionName: 'pinPostComment',
+      method,
+      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}/${action}`),
+      functionName,
     },
     async () => ({
-
       channelId: headers.channelId,
       accessToken: (await getServerAuthContext())?.accessToken || '',
     }),
@@ -226,7 +228,33 @@ export async function pinPostComment(
 }
 
 /**
- * Heart a comment (post owner only)
+ * Pin a top-level comment (channel owner only; replaces any existing pin)
+ * POST /api/community/channels/{channelId}/posts/{postId}/comments/{commentId}/pin
+ */
+export async function pinPostComment(
+  channelId: string,
+  postId: string,
+  commentId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PostCommentPinResponse | null> {
+  return moderatePostComment<PostCommentPinResponse>('POST', 'pin', 'pinPostComment', channelId, postId, commentId, headers);
+}
+
+/**
+ * Unpin a comment (channel owner only)
+ * DELETE /api/community/channels/{channelId}/posts/{postId}/comments/{commentId}/pin
+ */
+export async function unpinPostComment(
+  channelId: string,
+  postId: string,
+  commentId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PostCommentPinResponse | null> {
+  return moderatePostComment<PostCommentPinResponse>('DELETE', 'pin', 'unpinPostComment', channelId, postId, commentId, headers);
+}
+
+/**
+ * Heart a comment (channel owner only)
  * POST /api/community/channels/{channelId}/posts/{postId}/comments/{commentId}/heart
  */
 export async function heartPostComment(
@@ -234,18 +262,19 @@ export async function heartPostComment(
   postId: string,
   commentId: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean; hearted: boolean } | null> {
-  return apiRequestServer<{ success: boolean; hearted: boolean }>(
-    {
-      method: 'POST',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}/heart`),
-      functionName: 'heartPostComment',
-    },
-    async () => ({
+): Promise<PostCommentHeartResponse | null> {
+  return moderatePostComment<PostCommentHeartResponse>('POST', 'heart', 'heartPostComment', channelId, postId, commentId, headers);
+}
 
-      channelId: headers.channelId,
-      accessToken: (await getServerAuthContext())?.accessToken || '',
-    }),
-    true
-  );
+/**
+ * Remove the creator heart from a comment (channel owner only)
+ * DELETE /api/community/channels/{channelId}/posts/{postId}/comments/{commentId}/heart
+ */
+export async function unheartPostComment(
+  channelId: string,
+  postId: string,
+  commentId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PostCommentHeartResponse | null> {
+  return moderatePostComment<PostCommentHeartResponse>('DELETE', 'heart', 'unheartPostComment', channelId, postId, commentId, headers);
 }
