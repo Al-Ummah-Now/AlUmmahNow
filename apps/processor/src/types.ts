@@ -82,4 +82,8 @@ export interface QueueEnvironment {
   REPORTS_DB: D1Database;
   ENVIRONMENT: string;
   LOG_LEVEL: string;
+  /** Base URL of the websocket-server (realtime broadcasts are skipped when unset) */
+  WEBSOCKET_URL?: string;
+  /** Secrets Store binding (or plain string in local dev) for websocket-server /broadcast */
+  INTERNAL_API_KEY?: string | { get: () => Promise<string> };
 }

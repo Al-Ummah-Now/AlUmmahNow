@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { LiveStream, PaginatedResponse } from '@al-ummah/shared-types';
 import { listLiveStreams } from '@/lib/api/livestreams';
 import { logger } from '@/lib/logger-client';
+import { useOptionalWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
 
 /**
  * Options for configuring the useLiveStreams hook
@@ -149,6 +150,19 @@ export function useLiveStreams({
 }: UseLiveStreamsOptions = {}): UseLiveStreamsReturn {
   // Build query key for React Query caching
   const queryKey = ['live-streams', { status, channelId, limit }];
+
+  // Realtime: the processor broadcasts `live_stream_updated` on `live-streams`
+  // whenever a stream is created or changes status; refetch instead of waiting
+  // for the next poll.
+  const queryClient = useQueryClient();
+  const handleLiveStreamEvent = useCallback((eventData: unknown) => {
+    if (!eventData || typeof eventData !== 'object') return;
+    const event = eventData as { type?: string; liveStreamId?: string; status?: string };
+    if (event.type !== 'live_stream_updated') return;
+    logger.debug('[useLiveStreams] Live stream changed, refreshing', { liveStreamId: event.liveStreamId, status: event.status });
+    void queryClient.invalidateQueries({ queryKey: ['live-streams'] });
+  }, [queryClient]);
+  useOptionalWebSocketSubscription(enabled ? 'live-streams' : '', handleLiveStreamEvent);
 
   // Determine refetch interval based on status
   const effectiveRefetchInterval = refetchInterval !== undefined

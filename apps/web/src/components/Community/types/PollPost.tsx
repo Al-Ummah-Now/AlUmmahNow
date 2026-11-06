@@ -1,30 +1,43 @@
+'use client';
+
 import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { CommunityPost } from '@al-ummah/shared-types';
+import { CommunityPost, PollOption } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import { voteOnPoll } from '@/lib/api/community-posts';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface PollPostProps {
   post: CommunityPost;
   isRTL?: boolean;
   locale?: string;
+  /** Viewer's active channel (acting identity for the vote) */
+  channelId?: string;
+  /** Viewer's user ID; voting requires a signed-in viewer */
+  userId?: string;
 }
 
-export default function PollPost({ post, isRTL = false }: PollPostProps) {
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
-  const [hasVoted, setHasVoted] = useState(false);
+export default function PollPost({ post, isRTL = false, locale = 'en', channelId, userId }: PollPostProps) {
+  const { t } = useLanguage();
+  const viewerVote = post.viewerPollVote ?? [];
+  const [selectedOptions, setSelectedOptions] = useState<string[]>(viewerVote);
+  const [hasVoted, setHasVoted] = useState(viewerVote.length > 0);
   const [voting, setVoting] = useState(false);
+  const [voteError, setVoteError] = useState(false);
+  const [options, setOptions] = useState<PollOption[]>(post.poll?.options ?? []);
+  const [totalVotes, setTotalVotes] = useState(post.poll?.totalVotes ?? 0);
 
   if (!post.poll) return null;
 
-  const { question, options, totalVotes, multipleChoice, votingEndsAt } = post.poll;
+  const { question, multipleChoice, votingEndsAt } = post.poll;
 
-  const isVotingEnded = votingEndsAt && new Date(votingEndsAt) < new Date();
+  const isVotingEnded = Boolean(votingEndsAt && new Date(votingEndsAt) < new Date());
+  const canVote = Boolean(userId && channelId);
 
   const handleOptionClick = (optionId: string) => {
-    if (hasVoted || isVotingEnded || voting) return;
+    if (hasVoted || isVotingEnded || voting || !canVote) return;
 
     if (multipleChoice) {
       setSelectedOptions((prev) =>
@@ -38,26 +51,45 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
   };
 
   const handleVote = async () => {
-    if (selectedOptions.length === 0 || voting) return;
+    if (selectedOptions.length === 0 || voting || !channelId || !userId) return;
 
     setVoting(true);
+    setVoteError(false);
     try {
       const result = await voteOnPoll(
         post.channelId,
         post.id,
         { optionIds: selectedOptions },
-        { channelId: post.channelId }
+        { channelId }
       );
 
       if (result?.success) {
         setHasVoted(true);
+        if (result.results) {
+          const byId = new Map(result.results.options.map((opt) => [opt.id, opt]));
+          setOptions((prev) =>
+            prev.map((opt) => ({
+              ...opt,
+              votes: byId.get(opt.id)?.votes ?? opt.votes,
+              percentage: byId.get(opt.id)?.percentage ?? opt.percentage,
+            }))
+          );
+          setTotalVotes(result.results.totalVotes);
+        }
+      } else {
+        setVoteError(true);
       }
     } catch (error) {
-      logger.error('Failed to vote:', error);
+      logger.error('[PollPost] Failed to vote', { postId: post.id, error });
+      setVoteError(true);
     } finally {
       setVoting(false);
     }
   };
+
+  const voteCountLabel = totalVotes === 1
+    ? t.community.voteCountOne
+    : t.community.voteCountMany.replace('{count}', totalVotes.toLocaleString(locale));
 
   return (
     <div className="space-y-4">
@@ -85,12 +117,15 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
           const percentage = option.percentage || 0;
           const isSelected = selectedOptions.includes(option.id);
           const showResults = hasVoted || post.poll?.showResults || isVotingEnded;
+          const optionLabel = option.text || option.image?.caption || t.community.pollOption;
 
           return (
             <button
               key={option.id}
               onClick={() => handleOptionClick(option.id)}
-              disabled={hasVoted || isVotingEnded || voting}
+              disabled={hasVoted || isVotingEnded || voting || !canVote}
+              aria-pressed={isSelected}
+              aria-label={showResults ? `${optionLabel} ${percentage.toFixed(1)}%` : optionLabel}
               className={cn(
                 'w-full relative rounded-lg border-2 transition-all text-left',
                 isRTL && 'text-right',
@@ -142,7 +177,7 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
                     <div className="relative w-full h-32">
                       <Image
                         src={option.image.url}
-                        alt={option.image.caption || option.text || 'Poll option'}
+                        alt={optionLabel}
                         fill
                         className="object-cover rounded"
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -176,7 +211,19 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
       </div>
 
       {/* Vote Button */}
-      {!hasVoted && !isVotingEnded && (
+      {!hasVoted && !isVotingEnded && !canVote && (
+        <p className={cn('text-sm text-gray-500 dark:text-gray-400', isRTL && 'text-right')}>
+          {t.community.signInToVote}
+        </p>
+      )}
+
+      {voteError && (
+        <p role="alert" className={cn('text-sm text-red-600 dark:text-red-400', isRTL && 'text-right')}>
+          {t.community.voteFailed}
+        </p>
+      )}
+
+      {!hasVoted && !isVotingEnded && canVote && (
         <button
           onClick={handleVote}
           disabled={selectedOptions.length === 0 || voting}
@@ -187,9 +234,7 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
             'dark:bg-blue-500 dark:hover:bg-blue-600'
           )}
         >
-          {voting
-            ? (isRTL ? 'جاري التصويت...' : 'Voting...')
-            : (isRTL ? 'تصويت' : 'Vote')}
+          {voting ? t.community.voting : t.community.vote}
         </button>
       )}
 
@@ -199,13 +244,13 @@ export default function PollPost({ post, isRTL = false }: PollPostProps) {
         isRTL && 'flex-row-reverse'
       )}>
         <span>
-          {totalVotes} {isRTL ? 'صوت' : totalVotes === 1 ? 'vote' : 'votes'}
+          {voteCountLabel}
         </span>
         {votingEndsAt && (
           <span>
             {isVotingEnded
-              ? (isRTL ? 'انتهى التصويت' : 'Voting ended')
-              : (isRTL ? 'ينتهي التصويت في' : 'Voting ends') + ' ' + new Date(votingEndsAt).toLocaleDateString()}
+              ? t.community.votingEnded
+              : t.community.votingEnds.replace('{date}', new Date(votingEndsAt).toLocaleDateString(locale))}
           </span>
         )}
       </div>

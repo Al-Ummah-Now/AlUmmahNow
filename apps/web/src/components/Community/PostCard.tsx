@@ -81,7 +81,7 @@ export default function PostCard({
       case PostType.IMAGE:
         return <ImagePost post={post} isRTL={isRTL} />;
       case PostType.POLL:
-        return <PollPost post={post} isRTL={isRTL} locale={locale} />;
+        return <PollPost post={post} isRTL={isRTL} locale={locale} channelId={channelId} userId={userId} />;
       case PostType.QUIZ:
         return <QuizPost post={post} isRTL={isRTL} locale={locale} />;
       case PostType.VIDEO:
@@ -169,6 +169,8 @@ export default function PostCard({
         locale={locale}
         showComments={showComments}
         onToggleComments={handleToggleComments}
+        channelId={channelId}
+        userId={userId}
       />
 
       {/* Comments Section - Smooth expand/collapse animation */}
@@ -182,7 +184,7 @@ export default function PostCard({
           <CommentsSection
             postChannelId={post.channelId}
             postId={post.id}
-            postOwnerId={post.channelId}
+            postOwnerId={post.userId}
             commentsCount={post.comments}
             commentsEnabled={post.commentsEnabled}
             userAvatar={userAvatar}

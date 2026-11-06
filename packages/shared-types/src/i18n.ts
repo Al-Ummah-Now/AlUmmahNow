@@ -115,6 +115,28 @@ export interface UpdateTranslationsResponse {
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  /** Discovery: videos/channels directories and channel discovery sections */
+  discovery: {
+    allVideos: string;
+    allVideosDescription: string;
+    allChannels: string;
+    allChannelsDescription: string;
+    noVideos: string;
+    noVideosDescription: string;
+    noChannels: string;
+    noChannelsDescription: string;
+    loadFailed: string;
+    subscribersCount: string;
+    videosCount: string;
+    verified: string;
+    upcomingEventsEmpty: string;
+    liveEventsEmpty: string;
+    completedEventsEmpty: string;
+    featuredChannelsEmpty: string;
+    subscriptionsEmpty: string;
+    channelsTabEmpty: string;
+  };
+
   /**
    * Common UI elements
    */
@@ -872,6 +894,33 @@ export interface AppTranslations {
     demoMessage: string;
     trackPerformance: string;
     demoModeMessage: string;
+    /** Analytics dashboard labels */
+    dashboard: {
+      noData: string;
+      signInTitle: string;
+      signInMessage: string;
+      totalViews: string;
+      totalLikes: string;
+      totalComments: string;
+      totalVideos: string;
+      publishedContent: string;
+      avgViewsPerVideo: string;
+      performanceIndicator: string;
+      engagementOverview: string;
+      overallEngagementRate: string;
+      topPerformingVideo: string;
+      topPerformingVideos: string;
+      viewsCount: string;
+      likesAndComments: string;
+      performanceTrends: string;
+      viewsOverTime: string;
+      engagementMetrics: string;
+      likes: string;
+      comments: string;
+      avgDailyViews: string;
+      noMetrics: string;
+      changeVsPrevious: string;
+    };
     // Extended analytics fields for Arabic translations
     analytics?: string;
     reach?: string;
@@ -1249,6 +1298,31 @@ export interface AppTranslations {
     noPostsYet: string;
     createFirstPost: string;
     community: string;
+    // Channel community feed
+    noPostsDescription: string;
+    loadPostsFailed: string;
+    retry: string;
+    loadMore: string;
+    loading: string;
+    like: string;
+    unlike: string;
+    // Polls
+    vote: string;
+    voting: string;
+    voteCountOne: string;
+    voteCountMany: string;
+    votingEnded: string;
+    votingEnds: string;
+    signInToVote: string;
+    voteFailed: string;
+    pollOption: string;
+    // Comment moderation (channel owner)
+    pinComment: string;
+    unpinComment: string;
+    pinned: string;
+    heartComment: string;
+    removeHeart: string;
+    heartedByCreator: string;
     // Extended community fields for Arabic translations
     createPost?: string;
     editPost?: string;
@@ -1307,6 +1381,17 @@ export interface AppTranslations {
     subscriptionMessage: string;
     uploadMessage: string;
     systemMessage: string;
+    /** Server-pushed notifications, keyed by the websocket notificationKey */
+    realtime: {
+      newCommentTitle: string;
+      newCommentMessage: string;
+      newSubscriberTitle: string;
+      newSubscriberMessage: string;
+      uploadReadyTitle: string;
+      uploadReadyMessage: string;
+      uploadFailedTitle: string;
+      uploadFailedMessage: string;
+    };
     // Extended notifications fields for Arabic translations
     notifications?: string;
     settings?: string;

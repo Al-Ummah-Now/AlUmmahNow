@@ -169,3 +169,33 @@ export function useWebSocketSubscription(
 
   return isConnected;
 }
+
+/**
+ * Like useWebSocketSubscription, but a no-op when rendered outside a
+ * WebSocketProvider (e.g. isolated widgets and tests), so realtime stays an
+ * enhancement on top of polling/fetching rather than a hard dependency.
+ */
+export function useOptionalWebSocketSubscription(
+  channel: string,
+  callback: (data: unknown) => void
+): boolean {
+  const context = useContext(WebSocketContext);
+  const subscribe = context?.subscribe;
+  const callbackRef = useRef(callback);
+
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+
+  useEffect(() => {
+    if (!channel || !subscribe) return undefined;
+    const unsubscribe = subscribe(channel, (data: unknown) => {
+      callbackRef.current(data);
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [channel, subscribe]);
+
+  return context?.isConnected ?? false;
+}

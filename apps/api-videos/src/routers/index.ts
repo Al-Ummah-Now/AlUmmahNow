@@ -11,6 +11,7 @@ import settingsRouter from './settings.router';
 import sectionsRouter from './sections.router';
 import monitoringRouter from './monitoring.router';
 import i18nRouter from './i18n.router';
+import discoveryRouter from './discovery.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -29,6 +30,7 @@ import i18nRouter from './i18n.router';
  * - Analytics: /api/analytics
  * - Moderation: /api/moderation
  * - i18n: /api/i18n
+ * - Discovery: /api/search/suggestions, /api/trending, /api/recommendations
  * - Monitoring: / (root level - health, metrics, status)
  *
  * @param openapi - The main OpenAPI instance from chanfana
@@ -71,6 +73,9 @@ export function registerAllRouters(openapi: any) {
   // i18n domain - internationalization (translations, config, metadata)
   openapi.route('/api/i18n', i18nRouter);
 
+  // Discovery domain - search suggestions, trending, recommendations
+  openapi.route('/api', discoveryRouter);
+
   // Monitoring domain - health checks, metrics, status page (root level)
   openapi.route('', monitoringRouter);
 }
@@ -89,5 +94,6 @@ export {
   settingsRouter,
   sectionsRouter,
   i18nRouter,
+  discoveryRouter,
   monitoringRouter,
 };

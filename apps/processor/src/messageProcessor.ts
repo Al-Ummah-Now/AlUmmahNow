@@ -3,6 +3,8 @@ import { Logger } from '@al-ummah/logger';
 import { handleChannelSectionEvent } from './handlers/channel-section';
 import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
+import { recordViewRollup } from './lib/analytics-rollup';
+import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
 // Channel tabs are frontend-only, no backend processing needed
 // import { handleChannelTabEvent } from './handlers/channel-tab';
 
@@ -84,10 +86,13 @@ export class MessageProcessor {
         break;
 
       // Video-related messages
+      case MessageType.VideoView:
+        await this.processVideoViewMessage(message, env);
+        break;
+
       case MessageType.VideoCreate:
       case MessageType.VideoEdit:
       case MessageType.VideoDelete:
-      case MessageType.VideoView:
       case MessageType.VideoLike:
       case MessageType.VideoUnlike:
       case MessageType.VideoDislike:
@@ -157,6 +162,35 @@ export class MessageProcessor {
       case MessageType.ChannelSectionReorder:
       case MessageType.ChannelSectionView:
         await handleChannelSectionEvent(message, env, this.logger);
+        break;
+
+      // Upload / processing lifecycle events - pushed to the uploader in realtime
+      case MessageType.VideoUploadStarted:
+      case MessageType.VideoUploadCompleted:
+      case MessageType.VideoProcessingCompleted:
+      case MessageType.VideoUploadFailed:
+      case MessageType.VideoUploadCancelled:
+        await this.processUploadLifecycleMessage(message, env);
+        break;
+
+      // Live stream lifecycle events - pushed on the shared live-streams channel
+      case MessageType.LiveStreamCreate:
+      case MessageType.LiveStreamUpdate:
+      case MessageType.LiveStreamStart:
+      case MessageType.LiveStreamEnd:
+      case MessageType.LiveStreamView:
+        await this.processLiveStreamMessage(message, env);
+        break;
+
+      // Client-side telemetry (A/B test exposures, web vitals, player performance).
+      // Persisted by saveMessageToR2; nothing else to do.
+      case MessageType.ClientAnalyticsEvent:
+        this.logger.info('Client analytics batch stored', {
+          kind: (message.payload as { kind?: string }).kind,
+          eventCount: Array.isArray((message.payload as { events?: unknown[] }).events)
+            ? (message.payload as { events: unknown[] }).events.length
+            : 0,
+        });
         break;
 
       // Content moderation events
@@ -290,6 +324,69 @@ export class MessageProcessor {
         this.logger.info(`Video ${videoId} undisliked by user ${actualUserId || 'unknown'}`);
         break;
     }
+  }
+
+  private async processVideoViewMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as { videoId?: string; searchQuery?: string };
+
+    // Search telemetry is published with the VideoView type but has no videoId.
+    if (!payload.videoId && payload.searchQuery !== undefined) {
+      this.logger.info('Search event recorded', { query: payload.searchQuery });
+      return;
+    }
+
+    await this.processVideoMessage(message);
+
+    try {
+      const recorded = await recordViewRollup(env.MESSAGES_BUCKET, message.payload, message.timestamp);
+      if (recorded) {
+        this.logger.debug('View rollup updated', { videoId: payload.videoId });
+      }
+    } catch (error) {
+      // Rollups are derived data; never fail (and retry) the message because of them.
+      this.logger.warn('Failed to update view rollup', { videoId: payload.videoId, error });
+    }
+  }
+
+  private async processUploadLifecycleMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as { videoId?: string; userId?: string; title?: string; error?: string; duration?: number };
+    if (!payload.videoId) {
+      throw new Error('Upload message missing required field: videoId');
+    }
+
+    const statusByType: Partial<Record<MessageType, ProcessingStatus>> = {
+      [MessageType.VideoUploadStarted]: 'uploading',
+      [MessageType.VideoUploadCompleted]: 'processing',
+      [MessageType.VideoProcessingCompleted]: 'ready',
+      [MessageType.VideoUploadFailed]: 'failed',
+      [MessageType.VideoUploadCancelled]: 'cancelled',
+    };
+    const status = statusByType[message.type] as ProcessingStatus;
+    this.logger.info(`Video ${payload.videoId} upload status: ${status}`, { userId: payload.userId });
+
+    await notifyVideoProcessing(env, payload.videoId, payload.userId, status, {
+      title: payload.title,
+      error: payload.error,
+      duration: payload.duration,
+    });
+  }
+
+  private async processLiveStreamMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as { liveStreamId?: string; channelId?: string; status?: string; title?: string };
+    if (!payload.liveStreamId) {
+      throw new Error('Live stream message missing required field: liveStreamId');
+    }
+    this.logger.info(`Live stream ${payload.liveStreamId} event ${MessageType[message.type]}`, { status: payload.status });
+
+    if (message.type === MessageType.LiveStreamView) return;
+
+    await notifyLiveStream(env, payload.liveStreamId, {
+      event: message.type === MessageType.LiveStreamCreate ? 'created' : 'updated',
+      status: payload.status
+        ?? (message.type === MessageType.LiveStreamStart ? 'live' : message.type === MessageType.LiveStreamEnd ? 'ended' : undefined),
+      channelId: payload.channelId,
+      title: payload.title,
+    });
   }
 
   private async processCommentMessage(message: AlUmmahMessage): Promise<void> {

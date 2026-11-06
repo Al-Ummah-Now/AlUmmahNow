@@ -95,6 +95,10 @@ export enum MessageType {
   // Content moderation events
   ReportCreate,
   ReportResolve,
+
+  // Client-side telemetry forwarded by the web app (A/B exposures, performance beacons).
+  // Appended last: values are numeric and already-queued messages must keep their meaning.
+  ClientAnalyticsEvent,
 }
 
 // Generic message structure for queue messages

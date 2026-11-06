@@ -7,6 +7,13 @@ import type {
   PostCommentListResponse,
   PostCommentIndex,
 } from '@al-ummah/shared-types';
+import {
+  PinnedCommentPointer,
+  pinnedPointerKey,
+  presentComment,
+  topLevelCommentKey,
+  withViewerLikes,
+} from './post-comment-helpers';
 
 const listCommentsSchema = {
   params: z.object({
@@ -111,39 +118,26 @@ export class ListPostComments extends OptionalAuthRoute {
     const paginatedIds = commentIds.slice(startIndex, startIndex + limit);
     const hasNext = startIndex + limit < commentIds.length;
 
-    // 4. Fetch comment objects in parallel
+    // 4. Fetch comment objects in parallel (hidden/deleted handling in presentComment)
+    const pinnedPointerObj = await bucket.get(pinnedPointerKey(postId));
+    const pinnedCommentId = pinnedPointerObj
+      ? (await pinnedPointerObj.json<PinnedCommentPointer>()).commentId
+      : undefined;
+
+    // The pinned comment is always shown first on the first page, wherever it
+    // sits in the index, and is skipped on the page where it would normally appear.
+    const idsToFetch = paginatedIds.filter((id) => id !== pinnedCommentId);
+    if (!cursor && pinnedCommentId) {
+      idsToFetch.unshift(pinnedCommentId);
+    }
+
     const comments: PostComment[] = [];
-    const fetchPromises = paginatedIds.map(async (commentId) => {
-      const commentKey = `comments/${postId}/top-level/${commentId}.json`;
-      const commentObj = await bucket.get(commentKey);
-      if (commentObj) {
-        const comment: PostComment = await commentObj.json();
-
-        // Filter out moderation-hidden comments completely
-        if (comment.isHidden) {
-          return null;
-        }
-
-        // Filter out soft-deleted comments without replies
-        if ((comment.isDeleted || comment.deletedAt) && comment.repliesCount === 0) {
-          return null;
-        }
-
-        // Mask deleted comments with replies
-        if (comment.isDeleted || comment.deletedAt) {
-          return {
-            ...comment,
-            content: '[deleted]',
-            userDisplayName: '[deleted]',
-            userAvatarUrl: undefined,
-          };
-        }
-        return comment;
-      }
-      return null;
-    });
-
-    const fetchedComments = await Promise.all(fetchPromises);
+    const fetchedComments = await Promise.all(
+      idsToFetch.map(async (commentId) => {
+        const commentObj = await bucket.get(topLevelCommentKey(postId, commentId));
+        return commentObj ? presentComment(await commentObj.json<PostComment>()) : null;
+      })
+    );
     comments.push(...fetchedComments.filter((c): c is PostComment => c !== null));
 
     // 5. Sort comments based on sortBy
@@ -171,7 +165,7 @@ export class ListPostComments extends OptionalAuthRoute {
 
     const response: PostCommentListResponse = {
       success: true,
-      comments,
+      comments: await withViewerLikes(bucket, postId, comments, this.getUserId(c)),
       pagination: {
         limit,
         cursor: paginatedIds.length > 0 ? paginatedIds[paginatedIds.length - 1] : undefined,

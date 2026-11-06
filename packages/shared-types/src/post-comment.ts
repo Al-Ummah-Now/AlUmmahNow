@@ -29,6 +29,9 @@ export interface PostComment extends SoftDelete, Moderation {
   isEdited: boolean;                 // Flag if edited after creation
   isHeartedByCreator: boolean;       // Post owner can "heart" comments
 
+  // Viewer state (computed per request, never stored)
+  isLikedByViewer?: boolean;         // Present when the request is authenticated
+
   // Timestamps
   createdAt: string;                 // ISO timestamp
   updatedAt?: string;                // ISO timestamp
@@ -72,6 +75,18 @@ export interface PostCommentLikeResponse {
   success: boolean;
   liked: boolean;                    // true after like, false after unlike
   totalLikes: number;
+}
+
+export interface PostCommentPinResponse {
+  success: boolean;
+  pinned: boolean;                   // true after pin, false after unpin
+  commentId: string;
+}
+
+export interface PostCommentHeartResponse {
+  success: boolean;
+  hearted: boolean;                  // true after heart, false after unheart
+  commentId: string;
 }
 
 // Internal storage types

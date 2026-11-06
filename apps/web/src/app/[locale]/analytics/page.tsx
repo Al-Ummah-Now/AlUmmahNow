@@ -2,15 +2,21 @@
 
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
+import { login } from '@/lib/actions';
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useCurrentChannel } from '@/hooks/useMultiAccount';
 import * as AnalyticsAPI from '@/lib/api/analytics';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
 import AnalyticsDashboard from '@/components/analytics/AnalyticsDashboard';
+import AnalyticsDashboardRTL from '@/components/analytics/AnalyticsDashboard/rtl';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const AnalyticsPage = () => {
-  const { t } = useLanguage();
+  const { t, lang, isRTL } = useLanguage();
   const auth = useAuth();
+  const currentChannel = useCurrentChannel();
+  const channelId = currentChannel?.id;
+  const userId = auth?.user?.id;
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [channelData, setChannelData] = useState<ChannelAnalyticsData | null>(null);
   const [metrics, setMetrics] = useState<AnalyticsMetrics[] | null>(null);
@@ -18,55 +24,62 @@ const AnalyticsPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userId) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     const loadAnalyticsData = async () => {
       try {
         setIsLoading(true);
         setError(null);
 
-        // Load analytics data
-        const [summaryData, metricsData] = await Promise.all([
+        // Totals and the daily series cover every channel the user owns; the
+        // top videos list is for the channel currently selected (if any).
+        const [summaryData, metricsData, channelAnalytics] = await Promise.all([
           AnalyticsAPI.getSummary(),
-          AnalyticsAPI.getMetrics()
+          AnalyticsAPI.getMetrics(),
+          channelId ? AnalyticsAPI.getChannelAnalytics(channelId) : Promise.resolve(null),
         ]);
 
+        if (cancelled) return;
         setSummary(summaryData);
         setMetrics(metricsData);
-
-        // Load channel data if we have user info
-        if (auth?.user?.id) {
-          const channelAnalytics = await AnalyticsAPI.getChannelAnalytics(auth.user.id);
-          setChannelData(channelAnalytics);
-        }
-
+        setChannelData(channelAnalytics);
       } catch (err) {
+        if (cancelled) return;
         setError(t.errors.genericError);
-        logger.error('Analytics loading error:', err);
+        logger.error('[AnalyticsPage] Failed to load analytics', { error: err });
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     loadAnalyticsData();
-  }, [auth?.user, t]);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, channelId, t]);
 
-  if (!auth?.user) {
+  const Dashboard = isRTL ? AnalyticsDashboardRTL : AnalyticsDashboard;
+
+  if (!userId) {
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-        <div className="container mx-auto px-4 py-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
-              {t.analytics.analyticsTitle} {t.analytics.demoMode ? `(${t.analytics.demoMode})` : '(Demo Mode)'}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-300">
-              {t.analytics.demoModeMessage || 'This is a demonstration of the analytics dashboard. Please log in to view your actual analytics.'}
-            </p>
-          </div>
-
-          <AnalyticsDashboard
-            summary={summary}
-            channelData={channelData}
-            metrics={metrics}
-          />
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900" dir={isRTL ? 'rtl' : 'ltr'}>
+        <div className="container mx-auto px-4 py-16 text-center">
+          <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-3">
+            {t.analytics.dashboard.signInTitle}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">{t.analytics.dashboard.signInMessage}</p>
+          <form action={login.bind(null, lang)}>
+            <button
+              type="submit"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            >
+              {t.navigation.signIn}
+            </button>
+          </form>
         </div>
       </div>
     );
@@ -97,18 +110,18 @@ const AnalyticsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
             {t.analytics.analyticsTitle}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            {t.analytics.trackPerformance || 'Track your video performance and audience engagement'}
+            {t.analytics.trackPerformance}
           </p>
         </div>
 
-        <AnalyticsDashboard
+        <Dashboard
           summary={summary}
           channelData={channelData}
           metrics={metrics}

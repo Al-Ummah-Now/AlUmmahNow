@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { broadcastInBackground } from "../../lib/websocket-notify";
 
 export class VideoView extends OptionalAuthRoute {
 	schema = {
@@ -117,6 +118,12 @@ export class VideoView extends OptionalAuthRoute {
 
 		// Save updated video
 		await repository.putObject(id, updatedVideo);
+
+		// Push the new count to everyone watching this video (non-blocking)
+		broadcastInBackground(c, `video:${id}`, 'view_count_updated', {
+			videoId: id,
+			viewCount: updatedVideo.views,
+		});
 
 		// Send detailed analytics event
 		const queue = new Queue(c.env.queue);

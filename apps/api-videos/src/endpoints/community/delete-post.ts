@@ -6,7 +6,7 @@ import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 
 export class DeleteCommunityPost extends AuthenticatedRoute {
-  static schema = addAuthToSchema({
+  schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Delete a community post',
     request: {

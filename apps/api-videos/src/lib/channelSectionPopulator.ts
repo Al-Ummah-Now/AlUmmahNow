@@ -5,18 +5,64 @@
  * - recent_uploads: Latest videos from the channel
  * - popular_uploads: Most viewed videos from the channel
  * - liked_videos: Videos liked by the channel owner
- * - subscribed_channels: Channels the user is subscribed to
+ * - subscribed_channels: Public channels the channel owner is subscribed to
  */
 
 import R2Repository from './r2Repo';
-import { VideoObject, ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
+import { VideoObject, ChannelSection, ChannelSectionView, Channel, Profile } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { isVideoRemoved } from './visibility';
+
+/**
+ * Public-safe channel summary returned in populated section content.
+ * Deliberately excludes owner email, subscriber lists and other private fields.
+ */
+export interface PublicChannelSummary {
+  id: string;
+  name: string;
+  nameLocalized?: Record<string, string>;
+  description?: string;
+  descriptionLocalized?: Record<string, string>;
+  avatarUrl?: string;
+  coverUrl?: string;
+  isVerified?: boolean;
+  subscribersCount: number;
+  videosCount: number;
+}
 
 export interface SectionContent {
   videos?: VideoObject[];
   playlists?: any[];
-  channels?: any[];
+  channels?: PublicChannelSummary[];
+}
+
+/**
+ * Stored channel shape in R2 (business model carries raw relation arrays)
+ */
+type StoredChannel = Channel & {
+  subscribers?: unknown[];
+  videos?: unknown[];
+};
+
+function isPubliclyVisibleChannel(channel: StoredChannel | null): channel is StoredChannel {
+  return !!channel && !channel.isDeleted && !channel.isHidden && !channel.isPrivate;
+}
+
+function toPublicChannelSummary(channel: StoredChannel): PublicChannelSummary {
+  return {
+    id: channel.id,
+    name: channel.name,
+    nameLocalized: channel.nameLocalized,
+    description: channel.description,
+    descriptionLocalized: channel.descriptionLocalized,
+    avatarUrl: channel.avatarUrl,
+    coverUrl: channel.coverUrl,
+    isVerified: channel.isVerified,
+    subscribersCount: Array.isArray(channel.subscribers)
+      ? channel.subscribers.length
+      : channel.subscribersCount || 0,
+    videosCount: Array.isArray(channel.videos) ? channel.videos.length : channel.videosCount || 0,
+  };
 }
 
 /**
@@ -45,7 +91,6 @@ export async function populateSectionContent(
         break;
 
       case 'subscribed_channels':
-        // For now, return empty - would need subscription tracking
         content.channels = await getSubscribedChannels(section.channelId, section.itemCount || 12, env);
         break;
 
@@ -167,18 +212,42 @@ async function getLikedVideos(
 }
 
 /**
- * Get channels that the user is subscribed to
+ * Get the channels the channel owner is subscribed to.
+ *
+ * Subscriptions are only exposed because the channel owner explicitly added a
+ * "subscribed_channels" section to their channel page. Only public, non-deleted,
+ * non-hidden channels are returned, as public-safe summaries.
  */
 async function getSubscribedChannels(
   channelId: string,
   limit: number,
   env: any
-): Promise<any[]> {
+): Promise<PublicChannelSummary[]> {
   try {
-    // This would need subscription tracking
-    // For now, return empty array
-    logger.info('Subscribed channels feature not yet implemented', { channelId });
-    return [];
+    const channelRepo = new R2Repository<StoredChannel>(env.channels);
+    const channel = await channelRepo.getObject(channelId);
+    if (!channel?.userId) {
+      return [];
+    }
+
+    const profileRepo = new R2Repository<Profile>(env.profiles);
+    const profile = await profileRepo.getObject(channel.userId);
+    const subscribedTo = (profile?.subscribedTo || []).filter((id) => id !== channelId);
+
+    const summaries: PublicChannelSummary[] = [];
+    for (const subscribedChannelId of subscribedTo) {
+      if (summaries.length >= limit) break;
+      try {
+        const subscribedChannel = await channelRepo.getObject(subscribedChannelId);
+        if (isPubliclyVisibleChannel(subscribedChannel)) {
+          summaries.push(toPublicChannelSummary(subscribedChannel));
+        }
+      } catch (error) {
+        logger.warn('Failed to load subscribed channel', { channelId, subscribedChannelId, error });
+      }
+    }
+
+    return summaries;
   } catch (error) {
     logger.error('Failed to get subscribed channels', { channelId, error });
     return [];

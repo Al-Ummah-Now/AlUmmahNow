@@ -44,10 +44,10 @@ export function ChannelTabContent({
       {activeTab === 'playlists' && <PlaylistsTabContent channelId={channelId} />}
 
       {/* Community Tab */}
-      {activeTab === 'community' && <CommunityTabContent />}
+      {activeTab === 'community' && <CommunityTabContent channelId={channelId} />}
 
       {/* Channels Tab */}
-      {activeTab === 'channels' && <ChannelsTabContent />}
+      {activeTab === 'channels' && <ChannelsTabContent channelId={channelId} />}
 
       {/* About Tab */}
       {activeTab === 'about' && <AboutTabContent />}

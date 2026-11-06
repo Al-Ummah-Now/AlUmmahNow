@@ -13,6 +13,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateCreatePost } from '../../validation/community-posts';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
+import { getChannelObject } from './post-comment-helpers';
 
 // Sanitization configuration for community posts
 // Allows basic formatting while preventing XSS attacks
@@ -71,7 +72,7 @@ const createPostSchema = z.object({
 const Str = (opts: { description: string }) => z.string().openapi(opts);
 
 export class CreateCommunityPost extends AuthenticatedRoute {
-  static schema = addAuthToSchema({
+  schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Create a community post',
     request: {
@@ -140,8 +141,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
 
     try {
       // Get channel info for denormalized fields
-      const channelKey = `${channelId}/channel.json`;
-      const channelData = await c.env.channels.get(channelKey);
+      const channelData = await getChannelObject(c.env.channels, channelId);
 
       if (!channelData) {
         return c.json({ error: 'Channel not found' }, 404);

@@ -20,6 +20,9 @@ export class ChannelsList extends OptionalAuthRoute {
 				cursor: string({
 					description: "The last cursor returned from the previous request",
 				}).optional(),
+				scope: z.enum(["mine", "all"]).optional().describe(
+					"'mine' (default) returns only the authenticated user's channels when signed in; 'all' returns every publicly visible channel (channel directory)",
+				),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
@@ -58,7 +61,7 @@ export class ChannelsList extends OptionalAuthRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated parameters
-		const { limit, cursor } = request.query;
+		const { limit, cursor, scope } = request.query;
 		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
@@ -81,7 +84,7 @@ export class ChannelsList extends OptionalAuthRoute {
 			}
 
 			// Filter out private channels (except for owner)
-			if (channel.isPrivate && channel.userId !== userId) {
+			if (channel.isPrivate && (scope === "all" || channel.userId !== userId)) {
 				return false;
 			}
 
@@ -89,7 +92,7 @@ export class ChannelsList extends OptionalAuthRoute {
 		});
 
 		// Additional filter by userId if requested (to show only user's channels)
-		if (userId) {
+		if (userId && scope !== "all") {
 			filteredChannels = filteredChannels.filter(channel => channel.userId === userId);
 		}
 
@@ -99,7 +102,9 @@ export class ChannelsList extends OptionalAuthRoute {
 		let response: PaginationResponse<any>;
 		if (!filteredChannels || filteredChannels.length === 0) {
 			response = {
-				cursor: "",
+				// In directory mode a page may contain only hidden/private channels;
+				// keep the cursor so clients can continue to the next page.
+				cursor: scope === "all" ? Channels.cursor : "",
 				limit,
 				data: [],
 			};

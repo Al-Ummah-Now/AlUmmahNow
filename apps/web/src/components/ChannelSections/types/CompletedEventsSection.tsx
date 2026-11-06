@@ -1,23 +1,26 @@
 'use client';
 
-import { SectionHeader } from '../SectionHeader';
-import { logger } from '@/lib/logger-client';
+import { useLanguage } from '@/hooks/useLanguage';
+import { ChannelEventsSection } from './ChannelEventsSection';
 
 interface CompletedEventsSectionProps {
   channelId: string;
+  title?: string;
 }
 
-export function CompletedEventsSection({ channelId }: CompletedEventsSectionProps) {
-  logger.info('CompletedEventsSection: Rendering placeholder', { channelId });
+/**
+ * Channel section: the channel's past (ended) live streams.
+ * Data source: GET /api/live-streams?status=ended&channelId=...
+ */
+export function CompletedEventsSection({ channelId, title }: CompletedEventsSectionProps) {
+  const { t } = useLanguage();
 
   return (
-    <section className="space-y-4">
-      <SectionHeader title="Past live streams" />
-      <div className="p-8 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
-        <p className="text-gray-600 dark:text-gray-400">
-          Past live streams section coming soon
-        </p>
-      </div>
-    </section>
+    <ChannelEventsSection
+      channelId={channelId}
+      status="ended"
+      title={title || t.channel.pastLiveStreams}
+      emptyMessage={t.discovery.completedEventsEmpty}
+    />
   );
 }

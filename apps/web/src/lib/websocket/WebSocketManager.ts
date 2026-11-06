@@ -261,8 +261,14 @@ export class WebSocketManager {
       return;
     }
 
-    // Route message to appropriate subscribers
-    const channelKey = this.getChannelKeyFromMessage(message);
+    // Route message to appropriate subscribers. Server broadcasts name their
+    // channel explicitly; older message shapes are routed by type + payload ids.
+    // Notifications are delivered below to every subscriber, so skip them here.
+    const channelKey = message.type === 'notification'
+      ? null
+      : (typeof message.channel === 'string' && this.subscriptions.has(message.channel)
+        ? message.channel
+        : this.getChannelKeyFromMessage(message));
     if (channelKey) {
       const subscribers = this.subscriptions.get(channelKey);
       if (subscribers) {

@@ -1,8 +1,13 @@
+'use client';
+
 import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { CommunityPost } from '@al-ummah/shared-types';
 import { listCommunityPosts } from '@/lib/api/community-posts';
+import { useAuth } from '@/components/AuthProvider/authContext';
+import { useActiveChannel } from '@/contexts/ActiveChannelContext';
+import { useLanguage } from '@/hooks/useLanguage';
 import PostCard from './PostCard';
 import { cn } from '@/lib/utils';
 
@@ -12,47 +17,54 @@ interface CommunityPostsProps {
   locale?: string;
 }
 
+const PAGE_SIZE = 20;
+
 export default function CommunityPosts({ channelId, isRTL = false, locale = 'en' }: CommunityPostsProps) {
+  const { t } = useLanguage();
+  const { user } = useAuth();
+  const { activeChannel } = useActiveChannel();
+  const viewerUserId = user?.id;
+  const viewerChannelId = activeChannel?.channelId;
+
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const loadPosts = useCallback(async (pageNumber: number) => {
+    if (pageNumber === 1) {
+      setLoading(true);
+      setError(false);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
-      if (pageNumber === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
+      const response = await listCommunityPosts(
+        { channelId, page: pageNumber, limit: PAGE_SIZE },
+        viewerChannelId ? { channelId: viewerChannelId } : undefined
+      );
 
-      const response = await listCommunityPosts({
-        channelId,
-        page: pageNumber,
-        limit: 20,
-      });
-
-      if (response) {
-        if (pageNumber === 1) {
-          setPosts(response.posts);
-        } else {
-          setPosts((prev) => [...prev, ...response.posts]);
-        }
-        setHasMore(response.pagination.hasNext);
+      if (response && Array.isArray(response.posts)) {
+        setPosts((prev) => (pageNumber === 1 ? response.posts : [...prev, ...response.posts]));
+        setHasMore(Boolean(response.pagination?.hasNext));
         setPage(pageNumber);
-      } else {
-        setError(isRTL ? 'فشل تحميل المنشورات' : 'Failed to load posts');
+      } else if (pageNumber === 1) {
+        logger.warn('[CommunityPosts] Empty or invalid posts response', { channelId });
+        setError(true);
       }
     } catch (err) {
-      logger.error('Error loading community posts:', err);
-      setError(isRTL ? 'حدث خطأ أثناء تحميل المنشورات' : 'An error occurred while loading posts');
+      logger.error('[CommunityPosts] Failed to load community posts', { channelId, pageNumber, error: err });
+      if (pageNumber === 1) {
+        setError(true);
+      }
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [channelId, isRTL]);
+  }, [channelId, viewerChannelId]);
 
   useEffect(() => {
     loadPosts(1);
@@ -66,10 +78,10 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6" aria-busy="true" aria-label={t.community.loading} data-testid="community-posts-loading">
         {[1, 2, 3].map((i) => (
           <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 animate-pulse">
-            <div className="flex items-center gap-3 mb-4">
+            <div className={cn('flex items-center gap-3 mb-4', isRTL && 'flex-row-reverse')}>
               <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full" />
               <div className="flex-1">
                 <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2" />
@@ -88,38 +100,44 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
 
   if (error) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-        <p className="text-red-600 dark:text-red-400">{error}</p>
+      <div
+        role="alert"
+        className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center space-y-3"
+      >
+        <p className="text-red-600 dark:text-red-400">{t.community.loadPostsFailed}</p>
+        <button
+          onClick={() => loadPosts(1)}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 text-white"
+        >
+          {t.community.retry}
+        </button>
       </div>
     );
   }
 
   if (posts.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-12 text-center">
-        <div className="max-w-md mx-auto space-y-4">
-          <svg
-            className="w-24 h-24 mx-auto text-gray-300 dark:text-gray-600"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-          </svg>
-          <h2 className={cn(
-            'text-2xl font-semibold text-gray-900 dark:text-gray-100',
-            isRTL ? 'text-right' : 'text-left'
-          )}>
-            {isRTL ? 'المجتمع' : 'Community'}
-          </h2>
-          <p className={cn(
-            'text-gray-600 dark:text-gray-400',
-            isRTL ? 'text-right' : 'text-left'
-          )}>
-            {isRTL
-              ? 'لا توجد منشورات مجتمعية حاليًا'
-              : 'No community posts available at this time'}
-          </p>
-        </div>
+      <div className="text-center py-12">
+        <svg
+          className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
+          />
+        </svg>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          {t.community.noPostsYet}
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400">
+          {t.community.noPostsDescription}
+        </p>
       </div>
     );
   }
@@ -127,7 +145,16 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
   return (
     <div className="space-y-6">
       {posts.map((post) => (
-        <PostCard key={post.id} post={post} isRTL={isRTL} locale={locale} />
+        <PostCard
+          key={post.id}
+          post={post}
+          isRTL={isRTL}
+          locale={locale}
+          channelId={viewerChannelId}
+          userId={viewerUserId}
+          userAvatar={activeChannel?.avatarUrl}
+          userDisplayName={activeChannel?.name}
+        />
       ))}
 
       {hasMore && (
@@ -143,9 +170,7 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
               'dark:disabled:bg-gray-700'
             )}
           >
-            {loadingMore
-              ? (isRTL ? 'جاري التحميل...' : 'Loading...')
-              : (isRTL ? 'تحميل المزيد' : 'Load More')}
+            {loadingMore ? t.community.loading : t.community.loadMore}
           </button>
         </div>
       )}

@@ -19,6 +19,15 @@ import { useRealTimeNotifications } from '@/hooks/useRealTimeNotifications';
 import { WebSocketProvider } from '@/lib/websocket/WebSocketProvider';
 import React from 'react';
 
+// useRealTimeNotifications renders server notification keys through i18n
+jest.mock('@/hooks/useLanguage', () => ({
+  useLanguage: () => ({
+    t: jest.requireActual('@/lib/i18n/translations').EN_TRANSLATIONS,
+    lang: 'en',
+    isRTL: false,
+  }),
+}));
+
 // Mock WebSocketManager
 jest.mock('@/lib/websocket/WebSocketManager', () => {
   let subscriptions: Map<string, Array<(data: unknown) => void>> = new Map();

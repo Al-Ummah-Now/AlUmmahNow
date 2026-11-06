@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { NotificationEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
 import { logger } from '@/lib/logger-client';
+import { useLanguage } from '@/hooks/useLanguage';
+import { resolveNotificationText } from '@/lib/websocket/notification-text';
 
 
 export interface Notification {
@@ -37,6 +39,11 @@ export function useRealTimeNotifications(
 ): UseRealTimeNotificationsReturn {
   const {  maxNotifications = 50, autoRemoveAfter } = options;
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { t } = useLanguage();
+  const translationsRef = useRef(t);
+  useEffect(() => {
+    translationsRef.current = t;
+  }, [t]);
 
   // Remove specific notification
   const removeNotification = useCallback((notificationId: string) => {
@@ -79,10 +86,11 @@ export function useRealTimeNotifications(
     logger.info('📥 Real-time notification:', event);
 
     if (event.type === 'notification') {
+      const { title, message } = resolveNotificationText(event, translationsRef.current);
       const notification: Notification = {
         id: event.notificationId,
-        title: event.title,
-        message: event.message,
+        title,
+        message,
         type: event.notificationType,
         actionUrl: event.actionUrl,
         timestamp: new Date(),
@@ -125,7 +133,8 @@ export function useRealTimeNotifications(
   // Subscribe to real-time notifications
   // Note: handleNotificationUpdate should NOT be in dependencies as it would cause re-subscriptions
   const isConnected = useWebSocketSubscription(
-    options.userId ? `user:${options.userId}:notifications` : 'notifications',
+    // The websocket server auto-subscribes every authenticated session to `user:<id>`
+    options.userId ? `user:${options.userId}` : 'notifications',
     handleNotificationUpdate,
     [options.userId]
   );
@@ -143,6 +152,15 @@ export function useRealTimeNotifications(
       const newNotifications = [notification, ...prevNotifications];
       return newNotifications.slice(0, maxNotifications);
     });
+
+    // Local notifications honour autoRemoveAfter just like server-pushed ones
+    if (autoRemoveAfterRef.current) {
+      const timerId = setTimeout(() => {
+        autoRemoveTimersRef.current.delete(timerId);
+        removeNotificationRef.current(notification.id);
+      }, autoRemoveAfterRef.current);
+      autoRemoveTimersRef.current.add(timerId);
+    }
   }, [maxNotifications]);
   
   // Mark notification as read

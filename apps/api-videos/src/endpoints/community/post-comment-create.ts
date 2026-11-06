@@ -10,7 +10,9 @@ import type {
   PostCommentCreateResponse,
   PostCommentIndex,
   CommunityPost,
+  Channel,
 } from '@al-ummah/shared-types';
+import { findPostComment, getChannelObject, topLevelCommentKey } from './post-comment-helpers';
 
 // Sanitization configuration for comments
 // Allows basic formatting while preventing XSS attacks
@@ -135,29 +137,31 @@ export class CreatePostComment extends AuthenticatedRoute {
     // 2. If reply, validate parent comment exists and is top-level
     let parentComment: PostComment | null = null;
     if (requestBody.parentCommentId) {
-      const parentKey = `comments/${postId}/top-level/${requestBody.parentCommentId}.json`;
-      const parentObj = await bucket.get(parentKey);
+      const parentObj = await bucket.get(topLevelCommentKey(postId, requestBody.parentCommentId));
 
-      if (!parentObj) {
+      if (parentObj) {
+        parentComment = await parentObj.json();
+      } else {
+        // Threads are one level deep. A reply to a reply is attached to the
+        // top-level comment of that thread (YouTube-style) rather than rejected,
+        // so the conversation stays together and clients need no special case.
+        const { comment: replyTarget } = await findPostComment(bucket, postId, requestBody.parentCommentId);
+        if (replyTarget?.parentCommentId) {
+          const rootObj = await bucket.get(topLevelCommentKey(postId, replyTarget.parentCommentId));
+          if (rootObj) {
+            parentComment = await rootObj.json();
+            requestBody.parentCommentId = parentComment.id;
+          }
+        }
+      }
+
+      if (!parentComment) {
         return c.json(
           {
             success: false,
             error: 'Parent comment not found',
           },
           404
-        );
-      }
-
-      parentComment = await parentObj.json();
-
-      // Cannot reply to a reply (max depth = 1)
-      if (parentComment.parentCommentId) {
-        return c.json(
-          {
-            success: false,
-            error: 'Cannot reply to a reply. Maximum thread depth is 1 level.',
-          },
-          400
         );
       }
 
@@ -174,17 +178,36 @@ export class CreatePostComment extends AuthenticatedRoute {
     }
 
     // 3. Create comment object with sanitized content
-    const auth = this.getAuth(c);
+    // Commenter identity comes from the actor channel (never the account email).
+    // The channel must belong to the authenticated user.
+    let actorChannel: Channel | null = null;
+    if (userChannelId) {
+      const channelObj = await getChannelObject(c.env.channels, userChannelId);
+      if (channelObj) {
+        const channel = await channelObj.json<Channel>();
+        if (channel.userId !== userId) {
+          return c.json(
+            {
+              success: false,
+              error: 'You can only comment as a channel you own',
+            },
+            403
+          );
+        }
+        actorChannel = channel;
+      }
+    }
+
     const comment: PostComment = {
       id: crypto.randomUUID(),
       postId,
-      channelId: userChannelId || userId,
+      channelId: actorChannel?.id || userChannelId || userId,
       userId: userId,
       parentCommentId: requestBody.parentCommentId,
       content: sanitizeHtml(requestBody.content, sanitizeOptions),
-      userDisplayName: (auth?.payload as any)?.email || 'Anonymous',
-      userAvatarUrl: undefined,
-      channelVerified: false,
+      userDisplayName: actorChannel?.name || 'Anonymous',
+      userAvatarUrl: actorChannel?.avatarUrl,
+      channelVerified: Boolean(actorChannel?.isVerified),
       likes: 0,
       repliesCount: 0,
       isPinned: false,

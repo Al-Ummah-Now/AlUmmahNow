@@ -12,6 +12,10 @@ interface PostEngagementProps {
   locale?: string;
   showComments?: boolean;
   onToggleComments?: () => void;
+  /** Viewer's active channel (acting identity for likes) */
+  channelId?: string;
+  /** Viewer's user ID */
+  userId?: string;
 }
 
 export default function PostEngagement({
@@ -19,6 +23,8 @@ export default function PostEngagement({
   isRTL = false,
   showComments = false,
   onToggleComments,
+  channelId,
+  userId,
 }: PostEngagementProps) {
   const [showShareMenu, setShowShareMenu] = useState(false);
 
@@ -72,8 +78,10 @@ export default function PostEngagement({
           postChannelId={post.channelId}
           postId={post.id}
           initialLikes={post.likes}
+          initialLiked={Boolean(post.viewerHasLiked)}
           isRTL={isRTL}
-          channelId={post.channelId}
+          channelId={channelId}
+          userId={userId}
         />
 
         {/* Comment Button */}

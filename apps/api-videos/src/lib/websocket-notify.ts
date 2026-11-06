@@ -1,154 +1,146 @@
 /**
- * WebSocket Notification Helper for API Videos
- * Utility to send notifications to the WebSocket server
+ * WebSocket notification helpers for api-videos.
+ *
+ * Messages are POSTed to the websocket-server `/broadcast` endpoint
+ * (X-API-Key = INTERNAL_API_KEY) and delivered verbatim to every client
+ * subscribed to `channel`. The envelope matches what the web WebSocketManager
+ * routes on:
+ *
+ *   { type, channel, timestamp, data: { type, ...fields } }
+ *
+ * `data.type` is repeated because subscription callbacks only receive `data`.
+ * Notifications carry a `notificationKey` + `params` instead of text so the web
+ * client renders them in the viewer's language.
+ *
+ * Broadcasting always happens through `ctx.waitUntil` so it never delays or
+ * fails the API response.
  */
 
 import { logger } from './logger';
 
-/**
- * Get the API key value from either a string or a SecretStoreSecret binding
- */
-export async function getApiKey(
-  apiKeyBinding: string | { get: () => Promise<string> } | undefined
-): Promise<string> {
-  if (!apiKeyBinding) return '';
-  if (typeof apiKeyBinding === 'string') return apiKeyBinding;
-  if (typeof apiKeyBinding.get === 'function') return await apiKeyBinding.get();
-  return '';
+type ApiKeyBinding = string | { get: () => Promise<string> } | { text: () => Promise<string> } | undefined;
+
+interface RealtimeEnv {
+  WEBSOCKET_URL?: string;
+  INTERNAL_API_KEY?: unknown;
+}
+
+interface WaitUntilContext {
+  env: unknown;
+  executionCtx?: { waitUntil(promise: Promise<unknown>): void };
 }
 
 /**
- * Send a notification to the WebSocket server
- * This will broadcast the message to all clients subscribed to the channel
+ * Get the API key value from a plain string or a Secrets Store binding.
+ */
+export async function getApiKey(apiKeyBinding: ApiKeyBinding): Promise<string> {
+  if (!apiKeyBinding) return '';
+  if (typeof apiKeyBinding === 'string') return apiKeyBinding;
+  if ('get' in apiKeyBinding && typeof apiKeyBinding.get === 'function') return await apiKeyBinding.get();
+  if ('text' in apiKeyBinding && typeof apiKeyBinding.text === 'function') return await apiKeyBinding.text();
+  return '';
+}
+
+export function buildRealtimeMessage(channel: string, type: string, data: Record<string, unknown>) {
+  return { type, channel, timestamp: Date.now(), data: { ...data, type } };
+}
+
+/**
+ * POST a message to the websocket server. Never throws.
  */
 export async function sendWebSocketNotification(
   websocketUrl: string,
   apiKey: string,
   channel: string,
-  message: any
+  message: unknown
 ): Promise<boolean> {
   try {
-    const response = await fetch(`${websocketUrl}/broadcast`, {
+    const response = await fetch(`${websocketUrl.replace(/\/$/, '')}/broadcast`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': apiKey,
       },
-      body: JSON.stringify({
-        channel,
-        message,
-      }),
+      body: JSON.stringify({ channel, message }),
     });
-
+    if (!response.ok) {
+      logger.warn('[realtime] Broadcast rejected', { channel, status: response.status });
+    }
     return response.ok;
   } catch (error) {
-    logger.error('Failed to send WebSocket notification:', error);
+    logger.error('[realtime] Failed to send WebSocket notification', { channel, error });
     return false;
   }
 }
 
-/**
- * Send a user notification
- */
-export async function notifyUser(
-  websocketUrl: string,
-  apiKey: string,
-  userId: string,
-  notification: {
-    id: string;
-    title: string;
-    message: string;
-    type: 'new_video' | 'comment' | 'like' | 'subscription' | 'system';
-    actionUrl?: string;
+export async function broadcast(
+  env: RealtimeEnv,
+  channel: string,
+  type: string,
+  data: Record<string, unknown>
+): Promise<boolean> {
+  if (!env?.WEBSOCKET_URL) return false;
+  const apiKey = await getApiKey(env.INTERNAL_API_KEY as ApiKeyBinding);
+  if (!apiKey) {
+    logger.warn('[realtime] INTERNAL_API_KEY not configured, skipping broadcast', { channel, type });
+    return false;
   }
-): Promise<boolean> {
-  return sendWebSocketNotification(
-    websocketUrl,
-    apiKey,
-    `user:${userId}`,
-    {
-      type: 'notification',
-      data: {
-        ...notification,
-        userId,
-        timestamp: Date.now(),
-      },
-    }
-  );
+  return sendWebSocketNotification(env.WEBSOCKET_URL, apiKey, channel, buildRealtimeMessage(channel, type, data));
 }
 
 /**
- * Send a video update notification
+ * Run realtime work after the response is sent. Any failure is logged only.
  */
-export async function notifyVideoUpdate(
-  websocketUrl: string,
-  apiKey: string,
-  videoId: string,
-  status: string,
-  data: any
-): Promise<boolean> {
-  return sendWebSocketNotification(
-    websocketUrl,
-    apiKey,
-    `video:${videoId}`,
-    {
-      type: 'video_update',
-      videoId,
-      status,
-      data,
+export function inBackground(c: WaitUntilContext, label: string, work: () => Promise<unknown>): void {
+  const task = (async () => {
+    try {
+      await work();
+    } catch (error) {
+      logger.warn('[realtime] Background notification failed', { label, error });
     }
-  );
+  })();
+  try {
+    if (c.executionCtx?.waitUntil) {
+      c.executionCtx.waitUntil(task);
+    }
+  } catch {
+    // Outside the Workers runtime (e.g. Node dev server) there is no execution context;
+    // the task still runs to completion on its own.
+  }
 }
 
-/**
- * Send a comment notification to video subscribers
- */
-export async function notifyComment(
-  websocketUrl: string,
-  apiKey: string,
-  videoId: string,
-  commentData: any
-): Promise<boolean> {
-  return sendWebSocketNotification(
-    websocketUrl,
-    apiKey,
-    `video:${videoId}`,
-    {
-      type: 'comment',
-      videoId,
-      commentId: commentData.id,
-      data: commentData,
-    }
-  );
+/** Fire-and-forget broadcast bound to the request's execution context. */
+export function broadcastInBackground(
+  c: WaitUntilContext,
+  channel: string,
+  type: string,
+  data: Record<string, unknown>
+): void {
+  inBackground(c, `${type}@${channel}`, () => broadcast(c.env as RealtimeEnv, channel, type, data));
 }
 
-/**
- * Example: Integrate with video like endpoint
- *
- * Usage in api-videos/src/index.ts:
- *
- * import { notifyUser, getApiKey } from './lib/websocket-notify';
- *
- * // In video like handler
- * app.post('/api/videos/:id/like', authMiddleware, async (c) => {
- *   // ... existing like logic ...
- *
- *   // Notify video owner
- *   const websocketUrl = c.env.WEBSOCKET_URL || 'http://localhost:3087';
- *   const apiKey = await getApiKey(c.env.INTERNAL_API_KEY);
- *   await notifyUser(
- *     websocketUrl,
- *     apiKey,
- *     video.userId,
- *     {
- *       id: crypto.randomUUID(),
- *       title: 'New Like',
- *       message: `Someone liked your video "${video.title}"`,
- *       type: 'like',
- *       actionUrl: `/videos/${videoId}`
- *     }
- *   );
- *
- *   return c.json({ success: true });
- * });
- */
+export type NotificationType = 'like' | 'comment' | 'subscription' | 'upload' | 'system';
+
+export interface UserNotification {
+  notificationType: NotificationType;
+  notificationKey: string;
+  params?: Record<string, string | number>;
+  actionUrl?: string;
+}
+
+/** Send a notification on `user:<userId>` (awaitable; use inside background work). */
+export async function notifyUser(env: unknown, userId: string, notification: UserNotification): Promise<boolean> {
+  if (!userId) return false;
+  return broadcast(env as RealtimeEnv, `user:${userId}`, 'notification', {
+    notificationId: crypto.randomUUID(),
+    userId,
+    ...notification,
+    params: notification.params || {},
+  });
+}
+
+/** Fire-and-forget user notification on `user:<userId>`. */
+export function notifyUserInBackground(c: WaitUntilContext, userId: string, notification: UserNotification): void {
+  if (!userId) return;
+  inBackground(c, `notification@user:${userId}`, () => notifyUser(c.env, userId, notification));
+}
