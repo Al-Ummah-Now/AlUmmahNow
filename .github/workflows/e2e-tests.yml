@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
@@ -71,6 +71,7 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: https://videos.qa.alummahnow.net
+          OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
 
       - name: Debug - List auth files
         run: |
@@ -107,7 +108,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
@@ -158,6 +159,7 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: https://videos.qa.alummahnow.net
+          OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
 
       - name: Upload test results
         if: always()
@@ -188,7 +190,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
@@ -238,6 +240,7 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: https://videos.qa.alummahnow.net
+          OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
 
       - name: Generate HTML report
         if: always()
@@ -285,7 +288,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
@@ -326,6 +329,7 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           OPENAUTH_URL: https://auth.qa.alummahnow.net
           WEB_APP_URL: https://videos.qa.alummahnow.net
+          OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
 
       - name: Upload mobile test results
         if: always()

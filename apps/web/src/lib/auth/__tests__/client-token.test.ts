@@ -1,126 +1,54 @@
 /**
- * Tests for client-side auth token utilities
+ * Tests for client-side auth token utilities.
+ * Tokens come from the same-origin /api/auth/token endpoint (cookies are httpOnly).
  */
 
-import { getClientAuthToken, getAuthHeaders } from '../client-token';
+import {
+  fetchClientAuthToken,
+  getClientAuthToken,
+  getClientAuthHeaders,
+  clearClientAuthToken,
+} from '../client-token';
 
-describe('getClientAuthToken', () => {
-  let cookieStore: string = '';
+const mockFetch = (status: number, body: unknown) =>
+  jest.fn().mockResolvedValue({ ok: status >= 200 && status < 300, json: async () => body });
 
-  beforeEach(() => {
-    // Mock document.cookie getter/setter
-    cookieStore = '';
-    Object.defineProperty(document, 'cookie', {
-      get: () => cookieStore,
-      set: (value: string) => {
-        cookieStore = value;
-      },
-      configurable: true,
-    });
-  });
+describe('client-token', () => {
+  const originalFetch = global.fetch;
 
+  beforeEach(() => clearClientAuthToken());
   afterEach(() => {
-    cookieStore = '';
+    global.fetch = originalFetch;
   });
 
-  it('should return null when no cookies exist', () => {
-    const token = getClientAuthToken();
-    expect(token).toBeNull();
+  it('returns the token from /api/auth/token and caches it', async () => {
+    const f = mockFetch(200, { accessToken: 'tok', channelId: 'ch1' });
+    global.fetch = f as unknown as typeof fetch;
+
+    expect(await fetchClientAuthToken()).toBe('tok');
+    expect(await fetchClientAuthToken()).toBe('tok');
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(f).toHaveBeenCalledWith('/api/auth/token', expect.objectContaining({ credentials: 'same-origin' }));
+    expect(getClientAuthToken()).toBe('tok');
   });
 
-  it('should return null when access_token cookie does not exist', () => {
-    cookieStore = 'other_cookie=value';
-    const token = getClientAuthToken();
-    expect(token).toBeNull();
+  it('returns null when not authenticated', async () => {
+    global.fetch = mockFetch(401, { accessToken: null }) as unknown as typeof fetch;
+    expect(await fetchClientAuthToken()).toBeNull();
   });
 
-  it('should return the access token when it exists', () => {
-    const expectedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test';
-    cookieStore = `access_token=${expectedToken}`;
-    const token = getClientAuthToken();
-    expect(token).toBe(expectedToken);
+  it('returns null when the request fails', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('network')) as unknown as typeof fetch;
+    expect(await fetchClientAuthToken()).toBeNull();
   });
 
-  it('should return the access token when multiple cookies exist', () => {
-    const expectedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test';
-    cookieStore = `other_cookie=value; access_token=${expectedToken}; another_cookie=another_value`;
-    const token = getClientAuthToken();
-    expect(token).toBe(expectedToken);
+  it('builds Authorization and channelId headers', async () => {
+    global.fetch = mockFetch(200, { accessToken: 'tok', channelId: 'ch1' }) as unknown as typeof fetch;
+    expect(await getClientAuthHeaders()).toEqual({ Authorization: 'Bearer tok', channelId: 'ch1' });
   });
 
-  it('should decode URI-encoded token', () => {
-    const originalToken = 'token with spaces and special chars!@#';
-    const encodedToken = encodeURIComponent(originalToken);
-    cookieStore = `access_token=${encodedToken}`;
-    const token = getClientAuthToken();
-    expect(token).toBe(originalToken);
-  });
-
-  it('should handle errors gracefully and return null', () => {
-    // Mock document.cookie getter to throw an error
-    Object.defineProperty(document, 'cookie', {
-      get: () => {
-        throw new Error('Cookie access denied');
-      },
-      configurable: true,
-    });
-
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-    const token = getClientAuthToken();
-
-    expect(token).toBeNull();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[getClientAuthToken] Failed to read token from cookies:',
-      expect.any(Error)
-    );
-
-    consoleSpy.mockRestore();
-  });
-});
-
-describe('getAuthHeaders', () => {
-  let cookieStore: string = '';
-
-  beforeEach(() => {
-    // Mock document.cookie getter/setter
-    cookieStore = '';
-    Object.defineProperty(document, 'cookie', {
-      get: () => cookieStore,
-      set: (value: string) => {
-        cookieStore = value;
-      },
-      configurable: true,
-    });
-  });
-
-  afterEach(() => {
-    cookieStore = '';
-  });
-
-  it('should return empty object when not authenticated', () => {
-    const headers = getAuthHeaders();
-    expect(headers).toEqual({});
-  });
-
-  it('should return Authorization header when authenticated', () => {
-    const expectedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test';
-    cookieStore = `access_token=${expectedToken}`;
-
-    const headers = getAuthHeaders();
-
-    expect(headers).toEqual({
-      'Authorization': `Bearer ${expectedToken}`,
-    });
-  });
-
-  it('should work with multiple cookies', () => {
-    const expectedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test';
-    cookieStore = `refresh_token=refresh_token_value; access_token=${expectedToken}; session_id=session_value`;
-
-    const headers = getAuthHeaders();
-
-    expect(headers).toEqual({
-      'Authorization': `Bearer ${expectedToken}`,
-    });
+  it('returns no headers when anonymous', async () => {
+    global.fetch = mockFetch(401, { accessToken: null, channelId: null }) as unknown as typeof fetch;
+    expect(await getClientAuthHeaders()).toEqual({});
   });
 });

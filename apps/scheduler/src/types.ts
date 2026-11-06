@@ -20,6 +20,7 @@ export interface Env {
   BATCH_SIZE: string;
   LOCK_TTL: string;
   WEBSOCKET_URL: string;
+  INTERNAL_API_KEY?: string | { get(): Promise<string> };
 }
 
 // Scheduler-specific types

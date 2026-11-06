@@ -161,13 +161,14 @@
 	 */
 	// "vars": { "MY_VARIABLE": "production_value" },
 	"vars": {
+		"ENVIRONMENT": "production",
 		"ZONE": "al-ummah-now-images",
 		"ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
 		"Issuer": "https://auth.alummahnow.net",
-		"Audience": "https://videos.alummahnow.net",
+		"Audience": "https://videos.api.alummahnow.net",
 		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",
-		"WEBSOCKET_URL": "https://ws.alummahnow.net",
-		"CORS_ORIGINS": "https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
+		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
 	},
 	/**
 	 * Note: Use secrets to store sensitive data.

@@ -69,11 +69,18 @@
 	],
 
 	// Environment variables
+	"secrets_store_secrets": [
+		{
+			"binding": "INTERNAL_API_KEY",
+			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+			"secret_name": "internal-api-key"
+		}
+	],
 	"vars": {
 		"MAX_RETRIES": "3",
 		"BATCH_SIZE": "50",
 		"LOCK_TTL": "120",
-		"WEBSOCKET_URL": "https://ws.alummahnow.net"
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net"
 	},
 
 	// Development server configuration

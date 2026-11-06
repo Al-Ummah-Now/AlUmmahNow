@@ -2,7 +2,10 @@
   "name": "al-ummah-now-preview",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-04-12",
-  "compatibility_flags": ["nodejs_compat","nodejs_compat_populate_process_env"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env"
+  ],
   "logpush": false,
   "minify": true,
   "assets": {
@@ -13,23 +16,13 @@
     "enabled": true
   },
   "upload_source_maps": true,
-  "env": {
-    "BunnyImageKey": "",
-    "BunnyImageZone": "al-ummah-now-images-preview",
-    "BunnyVideoKey": "",
-    "BunnyVideoZone": "videos-preview",
-    "S3Api": "https://0e4b6e7f9faf280c3c9bf95995edc64f.r2.cloudflarestorage.com",
-    "S3Key": "",
-    "S3Secret": "",
-    "S3Token": "",
-    "ClientId": "3f8c9b2e-4d6a-4b8e-9f3a-2c7d5e8f1a6b",
-    "Issuer": "https://auth.alummahnow.net"
-  },
-  "vars":{
+  "vars": {
     "Issuer": "https://auth.alummahnow.net",
     "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
     "NEXTJS_ENV": "preview",
-    "API_URL": "https://videos.api.alummahnow.net"
+    "API_URL": "https://videos.api.alummahnow.net",
+    "ClientId": "f0de3c30-0304-4ac4-86d6-1e185dec0439",
+    "WEBSOCKET_URL": "wss://realtime.alummahnow.net/ws"
   },
   "r2_buckets": [
     {

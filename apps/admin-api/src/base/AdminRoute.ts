@@ -104,7 +104,7 @@ export abstract class AdminRoute extends OpenAPIRoute {
       }
 
       const roles = auth.roles || [];
-      const isAdmin = roles.includes('admin');
+      const isAdmin = roles.includes('admin') || roles.includes('super_admin');
       const isModerator = roles.includes('moderator');
 
       logger.info('[AdminRoute] Role check result', {

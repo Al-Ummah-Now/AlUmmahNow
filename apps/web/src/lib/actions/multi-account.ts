@@ -9,7 +9,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { headers as getHeaders } from "next/headers";
+import { headers as getHeaders, cookies as getCookies } from "next/headers";
 import { createClient } from "@al-ummah-now/openauth/client";
 import { SessionManager, type AccountInfo } from '../auth/session-manager';
 import { createChannel } from '../api/channels';
@@ -36,9 +36,11 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
   const host = headers.get("host");
   const protocol = host?.includes("localhost") ? "http" : "https";
 
+  (await getCookies()).set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 });
+
   const client = await getAuthClient();
   const { url } = await client.authorize(
-    `${protocol}://${host}/api/callback/multi-account?locale=${locale}`,
+    `${protocol}://${host}/api/callback/multi-account`,
     "code"
   );
 

@@ -38,6 +38,14 @@ export interface AuthContext {
 }
 
 /**
+ * The auth server emits RBAC role display names ("Super Admin", "Admin",
+ * "Moderator"); normalize to snake_case ids used throughout this service.
+ */
+export function normalizeRole(role: string): string {
+  return String(role ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+/**
  * Authentication middleware for validating JWT tokens
  */
 export async function authMiddleware(c: Context, next: Next) {
@@ -88,7 +96,7 @@ export async function authMiddleware(c: Context, next: Next) {
     c.set('auth', {
       userId: payload.sub,
       email: payload.email,
-      roles: payload.roles || [],
+      roles: (payload.roles || []).map(normalizeRole),
       payload
     } as AuthContext);
 
@@ -122,7 +130,7 @@ export async function adminMiddleware(c: Context, next: Next) {
 
     // Get roles from auth context (populated from token)
     const roles = auth.roles || [];
-    const isAdmin = roles.includes('admin');
+    const isAdmin = roles.includes('admin') || roles.includes('super_admin');
     const isModerator = roles.includes('moderator');
 
     logger.info('Admin middleware checking roles', {

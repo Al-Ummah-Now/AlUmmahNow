@@ -19,6 +19,7 @@
 
 'use client';
 
+import { getClientAuthToken } from '@/lib/auth/client-token';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { PresenceEvent } from '@/interfaces/websocket';
@@ -43,21 +44,10 @@ export interface VideoWebSocketReturn {
 }
 
 /**
- * Get auth token from cookies (client-side)
- * Note: This is a simple implementation. In production, you might want
- * to use a more secure method or get the token from the auth context.
+ * Cached access token from the same-origin token endpoint (cookies are httpOnly).
  */
 function getAuthTokenFromCookies(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-
-  const cookies = document.cookie.split(';');
-  const accessTokenCookie = cookies.find(c => c.trim().startsWith('access_token='));
-
-  if (accessTokenCookie) {
-    return accessTokenCookie.split('=')[1];
-  }
-
-  return undefined;
+  return getClientAuthToken() ?? undefined;
 }
 
 /**
