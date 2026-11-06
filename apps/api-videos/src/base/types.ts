@@ -32,6 +32,8 @@ export interface AppBindings {
   SCHEDULED_VIDEOS: R2Bucket;
   'scheduled-videos': R2Bucket;
   global_settings: R2Bucket;
+  /** Processor-written view/watch-time rollups (al-ummah-now-messages bucket) */
+  analytics_rollups?: R2Bucket;
 
   // KV Namespaces
   RATE_LIMIT_KV: KVNamespace;

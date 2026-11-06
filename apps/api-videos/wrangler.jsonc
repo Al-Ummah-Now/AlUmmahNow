@@ -108,6 +108,13 @@
 			"bucket_name": "global-settings",
 			"preview_bucket_name": "global-settings-preview",
 			"remote": true
+		},
+		{
+			// Read-only use: daily view/watch-time rollups written by the processor
+			// (analytics/rollups/*) in the processor's messages bucket
+			"binding": "analytics_rollups",
+			"bucket_name": "al-ummah-now-messages",
+			"remote": true
 		}
 	],
 	"kv_namespaces": [

@@ -106,54 +106,6 @@ class ExperimentAnalytics {
       };
     }
   }
-
-  async getExperimentResults(experimentId: string): Promise<unknown> {
-    try {
-      // Get auth token from cookies (client-side)
-      const { getAuthHeaders } = await import('@/lib/auth/client-token');
-      const authHeaders = getAuthHeaders();
-
-      const response = await fetch(`/api/analytics/ab-test?experimentId=${experimentId}`, {
-        headers: {
-          ...authHeaders,
-        },
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      return data;
-    } catch (error) {
-      logger.error('Failed to fetch experiment results:', error);
-      throw error;
-    }
-  }
-
-  async getExperimentStatistics(experimentId: string): Promise<unknown> {
-    try {
-      // Get auth token from cookies (client-side)
-      const { getAuthHeaders } = await import('@/lib/auth/client-token');
-      const authHeaders = getAuthHeaders();
-
-      const response = await fetch(`/api/analytics/ab-test/stats?experimentId=${experimentId}`, {
-        headers: {
-          ...authHeaders,
-        },
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      return data;
-    } catch (error) {
-      logger.error('Failed to fetch experiment statistics:', error);
-      throw error;
-    }
-  }
 }
 
 export const experimentAnalytics = new ExperimentAnalytics();

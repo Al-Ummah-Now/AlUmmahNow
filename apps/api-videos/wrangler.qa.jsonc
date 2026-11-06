@@ -63,6 +63,10 @@
     {
       "binding": "global_settings",
       "bucket_name": "global-settings-qa"
+    },
+    {
+      "binding": "analytics_rollups",
+      "bucket_name": "al-ummah-now-messages-qa"
     }
   ],
   "kv_namespaces": [
