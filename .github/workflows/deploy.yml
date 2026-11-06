@@ -1082,6 +1082,7 @@ jobs:
       - name: Deploy Admin API to QA
         run: |
           cd apps/admin-api
+          pnpm wrangler d1 migrations apply al-ummah-now-reports-qa --remote --config wrangler.qa.jsonc
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -1196,6 +1197,7 @@ jobs:
       - name: Deploy Admin API to Production
         run: |
           cd apps/admin-api
+          pnpm wrangler d1 migrations apply al-ummah-now-reports --remote
           pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

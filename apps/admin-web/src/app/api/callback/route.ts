@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (exchanged.err) {
-      logger.error('Token exchange failed', { error: exchanged.err });
+      logger.error('Token exchange failed', { name: exchanged.err?.name, message: exchanged.err?.message });
       return NextResponse.redirect(new URL('/login?error=exchange_failed', request.url));
     }
 
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (verified.err || !verified.subject) {
-      logger.error('Token verification failed', { error: verified.err });
+      logger.error('Token verification failed', { name: verified.err?.name, message: verified.err?.message, cause: String((verified.err as { cause?: unknown } | undefined)?.cause ?? '') });
       return NextResponse.redirect(new URL('/login?error=verification_failed', request.url));
     }
 
