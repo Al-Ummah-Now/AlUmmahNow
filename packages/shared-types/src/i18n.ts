@@ -629,6 +629,16 @@ export interface AppTranslations {
     updateFailed?: string;
     thumbnailUploadSuccess?: string;
     thumbnailUploadFailed?: string;
+    thumbnailInvalidType: string;
+    thumbnailTooLarge: string;
+    thumbnailCurrentDefault: string;
+    enterTitleEnglish: string;
+    enterDescriptionEnglish: string;
+    enterTitleArabic: string;
+    enterDescriptionArabic: string;
+    createChaptersManually: string;
+    uploadChapterFile: string;
+    clickToEditChapters: string;
     play?: string;
     pause?: string;
     mute?: string;
@@ -847,6 +857,7 @@ export interface AppTranslations {
       invalidFileType: string;
       fileTooLarge: string;
       initiateFailed: string;
+      deviceLimit: string;
       uploadFailed: string;
     };
   };
@@ -1380,6 +1391,56 @@ export interface AppTranslations {
     statusActive: string;
     statusProcessing: string;
     statusFailed: string;
+  };
+
+  /**
+   * Playlists (playlist page, management, save-to-playlist)
+   */
+  playlist: {
+    playlist: string;
+    playlists: string;
+    playAll: string;
+    videosLabel: string;
+    videoCount: string;
+    emptyPlaylist: string;
+    notFound: string;
+    notFoundDescription: string;
+    publicLabel: string;
+    privateLabel: string;
+    updatedOn: string;
+    removeFromPlaylist: string;
+    moveUp: string;
+    moveDown: string;
+    removeFailed: string;
+    reorderFailed: string;
+    managePlaylists: string;
+    managePlaylistsDescription: string;
+    newPlaylist: string;
+    createPlaylist: string;
+    editPlaylist: string;
+    deletePlaylist: string;
+    confirmDelete: string;
+    nameLabel: string;
+    namePlaceholder: string;
+    descriptionLabel: string;
+    descriptionPlaceholder: string;
+    visibilityLabel: string;
+    publicDescription: string;
+    privateDescription: string;
+    nameRequired: string;
+    createFailed: string;
+    updateFailed: string;
+    deleteFailed: string;
+    loadFailed: string;
+    noPlaylists: string;
+    viewPlaylist: string;
+    saveToPlaylist: string;
+    saveToPlaylistTitle: string;
+    addedTo: string;
+    removedFrom: string;
+    saveFailed: string;
+    createAndAdd: string;
+    channelRequired: string;
   };
 
   /**
