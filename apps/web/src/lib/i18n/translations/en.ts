@@ -852,6 +852,10 @@ export const EN_TRANSLATIONS: AppTranslations = {
     loginSuccess: 'Login successful',
     logoutSuccess: 'Logout successful',
     loginFailed: 'Login failed',
+    callbackErrorTitle: 'Sign-in did not finish',
+    callbackErrorMessage: 'We could not sign you in. If you were resetting your password, check that the email address belongs to an account, or create one.',
+    tryAgain: 'Try again',
+    backHome: 'Back to home',
   },
 
   errors: {
