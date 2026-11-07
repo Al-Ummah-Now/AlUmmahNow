@@ -526,7 +526,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     });
   };
 
-  const handleTemplateApply = (processedMetadata: ProcessedMetadata) => {
+  // Stable identity: TemplateSelector must not re-run its loader (and re-apply the
+  // default template over the user's edits) on every render.
+  const handleTemplateApply = useCallback((processedMetadata: ProcessedMetadata) => {
     setMetadata(prev => ({
       ...prev,
       titleEn: processedMetadata.titleLocalized?.en || processedMetadata.title || prev.titleEn,
@@ -539,7 +541,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       category: processedMetadata.category || prev.category,
       isPublic: processedMetadata.visibility === 'public' ? true : processedMetadata.visibility === 'private' ? false : prev.isPublic,
     }));
-  };
+  }, []);
 
   if (showMetadataForm && selectedFile) {
     return (

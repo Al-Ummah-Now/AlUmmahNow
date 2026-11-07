@@ -7,7 +7,7 @@
  * Pre-fills metadata fields when a template is selected.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { FileText, ChevronDown, AlertCircle } from 'lucide-react';
 import { UploadTemplate } from '@al-ummah/shared-types';
@@ -74,8 +74,16 @@ export function TemplateSelector({
     onTemplateApply(metadata);
   }, [requiresUserInput, channelName, uploaderName, onTemplateApply]);
 
+  // Load templates once per mount; the default template is applied only then,
+  // never again on re-render (that would overwrite the user's edits).
+  const applyTemplateRef = useRef(applyTemplate);
+  applyTemplateRef.current = applyTemplate;
+  const loadedRef = useRef(false);
+
   // Load templates
   useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
     const loadTemplates = async () => {
       setLoading(true);
       setError(null);
@@ -94,7 +102,7 @@ export function TemplateSelector({
             setSelectedTemplateId(data.defaultTemplateId);
             const defaultTemplate = data.templates?.find((t) => t.id === data.defaultTemplateId);
             if (defaultTemplate) {
-              applyTemplate(defaultTemplate);
+              applyTemplateRef.current(defaultTemplate);
             }
           }
         } else {
@@ -108,7 +116,8 @@ export function TemplateSelector({
     };
 
     loadTemplates();
-  }, [applyTemplate, isRTL]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; see note above
+  }, []);
 
   // Handle template selection
   const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

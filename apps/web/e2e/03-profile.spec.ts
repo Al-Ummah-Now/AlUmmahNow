@@ -68,8 +68,10 @@ test.describe('Profile Pages - authenticated', () => {
     await expect(page).toHaveURL(/\/en\/profile\/create/);
   });
 
-  test('profile create switches to Arabic fields', async ({ page }) => {
-    await page.goto('/en/profile/create');
+  // Every E2E user already has a profile, so ProfileGuard redirects /profile/create;
+  // the edit form shares the same bilingual fields.
+  test('profile form switches to Arabic fields', async ({ page }) => {
+    await page.goto('/en/profile/edit');
 
     await page.getByRole('button', { name: 'العربية' }).click();
     const firstNameAr = page.locator('input[name="firstNameAr"]');

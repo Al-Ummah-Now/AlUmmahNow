@@ -54,7 +54,9 @@ test.describe('Video Player', () => {
     await expect(page.getByTestId('video-metrics-views')).toHaveText(/\d+(\.\d)?[KM]? views?/);
     // Anonymous viewers can't like
     await expect(page.getByTestId('video-like-button')).toBeDisabled();
-    await expect(page.getByTestId('video-like-button')).toHaveAccessibleName('Sign in to like');
+    // The accessible name includes the visible count (WCAG 2.5.3); the sign-in hint is a description
+    await expect(page.getByTestId('video-like-button')).toHaveAccessibleName(/^Like this video \d/);
+    await expect(page.getByTestId('video-like-button')).toHaveAccessibleDescription(/sign in/i);
   });
 
   test('fits a mobile viewport', async ({ page, request }) => {

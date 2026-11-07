@@ -24,7 +24,8 @@ async function expectSelectedTabPanel(page: Page, tab: string) {
   const tabs = page.getByTestId('channel-tabs');
   await expect(tabs.locator('[role="tab"][aria-selected="true"]')).toHaveCount(1);
   await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId(`tabpanel-${tab}`)).toBeVisible();
+  // An empty panel (e.g. no home sections) has zero height, so assert it is rendered
+  await expect(page.getByTestId(`tabpanel-${tab}`)).toBeAttached();
 }
 
 test.describe('Channel Pages', () => {

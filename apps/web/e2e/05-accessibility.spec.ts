@@ -87,7 +87,8 @@ test.describe('Accessibility - Keyboard Navigation', () => {
     }).toPass();
   });
 
-  test('header menu button is keyboard operable', async ({ page }) => {
+  test('header menu button is keyboard operable', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
     await page.goto('/en/');
     const trigger = page.getByRole('button', { name: 'Navigation menu' });
 
@@ -153,7 +154,8 @@ test.describe('Accessibility - RTL Support', () => {
     await expect(page.getByRole('main')).toHaveCSS('direction', 'rtl');
   });
 
-  test('RTL header menu is keyboard operable', async ({ page }) => {
+  test('RTL header menu is keyboard operable', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
     await page.goto('/ar/');
     const trigger = page.getByRole('button', { name: 'قائمة التنقل' });
 
