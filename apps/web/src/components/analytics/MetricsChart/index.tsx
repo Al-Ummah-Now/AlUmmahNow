@@ -39,12 +39,12 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
   const labelEvery = Math.max(1, Math.ceil(data.length / 10));
 
   return (
-    <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="space-y-6 overflow-x-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
       <div>
         <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{d.viewsOverTime}</h4>
         <div className="h-24 flex items-end gap-1">
           {data.map((metric, index) => (
-            <div key={metric.date} className="flex flex-col items-center flex-1 h-full justify-end">
+            <div key={metric.date} className="flex flex-col items-center flex-1 min-w-0 h-full justify-end">
               <div
                 className="bg-blue-500 dark:bg-blue-400 rounded-t w-full min-h-[2px] transition-all duration-300 hover:bg-blue-600 dark:hover:bg-blue-300"
                 style={{ height: scale(metric.views, maxViews, 100) }}
@@ -62,7 +62,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
         <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{d.engagementMetrics}</h4>
         <div className="h-24 flex items-end gap-1">
           {data.map((metric) => (
-            <div key={metric.date} className="flex flex-col items-center justify-end flex-1 h-full gap-1">
+            <div key={metric.date} className="flex flex-col items-center justify-end flex-1 min-w-0 h-full gap-1">
               <div
                 className="bg-green-500 dark:bg-green-400 rounded w-full min-h-[2px]"
                 style={{ height: scale(metric.likes, maxLikes, 45) }}
