@@ -48,5 +48,9 @@ export * from './i18n';
 export * from './notifications';
 export * from './i18n-library';
 
+// Static en/ar UI translations (web fallback + api-videos translation seed)
+export { EN_TRANSLATIONS } from './i18n-static/en';
+export { AR_TRANSLATIONS } from './i18n-static/ar';
+
 // Search index: Arabic normalisation, documents, D1 store, API contracts (Epic 29)
 export * from './search';

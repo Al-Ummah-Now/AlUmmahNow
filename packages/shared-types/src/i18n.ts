@@ -133,73 +133,6 @@ export interface AppTranslations {
   library: LibraryTranslations;
   /** Notification center, settings and per-channel bell (Story 29.10) */
   notificationCenter: NotificationCenterTranslations;
-  /** Accessibility: skip links and accessible names for icon-only controls (Epic 1) */
-  a11y: {
-    skipLinks: string;
-    skipToMainContent: string;
-    skipToVideoPlayer: string;
-    skipToComments: string;
-    openNavigationMenu: string;
-    closeNavigationMenu: string;
-    goToHomePage: string;
-    videoPlayerFor: string;
-    channelAvatar: string;
-    videoStats: string;
-    commentsCount: string;
-    likeVideo: string;
-    unlikeVideo: string;
-    dislikeVideo: string;
-    removeDislike: string;
-    signInToReact: string;
-    watchingNow: string;
-  };
-
-  /** Explore page (Epic 29, Story 29.7) */
-  explore: {
-    title: string;
-    subtitle: string;
-    trending: string;
-    popularFallback: string;
-    contentLanguage: string;
-    allLanguages: string;
-    english: string;
-    arabic: string;
-    categories: string;
-    categoryVideos: string;
-    liveNow: string;
-    noLive: string;
-    watching: string;
-    viewAll: string;
-    newChannels: string;
-    noNewChannels: string;
-    noTrending: string;
-    sectionFailed: string;
-    retry: string;
-    seasonalUntil: string;
-    browseCategory: string;
-  };
-
-  /** Discovery: videos/channels directories and channel discovery sections */
-  discovery: {
-    allVideos: string;
-    allVideosDescription: string;
-    allChannels: string;
-    allChannelsDescription: string;
-    noVideos: string;
-    noVideosDescription: string;
-    noChannels: string;
-    noChannelsDescription: string;
-    loadFailed: string;
-    subscribersCount: string;
-    videosCount: string;
-    verified: string;
-    upcomingEventsEmpty: string;
-    liveEventsEmpty: string;
-    completedEventsEmpty: string;
-    featuredChannelsEmpty: string;
-    subscriptionsEmpty: string;
-    channelsTabEmpty: string;
-  };
 
   /**
    * Common UI elements
@@ -467,13 +400,13 @@ export interface AppTranslations {
     deleteDialogBody: string;
     deleteMainNote: string;
     deleteOnlyNote: string;
+    newMainChannel: string;
     deleteConfirmLabel: string;
     deleteConfirmButton: string;
     deleting: string;
     deleteFailed: string;
     deleteSuccess: string;
     saveFailed: string;
-    newMainChannel: string;
     tabs: {
       manage_tabs: string;
       manage_tabs_description: string;
@@ -491,26 +424,6 @@ export interface AppTranslations {
       at_least_one_visible: string;
       default_must_be_visible: string;
     };
-    // Extended fields for Arabic translations
-    noChannelYet?: string;
-    createYourChannel?: string;
-    manageChannel?: string;
-    channelAnalytics?: string;
-    channelVideos?: string;
-    channelPlaylists?: string;
-    channelCommunity?: string;
-    totalViews?: string;
-    viewCount?: string;
-    subscriberCount?: string;
-    videoCount?: string;
-    customization?: string;
-    branding?: string;
-    basicInfo?: string;
-    advancedSettings?: string;
-    handleDescription?: string;
-    socialLinks?: string;
-    websiteLink?: string;
-    channelWatermark?: string;
   };
 
   /**
@@ -556,30 +469,10 @@ export interface AppTranslations {
     timezone: string;
     timezoneDetected: string;
     currentTimezone: string;
-    // Extended profile fields for Arabic translations
-    profileSettings?: string;
-    coverImage?: string;
-    username?: string;
-    website?: string;
-    location?: string;
-    joinDate?: string;
-    firstNameEnglish?: string;
-    lastNameEnglish?: string;
-    displayNameEnglish?: string;
-    bioEnglish?: string;
-    socialLinks?: string;
-    privacySettings?: string;
-    notificationSettings?: string;
-    accountSettings?: string;
-    deleteAccount?: string;
-    changePassword?: string;
-    twoFactorAuth?: string;
-    connectedAccounts?: string;
-    activityLog?: string;
-    subscriptions?: string;
-    subscribers?: string;
-    following?: string;
-    followers?: string;
+    signInTitle: string;
+    signInMessage: string;
+    saveFailed: string;
+    unexpectedError: string;
   };
 
   /**
@@ -603,6 +496,8 @@ export interface AppTranslations {
     addToPlaylist: string;
     noVideoSelected: string;
     selectVideoMessage: string;
+    videoNotFound: string;
+    videoNotFoundDescription: string;
     noVideosAvailable: string;
     latest: string;
     popular: string;
@@ -622,58 +517,7 @@ export interface AppTranslations {
     weeksAgo: string;
     monthsAgo: string;
     yearsAgo: string;
-    // Extended video fields for Arabic translations
-    title?: string;
-    description?: string;
-    share?: string;
-    like?: string;
-    dislike?: string;
-    viewsCount?: string;
-    likes?: string;
-    comments?: string;
-    commentsCount?: string;
-    noComments?: string;
-    addComment?: string;
-    reply?: string;
-    showReplies?: string;
-    hideReplies?: string;
-    loadMoreComments?: string;
-    sortBy?: string;
-    topComments?: string;
-    newestFirst?: string;
-    publishedAt?: string;
-    duration?: string;
-    autoplay?: string;
-    playbackSpeed?: string;
-    theater?: string;
-    miniPlayer?: string;
-    pip?: string;
-    upNext?: string;
-    nowPlaying?: string;
-    visibility?: string;
-    unlisted?: string;
-    scheduled?: string;
-    premiere?: string;
-    uploadDate?: string;
-    recordingDate?: string;
-    location?: string;
-    license?: string;
-    ageRestriction?: string;
-    madeForKids?: string;
-    notMadeForKids?: string;
-    monetization?: string;
-    promoted?: string;
-    sponsoredContent?: string;
-    paidPromotion?: string;
-    thumbnail?: string;
-    autoGeneratedThumbnail?: string;
-    endScreen?: string;
-    cards?: string;
-    videoInfo?: string;
-    transcoding?: string;
-    sdProcessing?: string;
-    hdProcessing?: string;
-    captionsProcessing?: string;
+    // Video chapters (flat properties)
     chapters?: string;
     chapter?: string;
     noChapters?: string;
@@ -693,6 +537,16 @@ export interface AppTranslations {
     chapterParserHelp?: string;
     chapterParserExample?: string;
     chaptersDetected?: string;
+    chapterFileHint?: string;
+    chapterFileSupported?: string;
+    parsingChapters?: string;
+    chapterErrorsFound?: string;
+    chapterErrorLine?: string;
+    removeChapterFile?: string;
+    chapterFileTooLarge?: string;
+    chapterFileType?: string;
+    chapterFileReadFailed?: string;
+    chapterFileInput?: string;
     chaptersParsed?: string;
     invalidChapterFormat?: string;
     firstChapterMustBeZero?: string;
@@ -707,6 +561,7 @@ export interface AppTranslations {
     autoParseChapters?: string;
     manualChapters?: string;
     importedChapters?: string;
+    // Video management dashboard
     myVideos?: string;
     manageVideos?: string;
     manageVideosDescription?: string;
@@ -743,6 +598,11 @@ export interface AppTranslations {
     deleteMultipleSuccess?: string;
     noVideosFound?: string;
     uploadFirstVideo?: string;
+    clearSearch?: string;
+    bulkDeletePartial?: string;
+    selectVideo?: string;
+    videoStatus?: string;
+    // Video Edit
     editVideoDetails?: string;
     videoPreview?: string;
     titleEnglish?: string;
@@ -789,16 +649,19 @@ export interface AppTranslations {
     createChaptersManually: string;
     uploadChapterFile: string;
     clickToEditChapters: string;
+    // Video player controls
     play?: string;
     pause?: string;
     mute?: string;
     unmute?: string;
     fullscreen?: string;
     exitFullscreen?: string;
+    seekBar: string;
     quality?: string;
     speed?: string;
     currentTime?: string;
     totalDuration?: string;
+    // Video duration filters
     shortVideos?: string;
     standardVideos?: string;
     longVideos?: string;
@@ -902,29 +765,6 @@ export interface AppTranslations {
     suggestionsLabel: string;
     startSearching: string;
     resultsLabel: string;
-    // Extended search fields for Arabic translations
-    search?: string;
-    resultsFor?: string;
-    noResults?: string;
-    tryDifferentKeywords?: string;
-    rating?: string;
-    type?: string;
-    features?: string;
-    all?: string;
-    videos?: string;
-    channels?: string;
-    playlists?: string;
-    hd?: string;
-    fourK?: string;
-    subtitles?: string;
-    creativeCommons?: string;
-    live360?: string;
-    vr180?: string;
-    threeD?: string;
-    hdr?: string;
-    location?: string;
-    clearRecentSearches?: string;
-    suggestions?: string;
   };
 
   /**
@@ -961,6 +801,7 @@ export interface AppTranslations {
     guidelineProcessing: string;
     guidelineThumbnails: string;
     shareWithCommunity: string;
+    // TUS upload states
     paused: string;
     processing: string;
     complete: string;
@@ -992,28 +833,25 @@ export interface AppTranslations {
     channelRequiredMessage: string;
     createChannel: string;
     goHome: string;
-    // Extended upload fields for Arabic translations
-    upload?: string;
-    dragAndDrop?: string;
-    orClickToSelect?: string;
-    selectFiles?: string;
-    supportedFormats?: string;
-    maxFileSize?: string;
-    processingComplete?: string;
-    addDetails?: string;
-    titleRequired?: string;
-    descriptionOptional?: string;
-    selectThumbnail?: string;
-    uploadThumbnail?: string;
-    visibility?: string;
-    publishNow?: string;
-    scheduleLater?: string;
-    saveDraft?: string;
-    next?: string;
-    previous?: string;
-    finish?: string;
-    step?: string;
-    of?: string;
+    chooseThumbnail: string;
+    autoGeneratedOptions: string;
+    extractingFrames: string;
+    noFramePreview: string;
+    orUploadCustomThumbnail: string;
+    thumbnailClickOrDrag: string;
+    thumbnailDropHere: string;
+    thumbnailFormats: string;
+    selectedThumbnail: string;
+    thumbnailSelectedBadge: string;
+    clearThumbnailSelection: string;
+    thumbnailAtPosition: string;
+    frameExtractFailed: string;
+    dropImageError: string;
+    thumbnailProcessFailed: string;
+    thumbnailTooSmall: string;
+    customThumbnailInput: string;
+    batchGuideline: string;
+    batchFileInput: string;
   };
 
   /**
@@ -1116,33 +954,6 @@ export interface AppTranslations {
       noMetrics: string;
       changeVsPrevious: string;
     };
-    // Extended analytics fields for Arabic translations
-    analytics?: string;
-    reach?: string;
-    engagement?: string;
-    audience?: string;
-    likes?: string;
-    comments?: string;
-    shares?: string;
-    avgViewDuration?: string;
-    impressions?: string;
-    ctr?: string;
-    demographics?: string;
-    ageGroup?: string;
-    gender?: string;
-    geography?: string;
-    trafficSources?: string;
-    deviceTypes?: string;
-    peakHours?: string;
-    realtime?: string;
-    historical?: string;
-    compare?: string;
-    exportData?: string;
-    period?: string;
-    last30Days?: string;
-    last90Days?: string;
-    lastYear?: string;
-    custom?: string;
   };
 
   /**
@@ -1152,21 +963,6 @@ export interface AppTranslations {
     allTime: string;
     hours: string;
     minutes: string;
-    justNow?: string;
-    minutesAgo?: string;
-    hoursAgo?: string;
-    daysAgo?: string;
-    weeksAgo?: string;
-    monthsAgo?: string;
-    yearsAgo?: string;
-    inMinutes?: string;
-    inHours?: string;
-    inDays?: string;
-    seconds?: string;
-    days?: string;
-    weeks?: string;
-    months?: string;
-    years?: string;
   };
 
   /**
@@ -1191,6 +987,14 @@ export interface AppTranslations {
     loadFailed: string;
     showingVideosFrom: string;
     wantMore: string;
+    signInToManage: string;
+    loadingSubscriptions: string;
+    noSubscriptionsHint: string;
+    unsubscribe: string;
+    unsubscribeFrom: string;
+    summaryTitle: string;
+    totalSubscriptions: string;
+    unsubscribeFailed: string;
   };
 
   /**
@@ -1305,29 +1109,6 @@ export interface AppTranslations {
       privacyViolation: string;
       other: string;
     };
-    // Extended moderation fields for Arabic translations
-    report?: string;
-    reportVideo?: string;
-    reportChannel?: string;
-    reportComment?: string;
-    reportUser?: string;
-    additionalDetails?: string;
-    submitReport?: string;
-    reportSubmitted?: string;
-    thankYouReport?: string;
-    spam?: string;
-    harassment?: string;
-    hateSpeech?: string;
-    violence?: string;
-    nudity?: string;
-    misinformation?: string;
-    copyright?: string;
-    other?: string;
-    block?: string;
-    unblock?: string;
-    mute?: string;
-    unmute?: string;
-    showContent?: string;
   };
 
   /**
@@ -1350,24 +1131,6 @@ export interface AppTranslations {
     callbackErrorMessage: string;
     tryAgain: string;
     backHome: string;
-    // Extended auth fields for Arabic translations
-    signIn?: string;
-    signOut?: string;
-    email?: string;
-    orContinueWith?: string;
-    alreadyHaveAccount?: string;
-    dontHaveAccount?: string;
-    createAccount?: string;
-    verifyEmail?: string;
-    resendVerification?: string;
-    checkYourEmail?: string;
-    passwordRequirements?: string;
-    invalidCredentials?: string;
-    accountLocked?: string;
-    tooManyAttempts?: string;
-    sessionExpired?: string;
-    unauthorized?: string;
-    forbidden?: string;
   };
 
   /**
@@ -1378,6 +1141,10 @@ export interface AppTranslations {
     networkError: string;
     notFound: string;
     notFoundDescription: string;
+    notFoundGoHome: string;
+    notFoundGoBack: string;
+    notFoundNeedHelp: string;
+    notFoundContactUs: string;
     unauthorized: string;
     forbidden: string;
     serverError: string;
@@ -1398,31 +1165,6 @@ export interface AppTranslations {
     fileTooLarge: string;
     reportReasonRequired: string;
     loginRequired: string;
-    // Extended error fields for Arabic translations
-    somethingWentWrong?: string;
-    pageNotFound?: string;
-    timeoutError?: string;
-    authenticationError?: string;
-    authorizationError?: string;
-    badRequest?: string;
-    conflict?: string;
-    tooManyRequests?: string;
-    serviceUnavailable?: string;
-    tryAgainLater?: string;
-    contactSupport?: string;
-    goBack?: string;
-    goHome?: string;
-    refresh?: string;
-    errorOccurred?: string;
-    unexpectedError?: string;
-    loadingFailed?: string;
-    saveFailed?: string;
-    deleteFailed?: string;
-    downloadFailed?: string;
-    connectionLost?: string;
-    reconnecting?: string;
-    offline?: string;
-    online?: string;
   };
 
   /**
@@ -1509,6 +1251,9 @@ export interface AppTranslations {
     newPost: string;
     searchPosts: string;
     allTypes: string;
+    filterByType: string;
+    /** Post card comments toggle (screen-reader label before the visible count) */
+    commentsButton: string;
     text: string;
     image: string;
     poll: string;
@@ -1546,39 +1291,6 @@ export interface AppTranslations {
     heartComment: string;
     removeHeart: string;
     heartedByCreator: string;
-    // Extended community fields for Arabic translations
-    createPost?: string;
-    editPost?: string;
-    deletePost?: string;
-    sharePost?: string;
-    likePost?: string;
-    commentOnPost?: string;
-    postContent?: string;
-    addImage?: string;
-    addVideo?: string;
-    addPoll?: string;
-    addQuiz?: string;
-    pollOptions?: string;
-    addOption?: string;
-    removeOption?: string;
-    pollDuration?: string;
-    oneDay?: string;
-    oneWeek?: string;
-    twoWeeks?: string;
-    quizQuestion?: string;
-    quizAnswer?: string;
-    correctAnswer?: string;
-    explanation?: string;
-    publishPost?: string;
-    saveDraft?: string;
-    schedulePost?: string;
-    postPublished?: string;
-    postDeleted?: string;
-    postUpdated?: string;
-    noPostsMessage?: string;
-    discoverPosts?: string;
-    yourPosts?: string;
-    postsCount?: string;
   };
 
   /**
@@ -1604,7 +1316,7 @@ export interface AppTranslations {
     subscriptionMessage: string;
     uploadMessage: string;
     systemMessage: string;
-    /** Server-pushed notifications, keyed by the websocket notificationKey */
+    /** Server-pushed notifications, keyed by NotificationEvent.notificationKey */
     realtime: {
       newCommentTitle: string;
       newCommentMessage: string;
@@ -1621,38 +1333,6 @@ export interface AppTranslations {
       commentReplyTitle: string;
       commentReplyMessage: string;
     };
-    // Extended notifications fields for Arabic translations
-    notifications?: string;
-    settings?: string;
-    pushNotifications?: string;
-    emailNotifications?: string;
-    allActivity?: string;
-    mentions?: string;
-    replies?: string;
-    subscriptions?: string;
-    recommendations?: string;
-    unread?: string;
-    read?: string;
-    clearAll?: string;
-    deleteNotification?: string;
-    muteChannel?: string;
-    unmuteChannel?: string;
-    timeAgo?: string;
-    justNow?: string;
-    newVideo?: string;
-    newComment?: string;
-    newLike?: string;
-    newSubscriber?: string;
-    milestone?: string;
-    liveNow?: string;
-    uploadComplete?: string;
-    processingComplete?: string;
-    subscriptionActivity?: string;
-    recommendedVideos?: string;
-    channelActivity?: string;
-    communityPosts?: string;
-    premieres?: string;
-    scheduledStreams?: string;
   };
 
   /**
@@ -1760,9 +1440,10 @@ export interface AppTranslations {
   };
 
   /**
-   * Video Sections related (optional)
+   * Video Sections related
    */
   sections?: {
+    // Video Sections
     recentVideos?: string;
     popularVideos?: string;
     trendingVideos?: string;
@@ -1771,28 +1452,30 @@ export interface AppTranslations {
     noPopularVideos?: string;
     noTrendingVideos?: string;
     noRecommendedVideos?: string;
+    // Time Periods
     periodDaily?: string;
     periodWeekly?: string;
     periodMonthly?: string;
     periodAll?: string;
+    // Strategies
     strategyPopular?: string;
     strategyCategoryBased?: string;
     strategyRandom?: string;
     basedOn?: string;
+    // Common
     loadMore?: string;
     collapse?: string;
     expand?: string;
+    // /sections page
     pageTitle?: string;
     pageDescription?: string;
   };
 
   /**
-   * Channel management (settings pages, section manager, channel header owner actions).
-   * Optional here: web ships the strings statically; API overrides are partial.
+   * Channel management (settings pages, section manager, channel header owner actions)
    */
-  channelManage?: {
+  channelManage: {
     breadcrumb: string;
-    settingsLink: string;
     postActions: string;
     sections: {
       title: string;
@@ -1857,7 +1540,7 @@ export interface AppTranslations {
   };
 
   /**
-   * Upload Defaults/Templates related (optional)
+   * Upload Defaults/Templates related
    */
   uploadDefaults?: {
     title?: string;
@@ -1885,6 +1568,7 @@ export interface AppTranslations {
     deleteFailed?: string;
     setDefaultSuccess?: string;
     setDefaultFailed?: string;
+    // Template Editor
     templateInformation?: string;
     templateNameRequired?: string;
     titleRequired?: string;
@@ -1908,12 +1592,14 @@ export interface AppTranslations {
     saving?: string;
     saveFailed?: string;
     saveError?: string;
+    // Template Selector
     uploadTemplate?: string;
     noneManualEntry?: string;
     defaultTemplate?: string;
     templateApplied?: string;
     loadTemplatesFailed?: string;
     loadTemplatesError?: string;
+    // Variable Prompts
     enterVariableValues?: string;
     templateRequiresInputs?: string;
     episodeNumber?: string;
@@ -1930,6 +1616,7 @@ export interface AppTranslations {
     ayahRangePlaceholder?: string;
     juzNumber?: string;
     juzNumberPlaceholder?: string;
+    // Variable Guide
     variableGuide?: string;
     variables?: string;
     requiresInput?: string;
@@ -1937,6 +1624,7 @@ export interface AppTranslations {
     copy?: string;
     copied?: string;
     variableUsageNote?: string;
+    // Variable Categories
     categoryDateTime?: string;
     categoryIslamic?: string;
     categoryEpisode?: string;
@@ -1946,7 +1634,7 @@ export interface AppTranslations {
   };
 
   /**
-   * Scheduling related (optional)
+   * Scheduling related
    */
   schedule?: {
     title?: string;
@@ -2014,6 +1702,22 @@ export interface AppTranslations {
     confirmPublishNow?: string;
     localTime?: string;
     utcTime?: string;
+    manageScheduledVideos?: string;
+    signInToViewScheduled?: string;
+    errorFetchingScheduled?: string;
+    clearDate?: string;
+    schedulePublication?: string;
+    alreadyPublic?: string;
+    alreadyPublicHelp?: string;
+    dateLabel?: string;
+    timeLabel?: string;
+    selectDateAndTime?: string;
+    mustBeInFuture?: string;
+    scheduleVideoAction?: string;
+    updateScheduleAction?: string;
+    cancelScheduleFailed?: string;
+    publishFailed?: string;
+    // Calendar View
     views?: {
       list: string;
       calendar: string;
@@ -2052,6 +1756,24 @@ export interface AppTranslations {
     };
   };
 
+  /**
+   * Live streaming page related
+   */
+  live?: {
+    liveStreams?: string;
+    liveStreamsDescription?: string;
+    failedToLoadStreams?: string;
+    failedToLoadStreamsDescription?: string;
+    tryAgain?: string;
+    noLiveStreams?: string;
+    noLiveStreamsDescription?: string;
+    updatingLiveStreams?: string;
+    showingStreamsCount?: string;
+  };
+
+  /**
+   * Settings page related
+   */
   /**
    * Report content dialog
    */
@@ -2165,9 +1887,6 @@ export interface AppTranslations {
     totalCount: string;
   };
 
-  /**
-   * Settings page related (optional)
-   */
   settings?: {
     uploadDefaults?: string;
     uploadDefaultsDesc?: string;
@@ -2179,140 +1898,80 @@ export interface AppTranslations {
     notAvailable?: string;
     needHelp?: string;
     needHelpDesc?: string;
-    // Extended settings fields for Arabic translations
-    settings?: string;
-    general?: string;
-    appearance?: string;
-    language?: string;
-    notifications?: string;
-    privacy?: string;
-    security?: string;
-    playback?: string;
-    downloads?: string;
-    storage?: string;
-    about?: string;
-    help?: string;
-    feedback?: string;
-    termsOfService?: string;
-    privacyPolicy?: string;
-    communityGuidelines?: string;
-    autoplay?: string;
-    restrictedMode?: string;
-    dataSaver?: string;
-    defaultQuality?: string;
-    captionsDefault?: string;
-    theme?: string;
-    darkTheme?: string;
-    lightTheme?: string;
-    systemDefault?: string;
-    emailNotifications?: string;
-    pushNotifications?: string;
-    smsNotifications?: string;
-    activityStatus?: string;
-    searchHistory?: string;
-    watchHistory?: string;
-    clearHistory?: string;
-    pauseHistory?: string;
-    manageHistory?: string;
-    connectedApps?: string;
-    dataExport?: string;
-    deleteData?: string;
+    signInTitle?: string;
+    signInMessage?: string;
   };
-
   /**
-   * Admin-specific translations (optional)
+   * Discovery: videos/channels directories and channel discovery sections
    */
-  admin?: {
-    dashboard?: string;
-    overview?: string;
-    users?: string;
-    content?: string;
-    settings?: string;
-    translations?: string;
-    translationEditor?: string;
-    editTranslations?: string;
-    searchKeys?: string;
-    filterBySection?: string;
-    allSections?: string;
-    missingTranslations?: string;
-    saveAll?: string;
-    discardChanges?: string;
-    unsavedChanges?: string;
-    keyName?: string;
-    englishValue?: string;
-    arabicValue?: string;
-    lastUpdated?: string;
-    updatedBy?: string;
-    publishChanges?: string;
-    previewChanges?: string;
-    revertChanges?: string;
-    importTranslations?: string;
-    exportTranslations?: string;
-    translationsSaved?: string;
-    translationsFailed?: string;
-    noChangesToSave?: string;
-    moderation?: string;
-    reports?: string;
-    analytics?: string;
-    editTranslation?: string;
-    addTranslation?: string;
-    deleteTranslation?: string;
-    key?: string;
-    value?: string;
-    section?: string;
-    searchTranslations?: string;
-    noTranslationsFound?: string;
-    saveChanges?: string;
-    confirmDiscard?: string;
-    translationUpdated?: string;
-    translationAdded?: string;
-    translationDeleted?: string;
-    syncTranslations?: string;
-    lastSync?: string;
-    pendingChanges?: string;
-    version?: string;
-    locale?: string;
-    categoryCommon?: string;
-    categoryNavigation?: string;
-    categoryChannel?: string;
-    categoryVideo?: string;
+  discovery: {
+    allVideos: string;
+    allVideosDescription: string;
+    allChannels: string;
+    allChannelsDescription: string;
+    noVideos: string;
+    noVideosDescription: string;
+    noChannels: string;
+    noChannelsDescription: string;
+    loadFailed: string;
+    subscribersCount: string;
+    videosCount: string;
+    verified: string;
+    upcomingEventsEmpty: string;
+    liveEventsEmpty: string;
+    completedEventsEmpty: string;
+    featuredChannelsEmpty: string;
+    subscriptionsEmpty: string;
+    channelsTabEmpty: string;
   };
-
   /**
-   * Numbers formatting (optional)
+   * Explore page (Epic 29, Story 29.7)
    */
-  numbers?: {
-    thousand?: string;
-    million?: string;
-    billion?: string;
-    trillion?: string;
+  explore: {
+    title: string;
+    subtitle: string;
+    trending: string;
+    popularFallback: string;
+    contentLanguage: string;
+    allLanguages: string;
+    english: string;
+    arabic: string;
+    categories: string;
+    categoryVideos: string;
+    liveNow: string;
+    noLive: string;
+    watching: string;
+    viewAll: string;
+    newChannels: string;
+    noNewChannels: string;
+    noTrending: string;
+    sectionFailed: string;
+    retry: string;
+    seasonalUntil: string;
+    browseCategory: string;
   };
-
   /**
-   * Accessibility labels (optional)
+   * Accessibility: skip links, landmark labels and accessible names for
+   * icon-only controls (Epic 1 - WCAG 2.1 AA)
    */
-  accessibility?: {
-    skipToContent?: string;
-    skipToNavigation?: string;
-    openMenu?: string;
-    closeMenu?: string;
-    expandSection?: string;
-    collapseSection?: string;
-    playVideo?: string;
-    pauseVideo?: string;
-    muteVideo?: string;
-    unmuteVideo?: string;
-    enterFullscreen?: string;
-    exitFullscreen?: string;
-    seekForward?: string;
-    seekBackward?: string;
-    volumeControl?: string;
-    qualitySettings?: string;
-    captionSettings?: string;
-    playbackSettings?: string;
-    loading?: string;
-    buffering?: string;
-    error?: string;
+  a11y: {
+    skipLinks: string;
+    skipToMainContent: string;
+    skipToVideoPlayer: string;
+    skipToComments: string;
+    openNavigationMenu: string;
+    closeNavigationMenu: string;
+    goToHomePage: string;
+    videoPlayerFor: string;
+    channelAvatar: string;
+    videoStats: string;
+    commentsCount: string;
+    likeVideo: string;
+    unlikeVideo: string;
+    dislikeVideo: string;
+    removeDislike: string;
+    signInToReact: string;
+    watchingNow: string;
   };
 }
 
