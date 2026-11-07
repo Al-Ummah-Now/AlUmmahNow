@@ -31,6 +31,14 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   });
   
   const wsManagerRef = useRef<WebSocketManager | null>(null);
+  
+  // Subscriptions made by children. Child effects run before this provider's
+  
+  // effect creates the manager (and the manager is recreated on sign-in), so
+  
+  // every subscription is kept here and replayed onto each new manager.
+  
+  const registryRef = useRef(new Set<{ channel: string; callback: (data: unknown) => void; off: (() => void) | null }>());
   const [isConnected, setIsConnected] = useState(false);
 
   // Initialize WebSocket manager
@@ -55,6 +63,9 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     let cancelled = false;
     const manager = new WebSocketManager(defaultConfig);
     wsManagerRef.current = manager;
+    registryRef.current.forEach((entry) => {
+      entry.off = manager.subscribe(entry.channel, entry.callback);
+    });
 
     // Listen for connection state changes
     const unsubscribeStateChange = wsManagerRef.current.onStateChange((state) => {
@@ -79,6 +90,9 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     return () => {
       cancelled = true;
       unsubscribeStateChange();
+      registryRef.current.forEach((entry) => {
+        entry.off = null;
+      });
       if (wsManagerRef.current) {
         wsManagerRef.current.disconnect();
         wsManagerRef.current = null;
@@ -100,10 +114,13 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   }, [user?.id]);
 
   const subscribe = useCallback((channel: string, callback: (data: unknown) => void): (() => void) | null => {
-    if (wsManagerRef.current) {
-      return wsManagerRef.current.subscribe(channel, callback);
-    }
-    return null;
+    const entry = { channel, callback, off: wsManagerRef.current ? wsManagerRef.current.subscribe(channel, callback) : null };
+    registryRef.current.add(entry);
+    return () => {
+      entry.off?.();
+      entry.off = null;
+      registryRef.current.delete(entry);
+    };
   }, []);
 
   const sendMessage = useCallback((type: string, data: unknown): void => {
