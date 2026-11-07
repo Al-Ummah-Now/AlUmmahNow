@@ -90,7 +90,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
   test('header menu button is keyboard operable', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
     await page.goto('/en/');
-    const trigger = page.getByRole('button', { name: 'Navigation menu' });
+    const trigger = page.getByRole('button', { name: 'Navigation menu', exact: true });
 
     await trigger.focus();
     await expect(trigger).toBeFocused();
@@ -157,7 +157,7 @@ test.describe('Accessibility - RTL Support', () => {
   test('RTL header menu is keyboard operable', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
     await page.goto('/ar/');
-    const trigger = page.getByRole('button', { name: 'قائمة التنقل' });
+    const trigger = page.getByRole('button', { name: 'قائمة التنقل', exact: true });
 
     await trigger.focus();
     await page.keyboard.press('Enter');

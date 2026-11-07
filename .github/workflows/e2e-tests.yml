@@ -178,10 +178,16 @@ jobs:
           retention-days: 7
 
   e2e-tests-full:
-    name: Full E2E Test Suite
+    # Desktop browsers only, one job each: the mobile projects have their own
+    # jobs, and the *-user projects re-ran the same specs (auth is pinned per describe).
+    name: Full E2E Test Suite (${{ matrix.browser }})
     needs: auth-setup
     runs-on: ubuntu-24.04  # Playwright 1.56 has no browser builds for ubuntu-latest (26.04)
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
 
     steps:
       - name: Checkout code
@@ -223,7 +229,7 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps
+        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
 
       - name: Download auth state
         uses: actions/download-artifact@v4
@@ -233,7 +239,7 @@ jobs:
 
       - name: Run all E2E tests
         working-directory: apps/web
-        run: pnpm exec playwright test
+        run: pnpm exec playwright test --project=${{ matrix.browser }}
         env:
           CI: true
           SKIP_AUTH_SETUP: 'true'
@@ -246,7 +252,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-full
+          name: playwright-report-full-${{ matrix.browser }}
           path: apps/web/playwright-report/
           retention-days: 30
 
@@ -254,7 +260,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-report
+          name: junit-report-${{ matrix.browser }}
           path: apps/web/test-results/junit.xml
           retention-days: 30
 
@@ -263,7 +269,7 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: apps/web/test-results/junit.xml
-          check_name: E2E Test Results
+          check_name: E2E Test Results (${{ matrix.browser }})
 
   e2e-mobile:
     name: Mobile E2E Tests

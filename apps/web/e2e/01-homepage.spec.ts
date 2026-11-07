@@ -31,7 +31,7 @@ test.describe('Homepage - English', () => {
 
     const header = page.getByRole('banner');
     await expect(header).toBeVisible();
-    await expect(header.getByRole('button', { name: 'Navigation menu' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Navigation menu', exact: true })).toBeVisible();
     await expect(page.getByTestId('nav-drawer-toggle')).toBeVisible();
   });
 
