@@ -1,0 +1,171 @@
+# GDPR compliance: data inventory, legal basis, retention, data subject rights
+
+Status: implemented in Story 1.3 (`docs/stories/1-3-gdpr-compliance.md`). This page records the
+engineering facts a privacy review needs. Items marked **Decision needed** are proposed defaults
+that product/legal should confirm.
+
+## 1. Who holds what
+
+| System | What it stores | Controller-side owner |
+|---|---|---|
+| AlUmmahNowAuth (separate service) | Sign-in account: email, password hash, sessions, multi-account links | Auth service. Not part of this repo. Managed at the account app (`profile.auth.<env>.alummahnow.net`) |
+| api-videos (R2) | Profiles, channels, videos, comments, reactions, subscriptions, watch history, community content, playlists, templates, reports | This repo |
+| processor (R2 + D1) | Raw event archive (`al-ummah-now-messages`), aggregated rollups, D1 moderation reports | This repo |
+| websocket-server (KV) | Presence `presence:{userId}` (TTL 5 min) | This repo |
+| Browser (web app) | Preferences, consent cookie, encrypted on-device watch progress | This repo |
+| Bunny.net | Video files, thumbnails, avatars, community images | Processor (sub-processor) |
+| Cloudflare | Hosting, Workers logs | Processor (sub-processor) |
+
+## 2. Server-side data inventory (api-videos R2)
+
+| Bucket / key | Personal data | Legal basis (Art. 6) | Retention |
+|---|---|---|---|
+| `profiles/{userId}` | Name, email copy, avatar/cover URLs, `subscribedTo[]`, legacy `watchHistory[]` (max 1000), `privacyConsent` (consent audit trail, last 50 decisions) | Contract (b): providing the account | Until erasure request or account closure |
+| `channels/{channelId}` | Channel profile owned by `userId`, email copy, `subscriptions[]` entries naming subscriber user ids | Contract (b) | Until erasure / channel deletion |
+| `channel_sections/{channelId}/...`, `channel_tabs/channel-tabs/{channelId}` | Channel layout | Contract (b) | With the channel |
+| `videos/{videoId}` | Owner `userId`; embedded `comments[]`, `likes[]`, `dislikes[]` with user ids and comment text | Contract (b) | Until erasure / video deletion |
+| `watch_history/{userId}:{videoId}` | What a user watched, when, how far | Contract (b): history and resume feature, user-controlled (clear/remove in Watch History) | **18 months after last watched** (enforced daily) |
+| `community_posts/posts/...`, `comments/...`, `likes/{postId}/{userId}.json`, `votes/{postId}/{userId}.json`, `comment-likes/...` | Posts, comments, likes, poll votes | Contract (b) | Until erasure / content deletion |
+| `playlists/{playlistId}` | Owner `userId` | Contract (b) | Until erasure |
+| `upload-defaults/{userId}/...` | Upload templates | Contract (b) | Until erasure |
+| `reports/report:{entityId}:{reportId}:{reporterId}` | Who reported what | Legitimate interest (f): platform safety and moderation history | Kept; reporter identity removed on erasure |
+| KV `RATE_LIMIT_KV` `rate_limit:{op}:{userId}` | Counters | Legitimate interest (f): abuse prevention | ~25 h TTL |
+| KV `TUS_SESSIONS` | Upload session to user mapping | Contract (b) | 1 h TTL |
+
+### Special-category data (Art. 9)
+
+On a religious-content platform, viewing history and subscriptions can reveal religious or
+philosophical beliefs. This drives three design choices: watch history has a bounded
+retention period, on-device watch progress is encrypted, and analytics/experiments need
+explicit opt-in consent. **Decision needed:** legal should confirm whether the account-level
+history feature needs explicit Art. 9(2)(a) consent at sign-up, beyond the contract basis
+used today.
+
+## 3. Event archive, analytics and logs
+
+| Data | Personal data | Legal basis | Retention |
+|---|---|---|---|
+| Processor archive `al-ummah-now-messages/{YYYY-MM-DD}T...` (every queue message: views, likes, comments, reports, analytics beacons) | Pseudonymous user ids, comment text in comment events | Legitimate interest (f): abuse investigation, statistics, replay | **13 months** (enforced daily by the api-videos cron) |
+| Aggregated rollups `analytics/rollups/...` | None (counts per video/channel/month) | n/a | Kept |
+| A/B experiment events, web vitals, player QoS (`/api/analytics/ab-test`, `/api/analytics/performance`) | Pseudonymous ids, user agent, page path | **Consent (a)** | Archive retention (13 months) |
+| Anonymous view count (`/api/analytics/video` "ready" event) | None (video id only) | Legitimate interest (f): public view counters | n/a |
+| D1 `reports` (`reporter_id`) | Reporter id | Legitimate interest (f) | Kept; reporter anonymised on erasure |
+| Cloudflare Workers logs (observability) | User ids and paths in structured logs | Legitimate interest (f): operations, security | Cloudflare plan default (3-7 days). **Decision needed:** confirm the plan's log retention and add it to the privacy notice |
+| Security event logs (`/api/security/events`, `/api/security/csp-report`) | Path (no query), event type | Legitimate interest (f): security | Same as Workers logs |
+
+The archive has no per-user index, so it is not part of on-demand export or erasure. It is
+covered by the 13-month retention period instead. **Decision needed:** legal should confirm
+that a bounded-retention pseudonymous log is acceptable under Art. 17(3), or ask for a
+processor job that rewrites archived messages of erased users.
+
+## 4. Browser storage
+
+All keys are listed in `apps/web/src/lib/privacy/local-data.ts` (`LOCAL_DATA_INVENTORY`).
+
+| Key | Class | Purpose | Retention | Protection |
+|---|---|---|---|---|
+| `aun_consent` cookie | Strictly necessary | Records the consent choice (`v1.a?.e?.p?.<ts>`) | 6 months, then the banner asks again | First-party, SameSite=Lax, Secure on https |
+| `aun.enc.watchProgress` | Personal | Resume playback for signed-out viewers | 90 days, max 50 videos, no user id | **AES-GCM-256 encrypted** |
+| `video_views_tracked` | Personal | Avoid double-counting a view | 30 minutes (pruned on every load) | Minimised: video ids and timestamps only |
+| `al-ummah-active-channel*` | Session | Active channel | Until sign-out | Not sensitive |
+| `al-ummah-ab-assignments` | Tracking | Stable A/B variants | Only with experiments consent; purged on withdrawal | |
+| `darkmode`, `preferred-language`, `videoPlayerVolume`, `video-player-playback-rate`, `subtitle-settings`, `last-subtitle-track` | Preference | UI preferences | Until cleared | Not personal |
+| `pendingVideoAnalytics` (legacy) | Tracking | No longer written. It was an unbounded backup of analytics events that was never sent | Purged on every load | |
+
+### Encryption design (AC 1)
+
+`apps/web/src/lib/crypto.ts` and `apps/web/src/lib/storage/EncryptedStorage.ts`:
+
+- Each browser gets a **non-extractable AES-GCM-256 CryptoKey**, generated with WebCrypto and
+  stored in IndexedDB (`aun-secure-store`). IndexedDB stores the key object, not its bytes, and
+  the bytes can never be exported.
+- **No secret ships in the bundle.** The previous design relied on `NEXT_PUBLIC_ENCRYPTION_SECRET`,
+  which is public by definition. It was also unset in builds and used a random salt per page
+  load, so data could not be decrypted after a reload.
+- A random 96-bit IV is used per write. The storage key is bound as associated data, so
+  ciphertexts cannot be swapped between keys. GCM authentication replaces the separate HMAC
+  from the plan.
+- Every value has an expiry. The sweep removes expired values without decrypting them.
+  Deleting the key ("Clear data on this device", or erasure) makes every value unreadable
+  (crypto-shredding).
+- If WebCrypto or IndexedDB is unavailable, values are kept in memory only. They are never
+  written to disk in plaintext.
+- Threat model: this protects data at rest (disk or profile copies, backups, other local
+  software). It does not protect against script running on our origin. The Story 1.2 CSP and
+  listener validation cover that.
+
+## 5. Consent (AC 3, 4)
+
+- Banner: `apps/web/src/components/consent/ConsentBanner` (LTR) and `ConsentBanner/rtl` (RTL),
+  in English and Arabic. It appears until the user decides. "Accept all" and "Reject all" have
+  equal weight and are one click each. "Customize" offers per-category switches, all off by
+  default.
+- Categories: `analytics` (video engagement analytics), `experiments` (A/B tests),
+  `performance` (web vitals, player QoS). Strictly necessary storage is listed but cannot be
+  turned off.
+- **Default deny** is enforced in two places:
+  - Client: `VideoAnalytics.addEvent`, `ExperimentAnalytics.trackEvent`,
+    `ABTestingEngine.assignVariant/persistAssignments`, `WebVitalsMonitor.handleMetric` and
+    `VideoPerformanceMonitor.sendMetrics` all check `hasConsent()`.
+  - Server: `forwardClientEvents` (`/api/analytics/ab-test`, `/api/analytics/performance`) reads
+    the `aun_consent` cookie and drops beacons without consent (202, `reason: no-consent`).
+- Withdrawal (Settings > Privacy & data) takes effect immediately. Data collected under the
+  withdrawn category is removed from the device. Queued analytics events are reduced to
+  anonymous view counts.
+- Audit trail: signed-in users' decisions are recorded server-side in `PUT /api/privacy/consent`
+  (profile `privacyConsent.current` plus the last 50 decisions in `history`).
+- Third-party trackers: the CSP no longer allows `static.cloudflareinsights.com`. **Decision
+  needed:** keep Cloudflare Web Analytics disabled for the zone, or load it only after
+  `analytics` consent.
+
+## 6. Data subject rights (AC 2)
+
+UI: `/{en|ar}/settings/privacy` (`apps/web/src/components/privacySettings`, LTR and RTL).
+
+| Right | How |
+|---|---|
+| Access / portability (Art. 15, 20) | **Download my data**. Calls `GET /api/privacy/export`, which returns JSON with profile, consent record, channels (+ sections, tabs), owned video metadata (other people's comments reduced to counts), the user's video comments and reactions, subscriptions, watch history (new and legacy), community posts/comments/likes/poll votes, playlists, upload templates and reports filed. Large accounts are exported in passes (`complete:false` + `resumeToken`, `?resume=`). The client merges the passes into one file. |
+| Erasure (Art. 17) | **Delete my data** (type the confirmation word). Calls `DELETE /api/privacy/data` with `{"confirm":"DELETE"}`. **Deleted:** profile, owned channels with their sections and tabs, owned videos with their subtitles and Bunny Stream media, posts of owned channels with their comment/like/vote trees, watch history, upload templates, playlists, the user's subscriptions on other channels, likes/dislikes, post likes, poll votes, comment likes. **Anonymised** (tombstone `deleted-user`, content emptied, thread kept): the user's comments in other people's threads, and reports they filed (R2, plus D1 via the `UserDataErased` queue message handled by the processor). The operation is idempotent and resumable (`resumeToken`). The client repeats it until `complete:true`, then clears this device's data. |
+| Sign-in account | Linked from the same page (**Open account settings**, `AUTH_PROFILE_URL` or derived from the issuer). **Decision needed:** the auth service has no self-service account deletion yet (only admin `deleteUser`). Add it there, or define a support process with a 30-day SLA. |
+| Rectification (Art. 16) | Existing profile, channel and content edit screens. |
+| Restriction / objection (Art. 18, 21) | Consent withdrawal, watch-history clear/remove, comment and post deletion. |
+
+Each request is bounded by an operation budget (`PRIVACY_OP_BUDGET`, default 900 R2
+operations, under the Workers subrequest limit) and scans R2 list pages of 100 objects.
+Interrupted pages are redone on resume. Export rolls back partial pages, so merged exports
+contain no duplicates.
+
+Known follow-ups:
+- Cached post like counters and poll results are recomputed the next time someone likes or votes on that post.
+- Avatars, covers and community images on Bunny Storage are not deleted yet. The URLs disappear with the profile and posts.
+- Scheduled-publish entries for deleted videos are left for the scheduler, which skips missing videos.
+
+## 7. Retention enforcement (AC 5)
+
+- Server: api-videos runs a cron trigger (`17 3 * * *`, in `wrangler.jsonc` and
+  `wrangler.qa.jsonc`) that calls `enforceRetention()` (`apps/api-videos/src/lib/privacy/retention.ts`).
+  - Watch history: entries whose R2 `uploaded` time (rewritten on every progress update) is
+    older than `WATCH_HISTORY_RETENTION_DAYS = 548` are deleted.
+  - Event archive: keys sort chronologically, so the sweep deletes from the oldest key and stops
+    at the first key inside `EVENT_ARCHIVE_RETENTION_DAYS = 395`. Rollups are kept.
+  - Each run is budgeted. Leftovers are handled by the next day's run.
+  - Recommended hardening: also add an R2 lifecycle rule on `al-ummah-now-messages(-qa)` to
+    expire objects after 395 days (`wrangler r2 bucket lifecycle add`), as a backstop to the cron.
+- Browser: `enforceLocalRetention()` runs on every page load (SecurityBootstrap). It removes
+  expired encrypted values, legacy tracking keys, unconsented experiment data and stale view
+  markers.
+
+**Decision needed (proposed defaults):** watch history 18 months, event archive 13 months
+(CNIL guidance for audience measurement), consent 6 months, on-device watch progress 90 days.
+
+## 8. Audit checklist (AC 6)
+
+- [x] Data inventory and legal bases documented (this page)
+- [x] Encryption of sensitive client-side data, with no shipped secret
+- [x] Consent banner with default deny, granular choices, withdrawal, audit trail, and server-side enforcement
+- [x] Access/export and erasure endpoints and UI, covered by unit tests
+- [x] Retention periods defined and enforced
+- [ ] Privacy notice / cookie policy page with the final wording (product/legal)
+- [ ] DPIA (Art. 35) for viewing-history processing (legal)
+- [ ] Records of processing (Art. 30) and sub-processor DPAs (Cloudflare, Bunny.net) (legal)
+- [ ] Third-party GDPR audit (scheduled by legal)

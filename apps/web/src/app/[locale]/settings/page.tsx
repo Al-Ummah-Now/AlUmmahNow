@@ -17,6 +17,7 @@ import {
   User,
   FileText,
   ChevronRight,
+  Shield,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -50,6 +51,13 @@ export default function SettingsPage() {
       description: t.settings?.profileSettingsDesc || 'Update your profile information and preferences',
       icon: User,
       href: `/${lang}/profile`,
+      available: true,
+    },
+    {
+      title: t.privacy.settingsTitle,
+      description: t.privacy.settingsDescription,
+      icon: Shield,
+      href: `/${lang}/settings/privacy`,
       available: true,
     },
   ];

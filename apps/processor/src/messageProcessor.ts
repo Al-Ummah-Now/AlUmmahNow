@@ -5,6 +5,9 @@ import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
 import { recordViewRollup } from './lib/analytics-rollup';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
+
+/** Tombstone replacing a user id after GDPR erasure (matches api-videos lib/privacy/user-data.ts). */
+export const DELETED_USER_ID = 'deleted-user';
 // Channel tabs are frontend-only, no backend processing needed
 // import { handleChannelTabEvent } from './handlers/channel-tab';
 
@@ -197,6 +200,11 @@ export class MessageProcessor {
       case MessageType.ReportCreate:
       case MessageType.ReportResolve:
         await this.processReportMessage(message, env);
+        break;
+
+      // GDPR erasure (Story 1.3): anonymise the reporter on moderation reports in D1
+      case MessageType.UserDataErased:
+        await this.processUserDataErased(message, env);
         break;
 
       // Channel tab events - REMOVED: tabs are frontend-only, no backend processing
@@ -603,6 +611,25 @@ export class MessageProcessor {
         this.logger.info(`Comment ${commentId} hearted on post ${postId} by actor`, { actor });
         break;
     }
+  }
+
+  /**
+   * Reports are kept for moderation history after a GDPR erasure, but the
+   * reporter's identity is replaced with a tombstone (same value api-videos
+   * writes to its R2 copy).
+   */
+  private async processUserDataErased(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const { userId } = message.payload as { userId?: string };
+    if (!userId || userId === DELETED_USER_ID) {
+      throw new Error('UserDataErased message missing required field: userId');
+    }
+    const result = await env.REPORTS_DB.prepare('UPDATE reports SET reporter_id = ? WHERE reporter_id = ?')
+      .bind(DELETED_USER_ID, userId)
+      .run();
+    this.logger.info('Anonymised moderation reports after user data erasure', {
+      userId,
+      changes: (result as { meta?: { changes?: number } })?.meta?.changes ?? 0,
+    });
   }
 
   private async processReportMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-server';
-import { ClientEventKind, MAX_BODY_BYTES, normalizeClientEvents } from './client-events';
+import { CONSENT_FOR_KIND, ClientEventKind, MAX_BODY_BYTES, normalizeClientEvents } from './client-events';
+import { consentFromCookieHeader, isCategoryAllowed } from '@/lib/consent/consent-cookie';
 
 export type { ClientEventKind };
 
@@ -12,6 +13,13 @@ export type { ClientEventKind };
  * undeliverable batches are logged and acknowledged.
  */
 export async function forwardClientEvents(request: NextRequest, kind: ClientEventKind): Promise<NextResponse> {
+  // Story 1.3 AC 4: enforce consent server-side too (default deny). The beacon
+  // is acknowledged so clients never retry, but nothing is forwarded or stored.
+  const consent = consentFromCookieHeader(request.headers.get('cookie'));
+  if (!isCategoryAllowed(consent, CONSENT_FOR_KIND[kind])) {
+    return NextResponse.json({ success: true, accepted: 0, reason: 'no-consent' }, { status: 202 });
+  }
+
   let raw: string;
   try {
     raw = await request.text();

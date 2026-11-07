@@ -8,6 +8,8 @@ import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
+import { enforceRetention } from './lib/privacy/retention';
+import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
 
 // TUS Proxy import (not in routers yet)
 import { createTusRouter } from "./endpoints/video/tus";
@@ -358,4 +360,25 @@ app.get("/", async (c) => {
 // EXPORT
 // ==========================================
 
-export default app;
+/**
+ * Daily cron (wrangler `triggers.crons`): enforce data retention (Story 1.3, AC 5).
+ * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
+ */
+async function scheduled(_controller: ScheduledController, env: AppBindings, ctx: ExecutionContext): Promise<void> {
+	ctx.waitUntil(
+		(async () => {
+			const budget = new OperationBudget(DEFAULT_OPERATION_BUDGET);
+			try {
+				const result = await enforceRetention(env, new Date(), budget);
+				logger.info('[Retention] Retention sweep finished', { ...result, operations: budget.spent });
+			} catch (error) {
+				logger.error('[Retention] Retention sweep failed', { error: error instanceof Error ? error.message : String(error) });
+			}
+		})(),
+	);
+}
+
+export default {
+	fetch: app.fetch,
+	scheduled,
+};
