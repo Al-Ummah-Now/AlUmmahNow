@@ -69,6 +69,9 @@ This epic breakdown transforms comprehensive PRD requirements into bite-sized, i
 **Estimated Effort:** 1.5 weeks
 **GitHub Issues Covered:** #38
 
+### **Epics 9–24: Native Apps (viewer + Studio on all platforms)**
+See [`docs/native-apps/EPICS.md`](native-apps/EPICS.md): product family, Fanous design system, architecture, 16 epics, roadmap and open decisions.
+
 ---
 
 ## GitHub Issues Coverage Analysis
