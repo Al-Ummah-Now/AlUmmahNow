@@ -12,6 +12,7 @@ import sectionsRouter from './sections.router';
 import monitoringRouter from './monitoring.router';
 import i18nRouter from './i18n.router';
 import discoveryRouter from './discovery.router';
+import privacyRouter from './privacy.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -31,6 +32,7 @@ import discoveryRouter from './discovery.router';
  * - Moderation: /api/moderation
  * - i18n: /api/i18n
  * - Discovery: /api/search/suggestions, /api/trending, /api/recommendations
+ * - Privacy: /api/privacy (GDPR export, erasure, consent)
  * - Monitoring: / (root level - health, metrics, status)
  *
  * @param openapi - The main OpenAPI instance from chanfana
@@ -76,6 +78,9 @@ export function registerAllRouters(openapi: any) {
   // Discovery domain - search suggestions, trending, recommendations
   openapi.route('/api', discoveryRouter);
 
+  // Privacy domain - GDPR export, erasure, consent audit trail
+  openapi.route('/api/privacy', privacyRouter);
+
   // Monitoring domain - health checks, metrics, status page (root level)
   openapi.route('', monitoringRouter);
 }
@@ -96,4 +101,5 @@ export {
   i18nRouter,
   discoveryRouter,
   monitoringRouter,
+  privacyRouter,
 };

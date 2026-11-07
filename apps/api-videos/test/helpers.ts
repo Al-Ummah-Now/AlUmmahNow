@@ -7,35 +7,54 @@ import { fromHono } from 'chanfana';
 
 export class MemoryBucket {
 	store = new Map<string, string>();
+	/** Last-write time per key, reported as R2Object.uploaded by list(). */
+	uploaded = new Map<string, Date>();
+	/** Number of get/put/delete/list calls (to check operation budgets). */
+	calls = 0;
 
 	constructor(initial: Record<string, unknown> = {}) {
-		for (const [k, v] of Object.entries(initial)) this.store.set(k, JSON.stringify(v));
+		for (const [k, v] of Object.entries(initial)) {
+			this.store.set(k, JSON.stringify(v));
+			this.uploaded.set(k, new Date());
+		}
 	}
 
 	async get(key: string) {
+		this.calls++;
 		const raw = this.store.get(key);
 		if (raw === undefined) return null;
 		return { key, json: async () => JSON.parse(raw), text: async () => raw };
 	}
 
 	async put(key: string, value: string) {
+		this.calls++;
 		this.store.set(key, value);
+		this.uploaded.set(key, new Date());
 	}
 
-	async delete(key: string) {
-		this.store.delete(key);
+	async delete(keys: string | string[]) {
+		this.calls++;
+		for (const key of Array.isArray(keys) ? keys : [keys]) {
+			this.store.delete(key);
+			this.uploaded.delete(key);
+		}
 	}
 
 	async list(opts: { limit?: number; cursor?: string; prefix?: string } = {}) {
-		const keys = [...this.store.keys()].filter((k) => !opts.prefix || k.startsWith(opts.prefix)).sort();
-		const start = opts.cursor ? parseInt(opts.cursor, 10) : 0;
+		this.calls++;
+		// Key-based cursor like R2: resumes after the last returned key, so
+		// deleting objects between pages does not skip any.
+		const keys = [...this.store.keys()]
+			.filter((k) => !opts.prefix || k.startsWith(opts.prefix))
+			.sort()
+			.filter((k) => !opts.cursor || k > opts.cursor);
 		const limit = opts.limit ?? 1000;
-		const page = keys.slice(start, start + limit);
-		const truncated = start + limit < keys.length;
+		const page = keys.slice(0, limit);
+		const truncated = limit < keys.length;
 		return {
-			objects: page.map((key) => ({ key })),
+			objects: page.map((key) => ({ key, uploaded: this.uploaded.get(key) })),
 			truncated,
-			cursor: truncated ? String(start + limit) : undefined,
+			cursor: truncated ? page[page.length - 1] : undefined,
 		};
 	}
 
