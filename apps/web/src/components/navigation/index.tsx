@@ -40,8 +40,8 @@ const Navigation: React.FC = memo(() => {
     return (
         <div style={{ direction: rtl ? "rtl" : "ltr" }}>
             {rtl
-                ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} />
-                : <Header profile={profile} toggleCollapse={toggleCollapse} />}
+                ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} isNavOpen={!isCollapsed} />
+                : <Header profile={profile} toggleCollapse={toggleCollapse} isNavOpen={!isCollapsed} />}
             <div className="flex flex-1">
                 {/* Left Navigation */}
                 {path.indexOf('/ar') > -1

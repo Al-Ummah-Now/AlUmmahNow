@@ -1,6 +1,6 @@
 # Story 1.1: Fix Critical WCAG Color Contrast Violations
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -18,31 +18,31 @@ so that I can read and navigate the video player interface without difficulty.
 
 ## Tasks / Subtasks
 
-- [ ] Audit existing color palette and identify non-compliant contrast ratios (AC: 1)
-  - [ ] Install and configure axe-core for automated contrast testing
-  - [ ] Run comprehensive contrast audit on all video player UI elements
-  - [ ] Document all elements failing WCAG 2.1 AA standards
-- [ ] Update CSS color palette to meet contrast requirements (AC: 1, 2)
-  - [ ] Modify Tailwind CSS custom properties for compliant colors
-  - [ ] Update video player component styles with new color palette
-  - [ ] Ensure both light and dark themes use compliant colors
-- [ ] Implement enhanced contrast indicators for interactive elements (AC: 2)
-  - [ ] Add high-contrast focus states for all interactive elements
-  - [ ] Implement hover and active states with enhanced contrast
-  - [ ] Test contrast indicators across all interactive components
-- [ ] Ensure color is not only method of conveying information (AC: 3)
-  - [ ] Add text labels or icons for color-only indicators
-  - [ ] Implement ARIA attributes for color-coded information
-  - [ ] Test interface with color blindness simulation
-- [ ] Automated accessibility testing implementation (AC: 4)
-  - [ ] Integrate axe-core testing into development workflow
-  - [ ] Set up WAVE API integration for automated testing
-  - [ ] Configure CI/CD pipeline to run accessibility tests
-  - [ ] Ensure zero contrast violations in automated tests
-- [ ] Cross-theme contrast compliance validation (AC: 5)
-  - [ ] Test contrast ratios in both light and dark themes
-  - [ ] Verify theme switching maintains contrast compliance
-  - [ ] Document contrast compliance for all theme variations
+- [x] Audit existing color palette and identify non-compliant contrast ratios (AC: 1) - baseline axe run against QA (watch page, 8 combos)
+  - [x] Install and configure axe-core for automated contrast testing - `@axe-core/playwright` added to apps/web
+  - [x] Run comprehensive contrast audit on all video player UI elements - axe page + `.video-js` scans; player chrome ratios computed in `contrast.test.ts` (axe cannot measure text over `<video>`)
+  - [x] Document all elements failing WCAG 2.1 AA standards - see Completion Notes
+- [x] Update CSS color palette to meet contrast requirements (AC: 1, 2)
+  - [x] Modify Tailwind CSS custom properties for compliant colors - `--a11y-*` tokens in globals.css, `--vp-*` player tokens
+  - [x] Update video player component styles with new color palette - video-player.css rewritten off the invalid `oklch(var())` form
+  - [x] Ensure both light and dark themes use compliant colors - player chrome is a dark scrim in both themes; page fixes have `dark:` variants
+- [x] Implement enhanced contrast indicators for interactive elements (AC: 2)
+  - [x] Add high-contrast focus states for all interactive elements - 3px ring + halo, global `:focus-visible` and player-specific
+  - [x] Implement hover and active states with enhanced contrast
+  - [x] Test contrast indicators across all interactive components - E2E asserts a non-`none` outline on every focused control-bar control
+- [x] Ensure color is not only method of conveying information (AC: 3)
+  - [x] Add text labels or icons for color-only indicators - selected menu item gets a check mark; like/dislike expose `aria-pressed`
+  - [x] Implement ARIA attributes for color-coded information - `aria-pressed`, `aria-current` (chapters)
+  - [ ] Test interface with color blindness simulation - _Not done: no simulator run; mitigated by removing colour-only states (check marks, aria-pressed, text labels)_
+- [x] Automated accessibility testing implementation (AC: 4)
+  - [x] Integrate axe-core testing into development workflow - `e2e/20-accessibility-axe.spec.ts`
+  - [ ] Set up WAVE API integration for automated testing - _Not done: needs a paid WAVE API key; axe-core covers the same contrast rules_
+  - [x] Configure CI/CD pipeline to run accessibility tests - picked up by the existing `pnpm exec playwright test` job in e2e-tests.yml (player tests need `A11Y_CHROME_CHANNEL=chrome`)
+  - [x] Ensure zero contrast violations in automated tests - QA: 0 axe violations in light/dark x en/ar x desktop/mobile
+- [x] Cross-theme contrast compliance validation (AC: 5)
+  - [x] Test contrast ratios in both light and dark themes
+  - [x] Verify theme switching maintains contrast compliance - E2E runs each theme via `colorScheme`
+  - [x] Document contrast compliance for all theme variations - token comments in video-player.css / globals.css and contrast.test.ts
 
 ## Dev Notes
 
@@ -88,4 +88,22 @@ Claude Code (claude-3-5-sonnet-20241022)
 
 ### Completion Notes List
 
+- Root cause of the player contrast failure: `video-player.css` wrapped design tokens that are already full colours in `oklch(var(--token) / a)`. That produced ~128 invalid declarations the browser dropped, so the control bar was transparent and white icons sat directly on video (about 2.8:1). Rewritten to `var()`/`color-mix()`, and the player chrome now has its own `--vp-*` tokens.
+- Player chrome ratios, worst case (lightest scrim over a white frame = #474747): white controls 9.3:1, muted text 7.5:1, focus ring #ffb84d 5.4:1 (12.2:1 on black), slider track 3.3:1, menus 17.7:1. These are pinned in `src/lib/accessibility/__tests__/contrast.test.ts`, which reads the CSS files directly.
+- Page-level fixes found by axe on QA: live-metric green-600 (3.21:1) changed to green-700/green-400 (4.95/9.98); gray-500 on gray-900 in comments and related videos (3.66:1) changed to gray-600/gray-400 (7.56/6.82); the unlabeled quality button and the unlabeled header menu toggle got names; `meta-viewport` no longer blocks zoom; Label in Name fixed for like/dislike/quality.
+- axe on the QA watch page before the change, per combination: `aria-required-attr`, `button-name` x2, `color-contrast` (1 light / 12 dark), `meta-viewport`, `nested-interactive`. After: 0 violations in all 8 combinations (light/dark x en/ar x desktop/mobile).
+
 ### File List
+
+- apps/web/src/styles/video-player.css, apps/web/src/styles/keyboard-feedback.css
+- apps/web/src/app/globals.css, apps/web/src/app/layout.tsx
+- apps/web/src/lib/accessibility/{contrast,focus-manager,keyboard-scope}.ts (+ __tests__)
+- apps/web/src/lib/touch/touch-feedback.ts (+ __tests__)
+- apps/web/src/lib/video/{accessibility,keyboard-shortcuts,videojs-setup}.ts, apps/web/src/lib/video/i18n/*
+- apps/web/src/components/VideoPlayer/{CustomVideoPlayer,KeyboardHelpModal}.tsx (+ __tests__)
+- apps/web/src/components/VideoPagePlayer/{index,rtl/index,ChapterList,ChapterMarkers}.tsx (+ __tests__)
+- apps/web/src/components/SkipLinks/* (LTR + RTL, + __tests__)
+- apps/web/src/components/{iconButton.tsx,Header/*,navigation/index.tsx,videoMetrics/VideoMetricsDisplay.tsx,relatedVideo/*,related/index.tsx,commentsSection/index.tsx}
+- apps/web/src/app/[locale]/video/[id]/page.tsx
+- apps/web/src/lib/i18n/{types,translations/en,translations/ar}.ts, packages/shared-types/src/i18n.ts, apps/api-videos/src/endpoints/i18n/translationsSync.ts (new `a11y` section)
+- apps/web/e2e/20-accessibility-axe.spec.ts, apps/web/package.json (@axe-core/playwright), pnpm-lock.yaml

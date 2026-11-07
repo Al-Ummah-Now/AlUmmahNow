@@ -29,6 +29,7 @@
 
 import type { ExtendedPlayer } from './videojs';
 import { logger } from '@/lib/logger-server';
+import { getTranslations } from './i18n';
 
 
 /**
@@ -69,38 +70,56 @@ export interface AriaLabels {
 }
 
 /**
- * Default ARIA labels (English)
+ * ARIA labels for a language, from the video player i18n system
  */
-const EN_LABELS: AriaLabels = {
-  player: 'Video player',
-  playButton: 'Play video',
-  pauseButton: 'Pause video',
-  muteButton: 'Mute',
-  unmuteButton: 'Unmute',
-  fullscreenButton: 'Enter fullscreen',
-  exitFullscreenButton: 'Exit fullscreen',
-  volumeControl: 'Volume control',
-  progressBar: 'Video progress',
-  currentTime: 'Current time',
-  duration: 'Total duration',
-};
+export function getAriaLabels(lang: 'en' | 'ar' = 'en'): AriaLabels {
+  const a = getTranslations(lang).accessibility;
+  return {
+    player: a.videoPlayer,
+    playButton: a.playButton,
+    pauseButton: a.pauseButton,
+    muteButton: a.muteButton,
+    unmuteButton: a.unmuteButton,
+    fullscreenButton: a.fullscreenButton,
+    exitFullscreenButton: a.exitFullscreenButton,
+    volumeControl: a.volumeSlider,
+    progressBar: a.progressBar,
+    currentTime: a.currentTime,
+    duration: a.duration,
+  };
+}
 
 /**
- * Default ARIA labels (Arabic)
+ * Name the quality menu button (videojs-hls-quality-selector renders it with
+ * only an aria-hidden "Auto"/"720p" label). The accessible name includes the
+ * visible quality so it satisfies WCAG 2.5.3 Label in Name.
  */
-const AR_LABELS: AriaLabels = {
-  player: 'مشغل الفيديو',
-  playButton: 'تشغيل الفيديو',
-  pauseButton: 'إيقاف مؤقت',
-  muteButton: 'كتم الصوت',
-  unmuteButton: 'إلغاء كتم الصوت',
-  fullscreenButton: 'ملء الشاشة',
-  exitFullscreenButton: 'الخروج من ملء الشاشة',
-  volumeControl: 'التحكم في مستوى الصوت',
-  progressBar: 'تقدم الفيديو',
-  currentTime: 'الوقت الحالي',
-  duration: 'المدة الإجمالية',
-};
+export function labelQualityButton(button: HTMLElement, baseLabel: string): void {
+  const visible = button.querySelector('.vjs-icon-placeholder')?.textContent?.trim() ?? '';
+  const label = visible ? `${baseLabel}: ${visible}` : baseLabel;
+  if (button.getAttribute('aria-label') !== label) {
+    button.setAttribute('aria-label', label);
+  }
+  if (button.getAttribute('title') !== baseLabel) {
+    button.setAttribute('title', baseLabel);
+  }
+}
+
+/**
+ * A Video.js menu's title <li> sits inside role="menu" without a menu-item
+ * role (axe aria-required-children). Use it as the menu's accessible name and
+ * hide the title row itself from assistive technology.
+ */
+export function fixMenuTitle(menu: HTMLElement): void {
+  const title = menu.querySelector<HTMLElement>(':scope > li.vjs-menu-title');
+  if (!title) return;
+  const text = title.textContent?.trim();
+  if (text && menu.getAttribute('aria-label') !== text) {
+    menu.setAttribute('aria-label', text);
+  }
+  if (title.getAttribute('aria-hidden') !== 'true') title.setAttribute('aria-hidden', 'true');
+  if (title.hasAttribute('tabindex')) title.removeAttribute('tabindex');
+}
 
 /**
  * Screen reader announcement manager
@@ -194,12 +213,17 @@ export function setupAccessibility(
 
   // Get labels for current language
   const labels = {
-    ...(lang === 'ar' ? AR_LABELS : EN_LABELS),
+    ...getAriaLabels(lang),
     ...customLabels,
   };
+  const translations = getTranslations(lang);
+  const said = translations.accessibility.announcements;
 
   // Create announcement manager
   const announcementManager = new AnnouncementManager();
+
+  // Observes control-bar menus so rebuilt menus keep their accessible names
+  let menuObserver: MutationObserver | null = null;
 
   // Track all event handlers for cleanup
   const eventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
@@ -234,24 +258,6 @@ export function setupAccessibility(
       player.on('pause', updatePlayButtonLabel);
     }
 
-    // Volume control
-    const volumePanel = playerEl.querySelector('.vjs-volume-panel');
-    if (volumePanel) {
-      volumePanel.setAttribute('aria-label', labels.volumeControl);
-
-      const updateVolumeLabel = () => {
-        const volume = Math.round(player.volume() * 100);
-        const label = player.muted()
-          ? labels.muteButton
-          : `${labels.volumeControl} ${volume}%`;
-        volumePanel.setAttribute('aria-label', label);
-      };
-      updateVolumeLabel();
-
-      eventHandlers.push({ event: 'volumechange', handler: updateVolumeLabel });
-      player.on('volumechange', updateVolumeLabel);
-    }
-
     // Mute button
     const muteButton = playerEl.querySelector('.vjs-mute-control');
     if (muteButton) {
@@ -280,39 +286,25 @@ export function setupAccessibility(
       player.on('fullscreenchange', updateFullscreenLabel);
     }
 
-    // Progress bar (seek bar)
-    const seekBar = playerEl.querySelector('.vjs-progress-control');
-    if (seekBar) {
-      seekBar.setAttribute('role', 'slider');
-      seekBar.setAttribute('aria-label', labels.progressBar);
-      seekBar.setAttribute('aria-valuemin', '0');
-      seekBar.setAttribute('aria-valuemax', '100');
-
-      const updateSeekBarValue = () => {
-        const duration = player.duration();
-        if (duration > 0) {
-          const currentTime = player.currentTime() || 0;
-          const percent = Math.round((currentTime / duration) * 100);
-          seekBar.setAttribute('aria-valuenow', percent.toString());
-          seekBar.setAttribute('aria-valuetext', `${percent}%`);
-        }
-      };
-      updateSeekBarValue();
-
-      eventHandlers.push({ event: 'timeupdate', handler: updateSeekBarValue });
-      player.on('timeupdate', updateSeekBarValue);
+    // Seek slider (Video.js .vjs-progress-holder, role=slider)
+    const seekSlider = playerEl.querySelector('.vjs-progress-holder');
+    if (seekSlider) {
+      seekSlider.setAttribute('aria-label', labels.progressBar);
     }
 
-    // Current time display
-    const currentTimeDisplay = playerEl.querySelector('.vjs-current-time');
-    if (currentTimeDisplay) {
-      currentTimeDisplay.setAttribute('aria-label', labels.currentTime);
-    }
-
-    // Duration display
-    const durationDisplay = playerEl.querySelector('.vjs-duration');
-    if (durationDisplay) {
-      durationDisplay.setAttribute('aria-label', labels.duration);
+    // Menus (quality / captions) are rebuilt by Video.js and the quality plugin
+    // whenever levels or tracks change, so re-apply the fixes on DOM changes.
+    const fixMenus = () => {
+      playerEl.querySelectorAll<HTMLElement>('.vjs-quality-selector .vjs-menu-button').forEach((button) => {
+        labelQualityButton(button, translations.accessibility.qualityButton);
+      });
+      playerEl.querySelectorAll<HTMLElement>('.vjs-menu-content[role="menu"]').forEach(fixMenuTitle);
+    };
+    fixMenus();
+    const controlBar = playerEl.querySelector('.vjs-control-bar');
+    if (controlBar && typeof MutationObserver !== 'undefined') {
+      menuObserver = new MutationObserver(() => fixMenus());
+      menuObserver.observe(controlBar, { childList: true, subtree: true, characterData: true });
     }
 
     // === Screen Reader Announcements ===
@@ -321,14 +313,14 @@ export function setupAccessibility(
     if (announcements) {
       // Play/Pause announcements
       const playHandler = () => {
-        const message = lang === 'ar' ? 'يتم التشغيل' : 'Playing';
+        const message = said.playing;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'play', handler: playHandler });
       player.on('play', playHandler);
 
       const pauseHandler = () => {
-        const message = lang === 'ar' ? 'موقف مؤقتاً' : 'Paused';
+        const message = said.paused;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'pause', handler: pauseHandler });
@@ -338,8 +330,8 @@ export function setupAccessibility(
       const volumeHandler = () => {
         const volume = Math.round(player.volume() * 100);
         const message = player.muted()
-          ? (lang === 'ar' ? 'الصوت مكتوم' : 'Muted')
-          : (lang === 'ar' ? `مستوى الصوت ${volume}%` : `Volume ${volume}%`);
+          ? said.muted
+          : said.volume.replace('{volume}', String(volume));
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'volumechange', handler: volumeHandler });
@@ -348,8 +340,8 @@ export function setupAccessibility(
       // Fullscreen announcements
       const fullscreenHandler = () => {
         const message = player.isFullscreen()
-          ? (lang === 'ar' ? 'وضع ملء الشاشة' : 'Fullscreen mode')
-          : (lang === 'ar' ? 'خروج من ملء الشاشة' : 'Exited fullscreen');
+          ? said.fullscreenOn
+          : said.fullscreenOff;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'fullscreenchange', handler: fullscreenHandler });
@@ -357,7 +349,7 @@ export function setupAccessibility(
 
       // Error announcements
       const errorHandler = () => {
-        const message = lang === 'ar' ? 'حدث خطأ في تشغيل الفيديو' : 'Video playback error';
+        const message = said.playbackError;
         announcementManager.announce(message, true); // Force announcement
       };
       eventHandlers.push({ event: 'error', handler: errorHandler });
@@ -365,14 +357,14 @@ export function setupAccessibility(
 
       // Buffering announcements
       const waitingHandler = () => {
-        const message = lang === 'ar' ? 'جارٍ التحميل...' : 'Buffering...';
+        const message = said.buffering;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'waiting', handler: waitingHandler });
       player.on('waiting', waitingHandler);
 
       const canplayHandler = () => {
-        const message = lang === 'ar' ? 'جاهز للتشغيل' : 'Ready to play';
+        const message = said.readyToPlay;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'canplay', handler: canplayHandler });
@@ -411,6 +403,10 @@ export function setupAccessibility(
 
     // Remove high contrast listener
     highContrastQuery.removeEventListener('change', updateHighContrastMode);
+
+    // Stop observing menus
+    menuObserver?.disconnect();
+    menuObserver = null;
 
     // Cleanup announcements
     announcementManager.cleanup();

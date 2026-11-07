@@ -14,6 +14,26 @@ import { TranslationData, I18nMetadata, I18nConfig, AppTranslations } from '@al-
 
 // English translations (embedded from static files)
 const EN_TRANSLATIONS: AppTranslations = {
+  a11y: {
+    skipLinks: 'Skip links',
+    skipToMainContent: 'Skip to main content',
+    skipToVideoPlayer: 'Skip to video player',
+    skipToComments: 'Skip to comments',
+    openNavigationMenu: 'Open navigation menu',
+    closeNavigationMenu: 'Close navigation menu',
+    goToHomePage: 'Al Ummah Now home',
+    videoPlayerFor: 'Video: {title}',
+    channelAvatar: '{channel} channel avatar',
+    videoStats: 'Video statistics',
+    commentsCount: '{count} comments',
+    likeVideo: 'Like this video',
+    unlikeVideo: 'Remove like',
+    dislikeVideo: 'Dislike this video',
+    removeDislike: 'Remove dislike',
+    signInToReact: 'Sign in to like or dislike',
+    watchingNow: '{count} watching now',
+  },
+
   discovery: {
     allVideos: 'All videos',
     allVideosDescription: 'Browse the latest videos from every channel',
@@ -1325,6 +1345,26 @@ const EN_TRANSLATIONS: AppTranslations = {
 
 // Arabic translations - EXACT same structure as English
 const AR_TRANSLATIONS: AppTranslations = {
+  a11y: {
+    skipLinks: 'روابط التخطي',
+    skipToMainContent: 'انتقل إلى المحتوى الرئيسي',
+    skipToVideoPlayer: 'انتقل إلى مشغل الفيديو',
+    skipToComments: 'انتقل إلى التعليقات',
+    openNavigationMenu: 'فتح قائمة التنقل',
+    closeNavigationMenu: 'إغلاق قائمة التنقل',
+    goToHomePage: 'الصفحة الرئيسية للأمة الآن',
+    videoPlayerFor: 'فيديو: {title}',
+    channelAvatar: 'صورة قناة {channel}',
+    videoStats: 'إحصائيات الفيديو',
+    commentsCount: '{count} تعليق',
+    likeVideo: 'أعجبني هذا الفيديو',
+    unlikeVideo: 'إزالة الإعجاب',
+    dislikeVideo: 'لم يعجبني هذا الفيديو',
+    removeDislike: 'إزالة عدم الإعجاب',
+    signInToReact: 'سجّل الدخول لإبداء الإعجاب أو عدمه',
+    watchingNow: '{count} يشاهدون الآن',
+  },
+
   discovery: {
     allVideos: 'جميع الفيديوهات',
     allVideosDescription: 'تصفح أحدث الفيديوهات من جميع القنوات',

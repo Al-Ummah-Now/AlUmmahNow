@@ -186,3 +186,80 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+  ---break---
+*/
+
+/*
+  Epic 1 accessibility (WCAG 2.1 AA)
+  - Focus indicator tokens: the ring colour has >= 4.5:1 contrast against the
+    page background in each theme and is paired with a halo in the opposite
+    tone so it stays visible on coloured surfaces (header, cards, video).
+  - Skip links: visually hidden until focused (WCAG 2.4.1)
+*/
+:root {
+  --a11y-focus-ring: #1d4ed8; /* blue-700: 6.7:1 on #ffffff */
+  --a11y-focus-halo: #ffffff;
+  --a11y-skip-bg: #111827;
+  --a11y-skip-fg: #ffffff;
+}
+
+.dark {
+  --a11y-focus-ring: #93c5fd; /* blue-300: 9.8:1 on gray-900 #101828 */
+  --a11y-focus-halo: #030712;
+  --a11y-skip-bg: #ffffff;
+  --a11y-skip-fg: #111827;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--a11y-focus-ring);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 6px var(--a11y-focus-halo);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :focus-visible {
+      transition: outline-offset 0.12s ease, box-shadow 0.12s ease;
+    }
+  }
+}
+
+.skip-links {
+  position: absolute;
+  inset-inline-start: 0.5rem;
+  top: 0.5rem;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skip-link {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  clip-path: none;
+  background: var(--a11y-skip-bg);
+  color: var(--a11y-skip-fg); /* 17.7:1 in both themes */
+  font-weight: 600;
+  border-radius: 0.5rem;
+  text-decoration: underline;
+}

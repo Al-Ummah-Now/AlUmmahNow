@@ -54,7 +54,7 @@ export function ChapterMarkers({
   className = '',
   direction,
 }: ChapterMarkersProps) {
-  const { t, isRTL: pageIsRTL, lang } = useLanguage();
+  const { isRTL: pageIsRTL, lang } = useLanguage();
   const isRTL = direction ? direction === 'rtl' : pageIsRTL;
 
   const handleMarkerClick = useCallback((e: React.MouseEvent, chapter: VideoChapter) => {
@@ -76,8 +76,7 @@ export function ChapterMarkers({
         ${className}
       `}
       dir={isRTL ? 'rtl' : 'ltr'}
-      role="group"
-      aria-label={t.video.chapters}
+      aria-hidden="true"
     >
       {chapters.map((chapter) => {
         // The first chapter starts at 0:00 - a marker at the very start adds nothing
@@ -90,6 +89,7 @@ export function ChapterMarkers({
           <button
             key={chapter.id}
             type="button"
+            tabIndex={-1}
             onClick={(e) => handleMarkerClick(e, chapter)}
             className={`
               absolute
@@ -112,8 +112,7 @@ export function ChapterMarkers({
             style={{
               [isRTL ? 'right' : 'left']: `${position}%`,
             }}
-            aria-label={`${t.video.chapter}: ${title} (${formatTime(chapter.startTime)})`}
-            title={title}
+            title={`${formatTime(chapter.startTime)} ${title}`}
           >
             {/* Tooltip on hover - Desktop only */}
             <span

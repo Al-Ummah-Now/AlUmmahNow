@@ -1505,6 +1505,29 @@ export interface AppTranslations {
     subscriptionsEmpty: string;
     channelsTabEmpty: string;
   };
+  /**
+   * Accessibility: skip links, landmark labels and accessible names for
+   * icon-only controls (Epic 1 - WCAG 2.1 AA)
+   */
+  a11y: {
+    skipLinks: string;
+    skipToMainContent: string;
+    skipToVideoPlayer: string;
+    skipToComments: string;
+    openNavigationMenu: string;
+    closeNavigationMenu: string;
+    goToHomePage: string;
+    videoPlayerFor: string;
+    channelAvatar: string;
+    videoStats: string;
+    commentsCount: string;
+    likeVideo: string;
+    unlikeVideo: string;
+    dislikeVideo: string;
+    removeDislike: string;
+    signInToReact: string;
+    watchingNow: string;
+  };
 }
 
 /**

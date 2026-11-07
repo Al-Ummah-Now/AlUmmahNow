@@ -115,6 +115,27 @@ export interface UpdateTranslationsResponse {
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  /** Accessibility: skip links and accessible names for icon-only controls (Epic 1) */
+  a11y: {
+    skipLinks: string;
+    skipToMainContent: string;
+    skipToVideoPlayer: string;
+    skipToComments: string;
+    openNavigationMenu: string;
+    closeNavigationMenu: string;
+    goToHomePage: string;
+    videoPlayerFor: string;
+    channelAvatar: string;
+    videoStats: string;
+    commentsCount: string;
+    likeVideo: string;
+    unlikeVideo: string;
+    dislikeVideo: string;
+    removeDislike: string;
+    signInToReact: string;
+    watchingNow: string;
+  };
+
   /** Discovery: videos/channels directories and channel discovery sections */
   discovery: {
     allVideos: string;
