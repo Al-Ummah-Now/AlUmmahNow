@@ -65,6 +65,8 @@ interface MultiAccountContextValue {
   removeAccount: (userId: string) => Promise<void>;
   switchToChannel: (channelId: string | null) => Promise<void>;
   createChannel: (data: ChannelCreateRequest) => Promise<Channel | null>;
+  /** True while a channel creation request is in flight */
+  creatingChannel: boolean;
   reloadChannels: () => Promise<void>;
   logout: () => Promise<void>;
   logoutAll: (skipConfirmation?: boolean) => Promise<void>;
@@ -293,25 +295,38 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     }
   }, [loadSessionData, router, t]);
 
-  // Create a new channel
-  const createChannel = useCallback(async (data: ChannelCreateRequest): Promise<Channel | null> => {
-    try {
-      setError(null);
+  // Create a new channel. Repeated calls while a request is in flight (double
+  // clicks, Enter + click) share that request instead of creating duplicates.
+  const createChannelInFlight = useRef<Promise<Channel | null> | null>(null);
+  const [creatingChannel, setCreatingChannel] = useState(false);
+  const createChannel = useCallback((data: ChannelCreateRequest): Promise<Channel | null> => {
+    if (createChannelInFlight.current) return createChannelInFlight.current;
+    const run = (async () => {
+      setCreatingChannel(true);
+      try {
+        setError(null);
 
-      const newChannel = await createChannelForActiveUser(data);
+        const newChannel = await createChannelForActiveUser(data);
 
-      if (newChannel) {
-        await loadSessionData();
-        router.refresh();
-        return newChannel;
+        if (newChannel) {
+          await loadSessionData();
+          router.refresh();
+          return newChannel;
+        }
+
+        setError(t.errors.failedToCreate);
+        return null;
+      } catch (err) {
+        logger.error('[MultiAccountProvider] Failed to create channel:', err);
+        setError(t.errors.failedToCreate);
+        return null;
+      } finally {
+        createChannelInFlight.current = null;
+        setCreatingChannel(false);
       }
-
-      return null;
-    } catch (err) {
-      logger.error('[MultiAccountProvider] Failed to create channel:', err);
-      setError(t.errors.failedToCreate);
-      return null;
-    }
+    })();
+    createChannelInFlight.current = run;
+    return run;
   }, [loadSessionData, router, t]);
 
   // Reload channels (without triggering full loading state)
@@ -432,6 +447,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     removeAccount,
     switchToChannel,
     createChannel,
+    creatingChannel,
     reloadChannels,
     logout,
     logoutAll,

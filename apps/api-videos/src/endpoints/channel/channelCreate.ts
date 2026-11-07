@@ -75,6 +75,26 @@ export class ChannelCreate extends AuthenticatedRoute {
 			}, 404);
 		}
 
+		// One owner may not have two channels with the same name (guards double
+		// submits and accidental duplicates). Channel creation is rare, so a
+		// bounded scan of the bucket is acceptable here.
+		const wantedName = String(channelInput.name ?? "").trim().toLocaleLowerCase();
+		if (wantedName) {
+			const existingRepo = new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels);
+			let cursor: string | undefined;
+			for (let page = 0; page < 50; page++) {
+				const batch = await existingRepo.listObjects(100, cursor);
+				const clash = (batch.items || []).some((ch) =>
+					ch.userId === userId && !ch.isDeleted && String(ch.name ?? "").trim().toLocaleLowerCase() === wantedName
+				);
+				if (clash) {
+					return c.json({ success: false, error: "You already have a channel with this name" }, 409);
+				}
+				if (!batch.cursor) break;
+				cursor = batch.cursor;
+			}
+		}
+
 		// Create business channel object
 		const entityDefaults = createEntityDefaults();
 

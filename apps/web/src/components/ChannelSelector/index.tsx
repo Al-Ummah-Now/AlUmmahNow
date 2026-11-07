@@ -21,6 +21,7 @@ export function ChannelSelector() {
     error,
     switchToChannel,
     createChannel,
+    creatingChannel,
     reloadChannels,
   } = useMultiAccount();
 
@@ -53,7 +54,7 @@ export function ChannelSelector() {
   }
 
   const handleCreateChannel = async () => {
-    if (!newChannelName.trim()) return;
+    if (!newChannelName.trim() || creatingChannel) return;
 
     const created = await createChannel({
       name: newChannelName.trim(),
@@ -220,6 +221,7 @@ export function ChannelSelector() {
                   <input
                     type="text"
                     value={newChannelName}
+                              disabled={creatingChannel}
                     onChange={(e) => setNewChannelName(e.target.value)}
                     placeholder={t.channel.enterChannelNamePlaceholder}
                     className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
@@ -233,10 +235,11 @@ export function ChannelSelector() {
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={handleCreateChannel}
-                      disabled={!newChannelName.trim()}
+                      disabled={!newChannelName.trim() || creatingChannel}
+                                aria-busy={creatingChannel}
                       className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
                     >
-                      {t.common.create}
+                      {creatingChannel ? t.channel.creating : t.common.create}
                     </button>
                     <button
                       onClick={() => {
