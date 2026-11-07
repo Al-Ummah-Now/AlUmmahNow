@@ -81,15 +81,15 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
   const getStatusColor = (status: PostStatus) => {
     switch (status) {
       case PostStatus.PUBLISHED:
-        return 'bg-green-500';
+        return 'bg-green-700 text-white';
       case PostStatus.SCHEDULED:
-        return 'bg-blue-500';
+        return 'bg-blue-700 text-white';
       case PostStatus.DRAFT:
-        return 'bg-gray-500';
+        return 'bg-gray-600 text-white';
       case PostStatus.DELETED:
-        return 'bg-red-500';
+        return 'bg-red-700 text-white';
       default:
-        return 'bg-gray-500';
+        return 'bg-gray-600 text-white';
     }
   };
 

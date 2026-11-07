@@ -206,5 +206,20 @@ spec runs in all five projects).
 
 ## 4. Status
 
-See the PR description for the latest run (passing/failing per project) and the
-list of cases that wait for an api-videos deploy.
+Latest results per project are in PR #171. Cases that stay red until
+api-videos is deployed with the fixes from that PR:
+
+| Case | Waits for |
+|---|---|
+| HIST-002…004 | watch-history record/progress no longer re-read the request body |
+| UPL-007 | upload-initiate keeps `titleLocalized` / `descriptionLocalized` / `category` |
+| WATCH-008 | like/unlike answer `{ success: true }` and use conditional (etag) writes |
+| COMM-002/004/010/020/021 (intermittent) | community post index written with conditional writes |
+| HOME-007, VIS-home | `GET /api/videos` fills a page with visible videos |
+
+Known cross-workstream flakes (not owned by this plan): 21-library "Watch
+later from the watch page" (eventual consistency of the library list) and
+22-notifications bell level.
+
+Visual baselines do not exist until the `update-visual-snapshots` workflow
+job has run once on Linux (workflow_dispatch, `update_snapshots=true`).
