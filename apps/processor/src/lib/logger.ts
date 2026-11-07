@@ -7,7 +7,8 @@ import { createLogger } from '@al-ummah/logger';
 
 // Create logger instance for processor
 const processorLogger = createLogger('processor', {
-  logLevel: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+  // `process` is not defined in Workers at this compatibility date
+  logLevel: ((typeof process !== 'undefined' ? process.env?.LOG_LEVEL : undefined) as 'debug' | 'info' | 'warn' | 'error' | undefined) || 'info',
   forceHttpLogging: true, // Force HTTP logging for Cloudflare Workers
 });
 
