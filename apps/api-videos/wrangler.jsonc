@@ -186,7 +186,13 @@
 		"binding": "INTERNAL_API_KEY",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "internal-api-key"
-	  }
+	  },
+	{
+		// Bunny Stream CDN token authentication key (production library vz-25839d05-80d)
+		"binding": "BUNNY_TOKEN_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "bunny-stream-token-key"
+	}
 	],
 	/**
 	 * Environment Variables
@@ -200,6 +206,9 @@
 		"Issuer": "https://auth.alummahnow.net",
 		"Audience": "https://videos.api.alummahnow.net",
 		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",
+		// Off until prod video records carry playUrl on this library and CDN token
+		// auth is enabled on it (legacy library 400189 / vz-215a1ffd is not signed)
+		"BUNNY_SIGN_URLS": "false",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
 	},
