@@ -25,6 +25,22 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     volumeSlider: 'Volume control',
     progressBar: 'Video progress',
     seekSlider: 'Seek video',
+    currentTime: 'Current time',
+    duration: 'Total duration',
+    qualityButton: 'Video quality',
+    keyboardHelpButton: 'Show keyboard shortcuts',
+    keyboardHelpButtonTitle: 'Keyboard shortcuts (?)',
+    announcements: {
+      playing: 'Playing',
+      paused: 'Paused',
+      muted: 'Muted',
+      volume: 'Volume {volume}%',
+      fullscreenOn: 'Fullscreen mode',
+      fullscreenOff: 'Exited fullscreen',
+      playbackError: 'Video playback error',
+      buffering: 'Buffering...',
+      readyToPlay: 'Ready to play',
+    },
   },
 
   errors: {
@@ -147,6 +163,7 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
       volume: 'Volume',
       display: 'Display',
       speed: 'Speed',
+      navigation: 'Navigation',
     },
     shortcuts: {
       playPause: {
@@ -200,6 +217,22 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
       seekPercent: {
         keys: '0-9',
         description: 'Jump to 0%-90%',
+      },
+      help: {
+        keys: '?',
+        description: 'Show this list of shortcuts',
+      },
+      tabNavigation: {
+        keys: 'Tab, Shift+Tab',
+        description: 'Move between player controls',
+      },
+      activate: {
+        keys: 'Enter, Space',
+        description: 'Activate the focused control',
+      },
+      closeDialog: {
+        keys: 'Esc',
+        description: 'Close menus and dialogs',
       },
     },
     closeButton: 'Close',
