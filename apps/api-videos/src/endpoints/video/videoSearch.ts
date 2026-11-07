@@ -153,7 +153,24 @@ export class VideoSearch extends OptionalAuthRoute {
 
 		// For now, get all videos and filter in memory
 		// In production, this should use a proper search index like Elasticsearch
-		let videos = !cursor ? await repository.listObjects(1000) : await repository.listObjects(1000, cursor);
+		// Scan every R2 page (bounded). The response `cursor` is an offset into
+		// the filtered, sorted results (see pagination below), not an R2
+		// continuation token, so it must not be passed to listObjects: doing so
+		// failed every second-page request with "Continuation token is not valid".
+		const MAX_PAGES = 20;
+		let videos = await repository.listObjects(1000);
+		{
+			const collected = [...(videos.items || [])];
+			let next = videos.cursor;
+			let pages = 1;
+			while (next && pages < MAX_PAGES) {
+				const page = await repository.listObjects(1000, next);
+				collected.push(...(page.items || []));
+				next = page.cursor;
+				pages++;
+			}
+			videos = { ...videos, items: collected, cursor: "" };
+		}
 
 		// Prepare for search scoring
 		const searchTerms = query ? query.toLowerCase().trim().split(/\s+/) : [];

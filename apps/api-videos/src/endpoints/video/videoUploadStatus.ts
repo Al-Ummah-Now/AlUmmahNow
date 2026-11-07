@@ -142,7 +142,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);
 
 				// Log transcoding messages if video failed or has warnings
-				if (bunnyStreamStatus.status >= 4 || bunnyStreamStatus.transcodingMessages?.length) {
+				if (bunnyStreamStatus.status >= 5 || bunnyStreamStatus.transcodingMessages?.length) {
 					logger.warn('[VideoUploadStatus] Bunny.net transcoding messages', {
 						videoId: id,
 						status: bunnyStreamStatus.status,
@@ -160,38 +160,35 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		let message = "Video is ready";
 		
 		if (bunnyStreamStatus) {
-			// Map Bunny Stream status to our status
-			// Status: 0=Queued, 1=Processing, 2=Encoding, 3=Finished, 4=Error, 5=Deleted
+			// Map Bunny Stream status (BunnyVideoStatus in @al-ummah/shared-types) to our status:
+			// 0=Created, 1=Uploaded, 2=Processing, 3=Transcoding, 4=Finished, 5=Error, 6=UploadFailed
 			switch (bunnyStreamStatus.status) {
-				case 0: // Queued
+				case 0: // Created (waiting for the file)
 					status = "uploading";
 					progress = Math.max(10, bunnyStreamStatus.encodeProgress || 0);
 					message = "Video upload queued";
 					break;
-				case 1: // Processing
+				case 1: // Uploaded
+				case 2: // Processing
 					status = "processing";
 					progress = Math.max(25, bunnyStreamStatus.encodeProgress || 25);
 					message = "Video is being processed";
 					break;
-				case 2: // Encoding
+				case 3: // Transcoding
 					status = "processing";
 					progress = Math.max(50, bunnyStreamStatus.encodeProgress || 50);
 					message = "Video is being encoded";
 					break;
-				case 3: // Finished
+				case 4: // Finished
 					status = "ready";
 					progress = 100;
 					message = "Video is ready";
 					break;
-				case 4: // Error
+				case 5: // Error
+				case 6: // UploadFailed
 					status = "failed";
 					progress = 0;
 					message = "Video processing failed";
-					break;
-				case 5: // Deleted
-					status = "deleted";
-					progress = 0;
-					message = "Video has been deleted";
 					break;
 			}
 		} else if (video.uploadStatus === 'initiated' || video.uploadStatus === 'uploading') {
