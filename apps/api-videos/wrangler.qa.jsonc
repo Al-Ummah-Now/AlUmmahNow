@@ -141,7 +141,7 @@
     "Audience": "https://videos.api.qa.alummahnow.net",
     "bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
     // Flip to "true" together with enabling CDN token authentication on the library
-    "BUNNY_SIGN_URLS": "false",
+    "BUNNY_SIGN_URLS": "true",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
     "CORS_ORIGINS": "https://videos.qa.alummahnow.net,https://admin.qa.alummahnow.net"
   },
