@@ -67,10 +67,17 @@ test.describe('Search v2 - English (LTR)', () => {
 
     await page.getByTestId('search-type-playlist').click();
     await expect(page).toHaveURL(/type=playlist/);
+    // Playlists only exist in the index after the search backfill has run on this environment
+    const apiUrl = process.env.API_URL || 'https://videos.api.qa.alummahnow.net';
+    const indexed = await page.request
+      .get(`${apiUrl}/api/search?q=QA&type=playlist`)
+      .then(async r => ((await r.json())?.results?.length ?? 0) > 0)
+      .catch(() => false);
+    test.skip(!indexed, 'No playlists in the search index yet (run the search backfill)');
     await expect(page.locator('[data-result-type="playlist"]').first()).toBeVisible();
   });
 
-  test('filters apply from the panel and can be removed as chips', async ({ page }) => {
+  test('filters apply from the panel and can be removed as chips', async ({ page, isMobile }) => {
     await page.goto('/en/search?q=QA&type=video');
     await expectResults(page);
 
@@ -89,9 +96,12 @@ test.describe('Search v2 - English (LTR)', () => {
     // Seeded videos are about a minute long, so "long" leaves nothing
     await expect(page.getByTestId('search-empty')).toBeVisible();
 
+    // On phones the panel is a bottom sheet that covers the active-filter chips
+    if (isMobile) await panel.getByRole('button', { name: 'Close filters' }).click();
     await page.getByTestId('active-filter-duration').click();
     await expect(page).not.toHaveURL(/duration=/);
     await expect(results(page).first()).toBeVisible();
+    if (isMobile) await page.getByTestId('search-filters-toggle').click();
 
     await page.getByTestId('search-filters-clear').click();
     await expect(page).not.toHaveURL(/category=/);

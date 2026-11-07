@@ -121,7 +121,8 @@ test.describe('keyboard navigation (story 1.4)', () => {
     }
   });
 
-  test('every player control is reachable by Tab, in visual order, with a visible focus indicator', async ({ page }) => {
+  test('every player control is reachable by Tab, in visual order, with a visible focus indicator', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Touch devices have no hardware keyboard / Tab navigation');
     const playable = await openWatchPage(page, 'en');
     test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
 
@@ -172,7 +173,8 @@ test.describe('keyboard navigation (story 1.4)', () => {
       .toBe(!before);
   });
 
-  test('"?" opens the shortcut help dialog; Escape closes it and restores focus', async ({ page }) => {
+  test('"?" opens the shortcut help dialog; Escape closes it and restores focus', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Touch devices have no hardware keyboard / Tab navigation');
     const playable = await openWatchPage(page, 'en');
     test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
 

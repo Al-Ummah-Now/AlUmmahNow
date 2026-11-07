@@ -83,3 +83,38 @@ describe('WebSocketManager routing', () => {
     expect(onUser).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('WebSocketManager subscriptions', () => {
+  function attachSocket(manager: WebSocketManager) {
+    const sent: Array<Record<string, unknown>> = [];
+    const ws = { readyState: WebSocket.OPEN, send: (raw: string) => sent.push(JSON.parse(raw)) };
+    (manager as unknown as { ws: unknown }).ws = ws;
+    return sent;
+  }
+  function deliver(manager: WebSocketManager, message: unknown) {
+    (manager as unknown as { handleMessage: (m: unknown) => void }).handleMessage(message);
+  }
+  const subscribes = (sent: Array<Record<string, unknown>>) => sent.filter(m => m.type === 'subscribe');
+
+  it('holds subscriptions made before authentication and sends them once authenticated', () => {
+    const manager = new WebSocketManager({ url: 'wss://example/ws', reconnectInterval: 1000, maxReconnectAttempts: 1, heartbeatInterval: 30000 });
+    const sent = attachSocket(manager);
+    manager.subscribe('video:v1', jest.fn());
+    expect(subscribes(sent)).toHaveLength(0);
+
+    deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
+    // The server schema reads `channel` from the top level of the frame
+    expect(subscribes(sent)).toEqual([expect.objectContaining({ type: 'subscribe', channel: 'video:v1' })]);
+  });
+
+  it('sends new subscriptions immediately once authenticated and resubscribes after re-auth', () => {
+    const manager = new WebSocketManager({ url: 'wss://example/ws', reconnectInterval: 1000, maxReconnectAttempts: 1, heartbeatInterval: 30000 });
+    const sent = attachSocket(manager);
+    deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
+    manager.subscribe('channel:c1', jest.fn());
+    expect(subscribes(sent).map(m => m.channel)).toEqual(['channel:c1']);
+
+    deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
+    expect(subscribes(sent).map(m => m.channel)).toEqual(['channel:c1', 'channel:c1']);
+  });
+});
