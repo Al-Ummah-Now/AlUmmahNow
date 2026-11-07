@@ -51,6 +51,9 @@ const customJestConfig = {
     '/.next/',
     '/.open-next/',
   ],
+  // Build output contains copies of workspace packages; keep them out of the
+  // module map or jest reports duplicate packages (e.g. @al-ummah/logger).
+  modulePathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/.open-next/'],
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

@@ -69,7 +69,25 @@ export class ChannelsList extends OptionalAuthRoute {
 		const bucket = c.env.channels;
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
+		const mineOnly = Boolean(userId) && scope !== "all";
 		let Channels = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
+
+		// "My channels" must not depend on where the owner's channels fall in the
+		// global listing order: keep paging until the owner's channels are found
+		// (bounded) instead of filtering a single page.
+		if (mineOnly) {
+			const MAX_PAGES = 50;
+			const collected = [...(Channels.items || [])];
+			let next = Channels.cursor;
+			let pages = 1;
+			while (next && pages < MAX_PAGES) {
+				const page = await repository.listObjects(100, next);
+				collected.push(...(page.items || []));
+				next = page.cursor;
+				pages++;
+			}
+			Channels = { ...Channels, items: collected, cursor: "" };
+		}
 
 		// Filter channels by userId if provided, and apply privacy/moderation filters
 		let filteredChannels = (Channels.items || []).filter(channel => {

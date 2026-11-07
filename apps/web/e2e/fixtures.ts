@@ -2,7 +2,7 @@
 // The above disable is for Playwright's test.extend() which uses 'use' as a parameter name
 // This is incorrectly detected as a React hook, but it's actually Playwright's fixture API
 
-import { test as base, expect, Page } from '@playwright/test';
+import { test as base, expect, Page, BrowserContext } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
@@ -177,32 +177,12 @@ export const helpers = {
    * Login as a test user and navigate to upload page
    */
   loginAndNavigateToUpload: async (page: Page, locale: 'en' | 'ar' = 'en') => {
-    // Mock authentication
-    await page.route('**/api/auth/**', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          user: {
-            id: 'test-user-id',
-            email: 'test@example.com',
-            name: 'Test User'
-          }
-        })
-      });
-    });
-
-    // Set authentication cookie/localStorage
-    await page.goto(`/${locale}`);
-    await page.evaluate(() => {
-      localStorage.setItem('authToken', 'mock-jwt-token');
-      localStorage.setItem('user', JSON.stringify({
-        id: 'test-user-id',
-        email: 'test@example.com',
-        name: 'Test User'
-      }));
-    });
+    // Use the real session created by auth.setup.ts (single-channel user)
+    // instead of mocking auth: the upload flow calls api-videos with the
+    // session token from /api/auth/token, so a fake login cannot work.
+    const statePath = path.join(process.cwd(), 'e2e/.auth/user-single.json');
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as { cookies: Parameters<BrowserContext['addCookies']>[0] };
+    await page.context().addCookies(state.cookies);
 
     // Navigate to upload page
     await page.goto(`/${locale}/upload`);
