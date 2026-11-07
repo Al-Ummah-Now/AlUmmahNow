@@ -111,6 +111,11 @@ export enum MessageType {
   NotificationCreate = 200,
   // Fan a notification out to a channel's subscribers (payload: NotificationFanoutPayload).
   NotificationFanout = 201,
+
+  // Search index sync (Story 29.9). Payload: SearchIndexSyncPayload ({ entity, id, object? }).
+  // The processor projects the object and updates the D1 search index (no object = deleted).
+  // Explicit value in its own reserved range, like the notification types above.
+  SearchIndexSync = 210,
 }
 
 // Generic message structure for queue messages
