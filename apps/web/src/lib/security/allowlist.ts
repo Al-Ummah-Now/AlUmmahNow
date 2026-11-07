@@ -80,6 +80,19 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   'securitypolicyviolation',
   // Cross-document messaging: allowed only with origin validation (see createOriginCheckedHandler)
   'message',
+  // Form input: React delegates onChange/onSubmit/IME handling to listeners on the
+  // root container, which is `document` under the Next.js App Router. If the
+  // validator installs before hydration (chunk order, dev builds) and these are
+  // missing, controlled inputs silently stop updating (Arabic IMEs need composition*).
+  'input',
+  'beforeinput',
+  'compositionstart',
+  'compositionupdate',
+  'compositionend',
+  'submit',
+  'reset',
+  'select',
+  'invalid',
   // Selection / clipboard used by text inputs and copy-link buttons
   'selectionchange',
   'copy',
