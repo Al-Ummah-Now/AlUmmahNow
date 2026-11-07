@@ -5,6 +5,12 @@ import { logger } from '../lib/logger';
 
 interface BunnySigningEnv {
 	bunny_hostname?: string;
+	/**
+	 * Host whose URLs are signed, when it differs from bunny_hostname (the
+	 * upload library). Prod: legacy library 400189 (vz-215a1ffd), where the
+	 * existing videos live and token authentication is on.
+	 */
+	BUNNY_SIGN_HOSTNAME?: string;
 	/** "true" once CDN token authentication is enabled on the Stream library */
 	BUNNY_SIGN_URLS?: string;
 	BUNNY_TOKEN_KEY?: unknown;
@@ -23,7 +29,8 @@ export const bunnySigningMiddleware: MiddlewareHandler = async (c, next) => {
 	await next();
 
 	const env = c.env as BunnySigningEnv;
-	if (env.BUNNY_SIGN_URLS !== 'true' || !env.bunny_hostname) return;
+	const signHost = env.BUNNY_SIGN_HOSTNAME || env.bunny_hostname;
+	if (env.BUNNY_SIGN_URLS !== 'true' || !signHost) return;
 
 	const response = c.res;
 	const contentType = response.headers.get('content-type') || '';
@@ -36,7 +43,7 @@ export const bunnySigningMiddleware: MiddlewareHandler = async (c, next) => {
 			return;
 		}
 		const text = await response.clone().text();
-		const signed = await signBunnyUrlsInText(text, env.bunny_hostname, key);
+		const signed = await signBunnyUrlsInText(text, signHost, key);
 		if (signed === text) return;
 
 		const headers = new Headers(response.headers);
