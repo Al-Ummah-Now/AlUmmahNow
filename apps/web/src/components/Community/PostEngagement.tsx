@@ -4,6 +4,7 @@ import { CommunityPost } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import LikeButton from './LikeButton';
 import CommentButton from './CommentButton';
+import { SavePostButton } from '@/components/library/SavePostButton';
 import { useState } from 'react';
 
 interface PostEngagementProps {
@@ -93,6 +94,9 @@ export default function PostEngagement({
           showComments={showComments}
           onToggle={onToggleComments}
         />
+
+        {/* Save to Library (Story 29.6) */}
+        <SavePostButton postId={post.id} postChannelId={post.channelId} userId={userId} />
 
         {/* Share Button */}
         <div className="relative">

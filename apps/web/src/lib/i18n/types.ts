@@ -10,6 +10,7 @@
  * Import from locales.ts to keep single source of truth
  */
 export type { SupportedLocale } from './locales';
+import type { LibraryTranslations, NotificationCenterTranslations } from './translations/library-notifications';
 
 /**
  * Keep the old type for backward compatibility
@@ -21,6 +22,11 @@ export type SupportedLanguage = 'en' | 'ar';
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  /** Library hub, Watch later, liked videos, saved posts (Story 29.6) */
+  library: LibraryTranslations;
+  /** Notification center, settings and per-channel bell (Story 29.10) */
+  notificationCenter: NotificationCenterTranslations;
+
   /**
    * Common UI elements
    */
@@ -1049,6 +1055,12 @@ export interface AppTranslations {
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;
+      newVideoTitle: string;
+      newVideoMessage: string;
+      liveStartedTitle: string;
+      liveStartedMessage: string;
+      commentReplyTitle: string;
+      commentReplyMessage: string;
     };
   };
 

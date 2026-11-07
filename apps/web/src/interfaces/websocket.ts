@@ -71,7 +71,14 @@ export interface ViewCountEvent {
  * Keys the servers send instead of text so notifications render in the viewer's
  * language (see `t.notifications.realtime`).
  */
-export type RealtimeNotificationKey = 'newComment' | 'newSubscriber' | 'uploadReady' | 'uploadFailed';
+export type RealtimeNotificationKey =
+  | 'newComment'
+  | 'newSubscriber'
+  | 'uploadReady'
+  | 'uploadFailed'
+  | 'newVideo'
+  | 'liveStarted'
+  | 'commentReply';
 
 export interface NotificationEvent {
   type: 'notification';
@@ -84,6 +91,10 @@ export interface NotificationEvent {
   params?: Record<string, string | number>;
   actionUrl?: string;
   notificationType: 'like' | 'comment' | 'subscription' | 'upload' | 'system';
+  /** Notification center category (Story 29.10) */
+  category?: string;
+  /** True when the notification is (or will be) stored in the notification center */
+  persisted?: boolean;
 }
 
 export interface VideoProcessingEvent {

@@ -34,6 +34,8 @@ import {
   Calendar,
   History,
   Rss,
+  Library,
+  Bell,
 } from 'lucide-react';
 import { getTranslations } from '@/lib/i18n';
 
@@ -251,6 +253,16 @@ export function UnifiedNavigationRTL() {
       label: tAr.feed.history,
       icon: History,
       href: '/ar/history',
+    },
+    {
+      label: tAr.library.title,
+      icon: Library,
+      href: '/ar/library',
+    },
+    {
+      label: tAr.notificationCenter.title,
+      icon: Bell,
+      href: '/ar/notifications',
     },
     ...(channels.length > 0 ? [
       {

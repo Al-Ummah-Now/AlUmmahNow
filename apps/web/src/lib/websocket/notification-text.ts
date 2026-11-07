@@ -8,6 +8,9 @@ const KEY_TO_TEXT: Record<RealtimeNotificationKey, { title: keyof RealtimeTexts;
   newSubscriber: { title: 'newSubscriberTitle', message: 'newSubscriberMessage' },
   uploadReady: { title: 'uploadReadyTitle', message: 'uploadReadyMessage' },
   uploadFailed: { title: 'uploadFailedTitle', message: 'uploadFailedMessage' },
+  newVideo: { title: 'newVideoTitle', message: 'newVideoMessage' },
+  liveStarted: { title: 'liveStartedTitle', message: 'liveStartedMessage' },
+  commentReply: { title: 'commentReplyTitle', message: 'commentReplyMessage' },
 };
 
 function interpolate(template: string, params: Record<string, string | number> = {}): string {

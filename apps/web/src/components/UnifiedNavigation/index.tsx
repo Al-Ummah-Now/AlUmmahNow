@@ -34,6 +34,8 @@ import {
   Calendar,
   History,
   Rss,
+  Library,
+  Bell,
 } from 'lucide-react';
 
 export function UnifiedNavigation() {
@@ -250,6 +252,16 @@ export function UnifiedNavigation() {
       label: t.feed.history,
       icon: History,
       href: `/${lang}/history`,
+    },
+    {
+      label: t.library.title,
+      icon: Library,
+      href: `/${lang}/library`,
+    },
+    {
+      label: t.notificationCenter.title,
+      icon: Bell,
+      href: `/${lang}/notifications`,
     },
     ...(channels.length > 0 ? [
       {

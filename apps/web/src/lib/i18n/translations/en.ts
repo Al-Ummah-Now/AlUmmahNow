@@ -5,8 +5,11 @@
  */
 
 import type { AppTranslations } from '../types';
+import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from './library-notifications';
 
 export const EN_TRANSLATIONS: AppTranslations = {
+  library: LIBRARY_EN,
+  notificationCenter: NOTIFICATION_CENTER_EN,
   common: {
     appName: 'Al Ummah Now',
     loading: 'Loading...',
@@ -1079,6 +1082,12 @@ export const EN_TRANSLATIONS: AppTranslations = {
       uploadReadyMessage: 'Your video "{videoTitle}" has finished processing',
       uploadFailedTitle: 'Upload Failed',
       uploadFailedMessage: 'Your video "{videoTitle}" could not be processed',
+      newVideoTitle: 'New video',
+      newVideoMessage: '{channelName} uploaded "{videoTitle}"',
+      liveStartedTitle: 'Live now',
+      liveStartedMessage: '{channelName} is live: {streamTitle}',
+      commentReplyTitle: 'New reply',
+      commentReplyMessage: '{actorName} replied to your comment',
     },
   },
 

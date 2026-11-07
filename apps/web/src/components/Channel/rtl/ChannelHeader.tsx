@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
 import { getTranslations } from '@/lib/i18n';
 import Link from 'next/link';
+import { ChannelBellMenu } from '@/components/notifications/ChannelBellMenu';
 
 interface ChannelHeaderProps {
   channel: Channel;
@@ -125,8 +126,10 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                 )}
               </div>
 
-              {/* Subscribe Button - Only show if not owner */}
+              {/* Subscribe Button (+ per-channel bell while subscribed) - Only show if not owner */}
               {!isOwner && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                {user && isSubscribed && !isLoading && <ChannelBellMenu channelId={channel.id} />}
                 <button
                   onClick={handleSubscribe}
                   disabled={isLoading || checkingSubscription}
@@ -153,6 +156,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                     </>
                   )}
                 </button>
+                </div>
               )}
             </div>
 
