@@ -7,6 +7,7 @@ import { TestError } from '../endpoints/monitoring/test-error';
 import { StatusPage } from '../endpoints/monitoring/statusPage';
 import { SyncR2Buckets } from '../endpoints/monitoring/sync-r2';
 import { LibraryBackfill } from '../endpoints/library/backfill';
+import { ChannelHandlesBackfill } from '../endpoints/channel/channelHandle';
 
 const app = new Hono();
 export const monitoringRouter = fromHono(app, { base: '' }); // Root level
@@ -23,5 +24,8 @@ monitoringRouter.get('/internal/sync-r2', SyncR2Buckets);
 
 // One-off backfill of liked-videos / channel-subscriber indexes (X-API-Key, Epic 29)
 monitoringRouter.post('/internal/library/backfill', LibraryBackfill);
+
+// Story 29.1: assign default @handles to existing channels (X-API-Key, see index.ts INTERNAL_PATHS)
+monitoringRouter.post('/internal/channels/backfill-handles', ChannelHandlesBackfill);
 
 export default monitoringRouter;

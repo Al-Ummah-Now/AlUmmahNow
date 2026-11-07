@@ -45,6 +45,8 @@ import { CommentCreate } from '../endpoints/video/commentCreate';
 import { CommentUpdate } from '../endpoints/video/commentUpdate';
 import { CommentDelete } from '../endpoints/video/commentDelete';
 import { CommentList } from '../endpoints/video/commentList';
+import { CommentRepliesList } from '../endpoints/video/commentRepliesList';
+import { CommentApprove } from '../endpoints/video/commentApprove';
 
 // Video like/dislike endpoints
 import { LikeCreate } from '../endpoints/video/videoLikeCreate';
@@ -189,8 +191,14 @@ videoRouter.delete('/:id/dislikes', DislikeDelete);
 // List comments (public; reaction flags when authenticated)
 videoRouter.get('/:id/comments', CommentList);
 
-// Create comment (authenticated)
+// Create comment or reply (authenticated; parentCommentId for replies)
 videoRouter.post('/:id/comments', CommentCreate);
+
+// List replies of a comment (public; one level deep)
+videoRouter.get('/:id/comments/:cid/replies', CommentRepliesList);
+
+// Approve a held comment (video owner)
+videoRouter.post('/:id/comments/:cid/approve', CommentApprove);
 
 // Update comment (authenticated)
 videoRouter.put('/:id/comments/:cid', CommentUpdate);

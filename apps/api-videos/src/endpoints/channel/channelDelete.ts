@@ -4,6 +4,12 @@ import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { z } from "zod";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { Profile as BusinessProfile } from "../../lib/types";
+import { releaseHandle } from "../../lib/channelHandles";
+import { pickNewMainChannel, removeChannelContent, OwnedChannelSummary } from "../../lib/channelDeletion";
+import { loadOwnedChannels } from "../../lib/analytics";
+import { inBackground } from "../../lib/websocket-notify";
+import { logger } from "../../lib/logger";
 
 export class ChannelDelete extends AuthenticatedRoute {
 	schema = {
@@ -13,6 +19,9 @@ export class ChannelDelete extends AuthenticatedRoute {
 			params: z.object({
 				id: Str({ description: "Channel ID" }),
 			}),
+			query: z.object({
+				newMainChannelId: Str({ required: false, description: "When deleting the main channel: which remaining channel becomes main (default: the oldest)" }),
+			}),
 		},
 		responses: {
 			"200": {
@@ -21,6 +30,10 @@ export class ChannelDelete extends AuthenticatedRoute {
 					"application/json": {
 						schema: z.object({
 							success: Bool(),
+							result: z.object({
+								deletedChannelId: Str(),
+								newMainChannelId: Str().nullable().describe("Set when the deleted channel was the main channel and another channel was promoted"),
+							}).optional(),
 						}),
 					},
 				},
@@ -97,12 +110,49 @@ export class ChannelDelete extends AuthenticatedRoute {
 			timestamp: new Date().toISOString(),
 		});
 
-		// Delete the channel
-		await repository.deleteObject(id);
+		// Main-channel rule (see lib/channelDeletion.ts): promote another channel
+		let newMainChannelId: string | null = null;
+		if (channel.isMain) {
+			const owned = (await loadOwnedChannels(bucket, userId)) as unknown as OwnedChannelSummary[];
+			const next = pickNewMainChannel(owned, id, c.req.query('newMainChannelId'));
+			if (next) {
+				const nextChannel = await repository.getObject(next.id);
+				if (nextChannel) {
+					await repository.putObject(next.id, { ...nextChannel, isMain: true, dateModified: new Date().toISOString() });
+					newMainChannelId = next.id;
+				}
+			}
+		}
 
-		// Return the deleted task for confirmation
+		// Delete the channel and free its @handle
+		await repository.deleteObject(id);
+		try {
+			await releaseHandle(c.env.channel_tabs, channel.handle, id);
+			await c.env.channel_tabs.delete(`channel-tabs/${id}`);
+		} catch (error) {
+			logger.warn('[ChannelDelete] Could not release handle/tabs', { channelId: id, error: error instanceof Error ? error.message : String(error) });
+		}
+
+		// Drop the channel from the owner's profile
+		try {
+			type ProfileType = z.infer<typeof BusinessProfile>;
+			const profileRepo = new R2Repository<ProfileType>(c.env.profiles);
+			const profile = await profileRepo.getObject(userId);
+			if (profile?.channels?.includes(id)) {
+				await profileRepo.putObject(userId, { ...profile, channels: profile.channels.filter((cid) => cid !== id) });
+			}
+		} catch (error) {
+			logger.warn('[ChannelDelete] Could not update profile channels', { channelId: id, error: error instanceof Error ? error.message : String(error) });
+		}
+
+		// Videos, playlists, posts and sections go after the response
+		inBackground(c, `channel-delete:${id}`, () => removeChannelContent(c.env, id));
+
+		logger.info('[ChannelDelete] Channel deleted', { channelId: id, userId, wasMain: channel.isMain === true, newMainChannelId });
+
 		return {
 			success: true,
+			result: { deletedChannelId: id, newMainChannelId },
 		};
 	}
 }

@@ -6,7 +6,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AppContext } from '../../base';
 import { logger } from "../../lib/logger";
 import { isVideoRemoved } from "../../lib/visibility";
-import { applyCommentReaction, StoredComment } from "../../lib/comments";
+import { applyCommentReaction, findStoredComment, isCommentVisible, StoredComment } from "../../lib/comments";
 
 export type CommentReactionKind = 'like' | 'dislike';
 export type CommentReactionAction = 'add' | 'remove';
@@ -77,8 +77,9 @@ export async function handleCommentReaction(
 		return c.json({ success: false, error: "Object not found" }, 404);
 	}
 
-	const comment = (video.comments || []).find((cm) => cm.id === cid) as unknown as StoredComment | undefined;
-	if (!comment || comment.isDeleted) {
+	// Top-level comments and replies can be reacted to; held comments cannot
+	const comment = findStoredComment(video.comments as unknown as StoredComment[], cid)?.comment;
+	if (!comment || !isCommentVisible(comment) || comment.status === 'held') {
 		return c.json({ success: false, error: "Object not found" }, 404);
 	}
 

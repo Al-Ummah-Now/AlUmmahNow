@@ -4,20 +4,25 @@
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
+import { getCommentSettings, isCommentVisible, StoredComment } from './comments';
 
 // Transform a business video to a view model
 export function transformVideoToView(
     video: z.infer<typeof BusinessVideo>,
     channel?: z.infer<typeof BusinessChannel> | null
 ): z.infer<typeof VideoView> {
+    // Held-for-review, hidden and deleted comments are never exposed with the video
+    const publicComments = (video.comments || []).filter((comment) => isCommentVisible(comment as unknown as StoredComment));
     return {
         ...video,
+        comments: publicComments,
+        commentSettings: getCommentSettings(video),
         channelName: channel?.name || "",
         channelAvatarUrl: channel?.avatarUrl,
         channelCoverUrl: channel?.coverUrl,
         likesCount: video.likes?.length || 0,
         dislikesCount: video.dislikes?.length || 0,
-        commentsCount: video.comments?.length || 0,
+        commentsCount: publicComments.length,
     };
 }
 
