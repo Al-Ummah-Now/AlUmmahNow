@@ -15,6 +15,7 @@ on:
 permissions:
   contents: read
   packages: read
+  checks: write  # EnricoMi/publish-unit-test-result-action creates the JUnit check runs
 
 env:
   OPENAUTH_URL: https://auth.qa.alummahnow.net
@@ -332,6 +333,7 @@ jobs:
             echo "Snapshots unchanged"
           else
             git commit -m "test(e2e): update visual snapshots (Linux)"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
             git push
           fi
 
