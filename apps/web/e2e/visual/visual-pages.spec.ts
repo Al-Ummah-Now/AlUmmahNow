@@ -48,6 +48,10 @@ function dynamicRegions(page: Page) {
     page.getByTestId('video-card-rtl'),
     page.getByTestId('channel-tile'),
     page.getByTestId('dashboard-video-card'),
+    // The grid itself: its height (number of card rows) follows the user's video count
+    page.getByTestId('dashboard-video-grid'),
+    // Unread count changes with every run's activity
+    page.getByTestId('notification-badge'),
     page.getByTestId('video-metrics'),
     page.locator('time'),
     page.locator('[data-testid*="count"]'),
