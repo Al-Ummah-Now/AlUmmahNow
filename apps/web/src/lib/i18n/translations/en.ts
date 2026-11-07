@@ -474,7 +474,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     recentSearches: 'Recent Searches',
     clearSearchHistory: 'Clear Search History',
     trending: 'Trending',
-    searchPageTitle: 'Search Videos',
+    searchPageTitle: 'Search',
     searchButton: 'Search',
     searching: 'Searching...',
     foundResults: 'Found {count} results',

@@ -474,7 +474,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     recentSearches: 'عمليات البحث الأخيرة',
     clearSearchHistory: 'مسح سجل البحث',
     trending: 'الشائع',
-    searchPageTitle: 'بحث الفيديوهات',
+    searchPageTitle: 'البحث',
     searchButton: 'بحث',
     searching: 'جاري البحث...',
     foundResults: 'تم العثور على {count} نتيجة',

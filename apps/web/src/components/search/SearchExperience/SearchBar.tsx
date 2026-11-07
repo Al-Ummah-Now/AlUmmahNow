@@ -36,6 +36,9 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  // Marks the input interactive once hydrated (used by E2E tests to avoid typing into server HTML).
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -129,6 +132,7 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
             ref={inputRef}
             id={`${listId}-input`}
             data-testid="search-input"
+            data-ready={ready ? 'true' : undefined}
             type="search"
             dir="auto"
             autoFocus={autoFocus}
@@ -147,6 +151,8 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
               setActive(-1);
             }}
             onFocus={() => setOpen(true)}
+            // autoFocus can focus the input before hydration, so a click on an already focused input opens the list too
+            onClick={() => setOpen(true)}
             onKeyDown={onKeyDown}
             className="w-full h-11 ps-10 pe-10 rounded-s-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-search-cancel-button]:hidden"
           />
@@ -158,6 +164,7 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
                 inputRef.current?.focus();
               }}
               aria-label={t.search.clear}
+              data-testid="search-input-clear"
               className="absolute end-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <X className="h-4 w-4" aria-hidden="true" />
