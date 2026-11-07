@@ -46,7 +46,13 @@ export default async function IndicesPage() {
               {t('indices.none')}
             </div>
           ) : (
-            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+            // Focusable so keyboard users can scroll the table on narrow screens
+            <div
+              className="bg-surface border border-border rounded-lg overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              role="region"
+              aria-label={t('indices.tableCaption')}
+              tabIndex={0}
+            >
               <table className="w-full" data-testid="indices-table">
                 <caption className="sr-only">{t('indices.tableCaption')}</caption>
                 <thead className="bg-surface-2">

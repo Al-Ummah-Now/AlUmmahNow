@@ -63,10 +63,21 @@ export function ReportActions({ reportId }: ReportActionsProps) {
     setLoading(true);
     setError(null);
 
-    const result = await takeAction(reportId, {
-      action: selectedAction,
-      notes: notes.trim() || undefined,
-    });
+    let result: Awaited<ReturnType<typeof takeAction>>;
+    try {
+      result = await takeAction(reportId, {
+        action: selectedAction,
+        notes: notes.trim() || undefined,
+      });
+    } catch (e) {
+      // The server action request itself failed (network error, 5xx)
+      logger.error('[moderation] Action request failed', {
+        reportId,
+        action: selectedAction,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      result = { ok: false, status: 0, error: 'request failed' };
+    }
 
     if (!result.ok) {
       logger.warn('[moderation] Action failed', { reportId, action: selectedAction, status: result.status });
@@ -81,8 +92,11 @@ export function ReportActions({ reportId }: ReportActionsProps) {
       return;
     }
 
+    // No router.refresh() here: dispatching a refresh right after push
+    // re-renders the current (report) URL and cancels the navigation, which
+    // left the button stuck on "Processing...". /moderation is dynamic, so
+    // the push already fetches fresh data.
     router.push('/moderation');
-    router.refresh();
   };
 
   return (
