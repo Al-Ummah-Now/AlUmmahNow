@@ -1,19 +1,26 @@
-import Link from 'next/link';
-import { getAdminSession, logout } from '@/lib/auth';
+import { getAdminSession } from '@/lib/auth';
+import { logout } from '@/app/actions';
+import { getI18n } from '@/i18n/server';
+import { PublicShell } from '@/components/PublicShell';
+import { primaryButtonClass, secondaryButtonClass } from '@/components/ui';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AccessDeniedPage() {
   const session = await getAdminSession();
+  const { t } = await getI18n();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
+    <PublicShell>
       <div className="max-w-md w-full space-y-8 text-center">
         <div>
-          <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-red-100">
+          <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-danger-bg">
             <svg
-              className="h-6 w-6 text-red-600"
+              className="h-6 w-6 text-danger-fg"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -23,54 +30,41 @@ export default async function AccessDeniedPage() {
               />
             </svg>
           </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            Access Denied
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            You do not have permission to access the admin dashboard.
-          </p>
-          <p className="mt-2 text-sm text-gray-600">
-            Admin or moderator role is required.
-          </p>
+          <h1 className="mt-6 text-3xl font-extrabold text-fg">{t('accessDenied.title')}</h1>
+          <p className="mt-2 text-sm text-fg-muted">{t('accessDenied.noPermission')}</p>
+          <p className="mt-2 text-sm text-fg-muted">{t('accessDenied.roleRequired')}</p>
         </div>
 
         {session && (
-          <div className="mt-4 p-4 bg-gray-100 rounded-md">
-            <p className="text-sm text-gray-700">
-              Logged in as: <strong>{session.user.email}</strong>
-            </p>
+          <div className="mt-4 p-4 bg-surface border border-border rounded-md">
+            <p className="text-sm text-fg-muted">{t('common.signedInAs', { email: session.user.email })}</p>
             {session.user.role && (
-              <p className="text-sm text-gray-700 mt-1">
-                Current role: <strong>{session.user.role}</strong>
+              <p className="text-sm text-fg-muted mt-1">
+                {t('accessDenied.currentRole', { role: session.user.role })}
               </p>
             )}
           </div>
         )}
 
         <div className="mt-6 space-y-3">
-          <p className="text-sm text-gray-600">
-            If you believe this is an error, please contact your system administrator.
-          </p>
+          <p className="text-sm text-fg-muted">{t('accessDenied.contactAdmin')}</p>
 
           <div className="flex flex-col gap-3">
             <form action={logout}>
-              <button
-                type="submit"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Log Out
+              <button type="submit" className={`${primaryButtonClass} w-full py-2`}>
+                {t('common.logout')}
               </button>
             </form>
 
-            <Link
+            <a
               href={process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'https://alummahnow.net'}
-              className="inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className={`${secondaryButtonClass} py-2`}
             >
-              Go to Main Site
-            </Link>
+              {t('accessDenied.goToMainSite')}
+            </a>
           </div>
         </div>
       </div>
-    </div>
+    </PublicShell>
   );
 }

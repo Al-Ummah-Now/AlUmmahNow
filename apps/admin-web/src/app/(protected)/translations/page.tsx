@@ -1,50 +1,40 @@
 import { TranslationEditor } from './components/TranslationEditor';
 import { getI18nMetadata } from '@/lib/api/i18n';
+import { getI18n } from '@/i18n/server';
+import { formatNumber } from '@/i18n/translate';
+import { ErrorAlert, cardClass } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TranslationsPage() {
-  let metadata = null;
-  let error = null;
-
-  try {
-    metadata = await getI18nMetadata();
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to load i18n metadata';
-  }
+  const { t, locale } = await getI18n();
+  // getI18nMetadata logs and returns null on failure
+  const metadata = await getI18nMetadata();
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Translation Management</h1>
-        <p className="text-gray-400 mt-2">
-          Edit translations for the Al Ummah Now platform
-        </p>
+        <h1 className="text-3xl font-bold text-fg">{t('translations.title')}</h1>
+        <p className="text-fg-muted mt-2">{t('translations.subtitle')}</p>
       </div>
 
-      {error && (
-        <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-6">
-          {error}
-        </div>
-      )}
+      {!metadata && <ErrorAlert testId="metadata-error">{t('errors.loadMetadata')}</ErrorAlert>}
 
       {metadata && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-gray-400 text-sm font-medium">Version</h3>
-            <p className="text-2xl font-bold text-white mt-2">{metadata.version}</p>
+        <dl className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className={cardClass} data-testid="metadata-version">
+            <dt className="text-fg-muted text-sm font-medium">{t('translations.version')}</dt>
+            <dd className="text-2xl font-bold text-fg mt-2" dir="ltr">{metadata.version}</dd>
           </div>
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-gray-400 text-sm font-medium">Languages</h3>
-            <p className="text-2xl font-bold text-white mt-2">
-              {metadata.locales.join(', ').toUpperCase()}
-            </p>
+          <div className={cardClass} data-testid="metadata-locales">
+            <dt className="text-fg-muted text-sm font-medium">{t('translations.languages')}</dt>
+            <dd className="text-2xl font-bold text-fg mt-2" dir="ltr">{metadata.locales.join(', ').toUpperCase()}</dd>
           </div>
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-gray-400 text-sm font-medium">Sections</h3>
-            <p className="text-2xl font-bold text-white mt-2">{metadata.sections.length}</p>
+          <div className={cardClass} data-testid="metadata-sections">
+            <dt className="text-fg-muted text-sm font-medium">{t('translations.sections')}</dt>
+            <dd className="text-2xl font-bold text-fg mt-2">{formatNumber(metadata.sections.length, locale)}</dd>
           </div>
-        </div>
+        </dl>
       )}
 
       <TranslationEditor availableLocales={metadata?.locales || ['en', 'ar']} />

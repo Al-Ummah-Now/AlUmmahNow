@@ -1,47 +1,61 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { takeAction } from '@/lib/api/admin';
 import type { ModerationAction } from '@al-ummah/shared-types';
+import { useLanguage } from '@/i18n/I18nProvider';
+import type { MessageKey } from '@/i18n/translate';
+import { ErrorAlert, cardClass } from '@/components/ui';
+import { logger } from '@/lib/logger-client';
 
 interface ReportActionsProps {
   reportId: string;
 }
 
-const actionOptions: { value: ModerationAction; label: string; description: string; color: string }[] = [
+const actionOptions: {
+  value: ModerationAction;
+  label: MessageKey;
+  description: MessageKey;
+  color: string;
+}[] = [
   {
     value: 'warning',
-    label: 'Issue Warning',
-    description: 'Flag content with a warning but keep it visible',
-    color: 'bg-yellow-600 hover:bg-yellow-700',
+    label: 'actions.warningLabel',
+    description: 'actions.warningDescription',
+    color: 'bg-btn-warning hover:bg-btn-warning-hover',
   },
   {
     value: 'removed',
-    label: 'Remove Content',
-    description: 'Hide content from public view',
-    color: 'bg-orange-600 hover:bg-orange-700',
+    label: 'actions.removedLabel',
+    description: 'actions.removedDescription',
+    color: 'bg-btn-removed hover:bg-btn-removed-hover',
   },
   {
     value: 'banned',
-    label: 'Ban Content',
-    description: 'Permanently remove content',
-    color: 'bg-red-600 hover:bg-red-700',
+    label: 'actions.bannedLabel',
+    description: 'actions.bannedDescription',
+    color: 'bg-btn-banned hover:bg-btn-banned-hover',
   },
   {
     value: 'dismissed',
-    label: 'Dismiss Report',
-    description: 'No action needed, dismiss report',
-    color: 'bg-gray-600 hover:bg-gray-700',
+    label: 'actions.dismissedLabel',
+    description: 'actions.dismissedDescription',
+    color: 'bg-btn-dismissed hover:bg-btn-dismissed-hover',
   },
 ];
 
 export function ReportActions({ reportId }: ReportActionsProps) {
   const router = useRouter();
+  const { t } = useLanguage();
+  const notesId = useId();
+  const groupLabelId = useId();
   const [selectedAction, setSelectedAction] = useState<ModerationAction | null>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selected = actionOptions.find((a) => a.value === selectedAction);
 
   const handleSubmit = async () => {
     if (!selectedAction) return;
@@ -49,69 +63,87 @@ export function ReportActions({ reportId }: ReportActionsProps) {
     setLoading(true);
     setError(null);
 
-    try {
-      await takeAction(reportId, {
-        action: selectedAction,
-        notes: notes || undefined,
-      });
-      router.refresh();
-      router.push('/moderation');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to take action');
-    } finally {
+    const result = await takeAction(reportId, {
+      action: selectedAction,
+      notes: notes.trim() || undefined,
+    });
+
+    if (!result.ok) {
+      logger.warn('[moderation] Action failed', { reportId, action: selectedAction, status: result.status });
+      setError(
+        result.status === 409
+          ? t('actions.alreadyClosed')
+          : result.status === 401
+            ? t('errors.notAuthenticated')
+            : t('actions.failed'),
+      );
       setLoading(false);
+      return;
     }
+
+    router.push('/moderation');
+    router.refresh();
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h2 className="text-lg font-semibold text-white mb-4">Take Action</h2>
+    <section className={cardClass} aria-labelledby={groupLabelId} data-testid="report-actions">
+      <h2 id={groupLabelId} className="text-lg font-semibold text-fg mb-4">
+        {t('actions.title')}
+      </h2>
 
-      {error && (
-        <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-4 text-sm">
-          {error}
-        </div>
-      )}
+      {error && <ErrorAlert testId="action-error">{error}</ErrorAlert>}
 
-      <div className="space-y-3 mb-6">
+      <div className="space-y-3 mb-6" role="group" aria-label={t('actions.choose')}>
         {actionOptions.map((option) => (
           <button
             key={option.value}
+            type="button"
+            data-action={option.value}
+            aria-pressed={selectedAction === option.value}
             onClick={() => setSelectedAction(option.value)}
-            className={`w-full text-left p-3 rounded border-2 transition-colors ${
+            className={`w-full text-start p-3 rounded border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
               selectedAction === option.value
-                ? 'border-blue-500 bg-gray-700'
-                : 'border-gray-700 hover:border-gray-600'
+                ? 'border-focus bg-surface-hover'
+                : 'border-border hover:bg-surface-hover'
             }`}
           >
-            <span className="font-medium text-white">{option.label}</span>
-            <span className="block text-sm text-gray-400">{option.description}</span>
+            <span className="font-medium text-fg">{t(option.label)}</span>
+            <span className="block text-sm text-fg-muted">{t(option.description)}</span>
           </button>
         ))}
       </div>
 
       <div className="mb-6">
-        <label className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
+        <label htmlFor={notesId} className="block text-fg-muted text-sm mb-2">
+          {t('actions.notesLabel')}
+        </label>
         <textarea
+          id={notesId}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="w-full bg-gray-900 border border-gray-700 rounded p-3 text-white resize-none"
+          dir="auto"
+          className="w-full bg-surface-2 border border-border rounded p-3 text-fg resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           rows={3}
-          placeholder="Add moderator notes..."
+          placeholder={t('actions.notesPlaceholder')}
         />
       </div>
 
       <button
+        type="button"
+        data-testid="confirm-action"
         onClick={handleSubmit}
         disabled={!selectedAction || loading}
-        className={`w-full py-3 rounded font-medium text-white transition-colors ${
-          selectedAction && !loading
-            ? actionOptions.find((a) => a.value === selectedAction)?.color
-            : 'bg-gray-700 cursor-not-allowed'
+        aria-busy={loading}
+        className={`w-full py-3 rounded font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-focus ${
+          selected && !loading ? `${selected.color} text-white` : 'bg-surface-hover text-fg-muted cursor-not-allowed'
         }`}
       >
-        {loading ? 'Processing...' : selectedAction ? `Confirm: ${actionOptions.find((a) => a.value === selectedAction)?.label}` : 'Select an action'}
+        {loading
+          ? t('actions.processing')
+          : selected
+            ? t('actions.confirm', { action: t(selected.label) })
+            : t('actions.selectAction')}
       </button>
-    </div>
+    </section>
   );
 }
