@@ -19,6 +19,7 @@ import {
 	checkHandleAvailability,
 	handleKey,
 	claimDefaultHandle,
+	defaultHandleCandidates,
 	normalizeHandleInput,
 	readHandleEntry,
 	resolveHandle,
@@ -216,7 +217,15 @@ export class ChannelHandlesBackfill extends PublicRoute {
 				continue;
 			}
 			if (dryRun) {
-				assigned.push({ channelId: channel.id, handle: '(pending)' });
+				// Report the handle the real run would most likely claim (read-only)
+				let preview = '';
+				for (const candidate of defaultHandleCandidates(channel)) {
+					if ((await checkHandleAvailability(c.env.channel_tabs, candidate, channel.id)).available) {
+						preview = candidate;
+						break;
+					}
+				}
+				assigned.push({ channelId: channel.id, handle: preview });
 				continue;
 			}
 			try {
