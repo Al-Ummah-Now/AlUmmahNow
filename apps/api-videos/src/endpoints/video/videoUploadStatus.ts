@@ -250,6 +250,10 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 				if (!video.playUrl && bunnyStreamStatus.guid) {
 					video.playUrl = `https://${c.env.bunny_hostname}/${bunnyStreamStatus.guid}/playlist.m3u8`;
 				}
+				// Bunny's auto thumbnail sits next to the playlist
+				if (!video.thumbnailUrl && video.playUrl?.endsWith('/playlist.m3u8')) {
+					video.thumbnailUrl = video.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg');
+				}
 
 				await repository.putObject(id, video);
 				logger.info('[VideoUploadStatus] Video status updated in R2', { videoId: id, status });

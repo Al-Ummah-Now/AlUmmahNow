@@ -276,6 +276,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				});
 			}
 
+			// No custom thumbnail: point at the one Bunny generates next to the
+			// playlist, so cards and listings have an image (signed per response)
+			if (!thumbnailUrl) {
+				thumbnailUrl = `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`;
+			}
+
 			// Create video metadata for R2 storage
 			const video = {
 				id: videoId,

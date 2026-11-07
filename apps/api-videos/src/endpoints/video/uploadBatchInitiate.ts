@@ -154,6 +154,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 					channelId,
 					playUrl: `https://${c.env.bunny_hostname}/${videoId}/playlist.m3u8`,
 					thumbnailType: 'auto',
+					thumbnailUrl: `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`,
 					dateCreated: now,
 					dateModified: now,
 					views: 0,
