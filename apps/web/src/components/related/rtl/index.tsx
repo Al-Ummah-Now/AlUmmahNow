@@ -7,7 +7,7 @@ const RelatedVideosSectionRTL: React.FC<{ relatedVideos: VideoInfo[] }> = ({ rel
   return (
     <div className="related-videos bg-white dark:bg-gray-900" dir="rtl">
       <h2 className="text-lg font-bold mb-4 text-black dark:text-white ">الفيديوهات ذات الصلة</h2>
-      <div className="space-y-4">
+      <div data-testid="related-videos-list" className="space-y-4">
         {relatedVideos.map((video) => (
           <RelatedVideo key={video.id} {...video} />
         ))}

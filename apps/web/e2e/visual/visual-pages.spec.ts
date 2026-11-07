@@ -52,6 +52,8 @@ function dynamicRegions(page: Page) {
     page.getByTestId('dashboard-video-grid'),
     // Unread count changes with every run's activity
     page.getByTestId('notification-badge'),
+    // Related titles are whatever other runs uploaded last
+    page.getByTestId('related-videos-list'),
     page.getByTestId('video-metrics'),
     page.locator('time'),
     page.locator('[data-testid*="count"]'),
@@ -80,6 +82,12 @@ for (const role of ['anon', 'single'] as const) {
             // Theme really applied before the snapshot (class-based dark mode)
             if (colorScheme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/);
             await page.evaluate(() => document.fonts.ready);
+            // Data-sized containers get a fixed minimum height so their masks cover the
+            // same area whatever the number of items (rows / related entries).
+            await page.addStyleTag({
+              content:
+                '[data-testid="dashboard-video-grid"],[data-testid="related-videos-list"]{min-height:100vh}',
+            });
 
             await expect(page).toHaveScreenshot(`${entry.id}-${locale}-${colorScheme}.png`, {
               animations: 'disabled',

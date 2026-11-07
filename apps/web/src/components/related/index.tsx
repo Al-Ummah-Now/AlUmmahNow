@@ -9,7 +9,7 @@ const RelatedVideosSection: React.FC<{ relatedVideos: VideoInfo[], keyPrefix: st
   return (
     <div className="related-videos bg-white dark:bg-gray-900">
       <h2 className="text-lg font-bold mb-4 text-black dark:text-white ">{t.video.relatedVideos}</h2>
-      <div className="space-y-4 mx-4 md:mx-0">
+      <div data-testid="related-videos-list" className="space-y-4 mx-4 md:mx-0">
         {relatedVideos.map((video) => (
           <RelatedVideo key={`${keyPrefix}_${video.id}`} {...video} />
         ))}
