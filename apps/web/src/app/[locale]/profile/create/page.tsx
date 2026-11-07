@@ -8,7 +8,7 @@ import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { login } from '@/lib/actions';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
+import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 
 const ProfileCreatePage = () => {
@@ -290,6 +290,9 @@ const ProfileCreatePage = () => {
                 onChange={(e) => setTimezone(e.target.value)}
                 className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
               >
+                {timezone && !isListedTimezone(timezone) && (
+                  <option value={timezone}>{getTimezoneDisplayName(timezone)}</option>
+                )}
                 {Object.entries(COMMON_TIMEZONES).map(([region, timezones]) => (
                   <optgroup key={region} label={region}>
                     {timezones.map((tz) => (

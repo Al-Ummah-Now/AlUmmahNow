@@ -3,6 +3,8 @@ import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
+import { useLanguage } from '@/hooks/useLanguage';
+import { SignInPrompt } from '@/components/common/SignInPrompt';
 import { unsubscribeFromChannel, getUserSubscriptions } from '@/lib/api/channels';
 import { Button } from '@/components/ui/button';
 import { X, RefreshCw, Users } from 'lucide-react';
@@ -13,9 +15,12 @@ import { Channel } from '@al-ummah/shared-types';
 export const SubscriptionManagement: React.FC = () => {
   const { user } = useAuth();
   const { profile } = useProfile(user);
+  const { t, dir } = useLanguage();
+  const s = t.subscriptions;
   const isAuthenticated = !!user;
   const [subscriptions, setSubscriptions] = useState<Channel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [unsubscribeError, setUnsubscribeError] = useState(false);
 
   const fetchSubscriptions = useCallback(async () => {
     if (!isAuthenticated || !user) return;
@@ -41,6 +46,7 @@ export const SubscriptionManagement: React.FC = () => {
     if (!user || !profile) return;
 
     setIsLoading(true);
+    setUnsubscribeError(false);
     try {
       const headers = {
         channelId: profile.channels?.[0] || '',
@@ -50,28 +56,25 @@ export const SubscriptionManagement: React.FC = () => {
 
       if (result?.success) {
         setSubscriptions(prev => prev.filter(sub => sub.id !== channelId));
+      } else {
+        setUnsubscribeError(true);
       }
     } catch (error) {
       logger.error('Failed to unsubscribe:', error);
+      setUnsubscribeError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
   if (!isAuthenticated) {
-    return (
-      <div className="p-6 text-center">
-        <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-4">Subscription Management</h2>
-        <p className="text-gray-600 dark:text-gray-400">Please log in to manage your subscriptions.</p>
-      </div>
-    );
+    return <SignInPrompt title={s.mySubscriptions} message={s.signInToManage} />;
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-6" dir={dir}>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Your Subscriptions</h1>
+        <h1 className="text-3xl font-bold">{s.mySubscriptions}</h1>
         <Button
           variant="outline"
           size="sm"
@@ -80,7 +83,7 @@ export const SubscriptionManagement: React.FC = () => {
           className="flex items-center gap-2"
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
+          {s.refresh}
         </Button>
       </div>
 
@@ -88,17 +91,17 @@ export const SubscriptionManagement: React.FC = () => {
         <div className="flex justify-center py-12">
           <div className="flex items-center gap-3">
             <RefreshCw className="w-5 h-5 animate-spin" />
-            <span>Loading subscriptions...</span>
+            <span>{s.loadingSubscriptions}</span>
           </div>
         </div>
       ) : subscriptions.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="text-center py-12" data-testid="subscriptions-empty">
           <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400 text-lg">
-            No subscriptions yet.
+            {s.noSubscriptions}
           </p>
           <p className="text-gray-500 dark:text-gray-500 mt-2">
-            Subscribe to channels to see them here.
+            {s.noSubscriptionsHint}
           </p>
         </div>
       ) : (
@@ -106,6 +109,8 @@ export const SubscriptionManagement: React.FC = () => {
           {subscriptions.map((channel) => (
             <div
               key={channel.id}
+              data-testid="subscription-item"
+              data-channel-id={channel.id}
               className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border"
             >
               <div className="flex items-center gap-4">
@@ -121,7 +126,7 @@ export const SubscriptionManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <h3 className="font-semibold text-lg">{channel.name}</h3>
+                  <h2 className="font-semibold text-lg">{channel.name}</h2>
                   {channel.description && (
                     <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
                       {channel.description}
@@ -135,21 +140,26 @@ export const SubscriptionManagement: React.FC = () => {
                 size="sm"
                 onClick={() => handleUnsubscribe(channel.id)}
                 disabled={isLoading}
+                aria-label={s.unsubscribeFrom.replace('{name}', channel.name)}
                 className="text-red-600 hover:text-red-700 flex items-center gap-1"
               >
                 <X className="w-4 h-4" />
-                <span className="hidden sm:inline">Unsubscribe</span>
+                <span className="hidden sm:inline">{s.unsubscribe}</span>
               </Button>
             </div>
           ))}
         </div>
       )}
 
+      {unsubscribeError && (
+        <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">{s.unsubscribeFailed}</p>
+      )}
+
       <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <h3 className="font-semibold mb-2">Subscription Summary</h3>
+        <h2 className="font-semibold mb-2">{s.summaryTitle}</h2>
         <div className="text-sm">
-          <span className="text-gray-600 dark:text-gray-400">Total Subscriptions:</span>
-          <span className="font-semibold ml-2">{subscriptions.length}</span>
+          <span className="text-gray-600 dark:text-gray-400">{s.totalSubscriptions}</span>
+          <span className="font-semibold ms-2" data-testid="subscriptions-total">{subscriptions.length}</span>
         </div>
       </div>
     </div>

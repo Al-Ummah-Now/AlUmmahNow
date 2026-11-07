@@ -34,6 +34,9 @@ import {
   Calendar,
   History,
   Rss,
+  Users,
+  BarChart3,
+  Settings,
 } from 'lucide-react';
 import { getTranslations } from '@/lib/i18n';
 
@@ -252,6 +255,21 @@ export function UnifiedNavigationRTL() {
       label: tAr.feed.history,
       icon: History,
       href: '/ar/history',
+    },
+    {
+      label: tAr.navigation.subscriptions,
+      icon: Users,
+      href: '/ar/subscriptions',
+    },
+    {
+      label: tAr.navigation.analytics,
+      icon: BarChart3,
+      href: '/ar/analytics',
+    },
+    {
+      label: tAr.header.settings,
+      icon: Settings,
+      href: '/ar/settings',
     },
     ...(channels.length > 0 ? [
       {

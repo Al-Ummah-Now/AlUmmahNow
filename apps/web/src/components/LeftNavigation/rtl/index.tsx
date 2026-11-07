@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
@@ -44,7 +44,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
         { label: tAr.navigation.homeLink, icon: "fa-house", href: `/${locale}/` },
         { label: tAr.navigation.search, icon: "fa-magnifying-glass", href: `/${locale}/search` },
         { label: tAr.navigation.upload, icon: "fa-upload", href: `/${locale}/upload` },
-        { label: tAr.navigation.subscriptions, icon: "fa-tv", href: "#" },
+        { label: tAr.navigation.subscriptions, icon: "fa-tv", href: `/${locale}/subscriptions` },
         { label: tAr.navigation.library, icon: "fa-bookmark", href: "#" },
     ];
 
@@ -66,6 +66,16 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
         const newUrl = params ? `${newPath}?${params}` : newPath;
         router.push(newUrl);
     };
+
+    // Escape closes the open drawer
+    useEffect(() => {
+        if (isCollapsed || !onCollapse) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onCollapse();
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [isCollapsed, onCollapse]);
 
     return (
         <>
@@ -164,7 +174,10 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                             <Link
                                 href={item.href}
                                 className={`flex items-center space-x-2 p-2 `}
-                                onClick={item.onClick}
+                                onClick={() => {
+                                    item.onClick?.();
+                                    onCollapse?.();
+                                }}
                             >
                                 <IcoButton
                                     style={item.icon}

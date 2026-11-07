@@ -3,43 +3,45 @@
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from "react";
 import { VideoObject } from "@/interfaces";
-import VideoCard from "@/components/videoCard/index";
-import SearchFilters from "@/components/search/SearchFilters/index";
-import SearchSuggestions from "@/components/search/SearchSuggestions/index";
-import TrendingContent from "@/components/search/TrendingContent/index";
+import VideoCardLTR from "@/components/videoCard/index";
+import VideoCardRTL from "@/components/videoCard/rtl/index";
+import SearchFiltersLTR from "@/components/search/SearchFilters/index";
+import SearchFiltersRTL from "@/components/search/SearchFilters/rtl/index";
+import SearchSuggestionsLTR from "@/components/search/SearchSuggestions/index";
+import SearchSuggestionsRTL from "@/components/search/SearchSuggestions/rtl/index";
+import TrendingContentLTR from "@/components/search/TrendingContent/index";
+import TrendingContentRTL from "@/components/search/TrendingContent/rtl/index";
+import { DEFAULT_SEARCH_FILTERS, hasActiveSearchFilters } from "@/components/search/activeFilters";
 import { SearchFilters as SearchFiltersType } from "@/lib/api/types";
 import * as VideosAPI from "@/lib/api/videos";
 import { useLanguage } from '@/hooks/useLanguage';
 
 const SearchPage: React.FC = () => {
-    const { t } = useLanguage();
+    const { t, isRTL, dir } = useLanguage();
+    // Arabic gets the RTL variants (panel/indicator placement, RTL cards)
+    const VideoCard = isRTL ? VideoCardRTL : VideoCardLTR;
+    const SearchFilters = isRTL ? SearchFiltersRTL : SearchFiltersLTR;
+    const SearchSuggestions = isRTL ? SearchSuggestionsRTL : SearchSuggestionsLTR;
+    const TrendingContent = isRTL ? TrendingContentRTL : TrendingContentLTR;
     const [searchQuery, setSearchQuery] = useState("");
     const [videos, setVideos] = useState<VideoObject[]>([]);
     const [loading, setLoading] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
-    const [filters, setFilters] = useState<SearchFiltersType>({
-        category: '',
-        language: 'all',
-        duration: 'all',
-        sortBy: 'relevance',
-        sortOrder: 'desc'
-    });
+    const [filters, setFilters] = useState<SearchFiltersType>(DEFAULT_SEARCH_FILTERS);
     const [hasSearched, setHasSearched] = useState(false);
     const [triggerSearch, setTriggerSearch] = useState(false); // Flag to trigger search from suggestion
 
-    const hasActiveFilters = useCallback(() => {
-        return Object.values(filters).some(value =>
-            value && value !== 'all' && value !== 'relevance'
-        );
-    }, [filters]);
+    const hasActiveFilters = useCallback(() => hasActiveSearchFilters(filters), [filters]);
 
-    const handleSearch = useCallback(async () => {
-        if (!searchQuery.trim() && !hasActiveFilters()) return;
+    // Takes the filters explicitly so "Clear" can search with the cleared
+    // filters instead of the stale ones captured before the state update
+    const runSearch = useCallback(async (activeFilters: SearchFiltersType) => {
+        if (!searchQuery.trim() && !hasActiveSearchFilters(activeFilters)) return;
 
         setLoading(true);
         setHasSearched(true);
         try {
-            const data = await VideosAPI.searchVideos(searchQuery, filters, { limit: 20 });
+            const data = await VideosAPI.searchVideos(searchQuery, activeFilters, { limit: 20 });
             setVideos(data?.data || []);
         } catch (error) {
             logger.error('Search error:', error);
@@ -47,7 +49,9 @@ const SearchPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [searchQuery, filters, hasActiveFilters]);
+    }, [searchQuery]);
+
+    const handleSearch = useCallback(() => runSearch(filters), [runSearch, filters]);
 
     const handleSuggestionSelect = (suggestion: string) => {
         setSearchQuery(suggestion);
@@ -68,22 +72,16 @@ const SearchPage: React.FC = () => {
     };
 
     const handleClearFilters = () => {
-        setFilters({
-            category: '',
-            language: 'all',
-            duration: 'all',
-            sortBy: 'relevance',
-            sortOrder: 'desc'
-        });
+        setFilters(DEFAULT_SEARCH_FILTERS);
         setShowFilters(false);
         // Re-search if there's a query
         if (searchQuery.trim()) {
-            handleSearch();
+            runSearch(DEFAULT_SEARCH_FILTERS);
         }
     };
 
     return (
-        <main className="flex flex-col p-4 w-full transition-all duration-300">
+        <main className="flex flex-col p-4 w-full transition-all duration-300" dir={dir}>
             <h1 className="text-2xl font-bold text-black dark:text-white mb-4">{t.search.searchPageTitle}</h1>
 
             {/* Search Bar with Suggestions and Filters */}
@@ -96,8 +94,10 @@ const SearchPage: React.FC = () => {
                     placeholder={t.search.searchPlaceholder}
                 />
                 <button
+                    type="button"
                     onClick={handleSearch}
-                    className="px-4 py-2 bg-gray-700 text-white rounded-r-md hover:bg-gray-800 transition-colors"
+                    data-testid="search-submit"
+                    className="px-4 py-2 bg-gray-700 text-white rounded-e-md hover:bg-gray-800 transition-colors"
                 >
                     {t.search.searchButton}
                 </button>
@@ -121,7 +121,7 @@ const SearchPage: React.FC = () => {
 
             {/* Active Filters Display */}
             {hasActiveFilters() && (
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="flex flex-wrap gap-2 mb-4" data-testid="search-active-filters">
                     <span className="text-sm text-gray-600 dark:text-gray-300">{t.search.activeFilters}</span>
                     {filters.category && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
@@ -155,7 +155,7 @@ const SearchPage: React.FC = () => {
             {hasSearched && (
                 <>
                     <div className="flex items-center justify-between mb-4">
-                        <p className="text-gray-600 dark:text-gray-300">
+                        <p className="text-gray-600 dark:text-gray-300" role="status" data-testid="search-summary">
                             {loading ? t.search.searching : (
                                 searchQuery
                                     ? t.search.foundResultsFor.replace('{count}', videos.length.toString()).replace('{query}', searchQuery)
@@ -177,21 +177,22 @@ const SearchPage: React.FC = () => {
                             ))}
                         </div>
                     ) : videos.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" data-testid="search-results">
                             {videos.map((video) => (
                                 <VideoCard key={video.id} {...video} />
                             ))}
                         </div>
                     ) : (
-                        <div className="text-center py-12">
-                            <div className="text-gray-400 text-6xl mb-4">🔍</div>
-                            <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">
+                        <div className="text-center py-12" data-testid="search-empty">
+                            <div className="text-gray-400 text-6xl mb-4" aria-hidden="true">🔍</div>
+                            <h2 className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">
                                 {t.search.noResultsTitle}
-                            </h3>
+                            </h2>
                             <p className="text-gray-500 dark:text-gray-400 mb-4">
                                 {t.search.noResultsMessage}
                             </p>
                             <button
+                                type="button"
                                 onClick={handleClearFilters}
                                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
                             >

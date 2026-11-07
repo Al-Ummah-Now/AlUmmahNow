@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw, Users } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSubscriptionFeed } from '@/lib/api/channels';
+import { SignInPrompt } from '@/components/common/SignInPrompt';
 
 const FEED_PAGE_SIZE = 24;
 
@@ -30,7 +31,9 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  // Set on the client after the first load: a server-rendered time would not
+  // match the client's and break hydration (React error #418)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   const loadSubscriptionFeed = useCallback(async () => {
     setIsLoading(true);
@@ -86,21 +89,11 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
   };
 
   if (!isAuthenticated) {
-    return (
-      <div className={`p-6 text-center ${className}`}>
-        <div className="flex flex-col items-center gap-4">
-          <Users className="w-16 h-16 text-gray-400" />
-          <h2 className="text-2xl font-bold">{t.subscriptions.subscriptionFeed}</h2>
-          <p className="text-gray-600 dark:text-gray-400 max-w-md">
-            {t.subscriptions.loginToSeeVideos}
-          </p>
-        </div>
-      </div>
-    );
+    return <SignInPrompt title={t.subscriptions.subscriptionFeed} message={t.subscriptions.loginToSeeVideos} />;
   }
 
   return (
-    <div className={`max-w-7xl mx-auto p-6 ${className}`}>
+    <div className={`max-w-7xl mx-auto p-6 ${className}`} dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">{t.subscriptions.subscriptionFeed}</h1>
@@ -110,9 +103,11 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
         </div>
 
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {t.subscriptions.lastUpdated} {lastRefresh.toLocaleTimeString()}
-          </span>
+          {lastRefresh && (
+            <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="feed-last-updated">
+              {t.subscriptions.lastUpdated} {lastRefresh.toLocaleTimeString(lang === 'ar' ? 'ar' : 'en-US')}
+            </span>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -141,9 +136,9 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
           </Button>
         </div>
       ) : videos.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="text-center py-12" data-testid="feed-empty">
           <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">{t.subscriptions.noVideosInFeed}</h3>
+          <h2 className="text-xl font-semibold mb-2">{t.subscriptions.noVideosInFeed}</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             {t.subscriptions.subscribeToSeeVideos}
           </p>
