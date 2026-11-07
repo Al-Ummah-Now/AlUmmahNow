@@ -168,9 +168,13 @@ test.describe('Privacy settings - signed in', () => {
   });
 
   test('PRIV-012 exports the account data as a JSON download', async ({ page }) => {
+    // The export scans the shared R2 buckets in resumable passes; on QA even
+    // an account with no data needs ~3 passes of 30-55 s each (~2 min).
+    // Export speed is tracked separately from this UI flow (issue #184).
+    test.setTimeout(330_000);
     await page.goto('/en/settings/privacy');
     const [download] = await Promise.all([
-      page.waitForEvent('download', { timeout: 60000 }),
+      page.waitForEvent('download', { timeout: 300_000 }),
       page.getByRole('button', { name: 'Download my data' }).click(),
     ]);
     expect(download.suggestedFilename()).toMatch(/^al-ummah-now-data-\d{4}-\d{2}-\d{2}\.json$/);

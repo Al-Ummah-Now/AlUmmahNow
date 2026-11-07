@@ -209,6 +209,12 @@ test.describe('Profile - edit', () => {
     const fs = await import('fs');
     fs.writeFileSync(image, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
     await page.locator('#profilePhotoInput').setInputFiles(image);
+    // The picked photo is positioned in the crop dialog first; Apply uploads it
+    const crop = page.getByTestId('image-crop-dialog-avatar');
+    await expect(crop).toBeVisible();
+    await expect(crop.getByTestId('image-crop-apply')).toBeEnabled();
+    await crop.getByTestId('image-crop-apply').click();
+    await expect(crop).toBeHidden();
 
     await expect.poll(async () => (await getProfile()).avatarUrl, { timeout: 60000 }).not.toBe(original.avatarUrl);
     const updated = (await getProfile()).avatarUrl!;

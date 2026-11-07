@@ -137,7 +137,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
             data-testid="channel-handle-input"
           />
         </div>
-        <p id={ids.handleHelp} className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p id={ids.handleHelp} className="text-sm text-gray-500 dark:text-gray-400 mt-1 break-words">
           {t.channel.handleHelp.replace('{url}', previewUrl)}
         </p>
         <p id={ids.handleStatus} className="text-sm mt-1" aria-live="polite" data-testid="channel-handle-status" data-state={status.state}>

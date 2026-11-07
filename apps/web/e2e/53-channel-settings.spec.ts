@@ -114,6 +114,7 @@ test.describe('Edit channel', () => {
         nameLocalized?: Record<string, string>;
         description?: string;
         descriptionLocalized?: Record<string, string>;
+        handle?: string | null;
       }>(`/api/channels/${target.id}`);
       const marker = `وصف اختبار ${Date.now()}`;
       try {
@@ -128,7 +129,9 @@ test.describe('Edit channel', () => {
         await expect(page.getByText(`${marker.length}/500`)).toBeVisible();
         await page.getByRole('button', { name: 'Save Changes' }).click();
 
-        await expect(page).toHaveURL(new RegExp(`/en/channels/${target.id}$`));
+        // Saving lands on the channel page: /@handle once the channel has one, else /channels/{id}
+        const channelUrl = original.handle ? `/en/@${original.handle}` : `/en/channels/${target.id}`;
+        await expect(page).toHaveURL(new RegExp(`${channelUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
         await expect
           .poll(async () => (await apiGet<{ descriptionLocalized?: Record<string, string> }>(`/api/channels/${target.id}`)).descriptionLocalized?.ar)
           .toBe(marker);
