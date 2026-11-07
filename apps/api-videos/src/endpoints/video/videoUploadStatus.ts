@@ -142,7 +142,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);
 
 				// Log transcoding messages if video failed or has warnings
-				if (bunnyStreamStatus.status >= 5 || bunnyStreamStatus.transcodingMessages?.length) {
+				if (bunnyStreamStatus.status === 5 || bunnyStreamStatus.status === 6 || bunnyStreamStatus.transcodingMessages?.length) {
 					logger.warn('[VideoUploadStatus] Bunny.net transcoding messages', {
 						videoId: id,
 						status: bunnyStreamStatus.status,
@@ -160,10 +160,11 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		let message = "Video is ready";
 		
 		if (bunnyStreamStatus) {
-			// Map Bunny Stream status (BunnyVideoStatus in @al-ummah/shared-types) to our status:
-			// 0=Created, 1=Uploaded, 2=Processing, 3=Transcoding, 4=Finished, 5=Error, 6=UploadFailed
+			// Map Bunny Stream status to our status (see lib/bunny/schema.json):
+			// 0=Created, 1=Uploaded, 2=Processing, 3=Transcoding, 4=Finished,
+			// 5=Error, 6=UploadFailed, 7=Transcribing (captions; playable), 8+ JIT states (playable)
 			switch (bunnyStreamStatus.status) {
-				case 0: // Created (waiting for the file)
+				case 0: // Created
 					status = "uploading";
 					progress = Math.max(10, bunnyStreamStatus.encodeProgress || 0);
 					message = "Video upload queued";
@@ -179,16 +180,16 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 					progress = Math.max(50, bunnyStreamStatus.encodeProgress || 50);
 					message = "Video is being encoded";
 					break;
-				case 4: // Finished
-					status = "ready";
-					progress = 100;
-					message = "Video is ready";
-					break;
 				case 5: // Error
 				case 6: // UploadFailed
 					status = "failed";
 					progress = 0;
 					message = "Video processing failed";
+					break;
+				default: // 4=Finished, 7=Transcribing and later states are playable
+					status = "ready";
+					progress = 100;
+					message = "Video is ready";
 					break;
 			}
 		} else if (video.uploadStatus === 'initiated' || video.uploadStatus === 'uploading') {
@@ -264,7 +265,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 			progress,
 			message,
 			encodingStatus: bunnyStreamStatus ? {
-				isProcessing: bunnyStreamStatus.status === 1 || bunnyStreamStatus.status === 2,
+				isProcessing: bunnyStreamStatus.status >= 1 && bunnyStreamStatus.status <= 3,
 				encodingProgress: bunnyStreamStatus.encodeProgress || progress,
 				availableResolutions: bunnyStreamStatus.availableResolutions 
 					? bunnyStreamStatus.availableResolutions.split(',').map(r => r.trim()) 

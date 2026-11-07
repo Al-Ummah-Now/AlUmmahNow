@@ -2,10 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import VideoThumbnail from '@/components/VideoThumbnail';
 import { Playlist } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
-import { resolveUrl } from '@/lib/utility';
 
 export function PlaylistCard(playlist: Playlist) {
   const { lang, t } = useLanguage();
@@ -17,21 +16,12 @@ export function PlaylistCard(playlist: Playlist) {
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">
         {/* Thumbnail */}
-        <div className="relative aspect-video bg-gray-200 dark:bg-gray-700">
-          {playlist.thumbnailUrl && (
-            <Image
-              src={resolveUrl(playlist.thumbnailUrl)}
-              alt={playlist.name}
-              fill
-              className="object-cover group-hover:scale-105 transition-transform duration-300"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            />
-          )}
+        <VideoThumbnail src={playlist.thumbnailUrl} alt={playlist.name} className="aspect-video">
           {/* Video count badge */}
           <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
-            {playlist.videosCount || 0} {t.video.videoViews}
+            {playlist.videosCount || 0} {t.video.videos}
           </div>
-        </div>
+        </VideoThumbnail>
 
         {/* Playlist details */}
         <div className="p-4">

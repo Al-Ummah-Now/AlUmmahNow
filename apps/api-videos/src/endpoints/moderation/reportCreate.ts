@@ -16,7 +16,7 @@ export class ReportCreate extends AuthenticatedRoute {
 		description: "🔒 **Authentication Required**: This endpoint requires a valid JWT token. Report inappropriate content, spam, harassment, or other violations.",
 		request: {
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }).optional(),
+				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 			body: {
 				content: {

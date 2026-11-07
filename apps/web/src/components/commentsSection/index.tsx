@@ -155,7 +155,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
         {process.env.NODE_ENV === 'development' && (
           <div className="flex items-center gap-2 text-sm">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
-            <span className="text-gray-500">
+            <span className="text-gray-600 dark:text-gray-400">
               {isConnected ? t.comments.live : t.comments.offline}
             </span>
           </div>
@@ -231,11 +231,11 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
       {/* Comments list */}
       <div className="space-y-4">
         {isLoading && comments.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">{t.comments.loading}</p>
+          <p className="text-gray-600 dark:text-gray-400 text-center py-8">{t.comments.loading}</p>
         ) : loadError && comments.length === 0 ? (
           <p className="text-red-600 dark:text-red-400 text-center py-8" role="alert">{t.comments.loadFailed}</p>
         ) : comments.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
+          <p className="text-gray-600 dark:text-gray-400 text-center py-8">
             {t.comments.noComments}
           </p>
         ) : (

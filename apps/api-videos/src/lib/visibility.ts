@@ -7,6 +7,7 @@
  */
 
 export interface VisibilityFields {
+	id?: string;
 	isPublic?: boolean;
 	isHidden?: boolean;
 	isDeleted?: boolean;
@@ -16,8 +17,18 @@ export interface VisibilityFields {
  * True when the video was removed from circulation (soft delete or moderation).
  * Applies to everyone, including the owner.
  */
+/**
+ * The videos bucket also stores internal records (section indexes such as
+ * "index:recent-videos", live streams under "livestream:"). They are not
+ * videos and must never appear in listings.
+ */
+export function isInternalRecord(video: VisibilityFields | null | undefined): boolean {
+	const id = video?.id;
+	return typeof id === "string" && (id.startsWith("index:") || id.startsWith("livestream:"));
+}
+
 export function isVideoRemoved(video: VisibilityFields | null | undefined): boolean {
-	if (!video) return true;
+	if (!video || isInternalRecord(video)) return true;
 	return video.isDeleted === true || video.isHidden === true;
 }
 

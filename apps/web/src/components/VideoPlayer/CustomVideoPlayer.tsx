@@ -68,10 +68,13 @@ import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
 import { BufferingIndicator } from './LoadingStates';
 import { ViewerCount } from './ViewerCount';
+import { KeyboardHelpModal } from './KeyboardHelpModal';
+import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
 import { useWatchProgress } from '@/hooks/useWatchProgress';
 import '@/styles/video-player.css';
+import '@/styles/keyboard-feedback.css';
 import type { Player } from 'video.js';
 import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
 import type { PlayerTextTrack } from '@/lib/video/subtitle-tracks';
@@ -145,6 +148,8 @@ export default function CustomVideoPlayer({
   const [isBuffering, setIsBuffering] = useState(false);
   const [bufferProgress, setBufferProgress] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isKeyboardHelpOpen, setIsKeyboardHelpOpen] = useState(false);
+  const touchFeedbackCleanupRef = useRef<(() => void) | null>(null);
 
   // Phase 3: Advanced analytics state tracking
   const seekStartTimeRef = useRef<number>(0);
@@ -390,7 +395,8 @@ export default function CustomVideoPlayer({
         controls,
         autoplay,
         sources,
-        poster
+        poster,
+        language: lang,
       });
 
       const player = playerRef.current;
@@ -419,7 +425,12 @@ export default function CustomVideoPlayer({
         keyboardShortcutsCleanupRef.current = setupKeyboardShortcuts(player as ExtendedPlayer, {
           lang,
           showFeedback: true,
+          // Story 1.4 AC 3: "?" key and a control-bar button open the shortcut list
+          onShowHelp: () => setIsKeyboardHelpOpen(true),
         });
+
+        // Story 1.5 AC 3: visual (and, where supported, haptic) touch feedback
+        touchFeedbackCleanupRef.current = setupTouchFeedback(player.el() as HTMLElement);
 
         // Phase 4.19: Setup mobile touch controls on mobile devices
         if (isMobileDevice()) {
@@ -642,10 +653,10 @@ export default function CustomVideoPlayer({
 
     const player = playerRef.current as ExtendedPlayer;
     const currentSrc = player.currentSrc();
-    const newSrc = `https://vz-215a1ffd-a5a.b-cdn.net/${videoId}/playlist.m3u8`;
+    const newSrc = sources[0]?.src;
 
     // Only update if the source actually changed
-    if (currentSrc && currentSrc !== newSrc) {
+    if (currentSrc && newSrc && currentSrc !== newSrc) {
       logger.debug(`[CustomVideoPlayer] Video ID changed, updating source to ${videoId}`);
 
       // Reset quartiles for new video
@@ -719,6 +730,12 @@ export default function CustomVideoPlayer({
       if (keyboardShortcutsCleanupRef.current) {
         keyboardShortcutsCleanupRef.current();
         keyboardShortcutsCleanupRef.current = null;
+      }
+
+      // Cleanup touch feedback
+      if (touchFeedbackCleanupRef.current) {
+        touchFeedbackCleanupRef.current();
+        touchFeedbackCleanupRef.current = null;
       }
 
       // Cleanup mobile touch controls
@@ -812,6 +829,12 @@ export default function CustomVideoPlayer({
           />
         )}
       </div>
+
+      <KeyboardHelpModal
+        isOpen={isKeyboardHelpOpen}
+        onClose={() => setIsKeyboardHelpOpen(false)}
+        lang={lang}
+      />
     </div>
   );
 }

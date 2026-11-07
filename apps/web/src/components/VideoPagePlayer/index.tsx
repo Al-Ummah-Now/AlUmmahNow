@@ -11,7 +11,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 
 const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { user } = useAuth();
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const locale = lang;
 
   const title = getLocalizedValue((options as PlayerOptions & { titleLocalized?: Record<string, string> }).titleLocalized, options.title, locale);
@@ -53,7 +53,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             isLive={false}
             lang="en"
             className="w-full"
-            ariaLabel={`Video: ${removeUnwantedChars(title)}`}
+            ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
           />
         </div>
       </div>
@@ -66,14 +66,16 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
         </h1>
 
         {/* Channel Info */}
-        <div className="flex space-x-3 items-center">
+        <div className="flex space-x-3 rtl:space-x-reverse items-center">
           <Link
             href={`/${lang}/channels/${options.channel}`}
-            className="w-10 h-10 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
+            className="w-11 h-11 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
+            tabIndex={-1}
+            aria-hidden="true"
           >
             <Image
               src={options.channelAvatar || '/avatar.png'}
-              alt="Channel Avatar"
+              alt=""
               sizes="10vw"
               className="bg-gray-500"
               fill
@@ -82,7 +84,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
           <div>
             <Link
               href={`/${lang}/channels/${options.channel}`}
-              className="text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
+              className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
             >
               {removeUnwantedChars(options.channelName)}
             </Link>

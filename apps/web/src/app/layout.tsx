@@ -17,6 +17,12 @@ import { MultiAccountProvider } from "@/hooks/useMultiAccount";
 import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
 import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { NONCE_HEADER } from "@/lib/security/nonce-header";
+import { serializeForInlineScript } from "@/lib/security/csp";
+import { deriveAuthProfileUrl } from "@/lib/runtime-config";
+import { SecurityBootstrap } from "@/components/security/SecurityBootstrap";
+import { ConsentBanner } from "@/components/consent/ConsentBanner";
+import SkipLinks from "@/components/SkipLinks";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -55,8 +61,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Pinch-zoom must stay enabled (WCAG 1.4.4 Resize Text / axe meta-viewport)
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)', color: '#111827' }, // gray-900
@@ -68,6 +73,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   const user = subject ? subject.properties : null;
   const requestedLocale = (await headers()).get(LOCALE_REQUEST_HEADER);
   const locale = requestedLocale && isLocaleSupported(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
+  // Per-request CSP nonce set by middleware (production only).
+  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
 
   return (
     <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
@@ -82,15 +89,21 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
         />
         {/* Runtime configuration injected from server */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
-            __html: `window.__RUNTIME_CONFIG__ = ${JSON.stringify({
+            __html: `window.__RUNTIME_CONFIG__ = ${serializeForInlineScript({
               API_URL: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '',
               WEBSOCKET_URL: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '',
+              AUTH_PROFILE_URL: deriveAuthProfileUrl(
+                process.env.OPENAUTH_ISSUER || process.env.Issuer,
+                process.env.AUTH_PROFILE_URL
+              ),
             })};`,
           }}
         />
       </head>
       <body className="font-inter">
+        <SecurityBootstrap />
         <Suspense>
           <QueryProvider>
             <NuqsAdapter>
@@ -98,6 +111,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
               attribute="class"
               defaultTheme="system"
               enableSystem
+              nonce={nonce}
               disableTransitionOnChange>
               <MultiAccountProvider>
                 <AuthProvider>
@@ -105,12 +119,17 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                     <WebSocketProvider user={user}>
                       <TranslationSyncProvider>
                         <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                          {/* Skip links must be the first focusable elements (WCAG 2.4.1) */}
+                          <SkipLinks />
                           {/* Header */}
                           <Navigation></Navigation>
                           {children}
 
                           {/* Real-time notification center */}
                           <NotificationCenter />
+
+                          {/* Cookie / tracking consent (GDPR, Story 1.3) */}
+                          <ConsentBanner />
                         </div>
                       </TranslationSyncProvider>
                     </WebSocketProvider>
@@ -124,7 +143,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
           </QueryProvider>
         </Suspense>
       </body>
-      <script async type="text/javascript" src="//assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>
+      <script async nonce={nonce} type="text/javascript" src="https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>
 
     </html>
   );

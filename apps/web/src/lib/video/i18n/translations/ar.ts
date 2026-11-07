@@ -26,6 +26,22 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     volumeSlider: 'التحكم بالصوت',
     progressBar: 'تقدم الفيديو',
     seekSlider: 'البحث في الفيديو',
+    currentTime: 'الوقت الحالي',
+    duration: 'المدة الإجمالية',
+    qualityButton: 'جودة الفيديو',
+    keyboardHelpButton: 'عرض اختصارات لوحة المفاتيح',
+    keyboardHelpButtonTitle: 'اختصارات لوحة المفاتيح (?)',
+    announcements: {
+      playing: 'يتم التشغيل',
+      paused: 'متوقف مؤقتاً',
+      muted: 'الصوت مكتوم',
+      volume: 'مستوى الصوت {volume}%',
+      fullscreenOn: 'وضع ملء الشاشة',
+      fullscreenOff: 'خروج من ملء الشاشة',
+      playbackError: 'حدث خطأ في تشغيل الفيديو',
+      buffering: 'جارٍ التحميل...',
+      readyToPlay: 'جاهز للتشغيل',
+    },
   },
 
   errors: {
@@ -148,6 +164,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
       volume: 'الصوت',
       display: 'العرض',
       speed: 'السرعة',
+      navigation: 'التنقل بين عناصر التحكم',
     },
     shortcuts: {
       playPause: {
@@ -155,7 +172,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
         description: 'تشغيل/إيقاف مؤقت',
       },
       rewind5: {
-        keys: '←',
+        keys: '→',
         description: 'الرجوع ٥ ثوانٍ',
       },
       rewind10: {
@@ -163,7 +180,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
         description: 'الرجوع ١٠ ثوانٍ',
       },
       forward5: {
-        keys: '→',
+        keys: '←',
         description: 'التقديم ٥ ثوانٍ',
       },
       forward10: {
@@ -201,6 +218,22 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
       seekPercent: {
         keys: '٠-٩',
         description: 'الانتقال إلى ٠٪-٩٠٪',
+      },
+      help: {
+        keys: '?',
+        description: 'عرض قائمة الاختصارات هذه',
+      },
+      tabNavigation: {
+        keys: 'Tab، Shift+Tab',
+        description: 'التنقل بين عناصر تحكم المشغل',
+      },
+      activate: {
+        keys: 'Enter، مسافة',
+        description: 'تفعيل عنصر التحكم المحدد',
+      },
+      closeDialog: {
+        keys: 'Esc',
+        description: 'إغلاق القوائم والنوافذ',
       },
     },
     closeButton: 'إغلاق',

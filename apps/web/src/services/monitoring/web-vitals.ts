@@ -1,5 +1,6 @@
 import { logger } from '@/lib/logger-client';
 import { onCLS, onINP, onFCP, onLCP, onTTFB, type Metric } from 'web-vitals';
+import { hasConsent } from '@/lib/consent/ConsentManager';
 
 interface WebVitalsConfig {
   analyticsEndpoint: string;
@@ -38,10 +39,14 @@ export class WebVitalsMonitor {
   }
 
   private handleMetric(metric: Metric): void {
+    // GDPR (Story 1.3): performance beacons require 'performance' consent.
+    if (!hasConsent('performance')) return;
+
     const enhancedMetric: EnhancedMetric = {
       ...metric,
       userAgent: navigator.userAgent,
-      url: window.location.href,
+      // Data minimisation: no query string or fragment (may carry identifiers).
+      url: window.location.origin + window.location.pathname,
       timestamp: Date.now(),
     };
 

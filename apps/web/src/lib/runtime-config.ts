@@ -10,7 +10,24 @@ declare global {
     __RUNTIME_CONFIG__?: {
       API_URL?: string;
       WEBSOCKET_URL?: string;
+      AUTH_PROFILE_URL?: string;
     };
+  }
+}
+
+/**
+ * URL of the auth service's account (profile) app, where the sign-in account
+ * itself is managed. Explicit AUTH_PROFILE_URL wins; otherwise it is derived
+ * from the issuer: https://auth.qa.alummahnow.net -> https://profile.auth.qa.alummahnow.net
+ */
+export function deriveAuthProfileUrl(issuer: string | undefined, explicit?: string): string {
+  if (explicit) return explicit.replace(/\/$/, '');
+  if (!issuer) return '';
+  try {
+    const url = new URL(issuer);
+    return `${url.protocol}//profile.${url.host}`;
+  } catch {
+    return '';
   }
 }
 
@@ -20,6 +37,10 @@ export function getRuntimeConfig() {
     return {
       API_URL: process.env.API_URL || '',
       WEBSOCKET_URL: process.env.WEBSOCKET_URL || '',
+      AUTH_PROFILE_URL: deriveAuthProfileUrl(
+        process.env.OPENAUTH_ISSUER || process.env.Issuer,
+        process.env.AUTH_PROFILE_URL
+      ),
     };
   }
 
@@ -27,6 +48,7 @@ export function getRuntimeConfig() {
   return window.__RUNTIME_CONFIG__ || {
     API_URL: '',
     WEBSOCKET_URL: '',
+    AUTH_PROFILE_URL: '',
   };
 }
 
@@ -36,4 +58,8 @@ export function getApiUrl(): string {
 
 export function getWebSocketUrl(): string {
   return getRuntimeConfig().WEBSOCKET_URL || '';
+}
+
+export function getAuthProfileUrl(): string {
+  return getRuntimeConfig().AUTH_PROFILE_URL || '';
 }

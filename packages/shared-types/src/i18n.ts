@@ -115,6 +115,27 @@ export interface UpdateTranslationsResponse {
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  /** Accessibility: skip links and accessible names for icon-only controls (Epic 1) */
+  a11y: {
+    skipLinks: string;
+    skipToMainContent: string;
+    skipToVideoPlayer: string;
+    skipToComments: string;
+    openNavigationMenu: string;
+    closeNavigationMenu: string;
+    goToHomePage: string;
+    videoPlayerFor: string;
+    channelAvatar: string;
+    videoStats: string;
+    commentsCount: string;
+    likeVideo: string;
+    unlikeVideo: string;
+    dislikeVideo: string;
+    removeDislike: string;
+    signInToReact: string;
+    watchingNow: string;
+  };
+
   /** Discovery: videos/channels directories and channel discovery sections */
   discovery: {
     allVideos: string;
@@ -1834,6 +1855,61 @@ export interface AppTranslations {
       misinformation: string;
       other: string;
     };
+  };
+
+  /**
+   * Privacy, consent and data rights (GDPR, Story 1.3)
+   */
+  privacy: {
+    bannerTitle: string;
+    bannerDescription: string;
+    acceptAll: string;
+    rejectAll: string;
+    customize: string;
+    savePreferences: string;
+    preferencesTitle: string;
+    necessaryTitle: string;
+    necessaryDescription: string;
+    alwaysOn: string;
+    analyticsTitle: string;
+    analyticsDescription: string;
+    experimentsTitle: string;
+    experimentsDescription: string;
+    performanceTitle: string;
+    performanceDescription: string;
+    cookieSettings: string;
+    settingsTitle: string;
+    settingsDescription: string;
+    consentSectionTitle: string;
+    consentSectionDescription: string;
+    consentSaved: string;
+    exportTitle: string;
+    exportDescription: string;
+    exportButton: string;
+    exporting: string;
+    exportReady: string;
+    exportFailed: string;
+    deviceDataTitle: string;
+    deviceDataDescription: string;
+    clearDeviceData: string;
+    deviceDataCleared: string;
+    deleteTitle: string;
+    deleteDescription: string;
+    deleteConfirmLabel: string;
+    deleteConfirmWord: string;
+    deleteButton: string;
+    deleting: string;
+    deleteDone: string;
+    deleteFailed: string;
+    accountTitle: string;
+    accountDescription: string;
+    manageAccount: string;
+    retentionTitle: string;
+    retentionWatchHistory: string;
+    retentionAnalytics: string;
+    retentionDevice: string;
+    retentionConsent: string;
+    signInRequired: string;
   };
 
   /**

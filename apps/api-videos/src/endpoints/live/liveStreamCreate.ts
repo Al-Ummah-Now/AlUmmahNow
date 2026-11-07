@@ -18,7 +18,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		description: "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
 		request: {
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }).optional(),
+				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 			body: {
 				content: {

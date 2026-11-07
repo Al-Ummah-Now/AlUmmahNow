@@ -1,9 +1,9 @@
 "use client";
 import React from "react";
 import Link from "next/link";
-import Image from "next/image";
+import VideoThumbnail from "@/components/VideoThumbnail";
 import { VideoObject, getLocalizedValue } from "@al-ummah/shared-types";
-import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
+import { removeUnwantedChars } from "@/lib/utility";
 import { useLanguage } from "@/hooks/useLanguage";
 
 const VideoCardRTL: React.FC<VideoObject> = (video) => {
@@ -22,16 +22,7 @@ const VideoCardRTL: React.FC<VideoObject> = (video) => {
       dir="rtl"
     >
       {/* Thumbnail */}
-      <div className="relative w-full h-48 bg-gray-200">
-        {video.thumbnailUrl && (
-          <Image
-            src={resolveUrl(video.thumbnailUrl)}
-            alt={title.replace(/⧸/g, ".")}
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            fill
-          />
-        )}
-      </div>
+      <VideoThumbnail src={video.thumbnailUrl} alt={title.replace(/⧸/g, ".")} className="h-48" />
 
       {/* Video Details */}
       <div className="p-4">

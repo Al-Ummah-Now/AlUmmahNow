@@ -28,6 +28,12 @@
 import { useEffect, useRef } from 'react';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import type { SupportedLanguage } from '@/lib/video/i18n';
+import { trapFocus } from '@/lib/accessibility/focus-manager';
+
+/** Key lists use ", " in English and the Arabic comma "، " in Arabic */
+export function splitShortcutKeys(keys: string): string[] {
+  return keys.split(/\s*[,،]\s*/).filter(Boolean);
+}
 
 export interface KeyboardHelpModalProps {
   /**
@@ -66,6 +72,7 @@ export function KeyboardHelpModal({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        event.stopPropagation();
         onClose();
       }
     }
@@ -75,12 +82,12 @@ export function KeyboardHelpModal({
   }, [isOpen, onClose]);
 
   /**
-   * Focus close button when modal opens
+   * Trap focus inside the dialog while open (focus starts on the close button)
+   * and return it to the control that opened the dialog when it closes.
    */
   useEffect(() => {
-    if (isOpen && closeButtonRef.current) {
-      closeButtonRef.current.focus();
-    }
+    if (!isOpen || !modalRef.current) return;
+    return trapFocus(modalRef.current, { initialFocus: closeButtonRef.current });
   }, [isOpen]);
 
   /**
@@ -148,6 +155,15 @@ export function KeyboardHelpModal({
         t.keyboard.shortcuts.speedIncrease,
       ],
     },
+    {
+      section: t.keyboard.sections.navigation,
+      items: [
+        t.keyboard.shortcuts.tabNavigation,
+        t.keyboard.shortcuts.activate,
+        t.keyboard.shortcuts.closeDialog,
+        t.keyboard.shortcuts.help,
+      ],
+    },
   ];
 
   return (
@@ -157,6 +173,7 @@ export function KeyboardHelpModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="keyboard-help-title"
+      aria-describedby="keyboard-help-description"
       dir={dir}
     >
       <div
@@ -172,17 +189,19 @@ export function KeyboardHelpModal({
             >
               {t.keyboard.title}
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p id="keyboard-help-description" className="text-sm text-muted-foreground mt-1">
               {t.keyboard.description}
             </p>
           </div>
           <button
             ref={closeButtonRef}
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
+            className="inline-flex items-center justify-center min-w-11 min-h-11 p-2 rounded-lg hover:bg-muted active:bg-muted transition-colors"
             aria-label={t.keyboard.closeButton}
           >
             <svg
+              aria-hidden="true"
               className="w-6 h-6"
               fill="none"
               stroke="currentColor"
@@ -201,21 +220,21 @@ export function KeyboardHelpModal({
         {/* Content */}
         <div className="px-6 py-4 space-y-6">
           {shortcuts.map((category, categoryIndex) => (
-            <div key={categoryIndex}>
-              <h3 className="text-lg font-semibold text-foreground mb-3">
+            <section key={categoryIndex} aria-labelledby={`keyboard-help-section-${categoryIndex}`}>
+              <h3 id={`keyboard-help-section-${categoryIndex}`} className="text-lg font-semibold text-foreground mb-3">
                 {category.section}
               </h3>
-              <div className="space-y-2">
+              <dl className="space-y-2">
                 {category.items.map((shortcut, shortcutIndex) => (
                   <div
                     key={shortcutIndex}
                     className="flex items-center justify-between gap-4 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                   >
-                    <span className="text-sm text-muted-foreground flex-1">
+                    <dt className="text-sm text-foreground flex-1">
                       {shortcut.description}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {shortcut.keys.split(', ').map((key, keyIndex) => (
+                    </dt>
+                    <dd className="flex items-center gap-2" dir="ltr">
+                      {splitShortcutKeys(shortcut.keys).map((key, keyIndex) => (
                         <kbd
                           key={keyIndex}
                           className="px-3 py-1.5 text-sm font-semibold text-foreground bg-background border border-border rounded-md shadow-sm min-w-[2.5rem] text-center"
@@ -223,19 +242,20 @@ export function KeyboardHelpModal({
                           {key}
                         </kbd>
                       ))}
-                    </div>
+                    </dd>
                   </div>
                 ))}
-              </div>
-            </div>
+              </dl>
+            </section>
           ))}
         </div>
 
         {/* Footer */}
         <div className="sticky bottom-0 px-6 py-4 border-t bg-background">
           <button
+            type="button"
             onClick={onClose}
-            className="w-full px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
+            className="w-full min-h-11 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 active:bg-primary/80 transition-colors"
           >
             {t.keyboard.closeButton}
           </button>

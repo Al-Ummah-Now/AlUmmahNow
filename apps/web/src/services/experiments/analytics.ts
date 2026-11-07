@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger-client';
+import { hasConsent } from '@/lib/consent/ConsentManager';
 export interface ExperimentEvent {
   eventType: 'assignment' | 'conversion' | 'exposure';
   experimentId: string;
@@ -30,6 +31,8 @@ class ExperimentAnalytics {
   }
 
   trackEvent(event: ExperimentEvent): void {
+    // GDPR (Story 1.3): experiment events are only collected with consent.
+    if (!hasConsent('experiments')) return;
     this.eventQueue.push(event);
 
     if (this.eventQueue.length >= this.BATCH_SIZE) {

@@ -9,6 +9,24 @@
 
 import { ABTestingEngine } from '../ab-testing';
 
+// Experiments require consent (GDPR, Story 1.3); granted for these tests.
+const mockHasConsent = jest.fn(() => true);
+jest.mock('@/lib/consent/ConsentManager', () => ({ hasConsent: (...args: unknown[]) => mockHasConsent(...(args as [])) }));
+
+describe('ABTestingEngine consent gating', () => {
+  afterEach(() => mockHasConsent.mockReturnValue(true));
+
+  it('does not assign variants without experiments consent', async () => {
+    mockHasConsent.mockReturnValue(false);
+    const engine = ABTestingEngine.getInstance();
+    engine.initialize('consent-test-user');
+    await expect(
+      engine.assignVariant({ id: 'consent-exp', enabled: true, trafficAllocation: 100 } as never)
+    ).rejects.toThrow(/consent/);
+    expect(engine.getVariant('consent-exp')).toBeNull();
+  });
+});
+
 describe('ABTestingEngine Security Tests', () => {
   let engine: ABTestingEngine;
 

@@ -167,7 +167,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
         lang="ar"
       >
         {/* Thumbnail Container (16:9 aspect ratio) */}
-        <div className="relative aspect-video bg-gray-200 dark:bg-gray-800 overflow-hidden">
+        <div className="relative aspect-video bg-gray-200 dark:bg-black overflow-hidden">
           {/* Placeholder gradient (shown while loading) */}
           {!imageLoaded && !imageError && (
             <div className="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-800 animate-pulse" />
@@ -193,7 +193,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
 
           {/* Error state */}
           {imageError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-300 dark:bg-gray-700">
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-black">
               <div className="text-center">
                 <ImageOff className="w-12 h-12 md:w-16 md:h-16 text-gray-500 mx-auto mb-2" />
                 <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400">

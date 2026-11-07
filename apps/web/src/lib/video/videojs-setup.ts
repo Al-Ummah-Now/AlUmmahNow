@@ -2,7 +2,9 @@ import videojs, { type Player, type PlayerOptions } from 'video.js';
 import '@videojs/http-streaming';
 import 'videojs-contrib-quality-levels';
 import 'videojs-hls-quality-selector';
+import videojsArabic from 'video.js/dist/lang/ar.json';
 import { logger } from '@/lib/logger-client';
+
 
 
 export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
@@ -51,7 +53,11 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
       'Captions': 'Show Captions',
       'Subtitles': 'Show Subtitles'
     },
+    // Full Video.js Arabic pack first so every built-in control text and
+    // accessible name (sliders, menus, time displays) is translated on /ar
+    // routes; the app-specific wording below overrides it.
     ar: {
+      ...(videojsArabic as Record<string, string>),
       'Play': 'تشغيل الفيديو',
       'Pause': 'إيقاف الفيديو',
       'Mute': 'كتم الصوت',

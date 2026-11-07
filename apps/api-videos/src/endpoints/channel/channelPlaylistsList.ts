@@ -27,7 +27,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 				}).optional(),
 			}),
 			headers: z.object({
-				channelId: Str({ description: "User's selected channel ID" }).optional(),
+				channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
 			}),
 		},
 		responses: {

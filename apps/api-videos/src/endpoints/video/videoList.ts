@@ -6,6 +6,7 @@ import R2Repository from "../../lib/r2Repo";
 import { VideoCategory, Channel } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
+import { isInternalRecord } from "../../lib/visibility";
 
 export class VideosList extends OptionalAuthRoute {
 	schema = {
@@ -24,7 +25,7 @@ export class VideosList extends OptionalAuthRoute {
 				}).optional(),
 				sort: z.enum(["date", "views", "title", "likes"]).optional().default("date").describe("Sort order for videos"),
 				filter: z.enum(["all", "public", "private", "live"]).optional().default("all").describe("Filter videos by type"),
-				channelId: Str({ description: "Filter by specific channel ID" }).optional(),
+				channelId: Str({ description: "Filter by specific channel ID" }).optional().nullable(),
 				category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
 			}),
 			headers: z.object({
@@ -81,6 +82,11 @@ export class VideosList extends OptionalAuthRoute {
 		
 		// Filter videos based on privacy settings, user context, and filters
 		let filteredVideos = (videos.items || []).filter(video => {
+			// Internal records (section indexes, live streams) share the bucket
+			if (isInternalRecord(video)) {
+				return false;
+			}
+
 			// Filter out soft-deleted videos
 			if (video.isDeleted) {
 				return false;

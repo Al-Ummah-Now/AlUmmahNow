@@ -7,6 +7,7 @@ import VideoCardLTR from "@/components/videoCard/index";
 import VideoCardRTL from "@/components/videoCard/rtl/index";
 import { useQueryState } from "nuqs";
 import { fetchVideosWithPagination } from "@/lib/api/videos";
+import { getNextVideosCursor } from "./videos/VideosPageClient";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 
@@ -43,7 +44,8 @@ const VideosPage: React.FC = () => {
         const newVideos = data.data.filter(video => !existingIds.has(video.id));
         return [...prevVideos, ...newVideos];
       });
-      setNextCursor(data.pagination?.nextCursor ?? null); // Update the next cursor
+      // GET /api/videos returns a top-level `cursor` ("" when there are no more pages)
+      setNextCursor(getNextVideosCursor(data));
     } catch (error) {
       logger.error("Error fetching videos:", error);
     } finally {
@@ -112,7 +114,7 @@ const VideosPage: React.FC = () => {
               disabled={!nextCursor || loading}
               className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
             >
-              {loading ? t.common.loading : t.common.viewAll}
+              {loading ? t.common.loading : t.common.loadMore}
             </button>
           </div>
         </main>

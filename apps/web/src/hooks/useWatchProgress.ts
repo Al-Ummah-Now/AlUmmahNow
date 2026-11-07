@@ -101,10 +101,10 @@ export function useWatchProgress(
           debugLog('Progress saved to API:', progress.currentTime, '/', progress.duration);
         } else {
           debugLog('Failed to save to API, falling back to localStorage:', result.error);
-          WatchHistoryService.saveLocal(progress);
+          await WatchHistoryService.saveLocal(progress);
         }
       } else {
-        WatchHistoryService.saveLocal(progress);
+        await WatchHistoryService.saveLocal(progress);
         debugLog('Progress saved to localStorage:', progress.currentTime, '/', progress.duration);
       }
 
@@ -114,7 +114,7 @@ export function useWatchProgress(
     } catch (error) {
       debugLog('Error saving progress:', error);
       // Save to localStorage as fallback
-      WatchHistoryService.saveLocal(progress);
+      await WatchHistoryService.saveLocal(progress);
       if (isMountedRef.current) {
         setSavedProgress(progress);
       }
@@ -250,7 +250,7 @@ export function useWatchProgress(
       }
 
       if (!progress) {
-        progress = WatchHistoryService.getLocal(videoId);
+        progress = await WatchHistoryService.getLocal(videoId);
         debugLog('Loaded progress from localStorage:', progress);
       }
 
