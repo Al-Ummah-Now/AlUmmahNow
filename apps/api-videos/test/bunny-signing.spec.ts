@@ -119,4 +119,21 @@ describe('bunny signing', () => {
 		const text = `not json https://${HOST}/${VID}/playlist.m3u8`;
 		assert.equal(await signBunnyUrlsInText(text, HOST, KEY), text);
 	});
+
+	it('signs only a single plain file name (no traversal or encoded segments)', async () => {
+		const OTHER = '11111111-2222-3333-4444-555555555555';
+		const bad = [
+			`https://${HOST}/${VID}/../${OTHER}/thumbnail.jpg`,
+			`https://${HOST}/${VID}/%2e%2e/${OTHER}/thumbnail.jpg`,
+			`https://${HOST}/${VID}/sub/thumbnail.jpg`,
+			`https://${HOST}/${VID}/..jpg`,
+		];
+		for (const url of bad) {
+			const out = JSON.parse(await signBunnyUrlsInText(JSON.stringify({ id: VID, thumbnailUrl: url }), HOST, KEY));
+			assert.equal(out.thumbnailUrl, url, url);
+		}
+		const ok = JSON.parse(await signBunnyUrlsInText(JSON.stringify({ id: VID, thumbnailUrl: `https://${HOST}/${VID}/thumbnail_767db498.jpg` }), HOST, KEY));
+		assert.match(ok.thumbnailUrl, /thumbnail_767db498\.jpg\?token=/);
+	});
 });
+

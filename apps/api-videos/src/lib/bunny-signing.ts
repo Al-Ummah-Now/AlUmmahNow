@@ -100,14 +100,16 @@ export async function signBunnyUrlsInText(
 		return text;
 	}
 
-	const urlPattern = new RegExp(`^https://${escapeRegExp(host)}/(${VIDEO_ID})/([^?#"'\\s<>]+)$`);
+	// One plain file name only: no '/', '%' or dot segments, so the signed path
+	// is exactly the path the CDN serves (no traversal into another video)
+	const urlPattern = new RegExp(`^https://${escapeRegExp(host)}/(${VIDEO_ID})/([A-Za-z0-9_-][A-Za-z0-9_.-]*)$`);
 	const expires = tokenExpiry(nowSeconds);
 	const directoryTokens = new Map<string, string>();
 	let changed = false;
 
 	const signImage = async (url: string, owners: Set<string>): Promise<string> => {
 		const match = urlPattern.exec(url);
-		if (!match || !owners.has(match[1]) || !IMAGE_FILE.test(match[2])) return url;
+		if (!match || !owners.has(match[1]) || !IMAGE_FILE.test(match[2]) || match[2].includes('..')) return url;
 		const path = `/${match[1]}/${match[2]}`;
 		changed = true;
 		return `https://${host}${path}?token=${await bunnyFileToken(securityKey, path, expires)}&expires=${expires}`;
