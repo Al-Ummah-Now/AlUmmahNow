@@ -14,7 +14,32 @@
  */
 
 /** Event types that first-party code and vetted libraries register globally. */
+/**
+ * Event types React DOM listens to on its root container. The Next.js App
+ * Router hydrates the whole document, so that root container IS `document`:
+ * blocking any of these silently breaks the matching React props everywhere
+ * (e.g. `input` -> onChange of every text field, `submit` -> form onSubmit,
+ * `mouseover`/`mouseout` -> onMouseEnter/Leave, media events -> onPlay...).
+ * Mirrors react-dom's registered native events (simpleEventPluginEvents,
+ * media events, enter/leave, change/select/beforeinput/composition plugins).
+ */
+export const REACT_ROOT_EVENT_TYPES: ReadonlyArray<string> = [
+  'abort', 'auxclick', 'beforetoggle', 'cancel', 'canplay', 'canplaythrough', 'click', 'close',
+  'contextmenu', 'copy', 'cut', 'drag', 'dragend', 'dragenter', 'dragexit', 'dragleave', 'dragover',
+  'dragstart', 'drop', 'durationchange', 'emptied', 'encrypted', 'ended', 'error', 'fullscreenchange',
+  'fullscreenerror', 'gotpointercapture', 'input', 'invalid', 'keydown', 'keypress', 'keyup', 'load',
+  'loadeddata', 'loadedmetadata', 'loadstart', 'lostpointercapture', 'mousedown', 'mousemove',
+  'mouseout', 'mouseover', 'mouseup', 'paste', 'pause', 'play', 'playing', 'pointercancel',
+  'pointerdown', 'pointermove', 'pointerout', 'pointerover', 'pointerup', 'progress', 'ratechange',
+  'reset', 'resize', 'seeked', 'seeking', 'stalled', 'submit', 'suspend', 'timeupdate', 'touchcancel',
+  'touchend', 'touchstart', 'volumechange', 'scroll', 'scrollend', 'toggle', 'touchmove', 'waiting',
+  'wheel', 'animationend', 'animationiteration', 'animationstart', 'dblclick', 'focusin', 'focusout',
+  'transitionrun', 'transitionstart', 'transitioncancel', 'transitionend', 'change', 'selectionchange',
+  'compositionend', 'compositionstart', 'compositionupdate', 'textInput', 'beforeinput', 'select',
+];
+
 export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
+  ...REACT_ROOT_EVENT_TYPES,
   // Keyboard: player shortcuts, modal Escape handling, focus traps, Radix menus
   'keydown',
   'keyup',
