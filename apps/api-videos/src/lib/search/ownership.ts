@@ -111,27 +111,52 @@ const CHANNEL_VIDEO_ORDER: Record<ChannelVideoSort, string> = {
   oldest: 'COALESCE(created_at, 0) ASC, id',
 };
 
+export interface ChannelVideoQuery {
+  sort: ChannelVideoSort;
+  offset: number;
+  limit: number;
+  /**
+   * Which private videos are included: `true` all of them (channel owner),
+   * a user id only those that user created, `false`/null none.
+   */
+  privateFor: boolean | string | null;
+  /** Exclude live streams and videos shorter than 60 s (channel "Videos" tab). */
+  longFormOnly?: boolean;
+  /** Only public (`true`) or only private (`false`) videos. */
+  isPublic?: boolean;
+  /** Only live streams. */
+  liveOnly?: boolean;
+}
+
 /**
- * One page of a channel's long-form videos (same filter as the channel videos
- * endpoint: not deleted/hidden/live, not shorter than 60 s, private ones only
- * for the owner). Fetches `limit + 1` ids so the caller knows if more exist.
+ * One page of a channel's videos from the index (never deleted or hidden).
+ * Fetches `limit + 1` ids so the caller knows if more exist.
  */
-export function channelVideoPage(
+export function channelVideoIds(
   env: OwnershipEnv,
   channelId: string,
-  options: { includePrivate: boolean; sort: ChannelVideoSort; offset: number; limit: number },
+  query: ChannelVideoQuery,
 ): Promise<{ ids: string[]; hasMore: boolean } | null> {
   return whenComplete(env, 'video', async db => {
-    const order = CHANNEL_VIDEO_ORDER[options.sort] ?? CHANNEL_VIDEO_ORDER.latest;
+    const order = CHANNEL_VIDEO_ORDER[query.sort] ?? CHANNEL_VIDEO_ORDER.latest;
+    const where = [`kind = 'video'`, 'channel_id = ?', 'is_deleted = 0', 'is_hidden = 0'];
+    const params: unknown[] = [channelId];
+    if (query.longFormOnly) {
+      where.push('is_live = 0', '(duration IS NULL OR duration = 0 OR duration >= 60)');
+    }
+    if (query.liveOnly) where.push('is_live = 1');
+    if (query.isPublic !== undefined) where.push(query.isPublic ? 'is_public = 1' : 'is_public = 0');
+    if (typeof query.privateFor === 'string') {
+      where.push('(is_public = 1 OR owner_id = ?)');
+      params.push(query.privateFor);
+    } else if (!query.privateFor) {
+      where.push('is_public = 1');
+    }
     const { results } = await db.prepare(
-      `SELECT id FROM ${OWNERSHIP_TABLE}
-       WHERE kind = 'video' AND channel_id = ? AND is_deleted = 0 AND is_hidden = 0 AND is_live = 0
-         AND (duration IS NULL OR duration = 0 OR duration >= 60)
-         AND (is_public = 1 OR ? = 1)
-       ORDER BY ${order} LIMIT ? OFFSET ?`,
-    ).bind(channelId, options.includePrivate ? 1 : 0, options.limit + 1, options.offset).all<{ id: string }>();
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`,
+    ).bind(...params, query.limit + 1, query.offset).all<{ id: string }>();
     const ids = (results ?? []).map(r => r.id);
-    return { ids: ids.slice(0, options.limit), hasMore: ids.length > options.limit };
+    return { ids: ids.slice(0, query.limit), hasMore: ids.length > query.limit };
   });
 }
 

@@ -5,17 +5,8 @@ import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { channelVideoPage, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
-
-/** Cursors issued from the ownership index are offsets; anything else is a legacy R2 cursor. */
-const INDEX_CURSOR_PREFIX = "idx:";
-
-function indexOffset(cursor: string | undefined): number | null {
-	if (!cursor) return 0;
-	if (!cursor.startsWith(INDEX_CURSOR_PREFIX)) return null;
-	const offset = Number.parseInt(cursor.slice(INDEX_CURSOR_PREFIX.length), 10);
-	return Number.isFinite(offset) && offset >= 0 ? offset : 0;
-}
+import { waitUntilOf } from "../../lib/search/ownership";
+import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
 
 export class ChannelVideosList extends OptionalAuthRoute {
 	schema = {
@@ -186,24 +177,27 @@ export class ChannelVideosList extends OptionalAuthRoute {
 
 			// Ownership index: filter, sort and page in D1, then load only this
 			// page's objects (the filter is re-applied to the loaded objects).
-			const offset = indexOffset(cursor);
-			const page = offset === null ? null : await channelVideoPage(c.env as never, channelId, {
-				includePrivate: isOwner,
-				sort: (sort || "latest") as "latest" | "popular" | "oldest",
-				offset,
+			const page = await channelVideosFromIndex<VideoType>(c.env as never, {
+				channelId,
+				cursor,
 				limit,
+				query: {
+					sort: (sort || "latest") as "latest" | "popular" | "oldest",
+					privateFor: isOwner,
+					longFormOnly: true,
+				},
+				load: id => repository.getObject(id),
+				isListed,
+				waitUntil: waitUntilOf(c as never),
 			});
 
 			if (page) {
 				source = "index";
-				const loaded = await Promise.all(page.ids.map(id => repository.getObject(id)));
-				limitedVideos = loaded.filter(isListed);
-				nextCursor = page.hasMore ? `${INDEX_CURSOR_PREFIX}${offset + limit}` : "";
+				limitedVideos = page.videos;
+				nextCursor = page.cursor;
 			} else {
 				// Index incomplete (or a legacy R2 cursor): previous behaviour, one
-				// bounded slice of the bucket, and rebuild the index in the background.
-				if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'video');
-
+				// bounded slice of the bucket (the helper schedules an index heal).
 				// Use R2's native cursor pagination to get all videos
 				const videos = await repository.listObjects(limit * 10, cursor); // Get more to filter
 
