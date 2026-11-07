@@ -26,6 +26,8 @@ export interface UseRealTimeNotificationsOptions {
 export interface UseRealTimeNotificationsReturn {
   notifications: Notification[];
   unreadCount: number;
+  /** Ask for browser notification permission; call from a user gesture */
+  requestBrowserPermission: () => Promise<NotificationPermission | null>;
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
   markAsRead: (notificationId: string) => void;
   markAllAsRead: () => void;
@@ -186,13 +188,15 @@ export function useRealTimeNotifications(
     setNotifications([]);
   }, []);
   
-  // Request notification permission on mount
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().then(permission => {
-        logger.info('Notification permission:', permission);
-      });
-    }
+  // Browser notification permission must be requested from a user gesture:
+  // Firefox throws when it is requested on page load, and Chrome suppresses
+  // such prompts. Call this from a click (e.g. a notifications setting).
+  const requestBrowserPermission = useCallback(async (): Promise<NotificationPermission | null> => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return null;
+    if (Notification.permission !== 'default') return Notification.permission;
+    const permission = await Notification.requestPermission();
+    logger.info('Notification permission:', permission);
+    return permission;
   }, []);
   
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -200,6 +204,7 @@ export function useRealTimeNotifications(
   return {
     notifications,
     unreadCount,
+    requestBrowserPermission,
     addNotification,
     markAsRead,
     markAllAsRead,

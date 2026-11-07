@@ -1,6 +1,7 @@
 import videojs, { type Player, type PlayerOptions } from 'video.js';
-import '@videojs/http-streaming';
-import 'videojs-contrib-quality-levels';
+// Video.js 8 bundles @videojs/http-streaming (VHS) and the quality-levels
+// plugin. Importing them again registered both twice ("A plugin named
+// qualityLevels already exists") and added their code to the bundle again.
 import 'videojs-hls-quality-selector';
 import videojsArabic from 'video.js/dist/lang/ar.json';
 import { logger } from '@/lib/logger-client';
