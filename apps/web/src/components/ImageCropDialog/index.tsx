@@ -47,7 +47,9 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const frameRef = useRef<HTMLDivElement>(null);
+  // Callback-ref state: the frame mounts inside the dialog portal after this
+  // component's effects first run, so measure when the element itself appears.
+  const [frameEl, setFrameEl] = useState<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const drag = useRef<{ id: number; start: Point; from: Point } | null>(null);
 
@@ -68,16 +70,18 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
 
   // Track the frame size (it is responsive)
   useLayoutEffect(() => {
-    const el = frameRef.current;
+    const el = frameEl;
     if (!el) return;
     const measure = () => setViewport({ width: el.clientWidth, height: el.clientHeight });
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [src]);
+  }, [frameEl]);
 
-  const scale = natural ? coverScale(natural, viewport) * zoom : 1;
+  const measured = viewport.width > 0 && viewport.height > 0;
+  const ready = !!natural && measured;
+  const scale = ready ? coverScale(natural, viewport) * zoom : 1;
 
   const applyZoom = useCallback(
     (next: number) => {
@@ -98,7 +102,7 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
 
   // Wheel zoom needs a non-passive listener to stop the page scrolling
   useEffect(() => {
-    const el = frameRef.current;
+    const el = frameEl;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -106,7 +110,7 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [applyZoom, zoom]);
+  }, [applyZoom, zoom, frameEl]);
 
   const move = (dx: number, dy: number) => {
     if (!natural) return;
@@ -158,7 +162,7 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
 
   const apply = async () => {
     const img = imgRef.current;
-    if (!img || !natural || !file) return;
+    if (!img || !natural || !file || !measured) return;
     setBusy(true);
     try {
       const { sx, sy, sw, sh } = sourceRect(natural, viewport, scale, offset);
@@ -205,7 +209,7 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
           </p>
         ) : (
           <div
-            ref={frameRef}
+            ref={setFrameEl}
             // Geometry is physical (left/right), so keep the frame LTR in Arabic too
             dir="ltr"
             role="group"
@@ -232,7 +236,7 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
                 onError={() => setFailed(true)}
                 className="absolute left-1/2 top-1/2 max-w-none pointer-events-none"
                 style={
-                  natural
+                  ready
                     ? {
                         width: natural.width * scale,
                         height: natural.height * scale,
@@ -283,7 +287,7 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
           <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
             {t.imageCrop.cancel}
           </Button>
-          <Button type="button" onClick={apply} disabled={busy || failed || !natural} data-testid="image-crop-apply">
+          <Button type="button" onClick={apply} disabled={busy || failed || !ready} data-testid="image-crop-apply">
             {t.imageCrop.apply}
           </Button>
         </DialogFooter>
