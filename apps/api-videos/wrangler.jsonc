@@ -153,6 +153,12 @@
 		"binding": "INTERNAL_API_KEY",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "internal-api-key"
+	  },
+	  {
+		// Bunny CDN token authentication key of legacy library 400189 (vz-215a1ffd)
+		"binding": "BUNNY_TOKEN_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "bunny-stream-token-key"
 	  }
 	],
 	/**
@@ -166,6 +172,10 @@
 		"Issuer": "https://auth.alummahnow.net",
 		"Audience": "https://videos.alummahnow.net",
 		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",
+		// Existing videos live on legacy library 400189 with CDN token auth on:
+		// sign its URLs (playUrl, thumbnails) in API responses
+		"BUNNY_SIGN_URLS": "true",
+		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
 		"WEBSOCKET_URL": "https://ws.alummahnow.net",
 		"CORS_ORIGINS": "https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
 	},

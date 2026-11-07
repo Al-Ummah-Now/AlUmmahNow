@@ -92,6 +92,15 @@ export class VideoBulkDelete extends AuthenticatedRoute {
 						};
 					}
 
+					// Only the owner may delete a video
+					if (!userId || video.userId !== userId) {
+						return {
+							videoId,
+							success: false,
+							error: "Forbidden",
+						};
+					}
+
 					// Send queue message for video deletion
 					await queue.send(MessageType.VideoDelete, {
 						videoId: videoId,

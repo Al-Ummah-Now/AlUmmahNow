@@ -1,0 +1,157 @@
+/**
+ * Bunny CDN token authentication for Stream video URLs.
+ *
+ * With "CDN token authentication" enabled on the Stream library, Bunny only
+ * serves files whose URL carries a valid token. We use a directory token in
+ * the path form:
+ *
+ *   https://<host>/bcdn_token=<token>&expires=<ts>&token_path=%2F<video>%2F/<video>/playlist.m3u8
+ *
+ * Bunny resolves relative URLs inside the HLS playlists against that path, so
+ * every rendition playlist and segment carries the same token. Still images
+ * (thumbnails, previews) get a single-file token instead; see bunnyFileToken. (A query-string token would be dropped by the player
+ * when it loads segments.)
+ *
+ * token = base64url(sha256(securityKey + signedPath + expires + "token_path=" + signedPath))
+ */
+
+const TOKEN_TTL_SECONDS = 6 * 60 * 60;
+/** Expiry is rounded up to the hour so URLs stay identical (and cacheable) for an hour */
+const EXPIRY_GRANULARITY_SECONDS = 60 * 60;
+
+const VIDEO_ID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+
+function base64Url(bytes: ArrayBuffer): string {
+	let binary = '';
+	for (const b of new Uint8Array(bytes)) binary += String.fromCharCode(b);
+	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function tokenExpiry(nowSeconds: number = Math.floor(Date.now() / 1000)): number {
+	const target = nowSeconds + TOKEN_TTL_SECONDS;
+	return Math.ceil(target / EXPIRY_GRANULARITY_SECONDS) * EXPIRY_GRANULARITY_SECONDS;
+}
+
+/** Directory token for everything under /<videoId>/ */
+export async function bunnyDirectoryToken(securityKey: string, videoId: string, expires: number): Promise<string> {
+	const tokenPath = `/${videoId}/`;
+	const data = new TextEncoder().encode(`${securityKey}${tokenPath}${expires}token_path=${tokenPath}`);
+	return base64Url(await crypto.subtle.digest('SHA-256', data));
+}
+
+/** Signed form of https://<host>/<videoId>/<rest> */
+export function signedBunnyUrl(host: string, videoId: string, rest: string, token: string, expires: number): string {
+	const tokenPath = encodeURIComponent(`/${videoId}/`);
+	return `https://${host}/bcdn_token=${token}&expires=${expires}&token_path=${tokenPath}/${videoId}/${rest}`;
+}
+
+/** Still images only ever need themselves; they never load relative URLs */
+const IMAGE_FILE = /^[^?#]+\.(?:jpe?g|png|webp|gif|avif)$/i;
+
+/**
+ * File token for one exact path, query form:
+ * https://<host>/<videoId>/<file>?token=<token>&expires=<ts>
+ * token = base64url(sha256(securityKey + path + expires))
+ *
+ * Used for thumbnails and previews so a stored image URL (cards, watch
+ * history, playlists) can never be reused to fetch the video's playlist.
+ */
+export async function bunnyFileToken(securityKey: string, path: string, expires: number): Promise<string> {
+	const data = new TextEncoder().encode(`${securityKey}${path}${expires}`);
+	return base64Url(await crypto.subtle.digest('SHA-256', data));
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Fields that hold a still image of the record's video (file token) */
+const IMAGE_FIELDS = new Set(['thumbnailUrl', 'thumbnail', 'previewUrl', 'poster', 'videoThumbnail']);
+/** Field whose values are image URLs per size, e.g. { hd, sd } */
+const IMAGE_MAP_FIELD = 'thumbnailSizes';
+/** The only field that gets a directory token (it unlocks playback) */
+const PLAYLIST_FIELD = 'playUrl';
+const PLAYLIST_FILE = 'playlist.m3u8';
+
+type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+
+/**
+ * Sign Bunny Stream URLs in a JSON response body.
+ *
+ * Not a signing oracle: only known URL fields are considered (never free text
+ * such as descriptions or comments), and a URL is signed only when its video
+ * id is the id (or videoId) of the object that holds it, so a record cannot
+ * obtain tokens for another video. Only the canonical playUrl
+ * (<id>/playlist.m3u8) gets a directory token; images get single-file tokens;
+ * anything else stays unsigned. Non-JSON bodies are returned unchanged.
+ */
+export async function signBunnyUrlsInText(
+	text: string,
+	host: string,
+	securityKey: string,
+	nowSeconds?: number,
+): Promise<string> {
+	if (!host || !securityKey || !text.includes(host)) return text;
+
+	let body: Json;
+	try {
+		body = JSON.parse(text) as Json;
+	} catch {
+		return text;
+	}
+
+	// One plain file name only: no '/', '%' or dot segments, so the signed path
+	// is exactly the path the CDN serves (no traversal into another video)
+	const urlPattern = new RegExp(`^https://${escapeRegExp(host)}/(${VIDEO_ID})/([A-Za-z0-9_-][A-Za-z0-9_.-]*)$`);
+	const expires = tokenExpiry(nowSeconds);
+	const directoryTokens = new Map<string, string>();
+	let changed = false;
+
+	const signImage = async (url: string, owners: Set<string>): Promise<string> => {
+		const match = urlPattern.exec(url);
+		if (!match || !owners.has(match[1]) || !IMAGE_FILE.test(match[2]) || match[2].includes('..')) return url;
+		const path = `/${match[1]}/${match[2]}`;
+		changed = true;
+		return `https://${host}${path}?token=${await bunnyFileToken(securityKey, path, expires)}&expires=${expires}`;
+	};
+
+	const signPlaylist = async (url: string, owners: Set<string>): Promise<string> => {
+		const match = urlPattern.exec(url);
+		if (!match || !owners.has(match[1]) || match[2] !== PLAYLIST_FILE) return url;
+		const videoId = match[1];
+		if (!directoryTokens.has(videoId)) {
+			directoryTokens.set(videoId, await bunnyDirectoryToken(securityKey, videoId, expires));
+		}
+		changed = true;
+		return signedBunnyUrl(host, videoId, PLAYLIST_FILE, directoryTokens.get(videoId)!, expires);
+	};
+
+	const walk = async (node: Json): Promise<void> => {
+		if (Array.isArray(node)) {
+			for (const item of node) await walk(item);
+			return;
+		}
+		if (!node || typeof node !== 'object') return;
+
+		const owners = new Set<string>();
+		if (typeof node.id === 'string') owners.add(node.id);
+		if (typeof node.videoId === 'string') owners.add(node.videoId);
+
+		for (const [key, value] of Object.entries(node)) {
+			if (typeof value === 'string') {
+				if (owners.size === 0) continue;
+				if (key === PLAYLIST_FIELD) node[key] = await signPlaylist(value, owners);
+				else if (IMAGE_FIELDS.has(key)) node[key] = await signImage(value, owners);
+			} else if (key === IMAGE_MAP_FIELD && value && typeof value === 'object' && !Array.isArray(value)) {
+				for (const [size, url] of Object.entries(value)) {
+					if (typeof url === 'string' && owners.size > 0) value[size] = await signImage(url, owners);
+				}
+			} else {
+				await walk(value);
+			}
+		}
+	};
+
+	await walk(body);
+	return changed ? JSON.stringify(body) : text;
+}
