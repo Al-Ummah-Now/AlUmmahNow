@@ -10,8 +10,24 @@
 			"binding": "REPORTS_DB",
 			"database_name": "al-ummah-now-reports",
 			"database_id": "7bee932d-c6b1-47c2-ab70-7dba349104af"
+		},
+		{
+			// Notification center + library indexes (Epic 29).
+			// PLACEHOLDER: the production database does not exist yet. Before the first
+			// production deploy run `npx wrangler d1 create al-ummah-now-notifications`,
+			// put the returned id here and in apps/api-videos/wrangler.jsonc, then
+			// `npx wrangler d1 migrations apply al-ummah-now-notifications --remote`.
+			"binding": "NOTIFICATIONS_DB",
+			"database_name": "al-ummah-now-notifications",
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "migrations-notifications"
 		}
 	],
+
+	// Daily notification retention sweep (90 days)
+	"triggers": {
+		"crons": ["41 3 * * *"]
+	},
 
 	// R2 bucket configuration
 	"r2_buckets": [
