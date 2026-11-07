@@ -78,6 +78,9 @@ See [`docs/specs/EMBEDS-COMMENTS-TIERS.md`](specs/EMBEDS-COMMENTS-TIERS.md): emb
 ### **Epic 28: AI-assisted moderation & flagging (Cloudflare Workers AI)**
 See [`docs/specs/AI-MODERATION.md`](specs/AI-MODERATION.md).
 
+### **Epic 29: Core web experience completion (P0)**
+Channels, posting, commenting, profiles, reactions, subscriptions, search, home/explore/library/notifications. See [`docs/specs/CORE-WEB-EXPERIENCE.md`](specs/CORE-WEB-EXPERIENCE.md).
+
 ---
 
 ## GitHub Issues Coverage Analysis
