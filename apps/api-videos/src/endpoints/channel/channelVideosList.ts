@@ -5,6 +5,17 @@ import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { channelVideoPage, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+
+/** Cursors issued from the ownership index are offsets; anything else is a legacy R2 cursor. */
+const INDEX_CURSOR_PREFIX = "idx:";
+
+function indexOffset(cursor: string | undefined): number | null {
+	if (!cursor) return 0;
+	if (!cursor.startsWith(INDEX_CURSOR_PREFIX)) return null;
+	const offset = Number.parseInt(cursor.slice(INDEX_CURSOR_PREFIX.length), 10);
+	return Number.isFinite(offset) && offset >= 0 ? offset : 0;
+}
 
 export class ChannelVideosList extends OptionalAuthRoute {
 	schema = {
@@ -132,12 +143,10 @@ export class ChannelVideosList extends OptionalAuthRoute {
 			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
+			const isOwner = Boolean(userId && channel.userId === userId);
 
-			// Use R2's native cursor pagination to get all videos
-			const videos = await repository.listObjects(limit * 10, cursor); // Get more to filter
-
-			// Filter videos for this channel and based on privacy settings
-			let channelVideos = (videos.items || []).filter(video => {
+			const isListed = (video: VideoType | null): video is VideoType => {
+				if (!video) return false;
 				// Must belong to this channel
 				if (video.channelId !== channelId) {
 					return false;
@@ -163,29 +172,66 @@ export class ChannelVideosList extends OptionalAuthRoute {
 
 				// If video is explicitly private (false), only show if user is channel owner
 				if (video.isPublic === false) {
-					return userId && channel.userId === userId;
+					return isOwner;
 				}
 
 				// If video is public (true) or undefined/null (default to public), show it
 				return true;
+			};
+
+			let limitedVideos: VideoType[];
+			let nextCursor: string;
+			let source: "index" | "scan" = "scan";
+			let totalFiltered: number | undefined;
+
+			// Ownership index: filter, sort and page in D1, then load only this
+			// page's objects (the filter is re-applied to the loaded objects).
+			const offset = indexOffset(cursor);
+			const page = offset === null ? null : await channelVideoPage(c.env as never, channelId, {
+				includePrivate: isOwner,
+				sort: (sort || "latest") as "latest" | "popular" | "oldest",
+				offset,
+				limit,
 			});
 
-			// Sort videos based on sort parameter
-			channelVideos.sort((a, b) => {
-				switch (sort) {
-					case "latest":
-						return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
-					case "popular":
-						return (b.views || 0) - (a.views || 0);
-					case "oldest":
-						return new Date(a.dateCreated || 0).getTime() - new Date(b.dateCreated || 0).getTime();
-					default:
-						return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
-				}
-			});
+			if (page) {
+				source = "index";
+				const loaded = await Promise.all(page.ids.map(id => repository.getObject(id)));
+				limitedVideos = loaded.filter(isListed);
+				nextCursor = page.hasMore ? `${INDEX_CURSOR_PREFIX}${offset + limit}` : "";
+			} else {
+				// Index incomplete (or a legacy R2 cursor): previous behaviour, one
+				// bounded slice of the bucket, and rebuild the index in the background.
+				if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'video');
 
-			// Limit to requested amount
-			const limitedVideos = channelVideos.slice(0, limit);
+				// Use R2's native cursor pagination to get all videos
+				const videos = await repository.listObjects(limit * 10, cursor); // Get more to filter
+
+				// Filter videos for this channel and based on privacy settings
+				const channelVideos = (videos.items || []).filter(isListed);
+
+				// Sort videos based on sort parameter
+				channelVideos.sort((a, b) => {
+					switch (sort) {
+						case "latest":
+							return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
+						case "popular":
+							return (b.views || 0) - (a.views || 0);
+						case "oldest":
+							return new Date(a.dateCreated || 0).getTime() - new Date(b.dateCreated || 0).getTime();
+						default:
+							return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
+					}
+				});
+
+				// Limit to requested amount
+				limitedVideos = channelVideos.slice(0, limit);
+				totalFiltered = channelVideos.length;
+
+				// Since we filtered after fetching, we need to manage cursor differently
+				const hasMore = channelVideos.length > limit;
+				nextCursor = hasMore ? videos.cursor : "";
+			}
 
 			// Transform business videos to view models
 			const transformToView = (video: VideoType) => ({
@@ -197,11 +243,6 @@ export class ChannelVideosList extends OptionalAuthRoute {
 				commentsCount: video.comments?.length || 0,
 			});
 
-			// Return response with custom cursor for pagination
-			// Since we filtered after fetching, we need to manage cursor differently
-			const hasMore = channelVideos.length > limit;
-			const nextCursor = hasMore ? videos.cursor : "";
-
 			const response: PaginationResponse<ReturnType<typeof transformToView>> = {
 				cursor: nextCursor || "",
 				limit,
@@ -212,8 +253,9 @@ export class ChannelVideosList extends OptionalAuthRoute {
 			logger.info('Successfully fetched channel videos', {
 				channelId,
 				videosCount: limitedVideos.length,
-				totalFiltered: channelVideos.length,
-				hasMore,
+				totalFiltered,
+				hasMore: Boolean(nextCursor),
+				source,
 				duration
 			});
 

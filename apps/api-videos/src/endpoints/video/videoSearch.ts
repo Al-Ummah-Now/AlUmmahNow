@@ -8,6 +8,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { Channel } from "@al-ummah/shared-types";
 import { logger } from "../../lib/logger";
 import { isVideoRemoved } from "../../lib/visibility";
+import { channelsVideoIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 
 export class VideoSearch extends OptionalAuthRoute {
 	schema = {
@@ -151,15 +152,21 @@ export class VideoSearch extends OptionalAuthRoute {
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 
-		// For now, get all videos and filter in memory
-		// In production, this should use a proper search index like Elasticsearch
-		// Scan every R2 page (bounded). The response `cursor` is an offset into
-		// the filtered, sorted results (see pagination below), not an R2
-		// continuation token, so it must not be passed to listObjects: doing so
-		// failed every second-page request with "Continuation token is not valid".
-		const MAX_PAGES = 20;
-		let videos = await repository.listObjects(1000);
-		{
+		// With channelIds, the ownership index lists the channels' videos
+		// (O(their videos)); the objects are then loaded and go through the same
+		// filtering, scoring and sorting as before. Without channelIds, or while
+		// the index is incomplete, every R2 page is scanned (bounded). The
+		// response `cursor` is an offset into the filtered, sorted results (see
+		// pagination below), not an R2 continuation token.
+		const indexedIds = channelIdList.length > 0 ? await channelsVideoIds(c.env as never, channelIdList) : null;
+		let videos: { cursor: string; items: VideoType[] };
+		if (indexedIds) {
+			const loaded = await Promise.all(indexedIds.map(id => repository.getObject(id)));
+			videos = { cursor: "", items: loaded.filter((video): video is VideoType => video !== null) };
+		} else {
+			if (channelIdList.length > 0) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'video');
+			const MAX_PAGES = 20;
+			videos = await repository.listObjects(1000);
 			const collected = [...(videos.items || [])];
 			let next = videos.cursor;
 			let pages = 1;
@@ -171,6 +178,7 @@ export class VideoSearch extends OptionalAuthRoute {
 			}
 			videos = { ...videos, items: collected, cursor: "" };
 		}
+		logger.debug('[VideoSearch] Candidates loaded', { source: indexedIds ? 'index' : 'scan', candidates: videos.items.length });
 
 		// Prepare for search scoring
 		const searchTerms = query ? query.toLowerCase().trim().split(/\s+/) : [];
