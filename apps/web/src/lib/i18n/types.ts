@@ -127,6 +127,7 @@ export interface AppTranslations {
     upload: string;
     subscriptions: string;
     library: string;
+    explore: string;
   };
 
   /**
@@ -557,6 +558,44 @@ export interface AppTranslations {
     thisMonth: string;
     noTrendingVideos: string;
     checkBackLater: string;
+    typeAll: string;
+    typeVideos: string;
+    typeChannels: string;
+    typePlaylists: string;
+    typePosts: string;
+    resultType: string;
+    anyDate: string;
+    thisYear: string;
+    verifiedOnly: string;
+    verified: string;
+    sortNewest: string;
+    sortPopular: string;
+    urdu: string;
+    french: string;
+    inChannel: string;
+    thisChannel: string;
+    removeFilter: string;
+    showResults: string;
+    closeFilters: string;
+    loadMore: string;
+    loadingMore: string;
+    relaxedNotice: string;
+    searchError: string;
+    retry: string;
+    removeFromHistory: string;
+    historyEmpty: string;
+    historyPrivacyNote: string;
+    historyCleared: string;
+    communityPost: string;
+    likesCount: string;
+    commentsCount: string;
+    videosCount: string;
+    viewsCount: string;
+    live: string;
+    searchInputLabel: string;
+    suggestionsLabel: string;
+    startSearching: string;
+    resultsLabel: string;
   };
 
   /**
@@ -1568,6 +1607,32 @@ export interface AppTranslations {
     featuredChannelsEmpty: string;
     subscriptionsEmpty: string;
     channelsTabEmpty: string;
+  };
+  /**
+   * Explore page (Epic 29, Story 29.7)
+   */
+  explore: {
+    title: string;
+    subtitle: string;
+    trending: string;
+    popularFallback: string;
+    contentLanguage: string;
+    allLanguages: string;
+    english: string;
+    arabic: string;
+    categories: string;
+    categoryVideos: string;
+    liveNow: string;
+    noLive: string;
+    watching: string;
+    viewAll: string;
+    newChannels: string;
+    noNewChannels: string;
+    noTrending: string;
+    sectionFailed: string;
+    retry: string;
+    seasonalUntil: string;
+    browseCategory: string;
   };
   /**
    * Accessibility: skip links, landmark labels and accessible names for
