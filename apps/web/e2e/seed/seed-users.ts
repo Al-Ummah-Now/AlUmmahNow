@@ -19,6 +19,7 @@ interface ChannelRecord {
   userId: string;
   isMain?: boolean;
   isDeleted?: boolean;
+  dateCreated?: string;
 }
 
 /** Creates the user's profile (id = token subject) if it does not exist. Returns true if created. */
@@ -87,4 +88,45 @@ export async function ensureChannels(
   const wanted = new Set(specs.map((s) => s.name));
   const extra = existing.filter((c) => !wanted.has(c.name)).map((c) => c.name);
   return { channels: result, created, extra };
+}
+
+/**
+ * Name prefixes of the throwaway channels specs create (21-channel-handles-owner,
+ * 09-channel-switching). Specs delete them when they finish, but a cancelled or
+ * crashed run leaves them behind, and a leftover channel changes what the
+ * account menu, profile and "active channel" show for that user.
+ */
+export const DISPOSABLE_CHANNEL_PREFIXES = ['E2E Temp Channel', 'قناة اختبار'];
+
+/**
+ * Deletes the user's leftover throwaway channels (matched by name prefix and
+ * created at least `minAgeMs` ago, so a run still using one is left alone).
+ * Never touches the channels in `keep`. Returns the deleted channel names.
+ */
+export async function purgeDisposableChannels(
+  api: ApiClient,
+  session: SessionTokens,
+  opts: { keep: string[]; minAgeMs: number },
+): Promise<string[]> {
+  const keep = new Set(opts.keep);
+  const cutoff = Date.now() - opts.minAgeMs;
+  const stale = (await listOwnChannels(api, session)).filter(
+    (c) =>
+      !keep.has(c.name) &&
+      !c.isMain &&
+      DISPOSABLE_CHANNEL_PREFIXES.some((p) => c.name.startsWith(p)) &&
+      new Date(c.dateCreated || 0).getTime() <= cutoff,
+  );
+  const deleted: string[] = [];
+  for (const channel of stale) {
+    const res = await api.request(`/api/channels/${channel.id}`, {
+      method: 'DELETE',
+      token: session.accessToken,
+      channelId: channel.id,
+      allowStatus: [403, 404],
+    });
+    if (res.status < 300) deleted.push(channel.name);
+    else log.warn('Could not delete leftover channel', { name: channel.name, status: res.status });
+  }
+  return deleted;
 }

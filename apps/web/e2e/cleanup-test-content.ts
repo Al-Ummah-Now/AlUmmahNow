@@ -1,5 +1,5 @@
 /**
- * Deletes videos owned by the three E2E test users (test-single/multi/none-*).
+ * Deletes videos owned by the E2E test users (test-single/multi/none/scratch-*).
  *
  * Only the stored E2E sessions (e2e/.auth/user-*.json) are used, and only
  * videos whose channelId is one of that user's own channels are deleted, so
@@ -18,7 +18,7 @@ import * as fs from 'fs';
 import { AUTH_STATE, type AuthUser } from './test-utils/auth-state';
 import { listOwnVideos, userApi, SEED_TITLES } from './test-utils/e2e-videos';
 
-const USERS: AuthUser[] = ['single', 'multi', 'none'];
+const USERS: AuthUser[] = ['single', 'multi', 'none', 'scratch'];
 const SEED_TITLE_SET = new Set<string>(Object.values(SEED_TITLES));
 
 export interface CleanupOptions {

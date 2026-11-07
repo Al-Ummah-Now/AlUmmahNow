@@ -7,8 +7,10 @@ import { userApi, API_URL } from './test-utils/e2e-videos';
  * delete flow (incl. the profile notice afterwards).
  *
  * Each describe pins its auth. Flows that change data use a throwaway channel
- * created through the API for this test and removed again in afterEach, so
- * the E2E users keep their fixed channels.
+ * created through the API for this test and removed again afterwards. Those
+ * channels belong to the dedicated `scratch` user: other CI jobs and specs rely
+ * on `single`/`multi` owning exactly their fixed channels, and a leftover temp
+ * channel there used to become their active channel.
  */
 
 interface ApiChannel {
@@ -23,7 +25,7 @@ function uniqueSuffix(): string {
 }
 
 async function createThrowawayChannel(label: string): Promise<ApiChannel> {
-  const u = userApi('single');
+  const u = userApi('scratch');
   const res = await u.api.post<{ result: { channel: ApiChannel } }>(
     '/api/channels',
     { name: `E2E Temp Channel ${label} ${uniqueSuffix()}` },
@@ -35,7 +37,7 @@ async function createThrowawayChannel(label: string): Promise<ApiChannel> {
 async function deleteChannelQuietly(channel: ApiChannel | null): Promise<void> {
   if (!channel) return;
   try {
-    const u = userApi('single');
+    const u = userApi('scratch');
     await u.api.request(`/api/channels/${channel.id}`, { method: 'DELETE', token: u.token, channelId: channel.id, allowStatus: [403, 404] });
   } catch {
     // cleanup must never fail a test
@@ -108,7 +110,7 @@ test.describe('Channel owner actions - non-owner', () => {
 });
 
 test.describe('Channel owner - handle, About and delete', () => {
-  test.use({ storageState: AUTH_STATE.single });
+  test.use({ storageState: AUTH_STATE.scratch });
   test.describe.configure({ mode: 'serial' });
 
   let channel: ApiChannel | null = null;

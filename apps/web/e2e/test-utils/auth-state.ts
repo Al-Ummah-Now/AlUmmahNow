@@ -16,6 +16,11 @@ export const AUTH_STATE = {
   multi: path.join(AUTH_DIR, 'user-multi.json'),
   /** Profile, no channels */
   none: path.join(AUTH_DIR, 'user-none.json'),
+  /**
+   * Profile + one fixed main channel. The only user specs may create (and
+   * delete) extra channels on; every other user's channel set is fixed.
+   */
+  scratch: path.join(AUTH_DIR, 'user-scratch.json'),
 } as const;
 
 /** Explicitly logged-out state (overrides a project's storageState) */
@@ -59,8 +64,13 @@ export function readSession(user: AuthUser): { userId: string; activeChannelId: 
   return {
     userId: data.activeUserId,
     activeChannelId: data.activeChannelId ?? account?.activeChannelId ?? null,
-    channels: account?.channels ?? [],
+    channels: mainFirst(account?.channels ?? []),
   };
+}
+
+/** Main channel first, so `channels[0]` is always the user's main channel */
+function mainFirst(channels: SessionChannel[]): SessionChannel[] {
+  return [...channels].sort((a, b) => Number(!!b.isMain) - Number(!!a.isMain));
 }
 
 type StorageState = Exclude<BrowserContextOptions['storageState'], string | undefined>;
@@ -99,7 +109,7 @@ export function readAccount(user: AuthUser): {
     userId: data.activeUserId,
     email: account?.email ?? '',
     accessToken: account?.accessToken ?? '',
-    channels: account?.channels ?? [],
+    channels: mainFirst(account?.channels ?? []),
   };
 }
 
