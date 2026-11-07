@@ -18,6 +18,12 @@
       "database_name": "al-ummah-now-notifications-qa",
       "database_id": "61a2966a-66c2-4ae2-a98f-6e2e8cf6b880",
       "migrations_dir": "migrations-notifications"
+    },
+    {
+      // Search index shared with api-videos (schema owned by apps/api-videos/migrations/search)
+      "binding": "SEARCH_DB",
+      "database_name": "al-ummah-now-search-qa",
+      "database_id": "0282bac3-5b70-4343-a991-937c732d981a"
     }
   ],
 

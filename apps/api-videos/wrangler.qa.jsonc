@@ -78,6 +78,13 @@
       "binding": "NOTIFICATIONS_DB",
       "database_name": "al-ummah-now-notifications-qa",
       "database_id": "61a2966a-66c2-4ae2-a98f-6e2e8cf6b880"
+    },
+    {
+      // Search index (Epic 29, Story 29.9). Schema: migrations/search
+      "binding": "SEARCH_DB",
+      "database_name": "al-ummah-now-search-qa",
+      "database_id": "0282bac3-5b70-4343-a991-937c732d981a",
+      "migrations_dir": "migrations/search"
     }
   ],
   "kv_namespaces": [

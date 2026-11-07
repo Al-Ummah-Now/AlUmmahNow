@@ -737,7 +737,8 @@ export async function getSearchSuggestions(
 export async function getTrendingVideos(
   period: 'hour' | 'day' | 'week' | 'month' = 'day',
   category?: string,
-  limit: number = 20
+  limit: number = 20,
+  language?: string
 ): Promise<VideoObject[]> {
   try {
     const queryParams = new URLSearchParams({
@@ -747,6 +748,9 @@ export async function getTrendingVideos(
 
     if (category) {
       queryParams.append('category', category);
+    }
+    if (language) {
+      queryParams.append('language', language);
     }
 
     const response = await fetch(

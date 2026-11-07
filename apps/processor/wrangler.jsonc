@@ -21,6 +21,13 @@
 			"database_name": "al-ummah-now-notifications",
 			"database_id": "00000000-0000-0000-0000-000000000000",
 			"migrations_dir": "migrations-notifications"
+		},
+		{
+			// Search index shared with api-videos (schema: apps/api-videos/migrations/search).
+			// PRODUCTION DATABASE NOT CREATED YET: use the id of al-ummah-now-search (see apps/api-videos/wrangler.jsonc).
+			"binding": "SEARCH_DB",
+			"database_name": "al-ummah-now-search",
+			"database_id": "00000000-0000-0000-0000-000000000001"
 		}
 	],
 

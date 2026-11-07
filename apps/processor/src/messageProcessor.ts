@@ -3,6 +3,7 @@ import { Logger } from '@al-ummah/logger';
 import { handleChannelSectionEvent } from './handlers/channel-section';
 import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
+import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
 import { recordViewRollup } from './lib/analytics-rollup';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
 import {
@@ -223,6 +224,11 @@ export class MessageProcessor {
       // GDPR erasure (Story 1.3): anonymise the reporter on moderation reports in D1
       case MessageType.UserDataErased:
         await this.processUserDataErased(message, env);
+        break;
+
+      // Search index (Story 29.9): content written outside api-videos
+      case MessageType.SearchIndexSync:
+        await handleSearchIndexSync(message, env, this.logger);
         break;
 
       // Channel tab events - REMOVED: tabs are frontend-only, no backend processing
@@ -798,6 +804,7 @@ export class MessageProcessor {
           entityType,
           entityId,
         });
+        await applyModerationToSearchIndex({ entityType, entityId, action }, env, this.logger);
         break;
     }
   }

@@ -10,6 +10,8 @@ import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
 import { enforceRetention } from './lib/privacy/retention';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
+import { withSearchSync } from './lib/search/sync';
+import { reconcileSearchIndex } from './lib/search/backfill';
 
 // TUS Proxy import (not in routers yet)
 import { createTusRouter } from "./endpoints/video/tus";
@@ -364,7 +366,19 @@ app.get("/", async (c) => {
  * Daily cron (wrangler `triggers.crons`): enforce data retention (Story 1.3, AC 5).
  * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
  */
-async function scheduled(_controller: ScheduledController, env: AppBindings, ctx: ExecutionContext): Promise<void> {
+async function scheduled(_controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
+	// Retention deletes go through the search-sync wrapper so removed content leaves the index.
+	const env = withSearchSync(rawEnv, ctx);
+	ctx.waitUntil(
+		(async () => {
+			try {
+				// Story 29.9: daily reconciliation of the search index with R2 (a few pages per type per run).
+				await reconcileSearchIndex(rawEnv as never);
+			} catch (error) {
+				logger.error('[SearchReconcile] Sweep failed', { error: error instanceof Error ? error.message : String(error) });
+			}
+		})(),
+	);
 	ctx.waitUntil(
 		(async () => {
 			const budget = new OperationBudget(DEFAULT_OPERATION_BUDGET);
@@ -379,6 +393,7 @@ async function scheduled(_controller: ScheduledController, env: AppBindings, ctx
 }
 
 export default {
-	fetch: app.fetch,
+	// Content buckets are wrapped so every R2 write also updates the search index (lib/search/sync.ts).
+	fetch: (request: Request, env: AppBindings, ctx: ExecutionContext) => app.fetch(request, withSearchSync(env, ctx), ctx),
 	scheduled,
 };
