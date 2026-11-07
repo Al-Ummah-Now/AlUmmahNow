@@ -37,6 +37,12 @@ describe('EventListenerValidator', () => {
       expect(validator.validate('keypress-logger', () => undefined)).toEqual({ allowed: true, suspicious: [] });
     });
 
+    it('allows every event React delegates to the document root (controlled inputs need input/beforeinput)', () => {
+      for (const type of ['input', 'beforeinput', 'compositionend', 'submit', 'select', 'dblclick', 'mouseover', 'timeupdate', 'toggle']) {
+        expect(validator.validate(type, () => undefined).allowed).toBe(true);
+      }
+    });
+
     it('rejects invalid listeners and event types', () => {
       expect(validator.validate('', () => undefined).reason).toBe('invalid-event-type');
       expect(validator.validate('x'.repeat(65), () => undefined).reason).toBe('invalid-event-type');

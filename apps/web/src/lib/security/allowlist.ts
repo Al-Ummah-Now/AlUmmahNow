@@ -13,6 +13,27 @@
  * docs/security/event-listener-audit.md for the per-listener inventory.
  */
 
+/**
+ * Every native event React 19 delegates to its root container (react-dom
+ * `allNativeEvents`, minus types already listed in the allowlist below).
+ */
+export const REACT_DELEGATED_EVENTS: ReadonlyArray<string> = [
+  // Forms and text entry (onChange/onInput/onBeforeInput/onSubmit/onReset/onInvalid/onSelect)
+  'input', 'beforeinput', 'textInput', 'compositionstart', 'compositionupdate', 'compositionend',
+  'keypress', 'submit', 'reset', 'invalid', 'select',
+  // Pointer and mouse
+  'auxclick', 'dblclick', 'mouseover', 'mouseout', 'pointerover', 'pointerout',
+  'gotpointercapture', 'lostpointercapture', 'drag', 'dragexit', 'scrollend',
+  // Dialog / popover / details
+  'beforetoggle', 'toggle', 'cancel', 'close',
+  // Media elements (Video.js and <video> props)
+  'abort', 'canplay', 'canplaythrough', 'durationchange', 'emptied', 'encrypted', 'ended',
+  'loadeddata', 'loadedmetadata', 'loadstart', 'pause', 'play', 'playing', 'progress',
+  'ratechange', 'seeked', 'seeking', 'stalled', 'suspend', 'timeupdate', 'volumechange', 'waiting',
+  // Animations and transitions
+  'animationstart', 'animationiteration', 'transitionrun', 'transitionstart', 'transitioncancel',
+];
+
 /** Event types that first-party code and vetted libraries register globally. */
 export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   // Keyboard: player shortcuts, modal Escape handling, focus traps, Radix menus
@@ -108,6 +129,13 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   // Animation / transitions (Radix presence)
   'animationend',
   'transitionend',
+  // React root event delegation. Next.js hydrates the whole `document`, so React
+  // registers one listener per supported event on it. When this chunk evaluates
+  // before hydration (timing-dependent; reproducible on Mobile Safari), any type
+  // missing here silently breaks the matching React prop app-wide: e.g. without
+  // `input`, controlled inputs never fire onChange. Listener sources are still
+  // checked against BLOCKED_HANDLER_PATTERNS.
+  ...REACT_DELEGATED_EVENTS,
 ]);
 
 /**
