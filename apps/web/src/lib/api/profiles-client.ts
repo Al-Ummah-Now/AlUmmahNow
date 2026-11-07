@@ -1,6 +1,7 @@
 import { Profile } from "@/interfaces";
 import { User } from "@/interfaces";
-import { getProfileCurrent, getProfileById, createProfileAPI, updateProfileAPI, uploadProfileAvatar, uploadProfileCover } from "./profiles";
+import { getProfileCurrent, getProfileById, createProfileAPI, updateProfileAPI } from "./profiles";
+import { uploadFileDirect } from "./direct-upload";
 import { logger } from '@/lib/logger-client';
 
 
@@ -240,16 +241,14 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
 
 /**
  * Client-side helper function for updating profile photo
- * Uses server action with proper authentication
+ * Uploads directly to the API (see lib/api/direct-upload)
  */
 export const updateProfilePhoto = async (profile: Profile, file: File, setProfile: (profile: Profile) => void) => {
     if (!profile || !file) return false;
     try {
-        const formData = new FormData();
-        formData.append("photo", file);
-
-        // Call server action which handles authentication
-        const updatedProfile = await uploadProfileAvatar(formData);
+        // Direct browser -> API upload; Server Actions with image bodies can be
+        // blocked by Cloudflare's WAF rule for CVE-2025-55183 (403).
+        const updatedProfile = await uploadFileDirect<Profile>('/api/profile/avatar', file);
 
         if (updatedProfile) {
             setProfile(updatedProfile);
@@ -265,16 +264,14 @@ export const updateProfilePhoto = async (profile: Profile, file: File, setProfil
 
 /**
  * Client-side helper function for updating cover photo
- * Uses server action with proper authentication
+ * Uploads directly to the API (see lib/api/direct-upload)
  */
 export const updateCoverPhoto = async (profile: Profile, file: File, setProfile: (profile: Profile) => void) => {
     if (!profile || !file) return false;
     try {
-        const formData = new FormData();
-        formData.append("photo", file);
-
-        // Call server action which handles authentication
-        const updatedProfile = await uploadProfileCover(formData);
+        // Direct browser -> API upload; Server Actions with image bodies can be
+        // blocked by Cloudflare's WAF rule for CVE-2025-55183 (403).
+        const updatedProfile = await uploadFileDirect<Profile>('/api/profile/cover', file);
 
         if (updatedProfile) {
             setProfile(updatedProfile);

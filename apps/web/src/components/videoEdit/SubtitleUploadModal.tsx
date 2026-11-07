@@ -3,10 +3,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import {
-  uploadSubtitle,
-  validateSubtitleFile,
-} from '@/lib/api/subtitles';
+import { validateSubtitleFile } from '@/lib/api/subtitle-validation';
+import { uploadSubtitleDirect } from '@/lib/api/direct-upload';
 import type { SubtitleValidationResult, SubtitleTrack } from '@/lib/api/subtitles-types';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitlePreview from './SubtitlePreview';
@@ -151,7 +149,7 @@ export default function SubtitleUploadModal({
         setUploadProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
-      const result = await uploadSubtitle(
+      const result = await uploadSubtitleDirect(
         videoId,
         selectedFile,
         selectedLanguage,

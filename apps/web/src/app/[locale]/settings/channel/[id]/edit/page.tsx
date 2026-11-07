@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getChannelById, updateChannelAvatar, updateChannelCover } from '@/lib/api/channels';
+import { getChannelById } from '@/lib/api/channels';
+import { uploadFileDirect } from '@/lib/api/direct-upload';
 import { updateChannelProfile } from '@/lib/api/channel-profile';
 import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
 import { channelPath } from '@/lib/channel-url';
@@ -161,14 +162,12 @@ function ChannelEditPage() {
         setFormData({ ...formData, coverUrl: previewUrl });
       }
 
-      // Upload to server via Server Action (10MB limit configured in next.config.ts)
-      const userChannelId = channelId;
-      const uploadFn = type === 'avatar' ? updateChannelAvatar : updateChannelCover;
-
-      const updatedChannel = await uploadFn(
-        channelId,
+      // Upload straight from the browser to the API. Not via a Server Action:
+      // Cloudflare's WAF rule for CVE-2025-55183 blocks some image bodies (403).
+      const updatedChannel = await uploadFileDirect<ChannelData>(
+        `/api/channels/${channelId}/${type === 'avatar' ? 'avatar' : 'cover'}`,
         file,
-        { channelId: userChannelId }
+        { channelId }
       );
 
       if (updatedChannel) {
