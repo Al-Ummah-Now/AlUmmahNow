@@ -88,6 +88,9 @@ test.describe('comments - signed in without a channel', () => {
 
 test.describe('comments - post and delete (single-channel user)', () => {
   test.use({ storageState: AUTH_STATE.single });
+  // The API rewrites the whole video record per comment, so concurrent writes
+  // to one video can drop each other's comment: run these one after another
+  test.describe.configure({ mode: 'serial' });
 
   let video: QaVideo;
   let text = '';

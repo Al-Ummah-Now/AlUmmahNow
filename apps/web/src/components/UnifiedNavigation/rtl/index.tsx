@@ -303,7 +303,6 @@ export function UnifiedNavigationRTL() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        aria-label="قائمة التنقل"
         aria-expanded={isOpen}
         aria-haspopup="menu"
         data-testid="nav-menu-trigger"
@@ -313,18 +312,18 @@ export function UnifiedNavigationRTL() {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={channel.avatarUrl}
-            alt={channel.name}
+            alt=""
             className="h-8 w-8 rounded-full object-cover"
           />
         ) : getUserAvatar() ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={getUserAvatar()!}
-            alt={getDisplayName()}
+            alt=""
             className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
-          <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">
+          <div aria-hidden="true" className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">
             {getDisplayName()[0]?.toUpperCase() || user.email[0].toUpperCase()}
           </div>
         )}
@@ -335,11 +334,13 @@ export function UnifiedNavigationRTL() {
             {getDisplayName()}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">
-            {channel ? getChannelName(channel.name, channel.nameLocalized) : 'بدون قناة'}
+            {channel ? getChannelName(channel.name, channel.nameLocalized) : tAr.navigation.noChannel}
           </div>
         </div>
 
-        <ChevronDown className="h-4 w-4 text-gray-500" />
+        {/* Accessible name = visible name + channel + "Navigation menu" (label-in-name) */}
+        <span className="sr-only">{tAr.navigation.navigationMenu}</span>
+        <ChevronDown className="h-4 w-4 text-gray-500" aria-hidden="true" />
       </button>
 
       {/* Dropdown Menu */}

@@ -17,6 +17,12 @@ import { focusElementById } from '@/lib/accessibility/focus-manager';
 export const MAIN_CONTENT_ID = 'main-content';
 export const VIDEO_PLAYER_ID = 'video-player';
 export const COMMENTS_ID = 'comments';
+/**
+ * Wrapper the root layout puts around every page's content. Not every page
+ * renders a <main> landmark, so it is the last-resort skip target and the
+ * skip link never points at nothing.
+ */
+export const PAGE_CONTENT_ID = 'page-content';
 
 interface SkipTarget {
   id: string;
@@ -24,6 +30,8 @@ interface SkipTarget {
   fallbackSelector?: string;
   /** Focus this (already focusable) element instead of the container when present */
   preferSelector?: string;
+  /** Element id focused when neither the id nor the fallback selector exists */
+  lastResortId?: string;
 }
 
 function isWatchPage(pathname: string | null): boolean {
@@ -39,7 +47,7 @@ export function SkipLinksBase({ dir }: SkipLinksBaseProps) {
   const pathname = usePathname();
 
   const targets: SkipTarget[] = [
-    { id: MAIN_CONTENT_ID, label: t.a11y.skipToMainContent, fallbackSelector: 'main' },
+    { id: MAIN_CONTENT_ID, label: t.a11y.skipToMainContent, fallbackSelector: 'main', lastResortId: PAGE_CONTENT_ID },
   ];
   if (isWatchPage(pathname)) {
     targets.push(
@@ -59,7 +67,10 @@ export function SkipLinksBase({ dir }: SkipLinksBaseProps) {
       preferred.scrollIntoView({ block: 'center' });
       return;
     }
-    if (focusElementById(target.id, target.fallbackSelector)) {
+    if (
+      focusElementById(target.id, target.fallbackSelector) ||
+      (target.lastResortId && focusElementById(target.lastResortId))
+    ) {
       event.preventDefault();
     }
   };

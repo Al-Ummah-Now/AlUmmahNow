@@ -123,7 +123,10 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                           <SkipLinks />
                           {/* Header */}
                           <Navigation></Navigation>
-                          {children}
+                          {/* Skip-link target for pages without <main id="main-content"> (PAGE_CONTENT_ID in SkipLinks; a literal because this is a server component) */}
+                          <div id="page-content" className="flex flex-1 flex-col">
+                            {children}
+                          </div>
 
                           {/* Real-time notification center */}
                           <NotificationCenter />

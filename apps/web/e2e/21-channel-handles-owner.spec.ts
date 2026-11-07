@@ -85,7 +85,8 @@ test.describe('Channel @handle URLs - anonymous viewer', () => {
 
   test('an unknown handle shows the not-found page', async ({ page }) => {
     await page.goto(`/en/@no-such-handle-${uniqueSuffix()}`);
-    await expect(page.getByRole('heading', { name: '404', level: 1 })).toBeVisible();
+    // Shared localized 404 page (components/NotFoundPage; its h1 is the localized message)
+    await expect(page.getByTestId('not-found-page').getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByTestId('channel-handle')).toHaveCount(0);
   });
 });

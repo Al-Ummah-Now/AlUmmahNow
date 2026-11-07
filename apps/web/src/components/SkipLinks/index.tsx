@@ -5,7 +5,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SkipLinksBase } from './SkipLinksBase';
 import SkipLinksRTL from './rtl';
 
-export { MAIN_CONTENT_ID, VIDEO_PLAYER_ID, COMMENTS_ID } from './SkipLinksBase';
+export { MAIN_CONTENT_ID, VIDEO_PLAYER_ID, COMMENTS_ID, PAGE_CONTENT_ID } from './SkipLinksBase';
 
 /**
  * LTR skip links. The root layout cannot know the locale on the server, so on

@@ -47,10 +47,15 @@ test.describe('Account menu - links', () => {
     await expect(menu.getByRole('menuitem', { name: 'الإعدادات', exact: true })).toHaveAttribute('href', '/ar/settings');
   });
 
-  test('NAV-053 menu trigger exposes haspopup and toggles aria-expanded', async ({ page }) => {
+  test('NAV-053 menu trigger exposes haspopup, label-in-name and toggles aria-expanded', async ({ page, isMobile }) => {
     await page.goto('/en');
     const trigger = menuTrigger(page);
     await expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+    // Label-in-name (WCAG 2.5.3): the visible account name is part of the accessible
+    // name; phones hide the name text, leaving the avatar + "Navigation menu"
+    await expect(trigger).toHaveAccessibleName(
+      isMobile ? 'Navigation menu' : /^Single Channel User .*Navigation menu$/,
+    );
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await openAccountMenu(page);
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');

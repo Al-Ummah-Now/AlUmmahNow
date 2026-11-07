@@ -1,8 +1,13 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-/** Account menu trigger in the header (LTR and RTL variants) */
+/**
+ * Account menu trigger in the header (LTR and RTL variants). Signed in, its
+ * accessible name is the visible name + channel followed by "Navigation menu"
+ * (label-in-name); signed out it is just "Navigation menu". The drawer toggle
+ * ("Open navigation menu" / "فتح قائمة التنقل") is excluded by the test id.
+ */
 export function menuTrigger(page: Page): Locator {
-  return page.getByRole('button', { name: /^(Navigation menu|قائمة التنقل)$/ });
+  return page.getByTestId('nav-menu-trigger').and(page.getByRole('button', { name: /(Navigation menu|قائمة التنقل)$/ }));
 }
 
 /** Opens the header account menu (no-op if already open) and returns it */

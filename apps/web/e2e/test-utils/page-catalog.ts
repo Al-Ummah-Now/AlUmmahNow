@@ -127,7 +127,8 @@ export async function openCatalogPage(page: Page, locale: 'en' | 'ar', entry: Ca
   const response = await page.goto(`/${locale}${entry.path}`, { waitUntil: 'domcontentloaded' });
   expect(response, `navigation to ${entry.path}`).not.toBeNull();
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
-  await expect(page.locator('main').first()).toBeVisible();
+  // Every page renders inside the root layout's skip-link target
+  await expect(page.locator('#page-content')).toBeVisible();
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
   await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15000 }).catch(() => undefined);
 }
