@@ -307,11 +307,12 @@ export function projectChannel(raw: unknown): SearchRow<'channel'> | null {
 export function projectPlaylist(raw: unknown): SearchRow<'playlist'> | null {
   const obj = asRecord(raw);
   const id = obj && str(obj.id);
-  if (!obj || !id || typeof obj.name !== 'string') return null;
+  // Stored playlists carry `title`; `name` is the API view's alias.
+  const name = str(obj?.name) ?? str(obj?.title);
+  if (!obj || !id || !name) return null;
   // Only explicitly public playlists; system playlists (watch later, liked) are never searchable.
   if (obj.isPublic !== true || isRemoved(obj)) return null;
   if (obj.isSystem === true || str(obj.systemType) || (str(obj.visibility) && obj.visibility !== 'public')) return null;
-  const name = obj.name;
   const description = str(obj.description);
   const videosCount = countOf(obj.videos, obj.videosCount);
   if (videosCount === 0) return null;
