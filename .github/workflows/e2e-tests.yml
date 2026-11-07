@@ -15,7 +15,7 @@ jobs:
   # Centralized auth setup - runs once, shares auth state with all test jobs
   auth-setup:
     name: Auth Setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
     timeout-minutes: 10
 
     steps:
@@ -92,7 +92,7 @@ jobs:
   e2e-tests:
     name: E2E Tests - Video Upload
     needs: auth-setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
     timeout-minutes: 60
 
     strategy:
@@ -178,7 +178,7 @@ jobs:
   e2e-tests-full:
     name: Full E2E Test Suite
     needs: auth-setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
     timeout-minutes: 90
 
     steps:
@@ -270,7 +270,7 @@ jobs:
   e2e-mobile:
     name: Mobile E2E Tests
     needs: auth-setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
     timeout-minutes: 45
 
     strategy:
