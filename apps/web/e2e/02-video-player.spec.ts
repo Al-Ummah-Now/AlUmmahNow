@@ -1,8 +1,7 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
-import { clickAndWaitForURL, findSeedVideo } from './test-utils/qa-content';
-import { canDecodeHls } from './test-utils/watch-page';
+import { canPlayH264, clickAndWaitForURL, expectPlayer, findSeedVideo } from './test-utils/qa-content';
 
 /**
  * Video page / player E2E tests against a real, processed QA seed video.
@@ -36,13 +35,12 @@ test.describe('Video Player', () => {
     const { title } = await openSeedVideo(page, request);
 
     await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
-    // Bundled Chromium cannot decode the stream and shows the error screen instead
-    await expect(page.locator('.video-js, [data-testid="video-error"]').first()).toBeAttached();
+    await expectPlayer(page);
   });
 
-  test('player controls do not sit above modals (z-index)', async ({ page, request, browserName }, testInfo) => {
-    test.skip(!canDecodeHls(browserName, testInfo), 'bundled Chromium cannot decode H.264 HLS: the error screen replaces the player (see 31-video-player PLAYER-002)');
+  test('player controls do not sit above modals (z-index)', async ({ page, request }) => {
     await openSeedVideo(page, request);
+    test.skip(!(await canPlayH264(page)), 'Browser build has no H.264/AAC support, so no control bar renders');
     const controls = page.locator('.vjs-control-bar').first();
     await expect(controls).toBeAttached();
 
@@ -66,8 +64,7 @@ test.describe('Video Player', () => {
     await page.setViewportSize({ width: 375, height: 667 });
     await openSeedVideo(page, request);
 
-    // Bundled Chromium cannot decode the stream and shows the error screen instead
-    await expect(page.locator('.video-js, [data-testid="video-error"]').first()).toBeAttached();
+    await expectPlayer(page);
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(375 + 1);
   });
@@ -93,8 +90,7 @@ test.describe('Video Player - RTL', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     // The heading shows the Arabic title when the video has one
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(/\S/);
-    // Bundled Chromium cannot decode the stream and shows the error screen instead
-    await expect(page.locator('.video-js, [data-testid="video-error"]').first()).toBeAttached();
+    await expectPlayer(page);
     await expect(page.getByTestId('video-metrics-views')).toHaveText(/مشاهد/);
   });
 });

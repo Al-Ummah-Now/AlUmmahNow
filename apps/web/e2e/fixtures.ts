@@ -42,6 +42,20 @@ export const test = base.extend<TestFixtures>({
     await use(context);
   },
 
+  // The site sends Cross-Origin-Opener-Policy, so the first navigation away from
+  // about:blank swaps browsing-context groups and Playwright's focus emulation is
+  // lost (document.hasFocus() === false, toBeFocused() reports "inactive").
+  // Re-focus the page after every goto so keyboard tests see a focused window.
+  page: async ({ page }, use) => {
+    const goto = page.goto.bind(page);
+    page.goto = async (...args: Parameters<typeof page.goto>) => {
+      const response = await goto(...args);
+      await page.bringToFront();
+      return response;
+    };
+    await use(page);
+  },
+
   mockUser: async ({}, use) => {
     const user = {
       id: 'test-user-' + Date.now(),

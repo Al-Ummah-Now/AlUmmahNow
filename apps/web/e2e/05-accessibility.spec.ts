@@ -72,9 +72,6 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
   test('video cards are keyboard-focusable links', async ({ page }) => {
     await page.goto('/en/');
-    // Headless Chromium can leave the navigated page without window focus,
-    // which makes toBeFocused() report "inactive"
-    await page.bringToFront();
     const card = page.getByTestId('video-card').first();
     await expect(card).toBeVisible();
 
@@ -94,7 +91,6 @@ test.describe('Accessibility - Keyboard Navigation', () => {
   test('header menu button is keyboard operable', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
     await page.goto('/en/');
-    await page.bringToFront();
     const trigger = menuTrigger(page);
 
     await trigger.focus();
