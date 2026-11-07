@@ -897,7 +897,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     networkError: 'Network error. Please check your connection.',
     notFound: 'Page not found',
     notFoundDescription: 'Sorry, the page you are looking for does not exist. It might have been removed or the URL might be incorrect.',
-    unauthorized: 'Unauthorized. Please login.',
+    unauthorized: 'Unauthorized. Please log in.',
     forbidden: 'Access forbidden',
     serverError: 'Server error. Please try again later.',
     validationError: 'Validation error',

@@ -75,6 +75,7 @@ export function ChannelsTabContent({ channelId }: ChannelsTabContentProps) {
     <div
       role="tabpanel"
       id="tabpanel-channels"
+      data-testid="tabpanel-channels"
       aria-labelledby="tab-channels"
       dir={isRTL ? 'rtl' : 'ltr'}
     >

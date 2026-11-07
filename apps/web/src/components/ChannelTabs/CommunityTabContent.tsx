@@ -20,6 +20,7 @@ export function CommunityTabContent({ channelId }: CommunityTabContentProps) {
     <div
       role="tabpanel"
       id="tabpanel-community"
+      data-testid="tabpanel-community"
       aria-labelledby="tab-community"
       dir={isRTL ? 'rtl' : 'ltr'}
       className="max-w-3xl mx-auto"

@@ -7,7 +7,7 @@ export function AboutTabContent() {
   const { t } = useLanguage();
 
   return (
-    <div role="tabpanel" id="tabpanel-about" aria-labelledby="tab-about">
+    <div role="tabpanel" id="tabpanel-about" data-testid="tabpanel-about" aria-labelledby="tab-about">
       <div className="max-w-4xl">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
           {t.channel.about}

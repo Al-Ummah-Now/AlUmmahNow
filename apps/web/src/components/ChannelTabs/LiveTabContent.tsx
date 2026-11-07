@@ -44,7 +44,7 @@ export function LiveTabContent({ channelId }: LiveTabContentProps) {
   }, [channelId, liveStreams.length, t]);
 
   return (
-    <div role="tabpanel" id="tabpanel-live" aria-labelledby="tab-live">
+    <div role="tabpanel" id="tabpanel-live" data-testid="tabpanel-live" aria-labelledby="tab-live">
       {error ? (
         <div className="text-center py-12 text-red-600 dark:text-red-400">
           {error}

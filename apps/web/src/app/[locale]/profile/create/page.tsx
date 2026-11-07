@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { login } from '@/lib/actions';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
@@ -116,7 +117,15 @@ const ProfileCreatePage = () => {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 dark:text-gray-400">{t.errors.unauthorized}</p>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">{t.navigation.signIn}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{t.errors.unauthorized}</p>
+          <button
+            type="button"
+            onClick={() => { void login(locale); }}
+            className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {t.navigation.signIn}
+          </button>
         </div>
       </div>
     );
