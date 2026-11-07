@@ -2,7 +2,7 @@ import { chromium, type Browser, type BrowserContext, type FullConfig, type Page
 import { ResendTestClient } from './test-utils/resend-client';
 import { ApiClient } from './seed/seed-api';
 import { extractSession, loginOnPage } from './seed/seed-auth';
-import { ensureChannels, ensureProfile, type UserChannelSpec } from './seed/seed-users';
+import { ensureChannels, ensureProfile, purgeDisposableChannels, type UserChannelSpec } from './seed/seed-users';
 import { consentCookie } from './test-utils/consent';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -36,6 +36,11 @@ export interface TestUser {
   storageStatePath: string;
   /** Channels the user must own; [] means profile only (no channels) */
   channels: UserChannelSpec[];
+  /**
+   * Leftover throwaway channels younger than this are kept (a concurrent local
+   * run may still be using them). Default 0: delete every leftover.
+   */
+  disposableChannelGraceMs?: number;
 }
 
 interface SessionCookieChannel {
@@ -77,6 +82,13 @@ async function provisionAndRefreshSession(
   const session = await extractSession(page, { webUrl: cfg.webAppUrl });
 
   const profileCreated = await ensureProfile(api, session, { email: user.email, displayName: user.name });
+  // Throwaway channels left by a cancelled or crashed run would otherwise show
+  // up in this user's menu, profile and active channel for every later run.
+  const purged = await purgeDisposableChannels(api, session, {
+    keep: user.channels.map((c) => c.name),
+    minAgeMs: user.disposableChannelGraceMs ?? 0,
+  });
+  if (purged.length > 0) ciLogger.warn(`[Setup] Deleted leftover throwaway channels of ${user.email}`, { purged });
   const { channels, created, extra } = await ensureChannels(api, session, user.channels);
   ciLogger.info(`[Setup] Provisioned ${user.email}`, {
     userId: session.userId,
@@ -116,18 +128,32 @@ async function provisionAndRefreshSession(
   }
   const data = parseSessionCookie(cookie.value);
   const account = data.accounts[data.activeUserId];
-  const cachedIds = new Set((account?.channels || []).map((c) => c.id));
-  const missing = channels.filter((c) => !cachedIds.has(c.id));
-  if (account && missing.length > 0) {
-    ciLogger.warn(`[Setup] Web session for ${user.email} is missing ${missing.length} channel(s); patching the cookie`, {
-      cached: cachedIds.size,
-      expected: channels.length,
-    });
-    account.channels = [...(account.channels || []), ...missing];
+  if (account) {
+    // The stored session must describe exactly the user's fixed channels with
+    // the main one active: specs read it (readSession/userApi) to know which
+    // channel to use, and must not pick up a channel another run created.
+    const cached = account.channels || [];
+    const cachedIds = new Set(cached.map((c) => c.id));
+    const expectedIds = new Set(channels.map((c) => c.id));
+    const missing = channels.filter((c) => !cachedIds.has(c.id));
+    const unexpected = cached.filter((c) => !expectedIds.has(c.id));
+    if (missing.length > 0 || unexpected.length > 0) {
+      ciLogger.warn(`[Setup] Web session for ${user.email} does not match its channels; patching the cookie`, {
+        cached: cachedIds.size,
+        expected: channels.length,
+        missing: missing.length,
+        unexpected: unexpected.length,
+      });
+    }
+    account.channels = [...cached.filter((c) => expectedIds.has(c.id)), ...missing];
     const main = account.channels.find((c) => c.isMain) || account.channels[0];
-    account.activeChannelId = account.activeChannelId || main?.id || null;
-    data.activeChannelId = data.activeChannelId || account.activeChannelId || null;
-    await refreshed.addCookies([{ ...cookie, value: encodeURIComponent(JSON.stringify(data)) }]);
+    const activeChannelId = main?.id ?? null;
+    const changed = account.activeChannelId !== activeChannelId || data.activeChannelId !== activeChannelId;
+    account.activeChannelId = activeChannelId;
+    data.activeChannelId = activeChannelId;
+    if (missing.length > 0 || unexpected.length > 0 || changed) {
+      await refreshed.addCookies([{ ...cookie, value: encodeURIComponent(JSON.stringify(data)) }]);
+    }
   }
   ciLogger.info(`[Setup] Web session for ${user.email} caches ${account?.channels?.length ?? 0} channel(s)`);
   return refreshed;
@@ -149,7 +175,7 @@ async function globalSetup(_config: FullConfig) {
     ciLogger.info('[Global Setup] SKIP_AUTH_SETUP=true, checking for existing auth state...');
 
     const authDir = path.join(process.cwd(), 'e2e/.auth');
-    const requiredFiles = ['user-single.json', 'user-multi.json', 'user-none.json'];
+    const requiredFiles = ['user-single.json', 'user-multi.json', 'user-none.json', 'user-scratch.json'];
     const allExist = requiredFiles.every(file => {
       const filePath = path.join(authDir, file);
       const exists = fs.existsSync(filePath);
@@ -243,6 +269,16 @@ async function globalSetup(_config: FullConfig) {
       name: 'No Channels User',
       storageStatePath: path.join(authDir, 'user-none.json'),
       channels: [],
+    },
+    {
+      // Owns the throwaway channels specs create and delete (channel create /
+      // delete / handle flows), so the users above keep a fixed channel set.
+      email: `test-scratch-${timestamp}@delivered.resend.dev`,
+      password: 'TestPassword321!',
+      name: 'Scratch Channel User',
+      storageStatePath: path.join(authDir, 'user-scratch.json'),
+      channels: [{ name: 'E2E Scratch Channel', description: 'E2E test channel (throwaway-channel user)', isMain: true }],
+      disposableChannelGraceMs: 30 * 60 * 1000,
     },
   ];
 

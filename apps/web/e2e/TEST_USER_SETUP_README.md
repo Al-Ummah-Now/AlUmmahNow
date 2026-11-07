@@ -61,22 +61,24 @@ Test Suite Start
     ↓
 Global Setup (auth.setup.ts)
     ↓
-Register 3 Test Users via OpenAuth UI
+Register 4 Test Users via OpenAuth UI
     ├─ test-single-{timestamp}@delivered.resend.dev
     ├─ test-multi-{timestamp}@delivered.resend.dev
-    └─ test-none-{timestamp}@delivered.resend.dev
+    ├─ test-none-{timestamp}@delivered.resend.dev
+    └─ test-scratch-{timestamp}@delivered.resend.dev
     ↓
 Save Authentication State to Files
     ├─ e2e/.auth/user-single.json
     ├─ e2e/.auth/user-multi.json
-    └─ e2e/.auth/user-none.json
+    ├─ e2e/.auth/user-none.json
+    └─ e2e/.auth/user-scratch.json
     ↓
 Tests Reuse Auth State (No Re-login)
 ```
 
 ## Test Users
 
-Three test users are created for different scenarios:
+Four test users are created for different scenarios:
 
 ### 1. Single Channel User
 - **Email**: `test-single-{timestamp}@delivered.resend.dev`
@@ -95,6 +97,16 @@ Three test users are created for different scenarios:
 - **Password**: `TestPassword789!`
 - **Storage State**: `e2e/.auth/user-none.json`
 - **Use Case**: Tests for users without any channels
+
+### 4. Scratch Channel User
+- **Email**: `test-scratch-{timestamp}@delivered.resend.dev`
+- **Password**: `TestPassword321!`
+- **Storage State**: `e2e/.auth/user-scratch.json`
+- **Use Case**: Owns the throwaway channels specs create and delete (channel
+  create, delete and @handle flows). Specs must never create channels on the
+  other users: other specs rely on their fixed channel sets and active channel.
+  Global setup deletes leftover `E2E Temp Channel …` / `قناة اختبار …` channels
+  on every user and stores each session with the main channel active.
 
 ## Usage in Tests
 
@@ -278,6 +290,7 @@ apps/web/e2e/
 │   ├── user-single.json           # Single-channel user session
 │   ├── user-multi.json            # Multi-channel user session
 │   ├── user-none.json             # No-channels user session
+│   ├── user-scratch.json          # Throwaway-channel user session
 │   └── error-*.png                # Debug screenshots (on failures)
 ├── test-utils/
 │   └── resend-client.ts           # Resend API client helper

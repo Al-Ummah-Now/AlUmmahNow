@@ -98,10 +98,21 @@ jobs:
   # with its own pinned QA users (E2E_USERS_TIMESTAMP): the specs mutate their
   # users' channels, subscriptions and videos, so jobs running in parallel must
   # never share accounts. Users are registered on first use and reused after.
+  #
+  # The pinned users are global, not per run, so runs from different PRs or
+  # branches would share them too (one run's temp channels and setting changes
+  # then broke the other's specs). The job-level concurrency group queues a
+  # project's job until the previous run's job on the same users has finished.
+  # GitHub keeps one pending job per group: a newer queued run replaces an
+  # older one that has not started yet. A running job is never cancelled, as
+  # that would stop specs halfway through changing (and restoring) shared data.
   e2e:
     name: E2E - ${{ matrix.project }}
     runs-on: ubuntu-24.04
     timeout-minutes: 110
+    concurrency:
+      group: e2e-qa-users-${{ matrix.users }}
+      cancel-in-progress: false
 
     strategy:
       fail-fast: false

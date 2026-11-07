@@ -8,7 +8,9 @@ import { menuTrigger, openAccountMenu } from './test-utils/navigation';
  *
  * Uses the multi-channel E2E user (two channels, "One" is main). Switching
  * only rewrites this test context's session cookie, so tests stay isolated.
- * Channels created here are deleted through the API afterwards.
+ * Channel creation runs as the `scratch` user, never `multi`: other specs count
+ * multi's channels and read its active channel. Created channels are deleted
+ * through the API afterwards (and leftovers by the auth setup).
  */
 
 const API_URL = process.env.API_URL || 'https://videos.api.qa.alummahnow.net';
@@ -38,12 +40,12 @@ async function switchTo(page: Page, channelId: string | null) {
 }
 
 /**
- * Deletes the multi user's channels with this exact name through the API.
+ * Deletes the scratch user's channels with this exact name through the API.
  * Looked up by name so a channel is cleaned up even if the UI assertion that
  * would have revealed its id failed.
  */
 async function deleteChannelsNamed(name: string) {
-  const { accessToken, userId } = readAccount('multi');
+  const { accessToken, userId } = readAccount('scratch');
   const headers = { Authorization: `Bearer ${accessToken}` };
   const res = await fetch(`${API_URL}/api/channels?limit=1000`, { headers });
   const body = (await res.json()) as { data?: Array<{ id: string; name: string; userId: string }> };
@@ -137,15 +139,6 @@ test.describe('Channel Switching - English', () => {
     // The upload shortcut needs an active channel
     await expect(page.getByRole('banner').getByRole('link', { name: /Upload Video/ })).toHaveCount(0);
   });
-
-  test('creates a new channel', async ({ page }) => {
-    const name = `E2E Temp Channel ${Date.now()}`;
-    try {
-      await createChannelViaMenu(page, name, 'Enter channel name', 'Create');
-    } finally {
-      await deleteChannelsNamed(name);
-    }
-  });
 });
 
 test.describe('Channel Switching - Arabic', () => {
@@ -172,8 +165,23 @@ test.describe('Channel Switching - Arabic', () => {
     const menu = await openAccountMenu(page);
     await expect(option(menu, main.id).locator('svg.lucide-crown')).toBeVisible();
   });
+});
+
+test.describe('Channel Switching - create a channel', () => {
+  test.use({ storageState: AUTH_STATE.scratch });
+
+  test('creates a new channel', async ({ page }) => {
+    await page.goto('/en');
+    const name = `E2E Temp Channel ${Date.now()}`;
+    try {
+      await createChannelViaMenu(page, name, 'Enter channel name', 'Create');
+    } finally {
+      await deleteChannelsNamed(name);
+    }
+  });
 
   test('creates a channel with an Arabic name', async ({ page }) => {
+    await page.goto('/ar');
     const name = `قناة اختبار ${Date.now()}`;
     try {
       await createChannelViaMenu(page, name, 'أدخل اسم القناة', 'إنشاء');
