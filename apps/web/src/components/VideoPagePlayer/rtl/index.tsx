@@ -20,14 +20,19 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   // the player a new sources array, which would reload the video.
   const videoSources = useMemo(() => [
     {
-      src: options.playUrl || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
+      src: options.playUrl || '',
       type: 'application/x-mpegURL'
     }
   ], [options.playUrl, options.id]);
 
   // Use poster from options (API-provided thumbnail URL) or fallback to default pattern
   const posterUrl = useMemo(() => {
-    const poster = options.poster || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
+    // Bunny keeps the thumbnail next to the playlist, so derive it from this
+    // video's own library (QA/prod differ) rather than a hard-coded host.
+    const derived = options.playUrl?.endsWith('/playlist.m3u8')
+      ? options.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg')
+      : '';
+    const poster = options.poster || derived;
     if (poster && !poster.startsWith('http://') && !poster.startsWith('https://')) {
       return `https://${poster}`;
     }
