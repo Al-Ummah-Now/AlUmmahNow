@@ -22,7 +22,7 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
     description: 'Upload up to 10 images for a community post. Returns URLs for uploaded images.',
     request: {
       headers: z.object({
-        channelId: Str({ description: "User's selected channel ID" }).optional(),
+        channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
       }),
       body: {
         content: {

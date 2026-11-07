@@ -29,7 +29,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 				sort: z.enum(["latest", "popular", "oldest"]).optional().default("latest").describe("Sort order for videos"),
 			}),
 			headers: z.object({
-				channelId: Str({ description: "User's selected channel ID" }).optional(),
+				channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
 			}),
 		},
 		responses: {

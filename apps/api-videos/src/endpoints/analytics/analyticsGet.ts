@@ -31,7 +31,7 @@ export class AnalyticsGet extends AuthenticatedRoute {
 		request: {
 			query: AnalyticsQueryInput,
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }).optional(),
+				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 		},
 		responses: {

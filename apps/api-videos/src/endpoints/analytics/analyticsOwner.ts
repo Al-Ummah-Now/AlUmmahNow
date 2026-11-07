@@ -251,7 +251,7 @@ export class AnalyticsMetricsGet extends AuthenticatedRoute {
     description: "🔒 Daily views, watch time (processor rollups), likes, comments and new subscribers for the caller's channels (or one owned channel).",
     request: {
       query: z.object({
-        channelId: Str({ description: "Limit to one owned channel" }).optional(),
+        channelId: Str({ description: "Limit to one owned channel" }).optional().nullable(),
         limit: Num({ description: "Return only the most recent N days" }).optional(),
         ...RangeQuery,
       }),

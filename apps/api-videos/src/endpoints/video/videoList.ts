@@ -24,7 +24,7 @@ export class VideosList extends OptionalAuthRoute {
 				}).optional(),
 				sort: z.enum(["date", "views", "title", "likes"]).optional().default("date").describe("Sort order for videos"),
 				filter: z.enum(["all", "public", "private", "live"]).optional().default("all").describe("Filter videos by type"),
-				channelId: Str({ description: "Filter by specific channel ID" }).optional(),
+				channelId: Str({ description: "Filter by specific channel ID" }).optional().nullable(),
 				category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
 			}),
 			headers: z.object({

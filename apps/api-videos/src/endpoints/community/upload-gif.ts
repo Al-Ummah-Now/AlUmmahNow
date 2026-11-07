@@ -20,7 +20,7 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
     description: 'Upload a single GIF for a community post. Returns URL for uploaded GIF.',
     request: {
       headers: z.object({
-        channelId: Str({ description: "User's selected channel ID" }).optional(),
+        channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
       }),
       body: {
         content: {
