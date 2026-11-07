@@ -12,6 +12,7 @@ import R2Repository from './r2Repo';
 import { VideoObject, ChannelSection, ChannelSectionView, Channel, Profile } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { isVideoRemoved } from './visibility';
+import { channelVideosFromIndex } from './search/channelVideoIndex';
 
 /**
  * Public-safe channel summary returned in populated section content.
@@ -78,11 +79,11 @@ export async function populateSectionContent(
   try {
     switch (section.type) {
       case 'recent_uploads':
-        content.videos = await getRecentUploads(section.channelId, section.itemCount || 12, env);
+        content.videos = await getChannelUploads(section.channelId, section.itemCount || 12, env, 'latest');
         break;
 
       case 'popular_uploads':
-        content.videos = await getPopularUploads(section.channelId, section.itemCount || 12, env);
+        content.videos = await getChannelUploads(section.channelId, section.itemCount || 12, env, 'popular');
         break;
 
       case 'liked_videos':
@@ -124,70 +125,52 @@ export async function populateSectionContent(
   return content;
 }
 
+/** Parallel reads per batch when the index cannot answer and the bucket is scanned */
+const SCAN_CONCURRENCY = 25;
+
 /**
- * Get recent uploads for a channel
+ * A channel's public uploads, newest first (`latest`) or most viewed first
+ * (`popular`). Answered from the ownership index (D1); falls back to a bucket
+ * scan, read in parallel batches, while the index is unavailable.
  */
-async function getRecentUploads(
+async function getChannelUploads(
   channelId: string,
   limit: number,
-  env: any
+  env: any,
+  sort: 'latest' | 'popular'
 ): Promise<VideoObject[]> {
+  const videoRepo = new R2Repository<VideoObject>(env.videos);
+  const isListed = (video: VideoObject | null): video is VideoObject =>
+    !!video && video.channelId === channelId && video.isPublic !== false && !isVideoRemoved(video);
+
   try {
-    const videoRepo = new R2Repository<VideoObject>(env.videos);
+    const indexed = await channelVideosFromIndex<VideoObject>(env, {
+      channelId,
+      cursor: undefined,
+      limit,
+      query: { sort, privateFor: null, isPublic: true },
+      load: id => videoRepo.getObject(id),
+      isListed,
+    });
+    if (indexed) return indexed.videos;
 
-    // List all videos with prefix (in R2, they're stored flat)
+    logger.info('[SectionPopulator] Ownership index unavailable; scanning bucket', { channelId, sort });
     const listResult = await env.videos.list({ limit: 1000 });
-
-    // Fetch and filter videos for this channel
+    const keys: string[] = (listResult.objects || []).map((obj: { key: string }) => obj.key);
     const videos: VideoObject[] = [];
-    for (const obj of listResult.objects) {
-      const video = await videoRepo.getObject(obj.key);
-      if (video && video.channelId === channelId && video.isPublic && !isVideoRemoved(video)) {
-        videos.push(video);
-      }
+    for (let i = 0; i < keys.length; i += SCAN_CONCURRENCY) {
+      const batch = await Promise.all(keys.slice(i, i + SCAN_CONCURRENCY).map(key => videoRepo.getObject(key)));
+      videos.push(...batch.filter(isListed));
     }
 
-    // Sort by date created (newest first) and limit
     videos.sort((a, b) =>
-      new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()
+      sort === 'popular'
+        ? (b.views || 0) - (a.views || 0)
+        : new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()
     );
-
     return videos.slice(0, limit);
   } catch (error) {
-    logger.error('Failed to get recent uploads', { channelId, error });
-    return [];
-  }
-}
-
-/**
- * Get popular uploads for a channel (sorted by view count)
- */
-async function getPopularUploads(
-  channelId: string,
-  limit: number,
-  env: any
-): Promise<VideoObject[]> {
-  try {
-    const videoRepo = new R2Repository<VideoObject>(env.videos);
-
-    // List all videos
-    const listResult = await env.videos.list({ limit: 1000 });
-
-    // Fetch and filter videos for this channel
-    const videos: VideoObject[] = [];
-    for (const obj of listResult.objects) {
-      const video = await videoRepo.getObject(obj.key);
-      if (video && video.channelId === channelId && video.isPublic && !isVideoRemoved(video)) {
-        videos.push(video);
-      }
-    }
-
-    // Sort by view count (highest first) and limit
-    videos.sort((a, b) => (b.views || 0) - (a.views || 0));
-
-    return videos.slice(0, limit);
-  } catch (error) {
-    logger.error('Failed to get popular uploads', { channelId, error });
+    logger.error('[SectionPopulator] Failed to get channel uploads', { channelId, sort, error });
     return [];
   }
 }
