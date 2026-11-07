@@ -73,6 +73,15 @@ async function openWatchPage(page: Page, locale: 'en' | 'ar'): Promise<boolean> 
   return true;
 }
 
+/**
+ * WebKit (Safari's default "Press Tab to highlight each item" off) only tabs
+ * between text fields; Option+Tab walks every focusable element, which is
+ * what a Safari keyboard user presses.
+ */
+function tabKey(browserName: string): string {
+  return browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
+}
+
 function formatViolations(violations: Awaited<ReturnType<AxeBuilder['analyze']>>['violations']): string {
   return violations
     .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).slice(0, 5).join(' | ')}`)
@@ -104,16 +113,17 @@ for (const colorScheme of ['light', 'dark'] as const) {
 }
 
 test.describe('keyboard navigation (story 1.4)', () => {
-  test('skip links are the first tab stop, visible on focus, and reach main content / player', async ({ page }) => {
+  test('skip links are the first tab stop, visible on focus, and reach main content / player', async ({ page, browserName }) => {
+    const TAB = tabKey(browserName);
     const playable = await openWatchPage(page, 'en');
     await page.locator('body').focus();
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(TAB);
     const skip = page.getByRole('link', { name: 'Skip to main content' });
     await expect(skip).toBeFocused();
     const box = await skip.boundingBox();
     expect(box && box.width > 1 && box.height >= MIN_TARGET, 'skip link visible when focused').toBeTruthy();
 
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(TAB);
     await expect(page.getByRole('link', { name: 'Skip to video player' })).toBeFocused();
     if (playable) {
       await page.keyboard.press('Enter');
@@ -121,7 +131,8 @@ test.describe('keyboard navigation (story 1.4)', () => {
     }
   });
 
-  test('every player control is reachable by Tab, in visual order, with a visible focus indicator', async ({ page, isMobile }) => {
+  test('every player control is reachable by Tab, in visual order, with a visible focus indicator', async ({ page, isMobile, browserName }) => {
+    const TAB = tabKey(browserName);
     test.skip(isMobile, 'Touch devices have no hardware keyboard / Tab navigation');
     const playable = await openWatchPage(page, 'en');
     test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
@@ -129,7 +140,7 @@ test.describe('keyboard navigation (story 1.4)', () => {
     await page.locator('#video-player .video-js').focus();
     const visited: Array<{ cls: string; x: number; outline: string }> = [];
     for (let i = 0; i < 15; i++) {
-      await page.keyboard.press('Tab');
+      await page.keyboard.press(TAB);
       const info = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement | null;
         if (!el || !el.closest('.video-js')) return { left: true };

@@ -114,7 +114,9 @@ test.describe('Channel header - owner', () => {
       await clickUntil(more, async () => expect(link).toBeVisible({ timeout: 3000 }));
       await expect(link).toHaveText(/^(Channel Settings|إعدادات القناة)$/);
       await expect(link).toHaveAttribute('href', `/${locale}/settings/channel/${main.id}`);
-      await clickUntil(link, async () => expect(page).toHaveURL(new RegExp(`/${locale}/settings/channel/${main.id}$`), { timeout: 5000 }));
+      // One click: the menu closes as navigation starts, so a retry would find no link
+      await link.click();
+      await expect(page).toHaveURL(new RegExp(`/${locale}/settings/channel/${main.id}$`), { timeout: 20000 });
     });
   }
 });
@@ -283,8 +285,8 @@ test.describe('Channel tabs', () => {
   test('CHTAB-017 back/forward navigate between tabs', async ({ page }) => {
     await openChannel(page, 'en', lectures.id);
     await clickUntil(page.getByTestId('tab-playlists'), async () => expect(page).toHaveURL(/tab=playlists/, { timeout: 3000 }));
-    await page.getByTestId('tab-community').click();
-    await expect(page).toHaveURL(/tab=community/);
+    // Re-rendered after the first tab switch: retry a click that landed on the old node
+    await clickUntil(page.getByTestId('tab-community'), async () => expect(page).toHaveURL(/tab=community/, { timeout: 3000 }));
     await page.goBack();
     await expect(page).toHaveURL(/tab=playlists/);
     await expectTabSelected(page, 'playlists');
