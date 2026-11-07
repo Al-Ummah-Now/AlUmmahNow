@@ -2,11 +2,11 @@
  * Next.js Middleware for Content Security Policy and Locale Routing
  *
  * Features:
- * - Content Security Policy (CSP) headers
+ * - Nonce-based Content Security Policy (CSP) headers (see lib/security/csp.ts)
  * - Locale validation based on LOCALES config (supports any locale with isSupported: true)
  * - Automatic redirect of unsupported locales to default locale
  * - RTL/LTR direction headers
- * - Video.js CDN whitelisting with integrity checks
+ * - Video.js CDN whitelisting
  * - Bunny CDN media source allowance
  * - WebSocket secure connection support
  * - Development vs production configuration
@@ -22,80 +22,54 @@ import {
   isLocaleSupported
 } from '@/lib/i18n/utils';
 import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
+import {
+  buildContentSecurityPolicy,
+  generateNonce,
+  SECURITY_HEADERS,
+} from '@/lib/security/csp';
+import { NONCE_HEADER } from '@/lib/security/nonce-header';
 
 /**
- * Generate CSP policy based on environment variables
+ * Build the CSP for this request. In production a fresh nonce is generated per
+ * request; Next.js reads it from the request's Content-Security-Policy header
+ * and applies it to every script it renders.
  */
-function generateCSP(isDevelopment: boolean): string {
-  // Get URLs from environment variables (runtime - no hardcoded fallbacks)
-  const apiUrl = process.env.API_URL || '';
-  const websocketUrl = process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '';
-  const bunnyPullZone = process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL || '';
-
-  // Extract domains from URLs
-  const apiDomain = apiUrl ? new URL(apiUrl).origin : '';
-  const wsDomain = websocketUrl ? websocketUrl.replace(/^ws(s)?:\/\/([^\/]+).*$/, 'https://$2') : '';
-  const wssDomain = websocketUrl ? websocketUrl.replace(/^ws:/, 'wss:').replace(/^wss:\/\/([^\/]+).*$/, 'wss://$1') : '';
-
-  const baseConnectSrc = [
-    "'self'",
-    "https://*.b-cdn.net",
-    bunnyPullZone ? `https://${bunnyPullZone}` : '',
-    apiDomain,
-  ].filter(Boolean);
-
-  const devConnectSrc = [
-    ...baseConnectSrc,
-    "http://127.0.0.1:*",
-    "http://localhost:*",
-    "ws://localhost:*",
-    "wss://localhost:*",
-  ];
-
-  const prodConnectSrc = [
-    ...baseConnectSrc,
-    wsDomain,
-    wssDomain,
-  ];
-
-  const connectSrc = isDevelopment ? devConnectSrc : prodConnectSrc;
-
-  const policy = [
-    "default-src 'self'",
-    isDevelopment
-      ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vjs.zencdn.net https://assets.mediadelivery.net http://assets.mediadelivery.net"
-      : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vjs.zencdn.net https://assets.mediadelivery.net https://static.cloudflareinsights.com",
-    "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net https://cdnjs.cloudflare.com",
-    "media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net blob:",
-    `connect-src ${connectSrc.filter(Boolean).join(' ')}`,
-    "img-src 'self' data: https: blob:",
-    "font-src 'self' data: https://cdnjs.cloudflare.com",
-    "worker-src 'self' blob:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ];
-
-  // Only add upgrade-insecure-requests in production or when not using localhost
-  if (!isDevelopment) {
-    policy.push("upgrade-insecure-requests");
-  }
-
-  return policy.join('; ');
+function createCsp(isDevelopment: boolean): { csp: string; nonce?: string } {
+  const nonce = isDevelopment ? undefined : generateNonce();
+  const csp = buildContentSecurityPolicy({
+    isDevelopment,
+    nonce,
+    env: {
+      apiUrl: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL,
+      websocketUrl: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL,
+      bunnyPullZone: process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL,
+      authUrl: process.env.OPENAUTH_ISSUER || process.env.Issuer,
+    },
+  });
+  return { csp, nonce };
 }
 
 /**
- * Additional security headers for enhanced protection
+ * Continue the request with the CSP (and nonce) visible to server rendering,
+ * and attach CSP + security headers to the response.
  */
-const SECURITY_HEADERS = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
-};
+function nextWithSecurityHeaders(request: NextRequest, isDevelopment: boolean): NextResponse {
+  const { csp, nonce } = createCsp(isDevelopment);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('Content-Security-Policy', csp);
+  if (nonce) requestHeaders.set(NONCE_HEADER, nonce);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('Content-Security-Policy', csp);
+  Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
+    response.headers.set(header, value);
+  });
+  if (isDevelopment) {
+    response.headers.set('X-CSP-Debug', 'development-mode');
+    response.headers.set('X-Security-Headers', 'enabled');
+  }
+  return response;
+}
 
 /**
  * Get language preference from cookie
@@ -141,26 +115,13 @@ export function middleware(request: NextRequest) {
       if (potentialLocale.length === 2) {
         // Check if the locale is supported
         if (supportedLocaleCodes.includes(potentialLocale)) {
-          // Valid supported locale - continue processing
-          const response = NextResponse.next();
+          // Valid supported locale - continue processing with CSP + security headers
+          const response = nextWithSecurityHeaders(request, isDevelopment);
 
           // Add locale and direction headers for the response
           const direction = getTextDirection(potentialLocale);
           response.headers.set('X-Locale', potentialLocale);
           response.headers.set('X-Text-Direction', direction);
-
-          // Add CSP and security headers
-          const csp = generateCSP(isDevelopment);
-          response.headers.set('Content-Security-Policy', csp);
-
-          Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
-            response.headers.set(header, value);
-          });
-
-          if (isDevelopment) {
-            response.headers.set('X-CSP-Debug', 'development-mode');
-            response.headers.set('X-Security-Headers', 'enabled');
-          }
 
           return response;
         } else {
@@ -175,24 +136,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Default response for all other routes
-  const response = NextResponse.next();
-
-  // Generate and add Content Security Policy
-  const csp = generateCSP(isDevelopment);
-  response.headers.set('Content-Security-Policy', csp);
-
-  // Add additional security headers
-  Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
-    response.headers.set(header, value);
-  });
-
-  // Add security-related debug headers in development
-  if (isDevelopment) {
-    response.headers.set('X-CSP-Debug', 'development-mode');
-    response.headers.set('X-Security-Headers', 'enabled');
-  }
-
-  return response;
+  return nextWithSecurityHeaders(request, isDevelopment);
 }
 
 /**

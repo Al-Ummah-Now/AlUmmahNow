@@ -12,6 +12,7 @@
 
 import type { Player } from 'video.js';
 import type { ExtendedPlayer } from './videojs';
+import { shouldHandleGlobalPlayerShortcut } from '@/lib/security/listener-scope';
 import { logger } from '@/lib/logger-server';
 
 
@@ -130,6 +131,12 @@ export function setupPlaybackSpeedKeyboardShortcuts(player: Player | ExtendedPla
   const handleKeyDown = (event: KeyboardEvent) => {
     // Only handle when shift is pressed
     if (!event.shiftKey) {
+      return;
+    }
+
+    // Scope the document listener to this player (Story 1.2, AC 4)
+    const scopeElement = (player as ExtendedPlayer).el();
+    if (scopeElement && !shouldHandleGlobalPlayerShortcut(event, scopeElement, { handleEventsInsidePlayer: true })) {
       return;
     }
 

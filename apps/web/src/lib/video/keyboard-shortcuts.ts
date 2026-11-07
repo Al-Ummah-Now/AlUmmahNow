@@ -38,6 +38,7 @@
 
 import type { ExtendedPlayer } from './videojs';
 import { getTranslations, isRTL, type SupportedLanguage } from './i18n';
+import { shouldHandleGlobalPlayerShortcut } from '@/lib/security/listener-scope';
 import { logger } from '@/lib/logger-server';
 
 
@@ -589,14 +590,21 @@ export function setupKeyboardShortcuts(
   // Add scoped event listener to player element (not global document)
   playerElement.addEventListener('keydown', handleKeyDown);
 
-  // Also add to document for when player is in fullscreen but maintain security validation
-  document.addEventListener('keydown', handleKeyDown);
+  // Document-level listener for page-wide shortcuts and fullscreen, scoped to
+  // this player: ignores events already handled by the element listener and
+  // keys aimed at other widgets or other players (Story 1.2, AC 4).
+  const handleDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (shouldHandleGlobalPlayerShortcut(event, playerElement)) {
+      handleKeyDown(event);
+    }
+  };
+  document.addEventListener('keydown', handleDocumentKeyDown);
 
   // Return cleanup function
   return () => {
     // Remove scoped event listeners
     playerElement.removeEventListener('keydown', handleKeyDown);
-    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('keydown', handleDocumentKeyDown);
 
     // Cleanup help button
     if (helpButtonCleanup) {

@@ -6,6 +6,7 @@ import {
   WebSocketEventType
 } from '@/interfaces/websocket';
 import { logger } from '@/lib/logger-client';
+import { sanitizeEventPayload, validateStructure } from '@/lib/security/InputSanitizer';
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -91,7 +92,21 @@ export class WebSocketManager {
 
         this.ws.onmessage = (event) => {
           try {
-            const message: WebSocketMessage = JSON.parse(event.data);
+            // Story 1.2 AC 5: sanitize before the message is dispatched to handlers
+            // (drops prototype-pollution keys, non-JSON values, control characters,
+            // oversized structures). Text stays intact because React escapes it.
+            const { value: message, modified } = sanitizeEventPayload<WebSocketMessage>(
+              JSON.parse(typeof event.data === 'string' ? event.data : ''),
+              { stripMarkup: false, maxDepth: 8, maxStringLength: 10_000, maxArrayLength: 500 }
+            );
+            const shape = validateStructure(message, { required: { type: 'string' } });
+            if (!shape.valid) {
+              logger.warn('[WebSocket] Dropping malformed message', { errors: shape.errors });
+              return;
+            }
+            if (modified) {
+              logger.debug('[WebSocket] Message sanitized before dispatch', { type: message.type });
+            }
             this.handleMessage(message);
           } catch (error) {
             logger.error('❌ Error parsing WebSocket message:', error);
