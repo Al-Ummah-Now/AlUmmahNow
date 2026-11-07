@@ -1,4 +1,5 @@
 import { fromHono } from "chanfana";
+import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { Hono } from "hono";
 import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
@@ -128,6 +129,10 @@ app.use('/api/*', optionalAuthMiddleware);
 // This middleware verifies that the channelId belongs to the authenticated user
 // It must run after auth middleware so the user context is available
 app.use('/api/*', channelIdMiddleware);
+
+// Sign Bunny Stream URLs in responses for CDN token authentication
+// (no-op unless BUNNY_SIGN_URLS is "true"; see middleware/bunny-signing.ts)
+app.use('/api/*', bunnySigningMiddleware);
 
 // ==========================================
 // RATE LIMITING

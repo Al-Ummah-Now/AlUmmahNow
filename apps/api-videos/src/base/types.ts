@@ -59,6 +59,10 @@ export interface AppBindings {
   Issuer: string;
   Audience?: string;
   bunny_hostname?: string;
+  /** "true" to sign Bunny Stream URLs (requires CDN token auth on the library) */
+  BUNNY_SIGN_URLS?: string;
+  /** Bunny Stream CDN token authentication key (Secrets Store) */
+  BUNNY_TOKEN_KEY?: { get(): Promise<string> } | string;
   WEBSOCKET_URL?: string;
   CORS_ORIGINS?: string;
 }

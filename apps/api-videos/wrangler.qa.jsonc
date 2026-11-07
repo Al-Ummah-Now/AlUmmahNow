@@ -126,6 +126,12 @@
       "binding": "INTERNAL_API_KEY",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
       "secret_name": "internal-api-key-qa"
+    },
+    {
+      // Bunny Stream CDN token authentication key (signs video URLs)
+      "binding": "BUNNY_TOKEN_KEY",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "bunny-stream-token-key-qa"
     }
   ],
   "vars": {
@@ -134,6 +140,8 @@
     "Issuer": "https://auth.qa.alummahnow.net",
     "Audience": "https://videos.api.qa.alummahnow.net",
     "bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
+    // Flip to "true" together with enabling CDN token authentication on the library
+    "BUNNY_SIGN_URLS": "false",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
     "CORS_ORIGINS": "https://videos.qa.alummahnow.net,https://admin.qa.alummahnow.net"
   },
