@@ -8,6 +8,12 @@ import { EN_TRANSLATIONS as WEB_EN } from '../../web/src/lib/i18n/translations/e
 import { AR_TRANSLATIONS as WEB_AR } from '../../web/src/lib/i18n/translations/ar';
 import { MemoryBucket, buildApp } from './helpers';
 
+function leafKeys(obj: Record<string, unknown>, prefix = ''): string[] {
+	return Object.entries(obj).flatMap(([k, v]) =>
+		v && typeof v === 'object' ? leafKeys(v as Record<string, unknown>, `${prefix}${k}.`) : [`${prefix}${k}`]
+	);
+}
+
 function routes(r: any) {
 	r.post('/api/i18n/sync', SyncTranslationsEndpoint);
 }
@@ -47,5 +53,11 @@ describe('POST /api/i18n/sync', () => {
 		assert.equal(bucket.read('translations/ar.json').version, '1.0.79');
 		assert.equal(bucket.read('translations/metadata.json').version, '1.0.79');
 		assert.equal(bucket.read('config/i18n-config.json').version, '1.0.79');
+	});
+
+	it('seeds an Arabic string for every English key', () => {
+		const ar = new Set(leafKeys(WEB_AR as unknown as Record<string, unknown>));
+		const missing = leafKeys(WEB_EN as unknown as Record<string, unknown>).filter((k) => !ar.has(k));
+		assert.deepEqual(missing, []);
 	});
 });
