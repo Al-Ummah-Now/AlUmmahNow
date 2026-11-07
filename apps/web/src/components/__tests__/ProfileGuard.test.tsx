@@ -46,6 +46,7 @@ interface MultiAccountContextValue {
   createChannel: (data: ChannelCreateRequest) => Promise<Channel | null>;
   creatingChannel: boolean;
   reloadChannels: () => Promise<void>;
+  reloadProfile: () => Promise<void>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -94,6 +95,7 @@ const createMockContext = (partial: Partial<MultiAccountContextValue>): MultiAcc
   createChannel: jest.fn(),
   creatingChannel: false,
   reloadChannels: jest.fn(),
+  reloadProfile: jest.fn(),
   logout: jest.fn(),
   logoutAll: jest.fn(),
   refresh: jest.fn(),

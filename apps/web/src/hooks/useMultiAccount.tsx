@@ -15,6 +15,7 @@ import {
   removeUserAccount,
   switchChannel,
   reloadUserChannels,
+  reloadActiveProfile,
   createChannelForActiveUser,
   logoutCurrentAccount,
   logoutAllAccounts,
@@ -68,6 +69,8 @@ interface MultiAccountContextValue {
   /** True while a channel creation request is in flight */
   creatingChannel: boolean;
   reloadChannels: () => Promise<void>;
+  /** Re-read the active profile (name, avatar) into the session */
+  reloadProfile: () => Promise<void>;
   logout: () => Promise<void>;
   logoutAll: (skipConfirmation?: boolean) => Promise<void>;
   refresh: () => Promise<void>;
@@ -349,6 +352,26 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     }
   }, [t]);
 
+  // Session channels are cached at sign-in, so avatars or names changed since
+  // then (or on another device) would never reach the navigation. Refresh them
+  // once per tab, after the page's own requests (Server Actions run one at a
+  // time, so this must not queue ahead of them).
+  const signedInUserId = user?.id;
+  useEffect(() => {
+    if (!signedInUserId) return;
+    const key = `aun_channels_refreshed_${signedInUserId}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, String(Date.now()));
+    } catch {
+      // Storage unavailable (private mode): refresh on every load instead
+    }
+    const timer = window.setTimeout(() => {
+      void reloadChannels();
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [signedInUserId, reloadChannels]);
+
   // Logout current account
   const logout = useCallback(async () => {
     try {
@@ -437,6 +460,15 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     await loadSessionData();
   }, [loadSessionData]);
 
+  const reloadProfile = useCallback(async () => {
+    await reloadActiveProfile();
+    const sessionInfo = await getActiveSessionInfo();
+    if (sessionInfo) {
+      setUser(sessionInfo.user);
+      setAccounts(sessionInfo.accounts);
+    }
+  }, []);
+
   const value: MultiAccountContextValue = {
     user,
     accounts,
@@ -449,6 +481,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     createChannel,
     creatingChannel,
     reloadChannels,
+    reloadProfile,
     logout,
     logoutAll,
     refresh,

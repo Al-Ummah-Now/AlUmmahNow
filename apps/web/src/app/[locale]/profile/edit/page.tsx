@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import ImageCropDialog from "@/components/ImageCropDialog";
+import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
@@ -96,6 +97,8 @@ const ProfileEditPage = () => {
     }
   };
 
+  // Session profile feeds the navigation avatar; refresh it after a new photo
+  const { reloadProfile } = useMultiAccount();
   // Picked image waiting to be positioned/zoomed before upload
   const [cropping, setCropping] = useState<{ type: 'profilePhoto' | 'coverPhoto'; file: File } | null>(null);
 
@@ -104,7 +107,9 @@ const ProfileEditPage = () => {
     if (!profile) return;
 
     if (type === 'profilePhoto') {
-      updateProfilePhoto(profile, file, setProfile);
+      void updateProfilePhoto(profile, file, setProfile).then((ok) => {
+        if (ok) void reloadProfile();
+      });
     }
     if (type === 'coverPhoto') {
       updateCoverPhoto(profile, file, setProfile);

@@ -10,6 +10,7 @@ import { updateChannelProfile } from '@/lib/api/channel-profile';
 import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
 import { channelPath } from '@/lib/channel-url';
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useLanguage } from '@/hooks/useLanguage';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
@@ -36,6 +37,8 @@ function ChannelEditPage() {
   const channelId = params.id as string;
 
   const { user } = useAuth();
+  // Session channels feed the navigation avatar; refresh them after changes
+  const { reloadChannels } = useMultiAccount();
   const [channel, setChannel] = useState<ChannelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -141,6 +144,7 @@ function ChannelEditPage() {
         return;
       }
 
+      await reloadChannels();
       router.push(channelPath(locale, { id: channelId, handle: result.channel.handle }));
     } catch (error) {
       logger.error('Error updating channel', { error, channelId });
@@ -183,6 +187,7 @@ function ChannelEditPage() {
 
         // Update channel state
         setChannel(updatedChannel);
+        void reloadChannels();
       } else {
         throw new Error(t.errors.uploadFailed || 'Upload failed');
       }
