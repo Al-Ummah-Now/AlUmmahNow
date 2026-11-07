@@ -75,6 +75,9 @@ See [`docs/native-apps/EPICS.md`](native-apps/EPICS.md): product family, Fanous 
 ### **Epics 25–27: Sharing & embeds, embedded discussions, plans & entitlements**
 See [`docs/specs/EMBEDS-COMMENTS-TIERS.md`](specs/EMBEDS-COMMENTS-TIERS.md): embeddable player + JS API, "Ummah Comments" widget for external sites, and the tier/entitlement framework every feature must declare.
 
+### **Epic 28: AI-assisted moderation & flagging (Cloudflare Workers AI)**
+See [`docs/specs/AI-MODERATION.md`](specs/AI-MODERATION.md).
+
 ---
 
 ## GitHub Issues Coverage Analysis

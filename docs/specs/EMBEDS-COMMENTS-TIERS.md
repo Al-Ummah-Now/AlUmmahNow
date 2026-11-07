@@ -206,9 +206,11 @@ existing comment storage, with per-thread index objects; counters via existing p
 limits and metering exist now, and everyone is on **Free** with generous defaults.
 
 ### 27.1 Data model (D1, `admin-api` owned)
-- `plans` (id, name, audience = creator|organisation|viewer, version)
+- `plans` (id, slug, name_en, name_ar, description_en/ar, audience = creator|organisation|viewer, status = draft|active|archived, is_public, sort_order, version, created_by)
+- `plan_prices` (plan_id, currency, interval = month|year|one_time, amount, provider_price_refs_json): a plan can have several prices; each provider maps its own product/price ids here
 - `plan_entitlements` (plan_id, key, value_json), e.g. `{"embed.domains.max": 3}`
-- `subscriptions` (subject_type = channel|organisation|user, subject_id, plan_id, status, period, source = manual|stripe|apple|google)
+- `subscriptions` (subject_type = channel|organisation|user, subject_id, plan_id, plan_version, status = trialing|active|past_due|canceled|expired, current_period_start/end, provider = manual|<provider id>, provider_subscription_ref)
+- `payment_providers` (id, adapter, display_name, enabled, regions, currencies, config_ref) and `payment_events` (provider, event_id, type, payload_hash, processed_at) for idempotent webhook processing
 - `entitlement_overrides` (subject, key, value, expires_at, reason) for grants, trials and partners
 - `usage_counters` (subject, key, period, value), updated by the processor
 
@@ -222,7 +224,13 @@ limits and metering exist now, and everyone is on **Free** with generous default
 - **Definition of Done addition (all epics):** each feature lists its entitlement keys, Free
   defaults and the behaviour at the limit.
 
-### 27.3 Proposed plans (names/prices TBD, decision T1)
+### 27.3 Plans are custom and admin-managed (decision T1: resolved)
+Plans are **not hard-coded**. Admins create, edit, version, price, publish and retire plans in admin-web
+(27.6); the table below is only the **initial seed** suggestion. Changing a plan creates a new
+**version**; existing subscribers stay on their version until migrated (bulk migrate with notice).
+Custom/private plans (e.g. a negotiated Institution deal) are plans with `is_public = false`
+assigned to specific subjects.
+
 | Plan | Audience | Intent |
 |---|---|---|
 | **Free** | everyone | Full platform use, embeds and comments widget with fair limits and branding |
@@ -231,7 +239,7 @@ limits and metering exist now, and everyone is on **Free** with generous default
 | **Institution** | masjids, universities, publishers | Many channels/Sites, SSO later, SLA, bulk import (Studio Desktop), dedicated support |
 | **Viewer Premium** (later) | viewers | Offline downloads, early access (native Epic 24) |
 
-### 27.4 Entitlement matrix: embeds & discussions (proposal)
+### 27.4 Entitlement matrix: embeds & discussions (initial seed values, editable by admins)
 | Key | Free | Plus | Pro | Institution |
 |---|---|---|---|---|
 | `share.shortLinks` | ✅ | ✅ | ✅ | ✅ |
@@ -263,13 +271,46 @@ Existing features get keys too (non-exhaustive): `upload.maxDurationMinutes`,
   **grace period** keeps existing embeds working: we never break a creator's live website
   without notice.
 
-### 27.6 Admin tooling (admin-web)
-- Assign plans manually, add overrides/trials, view usage, audit trail.
+### 27.6 Admin tooling (admin-web): Plans & Billing
+- **Entitlement catalogue:** registry of every entitlement key (type: boolean | number | enum | list, unit, default, description en/ar, owning epic). Features register keys in code; the catalogue is synced so admins can only pick valid keys.
+- **Plan editor:** create/clone plans, set entitlement values validated against the catalogue, bilingual names/descriptions, prices per currency and interval, public/private, draft → active → archived, versioning with a diff view.
+- **Assignments:** assign/migrate plans for channels/organisations/users, trials with expiry, per-subject overrides, bulk operations.
+- **Usage & limits:** usage per subject vs limits, upcoming limit breaches, grace states.
+- **Provider management:** enable/disable payment providers per region/currency, map plan prices to provider product ids, webhook/event log, retry failed events.
+- **Audit trail** for every plan, price, assignment and override change (who/when/why).
+- RBAC: new auth roles `billing_admin` (full) and `billing_viewer` (read-only).
 
-### 27.7 Billing (later, decision T2)
-- Stripe Billing for web (creators/organisations), App Store / Play IAP for in-app purchases
-  (viewer Premium, native Epic 24), webhooks updating `subscriptions`. Out of scope now; the framework
-  is billing-agnostic.
+### 27.7 Pluggable payment providers (decision T2: resolved)
+**Stripe will not be used.** Billing goes through a provider-agnostic interface so providers can be
+added, swapped or run side by side per region (important for MENA and Muslim-majority markets, where
+local payment methods matter).
+
+```ts
+interface PaymentProvider {
+  id: string;                                   // e.g. "manual", "paddle", "paypal", "tap", "apple", "google"
+  capabilities: { subscriptions: boolean; oneTime: boolean; refunds: boolean; currencies: string[]; regions: string[] };
+  createCheckout(input: CheckoutInput): Promise<{ redirectUrl?: string; clientToken?: string }>;
+  getSubscription(ref: string): Promise<ProviderSubscription>;
+  cancelSubscription(ref: string, atPeriodEnd: boolean): Promise<void>;
+  changePlan(ref: string, newPriceRef: string): Promise<void>;
+  verifyWebhook(req: Request): Promise<ProviderEvent>;   // signature check + normalisation
+  customerPortalUrl?(customerRef: string): Promise<string>;
+}
+```
+
+- Adapters live in a `billing` Worker (or a module in admin-api). Webhooks land on
+  `/api/billing/webhooks/:providerId`, are verified, normalised to internal events
+  (`subscription.activated|renewed|past_due|canceled`, `payment.succeeded|failed|refunded`), stored
+  idempotently in `payment_events`, and update `subscriptions`, which invalidates the entitlements cache.
+- A **manual provider** always exists: admin-assigned plans, bank transfer, invoices, sponsored/waqf accounts.
+- **App stores:** App Store and Google Play adapters for in-app purchases where store rules require
+  them (viewer Premium, native Epic 24), with server-side receipt validation.
+- Candidate providers (decision P1): merchant-of-record options (e.g. Paddle, Lemon Squeezy) to
+  offload global tax/VAT, PayPal, and regional gateways (e.g. Tap, Checkout.com, HyperPay, PayTabs,
+  Moyasar) chosen per market. Criteria: MENA card coverage (mada, KNET, local wallets), recurring
+  billing, payouts for creator support (Epic 24), fees, PCI scope staying with the provider (card data
+  never touches our systems), and Shariah considerations (no interest-bearing instalment products).
+- Checkout shows only providers available for the buyer region/currency, with prices from `plan_prices`.
 
 ---
 
@@ -281,7 +322,7 @@ Existing features get keys too (non-exhaustive): `upload.maxDurationMinutes`,
 | 2 | 25.4–25.6, 25.8 (embed player, JS API, creator controls, analytics) | 4 wk |
 | 3 | 26.1–26.5 (Sites, widget, scopes, moderation) | 5 wk |
 | 4 | 26.6–26.10, 25.7, 25.9 (abuse, SEO, export, Studio surfaces, end screen) | 3 wk |
-| 5 | 27.3–27.5 plan matrix activated; 27.7 billing when decided | TBD |
+| 5 | 27.6 plan editor & provider management; 27.7 manual + first provider adapters | 4 wk |
 
 ---
 
@@ -289,8 +330,9 @@ Existing features get keys too (non-exhaustive): `upload.maxDurationMinutes`,
 
 | # | Decision | Recommendation |
 |---|---|---|
-| T1 | Plan names, prices, limits | Ship the matrix as config; tune with real usage |
-| T2 | Billing provider & timing | Stripe for web; IAP only where stores require |
+| T1 | Plan names, prices, limits | **Resolved:** custom plans, fully admin-managed in admin-web; the table is seed data only |
+| T2 | Billing provider | **Resolved:** pluggable provider interface; **never Stripe**; manual + app-store adapters first |
+| P1 | First paid providers | Pick 1 global merchant-of-record + 1–2 MENA gateways using the 27.7 criteria |
 | E1 | Embed host domain | `embed.alummahnow.net` (separate origin isolates embeds from the main app) |
 | E2 | Default thread scope for video discussions | `shared` (one community per video) |
 | E3 | Guest commenting | Off by default; Pro+ with pre-moderation |
