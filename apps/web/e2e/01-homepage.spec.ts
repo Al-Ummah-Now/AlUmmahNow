@@ -1,60 +1,60 @@
 import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
+import { ANONYMOUS_STATE } from './test-utils/auth-state';
 
 /**
- * Homepage E2E Tests
- * Tests for the main landing page functionality
+ * Homepage E2E Tests (anonymous visitor, real QA content)
  */
+
+test.use({ storageState: ANONYMOUS_STATE });
+
+async function expectNoHorizontalScroll(page: Page) {
+  const { scrollWidth, innerWidth } = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth,
+  }));
+  expect(scrollWidth).toBeLessThanOrEqual(innerWidth + 1);
+}
 
 test.describe('Homepage - English', () => {
   test('should load successfully', async ({ page }) => {
-    await page.goto('/en/');
+    const response = await page.goto('/en/');
+    expect(response?.status()).toBe(200);
 
-    // Check page title
     await expect(page).toHaveTitle(/Al Ummah Now/i);
-
-    // Check that main content is visible
-    await expect(page.locator('body')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Videos' })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   });
 
-  test('should have working navigation', async ({ page }) => {
+  test('should have the header navigation', async ({ page }) => {
     await page.goto('/en/');
 
-    // Navigation exists but may be hidden initially (mobile-first design)
-    // Just verify the page has loaded with body visible
-    await expect(page.locator('body')).toBeVisible();
-
-    // Verify navigation exists in DOM (even if hidden)
-    const navCount = await page.locator('nav').count();
-    expect(navCount).toBeGreaterThan(0);
+    const header = page.getByRole('banner');
+    await expect(header).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Navigation menu' })).toBeVisible();
+    await expect(page.getByTestId('nav-drawer-toggle')).toBeVisible();
   });
 
-  test('should display video feed', async ({ page }) => {
+  test('should display the video feed', async ({ page }) => {
     await page.goto('/en/');
 
-    // Wait for videos to load (adjust timeout as needed)
-    await page.waitForTimeout(2000);
-
-    // Check if there are video elements on the page
-    // This is a basic check - you'll want to make this more specific
-    const content = page.locator('main');
-    await expect(content).toBeVisible();
+    const cards = page.getByTestId('video-card');
+    await expect(cards.first()).toBeVisible();
+    await expect(cards.first()).toHaveAttribute('href', /^\/en\/video\?vid=/);
+    await expect(page.getByTestId('video-grid-loading')).toHaveCount(0);
   });
 
   test('should be responsive', async ({ page }) => {
-    // Test desktop view
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto('/en/');
-    await expect(page.locator('body')).toBeVisible();
-
-    // Test tablet view
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto('/en/');
-    await expect(page.locator('body')).toBeVisible();
-
-    // Test mobile view
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/en/');
-    await expect(page.locator('body')).toBeVisible();
+    for (const viewport of [
+      { width: 1920, height: 1080 },
+      { width: 768, height: 1024 },
+      { width: 375, height: 667 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/en/');
+      await expect(page.getByTestId('video-card').first()).toBeVisible();
+      await expectNoHorizontalScroll(page);
+    }
   });
 });
 
@@ -62,51 +62,37 @@ test.describe('Homepage - Arabic (RTL)', () => {
   test('should load Arabic version', async ({ page }) => {
     await page.goto('/ar/');
 
-    // Check page loads
     await expect(page).toHaveTitle(/Al Ummah Now/i);
-
-    // Check for Arabic text content (more reliable than dir attribute)
-    await expect(page.locator('h1')).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   });
 
   test('should have RTL layout', async ({ page }) => {
     await page.goto('/ar/');
 
-    // Verify body has content
-    const body = page.locator('body');
-    await expect(body).toBeVisible();
-
-    // Check for Arabic text content
-    await expect(page.locator('h1')).toContainText('الفيديوهات');
-
-    // Verify RTL styling (inline style or dir attribute)
-    const main = page.locator('main');
-    const dirAttr = await main.getAttribute('dir');
-    const dirStyle = await main.evaluate((el: HTMLElement) => window.getComputedStyle(el).direction);
-
-    // Either dir attribute is "rtl" OR computed style direction is "rtl"
-    expect(dirAttr === 'rtl' || dirStyle === 'rtl').toBe(true);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    const main = page.getByRole('main');
+    await expect(main).toHaveCSS('direction', 'rtl');
+    await expect(page.getByTestId('video-card').first()).toHaveAttribute('href', /^\/ar\/video\?vid=/);
   });
 });
 
 test.describe('Language Switching', () => {
   test('should switch from English to Arabic', async ({ page }) => {
     await page.goto('/en/');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Videos');
 
-    // Navigate to Arabic version
     await page.goto('/ar/');
-
-    // Check for Arabic text (most reliable indicator)
-    await expect(page.locator('h1')).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 
   test('should switch from Arabic to English', async ({ page }) => {
     await page.goto('/ar/');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
 
-    // Navigate to English version
     await page.goto('/en/');
-
-    // Check for English text
-    await expect(page.locator('h1')).toContainText('Videos');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Videos');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
   });
 });

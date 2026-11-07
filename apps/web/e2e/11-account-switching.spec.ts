@@ -1,256 +1,121 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Locator } from '@playwright/test';
+import { combinedSessionState, readAccount } from './test-utils/auth-state';
+import { openAccountMenu } from './test-utils/navigation';
 
 /**
- * Account Switching Test
+ * Account switching with two signed-in accounts.
  *
- * Tests the account switching functionality, especially on profile creation page
+ * The context starts with a multi-account session (single-channel user active,
+ * multi-channel user as the second account) built from the stored E2E
+ * sessions. Switching only rewrites this context's cookie; the tests never
+ * sign out, so the stored sessions stay valid for other specs.
  */
 
+test.use({
+  // Playwright fixture callback, not a React hook
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  storageState: async ({}, use) => use(combinedSessionState('single', 'multi')),
+});
+
+function account(menu: Locator, displayName: string): Locator {
+  return menu.getByTestId('nav-account').filter({ hasText: displayName });
+}
+
 test.describe('Account Switching', () => {
-  test.beforeEach(async ({ page }) => {
-    // Navigate to home page (assumes user is already logged in)
-    await page.goto('/en', { waitUntil: 'networkidle' });
+  test('lists both accounts with the first one active', async ({ page }) => {
+    const single = readAccount('single');
+    const multi = readAccount('multi');
+    await page.goto('/en');
+    const menu = await openAccountMenu(page);
+
+    await expect(menu.getByText(/^ACCOUNTS \(2\)/)).toBeVisible();
+    await expect(menu.getByTestId('nav-account')).toHaveCount(2);
+    await expect(account(menu, single.email)).toHaveAttribute('data-active', 'true');
+    await expect(account(menu, multi.email)).toHaveAttribute('data-active', 'false');
+    // Not an exact count: 09-channel-switching briefly adds channels to this user
+    await expect(account(menu, multi.email)).toContainText(/\d+ channels/);
+    // Two accounts: "sign out of all" is offered
+    await expect(menu.getByRole('menuitem', { name: /Sign out of all accounts/ })).toBeVisible();
   });
 
-  test('should allow switching accounts on profile creation page', async ({ page }) => {
-    console.log('\n🧪 Testing account switching on profile creation page');
-
-    // Navigate to profile creation page
-    await page.goto('/en/profile/create', { waitUntil: 'networkidle' });
-
-    // Wait for page to load
-    await page.waitForTimeout(2000);
-
-    // Check if we're on profile creation page
-    const currentUrl = page.url();
-    console.log('Current URL:', currentUrl);
-
-    // Open navigation menu (look for user avatar or menu button)
-    const menuButton = page.locator('[data-testid="user-menu"], button:has-text("Menu"), button[aria-label*="menu"]').first();
-
-    if (await menuButton.isVisible()) {
-      console.log('Clicking menu button...');
-      await menuButton.click();
-      await page.waitForTimeout(1000);
-
-      // Look for account switcher section
-      const accountSection = page.locator('text=/ACCOUNTS?/i');
-
-      if (await accountSection.isVisible()) {
-        console.log('Found ACCOUNTS section');
-
-        // Find all account buttons (excluding the active one)
-        const accountButtons = page.locator('button:has-text("@")').filter({ hasNot: page.locator('[disabled]') });
-        const accountCount = await accountButtons.count();
-
-        console.log(`Found ${accountCount} switchable accounts`);
-
-        if (accountCount > 0) {
-          // Get the first available account to switch to
-          const targetAccount = accountButtons.first();
-          const accountEmail = await targetAccount.textContent();
-          console.log(`Attempting to switch to: ${accountEmail}`);
-
-          // Listen for network requests
-          const responsePromise = page.waitForResponse(
-            response => response.url().includes('/profile/create') && response.request().method() === 'POST',
-            { timeout: 10000 }
-          );
-
-          // Click the account to switch
-          await targetAccount.click();
-
-          try {
-            // Wait for the server action response
-            const response = await responsePromise;
-            const status = response.status();
-
-            console.log(`Server action response status: ${status}`);
-
-            // Check if we got a successful response (not 500)
-            expect(status).not.toBe(500);
-            expect([200, 307, 308]).toContain(status); // 200 OK, or redirect statuses
-
-            // Wait for navigation/state update
-            await page.waitForTimeout(2000);
-
-            // Check the final URL
-            const finalUrl = page.url();
-            console.log('Final URL after switch:', finalUrl);
-
-            // If we switched to an account WITH a profile, we should be redirected to /profile
-            // If we switched to an account WITHOUT a profile, we should stay on /profile/create
-            const isOnProfileCreate = finalUrl.includes('/profile/create');
-            const isOnProfile = finalUrl.includes('/profile') && !finalUrl.includes('/profile/create');
-
-            console.log('Is on profile create?', isOnProfileCreate);
-            console.log('Is on profile page?', isOnProfile);
-
-            // Either outcome is valid - the important thing is no 500 error
-            expect(isOnProfileCreate || isOnProfile).toBe(true);
-
-          } catch (error) {
-            console.error('Failed to capture server action response:', error);
-            throw error;
-          }
-
-        } else {
-          console.log('⏭️  Skipping test - no additional accounts available to switch to');
-          test.skip();
-        }
-
-      } else {
-        console.log('⏭️  Skipping test - ACCOUNTS section not found');
-        test.skip();
-      }
-
-    } else {
-      console.log('⏭️  Skipping test - menu button not found');
-      test.skip();
-    }
-  });
-
-  test('should not throw 500 errors when switching accounts', async ({ page }) => {
-    console.log('\n🧪 Testing for 500 errors during account switch');
-
-    // Monitor network for 500 errors
-    const errors500: string[] = [];
-    page.on('response', response => {
-      if (response.status() === 500) {
-        errors500.push(`${response.request().method()} ${response.url()} - ${response.status()}`);
-      }
+  test('switches to the other account and back', async ({ page, baseURL }) => {
+    const single = readAccount('single');
+    const multi = readAccount('multi');
+    const errors: string[] = [];
+    page.on('response', (r) => {
+      if (r.status() >= 500 && baseURL && r.url().startsWith(baseURL)) errors.push(`${r.status()} ${r.url()}`);
     });
+    await page.goto('/en');
 
-    // Navigate to profile creation
-    await page.goto('/en/profile/create', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1000);
+    let menu = await openAccountMenu(page);
+    await account(menu, multi.email).getByRole('menuitem').click();
 
-    // Try to open menu and switch accounts
-    try {
-      const menuButton = page.locator('[data-testid="user-menu"], button:has-text("Menu"), button[aria-label*="menu"]').first();
-
-      if (await menuButton.isVisible({ timeout: 5000 })) {
-        await menuButton.click();
-        await page.waitForTimeout(500);
-
-        const accountButtons = page.locator('button:has-text("@")').filter({ hasNot: page.locator('[disabled]') });
-        const accountCount = await accountButtons.count();
-
-        if (accountCount > 0) {
-          await accountButtons.first().click();
-          await page.waitForTimeout(3000); // Wait for server action to complete
-        }
-      }
-    } catch (_error) {
-      console.log('Could not perform account switch, but checking for 500 errors...');
+    menu = await openAccountMenu(page);
+    await expect(account(menu, multi.email)).toHaveAttribute('data-active', 'true');
+    await expect(menu.getByTestId('nav-active-context')).toContainText(multi.email);
+    // The active account's channels are listed
+    for (const ch of multi.channels) {
+      await expect(menu.locator(`[data-testid="nav-channel-option"][data-channel-id="${ch.id}"]`)).toBeVisible();
     }
 
-    // Check if any 500 errors occurred
-    if (errors500.length > 0) {
-      console.error('❌ Found 500 errors:');
-      errors500.forEach(err => console.error('  -', err));
-    } else {
-      console.log('✅ No 500 errors detected');
-    }
+    await account(menu, single.email).getByRole('menuitem').click();
+    menu = await openAccountMenu(page);
+    await expect(account(menu, single.email)).toHaveAttribute('data-active', 'true');
+    await expect(menu.getByTestId('nav-channel-option')).toHaveCount(1);
 
-    expect(errors500).toHaveLength(0);
+    expect(errors).toEqual([]);
   });
 
-  test('should show loading state during account switch', async ({ page }) => {
-    console.log('\n🧪 Testing loading state during account switch');
+  test('switching accounts away from profile/create returns home', async ({ page }) => {
+    const multi = readAccount('multi');
+    // Users with a profile are sent home from /profile/create by ProfileGuard
+    await page.goto('/en/profile/create');
+    await expect(page).toHaveURL(/\/en\/?$/);
 
-    await page.goto('/en/profile/create', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1000);
+    const menu = await openAccountMenu(page);
+    await account(menu, multi.email).getByRole('menuitem').click();
 
-    const menuButton = page.locator('[data-testid="user-menu"], button:has-text("Menu"), button[aria-label*="menu"]').first();
-
-    if (await menuButton.isVisible({ timeout: 5000 })) {
-      await menuButton.click();
-      await page.waitForTimeout(500);
-
-      const accountButtons = page.locator('button:has-text("@")').filter({ hasNot: page.locator('[disabled]') });
-      const accountCount = await accountButtons.count();
-
-      if (accountCount > 0) {
-        // Click account switch
-        await accountButtons.first().click();
-
-        // Check for loading indicator (could be a spinner or disabled state)
-        const hasLoadingIndicator = await Promise.race([
-          page.locator('.animate-spin, [aria-busy="true"], [data-loading="true"]').first().isVisible({ timeout: 2000 }).then(() => true),
-          page.waitForTimeout(2000).then(() => false)
-        ]);
-
-        console.log('Loading indicator shown:', hasLoadingIndicator);
-
-        // This is informational - we don't fail the test if no loading indicator
-        // The important thing is that the switch completes successfully
-      } else {
-        console.log('⏭️  Skipping - no accounts to switch to');
-        test.skip();
-      }
-    } else {
-      console.log('⏭️  Skipping - menu not found');
-      test.skip();
-    }
+    await expect(page).toHaveURL(/\/en\/?$/);
+    const reopened = await openAccountMenu(page);
+    await expect(account(reopened, multi.email)).toHaveAttribute('data-active', 'true');
   });
 
-  test('should use user-specific localStorage for active channel', async ({ page }) => {
-    console.log('\n🧪 Testing: localStorage keys are user-specific for channels');
+  test('keeps the active channel per account', async ({ page }) => {
+    const single = readAccount('single');
+    const multi = readAccount('multi');
+    await page.goto('/en');
 
-    // Enable console logging
-    page.on('console', msg => {
-      const text = msg.text();
-      if (text.includes('ActiveChannelProvider') || text.includes('userId:')) {
-        console.log(text);
-      }
-    });
+    let menu = await openAccountMenu(page);
+    await account(menu, multi.email).getByRole('menuitem').click();
+    menu = await openAccountMenu(page);
+    const second = multi.channels.find((c) => !c.isMain)!;
+    const secondOption = menu.locator(`[data-testid="nav-channel-option"][data-channel-id="${second.id}"]`);
+    await secondOption.click();
+    await expect(secondOption).toHaveAttribute('aria-checked', 'true');
 
-    await page.goto('/en', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000);
+    // Back to the single account: its own channel is active
+    await account(menu, single.email).getByRole('menuitem').click();
+    menu = await openAccountMenu(page);
+    await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${single.channels[0].id}`);
 
-    // Get all active channel related keys from localStorage
-    const channelData = await page.evaluate(() => {
-      const data: Record<string, unknown> = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.includes('al-ummah-active-channel')) {
-          try {
-            data[key] = JSON.parse(localStorage.getItem(key) || '{}');
-          } catch {
-            data[key] = localStorage.getItem(key);
-          }
-        }
-      }
-      return data;
-    });
+    // And the multi account remembers its second channel
+    await account(menu, multi.email).getByRole('menuitem').click();
+    menu = await openAccountMenu(page);
+    await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${second.id}`);
+  });
 
-    console.log('\n=== Channel localStorage Data ===');
-    console.log(JSON.stringify(channelData, null, 2));
-    console.log('==================================\n');
+  test('works in Arabic (RTL)', async ({ page }) => {
+    const multi = readAccount('multi');
+    await page.goto('/ar');
 
-    // Verify keys follow the pattern: al-ummah-active-channel-{userId}
-    const keys = Object.keys(channelData);
-    for (const key of keys) {
-      console.log(`Key: ${key}`);
+    let menu = await openAccountMenu(page);
+    await expect(menu).toHaveAttribute('dir', 'rtl');
+    await expect(menu.getByText(/^الحسابات \(2\)/)).toBeVisible();
+    await account(menu, multi.email).getByRole('menuitem').click();
 
-      // Check if key has userId suffix
-      const parts = key.split('-');
-      const hasUserIdSuffix = parts.length > 4; // al-ummah-active-channel-{userId}
-      console.log(`  Has userId suffix: ${hasUserIdSuffix}`);
-
-      const channelInfo = channelData[key] as Record<string, unknown>;
-      if (channelInfo && typeof channelInfo === 'object') {
-        console.log(`  Channel ID: ${channelInfo.channelId}`);
-        console.log(`  Channel Name: ${channelInfo.name}`);
-        console.log(`  Is Main: ${channelInfo.isMain}`);
-      }
-    }
-
-    // Document that each user should have their own key
-    console.log('\n✅ Expected behavior: Each user has separate localStorage key');
-    console.log('   Format: al-ummah-active-channel-{userId}');
-
-    expect(true).toBe(true); // This test is informational
+    menu = await openAccountMenu(page);
+    await expect(account(menu, multi.email)).toHaveAttribute('data-active', 'true');
+    await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', /^\/ar\/channels\//);
   });
 });

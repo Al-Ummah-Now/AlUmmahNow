@@ -1,574 +1,304 @@
-import { test, expect, helpers } from './fixtures';
+import { test, expect } from './fixtures';
+import type { Locator, Page } from '@playwright/test';
+import { AUTH_STATE } from './test-utils/auth-state';
+import {
+  SEED_TITLES,
+  createDisposableVideo,
+  deleteVideoQuietly,
+  ensureSeedVideos,
+  getVideo,
+  usePublicDisposable,
+  userApi,
+  type E2EVideo,
+} from './test-utils/e2e-videos';
 
 /**
- * Video Management E2E Tests
- * Tests for video dashboard, filtering, and management operations
+ * Video dashboard (/[locale]/dashboard/videos) E2E tests.
+ *
+ * The dashboard loads videos through a server action, so these tests run
+ * against the single-channel E2E user's real QA videos: a fixed seed set for
+ * read-only checks (all private), a public disposable video per worker for
+ * privacy checks, and per-test disposable videos for delete flows. Everything
+ * a test creates is deleted again.
  */
 
+test.use({ storageState: AUTH_STATE.single });
+
+let seed: Record<string, E2EVideo> = {};
+const publicVideo = usePublicDisposable('single', 'dashboard-public');
+
+test.beforeAll(async () => {
+  test.setTimeout(180000);
+  seed = await ensureSeedVideos('single');
+  await publicVideo.create();
+});
+
+test.afterAll(async () => {
+  await publicVideo.remove();
+});
+
+const cards = (page: Page) => page.getByTestId('dashboard-video-card');
+const card = (page: Page, video: E2EVideo) => page.locator(`[data-testid="dashboard-video-card"][data-video-id="${video.id}"]`);
+
+async function openDashboard(page: Page, locale: 'en' | 'ar' = 'en') {
+  await page.goto(`/${locale}/dashboard/videos`);
+  await expect(page.getByTestId('dashboard-search')).toBeVisible();
+  await expect(page.getByTestId('dashboard-loading')).toHaveCount(0);
+}
+
+/** Every card matching `cardLocator` has `attr` equal to `value` */
+async function expectAllCards(list: Locator, attr: string, value: string) {
+  const count = await list.count();
+  for (let i = 0; i < count; i++) {
+    await expect(list.nth(i)).toHaveAttribute(attr, value);
+  }
+}
+
 test.describe('Video Dashboard', () => {
-  test.beforeEach(async ({ page }) => {
-    // Mock authentication
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test('should display the owner\'s public and private videos', async ({ page }) => {
+    await openDashboard(page);
 
-    // Mock video list API
-    await page.route('**/api/videos/my-videos', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          videos: [
-            {
-              id: 'video-1',
-              title: 'Islamic Lecture on Patience',
-              titleLocalized: {
-                en: 'Islamic Lecture on Patience',
-                ar: 'محاضرة إسلامية عن الصبر'
-              },
-              description: 'A comprehensive lecture about patience in Islam',
-              thumbnailUrl: 'https://example.com/thumb1.jpg',
-              status: 'ready',
-              isPublic: true,
-              views: 1500,
-              createdAt: '2024-01-15T10:00:00Z',
-              duration: 1800
-            },
-            {
-              id: 'video-2',
-              title: 'Quran Recitation - Surah Al-Baqarah',
-              titleLocalized: {
-                en: 'Quran Recitation - Surah Al-Baqarah',
-                ar: 'تلاوة القرآن - سورة البقرة'
-              },
-              description: 'Beautiful recitation of Surah Al-Baqarah',
-              thumbnailUrl: 'https://example.com/thumb2.jpg',
-              status: 'ready',
-              isPublic: true,
-              views: 3200,
-              createdAt: '2024-01-10T15:30:00Z',
-              duration: 3600
-            },
-            {
-              id: 'video-3',
-              title: 'Private Study Session',
-              titleLocalized: {
-                en: 'Private Study Session',
-                ar: 'جلسة دراسة خاصة'
-              },
-              description: 'Personal study notes',
-              thumbnailUrl: 'https://example.com/thumb3.jpg',
-              status: 'ready',
-              isPublic: false,
-              views: 50,
-              createdAt: '2024-01-20T09:00:00Z',
-              duration: 900
-            },
-            {
-              id: 'video-4',
-              title: 'Processing Video',
-              titleLocalized: {
-                en: 'Processing Video',
-                ar: 'فيديو قيد المعالجة'
-              },
-              description: 'Currently being processed',
-              thumbnailUrl: null,
-              status: 'processing',
-              isPublic: true,
-              views: 0,
-              createdAt: '2024-01-25T12:00:00Z',
-              duration: null
-            }
-          ]
-        })
-      });
-    });
-  });
-
-  test('should display video dashboard', async ({ page }) => {
-    // Navigate to dashboard
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
-
-    // Verify page title
-    await expect(
-      page.locator('h1:has-text("My Videos"), h1:has-text("Videos")')
-    ).toBeVisible();
-
-    // Verify video cards are displayed
-    await expect(page.locator('text=Islamic Lecture on Patience')).toBeVisible();
-    await expect(page.locator('text=Quran Recitation')).toBeVisible();
-    await expect(page.locator('text=Private Study Session')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(card(page, publicVideo.get())).toBeVisible();
+    await expect(card(page, seed[SEED_TITLES.singlePrivate])).toBeVisible();
   });
 
   test('should show video metadata on cards', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+    await openDashboard(page);
 
-    // Verify first video card shows metadata
-    const videoCard = page.locator('text=Islamic Lecture on Patience').locator('..');
+    const publicCard = card(page, publicVideo.get());
+    await expect(publicCard.getByTestId('dashboard-video-title')).toHaveText(publicVideo.get().title);
+    await expect(publicCard).toHaveAttribute('data-privacy', 'public');
+    await expect(publicCard.getByTestId('dashboard-video-privacy')).toBeVisible();
+    await expect(publicCard.getByTestId('dashboard-video-status')).toBeVisible();
 
-    // Should show views
-    await expect(videoCard.locator('text=/1[,.]?500|views/i')).toBeVisible();
-
-    // Should show status
-    await expect(
-      videoCard.locator('text=/ready|published/i')
-    ).toBeVisible();
-
-    // Should show date
-    await expect(
-      videoCard.locator('text=/Jan|2024|15/i')
-    ).toBeVisible();
+    const privateCard = card(page, seed[SEED_TITLES.singlePrivate]);
+    await expect(privateCard).toHaveAttribute('data-privacy', 'private');
+    // Privacy badges differ between public and private videos
+    const publicLabel = await publicCard.getByTestId('dashboard-video-privacy').textContent();
+    await expect(privateCard.getByTestId('dashboard-video-privacy')).not.toHaveText(publicLabel || '');
   });
 
-  test('should display thumbnails', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+  test('should link each card to the video and its edit page', async ({ page }) => {
+    await openDashboard(page);
+    const video = seed[SEED_TITLES.singleVideo];
+    const publicCard = card(page, video);
 
-    // Verify thumbnails are loaded
-    const thumbnails = page.locator('img[alt*="thumbnail"], img[src*="thumb"]');
-    await expect(thumbnails.first()).toBeVisible();
+    await expect(publicCard.getByTestId('dashboard-video-view')).toHaveAttribute('href', `/en/video?vid=${video.id}`);
+    await publicCard.getByTestId('dashboard-video-edit').click();
+    await expect(page).toHaveURL(new RegExp(`/en/video/${video.id}/edit`));
+    await expect(page.getByTestId('video-edit-form')).toBeVisible();
   });
 });
 
 test.describe('Video Filtering', () => {
-  test.beforeEach(async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test('should filter videos by privacy', async ({ page }) => {
+    await openDashboard(page);
 
-    // Mock video list API (same as above)
-    await page.route('**/api/videos/my-videos**', route => {
-      const url = route.request().url();
-      const urlObj = new URL(url);
-      const status = urlObj.searchParams.get('status');
-      const isPublic = urlObj.searchParams.get('isPublic');
+    await page.getByTestId('dashboard-filter-privacy').selectOption('public');
+    await expect(card(page, publicVideo.get())).toBeVisible();
+    await expect(card(page, seed[SEED_TITLES.singlePrivate])).toHaveCount(0);
+    await expectAllCards(cards(page), 'data-privacy', 'public');
 
-      let videos = [
-        {
-          id: 'video-1',
-          title: 'Ready Public Video',
-          status: 'ready',
-          isPublic: true,
-          views: 1500,
-          createdAt: '2024-01-15T10:00:00Z'
-        },
-        {
-          id: 'video-2',
-          title: 'Ready Private Video',
-          status: 'ready',
-          isPublic: false,
-          views: 100,
-          createdAt: '2024-01-10T15:30:00Z'
-        },
-        {
-          id: 'video-3',
-          title: 'Processing Video',
-          status: 'processing',
-          isPublic: true,
-          views: 0,
-          createdAt: '2024-01-20T09:00:00Z'
-        }
-      ];
-
-      // Apply filters
-      if (status) {
-        videos = videos.filter(v => v.status === status);
-      }
-      if (isPublic) {
-        videos = videos.filter(v => v.isPublic === (isPublic === 'true'));
-      }
-
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, videos })
-      });
-    });
+    await page.getByTestId('dashboard-filter-privacy').selectOption('private');
+    await expect(card(page, seed[SEED_TITLES.singlePrivate])).toBeVisible();
+    await expect(card(page, publicVideo.get())).toHaveCount(0);
+    await expectAllCards(cards(page), 'data-privacy', 'private');
   });
 
   test('should filter videos by status', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+    await openDashboard(page);
+    const target = card(page, seed[SEED_TITLES.singleVideo]);
+    await expect(target).toBeVisible();
+    const status = (await target.getAttribute('data-status')) || 'ready';
 
-    // Apply "Ready" filter
-    const statusFilter = page.locator('select[name="status"], button:has-text("Status")');
-    if (await statusFilter.isVisible()) {
-      await statusFilter.click();
-      await page.click('text=/ready/i');
+    await page.getByTestId('dashboard-filter-status').selectOption(status);
+    await expect(target).toBeVisible();
+    await expectAllCards(cards(page), 'data-status', status);
 
-      // Wait for filter to apply
-      await page.waitForTimeout(1000);
-
-      // Should show only ready videos
-      await expect(page.locator('text=Ready Public Video')).toBeVisible();
-      await expect(page.locator('text=Ready Private Video')).toBeVisible();
-      await expect(page.locator('text=Processing Video')).not.toBeVisible();
-    }
+    const other = ['ready', 'processing', 'uploading', 'failed'].find((s) => s !== status)!;
+    await page.getByTestId('dashboard-filter-status').selectOption(other);
+    await expect(target).toHaveCount(0);
   });
 
-  test('should filter videos by privacy', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+  test('should filter videos by duration', async ({ page }) => {
+    await openDashboard(page);
 
-    // Apply "Private" filter
-    const privacyFilter = page.locator('select[name="privacy"], button:has-text("Privacy")');
-    if (await privacyFilter.isVisible()) {
-      await privacyFilter.click();
-      await page.click('text=/private/i');
+    // Seed videos are 2-4 second clips
+    await page.getByTestId('dashboard-filter-duration').selectOption('short');
+    await expect(card(page, seed[SEED_TITLES.singleVideo])).toBeVisible();
 
-      await page.waitForTimeout(1000);
-
-      // Should show only private videos
-      await expect(page.locator('text=Ready Private Video')).toBeVisible();
-      await expect(page.locator('text=Ready Public Video')).not.toBeVisible();
-    }
+    await page.getByTestId('dashboard-filter-duration').selectOption('long');
+    await expect(card(page, seed[SEED_TITLES.singleVideo])).toHaveCount(0);
   });
 
   test('should clear filters', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+    await openDashboard(page);
 
-    // Apply filter
-    const statusFilter = page.locator('select[name="status"], button:has-text("Status")');
-    if (await statusFilter.isVisible()) {
-      await statusFilter.click();
-      await page.click('text=/ready/i');
-      await page.waitForTimeout(500);
-    }
+    await page.getByTestId('dashboard-filter-privacy').selectOption('private');
+    await expect(card(page, publicVideo.get())).toHaveCount(0);
 
-    // Clear filters
-    const clearButton = page.locator('button:has-text("Clear"), button:has-text("Reset")');
-    if (await clearButton.isVisible()) {
-      await clearButton.click();
-      await page.waitForTimeout(500);
-
-      // Should show all videos
-      await expect(page.locator('text=Ready Public Video')).toBeVisible();
-      await expect(page.locator('text=Processing Video')).toBeVisible();
-    }
+    await page.getByTestId('dashboard-filter-privacy').selectOption('all');
+    await expect(card(page, publicVideo.get())).toBeVisible();
+    await expect(card(page, seed[SEED_TITLES.singlePrivate])).toBeVisible();
   });
 });
 
 test.describe('Video Search', () => {
-  test.beforeEach(async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
-
-    // Mock search API
-    await page.route('**/api/videos/my-videos**', route => {
-      const url = route.request().url();
-      const urlObj = new URL(url);
-      const query = urlObj.searchParams.get('q') || '';
-
-      let videos = [
-        { id: 'video-1', title: 'Islamic Lecture on Patience', status: 'ready' },
-        { id: 'video-2', title: 'Quran Recitation', status: 'ready' },
-        { id: 'video-3', title: 'Private Study Session', status: 'ready' }
-      ];
-
-      if (query) {
-        videos = videos.filter(v =>
-          v.title.toLowerCase().includes(query.toLowerCase())
-        );
-      }
-
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, videos })
-      });
-    });
-  });
-
   test('should search videos by title', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+    await openDashboard(page);
 
-    // Find search input
-    const searchInput = page.locator('input[type="search"], input[placeholder*="Search"]');
-    if (await searchInput.isVisible()) {
-      // Type search query
-      await searchInput.fill('Quran');
-      await page.waitForTimeout(1000);
-
-      // Should show matching videos
-      await expect(page.locator('text=Quran Recitation')).toBeVisible();
-      await expect(page.locator('text=Islamic Lecture')).not.toBeVisible();
-    }
+    await page.getByTestId('dashboard-search').fill('E2E Seed Private');
+    await expect(card(page, seed[SEED_TITLES.singlePrivate])).toBeVisible();
+    await expect(card(page, seed[SEED_TITLES.singleVideo])).toHaveCount(0);
   });
 
-  test('should show no results message', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+  test('should show the empty state when nothing matches', async ({ page }) => {
+    await openDashboard(page);
 
-    const searchInput = page.locator('input[type="search"], input[placeholder*="Search"]');
-    if (await searchInput.isVisible()) {
-      // Search for non-existent video
-      await searchInput.fill('NonExistentVideo12345');
-      await page.waitForTimeout(1000);
-
-      // Should show no results message
-      await expect(
-        page.locator('text=/no videos|no results|not found/i')
-      ).toBeVisible();
-    }
+    await page.getByTestId('dashboard-search').fill('no video is called this zq9x');
+    await expect(page.getByTestId('dashboard-empty')).toBeVisible();
+    await expect(cards(page)).toHaveCount(0);
   });
 
   test('should clear search', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+    await openDashboard(page);
 
-    const searchInput = page.locator('input[type="search"], input[placeholder*="Search"]');
-    if (await searchInput.isVisible()) {
-      // Search
-      await searchInput.fill('Quran');
-      await page.waitForTimeout(500);
+    await page.getByTestId('dashboard-search').fill('E2E Seed Private');
+    await expect(card(page, seed[SEED_TITLES.singleVideo])).toHaveCount(0);
 
-      // Clear search
-      await searchInput.fill('');
-      await page.waitForTimeout(500);
-
-      // Should show all videos
-      await expect(page.locator('text=Islamic Lecture')).toBeVisible();
-      await expect(page.locator('text=Quran Recitation')).toBeVisible();
-    }
+    await page.getByTestId('dashboard-search-clear').click();
+    await expect(page.getByTestId('dashboard-search')).toHaveValue('');
+    await expect(card(page, seed[SEED_TITLES.singleVideo])).toBeVisible();
   });
 });
 
 test.describe('Video Deletion', () => {
-  test.beforeEach(async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  let video: E2EVideo | null = null;
 
-    // Mock video list
-    await page.route('**/api/videos/my-videos', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          videos: [
-            { id: 'video-1', title: 'Video to Delete', status: 'ready' },
-            { id: 'video-2', title: 'Another Video', status: 'ready' }
-          ]
-        })
-      });
-    });
-
-    // Mock delete API
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true })
-      });
-    });
+  test.beforeEach(async () => {
+    video = await createDisposableVideo('single', 'delete');
   });
 
-  test('should delete single video', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+  test.afterEach(async () => {
+    await deleteVideoQuietly('single', video);
+  });
 
-    // Click delete button on first video
-    const deleteButton = page.locator('button:has-text("Delete")').first();
-    if (await deleteButton.isVisible()) {
-      await deleteButton.click();
+  test('should delete a single video', async ({ page }) => {
+    await openDashboard(page);
+    const target = card(page, video!);
+    await expect(target).toBeVisible();
 
-      // Should show confirmation modal
-      await expect(
-        page.locator('text=/confirm|are you sure/i')
-      ).toBeVisible();
+    await target.getByTestId('dashboard-video-delete').click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button').last().click();
 
-      // Confirm deletion
-      await page.click('button:has-text("Confirm"), button:has-text("Delete")');
-
-      // Wait for deletion
-      await page.waitForTimeout(1000);
-
-      // Video should be removed
-      await expect(page.locator('text=Video to Delete')).not.toBeVisible();
-
-      // Success notification
-      await expect(
-        page.locator('text=/deleted|removed|success/i')
-      ).toBeVisible();
-    }
+    await expect(dialog).toBeHidden();
+    await expect(target).toHaveCount(0);
+    await expect(page.getByTestId('dashboard-error')).toHaveCount(0);
+    // GET /api/videos/:id is briefly cached after a delete
+    await expect.poll(() => getVideo(userApi('single'), video!.id), { timeout: 60000 }).toBeNull();
   });
 
   test('should cancel deletion', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+    await openDashboard(page);
+    const target = card(page, video!);
+    await expect(target).toBeVisible();
 
-    const deleteButton = page.locator('button:has-text("Delete")').first();
-    if (await deleteButton.isVisible()) {
-      await deleteButton.click();
+    await target.getByTestId('dashboard-video-delete').click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button').first().click();
 
-      // Click cancel
-      await page.click('button:has-text("Cancel")');
-
-      // Video should still be visible
-      await expect(page.locator('text=Video to Delete')).toBeVisible();
-    }
+    await expect(dialog).toBeHidden();
+    await expect(target).toBeVisible();
+    expect(await getVideo(userApi('single'), video!.id)).not.toBeNull();
   });
 });
 
 test.describe('Bulk Operations', () => {
-  test.beforeEach(async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  let videos: E2EVideo[] = [];
 
-    // Mock video list
-    await page.route('**/api/videos/my-videos', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          videos: [
-            { id: 'video-1', title: 'Video 1', status: 'ready' },
-            { id: 'video-2', title: 'Video 2', status: 'ready' },
-            { id: 'video-3', title: 'Video 3', status: 'ready' }
-          ]
-        })
-      });
-    });
+  test.beforeEach(async () => {
+    videos = [await createDisposableVideo('single', 'bulk-a'), await createDisposableVideo('single', 'bulk-b')];
+  });
 
-    // Mock bulk delete API
-    await page.route('**/api/videos/bulk-delete', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, deleted: 2 })
-      });
-    });
+  test.afterEach(async () => {
+    for (const v of videos) await deleteVideoQuietly('single', v);
   });
 
   test('should select multiple videos', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+    await openDashboard(page);
 
-    // Find checkboxes
-    const checkboxes = page.locator('input[type="checkbox"]');
-    const count = await checkboxes.count();
+    for (const v of videos) await card(page, v).getByTestId('dashboard-video-select').check();
+    await expect(page.getByTestId('dashboard-bulk-actions')).toBeVisible();
+    await expect(page.getByTestId('dashboard-selected-count')).toHaveAttribute('data-count', '2');
 
-    if (count > 1) {
-      // Select first two videos
-      await checkboxes.nth(0).click();
-      await checkboxes.nth(1).click();
-
-      // Bulk actions should be visible
-      await expect(
-        page.locator('button:has-text("Delete Selected"), text=/2 selected/i')
-      ).toBeVisible();
-    }
+    await card(page, videos[0]).getByTestId('dashboard-video-select').uncheck();
+    await expect(page.getByTestId('dashboard-selected-count')).toHaveAttribute('data-count', '1');
   });
 
   test('should delete multiple videos', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+    await openDashboard(page);
 
-    const checkboxes = page.locator('input[type="checkbox"]');
-    const count = await checkboxes.count();
+    for (const v of videos) await card(page, v).getByTestId('dashboard-video-select').check();
+    await page.getByTestId('dashboard-delete-selected').click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button').last().click();
 
-    if (count > 1) {
-      // Select videos
-      await checkboxes.nth(0).click();
-      await checkboxes.nth(1).click();
-
-      // Click bulk delete
-      await page.click('button:has-text("Delete Selected")');
-
-      // Confirm
-      await page.click('button:has-text("Confirm"), button:has-text("Delete")');
-
-      await page.waitForTimeout(1000);
-
-      // Success notification
-      await expect(
-        page.locator('text=/deleted|removed|success/i')
-      ).toBeVisible();
-    }
+    await expect(dialog).toBeHidden();
+    for (const v of videos) await expect(card(page, v)).toHaveCount(0);
+    await expect(page.getByTestId('dashboard-error')).toHaveCount(0);
+    const api = userApi('single');
+    for (const v of videos) await expect.poll(() => getVideo(api, v.id), { timeout: 60000 }).toBeNull();
   });
 
-  test('should select all videos', async ({ page }) => {
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
+  test('should select and deselect all videos', async ({ page }) => {
+    await openDashboard(page);
 
-    // Find "Select All" checkbox
-    const selectAll = page.locator('input[type="checkbox"][id*="select-all"], label:has-text("Select All")');
+    await card(page, videos[0]).getByTestId('dashboard-video-select').check();
+    await page.getByTestId('dashboard-select-all').click();
+    const total = await cards(page).count();
+    await expect(page.getByTestId('dashboard-selected-count')).toHaveAttribute('data-count', String(total));
 
-    if (await selectAll.isVisible()) {
-      await selectAll.click();
-
-      // All videos should be selected
-      await expect(
-        page.locator('text=/3 selected|all selected/i')
-      ).toBeVisible();
-    }
+    await page.getByTestId('dashboard-select-all').click();
+    await expect(page.getByTestId('dashboard-bulk-actions')).toHaveCount(0);
   });
 });
 
 test.describe('Video Dashboard - Mobile', () => {
-  test('should work on mobile viewport', async ({ page }) => {
-    await helpers.setMobileViewport(page);
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test('should fit a mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openDashboard(page);
 
-    // Mock video list
-    await page.route('**/api/videos/my-videos', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          videos: [
-            { id: 'video-1', title: 'Mobile Test Video', status: 'ready' }
-          ]
-        })
-      });
-    });
-
-    await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
-
-    // Verify responsive layout
-    await expect(page.locator('text=Mobile Test Video')).toBeVisible();
-
-    // Actions should be accessible
-    const actionsButton = page.locator('button:has-text("Actions"), button[aria-label*="menu"]');
-    if (await actionsButton.isVisible()) {
-      await actionsButton.click();
-
-      // Menu should open
-      await expect(
-        page.locator('text=/edit|delete|share/i')
-      ).toBeVisible();
-    }
+    const target = card(page, seed[SEED_TITLES.singleVideo]);
+    await expect(target).toBeVisible();
+    const box = await target.boundingBox();
+    expect(box?.width ?? 0).toBeLessThanOrEqual(375);
+    await expect(target.getByTestId('dashboard-video-edit')).toBeVisible();
   });
 });
 
-test.describe('Video Dashboard - Empty State', () => {
-  test('should show empty state when no videos', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+test.describe('Video Dashboard - RTL', () => {
+  test('should render the Arabic dashboard right-to-left', async ({ page }) => {
+    await openDashboard(page, 'ar');
 
-    // Mock empty video list
-    await page.route('**/api/videos/my-videos', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          videos: []
-        })
-      });
-    });
+    await expect(page.locator('div[dir="rtl"]').first()).toBeVisible();
+    await expect(card(page, seed[SEED_TITLES.singleVideo])).toBeVisible();
+    await expect(card(page, seed[SEED_TITLES.singleVideo]).getByTestId('dashboard-video-edit')).toHaveAttribute(
+      'href',
+      `/ar/video/${seed[SEED_TITLES.singleVideo].id}/edit`,
+    );
+  });
+});
 
+test.describe('Video Dashboard - No Channels', () => {
+  test.use({ storageState: AUTH_STATE.none });
+
+  test('should send users without a channel back to the home page', async ({ page }) => {
     await page.goto('/en/dashboard/videos');
-    await page.waitForLoadState('networkidle');
-
-    // Should show empty state message
-    await expect(
-      page.locator('text=/no videos|upload your first|get started/i')
-    ).toBeVisible();
-
-    // Should show upload button
-    await expect(
-      page.locator('button:has-text("Upload"), a:has-text("Upload")')
-    ).toBeVisible();
+    await expect(page).toHaveURL(/\/en\/?$/);
   });
 });

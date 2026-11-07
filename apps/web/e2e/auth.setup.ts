@@ -3,6 +3,7 @@ import { ResendTestClient } from './test-utils/resend-client';
 import { ApiClient } from './seed/seed-api';
 import { extractSession, loginOnPage } from './seed/seed-auth';
 import { ensureChannels, ensureProfile, type UserChannelSpec } from './seed/seed-users';
+import { consentCookie } from './test-utils/consent';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -89,6 +90,7 @@ async function provisionAndRefreshSession(
 
   // Fresh context: the callback's addAccount() loads profile + channels into the cookie.
   const refreshed = await browser.newContext({ baseURL: cfg.webAppUrl });
+  await refreshed.addCookies([consentCookie(cfg.webAppUrl)]);
   const refreshPage = await refreshed.newPage();
   const login = await loginOnPage(
     refreshPage,
@@ -253,6 +255,7 @@ async function globalSetup(_config: FullConfig) {
     const context = await browser.newContext({
       baseURL: webAppUrl,
     });
+    await context.addCookies([consentCookie(webAppUrl)]);
     const page = await context.newPage();
 
     try {

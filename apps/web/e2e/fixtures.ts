@@ -5,6 +5,8 @@
 import { test as base, expect, Page, BrowserContext } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { createTestFile, expectUploadSuccess, selectVideo, uploadUi } from './test-utils/upload';
+import { consentCookie } from './test-utils/consent';
 
 /**
  * Test fixtures for Al Ummah Now E2E tests
@@ -32,7 +34,14 @@ type TestFixtures = {
   };
 };
 
+export { consentCookie };
+
 export const test = base.extend<TestFixtures>({
+  context: async ({ context, baseURL }, use) => {
+    if (baseURL) await context.addCookies([consentCookie(baseURL)]);
+    await use(context);
+  },
+
   mockUser: async ({}, use) => {
     const user = {
       id: 'test-user-' + Date.now(),
@@ -190,27 +199,18 @@ export const helpers = {
   },
 
   /**
-   * Create a small test video file (MP4)
-   * Returns path to generated test video
+   * Create a test file in e2e/test-fixtures and return its path.
+   * `.mp4` files are a real 2-second clip padded to `sizeKB` (still a valid
+   * MP4); other extensions are zero-filled.
    */
   createTestVideo: async (filename: string, sizeKB: number = 100): Promise<string> => {
-    const fixturesDir = path.join(__dirname, 'test-fixtures');
-    if (!fs.existsSync(fixturesDir)) {
-      fs.mkdirSync(fixturesDir, { recursive: true });
-    }
-
-    const filePath = path.join(fixturesDir, filename);
-
-    // Create a simple video-like file (for testing purposes)
-    // In real tests, use actual video files
-    const buffer = Buffer.alloc(sizeKB * 1024, 0);
-    fs.writeFileSync(filePath, buffer);
-
-    return filePath;
+    return createTestFile(filename, sizeKB);
   },
 
+
   /**
-   * Upload a test video with metadata
+   * Select a video, fill the metadata form and click Upload
+   * (real flow: server-side initiate, then browser TUS upload).
    */
   uploadTestVideo: async (
     page: Page,
@@ -223,124 +223,34 @@ export const helpers = {
       isPublic?: boolean;
     }
   ) => {
-    // Select file
-    await page.setInputFiles('input[type="file"]', options.videoPath);
+    const ui = uploadUi(page);
+    await selectVideo(page, options.videoPath);
 
-    // Wait for metadata form to appear
-    await page.waitForSelector('text=Video Details', { timeout: 5000 });
-
-    // Fill English title
-    await page.click('button:has-text("English")');
-    await page.fill('input[placeholder*="Title in English"]', options.titleEn);
-
-    // Fill Arabic title if provided
-    if (options.titleAr) {
-      await page.click('button:has-text("العربية")');
-      await page.fill('input[placeholder*="العنوان بالعربية"]', options.titleAr);
-    }
-
-    // Fill descriptions if provided
+    await ui.langTabEn.click();
+    await ui.titleEn.fill(options.titleEn);
     if (options.descriptionEn) {
-      await page.click('button:has-text("English")');
-      await page.fill('textarea[placeholder*="Description in English"]', options.descriptionEn);
+      await ui.descriptionEn.fill(options.descriptionEn);
     }
 
-    if (options.descriptionAr) {
-      await page.click('button:has-text("العربية")');
-      await page.fill('textarea[placeholder*="الوصف بالعربية"]', options.descriptionAr);
+    if (options.titleAr || options.descriptionAr) {
+      await ui.langTabAr.click();
+      if (options.titleAr) await ui.titleAr.fill(options.titleAr);
+      if (options.descriptionAr) await ui.descriptionAr.fill(options.descriptionAr);
     }
 
-    // Set privacy
     if (options.isPublic !== undefined) {
-      const checkbox = page.locator('input[type="checkbox"]#isPublic');
-      const isChecked = await checkbox.isChecked();
-      if (isChecked !== options.isPublic) {
-        await checkbox.click();
-      }
+      await ui.isPublic.setChecked(options.isPublic);
     }
 
-    // Click upload button
-    await page.click('button:has-text("Upload")');
+    await ui.submit.click();
   },
 
   /**
-   * Wait for upload to complete
+   * Wait for the upload flow (TUS transfer + completion + processing polls)
+   * to finish and the success panel to show
    */
   waitForUploadComplete: async (page: Page, timeout: number = 120000) => {
-    await page.waitForSelector('text=Upload Complete', { timeout });
-  },
-
-  /**
-   * Mock video upload API responses
-   */
-  mockVideoUploadAPI: async (page: Page) => {
-    const videoId = 'test-video-' + Date.now();
-
-    // Mock initiate upload
-    await page.route('**/api/videos/upload/initiate', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          result: {
-            videoId,
-            uploadUrl: 'https://storage.bunnycdn.com/test-library/videos/' + videoId,
-            libraryId: 'test-library-id'
-          }
-        })
-      });
-    });
-
-    // Mock Bunny.net access key
-    await page.route('**/api/videos/upload/bunny-key', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          accessKey: 'mock-bunny-access-key'
-        })
-      });
-    });
-
-    // Mock Bunny.net upload
-    await page.route('https://storage.bunnycdn.com/**', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true })
-      });
-    });
-
-    // Mock complete upload
-    await page.route('**/api/videos/upload/complete', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          result: { videoId }
-        })
-      });
-    });
-
-    // Mock status check
-    await page.route('**/api/videos/upload/status/**', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          result: {
-            status: 'ready',
-            progress: 100
-          }
-        })
-      });
-    });
-
-    return videoId;
+    await expectUploadSuccess(page, undefined, timeout);
   },
 
   /**
@@ -351,19 +261,12 @@ export const helpers = {
   },
 
   /**
-   * Wait for progress bar to reach percentage
+   * Wait for the upload progress bar to reach a percentage
    */
   waitForUploadProgress: async (page: Page, percentage: number) => {
-    await page.waitForFunction(
-      (targetPercentage) => {
-        const progressText = document.querySelector('[class*="progress"]')?.textContent;
-        if (!progressText) return false;
-        const currentPercentage = parseInt(progressText.replace('%', ''));
-        return currentPercentage >= targetPercentage;
-      },
-      percentage,
-      { timeout: 30000 }
-    );
+    await expect
+      .poll(async () => Number(await uploadUi(page).progressBar.getAttribute('aria-valuenow')), { timeout: 60000 })
+      .toBeGreaterThanOrEqual(percentage);
   }
 };
 

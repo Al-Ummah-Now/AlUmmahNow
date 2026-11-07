@@ -1,57 +1,66 @@
 import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
+import { readSession } from './test-utils/auth-state';
 
 /**
  * Channel page E2E tests.
  *
  * The channel page is server-rendered, so browser-side route mocks never
- * reach it. These tests run against a real channel from the target
- * environment's API (QA in CI).
+ * reach it. These tests use the single-channel E2E user's own channel
+ * (provisioned by auth.setup.ts with the default tab configuration) so they do
+ * not depend on how other channels in the target environment are configured.
  */
 
-const API_URL = process.env.API_URL || 'https://videos.api.qa.alummahnow.net';
+function findChannelId(): string | null {
+  try {
+    return readSession('single').channels[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
-async function findChannelId(request: import('@playwright/test').APIRequestContext): Promise<string | null> {
-  const res = await request.get(`${API_URL}/api/channels?scope=all&limit=20`);
-  if (!res.ok()) return null;
-  const body = (await res.json()) as { data?: Array<{ id: string }> };
-  return body.data?.[0]?.id ?? null;
+/** The selected tab must be unique and its panel rendered */
+async function expectSelectedTabPanel(page: Page, tab: string) {
+  const tabs = page.getByTestId('channel-tabs');
+  await expect(tabs.locator('[role="tab"][aria-selected="true"]')).toHaveCount(1);
+  await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId(`tabpanel-${tab}`)).toBeVisible();
 }
 
 test.describe('Channel Pages', () => {
   let channelId: string | null = null;
 
-  test.beforeAll(async ({ request }) => {
-    channelId = await findChannelId(request);
+  test.beforeAll(() => {
+    channelId = findChannelId();
   });
 
   test.beforeEach(() => {
-    test.skip(!channelId, 'No channels exist in the target environment');
+    test.skip(!channelId, 'E2E single-channel user has no channel');
   });
 
   test('should load channel page with tabs', async ({ page }) => {
     await page.goto(`/en/channels/${channelId}`);
 
     await expect(page.getByTestId('channel-tabs')).toBeVisible();
-    await expect(page.getByTestId('tab-home')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('tabpanel-home')).toBeVisible();
+    await expectSelectedTabPanel(page, 'home');
   });
 
   test('should switch between channel tabs', async ({ page }) => {
     await page.goto(`/en/channels/${channelId}`);
+    await expect(page.getByTestId('channel-tabs')).toBeVisible();
 
     for (const tab of ['videos', 'playlists', 'about']) {
       const button = page.getByTestId(`tab-${tab}`);
       if ((await button.count()) === 0) continue; // tab disabled for this channel
       await button.click();
-      await expect(button).toHaveAttribute('aria-selected', 'true');
-      await expect(page.getByTestId(`tabpanel-${tab}`)).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`tab=${tab}`));
+      await expectSelectedTabPanel(page, tab);
     }
   });
 
   test('should handle tab navigation via URL parameters', async ({ page }) => {
     await page.goto(`/en/channels/${channelId}?tab=videos`);
-    await expect(page.getByTestId('tab-videos')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('tabpanel-videos')).toBeVisible();
+    await expectSelectedTabPanel(page, 'videos');
   });
 
   test('channel page should be responsive', async ({ page }) => {
@@ -78,28 +87,28 @@ test.describe('Channel Pages - non-existent', () => {
 test.describe('Channel Pages - RTL', () => {
   let channelId: string | null = null;
 
-  test.beforeAll(async ({ request }) => {
-    channelId = await findChannelId(request);
+  test.beforeAll(() => {
+    channelId = findChannelId();
   });
 
   test.beforeEach(() => {
-    test.skip(!channelId, 'No channels exist in the target environment');
+    test.skip(!channelId, 'E2E single-channel user has no channel');
   });
 
   test('should load Arabic channel page with RTL layout', async ({ page }) => {
     await page.goto(`/ar/channels/${channelId}`);
 
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
     await expect(page.getByTestId('channel-tabs')).toBeVisible();
     await expect(page.getByTestId('channel-tabs')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByTestId('tab-home')).toHaveText('الرئيسية');
   });
 
   test('should switch tabs in Arabic', async ({ page }) => {
     await page.goto(`/ar/channels/${channelId}`);
 
-    const videos = page.getByTestId('tab-videos');
-    await videos.click();
-    await expect(videos).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('tabpanel-videos')).toBeVisible();
+    await page.getByTestId('tab-videos').click();
+    await expectSelectedTabPanel(page, 'videos');
   });
 });

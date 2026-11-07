@@ -1,615 +1,251 @@
 /**
- * E2E Tests: Dashboard Videos Page - Ownership Validation
+ * Dashboard videos - ownership and data isolation (/[locale]/dashboard/videos).
  *
- * These tests validate the ownership validation and privacy controls
- * in the dashboard videos page (/[locale]/dashboard/videos).
- *
- * Key Features Tested:
- * - Single API call for multiple channels (performance optimization)
- * - Server-side ownership validation (isOwner=true)
- * - Privacy filtering (public/private videos)
- * - Duration filtering (short/standard/long)
- * - Security: prevents access to other users' channels
+ * Runs against real QA data: the single-channel and multi-channel E2E users
+ * each own seed videos (see test-utils/e2e-videos.ts). The dashboard fetches
+ * through a server action, so isolation is asserted on what each signed-in
+ * user actually sees, and the API's owner checks are exercised directly.
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
+import { AUTH_STATE } from './test-utils/auth-state';
+import {
+  API_URL,
+  SEED_TITLES,
+  createDisposableVideo,
+  deleteVideoQuietly,
+  ensureSeedVideos,
+  getVideo,
+  usePublicDisposable,
+  userApi,
+  type E2EVideo,
+} from './test-utils/e2e-videos';
 
-// Test configuration
-const TEST_CONFIG = {
-  apiUrl: 'http://127.0.0.1:3086',
-  webUrl: 'http://localhost:3001',
-  locale: 'en',
-  timeout: 10000,
-};
+let singleSeed: Record<string, E2EVideo> = {};
+let multiSeed: Record<string, E2EVideo> = {};
+// Seed videos are private; privacy checks use a public video this file creates and deletes
+const publicVideo = usePublicDisposable('single', 'ownership-public');
 
-// Test data fixtures
-const TEST_USERS = {
-  singleChannel: {
-    userId: 'user-single-001',
-    email: 'single@test.com',
-    channels: [
-      {
-        id: 'ch-single-001',
-        userId: 'user-single-001',
-        name: 'Single Channel',
-      },
-    ],
-  },
-  multiChannel: {
-    userId: 'user-multi-002',
-    email: 'multi@test.com',
-    channels: [
-      { id: 'ch-multi-001', userId: 'user-multi-002', name: 'Channel One' },
-      { id: 'ch-multi-002', userId: 'user-multi-002', name: 'Channel Two' },
-      { id: 'ch-multi-003', userId: 'user-multi-002', name: 'Channel Three' },
-    ],
-  },
-  noChannels: {
-    userId: 'user-none-003',
-    email: 'none@test.com',
-    channels: [],
-  },
-};
+test.beforeAll(async () => {
+  test.setTimeout(240000);
+  singleSeed = await ensureSeedVideos('single');
+  multiSeed = await ensureSeedVideos('multi');
+  await publicVideo.create();
+});
 
-const TEST_VIDEOS = {
-  singleChannel: [
-    {
-      id: 'v-001',
-      channelId: 'ch-single-001',
-      userId: 'user-single-001',
-      title: 'Short Public Video',
-      isPublic: true,
-      duration: 120, // 2 minutes (short)
-      views: 100,
-    },
-    {
-      id: 'v-002',
-      channelId: 'ch-single-001',
-      userId: 'user-single-001',
-      title: 'Long Private Video',
-      isPublic: false,
-      duration: 600, // 10 minutes (standard)
-      views: 50,
-    },
-    {
-      id: 'v-003',
-      channelId: 'ch-single-001',
-      userId: 'user-single-001',
-      title: 'Very Long Public Video',
-      isPublic: true,
-      duration: 1800, // 30 minutes (long)
-      views: 200,
-    },
-  ],
-  multiChannel: [
-    { id: 'v-004', channelId: 'ch-multi-001', userId: 'user-multi-002', title: 'Ch1 Short', isPublic: true, duration: 90, views: 75 },
-    { id: 'v-005', channelId: 'ch-multi-001', userId: 'user-multi-002', title: 'Ch1 Private', isPublic: false, duration: 300, views: 25 },
-    { id: 'v-006', channelId: 'ch-multi-002', userId: 'user-multi-002', title: 'Ch2 Standard', isPublic: true, duration: 450, views: 150 },
-    { id: 'v-007', channelId: 'ch-multi-003', userId: 'user-multi-002', title: 'Ch3 Long', isPublic: false, duration: 2400, views: 300 },
-  ],
-};
+test.afterAll(async () => {
+  await publicVideo.remove();
+});
 
-/**
- * Helper: Mock authentication context
- */
-async function mockAuthContext(page: Page, user: typeof TEST_USERS.singleChannel) {
-  await page.addInitScript((userData) => {
-    // Mock localStorage auth data
-    localStorage.setItem('auth_user', JSON.stringify({
-      id: userData.userId,
-      email: userData.email,
-    }));
+const card = (page: Page, video: E2EVideo) => page.locator(`[data-testid="dashboard-video-card"][data-video-id="${video.id}"]`);
 
-    // Mock multi-account context
-    localStorage.setItem('multi_account_user', JSON.stringify({
-      user: {
-        id: userData.userId,
-        email: userData.email,
-      },
-      channels: userData.channels,
-    }));
-  }, user);
+async function openDashboard(page: Page) {
+  await page.goto('/en/dashboard/videos');
+  await expect(page.getByTestId('dashboard-search')).toBeVisible();
+  await expect(page.getByTestId('dashboard-loading')).toHaveCount(0);
 }
 
-/**
- * Helper: Setup API mocks for dashboard
- */
-async function setupDashboardMocks(
-  page: Page,
-  user: typeof TEST_USERS.singleChannel,
-  videos: typeof TEST_VIDEOS.singleChannel
-) {
-  // Mock the searchVideos API endpoint
-  await page.route('**/api/videos*', async (route, request) => {
-    const url = new URL(request.url());
-    const channelIds = url.searchParams.get('channelIds')?.split(',') || [];
-    const isOwner = url.searchParams.get('isOwner') === 'true';
-    const durationFilter = url.searchParams.get('durationFilter') || 'all';
-
-    // Validate ownership
-    if (isOwner) {
-      const headers = request.headers();
-      const requestUserId = headers['userid'] || headers['userId'];
-
-      if (!requestUserId) {
-        await route.fulfill({
-          status: 403,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            success: false,
-            error: 'User authentication required when isOwner is true',
-          }),
-        });
-        return;
-      }
-
-      // Check if user owns all requested channels
-      const ownedChannelIds = user.channels.map(ch => ch.id);
-      const unauthorizedChannel = channelIds.find(id => !ownedChannelIds.includes(id));
-
-      if (unauthorizedChannel) {
-        await route.fulfill({
-          status: 403,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            success: false,
-            error: `User does not own channel ${unauthorizedChannel}`,
-          }),
-        });
-        return;
-      }
-    }
-
-    // Filter videos based on request parameters
-    const filteredVideos = videos.filter(video => {
-      // Channel filter
-      if (channelIds.length > 0 && !channelIds.includes(video.channelId)) {
-        return false;
-      }
-
-      // Duration filter
-      if (durationFilter === 'short' && video.duration > 180) return false;
-      if (durationFilter === 'medium' && (video.duration <= 180 || video.duration > 1200)) return false;
-      if (durationFilter === 'long' && video.duration <= 1200) return false;
-
-      // Privacy filter (server-side for owner)
-      if (isOwner) {
-        return video.userId === user.userId;
-      } else {
-        return video.isPublic;
-      }
-    });
-
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        totalResults: filteredVideos.length,
-        searchTime: 123,
-        cursor: '',
-        limit: 100,
-        data: filteredVideos.map(v => ({
-          ...v,
-          dateCreated: new Date().toISOString(),
-          dateModified: new Date().toISOString(),
-          channelName: user.channels.find(ch => ch.id === v.channelId)?.name || '',
-          likesCount: 0,
-          dislikesCount: 0,
-          commentsCount: 0,
-        })),
-      }),
-    });
-  });
-}
-
-/**
- * Test Suite: Dashboard with Single Channel
- */
 test.describe('Dashboard Videos - Single Channel', () => {
-  test.beforeEach(async ({ page }) => {
-    await mockAuthContext(page, TEST_USERS.singleChannel);
-    await setupDashboardMocks(page, TEST_USERS.singleChannel, TEST_VIDEOS.singleChannel);
+  test.use({ storageState: AUTH_STATE.single });
+
+  test('should display all videos (public + private) for the owner', async ({ page }) => {
+    await openDashboard(page);
+
+    await expect(card(page, publicVideo.get())).toHaveAttribute('data-privacy', 'public');
+    await expect(card(page, singleSeed[SEED_TITLES.singlePrivate])).toHaveAttribute('data-privacy', 'private');
+    // Scheduled videos stay private until they publish, and owners see them too
+    await expect(card(page, singleSeed[SEED_TITLES.singleScheduled])).toBeVisible();
   });
 
-  test('should display all videos (public + private) for owner', async ({ page }) => {
-    // Track API calls
-    const apiCalls: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/api/videos')) {
-        apiCalls.push(request.url());
-      }
-    });
+  test('should only list videos from the user\'s own channel', async ({ page }) => {
+    await openDashboard(page);
+    const channelId = singleSeed[SEED_TITLES.singleVideo].channelId;
 
-    // Navigate to dashboard
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-
-    // Wait for videos to load
-    await page.waitForSelector('[data-testid="video-card"], .no-videos-message', { timeout: TEST_CONFIG.timeout });
-
-    // Verify API called with correct parameters
-    expect(apiCalls.length).toBeGreaterThan(0);
-    const apiCall = apiCalls[0];
-    expect(apiCall).toContain('isOwner=true');
-    expect(apiCall).toContain(`channelIds=${TEST_USERS.singleChannel.channels[0].id}`);
-
-    // Verify all videos displayed (public + private)
-    const videoCards = await page.locator('[data-testid="video-card"]').count();
-    expect(videoCards).toBe(TEST_VIDEOS.singleChannel.length); // 3 videos
+    const channels = await page.getByTestId('dashboard-video-card').evaluateAll((els) =>
+      [...new Set(els.map((el) => el.getAttribute('data-channel-id')))],
+    );
+    expect(channels).toEqual([channelId]);
   });
 
-  test('should filter by duration - Short', async ({ page }) => {
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
+  test('should filter by duration - short', async ({ page }) => {
+    await openDashboard(page);
 
-    // Select "Short" duration filter
-    await page.selectOption('select[data-testid="duration-filter"], select:has-text("All Videos")', 'short');
-
-    // Wait for filtered results
-    await page.waitForTimeout(500);
-
-    // Verify only short videos shown (duration ≤ 180 seconds)
-    const videoTitles = await page.locator('[data-testid="video-title"]').allTextContents();
-    expect(videoTitles).toContain('Short Public Video');
-    expect(videoTitles).not.toContain('Long Private Video');
-    expect(videoTitles).not.toContain('Very Long Public Video');
+    await page.getByTestId('dashboard-filter-duration').selectOption('short');
+    await expect(card(page, singleSeed[SEED_TITLES.singleVideo])).toBeVisible();
+    const durations = await page.getByTestId('dashboard-video-card').evaluateAll((els) =>
+      els.map((el) => Number(el.getAttribute('data-duration') || 0)),
+    );
+    for (const d of durations) expect(d).toBeLessThanOrEqual(180);
   });
 
-  test('should filter by duration - Standard', async ({ page }) => {
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
+  test('should filter by duration - standard', async ({ page }) => {
+    await openDashboard(page);
 
-    // Select "Standard" duration filter
-    await page.selectOption('select[data-testid="duration-filter"], select:has-text("All Videos")', 'medium');
-
-    // Wait for filtered results
-    await page.waitForTimeout(500);
-
-    // Verify only standard videos shown (180 < duration ≤ 1200)
-    const videoCount = await page.locator('[data-testid="video-card"]').count();
-    expect(videoCount).toBe(1); // Only "Long Private Video" (600s)
+    await page.getByTestId('dashboard-filter-duration').selectOption('standard');
+    // The seed clips are a few seconds long, so none of them are "standard"
+    await expect(card(page, singleSeed[SEED_TITLES.singleVideo])).toHaveCount(0);
+    await expect(card(page, singleSeed[SEED_TITLES.singlePrivate])).toHaveCount(0);
   });
 
-  test('should filter by privacy - Public', async ({ page }) => {
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
+  test('should filter by privacy - public', async ({ page }) => {
+    await openDashboard(page);
 
-    // Select "Public" privacy filter
-    await page.selectOption('select[data-testid="privacy-filter"], select:has-text("Filter by Privacy")', 'public');
-
-    // Wait for filtered results
-    await page.waitForTimeout(500);
-
-    // Verify only public videos shown
-    const videoTitles = await page.locator('[data-testid="video-title"]').allTextContents();
-    expect(videoTitles).toContain('Short Public Video');
-    expect(videoTitles).toContain('Very Long Public Video');
-    expect(videoTitles).not.toContain('Long Private Video');
+    await page.getByTestId('dashboard-filter-privacy').selectOption('public');
+    await expect(card(page, publicVideo.get())).toBeVisible();
+    await expect(card(page, singleSeed[SEED_TITLES.singlePrivate])).toHaveCount(0);
+    await expect(page.locator('[data-testid="dashboard-video-card"][data-privacy="private"]')).toHaveCount(0);
   });
 
-  test('should filter by privacy - Private', async ({ page }) => {
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
+  test('should filter by privacy - private', async ({ page }) => {
+    await openDashboard(page);
 
-    // Select "Private" privacy filter
-    await page.selectOption('select[data-testid="privacy-filter"], select:has-text("Filter by Privacy")', 'private');
-
-    // Wait for filtered results
-    await page.waitForTimeout(500);
-
-    // Verify only private videos shown
-    const videoTitles = await page.locator('[data-testid="video-title"]').allTextContents();
-    expect(videoTitles).toContain('Long Private Video');
-    expect(videoTitles).not.toContain('Short Public Video');
-    expect(videoTitles).not.toContain('Very Long Public Video');
+    await page.getByTestId('dashboard-filter-privacy').selectOption('private');
+    await expect(card(page, singleSeed[SEED_TITLES.singlePrivate])).toBeVisible();
+    await expect(card(page, publicVideo.get())).toHaveCount(0);
+    await expect(page.locator('[data-testid="dashboard-video-card"][data-privacy="public"]')).toHaveCount(0);
   });
 });
 
-/**
- * Test Suite: Dashboard with Multiple Channels
- */
 test.describe('Dashboard Videos - Multiple Channels', () => {
-  test.beforeEach(async ({ page }) => {
-    await mockAuthContext(page, TEST_USERS.multiChannel);
-    await setupDashboardMocks(page, TEST_USERS.multiChannel, TEST_VIDEOS.multiChannel);
+  test.use({ storageState: AUTH_STATE.multi });
+
+  test('should display videos from all of the user\'s channels', async ({ page }) => {
+    await openDashboard(page);
+
+    const one = multiSeed[SEED_TITLES.multiOne];
+    const two = multiSeed[SEED_TITLES.multiTwo];
+    expect(one.channelId).not.toBe(two.channelId);
+    await expect(card(page, one)).toHaveAttribute('data-channel-id', one.channelId);
+    await expect(card(page, two)).toHaveAttribute('data-channel-id', two.channelId);
   });
 
-  test('should make single API call for all channels', async ({ page }) => {
-    // Track API calls
-    const apiCalls: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/api/videos')) {
-        apiCalls.push(request.url());
-      }
-    });
+  test('should not show duplicate videos', async ({ page }) => {
+    await openDashboard(page);
+    await expect(card(page, multiSeed[SEED_TITLES.multiOne])).toBeVisible();
 
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForSelector('[data-testid="video-card"], .no-videos-message', { timeout: TEST_CONFIG.timeout });
-
-    // Verify exactly 1 API call (not 3 separate calls)
-    expect(apiCalls.length).toBe(1);
-
-    // Verify API call includes all channel IDs
-    const apiCall = apiCalls[0];
-    expect(apiCall).toContain('isOwner=true');
-    const channelIds = TEST_USERS.multiChannel.channels.map(ch => ch.id).join(',');
-    expect(apiCall).toContain(`channelIds=${encodeURIComponent(channelIds)}`);
-  });
-
-  test('should display videos from all channels', async ({ page }) => {
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForSelector('[data-testid="video-card"]', { timeout: TEST_CONFIG.timeout });
-
-    // Verify total video count
-    const videoCount = await page.locator('[data-testid="video-card"]').count();
-    expect(videoCount).toBe(TEST_VIDEOS.multiChannel.length); // 4 videos
-
-    // Verify videos from different channels present
-    const videoTitles = await page.locator('[data-testid="video-title"]').allTextContents();
-    expect(videoTitles).toContain('Ch1 Short');
-    expect(videoTitles).toContain('Ch2 Standard');
-    expect(videoTitles).toContain('Ch3 Long');
-  });
-
-  test('should not have duplicate videos', async ({ page }) => {
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForSelector('[data-testid="video-card"]', { timeout: TEST_CONFIG.timeout });
-
-    // Get all video IDs
-    const videoIds = await page.locator('[data-testid="video-card"]').evaluateAll((cards) =>
-      cards.map(card => card.getAttribute('data-video-id'))
-    );
-
-    // Verify no duplicates
-    const uniqueIds = new Set(videoIds);
-    expect(uniqueIds.size).toBe(videoIds.length);
+    const ids = await page.getByTestId('dashboard-video-card').evaluateAll((els) => els.map((el) => el.getAttribute('data-video-id')));
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   test('should filter short videos from all channels', async ({ page }) => {
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
+    await openDashboard(page);
 
-    // Select "Short" duration filter
-    await page.selectOption('select[data-testid="duration-filter"], select:has-text("All Videos")', 'short');
-    await page.waitForTimeout(500);
+    await page.getByTestId('dashboard-filter-duration').selectOption('short');
+    await expect(card(page, multiSeed[SEED_TITLES.multiOne])).toBeVisible();
+    await expect(card(page, multiSeed[SEED_TITLES.multiTwo])).toBeVisible();
+  });
 
-    // Verify only short videos from all channels shown
-    const videoCount = await page.locator('[data-testid="video-card"]').count();
-    expect(videoCount).toBe(1); // Only "Ch1 Short" (90s)
+  test('should bulk delete videos across channels', async ({ page }) => {
+    const videos = [
+      await createDisposableVideo('multi', 'bulk-ch1', { channelIndex: 0 }),
+      await createDisposableVideo('multi', 'bulk-ch2', { channelIndex: 1 }),
+    ];
+    try {
+      await openDashboard(page);
+      for (const v of videos) await card(page, v).getByTestId('dashboard-video-select').check();
+      await page.getByTestId('dashboard-delete-selected').click();
+      const dialog = page.getByRole('alertdialog');
+      await dialog.getByRole('button').last().click();
+
+      for (const v of videos) await expect(card(page, v)).toHaveCount(0);
+      await expect(page.getByTestId('dashboard-error')).toHaveCount(0);
+      const api = userApi('multi');
+      for (const v of videos) await expect.poll(() => getVideo(api, v.id), { timeout: 60000 }).toBeNull();
+    } finally {
+      for (const v of videos) await deleteVideoQuietly('multi', v);
+    }
   });
 });
 
-/**
- * Test Suite: Ownership Validation - Security Tests
- */
-test.describe('Dashboard Videos - Ownership Validation', () => {
-  test('should return 403 when requesting unowned channel', async ({ page }) => {
-    // Setup user with ch-multi-001 only
-    const limitedUser = {
-      ...TEST_USERS.multiChannel,
-      channels: [TEST_USERS.multiChannel.channels[0]], // Only first channel
-    };
+test.describe('Dashboard Videos - Ownership Validation (API)', () => {
+  test('should return 403 when requesting an unowned channel', async ({ request }) => {
+    const single = userApi('single');
+    const multi = userApi('multi');
 
-    await mockAuthContext(page, limitedUser);
-
-    // Mock API to validate ownership
-    await page.route('**/api/videos*', async (route, request) => {
-      const url = new URL(request.url());
-      const channelIds = url.searchParams.get('channelIds')?.split(',') || [];
-      const isOwner = url.searchParams.get('isOwner') === 'true';
-
-      if (isOwner && channelIds.includes('ch-multi-002')) {
-        // User doesn't own ch-multi-002
-        await route.fulfill({
-          status: 403,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            success: false,
-            error: 'User does not own channel ch-multi-002',
-          }),
-        });
-        return;
-      }
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          totalResults: 0,
-          data: [],
-        }),
-      });
+    const res = await request.get(`${API_URL}/api/videos/search?isOwner=true&channelIds=${multi.channelIds.join(',')}`, {
+      headers: { Authorization: `Bearer ${single.token}` },
     });
+    expect(res.status()).toBe(403);
 
-    // Attempt to access dashboard with unowned channel
-    // This would happen if user manipulates localStorage
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-
-    // Verify error handling (exact implementation depends on UI)
-    // Could be error message, empty state, or redirect
-    await page.waitForTimeout(1000);
-
-    // This test validates the API rejects the request
-    // Frontend handling may vary
+    const mixed = await request.get(`${API_URL}/api/videos/search?isOwner=true&channelIds=${single.channelIds[0]},${multi.channelIds[0]}`, {
+      headers: { Authorization: `Bearer ${single.token}` },
+    });
+    expect(mixed.status()).toBe(403);
   });
 
-  test('should return 403 when isOwner=true without userId', async ({ page }) => {
-    // Mock API without userId in headers
-    await page.route('**/api/videos*', async (route, request) => {
-      const url = new URL(request.url());
-      const isOwner = url.searchParams.get('isOwner') === 'true';
-      const headers = request.headers();
-
-      if (isOwner && !headers['userid']) {
-        await route.fulfill({
-          status: 403,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            success: false,
-            error: 'User authentication required when isOwner is true',
-          }),
-        });
-        return;
-      }
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          totalResults: 0,
-          data: [],
-        }),
-      });
-    });
-
-    // Navigate without proper auth
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForTimeout(1000);
-
-    // Verify error handling
+  test('should return 403 when isOwner=true without authentication', async ({ request }) => {
+    const single = userApi('single');
+    const res = await request.get(`${API_URL}/api/videos/search?isOwner=true&channelIds=${single.channelIds[0]}`);
+    expect(res.status()).toBe(403);
   });
 });
 
-/**
- * Test Suite: Privacy and Data Isolation
- */
 test.describe('Dashboard Videos - Privacy and Data Isolation', () => {
-  test('should only show own videos to authenticated user', async ({ page }) => {
-    // User A setup
-    await mockAuthContext(page, TEST_USERS.singleChannel);
-    await setupDashboardMocks(page, TEST_USERS.singleChannel, TEST_VIDEOS.singleChannel);
+  test.use({ storageState: AUTH_STATE.multi });
 
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForSelector('[data-testid="video-card"]', { timeout: TEST_CONFIG.timeout });
+  test('should only show the signed-in user\'s videos', async ({ page }) => {
+    await openDashboard(page);
+    await expect(card(page, multiSeed[SEED_TITLES.multiOne])).toBeVisible();
 
-    // Verify only User A's videos shown
-    const videoCount = await page.locator('[data-testid="video-card"]').count();
-    expect(videoCount).toBe(TEST_VIDEOS.singleChannel.length);
-
-    // Verify no videos from other users
-    const videoTitles = await page.locator('[data-testid="video-title"]').allTextContents();
-    expect(videoTitles).not.toContain('Ch1 Short'); // From multi-channel user
-    expect(videoTitles).not.toContain('Ch2 Standard');
+    for (const v of [...Object.values(singleSeed), publicVideo.get()]) await expect(card(page, v)).toHaveCount(0);
   });
 
-  test('should show private videos only to owner', async ({ page }) => {
-    await mockAuthContext(page, TEST_USERS.singleChannel);
-    await setupDashboardMocks(page, TEST_USERS.singleChannel, TEST_VIDEOS.singleChannel);
+  test('should show private videos only to their owner', async ({ request }) => {
+    const privateVideo = singleSeed[SEED_TITLES.singlePrivate];
 
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForSelector('[data-testid="video-card"]', { timeout: TEST_CONFIG.timeout });
-
-    // Verify private video shown
-    const videoTitles = await page.locator('[data-testid="video-title"]').allTextContents();
-    expect(videoTitles).toContain('Long Private Video');
-
-    // Verify privacy badge shown
-    const privateBadges = await page.locator('text="Private"').count();
-    expect(privateBadges).toBeGreaterThan(0);
-  });
-});
-
-/**
- * Test Suite: Edge Cases
- */
-test.describe('Dashboard Videos - Edge Cases', () => {
-  test('should show empty state for user with no channels', async ({ page }) => {
-    await mockAuthContext(page, TEST_USERS.noChannels);
-
-    // Mock API - no call should be made
-    let apiCallMade = false;
-    await page.route('**/api/videos*', async (route) => {
-      apiCallMade = true;
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          totalResults: 0,
-          data: [],
-        }),
-      });
-    });
-
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForTimeout(1000);
-
-    // Verify no API call made (early return)
-    expect(apiCallMade).toBe(false);
-
-    // Verify empty state shown
-    const emptyMessage = await page.locator('.no-videos-message, text="No videos found"').count();
-    expect(emptyMessage).toBeGreaterThan(0);
-  });
-
-  test('should handle non-existent channel gracefully', async ({ page }) => {
-    const userWithDeletedChannel = {
-      userId: 'user-deleted-001',
-      email: 'deleted@test.com',
-      channels: [
-        { id: 'ch-deleted-001', userId: 'user-deleted-001', name: 'Deleted Channel' },
-      ],
+    // Public search never returns another user's private video
+    const publicIds = async () => {
+      const anonymous = await request.get(`${API_URL}/api/videos/search?limit=100&channelIds=${privateVideo.channelId}`);
+      expect(anonymous.ok()).toBe(true);
+      return ((await anonymous.json()) as { data?: E2EVideo[] }).data?.map((v) => v.id) || [];
     };
-
-    await mockAuthContext(page, userWithDeletedChannel);
-
-    // Mock API - channel doesn't exist
-    await page.route('**/api/videos*', async (route) => {
-      await route.fulfill({
-        status: 403,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: false,
-          error: 'User does not own channel ch-deleted-001',
-        }),
-      });
-    });
-
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForTimeout(1000);
-
-    // Verify error handled gracefully (no crash)
+    await expect.poll(publicIds, { timeout: 60000 }).toContain(publicVideo.get().id);
+    expect(await publicIds()).not.toContain(privateVideo.id);
   });
 });
 
-/**
- * Test Suite: Performance
- */
-test.describe('Dashboard Videos - Performance', () => {
-  test('should complete API call within 2 seconds', async ({ page }) => {
-    await mockAuthContext(page, TEST_USERS.multiChannel);
-    await setupDashboardMocks(page, TEST_USERS.multiChannel, TEST_VIDEOS.multiChannel);
+test.describe('Dashboard Videos - Edge Cases', () => {
+  test.describe('no channels', () => {
+    test.use({ storageState: AUTH_STATE.none });
 
-    const startTime = Date.now();
-
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
-    await page.waitForSelector('[data-testid="video-card"]', { timeout: TEST_CONFIG.timeout });
-
-    const endTime = Date.now();
-    const loadTime = endTime - startTime;
-
-    // Verify reasonable load time
-    expect(loadTime).toBeLessThan(2000); // 2 seconds
+    test('should send a user with no channels to the home page', async ({ page }) => {
+      await page.goto('/en/dashboard/videos');
+      await expect(page).toHaveURL(/\/en\/?$/);
+      await expect(page.getByTestId('dashboard-video-card')).toHaveCount(0);
+    });
   });
 
-  test('should debounce rapid filter changes', async ({ page }) => {
-    await mockAuthContext(page, TEST_USERS.singleChannel);
-    await setupDashboardMocks(page, TEST_USERS.singleChannel, TEST_VIDEOS.singleChannel);
+  test.describe('signed out', () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
 
-    // Track API calls
-    let apiCallCount = 0;
-    page.on('request', (request) => {
-      if (request.url().includes('/api/videos')) {
-        apiCallCount++;
-      }
+    test('should not render the dashboard for anonymous visitors', async ({ page }) => {
+      await page.goto('/en/dashboard/videos');
+      await expect(page).toHaveURL(/\/en\/?$/);
+      await expect(page.getByTestId('dashboard-search')).toHaveCount(0);
     });
+  });
+});
 
-    await page.goto(`${TEST_CONFIG.webUrl}/${TEST_CONFIG.locale}/dashboard/videos`);
+test.describe('Dashboard Videos - Performance', () => {
+  test.use({ storageState: AUTH_STATE.single });
 
-    // Rapidly change filters
-    const select = page.locator('select[data-testid="duration-filter"], select:has-text("All Videos")');
-    await select.selectOption('short');
-    await select.selectOption('medium');
-    await select.selectOption('long');
-    await select.selectOption('all');
+  test('should render the owner\'s videos within 15 seconds', async ({ page }) => {
+    const start = Date.now();
+    await page.goto('/en/dashboard/videos');
+    await expect(card(page, singleSeed[SEED_TITLES.singleVideo])).toBeVisible({ timeout: 15000 });
+    expect(Date.now() - start).toBeLessThan(15000);
+  });
 
-    await page.waitForTimeout(1000);
+  test('should settle on the last of several rapid filter changes', async ({ page }) => {
+    await openDashboard(page);
+    const select = page.getByTestId('dashboard-filter-privacy');
 
-    // Verify API calls are managed (exact count depends on debounce implementation)
-    // Should be less than 5 (1 initial + 4 filter changes)
-    expect(apiCallCount).toBeLessThanOrEqual(5);
+    await select.selectOption('private');
+    await select.selectOption('public');
+    await select.selectOption('private');
+
+    await expect(card(page, singleSeed[SEED_TITLES.singlePrivate])).toBeVisible();
+    await expect(page.locator('[data-testid="dashboard-video-card"][data-privacy="public"]')).toHaveCount(0);
   });
 });

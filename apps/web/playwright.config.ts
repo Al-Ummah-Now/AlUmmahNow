@@ -23,6 +23,8 @@ export default defineConfig({
 
   /* Run global setup before all tests */
   globalSetup: require.resolve('./e2e/auth.setup'),
+  /* Delete videos the run created for the E2E users (seed videos are kept) */
+  globalTeardown: require.resolve('./e2e/cleanup-test-content'),
 
   /* Run tests in files in parallel */
   fullyParallel: true,

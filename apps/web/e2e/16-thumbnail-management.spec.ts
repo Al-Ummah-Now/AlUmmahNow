@@ -1,588 +1,209 @@
-import { test, expect, helpers } from './fixtures';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
+import * as path from 'path';
+import { AUTH_STATE } from './test-utils/auth-state';
+import {
+  SEED_TITLES,
+  createDisposableVideo,
+  deleteVideoQuietly,
+  ensureSeedVideos,
+  getVideo,
+  userApi,
+  waitForThumbnails,
+  type E2EVideo,
+} from './test-utils/e2e-videos';
 
 /**
- * Thumbnail Management E2E Tests
- * Tests for video thumbnail selection and upload
+ * Thumbnail management on the video edit page.
+ *
+ * Auto-generated thumbnails are the frames Bunny Stream renders while
+ * encoding (thumbnail_N.jpg next to the HLS playlist), so these tests use real
+ * QA videos: the seed video for read-only checks and a disposable video for
+ * anything that saves. Custom thumbnails are uploaded by the browser straight
+ * to the API.
  */
 
+test.use({ storageState: AUTH_STATE.single });
+
+const THUMBNAIL_JPG = path.join(__dirname, 'test-fixtures', 'e2e-thumbnail.jpg');
+
+let seed: Record<string, E2EVideo> = {};
+
+test.beforeAll(async () => {
+  test.setTimeout(240000);
+  seed = await ensureSeedVideos('single');
+  // The seed video is encoded once and reused, so this is normally immediate
+  await waitForThumbnails('single', seed[SEED_TITLES.singleVideo].id, 180000);
+});
+
+async function openEditor(page: Page, video: E2EVideo, locale: 'en' | 'ar' = 'en') {
+  await page.goto(`/${locale}/video/${video.id}/edit`);
+  await expect(page.getByTestId('thumbnail-selector')).toBeVisible();
+  // Let post-hydration session/profile checks settle before interacting
+  await page.waitForLoadState('networkidle').catch(() => undefined);
+  await expect(page.getByTestId('thumbnail-selector')).toBeVisible();
+}
+
 test.describe('Thumbnail Selection - Auto-generated', () => {
-  test.beforeEach(async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test('should display the generated frames', async ({ page }) => {
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    // Mock video details with thumbnails
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          video: {
-            id: 'video-1',
-            title: 'Test Video',
-            thumbnailUrl: 'https://example.com/thumb-1.jpg',
-            availableThumbnails: [
-              { url: 'https://example.com/thumb-1.jpg', timestamp: 0 },
-              { url: 'https://example.com/thumb-2.jpg', timestamp: 300 },
-              { url: 'https://example.com/thumb-3.jpg', timestamp: 600 },
-              { url: 'https://example.com/thumb-4.jpg', timestamp: 900 },
-              { url: 'https://example.com/thumb-5.jpg', timestamp: 1200 }
-            ],
-            status: 'ready',
-            isPublic: true
-          }
-        })
-      });
-    });
-
-    // Mock thumbnail update API
-    await page.route('**/api/videos/video-1/thumbnail', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          thumbnailUrl: 'https://example.com/thumb-updated.jpg'
-        })
-      });
-    });
+    const options = page.getByTestId('thumbnail-auto-option');
+    await expect(options.first()).toBeVisible();
+    expect(await options.count()).toBeGreaterThanOrEqual(1);
+    expect(await options.count()).toBeLessThanOrEqual(5);
+    await expect(options.first().locator('img')).toHaveAttribute('src', new RegExp(`/${seed[SEED_TITLES.singleVideo].id}/thumbnail_1\\.jpg$`));
   });
 
-  test('should display thumbnail selector', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
+  test('should select a frame', async ({ page }) => {
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    // Find thumbnail section
-    const thumbnailSection = page.locator('text=/thumbnail|select thumbnail/i');
+    const options = page.getByTestId('thumbnail-auto-option');
+    await expect(options.first()).toBeVisible();
+    const selection = page.getByTestId('thumbnail-current-selection');
+    const before = await selection.textContent();
 
-    if (await thumbnailSection.isVisible()) {
-      await expect(thumbnailSection).toBeVisible();
-
-      // Should show multiple thumbnail options
-      const thumbnailOptions = page.locator('img[src*="thumb"]');
-      const count = await thumbnailOptions.count();
-
-      expect(count).toBeGreaterThan(0);
-    }
-  });
-
-  test('should show 5 auto-generated thumbnails', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    // Find thumbnail grid
-    const thumbnailGrid = page.locator('[class*="thumbnail-grid"], [class*="thumbnail-selector"]');
-
-    if (await thumbnailGrid.isVisible()) {
-      // Should have 5 thumbnail options
-      const thumbnails = thumbnailGrid.locator('img, [role="button"]');
-      const count = await thumbnails.count();
-
-      expect(count).toBeGreaterThanOrEqual(5);
-    }
-  });
-
-  test('should select a thumbnail', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    // Find thumbnail options
-    const thumbnails = page.locator('img[src*="thumb"], button[data-thumbnail]');
-
-    if (await thumbnails.first().isVisible()) {
-      // Click second thumbnail
-      await thumbnails.nth(1).click();
-
-      // Should be highlighted/selected
-      const selectedThumbnail = thumbnails.nth(1);
-      const classes = await selectedThumbnail.getAttribute('class');
-
-      expect(classes?.includes('selected') || classes?.includes('active')).toBeTruthy();
-    }
-  });
-
-  test('should save selected thumbnail', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    const thumbnails = page.locator('img[src*="thumb"], button[data-thumbnail]');
-
-    if (await thumbnails.first().isVisible()) {
-      // Select thumbnail
-      await thumbnails.nth(2).click();
-
-      // Save
-      await page.click('button:has-text("Save"), button:has-text("Apply")');
-
-      await page.waitForTimeout(1000);
-
-      // Should show success
-      await expect(
-        page.locator('text=/saved|updated|success/i')
-      ).toBeVisible({ timeout: 5000 });
-    }
-  });
-
-  test('should show current thumbnail as selected', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    // Current thumbnail should be highlighted
-    const selectedThumbnail = page.locator('[class*="selected"], [class*="active"]').first();
-
-    if (await selectedThumbnail.isVisible()) {
-      await expect(selectedThumbnail).toBeVisible();
-    }
+    await options.first().click();
+    await expect(options.first()).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('thumbnail-auto-option').and(page.locator('[aria-checked="true"]'))).toHaveCount(1);
+    await expect(selection).not.toHaveText(before || '');
+    await expect(page.getByTestId('video-edit-unsaved')).toBeVisible();
   });
 });
 
-test.describe('Thumbnail Upload - Custom', () => {
-  test.beforeEach(async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+test.describe('Thumbnail - saving', () => {
+  let video: E2EVideo | null = null;
 
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          video: {
-            id: 'video-1',
-            title: 'Test Video',
-            thumbnailUrl: 'https://example.com/thumb.jpg',
-            status: 'ready',
-            isPublic: true
-          }
-        })
-      });
-    });
-
-    // Mock custom thumbnail upload
-    await page.route('**/api/videos/video-1/thumbnail/upload', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          thumbnailUrl: 'https://example.com/custom-thumb.jpg'
-        })
-      });
-    });
+  test.beforeEach(async () => {
+    video = await createDisposableVideo('single', 'thumbnail');
   });
 
-  test('should show upload custom thumbnail button', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    // Find upload button
-    const uploadButton = page.locator('button:has-text("Upload"), button:has-text("Custom Thumbnail")');
-
-    if (await uploadButton.isVisible()) {
-      await expect(uploadButton).toBeVisible();
-    }
+  test.afterEach(async () => {
+    await deleteVideoQuietly('single', video);
   });
 
-  test('should upload custom thumbnail', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
+  test('should save a selected auto-generated frame', async ({ page }) => {
+    test.setTimeout(300000);
+    expect(await waitForThumbnails('single', video!.id, 240000)).toBe(true);
+    await openEditor(page, video!);
 
-    // Create test thumbnail image
-    const thumbnailPath = await helpers.createTestVideo('test-thumb.jpg', 50);
+    const option = page.getByTestId('thumbnail-auto-option').first();
+    await expect(option).toBeVisible();
+    const src = await option.locator('img').getAttribute('src');
+    await option.click();
+    await page.getByTestId('video-edit-save').click();
+    await expect(page.getByTestId('video-edit-error')).toHaveCount(0);
 
-    // Find file input
-    const fileInput = page.locator('input[type="file"][accept*="image"]');
-
-    if (await fileInput.isVisible({ timeout: 500 })) {
-      // Upload thumbnail
-      await fileInput.setInputFiles(thumbnailPath);
-
-      // Wait for upload
-      await page.waitForTimeout(2000);
-
-      // Should show preview
-      const preview = page.locator('img[src*="custom"], img[alt*="preview"]');
-      if (await preview.isVisible({ timeout: 2000 })) {
-        await expect(preview).toBeVisible();
-      }
-
-      // Save
-      await page.click('button:has-text("Save"), button:has-text("Confirm")');
-
-      await expect(
-        page.locator('text=/saved|uploaded|success/i')
-      ).toBeVisible({ timeout: 5000 });
-    }
+    await expect.poll(async () => (await getVideo(userApi('single'), video!.id))?.thumbnailUrl, { timeout: 60000 }).toBe(src);
   });
 
-  test('should show thumbnail preview before upload', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
+  test('should upload, preview and save a custom thumbnail', async ({ page }) => {
+    await openEditor(page, video!);
 
-    const thumbnailPath = await helpers.createTestVideo('preview-thumb.jpg', 50);
+    await expect(page.getByTestId('thumbnail-upload-button')).toBeVisible();
+    await page.getByTestId('thumbnail-file-input').setInputFiles(THUMBNAIL_JPG);
 
-    const fileInput = page.locator('input[type="file"][accept*="image"]');
+    const custom = page.getByTestId('thumbnail-custom-option');
+    await expect(custom).toBeVisible();
+    await expect(page.getByTestId('thumbnail-upload-button')).toBeEnabled({ timeout: 60000 });
+    await expect(page.getByTestId('thumbnail-upload-error')).toHaveCount(0);
+    await expect(custom).toHaveAttribute('aria-pressed', 'true');
+    // Once uploaded, the preview switches from the local data: URL to the CDN URL
+    await expect(custom.locator('img')).toHaveAttribute('src', /^https:\/\//);
 
-    if (await fileInput.isVisible({ timeout: 500 })) {
-      await fileInput.setInputFiles(thumbnailPath);
-
-      // Should show preview
-      await page.waitForTimeout(1000);
-
-      const preview = page.locator('img[alt*="preview"], [class*="preview"]');
-      if (await preview.isVisible({ timeout: 2000 })) {
-        await expect(preview).toBeVisible();
-      }
-    }
-  });
-
-  test('should cancel custom thumbnail upload', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    const thumbnailPath = await helpers.createTestVideo('cancel-thumb.jpg', 50);
-
-    const fileInput = page.locator('input[type="file"][accept*="image"]');
-
-    if (await fileInput.isVisible({ timeout: 500 })) {
-      await fileInput.setInputFiles(thumbnailPath);
-
-      await page.waitForTimeout(500);
-
-      // Click cancel
-      const cancelButton = page.locator('button:has-text("Cancel")');
-      if (await cancelButton.isVisible({ timeout: 1000 })) {
-        await cancelButton.click();
-
-        // Preview should disappear
-        await page.waitForTimeout(500);
-      }
-    }
+    await page.getByTestId('video-edit-save').click();
+    await expect(page.getByTestId('video-edit-error')).toHaveCount(0);
+    await expect.poll(async () => (await getVideo(userApi('single'), video!.id))?.thumbnailUrl, { timeout: 60000 }).toMatch(/^https:\/\//);
   });
 });
 
 test.describe('Thumbnail Upload - Validation', () => {
-  test.beforeEach(async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
-
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          video: {
-            id: 'video-1',
-            title: 'Test Video',
-            thumbnailUrl: 'https://example.com/thumb.jpg',
-            status: 'ready',
-            isPublic: true
-          }
-        })
-      });
-    });
-  });
-
   test('should reject non-image files', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    // Create non-image file
-    const invalidPath = await helpers.createTestVideo('invalid.txt', 10);
-
-    const fileInput = page.locator('input[type="file"][accept*="image"]');
-
-    if (await fileInput.isVisible({ timeout: 500 })) {
-      // Try to upload non-image
-      await fileInput.setInputFiles(invalidPath);
-
-      // Should show error or reject
-      await page.waitForTimeout(1000);
-
-      // Either error shown or file not accepted
-      // Browser's accept attribute might prevent selection
-      await expect(
-        page.locator('text=/invalid|image only|unsupported/i')
-      ).toBeVisible().catch(() => {
-        // Error might not show if browser rejects file based on accept attribute
-      });
-    }
-  });
-
-  test('should reject oversized images', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    // Mock API error for large file
-    await page.route('**/api/videos/video-1/thumbnail/upload', route => {
-      route.fulfill({
-        status: 400,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: false,
-          error: 'File size exceeds 2MB limit'
-        })
-      });
+    await page.getByTestId('thumbnail-file-input').setInputFiles({
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('not an image'),
     });
 
-    // Create large file (mock)
-    const largePath = await helpers.createTestVideo('large-thumb.jpg', 3000);
-
-    const fileInput = page.locator('input[type="file"][accept*="image"]');
-
-    if (await fileInput.isVisible({ timeout: 500 })) {
-      await fileInput.setInputFiles(largePath);
-
-      // Try to save
-      await page.waitForTimeout(1000);
-      const saveButton = page.locator('button:has-text("Save"), button:has-text("Upload")');
-      if (await saveButton.isVisible({ timeout: 1000 })) {
-        await saveButton.click();
-
-        // Should show error
-        await expect(
-          page.locator('text=/exceeds|too large|limit/i')
-        ).toBeVisible({ timeout: 5000 });
-      }
-    }
+    await expect(page.getByTestId('thumbnail-upload-error')).toBeVisible();
+    await expect(page.getByTestId('thumbnail-custom-option')).toHaveCount(0);
   });
 
-  test('should validate image dimensions', async ({ page }) => {
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
+  test('should reject images over 2MB', async ({ page }) => {
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    // Mock API error for wrong dimensions
-    await page.route('**/api/videos/video-1/thumbnail/upload', route => {
-      route.fulfill({
-        status: 400,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: false,
-          error: 'Image must be at least 1280x720 pixels'
-        })
-      });
+    await page.getByTestId('thumbnail-file-input').setInputFiles({
+      name: 'huge.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.alloc(2 * 1024 * 1024 + 1, 0xff),
     });
 
-    const thumbnailPath = await helpers.createTestVideo('small-thumb.jpg', 50);
+    await expect(page.getByTestId('thumbnail-upload-error')).toBeVisible();
+    await expect(page.getByTestId('thumbnail-custom-option')).toHaveCount(0);
+  });
 
-    const fileInput = page.locator('input[type="file"][accept*="image"]');
+  test('should only accept JPEG, PNG and WebP in the file picker', async ({ page }) => {
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    if (await fileInput.isVisible({ timeout: 500 })) {
-      await fileInput.setInputFiles(thumbnailPath);
-
-      await page.waitForTimeout(1000);
-      const saveButton = page.locator('button:has-text("Save"), button:has-text("Upload")');
-      if (await saveButton.isVisible({ timeout: 1000 })) {
-        await saveButton.click();
-
-        // Should show dimension error
-        await expect(
-          page.locator('text=/dimensions|1280x720|resolution/i')
-        ).toBeVisible({ timeout: 5000 });
-      }
-    }
+    await expect(page.getByTestId('thumbnail-file-input')).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp');
   });
 });
 
 test.describe('Thumbnail Management - Mobile', () => {
-  test('should work on mobile viewport', async ({ page }) => {
-    await helpers.setMobileViewport(page);
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test('should fit a mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          video: {
-            id: 'video-1',
-            title: 'Mobile Test',
-            thumbnailUrl: 'https://example.com/thumb.jpg',
-            availableThumbnails: [
-              { url: 'https://example.com/thumb-1.jpg', timestamp: 0 },
-              { url: 'https://example.com/thumb-2.jpg', timestamp: 300 },
-              { url: 'https://example.com/thumb-3.jpg', timestamp: 600 }
-            ],
-            status: 'ready',
-            isPublic: true
-          }
-        })
-      });
-    });
+    const selector = page.getByTestId('thumbnail-selector');
+    await selector.scrollIntoViewIfNeeded();
+    const box = await selector.boundingBox();
+    expect(box?.width ?? 0).toBeLessThanOrEqual(375);
 
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    // Verify responsive thumbnail grid
-    const thumbnails = page.locator('img[src*="thumb"]');
-    const count = await thumbnails.count();
-
-    if (count > 0) {
-      // Should be scrollable or stacked on mobile
-      await expect(thumbnails.first()).toBeVisible();
-
-      // Can select thumbnail
-      await thumbnails.first().click();
-
-      await page.waitForTimeout(500);
-    }
-  });
-
-  test('should support touch interactions', async ({ page }) => {
-    await helpers.setMobileViewport(page);
-    await helpers.loginAndNavigateToUpload(page, 'en');
-
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          video: {
-            id: 'video-1',
-            title: 'Touch Test',
-            thumbnailUrl: 'https://example.com/thumb.jpg',
-            availableThumbnails: [
-              { url: 'https://example.com/thumb-1.jpg', timestamp: 0 },
-              { url: 'https://example.com/thumb-2.jpg', timestamp: 300 }
-            ],
-            status: 'ready',
-            isPublic: true
-          }
-        })
-      });
-    });
-
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    const thumbnails = page.locator('img[src*="thumb"]');
-
-    if (await thumbnails.first().isVisible()) {
-      // Tap to select
-      await thumbnails.first().tap();
-
-      await page.waitForTimeout(500);
-
-      // Selection state might vary by implementation
-      // Verify thumbnail is still visible after tap
-      await expect(thumbnails.first()).toBeVisible();
-    }
+    const option = page.getByTestId('thumbnail-auto-option').first();
+    await option.tap().catch(() => option.click());
+    await expect(option).toHaveAttribute('aria-checked', 'true');
   });
 });
 
 test.describe('Thumbnail Management - Accessibility', () => {
   test('should be keyboard accessible', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          video: {
-            id: 'video-1',
-            title: 'Accessibility Test',
-            thumbnailUrl: 'https://example.com/thumb.jpg',
-            availableThumbnails: [
-              { url: 'https://example.com/thumb-1.jpg', timestamp: 0 },
-              { url: 'https://example.com/thumb-2.jpg', timestamp: 300 },
-              { url: 'https://example.com/thumb-3.jpg', timestamp: 600 }
-            ],
-            status: 'ready',
-            isPublic: true
-          }
-        })
-      });
-    });
-
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    // Navigate with Tab key
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
-
-    // Should be able to select with Enter/Space
+    const option = page.getByTestId('thumbnail-auto-option').first();
+    await option.focus();
+    await expect(option).toBeFocused();
     await page.keyboard.press('Enter');
-
-    await page.waitForTimeout(500);
+    await expect(option).toHaveAttribute('aria-checked', 'true');
   });
 
-  test('should have proper ARIA labels', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test('should expose frames as a labelled radio group', async ({ page }) => {
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          video: {
-            id: 'video-1',
-            title: 'ARIA Test',
-            thumbnailUrl: 'https://example.com/thumb.jpg',
-            availableThumbnails: [
-              { url: 'https://example.com/thumb-1.jpg', timestamp: 0 }
-            ],
-            status: 'ready',
-            isPublic: true
-          }
-        })
-      });
-    });
-
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
-
-    // Thumbnails should have proper roles
-    const thumbnailButtons = page.locator('[role="radio"], [role="button"]');
-    const count = await thumbnailButtons.count();
-
-    // At least some elements should have accessibility attributes
-    if (count > 0) {
-      await expect(thumbnailButtons.first()).toBeVisible();
-    }
+    const group = page.getByRole('radiogroup');
+    await expect(group).toBeVisible();
+    const radios = group.getByRole('radio');
+    expect(await radios.count()).toBeGreaterThanOrEqual(1);
+    await expect(radios.first()).toHaveAccessibleName(/.+ 1$/);
+    await expect(page.getByTestId('thumbnail-file-input')).toHaveAttribute('aria-label', /.+/);
   });
 
-  test('should announce selection to screen readers', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test('should announce the selection in a live region', async ({ page }) => {
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    await page.route('**/api/videos/video-1', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          video: {
-            id: 'video-1',
-            title: 'Screen Reader Test',
-            thumbnailUrl: 'https://example.com/thumb.jpg',
-            availableThumbnails: [
-              { url: 'https://example.com/thumb-1.jpg', timestamp: 0 },
-              { url: 'https://example.com/thumb-2.jpg', timestamp: 300 }
-            ],
-            status: 'ready',
-            isPublic: true
-          }
-        })
-      });
-    });
+    const live = page.getByTestId('thumbnail-current-selection');
+    await expect(live).toHaveAttribute('aria-live', 'polite');
+    await page.getByTestId('thumbnail-auto-option').first().click();
+    await expect(live).toContainText('#1');
+  });
+});
 
-    await page.goto('/en/video/video-1/edit');
-    await page.waitForLoadState('networkidle');
+test.describe('Thumbnail Management - RTL', () => {
+  test('should render in the Arabic editor', async ({ page }) => {
+    await openEditor(page, seed[SEED_TITLES.singleVideo], 'ar');
 
-    const thumbnails = page.locator('[role="radio"], button');
-
-    if (await thumbnails.first().isVisible()) {
-      // Click thumbnail
-      await thumbnails.first().click();
-
-      // Should have aria-selected or aria-checked
-      const ariaSelected = await thumbnails.first().getAttribute('aria-selected');
-      const ariaChecked = await thumbnails.first().getAttribute('aria-checked');
-
-      expect(ariaSelected === 'true' || ariaChecked === 'true' || ariaSelected !== null).toBeTruthy();
-    }
+    await expect(page.locator('div[dir="rtl"]').first()).toBeVisible();
+    await expect(page.getByTestId('thumbnail-auto-option').first()).toBeVisible();
   });
 });

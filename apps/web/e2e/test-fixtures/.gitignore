@@ -15,3 +15,7 @@
 # Keep this directory in git
 !.gitignore
 !README.md
+# Tiny real H.264/AAC clip (4s 426x240, ~60KB) used to seed E2E videos without ffmpeg
+!e2e-sample.mp4
+# 1280x720 JPEG used as a custom thumbnail
+!e2e-thumbnail.jpg
