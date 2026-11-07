@@ -8,6 +8,8 @@ import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
+import { inBackground } from "../../lib/websocket-notify";
+import { announceLiveStarted } from "../../lib/notification-events";
 
 export class LiveStreamUpdate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
@@ -148,6 +150,13 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 
 			// Save updated stream
 			await repository.putObject(`livestream:${id}`, updatedStream);
+
+			// Went live: tell subscribers (Story 29.10; processor de-duplicates per stream)
+			if (updatedStream.status === 'live' && existingStream.status !== 'live') {
+				inBackground(c, 'live-started', () =>
+					announceLiveStarted(c.env, { id, channelId: updatedStream.channelId || channelId, userId, title: updatedStream.title }),
+				);
+			}
 
 			// Send queue message for live stream update
 			const queue = new Queue(c.env.queue);

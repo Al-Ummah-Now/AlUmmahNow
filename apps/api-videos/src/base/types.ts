@@ -35,6 +35,9 @@ export interface AppBindings {
   /** Processor-written view/watch-time rollups (al-ummah-now-messages bucket) */
   analytics_rollups?: R2Bucket;
 
+  // D1: notification center + library per-user indexes (Epic 29; optional until bound)
+  NOTIFICATIONS_DB?: D1Database;
+
   // KV Namespaces
   RATE_LIMIT_KV: KVNamespace;
   TUS_SESSIONS: KVNamespace;

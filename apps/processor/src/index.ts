@@ -1,6 +1,7 @@
 import { AlUmmahMessage, QueueEnvironment } from './types';
 import { MessageProcessor } from './messageProcessor';
 import { createLogger } from '@al-ummah/logger';
+import { purgeExpiredNotifications } from './lib/notifications-store';
 
 interface QueueMessage<T> {
   body: T;
@@ -54,7 +55,33 @@ async function checkDLQHealth(_env: QueueEnvironment): Promise<{ status: string;
   }
 }
 
+/**
+ * Daily cron (wrangler `triggers.crons`): 90-day notification retention (Story 29.10).
+ */
+export async function runScheduled(env: QueueEnvironment, now = Date.now()): Promise<number> {
+  const logger = createLogger('processor', {
+    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+    forceHttpLogging: true,
+  });
+  if (!env.NOTIFICATIONS_DB) {
+    logger.warn('[Retention] NOTIFICATIONS_DB not bound; notification retention skipped');
+    return 0;
+  }
+  try {
+    const deleted = await purgeExpiredNotifications(env.NOTIFICATIONS_DB, now);
+    logger.info('[Retention] Expired notifications deleted', { deleted });
+    return deleted;
+  } catch (error) {
+    logger.error('[Retention] Notification retention failed', error);
+    return 0;
+  }
+}
+
 export default {
+  async scheduled(_controller: unknown, env: QueueEnvironment, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {
+    ctx.waitUntil(runScheduled(env));
+  },
+
   async queue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment): Promise<void> {
     const logger = createLogger('processor', {
       logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',

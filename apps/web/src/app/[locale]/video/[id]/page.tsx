@@ -19,6 +19,7 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import SaveToPlaylist from "@/components/SaveToPlaylist";
 import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
+import { WatchLaterButton } from "@/components/library/WatchLaterButton";
 
 export default function VideoViewPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -104,7 +105,8 @@ export default function VideoViewPage() {
 
               {/* Save to playlist (logged-in users with a channel) */}
               {user && (
-                <div className="w-full max-w-4xl mt-4 px-4">
+                <div className="w-full max-w-4xl mt-4 px-4 flex flex-wrap items-start gap-3" dir={isRTL ? 'rtl' : 'ltr'}>
+                  <WatchLaterButton videoId={videoId} />
                   {isRTL ? <SaveToPlaylistRTL videoId={videoId} /> : <SaveToPlaylist videoId={videoId} />}
                 </div>
               )}

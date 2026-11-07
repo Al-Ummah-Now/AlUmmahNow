@@ -5,8 +5,11 @@
  */
 
 import type { AppTranslations } from '../types';
+import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from './library-notifications';
 
 export const AR_TRANSLATIONS: AppTranslations = {
+  library: LIBRARY_AR,
+  notificationCenter: NOTIFICATION_CENTER_AR,
   common: {
     appName: 'الأمة الآن',
     loading: 'جاري التحميل...',
@@ -1075,6 +1078,12 @@ export const AR_TRANSLATIONS: AppTranslations = {
       uploadReadyMessage: 'اكتملت معالجة الفيديو الخاص بك "{videoTitle}"',
       uploadFailedTitle: 'فشل الرفع',
       uploadFailedMessage: 'تعذرت معالجة الفيديو الخاص بك "{videoTitle}"',
+      newVideoTitle: 'فيديو جديد',
+      newVideoMessage: 'نشرت {channelName} الفيديو "{videoTitle}"',
+      liveStartedTitle: 'مباشر الآن',
+      liveStartedMessage: '{channelName} تبث مباشرة: {streamTitle}',
+      commentReplyTitle: 'رد جديد',
+      commentReplyMessage: 'ردّ {actorName} على تعليقك',
     },
   },
 

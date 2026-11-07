@@ -104,6 +104,13 @@ export enum MessageType {
   // Consumers anonymise copies they own (e.g. processor: D1 moderation reports).
   // Appended last for the same reason as above.
   UserDataErased,
+
+  // Notification center (Story 29.10). Explicit values in a reserved range so
+  // concurrent additions above cannot shift them.
+  // Persist a notification for one recipient (payload: NotificationCreatePayload).
+  NotificationCreate = 200,
+  // Fan a notification out to a channel's subscribers (payload: NotificationFanoutPayload).
+  NotificationFanout = 201,
 }
 
 // Generic message structure for queue messages

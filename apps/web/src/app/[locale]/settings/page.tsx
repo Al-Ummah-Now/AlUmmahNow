@@ -10,6 +10,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { NotificationSettingsPanel } from '@/components/notifications/NotificationSettingsPanel';
 import {
   Settings,
   Video,
@@ -133,6 +134,9 @@ export default function SettingsPage() {
             );
           })}
         </div>
+
+        {/* Notification categories (Story 29.10) */}
+        <NotificationSettingsPanel />
 
         {/* Quick Actions */}
         <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">

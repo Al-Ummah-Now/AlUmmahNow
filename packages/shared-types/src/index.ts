@@ -43,3 +43,7 @@ export * from './localization';
 
 // i18n types
 export * from './i18n';
+
+// Notification center & library (Epic 29)
+export * from './notifications';
+export * from './i18n-library';

@@ -72,6 +72,14 @@
       "bucket_name": "al-ummah-now-messages-qa"
     }
   ],
+  "d1_databases": [
+    {
+      // Notification center + library indexes (Epic 29); migrations live in apps/processor
+      "binding": "NOTIFICATIONS_DB",
+      "database_name": "al-ummah-now-notifications-qa",
+      "database_id": "61a2966a-66c2-4ae2-a98f-6e2e8cf6b880"
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "RATE_LIMIT_KV",

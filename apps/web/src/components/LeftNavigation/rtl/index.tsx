@@ -45,7 +45,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
         { label: tAr.navigation.search, icon: "fa-magnifying-glass", href: `/${locale}/search` },
         { label: tAr.navigation.upload, icon: "fa-upload", href: `/${locale}/upload` },
         { label: tAr.navigation.subscriptions, icon: "fa-tv", href: "#" },
-        { label: tAr.navigation.library, icon: "fa-bookmark", href: "#" },
+        { label: tAr.navigation.library, icon: "fa-bookmark", href: `/${locale}/library` },
     ];
 
     // Filter out Upload if user has no active channel

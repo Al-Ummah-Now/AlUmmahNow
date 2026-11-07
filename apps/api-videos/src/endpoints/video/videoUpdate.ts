@@ -9,6 +9,8 @@ import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
+import { inBackground } from "../../lib/websocket-notify";
+import { announceNewVideo } from "../../lib/notification-events";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class VideoUpdate extends AuthenticatedRoute {
@@ -166,6 +168,11 @@ export class VideoUpdate extends AuthenticatedRoute {
 
 		// Save the updated video to the repository
 		await repository.putObject(id, updatedVideo);
+
+		// Made public after processing: tell subscribers (processor de-duplicates per video)
+		if (existingVideo.isPublic === false && updatedVideo.isPublic !== false) {
+			inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...updatedVideo, id }));
+		}
 
 		// Send queue message for video update
 		const queue = new Queue(c.env.queue);

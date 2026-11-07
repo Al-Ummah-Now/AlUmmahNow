@@ -6,6 +6,8 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
+import { inBackground } from "../../lib/websocket-notify";
+import { announceProcessingResult } from "../../lib/notification-events";
 
 // Upload status type
 const UploadStatus = z.object({
@@ -214,6 +216,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		);
 
 		if (needsUpdate) {
+			const previousStatus = video.uploadStatus;
 			try {
 				logger.info('[VideoUploadStatus] Updating video status in R2', {
 					videoId: id,
@@ -250,6 +253,14 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 
 				await repository.putObject(id, video);
 				logger.info('[VideoUploadStatus] Video status updated in R2', { videoId: id, status });
+
+				// Terminal transition: uploader notification + subscriber fan-out (Story 29.10).
+				// Repeated polls never reach here twice (status already stored); the
+				// processor de-duplicates anyway.
+				if (previousStatus !== status && (status === 'ready' || status === 'failed')) {
+					const terminal = status;
+					inBackground(c, 'processing-result', () => announceProcessingResult(c.env, { ...video, id }, terminal));
+				}
 			} catch (error) {
 				logger.error('[VideoUploadStatus] Failed to update video status in R2', {
 					videoId: id,

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { Edit } from "lucide-react";
 import SaveToPlaylist from "@/components/SaveToPlaylist";
 import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
+import { WatchLaterButton } from "@/components/library/WatchLaterButton";
 
 export default function Home() {
   const { t, lang, isRTL } = useLanguage();
@@ -99,7 +100,8 @@ export default function Home() {
 
               {/* Save to playlist (logged-in users with a channel) */}
               {user && (
-                <div className="w-full max-w-4xl mt-4 px-4">
+                <div className="w-full max-w-4xl mt-4 px-4 flex flex-wrap items-start gap-3" dir={isRTL ? 'rtl' : 'ltr'}>
+                  <WatchLaterButton videoId={vid} />
                   <SaveToPlaylistControl videoId={vid} />
                 </div>
               )}
