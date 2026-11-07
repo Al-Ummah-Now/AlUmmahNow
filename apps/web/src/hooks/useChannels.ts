@@ -152,7 +152,8 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
       logger.info('useChannels: Updating channel', { id, data });
 
       const headers: Required<Pick<ApiHeaders, 'channelId'>> = {
-        channelId
+        // The API checks the header against the channel being changed
+        channelId: id
       };
 
       const response = await updateChannelAPI(id, data, headers);
@@ -190,7 +191,8 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
       logger.info('useChannels: Deleting channel', id);
 
       const headers: Required<Pick<ApiHeaders, 'channelId'>> = {
-        channelId
+        // The API checks the header against the channel being changed
+        channelId: id
       };
 
       const response = await deleteChannelAPI(id, headers);
