@@ -16,7 +16,9 @@ test.describe('moderation queue', () => {
     await expect(page.getByTestId('report-id')).toHaveText(report.id);
   });
 
-  test('MOD-02 status filter narrows the list and is reflected in the URL', async ({ page }) => {
+  test('MOD-02 status filter narrows the list and is reflected in the URL', async ({ page, makeReport }) => {
+    // Own a pending report so the filtered list is never empty (teardown dismisses all e2e reports)
+    await makeReport({ label: 'status-filter' });
     await page.goto('/moderation');
     await page.getByLabel('Status').selectOption('pending');
     await expect(page).toHaveURL(/status=pending/);
