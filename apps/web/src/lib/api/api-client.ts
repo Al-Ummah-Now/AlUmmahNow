@@ -112,6 +112,13 @@ export async function apiRequest<T>(
       return null;
     }
 
+    // 204 No Content (e.g. DELETE /api/upload-defaults/:id) has no body to parse;
+    // treating it as an error made successful deletes look like failures
+    if (response.status === 204) {
+      logApiEnd(functionName, true);
+      return { success: true } as T;
+    }
+
     // Parse response
     logApiStep({ functionName, step: 'Parsing response body' });
     const result = await response.json();

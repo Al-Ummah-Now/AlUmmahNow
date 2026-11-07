@@ -19,9 +19,10 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { UploadTemplate } from '@al-ummah/shared-types';
+import { UploadTemplate, VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 import { listTemplates, deleteTemplate, setDefaultTemplate } from '@/lib/api/upload-defaults';
 import { TemplateEditorModal } from '@/components/settings/TemplateEditorModal';
+import { parseTemplateListResponse } from '@/lib/upload/template-list';
 
 export default function UploadDefaultsPage() {
   const { t, isRTL } = useLanguage();
@@ -44,9 +45,10 @@ export default function UploadDefaultsPage() {
     try {
       const response = await listTemplates();
       if (response) {
-        // Ensure templates is always an array, even if response.templates is undefined
-        setTemplates(response.templates || []);
-        setDefaultTemplateId(response.defaultTemplateId || null);
+        // The API wraps the list in `result`; reading `response.templates` always showed the empty state
+        const parsed = parseTemplateListResponse(response);
+        setTemplates(parsed.templates);
+        setDefaultTemplateId(parsed.defaultTemplateId);
       } else {
         // API returned null - set empty array and show error
         setTemplates([]);
@@ -82,6 +84,8 @@ export default function UploadDefaultsPage() {
 
   // Handle delete template
   const handleDelete = async (templateId: string) => {
+    // Close the actions menu first; it stayed open through the reload otherwise
+    setActiveMenu(null);
     const confirmed = confirm(
       isRTL
         ? 'هل أنت متأكد من حذف هذا القالب؟'
@@ -104,9 +108,12 @@ export default function UploadDefaultsPage() {
 
   // Handle set as default
   const handleSetDefault = async (templateId: string) => {
+    setActiveMenu(null);
     try {
       const result = await setDefaultTemplate(templateId);
       if (result?.success) {
+        // Show the new default right away; the reload below confirms it
+        setDefaultTemplateId(templateId);
         await loadTemplates();
       } else {
         alert(isRTL ? 'فشل في تعيين القالب الافتراضي' : 'Failed to set default template');
@@ -123,7 +130,7 @@ export default function UploadDefaultsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900" dir={isRTL ? 'rtl' : 'ltr'} data-testid="upload-defaults-page">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -140,7 +147,9 @@ export default function UploadDefaultsPage() {
         {/* Create Button */}
         <div className="mb-6">
           <button
+            type="button"
             onClick={handleCreate}
+            data-testid="template-create"
             className="
               flex
               items-center
@@ -165,14 +174,14 @@ export default function UploadDefaultsPage() {
 
         {/* Loading State */}
         {loading && (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-12" role="status" aria-label={t.common.loading} data-testid="templates-loading">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
         )}
 
         {/* Error State */}
         {error && !loading && (
-          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+          <div role="alert" data-testid="templates-error" className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
             <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
@@ -180,7 +189,7 @@ export default function UploadDefaultsPage() {
 
         {/* Empty State */}
         {!loading && !error && templates && templates.length === 0 && (
-          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div data-testid="templates-empty" className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
             <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
               {isRTL ? 'لا توجد قوالب' : 'No templates yet'}
@@ -217,13 +226,16 @@ export default function UploadDefaultsPage() {
 
         {/* Templates List */}
         {!loading && !error && templates && templates.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div data-testid="templates-list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {templates.map((template) => {
               const isDefault = template.id === defaultTemplateId;
 
               return (
                 <div
                   key={template.id}
+                  data-testid="template-card"
+                  data-template-id={template.id}
+                  data-default={isDefault ? 'true' : 'false'}
                   className="
                     relative
                     bg-white
@@ -235,12 +247,13 @@ export default function UploadDefaultsPage() {
                     hover:border-primary/50
                     dark:hover:border-primary/50
                     transition-all
-                    overflow-hidden
                   "
                 >
+                  {/* No overflow-hidden on the card: it clipped the actions menu below
+                      the buttons, so "Set as Default" / "Delete" could not be clicked */}
                   {/* Default Badge */}
                   {isDefault && (
-                    <div className="absolute top-3 right-3 rtl:left-3 rtl:right-auto">
+                    <div className="absolute top-3 end-3" data-testid="template-default-badge">
                       <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
                         <Star className="w-3 h-3 fill-current" />
                         <span className="text-xs font-medium">
@@ -253,7 +266,7 @@ export default function UploadDefaultsPage() {
                   {/* Content */}
                   <div className="p-6">
                     {/* Template Name */}
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    <h3 data-testid="template-name" className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 pe-20">
                       {isRTL
                         ? template.nameLocalized?.ar || template.name
                         : template.name}
@@ -271,7 +284,7 @@ export default function UploadDefaultsPage() {
                       {template.template.category && (
                         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                           <span className="font-medium">{isRTL ? 'التصنيف:' : 'Category:'}</span>
-                          <span>{template.template.category}</span>
+                          <span data-testid="template-category">{VIDEO_CATEGORIES.find((c) => c.value === template.template.category)?.label[isRTL ? 'ar' : 'en'] ?? template.template.category}</span>
                         </div>
                       )}
                       {template.template.tags && template.template.tags.length > 0 && (
@@ -302,6 +315,8 @@ export default function UploadDefaultsPage() {
                     {/* Actions */}
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
+                        data-testid="template-edit"
                         onClick={() => handleEdit(template)}
                         className="
                           flex-1
@@ -331,6 +346,11 @@ export default function UploadDefaultsPage() {
                       {/* More Actions Menu */}
                       <div className="relative">
                         <button
+                          type="button"
+                          data-testid="template-menu"
+                          aria-label={isRTL ? 'المزيد من الإجراءات' : 'More actions'}
+                          aria-haspopup="menu"
+                          aria-expanded={activeMenu === template.id}
                           onClick={() => setActiveMenu(activeMenu === template.id ? null : template.id)}
                           className="
                             p-2
@@ -357,11 +377,9 @@ export default function UploadDefaultsPage() {
                             />
 
                             {/* Menu */}
-                            <div className="
+                            <div role="menu" className="
                               absolute
-                              right-0
-                              rtl:left-0
-                              rtl:right-auto
+                              end-0
                               mt-2
                               w-48
                               bg-popover
@@ -375,6 +393,9 @@ export default function UploadDefaultsPage() {
                             ">
                               {!isDefault && (
                                 <button
+                                  type="button"
+                                  role="menuitem"
+                                  data-testid="template-set-default"
                                   onClick={() => handleSetDefault(template.id)}
                                   className="
                                     w-full
@@ -396,6 +417,9 @@ export default function UploadDefaultsPage() {
                                 </button>
                               )}
                               <button
+                                type="button"
+                                role="menuitem"
+                                data-testid="template-delete"
                                 onClick={() => handleDelete(template.id)}
                                 className="
                                   w-full

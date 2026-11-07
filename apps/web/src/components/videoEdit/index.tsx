@@ -462,11 +462,13 @@ export default function VideoEdit({
           {chapterMode === 'none' && (
             <div className="flex gap-3">
               <button
+                type="button"
+                data-testid="chapter-mode-manual"
                 onClick={() => setChapterMode('manual')}
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-4 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 <Edit3 size={20} className="text-blue-500" />
-                <div className="text-left">
+                <div className="text-start">
                   <div className="font-medium dark:text-white">{t.video.manualChapters}</div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     {t.video.createChaptersManually}
@@ -474,11 +476,13 @@ export default function VideoEdit({
                 </div>
               </button>
               <button
+                type="button"
+                data-testid="chapter-mode-upload"
                 onClick={() => setChapterMode('upload')}
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-4 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 <FileText size={20} className="text-green-500" />
-                <div className="text-left">
+                <div className="text-start">
                   <div className="font-medium dark:text-white">{t.video.importedChapters}</div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     {t.video.uploadChapterFile}
@@ -543,7 +547,7 @@ export default function VideoEdit({
 
           {/* Show current chapters if they exist */}
           {chapters.length > 0 && chapterMode === 'none' && (
-            <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <div data-testid="chapter-summary" data-count={chapters.length} className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-green-700 dark:text-green-400">
@@ -554,6 +558,8 @@ export default function VideoEdit({
                   </p>
                 </div>
                 <button
+                  type="button"
+                  data-testid="chapter-edit-existing"
                   onClick={() => setChapterMode('manual')}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
                 >

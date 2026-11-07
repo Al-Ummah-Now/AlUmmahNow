@@ -244,7 +244,7 @@ export function ScheduledVideosList({
 
                   {/* Details */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
+                    <h3 data-testid="scheduled-video-title" className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
                       {video.title}
                     </h3>
 
@@ -261,16 +261,16 @@ export function ScheduledVideosList({
                     <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                       {scheduledPublishDate && (
                         <>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center gap-2">
                             <Calendar size={16} />
-                            <span>
+                            <span data-testid="scheduled-video-date">
                               {t.schedule?.scheduledFor || 'Scheduled for'}: {new Date(scheduledPublishDate).toLocaleString(locale)}
                             </span>
                           </div>
                           {scheduleStatus === 'scheduled' && (
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center gap-2">
                               <Clock size={16} />
-                              <span>
+                              <span data-testid="scheduled-video-countdown">
                                 {t.schedule?.publishesIn || 'Publishes in'}: {formatTimeRemaining(scheduledPublishDate)}
                               </span>
                             </div>
@@ -284,36 +284,41 @@ export function ScheduledVideosList({
                       {canEdit && (
                         <Link
                           href={`/${locale}/video/${video.id}/edit`}
+                          data-testid="scheduled-video-edit"
                           className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
                         >
-                          <Edit size={16} className="mr-1.5" />
+                          <Edit size={16} className="me-1.5" />
                           {t.schedule?.editSchedule || 'Edit Schedule'}
                         </Link>
                       )}
                       {scheduleStatus === 'scheduled' && (
                         <button
+                          type="button"
+                          data-testid="scheduled-video-publish-now"
                           onClick={() => handlePublishNow(video.id)}
                           disabled={actionLoading === video.id}
                           className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {actionLoading === video.id ? (
-                            <Loader size={16} className="mr-1.5 animate-spin" />
+                            <Loader size={16} className="me-1.5 animate-spin" />
                           ) : (
-                            <PlayCircle size={16} className="mr-1.5" />
+                            <PlayCircle size={16} className="me-1.5" />
                           )}
                           {t.schedule?.publishNow || 'Publish Now'}
                         </button>
                       )}
                       {canCancel && (
                         <button
+                          type="button"
+                          data-testid="scheduled-video-cancel"
                           onClick={() => handleCancelSchedule(video.id)}
                           disabled={actionLoading === video.id}
                           className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {actionLoading === video.id ? (
-                            <Loader size={16} className="mr-1.5 animate-spin" />
+                            <Loader size={16} className="me-1.5 animate-spin" />
                           ) : (
-                            <Trash2 size={16} className="mr-1.5" />
+                            <Trash2 size={16} className="me-1.5" />
                           )}
                           {t.schedule?.cancelSchedule || 'Cancel Schedule'}
                         </button>

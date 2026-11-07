@@ -164,6 +164,19 @@ export class BatchUploadManager {
   }
 
   /**
+   * Remove an upload from the queue entirely (cancelling it first). Unlike
+   * cancelUpload, the item does not come back in later queue snapshots.
+   */
+  removeUpload(videoId: string): void {
+    if (!this.queue.has(videoId)) return;
+    this.tusManager.cancel(videoId);
+    this.queue.delete(videoId);
+    this.statusCallbacks.delete(videoId);
+    this.uploadSpeeds.delete(videoId);
+    this.notifyProgressUpdate();
+  }
+
+  /**
    * Retry a failed upload
    */
   async retryUpload(videoId: string): Promise<void> {

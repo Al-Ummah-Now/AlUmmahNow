@@ -12,6 +12,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { FileText, ChevronDown, AlertCircle } from 'lucide-react';
 import { UploadTemplate } from '@al-ummah/shared-types';
 import { listTemplates } from '@/lib/api/upload-defaults';
+import { parseTemplateListResponse } from '@/lib/upload/template-list';
 import { processTemplateVariables, type VariableContext, type ProcessedMetadata } from '@/lib/upload/template-variables';
 
 interface TemplateSelectorProps {
@@ -91,9 +92,7 @@ export function TemplateSelector({
       try {
         const response = await listTemplates();
         if (response) {
-          // API returns { success: true, result: { templates, defaultTemplateId } }
-          // But apiRequest returns the full response, so we need to access .result
-          const data = (response as { result?: { templates: UploadTemplate[]; defaultTemplateId: string | null } }).result || response as { templates: UploadTemplate[]; defaultTemplateId: string | null };
+          const data = parseTemplateListResponse(response);
           setTemplates(data.templates || []);
           setDefaultTemplateId(data.defaultTemplateId || null);
 
@@ -190,12 +189,14 @@ export function TemplateSelector({
     <>
       {/* Template Selector */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label htmlFor="upload-template-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {isRTL ? 'قالب الرفع' : 'Upload Template'}
         </label>
 
         <div className="relative">
           <select
+            id="upload-template-select"
+            data-testid="upload-template-select"
             value={selectedTemplateId}
             onChange={handleTemplateChange}
             disabled={loading}
@@ -241,7 +242,7 @@ export function TemplateSelector({
 
         {/* Helper Text */}
         {selectedTemplateId && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1" data-testid="upload-template-applied">
             <FileText className="w-3 h-3" />
             {isRTL
               ? 'تم تطبيق القالب على النموذج أدناه'
@@ -271,6 +272,10 @@ export function TemplateSelector({
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="template-variables-title"
+            data-testid="template-variables-dialog"
             className="
               relative
               w-full
@@ -285,7 +290,7 @@ export function TemplateSelector({
           >
             {/* Header */}
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <h3 id="template-variables-title" className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                 {isRTL ? 'ادخل قيم المتغيرات' : 'Enter Variable Values'}
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -341,10 +346,12 @@ export function TemplateSelector({
 
                 return (
                   <div key={varKey}>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <label htmlFor={`template-variable-${varKey}`} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       {label[isRTL ? 'ar' : 'en']}
                     </label>
                     <input
+                      id={`template-variable-${varKey}`}
+                      data-testid={`template-variable-${varKey}`}
                       type="text"
                       value={(variableContext as Record<string, string>)[varKey] || ''}
                       onChange={(e) =>
@@ -380,6 +387,7 @@ export function TemplateSelector({
             <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
               <button
                 type="button"
+                data-testid="template-variables-cancel"
                 onClick={() => {
                   setShowVariablePrompt(false);
                   setPendingTemplate(null);
@@ -408,6 +416,7 @@ export function TemplateSelector({
               <button
                 type="button"
                 onClick={handleVariableSubmit}
+                data-testid="template-variables-confirm"
                 className="
                   px-6
                   py-2

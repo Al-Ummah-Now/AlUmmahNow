@@ -96,10 +96,15 @@ export default function ChapterEditor({
   }, [chapters, initialChapters]);
 
   const addChapter = () => {
+    // The last chapter always runs to the end of the video, so starting the new
+    // one at its endTime (as before) meant "Add Chapter" only ever reported
+    // "Maximum chapters reached". Split the last chapter in half instead.
     const lastChapter = chapters[chapters.length - 1];
-    const newStartTime = lastChapter ? lastChapter.endTime : 0;
+    const newStartTime = lastChapter
+      ? lastChapter.startTime + Math.floor((videoDuration - lastChapter.startTime) / 2)
+      : 0;
 
-    if (newStartTime >= videoDuration) {
+    if (lastChapter && (newStartTime - lastChapter.startTime < 10 || videoDuration - newStartTime < 10)) {
       setErrors({ global: t.video.maxChaptersReached ?? 'Maximum chapters reached' });
       return;
     }
@@ -111,7 +116,11 @@ export default function ChapterEditor({
       title: '',
     };
 
-    setChapters([...chapters, newChapter]);
+    setChapters([
+      ...chapters.slice(0, -1),
+      ...(lastChapter ? [{ ...lastChapter, endTime: newStartTime }] : []),
+      newChapter,
+    ]);
     setTimestampInputs({
       ...timestampInputs,
       [newChapter.id]: formatTimestamp(newStartTime),
@@ -228,8 +237,14 @@ export default function ChapterEditor({
     }
 
     const newIndex = direction === 'up' ? index - 1 : index + 1;
-    const reordered = [...chapters];
-    [reordered[index], reordered[newIndex]] = [reordered[newIndex], reordered[index]];
+    // Chapters are a timeline: moving one swaps the titles of the two slots and
+    // keeps the start times in order. Swapping whole chapters put a non-zero
+    // start first and made the list unsaveable.
+    const reordered = chapters.map((chapter) => ({ ...chapter }));
+    const a = reordered[index];
+    const b = reordered[newIndex];
+    [a.title, b.title] = [b.title, a.title];
+    [a.titleLocalized, b.titleLocalized] = [b.titleLocalized, a.titleLocalized];
 
     setChapters(reordered);
     setHasChanges(true);
@@ -294,6 +309,8 @@ export default function ChapterEditor({
             </p>
           </div>
           <button
+            type="button"
+            data-testid="chapter-add"
             onClick={addChapter}
             className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
           >
@@ -304,7 +321,7 @@ export default function ChapterEditor({
 
         {/* Global Error */}
         {errors.global && (
-          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+          <div role="alert" data-testid="chapter-global-error" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
             <AlertCircle size={20} className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-red-700 dark:text-red-400">{errors.global}</p>
           </div>
@@ -315,15 +332,19 @@ export default function ChapterEditor({
           {chapters.map((chapter, index) => (
             <div
               key={chapter.id}
+              data-testid="chapter-row"
               className="p-4 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 space-y-3"
             >
               <div className="flex items-start gap-3">
                 {/* Timestamp Input */}
                 <div className="flex-shrink-0 w-28">
-                  <label className="block text-xs font-medium mb-1 dark:text-gray-300">
+                  <label htmlFor={`chapter-start-${chapter.id}`} className="block text-xs font-medium mb-1 dark:text-gray-300">
                     {t.video.chapterTimestamp}
                   </label>
                   <input
+                    id={`chapter-start-${chapter.id}`}
+                    data-testid="chapter-start"
+                    dir="ltr"
                     type="text"
                     value={timestampInputs[chapter.id] || ''}
                     onChange={(e) => updateChapterTimestamp(chapter.id, e.target.value)}
@@ -338,7 +359,7 @@ export default function ChapterEditor({
                     }`}
                   />
                   {errors[chapter.id] && (
-                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1" data-testid="chapter-error">
                       {errors[chapter.id]}
                     </p>
                   )}
@@ -346,10 +367,12 @@ export default function ChapterEditor({
 
                 {/* Title Input */}
                 <div className="flex-1">
-                  <label className="block text-xs font-medium mb-1 dark:text-gray-300">
+                  <label htmlFor={`chapter-title-${chapter.id}`} className="block text-xs font-medium mb-1 dark:text-gray-300">
                     {t.video.chapterTitle}
                   </label>
                   <input
+                    id={`chapter-title-${chapter.id}`}
+                    data-testid="chapter-title"
                     type="text"
                     value={chapter.title}
                     onChange={(e) => updateChapterTitle(chapter.id, e.target.value)}
@@ -365,6 +388,8 @@ export default function ChapterEditor({
                 {/* Actions */}
                 <div className="flex flex-col gap-1 flex-shrink-0">
                   <button
+                    type="button"
+                    data-testid="chapter-move-up"
                     onClick={() => moveChapter(index, 'up')}
                     disabled={index === 0}
                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -373,6 +398,8 @@ export default function ChapterEditor({
                     <MoveUp size={16} className="dark:text-white" />
                   </button>
                   <button
+                    type="button"
+                    data-testid="chapter-move-down"
                     onClick={() => moveChapter(index, 'down')}
                     disabled={index === chapters.length - 1}
                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -381,6 +408,8 @@ export default function ChapterEditor({
                     <MoveDown size={16} className="dark:text-white" />
                   </button>
                   <button
+                    type="button"
+                    data-testid="chapter-remove"
                     onClick={() => removeChapter(chapter.id)}
                     disabled={chapters.length === 1}
                     className="p-2 hover:bg-red-100 dark:hover:bg-red-900/20 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -404,6 +433,8 @@ export default function ChapterEditor({
         {/* Action Buttons */}
         <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
           <button
+            type="button"
+            data-testid="chapter-save"
             onClick={handleSave}
             disabled={isSaving || !hasChanges}
             className="flex items-center gap-2 flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
@@ -413,6 +444,8 @@ export default function ChapterEditor({
           </button>
           {onCancel && (
             <button
+              type="button"
+              data-testid="chapter-cancel"
               onClick={onCancel}
               disabled={isSaving}
               className="px-6 py-3 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors dark:text-white font-medium"

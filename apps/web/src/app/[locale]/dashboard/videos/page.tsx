@@ -11,6 +11,7 @@ import { VideoObject } from '@/interfaces';
 import { searchVideos, bulkDeleteVideos } from '@/lib/api/videos';
 import Image from 'next/image';
 import Link from 'next/link';
+import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +26,7 @@ import {
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
 type FilterDuration = 'all' | 'short' | 'standard' | 'long';
-type SortBy = 'date' | 'views' | 'title';
+type SortBy = DashboardSort;
 type VideoStatus = Exclude<FilterStatus, 'all'>;
 
 /** Upload/processing status of a video; videos without one are treated as ready */
@@ -171,21 +172,9 @@ export default function VideoDashboardPage() {
       filtered = filtered.filter((video) => getVideoStatus(video) === statusFilter);
     }
 
-    // Sorting is already handled by API, but apply for client-side search results
-    if (searchQuery) {
-      filtered.sort((a, b) => {
-        switch (sortBy) {
-          case 'date':
-            return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
-          case 'views':
-            return (b.views || 0) - (a.views || 0);
-          case 'title':
-            return a.title.localeCompare(b.title);
-          default:
-            return 0;
-        }
-      });
-    }
+    // Always sort on the client: the search API has no title sort (it was sent as
+    // "relevance"), so choosing "Title" left the list in date order
+    filtered.sort((a, b) => compareDashboardVideos(a, b, sortBy));
 
     setFilteredVideos(filtered);
   }, [videos, searchQuery, statusFilter, sortBy]);
@@ -347,7 +336,8 @@ export default function VideoDashboardPage() {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // floor, not ceil: with ceil anything uploaded in the last 24 hours showed "Yesterday"
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) return t.video.today;
     if (diffDays === 1) return t.video.yesterday;
@@ -499,6 +489,7 @@ export default function VideoDashboardPage() {
                 data-privacy={video.isPublic ? 'public' : 'private'}
                 data-status={getVideoStatus(video)}
                 data-duration={video.duration ?? ''}
+                data-created={video.dateCreated || ''}
                 onClick={(e) => {
                   // Only toggle selection if clicking on the card itself, not buttons or links
                   const target = e.target as HTMLElement;
@@ -568,7 +559,7 @@ export default function VideoDashboardPage() {
                     {video.title}
                   </h3>
                   <p className="text-sm truncate">{video.channelName || video.channel}</p>
-                  <p className="text-sm">
+                  <p className="text-sm" data-testid="dashboard-video-meta">
                     {video.views || 0} {t.video.videoViews?.toLowerCase() || 'views'} • {formatDate(video.dateCreated)}
                   </p>
 
