@@ -99,14 +99,20 @@ test.describe('Channel header - owner', () => {
   test.use({ storageState: AUTH_STATE.single });
 
   for (const locale of ['en', 'ar'] as const) {
-    test(`CHTAB-005 owner sees a channel settings link instead of Subscribe (${locale})`, async ({ page }) => {
+    test(`CHTAB-005 owner sees owner actions (customize, videos, settings) instead of Subscribe (${locale})`, async ({ page }) => {
       const { main } = channelsOf('single');
       await openChannel(page, locale, main.id);
       const header = page.getByTestId('channel-header');
       await expect(header.getByRole('heading', { level: 1 })).toHaveText(main.name);
       await expect(header.getByTestId('channel-subscribe-button')).toHaveCount(0);
-      const link = header.getByTestId('channel-settings-link');
-      await expect(link).toHaveText(locale === 'ar' ? 'إعدادات القناة' : 'Channel settings');
+      // Owner actions: Customize / Manage videos, settings in the "More actions" menu
+      const actions = header.getByTestId('channel-owner-actions');
+      await expect(actions.getByTestId('channel-customize')).toHaveAttribute('href', `/${locale}/settings/channel/${main.id}/edit`);
+      await expect(actions.getByTestId('channel-manage-videos')).toHaveAttribute('href', `/${locale}/settings/channel/${main.id}/videos`);
+      const more = actions.getByRole('button', { name: locale === 'ar' ? 'إجراءات أخرى' : 'More actions' });
+      const link = page.getByTestId('channel-settings-link');
+      await clickUntil(more, async () => expect(link).toBeVisible({ timeout: 3000 }));
+      await expect(link).toHaveText(/^(Channel Settings|إعدادات القناة)$/);
       await expect(link).toHaveAttribute('href', `/${locale}/settings/channel/${main.id}`);
       await clickUntil(link, async () => expect(page).toHaveURL(new RegExp(`/${locale}/settings/channel/${main.id}$`), { timeout: 5000 }));
     });

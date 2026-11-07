@@ -1387,7 +1387,6 @@ export const EN_TRANSLATIONS: AppTranslations = {
 
   channelManage: {
     breadcrumb: 'Breadcrumb',
-    settingsLink: 'Channel settings',
     postActions: 'Post actions',
     sections: {
       title: 'Channel sections',

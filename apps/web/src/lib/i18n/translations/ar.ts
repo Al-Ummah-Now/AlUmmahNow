@@ -1382,7 +1382,6 @@ export const AR_TRANSLATIONS: AppTranslations = {
 
   channelManage: {
     breadcrumb: 'مسار التنقل',
-    settingsLink: 'إعدادات القناة',
     postActions: 'إجراءات المنشور',
     sections: {
       title: 'أقسام القناة',

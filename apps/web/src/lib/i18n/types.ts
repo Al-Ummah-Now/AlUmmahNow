@@ -1361,7 +1361,6 @@ export interface AppTranslations {
    */
   channelManage: {
     breadcrumb: string;
-    settingsLink: string;
     postActions: string;
     sections: {
       title: string;
