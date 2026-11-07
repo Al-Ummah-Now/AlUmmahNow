@@ -68,6 +68,11 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   'hashchange',
   'session-login',
   'session-updated',
+  // Comment timestamps seek the watch-page player (lib/video/comment-timestamps.ts)
+  'aun:player-seek',
+  // Radix DismissableLayer re-renders open layers through this document event;
+  // without it a dialog's content keeps pointer-events: none (dialogs can't be clicked)
+  'dismissableLayer.update',
   // Page lifecycle: analytics flush, web-vitals, TanStack Query focus refetch
   'visibilitychange',
   'pagehide',

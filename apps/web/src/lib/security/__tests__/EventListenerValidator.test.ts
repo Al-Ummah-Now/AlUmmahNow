@@ -43,6 +43,10 @@ describe('EventListenerValidator', () => {
       }
     });
 
+    it('allows the Radix layer update event (dialogs stay clickable)', () => {
+      expect(validator.validate('dismissableLayer.update', () => undefined).allowed).toBe(true);
+    });
+
     it('rejects invalid listeners and event types', () => {
       expect(validator.validate('', () => undefined).reason).toBe('invalid-event-type');
       expect(validator.validate('x'.repeat(65), () => undefined).reason).toBe('invalid-event-type');
