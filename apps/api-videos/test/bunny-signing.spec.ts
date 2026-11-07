@@ -20,6 +20,15 @@ function referenceToken(key: string, videoId: string, expires: number): string {
 		.replace(/=+$/, '');
 }
 
+function referenceFileToken(key: string, path: string, expires: number): string {
+	return createHash('sha256')
+		.update(`${key}${path}${expires}`)
+		.digest('base64')
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=+$/, '');
+}
+
 describe('bunny signing', () => {
 	it('computes the directory token as base64url(sha256(key + path + expires + token_path=path))', async () => {
 		assert.equal(await bunnyDirectoryToken(KEY, VID, 1800000000), referenceToken(KEY, VID, 1800000000));
@@ -55,7 +64,9 @@ describe('bunny signing', () => {
 		const token = referenceToken(KEY, VID, exp);
 		const prefix = `https://${HOST}/bcdn_token=${token}&expires=${exp}&token_path=%2F${VID}%2F/${VID}/`;
 		assert.equal(signed.video.playUrl, `${prefix}playlist.m3u8`);
-		assert.equal(signed.video.thumbnailUrl, `${prefix}thumbnail.jpg`);
+		// Images get a token for that one file, so a thumbnail never unlocks playback
+		const thumbToken = referenceFileToken(KEY, `/${VID}/thumbnail.jpg`, exp);
+		assert.equal(signed.video.thumbnailUrl, `https://${HOST}/${VID}/thumbnail.jpg?token=${thumbToken}&expires=${exp}`);
 		// Other hosts and non-video URLs are untouched
 		assert.equal(signed.video.otherHost, `https://vz-25839d05-80d.b-cdn.net/${VID}/playlist.m3u8`);
 		assert.equal(signed.video.image, 'https://images.alummahnow.net/x_avatar.png');
@@ -64,6 +75,9 @@ describe('bunny signing', () => {
 	it('leaves already-signed URLs alone and is a no-op without a key or host', async () => {
 		const once = await signBunnyUrlsInText(`"https://${HOST}/${VID}/playlist.m3u8"`, HOST, KEY);
 		assert.equal(await signBunnyUrlsInText(once, HOST, KEY), once);
+		const thumb = await signBunnyUrlsInText(`"https://${HOST}/${VID}/thumbnail_3.jpg"`, HOST, KEY);
+		assert.match(thumb, /thumbnail_3\.jpg\?token=[^&]+&expires=\d+"$/);
+		assert.equal(await signBunnyUrlsInText(thumb, HOST, KEY), thumb);
 		const plain = `"https://${HOST}/${VID}/playlist.m3u8"`;
 		assert.equal(await signBunnyUrlsInText(plain, HOST, ''), plain);
 		assert.equal(await signBunnyUrlsInText(plain, '', KEY), plain);
