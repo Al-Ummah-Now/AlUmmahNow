@@ -46,6 +46,20 @@ export function formatDuration(seconds?: number): string {
   return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
+/**
+ * Display name of a playlist. The API stores `title`; some endpoints add a
+ * `name` alias and others (GET /api/channels/{id}/playlists) do not.
+ */
+export function getPlaylistDisplayName(playlist: { name?: string | null; title?: string | null }): string {
+  return playlist.name || playlist.title || '';
+}
+
+/** Number of videos: the stored counter when present, else the ordered id list. */
+export function getPlaylistVideoCount(playlist: { videosCount?: number | null; videos?: unknown }): number {
+  if (typeof playlist.videosCount === 'number') return playlist.videosCount;
+  return Array.isArray(playlist.videos) ? playlist.videos.length : 0;
+}
+
 /** Validate a playlist title from a form. Returns the trimmed title or null. */
 export function normalizePlaylistTitle(input: string, maxLength = 150): string | null {
   const title = input.trim().replace(/\s+/g, ' ');

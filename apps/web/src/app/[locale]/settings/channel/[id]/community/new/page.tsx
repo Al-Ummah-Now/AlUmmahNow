@@ -181,9 +181,6 @@ export default function NewPostPage({ params }: NewPostPageProps) {
     }
   };
 
-  const handleSaveDraft = async () => {
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <div className="
@@ -207,23 +204,17 @@ export default function NewPostPage({ params }: NewPostPageProps) {
               size="icon"
               onClick={() => router.back()}
               className="w-8 h-8 md:w-10 md:h-10"
+              aria-label={isRTL ? 'رجوع' : 'Back'}
             >
-              <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
+              <ArrowLeft className={`w-4 h-4 md:w-5 md:h-5 ${isRTL ? 'rotate-180' : ''}`} />
             </Button>
             <h1 className="text-lg md:text-2xl font-bold">
               {isRTL ? 'منشور جديد' : 'New Post'}
             </h1>
           </div>
 
+          {/* Drafts are not supported by the API (posts are published or scheduled), so only Publish is offered */}
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={handleSaveDraft}
-              disabled={loading}
-              className="hidden sm:inline-flex"
-            >
-              {isRTL ? 'حفظ كمسودة' : 'Save Draft'}
-            </Button>
             <Button
               onClick={handlePublish}
               disabled={loading || !selectedType}

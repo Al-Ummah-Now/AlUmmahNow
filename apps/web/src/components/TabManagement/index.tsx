@@ -5,6 +5,7 @@ import {
   DndContext,
   closestCenter,
   DragEndEvent,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -12,6 +13,7 @@ import {
 import {
   arrayMove,
   SortableContext,
+  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { ChannelTabConfig, ChannelTab } from '@al-ummah/shared-types';
@@ -45,7 +47,9 @@ export default function TabManagement({
       activationConstraint: {
         distance: 8, // 8px movement required before drag starts
       },
-    })
+    }),
+    // Keyboard reordering: focus a handle, Space to pick up, arrows to move, Space to drop
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   // Handle drag and drop reordering

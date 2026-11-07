@@ -18,6 +18,9 @@ type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
 type SortBy = 'date' | 'views' | 'title';
 
+const VIDEO_PAGE_SIZE = 100;
+const MAX_VIDEO_PAGES = 10;
+
 export default function ChannelVideosPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -61,19 +64,34 @@ export default function ChannelVideosPage() {
       setLoading(true);
       try {
         // Fetch videos and channel in parallel
-        const [result, channel] = await Promise.all([
-          listVideos({ channelId }, { channelId: channelId }),
+        // The API filters by channel after paging through all videos, so a single
+        // default-sized page can miss most of the channel's videos: follow the cursor.
+        const loadAllVideos = async () => {
+          const all: VideoObject[] = [];
+          let cursor: string | undefined;
+          for (let page = 0; page < MAX_VIDEO_PAGES; page++) {
+            const result = await listVideos({ channelId, limit: VIDEO_PAGE_SIZE, cursor }, { channelId });
+            if (!result) break;
+            all.push(...result.data);
+            // api-videos returns the cursor at the top level; the shared type nests it under `pagination`
+            cursor = (result as { cursor?: string }).cursor || result.pagination?.nextCursor || result.pagination?.cursor || undefined;
+            if (!cursor) break;
+          }
+          return all;
+        };
+
+        const [allVideos, channel] = await Promise.all([
+          loadAllVideos(),
           getChannelById(channelId)
         ]);
 
         if (channel) {
-          setChannelName(channel.name || '');
+          setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
         }
 
-        if (result) {
-          setVideos(result.data);
-          setFilteredVideos(result.data);
-        }
+        logger.info('Channel videos loaded', { channelId, count: allVideos.length });
+        setVideos(allVideos);
+        setFilteredVideos(allVideos);
       } catch (error) {
         logger.error('Error fetching videos and channel', { error, channelId });
       } finally {
@@ -84,7 +102,7 @@ export default function ChannelVideosPage() {
     if (isOwner) {
       fetchData();
     }
-  }, [user, channelId, isOwner]);
+  }, [user, channelId, isOwner, locale]);
 
   // Apply filters and search
   useEffect(() => {

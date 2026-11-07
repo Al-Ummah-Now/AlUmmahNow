@@ -98,7 +98,7 @@ export default function PostCard({
       {/* Post Header */}
       <div className={cn(
         'flex items-start gap-3 p-4 border-b border-gray-100 dark:border-gray-700',
-        isRTL && 'flex-row-reverse'
+        // Direction comes from the RTL container (dir=rtl); no manual reversal
       )}>
         {/* Channel Avatar */}
         <div className="relative w-10 h-10 flex-shrink-0">
@@ -128,7 +128,7 @@ export default function PostCard({
 
         {/* Channel Info and Timestamp */}
         <div className={cn('flex-1 min-w-0', isRTL && 'text-right')}>
-          <div className={cn('flex items-center gap-2', isRTL && 'flex-row-reverse justify-end')}>
+          <div className={cn('flex items-center gap-2')}>
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
               {post.channelName}
             </h3>
@@ -147,7 +147,7 @@ export default function PostCard({
         <button
           className={cn(
             'p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-            isRTL && 'ml-auto'
+            'shrink-0'
           )}
           aria-label={isRTL ? 'المزيد من الخيارات' : 'More options'}
         >

@@ -94,6 +94,10 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      // Validation targets the English fields; show that tab so the error is visible
+      // (Arabic users start on the Arabic tab, where it was previously hidden)
+      setActiveTab('en');
+      logger.warn('CreateChannelDialog: Validation failed', { fields: Object.keys(newErrors) });
       return;
     }
 
@@ -178,7 +182,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
             {/* Channel Name */}
             <div className="grid gap-2">
               <label
-                htmlFor="channel-name"
+                htmlFor={`channel-name-${activeTab}`}
                 className="text-sm font-medium text-gray-900 dark:text-white"
               >
                 {t.channelName} {activeTab === 'en' && <span className="text-red-500">*</span>}
@@ -218,14 +222,14 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
                 />
               )}
               {errors.name && activeTab === 'en' && (
-                <p className="text-sm text-red-600 dark:text-red-400">{errors.name}</p>
+                <p role="alert" data-testid="create-channel-name-error" className="text-sm text-red-600 dark:text-red-400">{errors.name}</p>
               )}
             </div>
 
             {/* Channel Description */}
             <div className="grid gap-2">
               <label
-                htmlFor="channel-description"
+                htmlFor={`channel-description-${activeTab}`}
                 className="text-sm font-medium text-gray-900 dark:text-white"
               >
                 {t.descriptionLabel}

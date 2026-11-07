@@ -75,15 +75,16 @@ export default function ChannelSettingsBreadcrumb({
 
   return (
     <nav
-      aria-label="Breadcrumb"
-      className={`flex items-center text-sm ${isRTL ? 'flex-row-reverse' : ''} ${className}`}
+      aria-label={t.channelManage.breadcrumb}
+      data-testid="channel-settings-breadcrumb"
+      className={`flex items-center text-sm ${className}`}
     >
-      <ol className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
+      <ol className="flex items-center flex-wrap">
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
 
           return (
-            <li key={index} className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <li key={index} className="flex items-center">
               {index > 0 && <Separator />}
               {crumb.href ? (
                 <Link

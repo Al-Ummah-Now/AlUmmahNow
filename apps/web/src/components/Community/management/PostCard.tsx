@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger-client';
+import { useLanguage } from '@/hooks/useLanguage';
 
 import { useState } from 'react';
 import { CommunityPost, PostType, PostStatus } from '@al-ummah/shared-types';
@@ -38,7 +39,8 @@ interface PostCardProps {
   post: CommunityPost;
   locale: string;
   onView: (post: CommunityPost) => void;
-  onEdit: (post: CommunityPost) => void;
+  /** Omit to hide the Edit action (there is no post edit page yet) */
+  onEdit?: (post: CommunityPost) => void;
   onDelete: (postId: string) => Promise<void>;
 }
 
@@ -60,6 +62,7 @@ const STATUS_LABELS = {
 
 export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardProps) {
   const isRTL = locale === 'ar';
+  const { t } = useLanguage();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -97,7 +100,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
 
   return (
     <>
-      <Card className="p-4 md:p-6 hover:shadow-md transition-shadow">
+      <Card className="p-4 md:p-6 hover:shadow-md transition-shadow" data-testid="managed-post" data-post-id={post.id}>
         <div className="space-y-3 md:space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -142,7 +145,13 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label={t.channelManage.postActions}
+                  data-testid="post-actions"
+                >
                   <MoreVertical className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -151,10 +160,12 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                   <Eye className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
                   {isRTL ? 'عرض' : 'View'}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEdit(post)}>
-                  <Edit className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
-                  {isRTL ? 'تعديل' : 'Edit'}
-                </DropdownMenuItem>
+                {onEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(post)}>
+                    <Edit className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
+                    {isRTL ? 'تعديل' : 'Edit'}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => setShowDeleteDialog(true)}
                   className="text-destructive focus:text-destructive"

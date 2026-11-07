@@ -25,8 +25,12 @@ export default function PostEngagement({
   onToggleComments,
   channelId,
   userId,
+  locale = 'en',
 }: PostEngagementProps) {
   const [showShareMenu, setShowShareMenu] = useState(false);
+  // Posts live on the channel's Community tab; there is no standalone post route
+  const getShareUrl = () =>
+    `${window.location.origin}/${locale}/channels/${post.channelId}?tab=community`;
 
   const formatCount = (count: number) => {
     if (count >= 1000000) {
@@ -39,7 +43,7 @@ export default function PostEngagement({
   };
 
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/community/posts/${post.id}`;
+    const shareUrl = getShareUrl();
     const shareText = isRTL
       ? `شاهد هذا المنشور من ${post.channelName}`
       : `Check out this post from ${post.channelName}`;
@@ -59,7 +63,7 @@ export default function PostEngagement({
   };
 
   const copyLink = () => {
-    const shareUrl = `${window.location.origin}/community/posts/${post.id}`;
+    const shareUrl = getShareUrl();
     navigator.clipboard.writeText(shareUrl);
     setShowShareMenu(false);
   };
@@ -67,11 +71,11 @@ export default function PostEngagement({
   return (
     <div className={cn(
       'border-t border-gray-100 dark:border-gray-700 px-4 py-2',
-      isRTL && 'flex-row-reverse'
+      'flex-row'
     )}>
       <div className={cn(
         'flex items-center gap-1',
-        isRTL && 'flex-row-reverse'
+        'flex-row'
       )}>
         {/* Like Button */}
         <LikeButton
@@ -101,7 +105,7 @@ export default function PostEngagement({
             className={cn(
               'flex items-center gap-2 px-4 py-2 rounded-full transition-all group',
               'hover:bg-gray-100 dark:hover:bg-gray-700',
-              isRTL && 'flex-row-reverse'
+              'flex-row'
             )}
             aria-label={isRTL ? 'مشاركة' : 'Share'}
           >
@@ -140,7 +144,7 @@ export default function PostEngagement({
                   onClick={copyLink}
                   className={cn(
                     'w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3',
-                    isRTL && 'flex-row-reverse text-right'
+                    'text-start'
                   )}
                 >
                   <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,8 +162,8 @@ export default function PostEngagement({
         {/* Views (if available) */}
         {post.views > 0 && (
           <div className={cn(
-            'flex items-center gap-2 px-4 py-2 ml-auto',
-            isRTL && 'mr-auto ml-0 flex-row-reverse'
+            'flex items-center gap-2 px-4 py-2 ms-auto',
+            'flex-row'
           )}>
             <svg
               className="w-5 h-5 text-gray-500 dark:text-gray-400"

@@ -63,7 +63,7 @@ export default function CommentButton({
           ? 'bg-blue-50 dark:bg-blue-900/20'
           : 'hover:bg-gray-100 dark:hover:bg-gray-700',
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        isRTL && 'flex-row-reverse'
+        'flex-row'
       )}
       aria-label={isRTL ? 'التعليقات' : 'Comments'}
       aria-pressed={showComments}

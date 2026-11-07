@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ChannelSectionType, ChannelSectionCreateInput } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface SectionFormProps {
   channelId: string;
@@ -12,6 +13,8 @@ interface SectionFormProps {
   onCancel: () => void;
   isLoading?: boolean;
   initialData?: Partial<ChannelSectionCreateInput>;
+  /** 'create' (default) shows "Create section"; 'edit' shows "Save changes" */
+  mode?: 'create' | 'edit';
 }
 
 const TITLE_REQUIRED_TYPES: ChannelSectionType[] = ['multiple_playlists'];
@@ -24,7 +27,11 @@ export function SectionForm({
   onCancel,
   isLoading = false,
   initialData,
+  mode = 'create',
 }: SectionFormProps) {
+  const { t, isRTL } = useLanguage();
+  const s = t.channelManage.sections;
+  const f = s.form;
   const [title, setTitle] = useState(initialData?.title || '');
   const [playlistIds, setPlaylistIds] = useState(
     initialData?.playlistIds?.join(', ') || initialData?.playlistId || ''
@@ -41,28 +48,25 @@ export function SectionForm({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Title validation
     if (needsTitle && !title.trim()) {
-      newErrors.title = 'Title is required for this section type';
+      newErrors.title = f.titleRequired;
     } else if (title.length > 100) {
-      newErrors.title = 'Title must be 100 characters or less';
+      newErrors.title = f.titleTooLong;
     } else if (title.includes('<') || title.includes('>')) {
-      newErrors.title = 'Title cannot contain < or > characters';
+      newErrors.title = f.titleInvalidChars;
     }
 
-    // Playlist validation
     if (needsPlaylists && !playlistIds.trim()) {
-      newErrors.playlists = 'At least one playlist is required';
+      newErrors.playlists = f.playlistRequired;
     } else if (sectionType === 'single_playlist') {
       const ids = playlistIds.split(',').map((id) => id.trim()).filter(Boolean);
       if (ids.length !== 1) {
-        newErrors.playlists = 'Single playlist section requires exactly one playlist ID';
+        newErrors.playlists = f.singlePlaylistOnly;
       }
     }
 
-    // Video IDs validation
     if (needsVideoIds && !videoIds.trim()) {
-      newErrors.videoIds = 'At least one video ID is required';
+      newErrors.videoIds = f.videoRequired;
     }
 
     setErrors(newErrors);
@@ -78,7 +82,8 @@ export function SectionForm({
 
     const data: ChannelSectionCreateInput = {
       type: sectionType,
-      title: title.trim() || `${sectionType} section`,
+      // Untitled sections are named after their (localized) type
+      title: title.trim() || s.typeLabels[sectionType] || sectionType,
     };
 
     if (needsPlaylists && playlistIds.trim()) {
@@ -102,175 +107,125 @@ export function SectionForm({
     onSubmit(data);
   };
 
+  const submitLabel = mode === 'edit'
+    ? (isLoading ? f.saving : f.saveSection)
+    : (isLoading ? f.creating : f.createSection);
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Title input (for multiple_playlists and featured_videos) */}
-      {(needsTitle || sectionType === 'single_playlist' || sectionType === 'featured_videos') && (
-        <div>
+    <form onSubmit={handleSubmit} className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'} noValidate>
+      {/* Every section type has an editable title (automatic ones too) */}
+      <div>
           <label
             htmlFor="section-title"
-            className="
-              block
-              text-sm
-              font-medium
-              text-gray-900
-              dark:text-gray-100
-              mb-2
-            "
+            className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2"
           >
-            Section title {needsTitle && <span className="text-red-500">*</span>}
+            {f.sectionTitle} {needsTitle && <span className="text-red-500">*</span>}
           </label>
           <Input
             id="section-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Enter section title"
+            placeholder={f.enterSectionTitle}
             maxLength={100}
             className={errors.title ? 'border-red-500' : ''}
             aria-invalid={!!errors.title}
             aria-describedby={errors.title ? 'title-error' : undefined}
           />
           {errors.title && (
-            <p id="title-error" className="text-sm text-red-500 mt-1">
+            <p id="title-error" role="alert" className="text-sm text-red-500 mt-1">
               {errors.title}
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {title.length}/100 characters
+            {f.charactersCount.replace('{count}', String(title.length))}
           </p>
-        </div>
-      )}
+      </div>
 
-      {/* Playlist picker (for singlePlaylist and multiplePlaylists) */}
       {needsPlaylists && (
         <div>
           <label
             htmlFor="playlist-ids"
-            className="
-              block
-              text-sm
-              font-medium
-              text-gray-900
-              dark:text-gray-100
-              mb-2
-            "
+            className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2"
           >
-            Playlist IDs <span className="text-red-500">*</span>
+            {f.playlistIds} <span className="text-red-500">*</span>
           </label>
           <Input
             id="playlist-ids"
             type="text"
+            dir="ltr"
             value={playlistIds}
             onChange={(e) => setPlaylistIds(e.target.value)}
-            placeholder={
-              sectionType === 'single_playlist'
-                ? 'Enter one playlist ID'
-                : 'Enter playlist IDs separated by commas'
-            }
+            placeholder={sectionType === 'single_playlist' ? f.enterOnePlaylistId : f.enterPlaylistIds}
             className={errors.playlists ? 'border-red-500' : ''}
             aria-invalid={!!errors.playlists}
             aria-describedby={errors.playlists ? 'playlists-error' : undefined}
           />
           {errors.playlists && (
-            <p id="playlists-error" className="text-sm text-red-500 mt-1">
+            <p id="playlists-error" role="alert" className="text-sm text-red-500 mt-1">
               {errors.playlists}
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {sectionType === 'single_playlist'
-              ? 'Enter exactly one playlist ID'
-              : 'Separate multiple playlist IDs with commas'}
+            {sectionType === 'single_playlist' ? f.enterExactlyOnePlaylistId : f.separatePlaylistIds}
           </p>
         </div>
       )}
 
-      {/* Video IDs picker (for featured_videos) */}
       {needsVideoIds && (
         <div>
           <label
             htmlFor="video-ids"
-            className="
-              block
-              text-sm
-              font-medium
-              text-gray-900
-              dark:text-gray-100
-              mb-2
-            "
+            className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2"
           >
-            Video IDs <span className="text-red-500">*</span>
+            {f.videoIds} <span className="text-red-500">*</span>
           </label>
           <Input
             id="video-ids"
             type="text"
+            dir="ltr"
             value={videoIds}
             onChange={(e) => setVideoIds(e.target.value)}
-            placeholder="Enter video IDs separated by commas"
+            placeholder={f.enterVideoIds}
             className={errors.videoIds ? 'border-red-500' : ''}
             aria-invalid={!!errors.videoIds}
             aria-describedby={errors.videoIds ? 'videoIds-error' : undefined}
           />
           {errors.videoIds && (
-            <p id="videoIds-error" className="text-sm text-red-500 mt-1">
+            <p id="videoIds-error" role="alert" className="text-sm text-red-500 mt-1">
               {errors.videoIds}
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Separate multiple video IDs with commas (max 20)
+            {f.separateVideoIds}
           </p>
         </div>
       )}
 
-      {/* Info message for automatic sections */}
       {!needsTitle && !needsPlaylists && !needsVideoIds && (
-        <div className="
-          p-3
-          bg-blue-50
-          dark:bg-blue-900/20
-          border
-          border-blue-200
-          dark:border-blue-800
-          rounded-lg
-        ">
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <p className="text-sm text-blue-800 dark:text-blue-300">
-            This section type will automatically display content from your channel.
-            No additional configuration is needed.
+            {f.automaticMessage}
           </p>
         </div>
       )}
 
-      {/* Form actions */}
-      <div className="
-        flex
-        flex-col-reverse    /* Mobile: stack buttons */
-        sm:flex-row         /* Tablet+: row */
-        gap-2
-        sm:gap-3
-        pt-2
-      ">
+      <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-2">
         <Button
           type="button"
           variant="outline"
           onClick={onCancel}
           disabled={isLoading}
-          className="
-            w-full            /* Mobile: full width */
-            sm:w-auto         /* Tablet+: auto width */
-          "
+          className="w-full sm:w-auto"
         >
-          Cancel
+          {f.cancel}
         </Button>
         <Button
           type="submit"
           disabled={isLoading}
-          className="
-            w-full            /* Mobile: full width */
-            sm:w-auto         /* Tablet+: auto width */
-            sm:ml-auto        /* Push to right on desktop */
-          "
+          className="w-full sm:w-auto sm:ms-auto"
         >
-          {isLoading ? 'Creating...' : 'Create section'}
+          {submitLabel}
         </Button>
       </div>
     </form>

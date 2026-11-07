@@ -40,7 +40,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
       {/* Header */}
       <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="container mx-auto px-4 py-6">
-          <div className={`flex items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <div className={`flex items-center gap-4`}>
             {/* Channel Avatar */}
             {channel.avatarUrl && (
               <div className="relative w-16 h-16 rounded-full overflow-hidden flex-shrink-0">
@@ -77,7 +77,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             href={`/${locale}/settings/channel/${id}/edit`}
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
-            <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className={`flex items-start gap-4`}>
               <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 <svg
                   className="w-6 h-6 text-blue-600 dark:text-blue-400"
@@ -115,7 +115,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             href={`/${locale}/settings/channel/${id}/videos`}
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
-            <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className={`flex items-start gap-4`}>
               <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
                 <svg
                   className="w-6 h-6 text-red-600 dark:text-red-400"
@@ -147,7 +147,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             href={`/${locale}/settings/channel/${id}/playlists`}
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
-            <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className={`flex items-start gap-4`}>
               <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
                 <svg
                   className="w-6 h-6 text-indigo-600 dark:text-indigo-400"
@@ -179,7 +179,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             href={`/${locale}/settings/channel/${id}/tabs`}
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
-            <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className={`flex items-start gap-4`}>
               <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
                 <svg
                   className="w-6 h-6 text-purple-600 dark:text-purple-400"
@@ -211,7 +211,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             href={`/${locale}/settings/channel/${id}/sections`}
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
-            <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className={`flex items-start gap-4`}>
               <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
                 <svg
                   className="w-6 h-6 text-green-600 dark:text-green-400"
@@ -243,7 +243,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             href={`/${locale}/settings/channel/${id}/community`}
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
-            <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className={`flex items-start gap-4`}>
               <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
                 <svg
                   className="w-6 h-6 text-amber-600 dark:text-amber-400"
