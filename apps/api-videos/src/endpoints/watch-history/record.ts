@@ -91,8 +91,9 @@ export class RecordWatchHistory extends AuthenticatedRoute {
 
     const effectiveUserId = this.getUserId(c);
 
-    // Parse and validate request body
-    const body = await c.req.json<RecordWatchRequest>();
+    // getValidatedData() already consumed the request body; reading it again
+    // with c.req.json() threw "Body has already been used" (500 on every call)
+    const body = request.body as RecordWatchRequest;
     const { videoId, progress = 0, duration } = body;
 
     try {

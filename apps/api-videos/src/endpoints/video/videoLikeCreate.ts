@@ -117,6 +117,9 @@ export class LikeCreate extends AuthenticatedRoute {
 			userId,
 			likesCount: video.likes.length,
 			dislikesCount: video.dislikes?.length || 0,
-		});        return true;
+		});
+
+		// chanfana cannot build a response from a bare boolean (it 500ed after storing the like)
+		return { success: true };
     }
 }

@@ -92,7 +92,8 @@ export class DislikeDelete extends AuthenticatedRoute {
         
 		await repository.putObject(video.id, video);
 
-		return true;
+		// chanfana cannot build a response from a bare boolean (it 500ed after the change was stored)
+		return { success: true };
 	}
 }
 

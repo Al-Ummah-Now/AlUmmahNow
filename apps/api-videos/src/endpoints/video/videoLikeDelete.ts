@@ -98,7 +98,8 @@ export class LikeDelete extends AuthenticatedRoute {
 			dislikesCount: video.dislikes?.length || 0,
 		});
 
-		return true;
+		// chanfana cannot build a response from a bare boolean (it 500ed after the change was stored)
+		return { success: true };
 	}
 }
 

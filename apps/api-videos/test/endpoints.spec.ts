@@ -279,4 +279,19 @@ describe('GET /api/videos/search', () => {
 		assert.ok(!text.includes('"hid"'));
 		assert.ok(!text.includes('"del"'));
 	});
+
+	it('does not return viewed videos that do not match the query', async () => {
+		const videos = new MemoryBucket({
+			match: videoFixture({ id: 'match', title: 'quran recitation', views: 0 }),
+			popular: videoFixture({ id: 'popular', title: 'seerah overview', description: 'history', views: 80 }),
+		});
+		const app = buildApp((r) => r.get('/api/videos/search', VideoSearch), null);
+		const res = await app.request('/api/videos/search?q=quran', {}, env({ videos }));
+		assert.equal(res.status, 200);
+		const body = (await res.json()) as { data: Array<{ id: string }> };
+		assert.deepEqual(body.data.map((v) => v.id), ['match']);
+
+		const none = await app.request('/api/videos/search?q=zzqx-nothing', {}, env({ videos }));
+		assert.equal(((await none.json()) as { data: unknown[] }).data.length, 0);
+	});
 });
