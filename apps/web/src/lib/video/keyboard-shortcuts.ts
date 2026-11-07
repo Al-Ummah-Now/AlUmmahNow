@@ -39,6 +39,7 @@
 import type { ExtendedPlayer } from './videojs';
 import { getTranslations, isRTL, type SupportedLanguage } from './i18n';
 import { logger } from '@/lib/logger-server';
+import { shouldHandlePlayerShortcut } from '@/lib/accessibility/keyboard-scope';
 
 
 /**
@@ -144,6 +145,17 @@ const DEFAULT_KEY_BINDINGS: KeyBindings = {
     '7': 70,
     '8': 80,
     '9': 90,
+    // Eastern Arabic digits (Arabic keyboard layouts)
+    '٠': 0,
+    '١': 10,
+    '٢': 20,
+    '٣': 30,
+    '٤': 40,
+    '٥': 50,
+    '٦': 60,
+    '٧': 70,
+    '٨': 80,
+    '٩': 90,
   },
 };
 
@@ -174,24 +186,6 @@ function getPlayerState(player: ExtendedPlayer): PlayerState {
     playerStates.set(player, state);
   }
   return state;
-}
-
-/**
- * Check if the current focused element is an input field
- * Prevents keyboard shortcuts from interfering with form inputs
- */
-function isInputElement(element: Element | null): boolean {
-  if (!element) return false;
-
-  const tagName = element.tagName.toLowerCase();
-  const isEditable = element.getAttribute('contenteditable') === 'true';
-
-  return (
-    tagName === 'input' ||
-    tagName === 'textarea' ||
-    tagName === 'select' ||
-    isEditable
-  );
 }
 
 /**
@@ -328,12 +322,15 @@ export function addHelpButton(
     return () => {};
   }
 
-  // Create help button
+  // Create help button (discoverability of shortcuts - Story 1.4 AC 3)
+  const translations = getTranslations(lang);
   const helpButton = document.createElement('button');
   helpButton.className = 'vjs-keyboard-help-button vjs-control vjs-button';
   helpButton.setAttribute('type', 'button');
-  helpButton.setAttribute('aria-label', lang === 'ar' ? 'عرض اختصارات لوحة المفاتيح' : 'Show keyboard shortcuts');
-  helpButton.setAttribute('title', lang === 'ar' ? 'اختصارات لوحة المفاتيح (?)' : 'Keyboard shortcuts (?)');
+  helpButton.setAttribute('aria-label', translations.accessibility.keyboardHelpButton);
+  helpButton.setAttribute('aria-haspopup', 'dialog');
+  helpButton.setAttribute('aria-keyshortcuts', 'Shift+Slash');
+  helpButton.setAttribute('title', translations.accessibility.keyboardHelpButtonTitle);
 
   // Add click handler
   helpButton.addEventListener('click', (event) => {
@@ -392,6 +389,15 @@ export function setupKeyboardShortcuts(
       }
     : { ...DEFAULT_KEY_BINDINGS, ...customBindings };
 
+  // Get player element for scoped event listening
+  const playerElement = player.el();
+  if (!playerElement) {
+    logger.error('[KeyboardShortcuts] Player element not found');
+    return () => {}; // Return no-op cleanup
+  }
+
+  const processedEvents = new WeakSet<Event>();
+
   /**
    * Handle keyboard events with security validation
    * Wrapped in try-catch to prevent errors from propagating to global scope
@@ -407,6 +413,10 @@ export function setupKeyboardShortcuts(
         return;
       }
 
+      if (processedEvents.has(event)) {
+        return;
+      }
+
       // Security: Rate limiting to prevent event flooding attacks
       if (now - state.lastEventTime < EVENT_RATE_LIMIT_MS) {
         return; // Rate limited
@@ -419,8 +429,16 @@ export function setupKeyboardShortcuts(
       }
       state.eventQueue.set(event.key, now);
 
-      // Don't handle if focus is on an input element
-      if (isInputElement(document.activeElement)) {
+      // The listener is registered on both the player and the document (for
+      // fullscreen); process each event once.
+      if (processedEvents.has(event)) {
+        return;
+      }
+      processedEvents.add(event);
+
+      // Keep native keyboard behaviour for form fields, browser shortcuts,
+      // focused player controls and focused elements elsewhere on the page.
+      if (!shouldHandlePlayerShortcut(event, playerElement)) {
         return;
       }
 
@@ -444,7 +462,7 @@ export function setupKeyboardShortcuts(
     // Rewind (Arrow Left, J)
     else if (bindings.rewind.includes(key)) {
       event.preventDefault();
-      const rewindAmount = key === 'ArrowLeft' ? ARROW_REWIND_SECONDS : J_REWIND_SECONDS;
+      const rewindAmount = key.startsWith('Arrow') ? ARROW_REWIND_SECONDS : J_REWIND_SECONDS;
       const currentTime = player.currentTime() || 0;
       const newTime = Math.max(0, currentTime - rewindAmount);
       player.currentTime(newTime);
@@ -455,7 +473,7 @@ export function setupKeyboardShortcuts(
     // Forward (Arrow Right, L)
     else if (bindings.forward.includes(key)) {
       event.preventDefault();
-      const forwardAmount = key === 'ArrowRight' ? ARROW_FORWARD_SECONDS : L_FORWARD_SECONDS;
+      const forwardAmount = key.startsWith('Arrow') ? ARROW_FORWARD_SECONDS : L_FORWARD_SECONDS;
       const currentTime = player.currentTime() || 0;
       const duration = player.duration() || 0;
       const newTime = Math.min(duration, currentTime + forwardAmount);
@@ -573,12 +591,6 @@ export function setupKeyboardShortcuts(
     }
   }
 
-  // Get player element for scoped event listening
-  const playerElement = player.el();
-  if (!playerElement) {
-    logger.error('[KeyboardShortcuts] Player element not found');
-    return () => {}; // Return no-op cleanup
-  }
 
   // Add help button if callback provided
   let helpButtonCleanup: (() => void) | undefined;

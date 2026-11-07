@@ -3,7 +3,10 @@
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from "react";
 import VideoPlayer from "@/components/VideoPagePlayer/index";
+import VideoPlayerRTL from "@/components/VideoPagePlayer/rtl/index";
 import RelatedVideosSection from "@/components/related/index";
+import RelatedVideosSectionRTL from "@/components/related/rtl/index";
+import { MAIN_CONTENT_ID, VIDEO_PLAYER_ID, COMMENTS_ID } from "@/components/SkipLinks";
 import CommentsSection from "@/components/commentsSection/index";
 import CommentsSectionRTL from "@/components/commentsSection/rtl/index";
 import ReportContentButton from "@/components/moderation/ReportContentButton";
@@ -27,6 +30,11 @@ export default function VideoViewPage() {
   const { t, isRTL } = useLanguage();
 
   const Comments = isRTL ? CommentsSectionRTL : CommentsSection;
+  const Player = isRTL ? VideoPlayerRTL : VideoPlayer;
+  const renderRelated = (keyPrefix: string) =>
+    isRTL
+      ? <RelatedVideosSectionRTL relatedVideos={relatedVideos} />
+      : <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix={keyPrefix} />;
 
   useEffect(() => {
     setIsMounted(true); // Ensure the component is mounted on the client
@@ -56,7 +64,7 @@ export default function VideoViewPage() {
 
   if (!videoId) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center p-8" dir={isRTL ? 'rtl' : 'ltr'}>
+      <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col items-center justify-center p-8" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">{t.video.noVideoSelected}</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
@@ -70,13 +78,15 @@ export default function VideoViewPage() {
   const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
 
   return (
-    <main className="flex flex-1 flex-col md:flex-row overflow-hidden">
+    <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
         <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
           {/* Video Player Section */}
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
-              <VideoPlayer options={videoDetails} />
+              <section id={VIDEO_PLAYER_ID} className="w-full" tabIndex={-1}>
+                <Player options={videoDetails} />
+              </section>
 
               {/* Real-time video metrics */}
               <div className="w-full max-w-4xl mt-4 px-4">
@@ -114,7 +124,7 @@ export default function VideoViewPage() {
 
           {/* Comments Section with Real-time Updates */}
           <div className="flex flex-col w-full mt-6 gap-6 overflow-auto">
-            <div className="w-full max-w-4xl mx-auto px-4">
+            <div id={COMMENTS_ID} tabIndex={-1} className="w-full max-w-4xl mx-auto px-4">
               <Comments
                 videoId={videoId}
                 videoOwnerId={videoDetails?.userId}
@@ -126,13 +136,13 @@ export default function VideoViewPage() {
 
         {/* Related Videos Section */}
         <div className="hidden lg:block lg:w-1/4 min-w-[350px] max-w-[500px] pt-4 overflow-auto">
-          <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="t_" />
+          {renderRelated("t_")}
         </div>
       </div>
 
       {/* Related Videos Section (Mobile Only) */}
       <div className="block lg:hidden w-full mt-4 overflow-auto">
-        <RelatedVideosSection relatedVideos={relatedVideos} keyPrefix="b_" />
+        {renderRelated("b_")}
       </div>
     </main>
   );

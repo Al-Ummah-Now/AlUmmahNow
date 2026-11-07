@@ -14,6 +14,7 @@ import { MultiAccountProvider } from "@/hooks/useMultiAccount";
 import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
 import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
 import { QueryProvider } from "@/providers/QueryProvider";
+import SkipLinks from "@/components/SkipLinks";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -52,8 +53,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Pinch-zoom must stay enabled (WCAG 1.4.4 Resize Text / axe meta-viewport)
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)', color: '#111827' }, // gray-900
@@ -100,6 +100,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                     <WebSocketProvider user={user}>
                       <TranslationSyncProvider>
                         <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                          {/* Skip links must be the first focusable elements (WCAG 2.4.1) */}
+                          <SkipLinks />
                           {/* Header */}
                           <Navigation></Navigation>
                           {children}

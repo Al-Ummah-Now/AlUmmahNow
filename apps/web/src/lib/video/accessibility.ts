@@ -29,6 +29,7 @@
 
 import type { ExtendedPlayer } from './videojs';
 import { logger } from '@/lib/logger-server';
+import { getTranslations } from './i18n';
 
 
 /**
@@ -69,38 +70,24 @@ export interface AriaLabels {
 }
 
 /**
- * Default ARIA labels (English)
+ * ARIA labels for a language, from the video player i18n system
  */
-const EN_LABELS: AriaLabels = {
-  player: 'Video player',
-  playButton: 'Play video',
-  pauseButton: 'Pause video',
-  muteButton: 'Mute',
-  unmuteButton: 'Unmute',
-  fullscreenButton: 'Enter fullscreen',
-  exitFullscreenButton: 'Exit fullscreen',
-  volumeControl: 'Volume control',
-  progressBar: 'Video progress',
-  currentTime: 'Current time',
-  duration: 'Total duration',
-};
-
-/**
- * Default ARIA labels (Arabic)
- */
-const AR_LABELS: AriaLabels = {
-  player: 'مشغل الفيديو',
-  playButton: 'تشغيل الفيديو',
-  pauseButton: 'إيقاف مؤقت',
-  muteButton: 'كتم الصوت',
-  unmuteButton: 'إلغاء كتم الصوت',
-  fullscreenButton: 'ملء الشاشة',
-  exitFullscreenButton: 'الخروج من ملء الشاشة',
-  volumeControl: 'التحكم في مستوى الصوت',
-  progressBar: 'تقدم الفيديو',
-  currentTime: 'الوقت الحالي',
-  duration: 'المدة الإجمالية',
-};
+export function getAriaLabels(lang: 'en' | 'ar' = 'en'): AriaLabels {
+  const a = getTranslations(lang).accessibility;
+  return {
+    player: a.videoPlayer,
+    playButton: a.playButton,
+    pauseButton: a.pauseButton,
+    muteButton: a.muteButton,
+    unmuteButton: a.unmuteButton,
+    fullscreenButton: a.fullscreenButton,
+    exitFullscreenButton: a.exitFullscreenButton,
+    volumeControl: a.volumeSlider,
+    progressBar: a.progressBar,
+    currentTime: a.currentTime,
+    duration: a.duration,
+  };
+}
 
 /**
  * Screen reader announcement manager
@@ -194,9 +181,11 @@ export function setupAccessibility(
 
   // Get labels for current language
   const labels = {
-    ...(lang === 'ar' ? AR_LABELS : EN_LABELS),
+    ...getAriaLabels(lang),
     ...customLabels,
   };
+  const translations = getTranslations(lang);
+  const said = translations.accessibility.announcements;
 
   // Create announcement manager
   const announcementManager = new AnnouncementManager();
@@ -234,24 +223,6 @@ export function setupAccessibility(
       player.on('pause', updatePlayButtonLabel);
     }
 
-    // Volume control
-    const volumePanel = playerEl.querySelector('.vjs-volume-panel');
-    if (volumePanel) {
-      volumePanel.setAttribute('aria-label', labels.volumeControl);
-
-      const updateVolumeLabel = () => {
-        const volume = Math.round(player.volume() * 100);
-        const label = player.muted()
-          ? labels.muteButton
-          : `${labels.volumeControl} ${volume}%`;
-        volumePanel.setAttribute('aria-label', label);
-      };
-      updateVolumeLabel();
-
-      eventHandlers.push({ event: 'volumechange', handler: updateVolumeLabel });
-      player.on('volumechange', updateVolumeLabel);
-    }
-
     // Mute button
     const muteButton = playerEl.querySelector('.vjs-mute-control');
     if (muteButton) {
@@ -280,40 +251,25 @@ export function setupAccessibility(
       player.on('fullscreenchange', updateFullscreenLabel);
     }
 
-    // Progress bar (seek bar)
-    const seekBar = playerEl.querySelector('.vjs-progress-control');
-    if (seekBar) {
-      seekBar.setAttribute('role', 'slider');
-      seekBar.setAttribute('aria-label', labels.progressBar);
-      seekBar.setAttribute('aria-valuemin', '0');
-      seekBar.setAttribute('aria-valuemax', '100');
+    // Seek slider (Video.js .vjs-progress-holder, role=slider)
+    const seekSlider = playerEl.querySelector('.vjs-progress-holder');
+    if (seekSlider) {
+      seekSlider.setAttribute('aria-label', labels.progressBar);
+    }
 
-      const updateSeekBarValue = () => {
-        const duration = player.duration();
-        if (duration > 0) {
-          const currentTime = player.currentTime() || 0;
-          const percent = Math.round((currentTime / duration) * 100);
-          seekBar.setAttribute('aria-valuenow', percent.toString());
-          seekBar.setAttribute('aria-valuetext', `${percent}%`);
+    // Quality menu button (videojs-hls-quality-selector renders it without an
+    // accessible name). The plugin may (re)build the button once levels load.
+    const labelQualityButton = () => {
+      playerEl.querySelectorAll('.vjs-quality-selector .vjs-menu-button').forEach((button) => {
+        button.setAttribute('aria-label', translations.accessibility.qualityButton);
+        if (!button.getAttribute('title')) {
+          button.setAttribute('title', translations.accessibility.qualityButton);
         }
-      };
-      updateSeekBarValue();
-
-      eventHandlers.push({ event: 'timeupdate', handler: updateSeekBarValue });
-      player.on('timeupdate', updateSeekBarValue);
-    }
-
-    // Current time display
-    const currentTimeDisplay = playerEl.querySelector('.vjs-current-time');
-    if (currentTimeDisplay) {
-      currentTimeDisplay.setAttribute('aria-label', labels.currentTime);
-    }
-
-    // Duration display
-    const durationDisplay = playerEl.querySelector('.vjs-duration');
-    if (durationDisplay) {
-      durationDisplay.setAttribute('aria-label', labels.duration);
-    }
+      });
+    };
+    labelQualityButton();
+    eventHandlers.push({ event: 'loadedmetadata', handler: labelQualityButton });
+    player.on('loadedmetadata', labelQualityButton);
 
     // === Screen Reader Announcements ===
     // Moved inside ready() to avoid race conditions
@@ -321,14 +277,14 @@ export function setupAccessibility(
     if (announcements) {
       // Play/Pause announcements
       const playHandler = () => {
-        const message = lang === 'ar' ? 'يتم التشغيل' : 'Playing';
+        const message = said.playing;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'play', handler: playHandler });
       player.on('play', playHandler);
 
       const pauseHandler = () => {
-        const message = lang === 'ar' ? 'موقف مؤقتاً' : 'Paused';
+        const message = said.paused;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'pause', handler: pauseHandler });
@@ -338,8 +294,8 @@ export function setupAccessibility(
       const volumeHandler = () => {
         const volume = Math.round(player.volume() * 100);
         const message = player.muted()
-          ? (lang === 'ar' ? 'الصوت مكتوم' : 'Muted')
-          : (lang === 'ar' ? `مستوى الصوت ${volume}%` : `Volume ${volume}%`);
+          ? said.muted
+          : said.volume.replace('{volume}', String(volume));
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'volumechange', handler: volumeHandler });
@@ -348,8 +304,8 @@ export function setupAccessibility(
       // Fullscreen announcements
       const fullscreenHandler = () => {
         const message = player.isFullscreen()
-          ? (lang === 'ar' ? 'وضع ملء الشاشة' : 'Fullscreen mode')
-          : (lang === 'ar' ? 'خروج من ملء الشاشة' : 'Exited fullscreen');
+          ? said.fullscreenOn
+          : said.fullscreenOff;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'fullscreenchange', handler: fullscreenHandler });
@@ -357,7 +313,7 @@ export function setupAccessibility(
 
       // Error announcements
       const errorHandler = () => {
-        const message = lang === 'ar' ? 'حدث خطأ في تشغيل الفيديو' : 'Video playback error';
+        const message = said.playbackError;
         announcementManager.announce(message, true); // Force announcement
       };
       eventHandlers.push({ event: 'error', handler: errorHandler });
@@ -365,14 +321,14 @@ export function setupAccessibility(
 
       // Buffering announcements
       const waitingHandler = () => {
-        const message = lang === 'ar' ? 'جارٍ التحميل...' : 'Buffering...';
+        const message = said.buffering;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'waiting', handler: waitingHandler });
       player.on('waiting', waitingHandler);
 
       const canplayHandler = () => {
-        const message = lang === 'ar' ? 'جاهز للتشغيل' : 'Ready to play';
+        const message = said.readyToPlay;
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'canplay', handler: canplayHandler });
