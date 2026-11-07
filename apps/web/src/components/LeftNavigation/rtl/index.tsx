@@ -43,9 +43,10 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     const allNavItems: NavItems[] = [
         { label: tAr.navigation.homeLink, icon: "fa-house", href: `/${locale}/` },
         { label: tAr.navigation.search, icon: "fa-magnifying-glass", href: `/${locale}/search` },
+        { label: tAr.navigation.explore, icon: "fa-compass", href: `/${locale}/explore` },
         { label: tAr.navigation.upload, icon: "fa-upload", href: `/${locale}/upload` },
         { label: tAr.navigation.subscriptions, icon: "fa-tv", href: `/${locale}/subscriptions` },
-        { label: tAr.navigation.library, icon: "fa-bookmark", href: "#" },
+        { label: tAr.navigation.library, icon: "fa-bookmark", href: `/${locale}/library` },
     ];
 
     // Filter out Upload if user has no active channel
@@ -193,6 +194,14 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                             </Link>
                         </li>
                     ))}
+                    <li className="hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
+                        <Link href={`/ar/settings/privacy`} data-testid="nav-privacy" className="flex items-center space-x-2 py-2 pl-2">
+                            <IcoButton style="fa-shield-halved" size="text-lg" color="text-black dark:text-white bg-transparent cursor-pointer" />
+                            <span className={`${isCollapsed ? "hidden" : "block"} text-black dark:text-white text-sm md:text-base`}>
+                                {tAr.navigation.privacyAndCookies}
+                            </span>
+                        </Link>
+                    </li>
                 </ul>
             </nav>
         </>

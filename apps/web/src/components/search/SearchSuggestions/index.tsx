@@ -153,9 +153,7 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
           placeholder={defaultPlaceholder}
-          aria-label={t.search.searchPlaceholder}
-          data-testid="search-input"
-          className="w-full px-4 py-2 border border-gray-300 bg-white text-gray-900 dark:bg-gray-800 dark:text-white dark:border-gray-600 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         
         {/* Loading indicator */}
@@ -175,8 +173,6 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
           {suggestions.map((suggestion, index) => (
             <button
               key={`${suggestion.type}-${suggestion.text}`}
-              type="button"
-              data-testid="search-suggestion"
               onClick={() => handleSuggestionSelect(suggestion.text)}
               className={`w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors ${
                 index === selectedIndex ? 'bg-blue-50 text-blue-700' : 'text-gray-700'

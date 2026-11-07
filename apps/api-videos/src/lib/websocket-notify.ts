@@ -17,6 +17,7 @@
  */
 
 import { logger } from './logger';
+import { categoryOf, enqueueNotification, isCategoryEnabled, isNotificationKey, NotificationsEnv } from './notifications';
 
 type ApiKeyBinding = string | { get: () => Promise<string> } | { text: () => Promise<string> } | undefined;
 
@@ -126,17 +127,62 @@ export interface UserNotification {
   notificationKey: string;
   params?: Record<string, string | number>;
   actionUrl?: string;
+  /** Who caused it (excluded from nothing here; stored for the notification center). */
+  actorUserId?: string;
+  /** Related entity (video, comment, channel id). */
+  entityId?: string;
+  /** Stored once per (recipient, dedupeKey). */
+  dedupeKey?: string;
 }
 
-/** Send a notification on `user:<userId>` (awaitable; use inside background work). */
+/**
+ * Notify a user: push the realtime event on `user:<userId>` right away and,
+ * for notification-center keys (Story 29.10), queue it for the processor to
+ * persist with the same id. Respects the recipient's category settings.
+ * Awaitable; use inside background work.
+ */
 export async function notifyUser(env: unknown, userId: string, notification: UserNotification): Promise<boolean> {
   if (!userId) return false;
-  return broadcast(env as RealtimeEnv, `user:${userId}`, 'notification', {
-    notificationId: crypto.randomUUID(),
+  const store = env as NotificationsEnv;
+  const key = notification.notificationKey;
+  const persistable = isNotificationKey(key);
+
+  if (persistable && store?.NOTIFICATIONS_DB) {
+    try {
+      if (!(await isCategoryEnabled(store.NOTIFICATIONS_DB, userId, categoryOf(key)))) {
+        logger.debug('[notifications] Category disabled by recipient, skipping', { userId, key });
+        return false;
+      }
+    } catch (error) {
+      logger.warn('[notifications] Settings lookup failed; notifying anyway', { userId, key, error });
+    }
+  }
+
+  const notificationId = crypto.randomUUID();
+  const { actorUserId, entityId, dedupeKey, ...visible } = notification;
+  const sent = await broadcast(env as RealtimeEnv, `user:${userId}`, 'notification', {
+    notificationId,
     userId,
-    ...notification,
+    ...visible,
+    ...(persistable ? { category: categoryOf(key), persisted: !!store?.queue } : {}),
     params: notification.params || {},
   });
+
+  if (persistable) {
+    await enqueueNotification(store, {
+      notificationId,
+      recipientUserId: userId,
+      notificationKey: key,
+      params: notification.params || {},
+      actionUrl: notification.actionUrl,
+      actorUserId,
+      entityId,
+      dedupeKey,
+      realtimeSent: sent,
+      createdAt: Date.now(),
+    });
+  }
+  return sent;
 }
 
 /** Fire-and-forget user notification on `user:<userId>`. */

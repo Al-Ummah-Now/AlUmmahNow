@@ -7,6 +7,8 @@ import { transformChannelToView, createEntityDefaults } from "../../lib/transfor
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { claimDefaultHandle } from "../../lib/channelHandles";
+import { logger } from "../../lib/logger";
 
 export class ChannelCreate extends AuthenticatedRoute {
 	schema = {
@@ -120,7 +122,15 @@ export class ChannelCreate extends AuthenticatedRoute {
         const bucket = c.env.channels;
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
-		await repository.putObject(businessChannel.id, businessChannel);
+		// Every new channel gets a default @handle the owner can change in settings
+		let handle: string | undefined;
+		try {
+			handle = (await claimDefaultHandle(c.env.channel_tabs, businessChannel)) || undefined;
+		} catch (error) {
+			logger.warn('[ChannelCreate] Default handle not assigned', { channelId: businessChannel.id, error: error instanceof Error ? error.message : String(error) });
+		}
+		const storedChannel = { ...businessChannel, ...(handle ? { handle } : {}) };
+		await repository.putObject(businessChannel.id, storedChannel);
 
 		// Send queue message for channel creation
 		const queue = new Queue(c.env.queue);
@@ -131,7 +141,7 @@ export class ChannelCreate extends AuthenticatedRoute {
 		});
 
 		// Transform to view model for response
-		const channelView = transformChannelToView(businessChannel);
+		const channelView = transformChannelToView(storedChannel);
 
 		// Return the new Channel
 		return {

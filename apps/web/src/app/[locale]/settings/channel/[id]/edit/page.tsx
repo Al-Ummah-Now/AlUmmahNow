@@ -1,9 +1,12 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getChannelById, updateChannel, updateChannelAvatar, updateChannelCover } from '@/lib/api/channels';
+import { getChannelById, updateChannelAvatar, updateChannelCover } from '@/lib/api/channels';
+import { updateChannelProfile } from '@/lib/api/channel-profile';
+import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
+import { channelPath } from '@/lib/channel-url';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
@@ -17,6 +20,10 @@ interface ChannelData {
   descriptionLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
+  handle?: string;
+  links?: Array<{ title: string; url: string }>;
+  contactEmail?: string;
+  location?: string;
 }
 
 function ChannelEditPage() {
@@ -32,6 +39,8 @@ function ChannelEditPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
+  const [about, setAbout] = useState<ChannelAboutValues>({ handle: '', links: [], contactEmail: '', location: '' });
+  const [handleStatus, setHandleStatus] = useState<HandleStatus>({ state: 'idle' });
   const [formData, setFormData] = useState({
     name: '',
     nameEn: '',
@@ -43,15 +52,20 @@ function ChannelEditPage() {
     coverUrl: '',
   });
 
+  // The form is filled once per channel: later profile/session refreshes must not
+  // overwrite what the owner is typing
+  const initializedFor = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!channelId) return;
+    if (!channelId || initializedFor.current === channelId) return;
 
     const fetchChannel = async () => {
       setIsLoading(true);
       try {
         const channelData = await getChannelById(channelId);
 
-        if (channelData) {
+        if (channelData && initializedFor.current !== channelId) {
+          initializedFor.current = channelId;
           setChannel(channelData);
           setFormData({
             name: channelData.name || '',
@@ -62,6 +76,12 @@ function ChannelEditPage() {
             descriptionAr: channelData.descriptionLocalized?.ar || '',
             avatarUrl: channelData.avatarUrl || '',
             coverUrl: channelData.coverUrl || '',
+          });
+          setAbout({
+            handle: channelData.handle || '',
+            links: channelData.links || [],
+            contactEmail: channelData.contactEmail || '',
+            location: channelData.location || '',
           });
         }
       } catch (error) {
@@ -85,41 +105,42 @@ function ChannelEditPage() {
     setIsSaving(true);
     setError(null);
 
-    try {
-      // The owner acts as the channel being edited (multi-channel owners may edit a non-first channel)
-      const userChannelId = channelId;
-      const result = await updateChannel(
-        channelId,
-        {
-          name: formData.nameEn || formData.name, // Legacy field (English)
-          nameLocalized: {
-            en: formData.nameEn,
-            ar: formData.nameAr
-          },
-          description: formData.descriptionEn || formData.description,
-          descriptionLocalized: {
-            en: formData.descriptionEn || '',
-            ar: formData.descriptionAr || ''
-          },
-          avatarUrl: formData.avatarUrl,
-          coverUrl: formData.coverUrl
-        },
-        { channelId: userChannelId }
-      );
+    if (!canSubmitAboutFields(about, handleStatus)) {
+      setIsSaving(false);
+      return;
+    }
 
-      // apiRequestServer resolves to null on failure; stay on the form and show the error
-      if (!result || result.success === false) {
-        logger.error('Channel update failed', { channelId });
-        setError(t.errors.genericError);
+    try {
+      const result = await updateChannelProfile(channelId, {
+        name: formData.nameEn || formData.name, // Legacy field (English)
+        nameLocalized: {
+          en: formData.nameEn,
+          ar: formData.nameAr
+        },
+        description: formData.descriptionEn || formData.description,
+        descriptionLocalized: {
+          en: formData.descriptionEn || '',
+          ar: formData.descriptionAr || ''
+        },
+        // Only send the handle when it changed (an empty field keeps the current one)
+        ...(about.handle.trim() && about.handle.trim().replace(/^@+/, '') !== (channel?.handle || '') ? { handle: about.handle.trim() } : {}),
+        links: about.links.filter((l) => l.title.trim() || l.url.trim()).map((l) => ({ title: l.title.trim(), url: l.url.trim() })),
+        contactEmail: about.contactEmail.trim(),
+        location: about.location.trim(),
+      });
+
+      if (result.ok === false) {
+        logger.warn('Channel update rejected', { channelId, status: result.status, error: result.error, reason: result.reason });
+        if (result.reason) setHandleStatus({ state: 'unavailable', reason: result.reason });
+        setError(result.reason === 'taken' ? t.channel.handleTaken : t.channel.saveFailed);
         setIsSaving(false);
         return;
       }
 
-      logger.info('Channel updated', { channelId });
-      router.push(`/${locale}/channels/${channelId}`);
+      router.push(channelPath(locale, { id: channelId, handle: result.channel.handle }));
     } catch (error) {
       logger.error('Error updating channel', { error, channelId });
-      setError(t.errors.genericError);
+      setError(t.channel.saveFailed);
       setIsSaving(false);
     }
   };
@@ -423,11 +444,22 @@ function ChannelEditPage() {
               )}
             </div>
 
+            {/* Handle, links, contact, location (Story 29.1) */}
+            <ChannelAboutFields
+              channelId={channelId}
+              currentHandle={channel.handle}
+              value={about}
+              onChange={setAbout}
+              onHandleStatusChange={setHandleStatus}
+              disabled={isSaving}
+            />
+
             {/* Buttons */}
             <div className="flex gap-4 pt-4">
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSaving || !canSubmitAboutFields(about, handleStatus)}
+                data-testid="channel-edit-save"
                 className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-semibold transition-colors"
               >
                 {isSaving ? (

@@ -50,7 +50,7 @@ export function ChannelTabContent({
       {activeTab === 'channels' && <ChannelsTabContent channelId={channelId} />}
 
       {/* About Tab */}
-      {activeTab === 'about' && <AboutTabContent />}
+      {activeTab === 'about' && <AboutTabContent channelId={channelId} />}
     </div>
   );
 }

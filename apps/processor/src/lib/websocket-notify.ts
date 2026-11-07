@@ -101,16 +101,23 @@ export async function notifyVideoProcessing(
   videoId: string,
   userId: string | undefined,
   status: ProcessingStatus,
-  data: { title?: string | undefined; error?: string | undefined; duration?: number | undefined } = {}
+  data: { title?: string | undefined; error?: string | undefined; duration?: number | undefined } = {},
+  /**
+   * Id of the stored notification for terminal states. `null` means the
+   * uploader disabled upload notifications (no notification is pushed);
+   * undefined (no store configured) pushes one with a random id.
+   */
+  notificationId?: string | null
 ): Promise<void> {
   const tasks: Array<Promise<boolean>> = [
     broadcast(env, `video:${videoId}`, 'video_processing_update', { videoId, status, ...data }),
   ];
   if (userId) {
     tasks.push(broadcast(env, `user:${userId}`, 'video_processing_update', { videoId, status, ...data }));
-    if (status === 'ready' || status === 'failed') {
+    if ((status === 'ready' || status === 'failed') && notificationId !== null) {
       tasks.push(broadcast(env, `user:${userId}`, 'notification', {
-        notificationId: crypto.randomUUID(),
+        notificationId: notificationId ?? crypto.randomUUID(),
+        persisted: !!notificationId,
         userId,
         notificationType: 'upload',
         notificationKey: status === 'ready' ? 'uploadReady' : 'uploadFailed',

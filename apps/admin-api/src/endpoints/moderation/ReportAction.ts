@@ -48,6 +48,14 @@ export class ReportAction extends AdminRoute {
           },
         },
       },
+      "409": {
+        description: "Report already closed",
+        content: {
+          "application/json": {
+            schema: ResponseError,
+          },
+        },
+      },
       "404": {
         description: "Report not found",
         content: {
@@ -88,15 +96,37 @@ export class ReportAction extends AdminRoute {
         }, 404);
       }
 
+      if (report.status !== 'pending' && report.status !== 'reviewing') {
+        logger.warn('Moderation action rejected: report already closed', {
+          reportId,
+          status: report.status,
+          moderatorId,
+        });
+        return c.json({
+          success: false,
+          error: `Report is already ${report.status}`,
+        }, 409);
+      }
+
       const now = new Date().toISOString();
       const newStatus = action === 'dismissed' ? 'dismissed' : 'resolved';
 
-      // Update the report
-      await db.prepare(`
+      // Only transition open reports, so two moderators acting at once cannot
+      // both "win" and overwrite each other's decision.
+      const update = await db.prepare(`
         UPDATE reports
         SET status = ?, moderator_id = ?, action = ?, moderator_notes = ?, updated_at = ?, resolved_at = ?
-        WHERE id = ?
+        WHERE id = ? AND status IN ('pending', 'reviewing')
       `).bind(newStatus, moderatorId, action, notes || null, now, now, reportId).run();
+
+      const changes = (update.meta as { changes?: number } | undefined)?.changes ?? 0;
+      if (changes === 0) {
+        logger.warn('Moderation action lost a race: report closed concurrently', { reportId, moderatorId });
+        return c.json({
+          success: false,
+          error: 'Report is already closed',
+        }, 409);
+      }
 
       // Perform content action if not dismissed
       let contentAction: { performed: boolean; action: string; notes: string } = {
@@ -128,6 +158,10 @@ export class ReportAction extends AdminRoute {
         entityId: report.entity_id,
         moderatorId,
         action,
+        // The processor mirrors these into D1; without them it used to
+        // force status to 'resolved' and wipe the notes of dismissed reports.
+        status: newStatus,
+        moderatorNotes: notes,
         timestamp: now,
       });
 

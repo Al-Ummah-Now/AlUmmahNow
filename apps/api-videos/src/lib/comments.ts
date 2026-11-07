@@ -26,6 +26,33 @@ export interface StoredComment {
 	isDeleted?: boolean;
 	isPinned?: boolean;
 	isHidden?: boolean;
+	/** Set on replies: id of the top-level comment (replies are one level deep) */
+	parentCommentId?: string;
+	/** 'held' while awaiting the video owner's review (comment settings = held) */
+	status?: CommentStatus;
+}
+
+export type CommentStatus = 'published' | 'held';
+
+/** Per-video comment settings: on, held for review, off */
+export const COMMENT_SETTINGS = ['on', 'held', 'off'] as const;
+export type CommentSettings = typeof COMMENT_SETTINGS[number];
+
+export function getCommentSettings(video: { commentSettings?: unknown } | null | undefined): CommentSettings {
+	const value = video?.commentSettings;
+	return value === 'held' || value === 'off' ? value : 'on';
+}
+
+export type CommentSort = 'top' | 'newest';
+
+export function parseCommentSort(value: unknown): CommentSort {
+	return value === 'top' ? 'top' : 'newest';
+}
+
+/** Who is looking at the comments: held comments are visible to their author and the video owner only. */
+export interface CommentViewer {
+	userId?: string | null;
+	isVideoOwner?: boolean;
 }
 
 export interface CommentAuthor {
@@ -51,6 +78,8 @@ export interface CommentListItem {
 	isPinned: boolean;
 	isLiked: boolean;
 	isDisliked: boolean;
+	isHeld: boolean;
+	parentCommentId: string | null;
 	author: CommentAuthor;
 }
 
@@ -64,33 +93,56 @@ export const DEFAULT_COMMENT_PAGE_SIZE = 20;
 export const MAX_COMMENT_PAGE_SIZE = 100;
 
 /** Comments that are soft-deleted or hidden by moderation are never listed. */
-export function isCommentVisible(comment: StoredComment | null | undefined): boolean {
+export function isCommentVisible(comment: StoredComment | null | undefined, viewer?: CommentViewer): boolean {
 	if (!comment) return false;
-	return comment.isDeleted !== true && comment.isHidden !== true;
+	if (comment.isDeleted === true || comment.isHidden === true) return false;
+	if (comment.status === 'held') {
+		return !!viewer && (viewer.isVideoOwner === true || (!!viewer.userId && viewer.userId === comment.userId));
+	}
+	return true;
+}
+
+function score(comment: StoredComment): number {
+	return (comment.likes?.length || 0) - (comment.dislikes?.length || 0);
 }
 
 /**
- * Sort visible comments (pinned first, then newest first) and return one page.
- * The cursor is the numeric offset encoded as a string.
+ * Order comments: pinned first, then by sort (`top` = net likes, ties newest
+ * first; `newest` = newest first).
+ */
+export function sortComments<T extends StoredComment>(comments: T[], sort: CommentSort = 'newest'): T[] {
+	return comments.slice().sort((a, b) => {
+		if ((a.isPinned === true) !== (b.isPinned === true)) {
+			return a.isPinned ? -1 : 1;
+		}
+		if (sort === 'top') {
+			const diff = score(b) - score(a);
+			if (diff !== 0) return diff;
+		}
+		return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
+	});
+}
+
+function clampPage(limit: number, cursor?: string | null): { safeLimit: number; offset: number } {
+	const safeLimit = Math.min(Math.max(1, Math.floor(limit) || DEFAULT_COMMENT_PAGE_SIZE), MAX_COMMENT_PAGE_SIZE);
+	const parsedOffset = cursor ? parseInt(cursor, 10) : 0;
+	const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
+	return { safeLimit, offset };
+}
+
+/**
+ * Sort visible comments and return one page. The cursor is the numeric offset
+ * encoded as a string.
  */
 export function paginateComments<T extends StoredComment>(
 	comments: T[] | null | undefined,
 	limit: number = DEFAULT_COMMENT_PAGE_SIZE,
 	cursor?: string | null,
+	sort: CommentSort = 'newest',
+	viewer?: CommentViewer,
 ): CommentPage<T> {
-	const safeLimit = Math.min(Math.max(1, Math.floor(limit) || DEFAULT_COMMENT_PAGE_SIZE), MAX_COMMENT_PAGE_SIZE);
-	const parsedOffset = cursor ? parseInt(cursor, 10) : 0;
-	const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
-
-	const sorted = (comments || [])
-		.filter(isCommentVisible)
-		.slice()
-		.sort((a, b) => {
-			if ((a.isPinned === true) !== (b.isPinned === true)) {
-				return a.isPinned ? -1 : 1;
-			}
-			return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
-		});
+	const { safeLimit, offset } = clampPage(limit, cursor);
+	const sorted = sortComments((comments || []).filter((c) => isCommentVisible(c, viewer)), sort);
 
 	const items = sorted.slice(offset, offset + safeLimit);
 	const nextOffset = offset + items.length;
@@ -100,6 +152,51 @@ export function paginateComments<T extends StoredComment>(
 		nextCursor: nextOffset < sorted.length ? String(nextOffset) : null,
 		total: sorted.length,
 	};
+}
+
+/** Visible replies of a comment, oldest first (conversation order), paginated. */
+export function paginateReplies<T extends StoredComment>(
+	parent: StoredComment,
+	limit: number = DEFAULT_COMMENT_PAGE_SIZE,
+	cursor?: string | null,
+	viewer?: CommentViewer,
+): CommentPage<T> {
+	const { safeLimit, offset } = clampPage(limit, cursor);
+	const visible = ((parent.replies || []) as T[])
+		.filter((r) => isCommentVisible(r, viewer))
+		.sort((a, b) => new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime());
+	const items = visible.slice(offset, offset + safeLimit);
+	const nextOffset = offset + items.length;
+	return { items, nextCursor: nextOffset < visible.length ? String(nextOffset) : null, total: visible.length };
+}
+
+/** Find a top-level comment or a reply by id. */
+export function findStoredComment<T extends StoredComment>(
+	comments: T[] | null | undefined,
+	commentId: string,
+): { comment: T; parent: T | null } | null {
+	for (const comment of comments || []) {
+		if (comment.id === commentId) return { comment, parent: null };
+		const reply = ((comment.replies || []) as T[]).find((r) => r && r.id === commentId);
+		if (reply) return { comment: reply, parent: comment };
+	}
+	return null;
+}
+
+/** Remove a top-level comment or a reply by id. Returns true when something was removed. */
+export function removeStoredComment<T extends StoredComment>(comments: T[], commentId: string): { comments: T[]; removed: boolean } {
+	const filtered = comments.filter((c) => c.id !== commentId);
+	if (filtered.length !== comments.length) return { comments: filtered, removed: true };
+	let removed = false;
+	for (const comment of filtered) {
+		const replies = (comment.replies || []) as T[];
+		const kept = replies.filter((r) => r && r.id !== commentId);
+		if (kept.length !== replies.length) {
+			comment.replies = kept;
+			removed = true;
+		}
+	}
+	return { comments: filtered, removed };
 }
 
 /**
@@ -130,6 +227,7 @@ export function toCommentListItem(
 	comment: StoredComment,
 	author: CommentAuthor,
 	viewerChannelId?: string | null,
+	viewer?: CommentViewer,
 ): CommentListItem {
 	const likes = comment.likes || [];
 	const dislikes = comment.dislikes || [];
@@ -143,12 +241,14 @@ export function toCommentListItem(
 		dateModified: comment.dateModified || comment.dateCreated,
 		likesCount: likes.length,
 		dislikesCount: dislikes.length,
-		repliesCount: (comment.replies || []).length,
+		repliesCount: ((comment.replies || []) as StoredComment[]).filter((r) => isCommentVisible(r, viewer)).length,
 		isEdited: comment.isEdited === true,
 		isDeleted: comment.isDeleted === true,
 		isPinned: comment.isPinned === true,
 		isLiked: !!viewerChannelId && likes.some((l) => l.channelId === viewerChannelId),
 		isDisliked: !!viewerChannelId && dislikes.some((d) => d.channelId === viewerChannelId),
+		isHeld: comment.status === 'held',
+		parentCommentId: comment.parentCommentId || null,
 		author,
 	};
 }

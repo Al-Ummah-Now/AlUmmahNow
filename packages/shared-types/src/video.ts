@@ -65,6 +65,8 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   dislikesCount: number;
   commentsCount: number;
   sharesCount?: number;
+  /** Per-video comment settings (Story 29.2): on | held (for review) | off */
+  commentSettings?: VideoCommentSettings;
 
   // Status and visibility
   isPublic?: boolean;
@@ -144,7 +146,11 @@ export interface VideoUpdateRequest {
   tags?: string[];
   category?: VideoCategory;
   language?: string;
+  commentSettings?: VideoCommentSettings;
 }
+
+/** Comments on a video: on, held for the owner's review, or off */
+export type VideoCommentSettings = 'on' | 'held' | 'off';
 
 /**
  * Duration filter for video search

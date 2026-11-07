@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { DeleteChannelDialog } from '@/components/channelManagement/DeleteChannelDialog';
 import { ChannelCardProps } from '../types';
 import { Button } from '@/components/ui/button';
 import { getLocalizedValue } from '@al-ummah/shared-types';
+import { useLanguage } from '@/hooks/useLanguage';
 
 /**
  * ChannelCard Component (RTL - Arabic)
@@ -14,13 +16,14 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
   onDelete,
   onView,
 }) => {
+  const { t } = useLanguage();
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const name = getLocalizedValue(channel.nameLocalized, channel.name, 'ar');
   const description = getLocalizedValue(channel.descriptionLocalized, channel.description, 'ar');
+  // Opens the shared confirmation dialog (type-the-name, main-channel handling)
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm(`هل أنت متأكد من حذف "${name}"؟`)) {
-      onDelete(channel.id);
-    }
+    setDeleteOpen(true);
   };
 
   const handleEdit = (e: React.MouseEvent) => {
@@ -125,6 +128,7 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
             variant="outline"
             size="sm"
             onClick={handleEdit}
+            aria-label={`${t.common.edit}: ${name}`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -139,8 +143,9 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
             variant="destructive"
             size="sm"
             onClick={handleDelete}
-            disabled={channel.isMain}
-            title={channel.isMain ? 'لا يمكن حذف القناة الرئيسية' : 'حذف القناة'}
+            title={t.channel.deleteChannel}
+            aria-label={`${t.channel.deleteChannel}: ${name}`}
+            data-testid="channel-card-delete"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -152,6 +157,16 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
             </svg>
           </Button>
         </div>
+      </div>
+
+      {/* Delete confirmation (shared dialog); clicks inside must not open the channel */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <DeleteChannelDialog
+          channel={{ id: channel.id, name: channel.name, nameLocalized: channel.nameLocalized, isMain: channel.isMain }}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onDeleted={() => onDelete(channel.id)}
+        />
       </div>
     </div>
   );

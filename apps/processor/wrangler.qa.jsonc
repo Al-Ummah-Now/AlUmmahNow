@@ -10,8 +10,27 @@
       "binding": "REPORTS_DB",
       "database_name": "al-ummah-now-reports-qa",
       "database_id": "eed66c4a-af26-4e07-9f9a-36f1e4ada555"
+    },
+    {
+      // Notification center + library indexes (Epic 29). Processor owns the migrations:
+      // npx wrangler d1 migrations apply al-ummah-now-notifications-qa --remote --config wrangler.qa.jsonc
+      "binding": "NOTIFICATIONS_DB",
+      "database_name": "al-ummah-now-notifications-qa",
+      "database_id": "61a2966a-66c2-4ae2-a98f-6e2e8cf6b880",
+      "migrations_dir": "migrations-notifications"
+    },
+    {
+      // Search index shared with api-videos (schema owned by apps/api-videos/migrations/search)
+      "binding": "SEARCH_DB",
+      "database_name": "al-ummah-now-search-qa",
+      "database_id": "0282bac3-5b70-4343-a991-937c732d981a"
     }
   ],
+
+  // Daily notification retention sweep (90 days)
+  "triggers": {
+    "crons": ["41 3 * * *"]
+  },
 
   "r2_buckets": [
     {

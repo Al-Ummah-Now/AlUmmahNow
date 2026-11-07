@@ -15,6 +15,7 @@ import ReportContentButton from "@/components/moderation/ReportContentButton";
 import { VideoMetricsDisplay } from "@/components/videoMetrics/VideoMetricsDisplay";
 import SaveToPlaylist from "@/components/SaveToPlaylist";
 import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
+import { WatchLaterButton } from "@/components/library/WatchLaterButton";
 import { VideoInfo } from "@/interfaces";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
@@ -122,6 +123,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
 
               {(user || isOwnVideo) && (
                 <div className="w-full max-w-4xl mt-4 px-4 flex flex-wrap items-center gap-3">
+                  {user && <WatchLaterButton videoId={videoId} />}
                   {user && <SaveToPlaylistControl videoId={videoId} />}
                   {isOwnVideo && (
                     <Link

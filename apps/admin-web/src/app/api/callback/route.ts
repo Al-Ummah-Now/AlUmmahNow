@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthClient, setAdminSession } from '@/lib/auth';
 import { subjects } from '@/interfaces/subjects';
-import { hasAdminAccess, normalizeRole } from "@/lib/roles";
+import { highestAdminRole, normalizeRole } from "@/lib/roles";
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -41,26 +41,17 @@ export async function GET(request: NextRequest) {
     // Extract user roles from the verified token
     const userRoles: string[] = (userInfo.roles || []).map((r: string) => normalizeRole(r));
 
-    // Check if user has admin or moderator role
-    const hasAccess = userRoles.some((role: string) => hasAdminAccess(role));
+    // Determine the highest admin role; users without one are turned away
+    const role = highestAdminRole(userRoles);
 
-    if (!hasAccess) {
+    if (!role) {
       logger.warn('Unauthorized admin access attempt', {
         userId: userInfo.id,
         email: userInfo.email,
         roles: userRoles,
       });
-      return NextResponse.redirect(new URL('/access-denied', request.url));
+      return NextResponse.redirect(new URL('/access-denied', request.url), 303);
     }
-
-    // Determine the highest priority role
-    const role = userRoles.includes('super_admin')
-      ? 'super_admin'
-      : userRoles.includes('admin')
-      ? 'admin'
-      : userRoles.includes('moderator')
-      ? 'moderator'
-      : undefined;
 
     logger.info('Admin login successful', {
       userId: userInfo.id,
@@ -79,7 +70,7 @@ export async function GET(request: NextRequest) {
       refreshToken: exchanged.tokens!.refresh,
     });
 
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url), 303);
   } catch (error) {
     logger.error('Auth callback error', { error });
     return NextResponse.redirect(new URL('/login?error=auth_failed', request.url));

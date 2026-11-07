@@ -4,6 +4,7 @@ import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground } from "../../lib/websocket-notify";
+import { recordLike } from "../../lib/library";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class LikeCreate extends AuthenticatedRoute {
@@ -94,6 +95,8 @@ export class LikeCreate extends AuthenticatedRoute {
 
         // Check if the user has already liked the video
         const alreadyLiked = (video.likes || []).find((existingLike) => existingLike.entityId === id && existingLike.channelId === channelId);
+        // Per-user liked-videos index (Library, Story 29.6); idempotent
+        await recordLike(c.env.NOTIFICATIONS_DB, userId, id);
         if (alreadyLiked) {
             return c.json(
                 {

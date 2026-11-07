@@ -5,6 +5,7 @@ import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { toPlaylistResponse, canViewPlaylist } from "../../lib/playlists";
 import { logger } from "../../lib/logger";
+import { isSystemPlaylist } from "../../lib/library";
 
 // Bounds for scanning the playlists bucket when filtering by channel
 const CHANNEL_SCAN_PAGE_SIZE = 100;
@@ -74,7 +75,7 @@ export class PlaylistsList extends OptionalAuthRoute {
             for (let page = 0; page < CHANNEL_SCAN_MAX_PAGES; page++) {
                 const result = await repository.listObjects(CHANNEL_SCAN_PAGE_SIZE, scanCursor);
                 for (const playlist of result.items || []) {
-                    if (playlist.channelId === channelFilter && canViewPlaylist(playlist, userId)) {
+                    if (playlist.channelId === channelFilter && canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist)) {
                         matches.push(playlist);
                     }
                 }
@@ -97,7 +98,8 @@ export class PlaylistsList extends OptionalAuthRoute {
         }
 
         const playlists = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
-        const visible = (playlists.items || []).filter((playlist) => canViewPlaylist(playlist, userId));
+        // System playlists (Watch later) are listed in the Library, not with user playlists
+        const visible = (playlists.items || []).filter((playlist) => canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist));
 
         const response: PaginationResponse<ReturnType<typeof toPlaylistResponse>> = {
             cursor: playlists.cursor || "",

@@ -43,3 +43,10 @@ export * from './localization';
 
 // i18n types
 export * from './i18n';
+
+// Notification center & library (Epic 29)
+export * from './notifications';
+export * from './i18n-library';
+
+// Search index: Arabic normalisation, documents, D1 store, API contracts (Epic 29)
+export * from './search';

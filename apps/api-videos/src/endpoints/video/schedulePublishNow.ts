@@ -7,6 +7,8 @@ import R2Repository from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { inBackground } from "../../lib/websocket-notify";
+import { announceNewVideo } from "../../lib/notification-events";
 
 export class VideoSchedulePublishNow extends AuthenticatedRoute {
   schema = addAuthToSchema(
@@ -140,6 +142,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
       };
 
       await videoRepository.putObject(id, updatedVideo);
+      inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...updatedVideo, id } as Parameters<typeof announceNewVideo>[1]));
 
       logger.info('[VideoSchedulePublishNow] Video published successfully', {
         videoId: id,

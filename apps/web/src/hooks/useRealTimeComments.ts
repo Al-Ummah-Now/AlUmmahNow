@@ -1,44 +1,75 @@
+/**
+ * Video comments with live updates (Story 29.2).
+ *
+ * - Top-level comments sorted by `top` or `newest` (API ?sort=), paginated
+ * - Replies (one level) loaded per thread on demand
+ * - Live updates from the `video:<id>` realtime channel: comment_added
+ *   (top-level or reply, with author), comment_updated, comment_deleted
+ * - Per-video comment settings (on / held / off) reported by the list API
+ */
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Comments } from '@/interfaces';
-import { CommentEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
 import { logger } from '@/lib/logger-client';
 import {
-  createVideoComment,
   updateVideoComment,
   deleteVideoComment,
-  listVideoComments,
   likeVideoComment,
   unlikeVideoComment,
   dislikeVideoComment,
   removeVideoCommentDislike,
   CommentReactionResponse,
 } from '@/lib/api/videos';
+import {
+  approveComment as approveCommentApi,
+  createComment,
+  listComments,
+  listReplies,
+  type CommentSettings,
+  type CommentSort,
+} from '@/lib/api/video-comments';
 
 const COMMENTS_PAGE_SIZE = 20;
-// Stable default so the initialComments sync effect does not reset state on every render
-const EMPTY_COMMENTS: Comments[] = [];
+const REPLIES_PAGE_SIZE = 20;
 
+export type CommentReaction = 'like' | 'dislike';
+export type { CommentSort, CommentSettings };
+
+export interface ReplyThread {
+  open: boolean;
+  items: Comments[];
+  nextCursor: string | null;
+  loading: boolean;
+  loaded: boolean;
+}
+
+export type AddCommentResult = { ok: true; held: boolean } | { ok: false; error: 'comments_disabled' | 'not_found' | 'failed' };
 
 export interface UseRealTimeCommentsOptions {
   videoId: string;
   channelId: string;
-  initialComments?: Comments[];
   onCommentAdded?: (comment: Comments) => void;
-  onCommentUpdated?: (comment: Comments) => void;
+  onCommentUpdated?: (comment: Partial<Comments> & { id: string }) => void;
   onCommentDeleted?: (commentId: string) => void;
-  /** Load the first page from GET /api/videos/:id/comments on mount (default true) */
+  /** Load the first page on mount (default true) */
   loadFromApi?: boolean;
 }
 
-export type CommentReaction = 'like' | 'dislike';
-
 export interface UseRealTimeCommentsReturn {
   comments: Comments[];
-  addComment: (comment: Omit<Comments, 'id' | 'dateCreated' | 'dateModified' | 'likesCount' | 'dislikesCount' | 'repliesCount' | 'isEdited' | 'isDeleted' | 'isPinned'>) => Promise<boolean>;
-  updateComment: (commentId: string, updates: Partial<Comments>) => Promise<void>;
-  deleteComment: (commentId: string) => Promise<void>;
+  replies: Record<string, ReplyThread>;
+  sort: CommentSort;
+  setSort: (sort: CommentSort) => void;
+  commentSettings: CommentSettings;
+  addComment: (text: string) => Promise<AddCommentResult>;
+  addReply: (parentId: string, text: string) => Promise<AddCommentResult>;
+  updateComment: (commentId: string, text: string) => Promise<boolean>;
+  deleteComment: (commentId: string) => Promise<boolean>;
+  approveComment: (commentId: string) => Promise<boolean>;
   toggleReaction: (commentId: string, reaction: CommentReaction) => Promise<boolean>;
+  toggleReplies: (parentId: string) => Promise<void>;
+  loadMoreReplies: (parentId: string) => Promise<void>;
   loadMore: () => Promise<void>;
   hasMore: boolean;
   isLoading: boolean;
@@ -48,86 +79,133 @@ export interface UseRealTimeCommentsReturn {
   commentsCount: number;
 }
 
+/** Realtime payload (api-videos websocket-notify `data`) */
+interface CommentRealtimeEvent {
+  type: 'comment_added' | 'comment_updated' | 'comment_deleted';
+  videoId: string;
+  commentId: string;
+  parentCommentId?: string | null;
+  comment?: Partial<Comments> & { id: string };
+}
+
+const EMPTY_THREAD: ReplyThread = { open: false, items: [], nextCursor: null, loading: false, loaded: false };
+
+function isCommentEvent(data: unknown): data is CommentRealtimeEvent {
+  if (!data || typeof data !== 'object') return false;
+  const type = (data as { type?: unknown }).type;
+  return type === 'comment_added' || type === 'comment_updated' || type === 'comment_deleted';
+}
+
 export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRealTimeCommentsReturn {
-  const { videoId, channelId, initialComments = EMPTY_COMMENTS, onCommentAdded, onCommentUpdated, onCommentDeleted, loadFromApi = true } = options;
-  const [comments, setComments] = useState<Comments[]>(initialComments);
-  const [total, setTotal] = useState<number>(initialComments.length);
+  const { videoId, channelId, onCommentAdded, onCommentUpdated, onCommentDeleted, loadFromApi = true } = options;
+  const [comments, setComments] = useState<Comments[]>([]);
+  const [replies, setReplies] = useState<Record<string, ReplyThread>>({});
+  const [total, setTotal] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [sort, setSortState] = useState<CommentSort>('newest');
+  const [commentSettings, setCommentSettings] = useState<CommentSettings>('on');
   const [isLoading, setIsLoading] = useState<boolean>(loadFromApi);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
-  // Store callbacks in refs to prevent re-subscription on every render
-  const onCommentAddedRef = useRef(onCommentAdded);
-  const onCommentUpdatedRef = useRef(onCommentUpdated);
-  const onCommentDeletedRef = useRef(onCommentDeleted);
+  // Latest state for callbacks that must not be re-created on every change
+  const commentsRef = useRef(comments);
+  const repliesRef = useRef(replies);
+  useEffect(() => { commentsRef.current = comments; }, [comments]);
+  useEffect(() => { repliesRef.current = replies; }, [replies]);
 
+  const callbacks = useRef({ onCommentAdded, onCommentUpdated, onCommentDeleted });
   useEffect(() => {
-    onCommentAddedRef.current = onCommentAdded;
-    onCommentUpdatedRef.current = onCommentUpdated;
-    onCommentDeletedRef.current = onCommentDeleted;
+    callbacks.current = { onCommentAdded, onCommentUpdated, onCommentDeleted };
   }, [onCommentAdded, onCommentUpdated, onCommentDeleted]);
 
-  // Handle real-time comment updates
-  const handleCommentUpdate = useCallback((eventData: unknown) => {
-    // Type guard to ensure eventData is CommentEvent
-    if (!eventData || typeof eventData !== 'object' || !('type' in eventData)) {
-      return;
-    }
-
-    const event = eventData as CommentEvent;
-    logger.info('Real-time comment update:', event);
-
-    switch (event.type) {
-      case 'comment_added':
-        if (event.comment) {
-          setComments(prevComments => {
-            // Avoid duplicates
-            if (prevComments.some(c => c.id === event.comment!.id)) {
-              return prevComments;
-            }
-            const newComments = [event.comment!, ...prevComments];
-            onCommentAddedRef.current?.(event.comment!);
-            return newComments;
-          });
+  const patchEverywhere = useCallback((commentId: string, patch: (c: Comments) => Comments) => {
+    setComments((prev) => prev.map((c) => (c.id === commentId ? patch(c) : c)));
+    setReplies((prev) => {
+      let changed = false;
+      const next: Record<string, ReplyThread> = {};
+      for (const [parentId, thread] of Object.entries(prev)) {
+        if (thread.items.some((r) => r.id === commentId)) {
+          changed = true;
+          next[parentId] = { ...thread, items: thread.items.map((r) => (r.id === commentId ? patch(r) : r)) };
+        } else {
+          next[parentId] = thread;
         }
-        break;
+      }
+      return changed ? next : prev;
+    });
+  }, []);
 
-      case 'comment_updated':
-        if (event.comment) {
-          setComments(prevComments =>
-            prevComments.map(comment =>
-              comment.id === event.comment!.id
-                ? { ...comment, ...event.comment! }
-                : comment
-            )
-          );
-          onCommentUpdatedRef.current?.(event.comment!);
-        }
-        break;
+  /** Insert a reply into its thread (if loaded) and bump the parent's count once. */
+  const insertReply = useCallback((parentId: string, reply: Comments) => {
+    const thread = repliesRef.current[parentId];
+    if (thread?.items.some((r) => r.id === reply.id)) return false;
+    setReplies((prev) => {
+      const current = prev[parentId] || EMPTY_THREAD;
+      if (current.items.some((r) => r.id === reply.id)) return prev;
+      return { ...prev, [parentId]: { ...current, items: current.loaded || current.items.length > 0 ? [...current.items, reply] : [reply], loaded: current.loaded } };
+    });
+    setComments((prev) => prev.map((c) => (c.id === parentId ? { ...c, repliesCount: (c.repliesCount || 0) + 1 } : c)));
+    return true;
+  }, []);
 
-      case 'comment_deleted':
-        setComments(prevComments =>
-          prevComments.filter(comment => comment.id !== event.commentId)
-        );
-        onCommentDeletedRef.current?.(event.commentId);
-        break;
+  const removeEverywhere = useCallback((commentId: string, parentId?: string | null) => {
+    const wasTopLevel = commentsRef.current.some((c) => c.id === commentId);
+    const owningParent = parentId
+      || Object.entries(repliesRef.current).find(([, thread]) => thread.items.some((r) => r.id === commentId))?.[0]
+      || null;
+    if (wasTopLevel) {
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      setTotal((n) => Math.max(0, n - 1));
+      setReplies((prev) => {
+        if (!prev[commentId]) return prev;
+        const next = { ...prev };
+        delete next[commentId];
+        return next;
+      });
+    } else if (owningParent) {
+      setReplies((prev) => {
+        const thread = prev[owningParent];
+        if (!thread) return prev;
+        return { ...prev, [owningParent]: { ...thread, items: thread.items.filter((r) => r.id !== commentId) } };
+      });
+      setComments((prev) => prev.map((c) => (c.id === owningParent ? { ...c, repliesCount: Math.max(0, (c.repliesCount || 0) - 1) } : c)));
     }
   }, []);
 
-  // Subscribe to real-time updates for this video
-  const isConnected = useWebSocketSubscription(
-    `video:${videoId}`,
-    handleCommentUpdate,
-    [videoId]
-  );
+  // Live updates for other viewers
+  const handleRealtime = useCallback((data: unknown) => {
+    if (!isCommentEvent(data) || data.videoId !== videoId) return;
+    logger.debug('[useRealTimeComments] Realtime event', { type: data.type, commentId: data.commentId, parentCommentId: data.parentCommentId });
 
-  // Update comments when initial comments change
-  useEffect(() => {
-    setComments(initialComments);
-  }, [initialComments]);
+    if (data.type === 'comment_added' && data.comment) {
+      const comment = data.comment as Comments;
+      if (data.parentCommentId) {
+        insertReply(data.parentCommentId, comment);
+      } else if (!commentsRef.current.some((c) => c.id === comment.id)) {
+        // Pinned comments stay on top
+        setComments((prev) => {
+          if (prev.some((c) => c.id === comment.id)) return prev;
+          const pinned = prev.filter((c) => c.isPinned);
+          const rest = prev.filter((c) => !c.isPinned);
+          return [...pinned, comment, ...rest];
+        });
+        setTotal((n) => n + 1);
+      }
+      callbacks.current.onCommentAdded?.(comment);
+    } else if (data.type === 'comment_updated' && data.comment) {
+      const update = data.comment;
+      patchEverywhere(data.commentId, (c) => ({ ...c, ...update, author: c.author }));
+      callbacks.current.onCommentUpdated?.(update);
+    } else if (data.type === 'comment_deleted') {
+      removeEverywhere(data.commentId, data.parentCommentId);
+      callbacks.current.onCommentDeleted?.(data.commentId);
+    }
+  }, [videoId, insertReply, patchEverywhere, removeEverywhere]);
 
-  // Load the first page of comments from the API
+  const isConnected = useWebSocketSubscription(`video:${videoId}`, handleRealtime, [videoId]);
+
+  // First page (and again when the sort changes)
   useEffect(() => {
     if (!loadFromApi || !videoId) return;
     let cancelled = false;
@@ -135,16 +213,18 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
       setIsLoading(true);
       setLoadError(false);
       try {
-        const response = await listVideoComments(videoId, { limit: COMMENTS_PAGE_SIZE });
+        const page = await listComments(videoId, { limit: COMMENTS_PAGE_SIZE, sort });
         if (cancelled) return;
-        if (!response?.success || !response.result) {
-          logger.warn('[useRealTimeComments] Failed to load comments', { videoId });
+        if (!page) {
+          logger.warn('[useRealTimeComments] Failed to load comments', { videoId, sort });
           setLoadError(true);
           return;
         }
-        setComments(response.result.comments);
-        setTotal(response.result.total);
-        setNextCursor(response.result.nextCursor);
+        setComments(page.comments);
+        setReplies({});
+        setTotal(page.total);
+        setNextCursor(page.nextCursor);
+        setCommentSettings(page.commentSettings);
       } catch (error) {
         logger.error('[useRealTimeComments] Error loading comments', { videoId, error });
         if (!cancelled) setLoadError(true);
@@ -155,21 +235,24 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     return () => {
       cancelled = true;
     };
-  }, [videoId, loadFromApi]);
+  }, [videoId, loadFromApi, sort]);
+
+  const setSort = useCallback((next: CommentSort) => {
+    setSortState((prev) => (prev === next ? prev : next));
+  }, []);
 
   const loadMore = useCallback(async () => {
     if (!nextCursor) return;
     setIsLoadingMore(true);
     try {
-      const response = await listVideoComments(videoId, { limit: COMMENTS_PAGE_SIZE, cursor: nextCursor });
-      if (!response?.success || !response.result) {
+      const page = await listComments(videoId, { limit: COMMENTS_PAGE_SIZE, cursor: nextCursor, sort });
+      if (!page) {
         setLoadError(true);
         return;
       }
-      const page = response.result;
-      setComments(prev => {
-        const seen = new Set(prev.map(c => c.id));
-        return [...prev, ...page.comments.filter(c => !seen.has(c.id))];
+      setComments((prev) => {
+        const seen = new Set(prev.map((c) => c.id));
+        return [...prev, ...page.comments.filter((c) => !seen.has(c.id))];
       });
       setTotal(page.total);
       setNextCursor(page.nextCursor);
@@ -179,63 +262,107 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     } finally {
       setIsLoadingMore(false);
     }
-  }, [videoId, nextCursor]);
+  }, [videoId, nextCursor, sort]);
 
-  // Optimistic comment addition
-  const addComment = useCallback(async (commentData: Omit<Comments, 'id' | 'dateCreated' | 'dateModified' | 'likesCount' | 'dislikesCount' | 'repliesCount' | 'isEdited' | 'isDeleted' | 'isPinned'>) => {
-    const tempId = `temp_${Date.now()}`;
-    const optimisticComment: Comments = {
-      id: tempId,
-      dateCreated: new Date().toISOString(),
-      dateModified: new Date().toISOString(),
-      likesCount: 0,
-      dislikesCount: 0,
-      repliesCount: 0,
-      isEdited: false,
-      isDeleted: false,
-      isPinned: false,
-      ...commentData
-    };
-
-    // Add optimistically to local state
-    setComments(prevComments => [optimisticComment, ...prevComments]);
-    setTotal(n => n + 1);
-    logger.info('Adding comment:', optimisticComment);
-
+  const fetchReplies = useCallback(async (parentId: string, cursor: string | null) => {
+    setReplies((prev) => ({ ...prev, [parentId]: { ...(prev[parentId] || EMPTY_THREAD), open: true, loading: true } }));
     try {
-      const result = await createVideoComment(
-        videoId,
-        { content: commentData.text },
-        { channelId }
-      );
-
-      if (!result || !result.success || !result.result?.comment) {
-        // Rollback on failure
-        logger.error('Failed to create comment:', result?.error || 'Unknown error');
-        setComments(prevComments => prevComments.filter(c => c.id !== tempId));
-        setTotal(n => Math.max(0, n - 1));
-        return false;
-      }
-
-      // Replace the optimistic entry with the stored comment (real id + author)
-      const saved = result.result.comment;
-      setComments(prevComments => {
-        const withoutTemp = prevComments.filter(c => c.id !== tempId);
-        return withoutTemp.some(c => c.id === saved.id) ? withoutTemp : [saved, ...withoutTemp];
+      const page = await listReplies(videoId, parentId, { limit: REPLIES_PAGE_SIZE, cursor });
+      setReplies((prev) => {
+        const current = prev[parentId] || EMPTY_THREAD;
+        if (!page) return { ...prev, [parentId]: { ...current, loading: false } };
+        // First page replaces the thread but keeps replies that arrived live meanwhile
+        const merged = cursor ? [...current.items, ...page.replies] : [...page.replies, ...current.items];
+        const seen = new Set<string>();
+        const items = merged.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+        return {
+          ...prev,
+          [parentId]: { open: true, loading: false, loaded: true, nextCursor: page.nextCursor, items },
+        };
       });
-      return true;
+      if (page && !cursor) {
+        setComments((prev) => prev.map((c) => (c.id === parentId ? { ...c, repliesCount: Math.max(page.total, c.repliesCount || 0) } : c)));
+      }
     } catch (error) {
-      // Rollback on error
-      logger.error('Error creating comment:', error);
-      setComments(prevComments => prevComments.filter(c => c.id !== tempId));
-      setTotal(n => Math.max(0, n - 1));
-      return false;
+      logger.error('[useRealTimeComments] Error loading replies', { videoId, parentId, error });
+      setReplies((prev) => ({ ...prev, [parentId]: { ...(prev[parentId] || EMPTY_THREAD), loading: false } }));
     }
+  }, [videoId]);
+
+  const toggleReplies = useCallback(async (parentId: string) => {
+    const thread = repliesRef.current[parentId];
+    if (thread?.open) {
+      setReplies((prev) => ({ ...prev, [parentId]: { ...thread, open: false } }));
+      return;
+    }
+    if (thread?.loaded) {
+      setReplies((prev) => ({ ...prev, [parentId]: { ...thread, open: true } }));
+      return;
+    }
+    await fetchReplies(parentId, null);
+  }, [fetchReplies]);
+
+  const loadMoreReplies = useCallback(async (parentId: string) => {
+    const cursor = repliesRef.current[parentId]?.nextCursor;
+    if (cursor) await fetchReplies(parentId, cursor);
+  }, [fetchReplies]);
+
+  const addComment = useCallback(async (text: string): Promise<AddCommentResult> => {
+    const result = await createComment(videoId, text, channelId);
+    if (result.ok === false) {
+      if (result.error === 'comments_disabled') setCommentSettings('off');
+      return result;
+    }
+    const saved = result.comment;
+    setComments((prev) => {
+      if (prev.some((c) => c.id === saved.id)) return prev;
+      const pinned = prev.filter((c) => c.isPinned);
+      const rest = prev.filter((c) => !c.isPinned);
+      return [...pinned, saved, ...rest];
+    });
+    if (!commentsRef.current.some((c) => c.id === saved.id)) setTotal((n) => n + 1);
+    logger.info('[useRealTimeComments] Comment added', { videoId, commentId: saved.id, held: !!saved.isHeld });
+    return { ok: true, held: !!saved.isHeld };
   }, [videoId, channelId]);
+
+  const addReply = useCallback(async (parentId: string, text: string): Promise<AddCommentResult> => {
+    const result = await createComment(videoId, text, channelId, parentId);
+    if (result.ok === false) {
+      if (result.error === 'comments_disabled') setCommentSettings('off');
+      return result;
+    }
+    // Make sure the thread is open and shows the new reply
+    const thread = repliesRef.current[parentId];
+    if (!thread?.loaded) {
+      // The stored reply is normally part of the first page (and its count);
+      // keep it visible even if that read raced the write
+      await fetchReplies(parentId, null);
+      const saved = result.comment;
+      setReplies((prev) => {
+        const current = prev[parentId] || EMPTY_THREAD;
+        if (current.items.some((r) => r.id === saved.id)) return prev;
+        return { ...prev, [parentId]: { ...current, open: true, loaded: true, items: [...current.items, saved] } };
+      });
+    } else {
+      insertReply(parentId, result.comment);
+      setReplies((prev) => ({ ...prev, [parentId]: { ...(prev[parentId] || EMPTY_THREAD), open: true } }));
+    }
+    return { ok: true, held: !!result.comment.isHeld };
+  }, [videoId, channelId, fetchReplies, insertReply]);
+
+  const findComment = useCallback((commentId: string): Comments | undefined => {
+    const top = commentsRef.current.find((c) => c.id === commentId);
+    if (top) return top;
+    for (const thread of Object.values(repliesRef.current)) {
+      const reply = thread.items.find((r) => r.id === commentId);
+      if (reply) return reply;
+    }
+    return undefined;
+  }, []);
 
   // Like/dislike toggle; the API keeps a channel's reaction exclusive
   const toggleReaction = useCallback(async (commentId: string, reaction: CommentReaction): Promise<boolean> => {
-    const current = comments.find(c => c.id === commentId);
+    const current = findComment(commentId);
     if (!current) return false;
     const active = reaction === 'like' ? current.isLiked : current.isDisliked;
 
@@ -261,103 +388,65 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     }
 
     const r = response.result;
-    setComments(prev => prev.map(c => c.id === commentId
-      ? { ...c, likesCount: r.likesCount, dislikesCount: r.dislikesCount, isLiked: r.isLiked, isDisliked: r.isDisliked }
-      : c));
+    patchEverywhere(commentId, (c) => ({ ...c, likesCount: r.likesCount, dislikesCount: r.dislikesCount, isLiked: r.isLiked, isDisliked: r.isDisliked }));
     return true;
-  }, [comments, videoId, channelId]);
+  }, [videoId, channelId, findComment, patchEverywhere]);
 
-  // Optimistic comment update
-  const updateComment = useCallback(async (commentId: string, updates: Partial<Comments>) => {
-    // Store original comment for rollback
-    let originalComment: Comments | undefined;
-
-    setComments(prevComments => {
-      originalComment = prevComments.find(c => c.id === commentId);
-      return prevComments.map(comment =>
-        comment.id === commentId
-          ? { ...comment, ...updates, dateModified: new Date().toISOString() }
-          : comment
-      );
-    });
-
-    logger.info('Updating comment:', { commentId, updates });
-
+  const updateComment = useCallback(async (commentId: string, text: string): Promise<boolean> => {
+    const original = findComment(commentId);
+    if (!original) return false;
+    patchEverywhere(commentId, (c) => ({ ...c, text, isEdited: c.text !== text ? true : c.isEdited, dateModified: new Date().toISOString() }));
     try {
-      // Send update to API - map 'text' field to 'content' for API
-      const result = await updateVideoComment(
-        videoId,
-        commentId,
-        { content: updates.text || '' },
-        { channelId }
-      );
-
-      if (!result || !result.success) {
-        // Rollback on failure
-        logger.error('Failed to update comment:', result?.error || 'Unknown error');
-        if (originalComment) {
-          setComments(prevComments =>
-            prevComments.map(c => c.id === commentId ? originalComment! : c)
-          );
-        }
-      }
+      const result = await updateVideoComment(videoId, commentId, { content: text }, { channelId });
+      if (result?.success) return true;
+      logger.warn('[useRealTimeComments] Edit rejected', { videoId, commentId, error: result?.error });
     } catch (error) {
-      // Rollback on error
-      logger.error('Error updating comment:', error);
-      if (originalComment) {
-        setComments(prevComments =>
-          prevComments.map(c => c.id === commentId ? originalComment! : c)
-        );
-      }
+      logger.error('[useRealTimeComments] Edit failed', { videoId, commentId, error });
     }
-  }, [videoId, channelId]);
+    patchEverywhere(commentId, () => original);
+    return false;
+  }, [videoId, channelId, findComment, patchEverywhere]);
 
-  // Optimistic comment deletion
-  const deleteComment = useCallback(async (commentId: string) => {
-    // Store original comment for rollback
-    let deletedComment: Comments | undefined;
-
-    setComments(prevComments => {
-      deletedComment = prevComments.find(c => c.id === commentId);
-      return prevComments.filter(comment => comment.id !== commentId);
-    });
-    setTotal(n => Math.max(0, n - 1));
-
-    logger.info('Deleting comment:', commentId);
-
+  const deleteComment = useCallback(async (commentId: string): Promise<boolean> => {
     try {
-      // Send deletion to API
       const result = await deleteVideoComment(videoId, commentId, { channelId });
-
-      if (!result || !result.success) {
-        // Rollback on failure - restore the deleted comment
-        logger.error('Failed to delete comment:', 'Unknown error');
-        if (deletedComment) {
-          setComments(prevComments => [deletedComment!, ...prevComments]);
-          setTotal(n => n + 1);
-        }
+      if (result?.success) {
+        removeEverywhere(commentId);
+        return true;
       }
+      logger.warn('[useRealTimeComments] Delete rejected', { videoId, commentId });
     } catch (error) {
-      // Rollback on error - restore the deleted comment
-      logger.error('Error deleting comment:', error);
-      if (deletedComment) {
-        setComments(prevComments => [deletedComment!, ...prevComments]);
-      }
+      logger.error('[useRealTimeComments] Delete failed', { videoId, commentId, error });
     }
-  }, [videoId, channelId]);
+    return false;
+  }, [videoId, channelId, removeEverywhere]);
+
+  const approveComment = useCallback(async (commentId: string): Promise<boolean> => {
+    const ok = await approveCommentApi(videoId, commentId);
+    if (ok) patchEverywhere(commentId, (c) => ({ ...c, isHeld: false }));
+    return ok;
+  }, [videoId, patchEverywhere]);
 
   return {
     comments,
+    replies,
+    sort,
+    setSort,
+    commentSettings,
     addComment,
+    addReply,
     updateComment,
     deleteComment,
+    approveComment,
     toggleReaction,
+    toggleReplies,
+    loadMoreReplies,
     loadMore,
     hasMore: !!nextCursor,
     isLoading,
     isLoadingMore,
     loadError,
     isConnected,
-    commentsCount: Math.max(total, comments.length)
+    commentsCount: Math.max(total, comments.length),
   };
 }

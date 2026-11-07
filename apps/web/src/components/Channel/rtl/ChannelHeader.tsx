@@ -8,6 +8,9 @@ import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
 import { getTranslations } from '@/lib/i18n';
 import Link from 'next/link';
+import { ChannelBellMenu } from '@/components/notifications/ChannelBellMenu';
+import { ChannelOwnerActions } from '@/components/Channel/ChannelOwnerActions';
+import { formatHandle } from '@/lib/channel-url';
 
 interface ChannelHeaderProps {
   channel: Channel;
@@ -18,6 +21,8 @@ interface ChannelHeaderProps {
 export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeaderProps) {
   // While the session loads `user` is still null: treat that as "checking", not anonymous
   const { user, loading: authLoading } = useMultiAccount();
+  // Server-side ownership plus a client fallback (e.g. right after switching accounts)
+  const owner = isOwner || (!!user && user.id === channel.userId);
   const t = getTranslations(locale as 'en' | 'ar');
   const displayName = channel.nameLocalized?.[locale] || channel.name;
   const displayDescription = channel.descriptionLocalized?.[locale] || channel.description;
@@ -31,7 +36,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
     toggle,
   } = useChannelSubscription({
     channelId: channel.id,
-    enabled: !!user && !isOwner,
+    enabled: !!user && !owner,
     initialSubscriberCount: channel.subscribersCount,
   });
 
@@ -57,30 +62,6 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
             className="object-cover"
             priority
           />
-          {/* Owner Buttons - Top Left on Cover (RTL) */}
-          {isOwner && (
-            <div className="absolute top-4 left-4">
-              <Link
-                href={`/${locale}/settings/channel/${channel.id}/edit`}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                  />
-                </svg>
-                {t.common.edit}
-              </Link>
-            </div>
-          )}
         </div>
       )}
 
@@ -126,19 +107,10 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                 )}
               </div>
 
-              {/* Owners manage their channel instead of subscribing to it */}
-              {isOwner && (
-                <Link
-                  href={`/${locale}/settings/channel/${channel.id}`}
-                  data-testid="channel-settings-link"
-                  className="px-4 py-1.5 text-sm font-semibold rounded-lg flex-shrink-0 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-                >
-                  {t.channelManage.settingsLink}
-                </Link>
-              )}
-
-              {/* Subscribe Button - Only show if not owner */}
-              {!isOwner && (
+              {/* Subscribe Button (+ per-channel bell while subscribed) - Only show if not owner */}
+              {!owner && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                {user && isSubscribed && !isLoading && <ChannelBellMenu channelId={channel.id} />}
                 <button
                   onClick={handleSubscribe}
                   data-testid="channel-subscribe-button"
@@ -167,8 +139,15 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                     </>
                   )}
                 </button>
+                </div>
               )}
             </div>
+
+            {channel.handle && (
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" dir="ltr" data-testid="channel-handle">
+                {formatHandle(channel.handle)}
+              </p>
+            )}
 
             <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
               {subscriberCount !== undefined && (
@@ -208,6 +187,13 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 mb-4">
                 {displayDescription}
               </p>
+            )}
+
+            {owner && (
+              <ChannelOwnerActions
+                channel={{ id: channel.id, name: channel.name, nameLocalized: channel.nameLocalized, isMain: channel.isMain }}
+                className="mt-2"
+              />
             )}
           </div>
         </div>

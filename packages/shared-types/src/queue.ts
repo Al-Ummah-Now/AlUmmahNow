@@ -104,6 +104,18 @@ export enum MessageType {
   // Consumers anonymise copies they own (e.g. processor: D1 moderation reports).
   // Appended last for the same reason as above.
   UserDataErased,
+
+  // Notification center (Story 29.10). Explicit values in a reserved range so
+  // concurrent additions above cannot shift them.
+  // Persist a notification for one recipient (payload: NotificationCreatePayload).
+  NotificationCreate = 200,
+  // Fan a notification out to a channel's subscribers (payload: NotificationFanoutPayload).
+  NotificationFanout = 201,
+
+  // Search index sync (Story 29.9). Payload: SearchIndexSyncPayload ({ entity, id, object? }).
+  // The processor projects the object and updates the D1 search index (no object = deleted).
+  // Explicit value in its own reserved range, like the notification types above.
+  SearchIndexSync = 210,
 }
 
 // Generic message structure for queue messages

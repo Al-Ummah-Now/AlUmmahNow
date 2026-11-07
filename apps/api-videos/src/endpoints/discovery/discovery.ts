@@ -13,6 +13,8 @@ import {
   rankTrending,
   toVideoResponse,
 } from "../../lib/discovery";
+import type { SearchDb } from "@al-ummah/shared-types";
+import { suggestFromIndex } from "../../lib/search/query";
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
@@ -46,7 +48,7 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Search suggestions",
-    description: "🔓 Public. Returns typeahead suggestions matching the query by prefix/word over public video titles, tags, categories and channel names.",
+    description: "🔓 Public. Returns typeahead suggestions (channel names, video titles, categories) matching the query by word prefix, served from the search index with Arabic normalisation. Falls back to scanning stored videos when the index is not configured or fails.",
     request: {
       query: z.object({
         q: Str({ description: "Partial search query" }),
@@ -67,6 +69,18 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
     const q = (query.q || "").trim();
     const limit = clampLimit(query.limit, 5, 20);
     if (q.length < 1) return c.json([]);
+
+    const db = c.env.SEARCH_DB as SearchDb | undefined;
+    if (db) {
+      try {
+        const suggestions = await suggestFromIndex(db, q, limit);
+        logger.info("[SearchSuggestions] Served suggestions from index", { q, count: suggestions.length });
+        c.header("Cache-Control", "public, max-age=60");
+        return c.json(suggestions);
+      } catch (error) {
+        logger.warn("[SearchSuggestions] Index lookup failed, falling back to scan", { q, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
 
     try {
       const [videos, channels] = await Promise.all([
@@ -97,6 +111,7 @@ export class TrendingGet extends OptionalAuthRoute {
       query: z.object({
         period: z.enum(["hour", "day", "week", "month"]).optional().default("day"),
         category: Str({ description: "Optional category filter" }).optional(),
+        language: Str({ description: "Optional content language filter (e.g. en, ar)" }).regex(/^[a-z]{2,3}$/).optional(),
         limit: Num({ description: "Maximum videos (1-50)", default: 20 }).optional(),
       }),
     },
@@ -126,15 +141,15 @@ export class TrendingGet extends OptionalAuthRoute {
 
     try {
       const videos = await loadDiscoverableVideos(c.env.videos);
-      const ranked = rankTrending(videos, { now: Date.now(), period, category: query.category, limit });
+      const ranked = rankTrending(videos, { now: Date.now(), period, category: query.category, language: query.language, limit });
       const channels = await loadChannelMap(c.env.channels, ranked.map(r => r.video.channelId || ""));
       const data = ranked.map(({ video, trending, rank }) => ({
         ...toVideoResponse(video, channels),
         trendingMetadata: { rank, score: trending.score, viewsVelocity: trending.viewsVelocity },
       }));
-      logger.info("[Trending] Served trending videos", { period, category: query.category, count: data.length });
+      logger.info("[Trending] Served trending videos", { period, category: query.category, language: query.language, count: data.length });
       c.header("Cache-Control", "public, max-age=120");
-      return c.json({ success: true, period, category: query.category, data, videos: data });
+      return c.json({ success: true, period, category: query.category, language: query.language, data, videos: data });
     } catch (error) {
       logger.error("[Trending] Failed to rank trending videos", { error, period });
       return c.json({ success: false, error: "Failed to load trending videos" }, 500);

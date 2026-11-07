@@ -13,6 +13,9 @@ import monitoringRouter from './monitoring.router';
 import i18nRouter from './i18n.router';
 import discoveryRouter from './discovery.router';
 import privacyRouter from './privacy.router';
+import libraryRouter from './library.router';
+import notificationsRouter from './notifications.router';
+import searchRouter from './search.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -33,6 +36,7 @@ import privacyRouter from './privacy.router';
  * - i18n: /api/i18n
  * - Discovery: /api/search/suggestions, /api/trending, /api/recommendations
  * - Privacy: /api/privacy (GDPR export, erasure, consent)
+ * - Search v2: /api/search, /api/explore, /internal/search/* (root level)
  * - Monitoring: / (root level - health, metrics, status)
  *
  * @param openapi - The main OpenAPI instance from chanfana
@@ -81,6 +85,14 @@ export function registerAllRouters(openapi: any) {
   // Privacy domain - GDPR export, erasure, consent audit trail
   openapi.route('/api/privacy', privacyRouter);
 
+  // Library domain - Watch later, liked videos, saved posts (Story 29.6)
+  openapi.route('/api/library', libraryRouter);
+
+  // Notifications domain - notification center, settings, per-channel bell (Story 29.10)
+  openapi.route('/api/notifications', notificationsRouter);
+  // Search v2 domain - index-backed search, explore, internal backfill (root level)
+  openapi.route('', searchRouter);
+
   // Monitoring domain - health checks, metrics, status page (root level)
   openapi.route('', monitoringRouter);
 }
@@ -102,4 +114,7 @@ export {
   discoveryRouter,
   monitoringRouter,
   privacyRouter,
+  libraryRouter,
+  notificationsRouter,
+  searchRouter,
 };

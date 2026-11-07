@@ -1,55 +1,48 @@
 import { redirect } from 'next/navigation';
 import { headers as getHeaders } from 'next/headers';
 import { isAuthenticated, getAuthClient } from '@/lib/auth';
+import { getI18n } from '@/i18n/server';
+import { PublicShell } from '@/components/PublicShell';
+import { ErrorAlert, primaryButtonClass } from '@/components/ui';
+import type { MessageKey } from '@/i18n/translate';
 
 interface PageProps {
   searchParams: Promise<{ error?: string }>;
 }
 
-const errorMessages: Record<string, string> = {
-  no_code: 'Authorization code not received',
-  exchange_failed: 'Failed to exchange authorization code',
-  verification_failed: 'Failed to verify credentials',
-  auth_failed: 'Authentication failed',
-  unauthorized: 'You do not have permission to access the admin panel',
-};
+const KNOWN_ERRORS = ['no_code', 'exchange_failed', 'verification_failed', 'auth_failed', 'unauthorized'] as const;
 
 export default async function LoginPage({ searchParams }: PageProps) {
   const params = await searchParams;
 
-  // If already authenticated, redirect to home
+  // If already authenticated, go straight to the dashboard
   if (await isAuthenticated()) {
-    redirect('/');
+    redirect('/dashboard');
   }
 
-  // If there's an error, show it
   if (params.error) {
-    const errorMessage = errorMessages[params.error] || 'An error occurred';
+    const { t } = await getI18n();
+    const errorKey: MessageKey = (KNOWN_ERRORS as readonly string[]).includes(params.error)
+      ? (`login.errors.${params.error}` as MessageKey)
+      : 'login.errors.unknown';
 
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4">
+      <PublicShell>
+        <div className="bg-surface border border-border rounded-lg p-8 max-w-md w-full">
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-white">Al Ummah Now</h1>
-            <p className="text-gray-400 mt-2">Admin Panel</p>
+            <h1 className="text-2xl font-bold text-fg">{t('common.appName')}</h1>
+            <p className="text-fg-muted mt-2">{t('common.adminPanel')}</p>
           </div>
 
-          <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-6 text-sm">
-            {errorMessage}
-          </div>
+          <ErrorAlert testId="login-error">{t(errorKey)}</ErrorAlert>
 
-          <a
-            href="/login"
-            className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded transition-colors text-center"
-          >
-            Try Again
+          <a href="/login" className={`${primaryButtonClass} block w-full`}>
+            {t('login.tryAgain')}
           </a>
 
-          <p className="text-gray-500 text-sm text-center mt-6">
-            Only administrators and moderators can access this panel.
-          </p>
+          <p className="text-fg-subtle text-sm text-center mt-6">{t('login.onlyStaff')}</p>
         </div>
-      </div>
+      </PublicShell>
     );
   }
 
@@ -59,10 +52,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
   const protocol = host?.includes('localhost') ? 'http' : 'https';
 
   const client = await getAuthClient();
-  const { url } = await client.authorize(
-    `${protocol}://${host}/api/callback`,
-    'code',
-  );
+  const { url } = await client.authorize(`${protocol}://${host}/api/callback`, 'code');
 
   redirect(url);
 }

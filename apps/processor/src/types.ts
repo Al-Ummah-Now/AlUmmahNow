@@ -80,6 +80,10 @@ export interface QueueEnvironment {
   MESSAGES_BUCKET: R2Bucket;
   community_posts: R2Bucket;
   REPORTS_DB: D1Database;
+  /** Notification center + library indexes (Epic 29). Optional: features are skipped when unbound. */
+  NOTIFICATIONS_DB?: D1Database;
+  /** D1 search index shared with api-videos (Story 29.9); optional, sync is skipped when unbound */
+  SEARCH_DB?: D1Database;
   ENVIRONMENT: string;
   LOG_LEVEL: string;
   /** Base URL of the websocket-server (realtime broadcasts are skipped when unset) */

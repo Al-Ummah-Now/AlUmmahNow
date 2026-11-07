@@ -36,6 +36,8 @@ import {
   Rss,
   Users,
   BarChart3,
+  Library,
+  Bell,
   Settings,
 } from 'lucide-react';
 import { getTranslations } from '@/lib/i18n';
@@ -267,18 +269,28 @@ export function UnifiedNavigationRTL() {
       href: '/ar/analytics',
     },
     {
+      label: tAr.library.title,
+      icon: Library,
+      href: '/ar/library',
+    },
+    {
+      label: tAr.notificationCenter.title,
+      icon: Bell,
+      href: '/ar/notifications',
+    },
+    {
       label: tAr.header.settings,
       icon: Settings,
       href: '/ar/settings',
     },
     ...(channels.length > 0 ? [
       {
-        label: 'فيديوهاتي',
+        label: tAr.video.myVideos,
         icon: Video,
         href: '/ar/dashboard/videos',
       },
       {
-        label: 'الفيديوهات المجدولة',
+        label: tAr.schedule?.scheduledVideos ?? tAr.video.videos,
         icon: Calendar,
         href: '/ar/scheduled-videos',
       },

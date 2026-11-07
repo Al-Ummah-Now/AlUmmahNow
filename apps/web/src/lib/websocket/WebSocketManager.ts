@@ -16,6 +16,8 @@ export class WebSocketManager {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private messageQueue: WebSocketMessage[] = [];
+  /** True once the server has accepted our authenticate message on this socket. */
+  private authenticated = false;
   private eventListeners: Map<string, Set<(data: WebSocketConnectionState) => void>> = new Map();
 
   /** Set the token sent in the authenticate message on (re)connect. */
@@ -75,6 +77,7 @@ export class WebSocketManager {
         this.ws.onopen = () => {
           logger.info('✅ WebSocket connected');
           this.state.status = 'connected';
+          this.authenticated = false;
           this.state.lastConnected = new Date();
           this.state.reconnectAttempts = 0;
 
@@ -114,6 +117,7 @@ export class WebSocketManager {
         };
 
         this.ws.onclose = (event) => {
+          this.authenticated = false;
           logger.info('🔌 WebSocket closed', { code: event.code, reason: event.reason });
           this.state.status = 'disconnected';
           this.stopHeartbeat();
@@ -170,9 +174,10 @@ export class WebSocketManager {
     const subscription: WebSocketSubscription = { channel, callback };
     this.subscriptions.get(channel)!.push(subscription);
 
-    // Send subscription message if connected
-    if (this.state.status === 'connected') {
-      this.sendMessage('subscribe', { channel });
+    // The server only accepts subscriptions from an authenticated socket. Before
+    // that, the channel is kept and sent by resubscribeAll() once authenticated.
+    if (this.authenticated) {
+      this.sendChannelMessage('subscribe', channel);
     }
 
     logger.info(`📡 Subscribed to channel: ${channel}`);
@@ -188,13 +193,40 @@ export class WebSocketManager {
 
           if (channelSubs.length === 0) {
             this.subscriptions.delete(channel);
-            if (this.state.status === 'connected') {
-              this.sendMessage('unsubscribe', { channel });
+            if (this.authenticated) {
+              this.sendChannelMessage('unsubscribe', channel);
             }
           }
         }
       }
     };
+  }
+
+  /**
+   * Send a subscribe/unsubscribe frame. The server schema expects `channel` at
+   * the top level; `data.channel` is kept for older server builds.
+   */
+  private sendChannelMessage(type: 'subscribe' | 'unsubscribe', channel: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return; // re-sent by resubscribeAll() after the next authentication
+    }
+    try {
+      this.ws.send(JSON.stringify({
+        id: this.generateMessageId(),
+        type,
+        timestamp: Date.now(),
+        channel,
+        data: { channel },
+      }));
+      logger.info('📤 Sent channel message', { type, channel });
+    } catch (error) {
+      logger.error('❌ Error sending channel message:', error);
+    }
+  }
+
+  /** (Re)send every active subscription, e.g. after (re)authentication. */
+  private resubscribeAll(): void {
+    this.subscriptions.forEach((_subs, channel) => this.sendChannelMessage('subscribe', channel));
   }
 
   /**
@@ -261,6 +293,8 @@ export class WebSocketManager {
     // Handle authentication response
     if (message.type === 'authenticated') {
       logger.info('🔐 Authentication successful', { userId: (message.data as { userId?: string })?.userId });
+      this.authenticated = true;
+      this.resubscribeAll();
       return;
     }
 

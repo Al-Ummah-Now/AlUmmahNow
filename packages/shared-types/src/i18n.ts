@@ -1,3 +1,4 @@
+import type { LibraryTranslations, NotificationCenterTranslations } from './i18n-library';
 /**
  * Internationalization (i18n) Types
  *
@@ -115,6 +116,10 @@ export interface UpdateTranslationsResponse {
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  /** Library hub, Watch later, liked videos, saved posts (Story 29.6) */
+  library: LibraryTranslations;
+  /** Notification center, settings and per-channel bell (Story 29.10) */
+  notificationCenter: NotificationCenterTranslations;
   /** Accessibility: skip links and accessible names for icon-only controls (Epic 1) */
   a11y: {
     skipLinks: string;
@@ -134,6 +139,31 @@ export interface AppTranslations {
     removeDislike: string;
     signInToReact: string;
     watchingNow: string;
+  };
+
+  /** Explore page (Epic 29, Story 29.7) */
+  explore: {
+    title: string;
+    subtitle: string;
+    trending: string;
+    popularFallback: string;
+    contentLanguage: string;
+    allLanguages: string;
+    english: string;
+    arabic: string;
+    categories: string;
+    categoryVideos: string;
+    liveNow: string;
+    noLive: string;
+    watching: string;
+    viewAll: string;
+    newChannels: string;
+    noNewChannels: string;
+    noTrending: string;
+    sectionFailed: string;
+    retry: string;
+    seasonalUntil: string;
+    browseCategory: string;
   };
 
   /** Discovery: videos/channels directories and channel discovery sections */
@@ -233,6 +263,7 @@ export interface AppTranslations {
     createChannel: string;
     channelName: string;
     enterChannelName: string;
+    privacyAndCookies: string;
     addAnotherAccount: string;
     signOutOf: string;
     signOutOfAll: string;
@@ -257,6 +288,7 @@ export interface AppTranslations {
     upload: string;
     subscriptions: string;
     library: string;
+    explore: string;
   };
 
   /**
@@ -384,6 +416,51 @@ export interface AppTranslations {
     generalSettings: string;
     editChannelDetails: string;
     backToChannel: string;
+    handle: string;
+    handleHelp: string;
+    handlePlaceholder: string;
+    handleChecking: string;
+    handleAvailable: string;
+    handleCurrent: string;
+    handleTaken: string;
+    handleReserved: string;
+    handleTooShort: string;
+    handleTooLong: string;
+    handleInvalid: string;
+    aboutDetails: string;
+    contactEmail: string;
+    contactEmailHelp: string;
+    invalidEmail: string;
+    location: string;
+    locationPlaceholder: string;
+    addLink: string;
+    removeLink: string;
+    linkTitle: string;
+    linkUrl: string;
+    linksHelp: string;
+    invalidLinkUrl: string;
+    statsViews: string;
+    statsVideos: string;
+    statsSubscribers: string;
+    joinedOn: string;
+    noLinks: string;
+    contact: string;
+    aboutLoadFailed: string;
+    customizeChannel: string;
+    manageVideos: string;
+    moreActions: string;
+    manage: string;
+    deleteDialogTitle: string;
+    deleteDialogBody: string;
+    deleteMainNote: string;
+    deleteOnlyNote: string;
+    deleteConfirmLabel: string;
+    deleteConfirmButton: string;
+    deleting: string;
+    deleteFailed: string;
+    deleteSuccess: string;
+    saveFailed: string;
+    newMainChannel: string;
     tabs: {
       manage_tabs: string;
       manage_tabs_description: string;
@@ -409,7 +486,6 @@ export interface AppTranslations {
     channelVideos?: string;
     channelPlaylists?: string;
     channelCommunity?: string;
-    joinedOn?: string;
     totalViews?: string;
     viewCount?: string;
     subscriberCount?: string;
@@ -418,13 +494,9 @@ export interface AppTranslations {
     branding?: string;
     basicInfo?: string;
     advancedSettings?: string;
-    handle?: string;
     handleDescription?: string;
-    addLink?: string;
     socialLinks?: string;
     websiteLink?: string;
-    contactEmail?: string;
-    location?: string;
     channelWatermark?: string;
   };
 
@@ -779,6 +851,44 @@ export interface AppTranslations {
     thisMonth: string;
     noTrendingVideos: string;
     checkBackLater: string;
+    typeAll: string;
+    typeVideos: string;
+    typeChannels: string;
+    typePlaylists: string;
+    typePosts: string;
+    resultType: string;
+    anyDate: string;
+    thisYear: string;
+    verifiedOnly: string;
+    verified: string;
+    sortNewest: string;
+    sortPopular: string;
+    urdu: string;
+    french: string;
+    inChannel: string;
+    thisChannel: string;
+    removeFilter: string;
+    showResults: string;
+    closeFilters: string;
+    loadMore: string;
+    loadingMore: string;
+    relaxedNotice: string;
+    searchError: string;
+    retry: string;
+    removeFromHistory: string;
+    historyEmpty: string;
+    historyPrivacyNote: string;
+    historyCleared: string;
+    communityPost: string;
+    likesCount: string;
+    commentsCount: string;
+    videosCount: string;
+    viewsCount: string;
+    live: string;
+    searchInputLabel: string;
+    suggestionsLabel: string;
+    startSearching: string;
+    resultsLabel: string;
     // Extended search fields for Arabic translations
     search?: string;
     resultsFor?: string;
@@ -791,8 +901,6 @@ export interface AppTranslations {
     videos?: string;
     channels?: string;
     playlists?: string;
-    live?: string;
-    thisYear?: string;
     hd?: string;
     fourK?: string;
     subtitles?: string;
@@ -1350,6 +1458,30 @@ export interface AppTranslations {
     actionFailed: string;
     yourAvatar: string;
     authorAvatar: string;
+    sortBy: string;
+    sortTop: string;
+    sortNewest: string;
+    reply: string;
+    replyPlaceholder: string;
+    replying: string;
+    showReplies: string;
+    hideReplies: string;
+    loadMoreReplies: string;
+    edit: string;
+    save: string;
+    saving: string;
+    editComment: string;
+    heldBadge: string;
+    heldNotice: string;
+    approve: string;
+    commentsOff: string;
+    heldForReviewInfo: string;
+    seekTo: string;
+    settingsLabel: string;
+    settingsHelp: string;
+    settingOn: string;
+    settingHeld: string;
+    settingOff: string;
   };
 
   /**
@@ -1465,6 +1597,12 @@ export interface AppTranslations {
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;
+      newVideoTitle: string;
+      newVideoMessage: string;
+      liveStartedTitle: string;
+      liveStartedMessage: string;
+      commentReplyTitle: string;
+      commentReplyMessage: string;
     };
     // Extended notifications fields for Arabic translations
     notifications?: string;
@@ -1935,6 +2073,8 @@ export interface AppTranslations {
   privacy: {
     bannerTitle: string;
     bannerDescription: string;
+    bannerChoiceHint: string;
+    bannerSettingsLink: string;
     acceptAll: string;
     rejectAll: string;
     customize: string;

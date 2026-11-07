@@ -36,6 +36,8 @@ import {
   Rss,
   Users,
   BarChart3,
+  Library,
+  Bell,
   Settings,
 } from 'lucide-react';
 
@@ -264,6 +266,16 @@ export function UnifiedNavigation() {
       label: t.navigation.analytics,
       icon: BarChart3,
       href: `/${lang}/analytics`,
+    },
+    {
+      label: t.library.title,
+      icon: Library,
+      href: `/${lang}/library`,
+    },
+    {
+      label: t.notificationCenter.title,
+      icon: Bell,
+      href: `/${lang}/notifications`,
     },
     {
       label: t.header.settings,

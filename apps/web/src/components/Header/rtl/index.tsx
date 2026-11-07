@@ -9,6 +9,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { UploadButton } from '@/components/UploadButton';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) => {
   const { t, lang: locale } = useLanguage();
@@ -54,6 +55,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
             size="sm"
           />
         )}
+        <NotificationBell dir="rtl" />
         <UnifiedNavigationRTL />
       </div>
     </header>

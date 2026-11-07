@@ -167,6 +167,8 @@ export interface Comments {
     isLiked?: boolean;       // Viewer channel liked this comment (GET /api/videos/:id/comments)
     isDisliked?: boolean;    // Viewer channel disliked this comment
     author?: CommentAuthor;  // Resolved author (channel name/avatar, falling back to profile)
+    isHeld?: boolean;        // Awaiting the video owner's review (visible to author + owner only)
+    parentCommentId?: string | null; // Set on replies (one level deep)
 }
 
 export interface CommentAuthor {

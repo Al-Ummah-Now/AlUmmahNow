@@ -25,6 +25,7 @@ export interface LocalDataEntry {
 
 export const LOCAL_DATA_INVENTORY: ReadonlyArray<LocalDataEntry> = [
   { key: 'aun.enc.watchProgress', classification: 'personal', purpose: 'Resume playback for signed-out viewers', retention: '90 days, max 50 videos', encrypted: true },
+  { key: 'aun.enc.searchHistory', classification: 'personal', purpose: 'Your recent searches (private, never sent to the server)', retention: '90 days, max 20 searches', encrypted: true },
   { key: 'video_views_tracked', classification: 'personal', purpose: 'Avoid counting the same view twice', retention: '30 minutes', encrypted: false },
   { key: 'al-ummah-active-channel', prefix: true, classification: 'session', purpose: 'Remember which of your channels is active', retention: 'Until sign-out', encrypted: false },
   { key: 'al-ummah-ab-assignments', classification: 'tracking', purpose: 'Keep A/B experiment variants stable (experiments consent only)', retention: '30 days unused', encrypted: false },

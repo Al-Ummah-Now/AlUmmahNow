@@ -8,8 +8,8 @@
   ],
   "logpush": true,
   "minify": true,
-  // keep_names (on by default) wraps functions in __name(); next-themes inlines
-  // its theme script via Function.toString(), so every page threw "e is not defined"
+  // esbuild keepNames injects __name() into fn.toString() output, breaking
+  // next-themes inline script in the browser ("e is not defined").
   "keep_names": false,
   "assets": {
     "directory": ".open-next/assets",
