@@ -39,11 +39,11 @@ export const accounts = {
     };
   },
   get nonadmin(): Account {
-    // Throwaway QA account without any admin role; it also files the test reports.
+    // Seeded QA viewer (no admin role); it also files the test reports.
     return {
       role: 'nonadmin',
-      email: process.env.QA_NONADMIN_EMAIL || 'test-none-1794007739628@delivered.resend.dev',
-      password: process.env.QA_NONADMIN_PASSWORD || 'TestPassword789!',
+      email: process.env.QA_NONADMIN_EMAIL || 'qa-viewer@delivered.resend.dev',
+      password: process.env.QA_NONADMIN_PASSWORD || seedPassword(),
     };
   },
 };
