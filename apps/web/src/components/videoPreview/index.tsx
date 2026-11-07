@@ -153,6 +153,7 @@ export default function VideoPreview({ videoUrl, posterUrl, className = '' }: Vi
             max={duration || 0}
             value={currentTime}
             onChange={handleSeek}
+            aria-label={t.video.seekBar}
             className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-0"
           />
 

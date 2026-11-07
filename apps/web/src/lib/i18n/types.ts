@@ -549,6 +549,7 @@ export interface AppTranslations {
     unmute?: string;
     fullscreen?: string;
     exitFullscreen?: string;
+    seekBar: string;
     quality?: string;
     speed?: string;
     currentTime?: string;
@@ -1139,6 +1140,9 @@ export interface AppTranslations {
     newPost: string;
     searchPosts: string;
     allTypes: string;
+    filterByType: string;
+    /** Post card comments toggle (screen-reader label before the visible count) */
+    commentsButton: string;
     text: string;
     image: string;
     poll: string;

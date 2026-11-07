@@ -72,7 +72,7 @@ export default function NotFoundPage() {
         {/* Go Home Button */}
         <Link
           href={`/${locale}`}
-          className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-center"
+          className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-center"
         >
           {t.errors.notFoundGoHome}
         </Link>
@@ -87,7 +87,7 @@ export default function NotFoundPage() {
       </div>
 
       {/* Additional Help Text */}
-      <p className="mt-8 text-sm text-gray-500 dark:text-gray-500 text-center transition-colors">
+      <p className="mt-8 text-sm text-gray-600 dark:text-gray-400 text-center transition-colors">
         {t.errors.notFoundNeedHelp}{' '}
         <Link
           href={`/${locale}`}

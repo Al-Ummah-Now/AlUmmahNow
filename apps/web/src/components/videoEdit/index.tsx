@@ -237,7 +237,7 @@ export default function VideoEdit({
               onClick={() => setActiveTab('en')}
               className={`px-4 py-2 font-medium transition-colors ${
                 activeTab === 'en'
-                  ? 'border-b-2 border-blue-500 text-blue-500'
+                  ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               }`}
             >
@@ -251,7 +251,7 @@ export default function VideoEdit({
               onClick={() => setActiveTab('ar')}
               className={`px-4 py-2 font-medium transition-colors ${
                 activeTab === 'ar'
-                  ? 'border-b-2 border-blue-500 text-blue-500'
+                  ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               }`}
             >
@@ -361,7 +361,7 @@ export default function VideoEdit({
               type="button"
               data-testid="video-edit-add-tag"
               onClick={handleAddTag}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
             >
               <Plus size={16} />
               {t.video.addTag}

@@ -38,7 +38,7 @@ export function PlaylistCard(playlist: Playlist) {
               {playlist.description}
             </p>
           )}
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
             {new Date(playlist.dateCreated).toLocaleDateString(lang)}
           </p>
         </div>

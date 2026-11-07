@@ -181,7 +181,7 @@ export function UnifiedNavigationRTL() {
         {/* Trigger Button - Menu Icon */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="flex items-center gap-2 rounded-lg p-2 hover:bg-white/10 transition-colors"
           aria-label="قائمة التنقل"
           aria-expanded={isOpen}
           aria-haspopup="menu"
@@ -302,7 +302,7 @@ export function UnifiedNavigationRTL() {
       {/* Trigger Button - Avatar with Dropdown */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        className="flex items-center gap-2 rounded-lg p-2 hover:bg-white/10 transition-colors"
         aria-expanded={isOpen}
         aria-haspopup="menu"
         data-testid="nav-menu-trigger"
@@ -330,17 +330,17 @@ export function UnifiedNavigationRTL() {
 
         {/* User Info (hidden on mobile) */}
         <div className="hidden md:block text-right">
-          <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">
+          <div className="text-sm font-medium text-white truncate max-w-[150px]">
             {getDisplayName()}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">
+          <div className="text-xs text-gray-300 truncate max-w-[150px]">
             {channel ? getChannelName(channel.name, channel.nameLocalized) : tAr.navigation.noChannel}
           </div>
         </div>
 
         {/* Accessible name = visible name + channel + "Navigation menu" (label-in-name) */}
         <span className="sr-only">{tAr.navigation.navigationMenu}</span>
-        <ChevronDown className="h-4 w-4 text-gray-500" aria-hidden="true" />
+        <ChevronDown className="h-4 w-4 text-gray-300" aria-hidden="true" />
       </button>
 
       {/* Dropdown Menu */}

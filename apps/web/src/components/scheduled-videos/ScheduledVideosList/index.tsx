@@ -297,7 +297,7 @@ export function ScheduledVideosList({
                           data-testid="scheduled-video-publish-now"
                           onClick={() => handlePublishNow(video.id)}
                           disabled={actionLoading === video.id}
-                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-700 rounded-md hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {actionLoading === video.id ? (
                             <Loader size={16} className="me-1.5 animate-spin" />

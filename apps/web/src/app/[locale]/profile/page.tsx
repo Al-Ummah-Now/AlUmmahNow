@@ -167,7 +167,7 @@ const ProfilePage = () => {
                   <p className="text-gray-600 dark:text-gray-400 text-lg font-medium mb-2">
                     {t.common.noResults}
                   </p>
-                  <p className="text-gray-500 dark:text-gray-500 text-sm mb-4">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
                     {t.profile.firstPlaylistMessage || 'Create your first playlist to organize your videos'}
                   </p>
                   <button

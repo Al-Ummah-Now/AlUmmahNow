@@ -88,10 +88,10 @@ export default function LikeButton({
         'disabled:opacity-50 disabled:cursor-not-allowed',
         'flex-row'
       )}
-      aria-label={liked ? t.community.unlike : t.community.like}
       aria-pressed={liked}
     >
       <svg
+        aria-hidden="true"
         className={cn(
           'w-5 h-5 transition-all',
           liked
@@ -115,6 +115,8 @@ export default function LikeButton({
           ? 'text-blue-600 dark:text-blue-400'
           : 'text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400'
       )}>
+        {/* Accessible name = action + visible count (label-in-name) */}
+        <span className="sr-only">{liked ? t.community.unlike : t.community.like}</span>{' '}
         {formatCount(likes)}
       </span>
     </button>

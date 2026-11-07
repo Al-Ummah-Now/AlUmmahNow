@@ -167,7 +167,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                 </span>
               </div>
               {playlist.dateModified && (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {t.playlist.updatedOn.replace('{date}', new Date(playlist.dateModified).toLocaleDateString(lang))}
                 </p>
               )}

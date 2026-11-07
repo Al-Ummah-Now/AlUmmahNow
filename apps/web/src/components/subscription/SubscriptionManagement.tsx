@@ -100,7 +100,7 @@ export const SubscriptionManagement: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400 text-lg">
             {s.noSubscriptions}
           </p>
-          <p className="text-gray-500 dark:text-gray-500 mt-2">
+          <p className="text-gray-500 dark:text-gray-400 mt-2">
             {s.noSubscriptionsHint}
           </p>
         </div>

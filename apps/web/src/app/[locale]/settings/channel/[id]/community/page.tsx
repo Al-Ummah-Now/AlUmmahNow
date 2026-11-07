@@ -170,7 +170,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
 
             <div className="flex gap-3">
               <Select value={filterType} onValueChange={(v) => setFilterType(v as PostType | 'all')}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]" aria-label={t.community.filterByType}>
                   <Filter className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
                   <SelectValue />
                 </SelectTrigger>

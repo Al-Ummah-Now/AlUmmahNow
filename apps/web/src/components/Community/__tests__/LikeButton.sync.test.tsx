@@ -26,16 +26,16 @@ describe('LikeButton', () => {
     const { rerender } = render(
       <LikeButton postChannelId="c1" postId="p1" initialLikes={0} initialLiked={false} channelId="v1" userId="u1" />
     );
-    expect(screen.getByRole('button', { name: 'Like' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /^Like\b/ })).toHaveAttribute('aria-pressed', 'false');
 
     rerender(<LikeButton postChannelId="c1" postId="p1" initialLikes={3} initialLiked={true} channelId="v1" userId="u1" />);
-    const button = screen.getByRole('button', { name: 'Unlike' });
+    const button = screen.getByRole('button', { name: /^Unlike\b/ });
     expect(button).toHaveAttribute('aria-pressed', 'true');
     expect(button).toHaveTextContent('3');
   });
 
   it('is disabled without a signed-in viewer channel', () => {
     render(<LikeButton postChannelId="c1" postId="p1" initialLikes={1} />);
-    expect(screen.getByRole('button', { name: 'Like' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Like\b/ })).toBeDisabled();
   });
 });

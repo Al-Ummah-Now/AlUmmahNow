@@ -324,11 +324,11 @@ export default function NewPostPage({ params }: NewPostPageProps) {
 
               <div className="space-y-4">
                 <div>
-                  <Label className="text-sm md:text-base">
+                  <Label htmlFor="community-post-visibility" className="text-sm md:text-base">
                     {isRTL ? 'الرؤية' : 'Visibility'}
                   </Label>
                   <Select value={visibility} onValueChange={(v) => setVisibility(v as PostVisibility)}>
-                    <SelectTrigger className="mt-2">
+                    <SelectTrigger id="community-post-visibility" className="mt-2">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

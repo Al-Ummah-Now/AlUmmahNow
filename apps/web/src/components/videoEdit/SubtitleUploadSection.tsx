@@ -190,8 +190,8 @@ export default function SubtitleUploadSection({
             sm:w-auto
             h-10
             md:h-11
-            bg-blue-500
-            hover:bg-blue-600
+            bg-blue-600
+            hover:bg-blue-700
             text-white
             flex
             items-center
@@ -253,7 +253,7 @@ export default function SubtitleUploadSection({
             type="button"
             data-testid="subtitle-add-first"
             onClick={() => setIsModalOpen(true)}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="w-4 h-4 me-2" />
             {t.subtitle?.uploadFirstSubtitle || 'Upload First Subtitle'}
