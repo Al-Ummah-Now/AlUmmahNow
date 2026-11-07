@@ -12,6 +12,7 @@
  */
 
 import { logger } from './logger';
+import { detectTextLanguage } from '@al-ummah/shared-types';
 
 export interface DiscoveryVideo {
   id: string;
@@ -269,10 +270,11 @@ export function trendingScore(video: DiscoveryVideo, now: number, period: Trendi
  */
 export function rankTrending(
   videos: DiscoveryVideo[],
-  options: { now: number; period: TrendingPeriod; category?: string; limit: number }
+  options: { now: number; period: TrendingPeriod; category?: string; language?: string; limit: number }
 ): Array<{ video: DiscoveryVideo; trending: TrendingScore; rank: number }> {
   return videos
     .filter(video => !options.category || video.category === options.category)
+    .filter(video => !options.language || (video.language || detectTextLanguage(`${video.title || ''} ${video.description || ''}`)) === options.language)
     .map(video => ({ video, trending: trendingScore(video, options.now, options.period) }))
     .filter(item => item.trending.score > 0)
     .sort((a, b) => b.trending.score - a.trending.score || (b.video.views || 0) - (a.video.views || 0))

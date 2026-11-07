@@ -129,6 +129,18 @@
 			"binding": "NOTIFICATIONS_DB",
 			"database_name": "al-ummah-now-notifications",
 			"database_id": "00000000-0000-0000-0000-000000000000"
+		},
+		{
+			// Search index (Epic 29, Story 29.9). Schema: migrations/search
+			// PRODUCTION DATABASE NOT CREATED YET: before the first production deploy run
+			//   npx wrangler d1 create al-ummah-now-search
+			// put the returned id here (and in apps/processor/wrangler.jsonc), then
+			//   npx wrangler d1 migrations apply al-ummah-now-search --remote
+			// and run scripts/search-backfill.sh against production.
+			"binding": "SEARCH_DB",
+			"database_name": "al-ummah-now-search",
+			"database_id": "00000000-0000-0000-0000-000000000001",
+			"migrations_dir": "migrations/search"
 		}
 	],
 	"kv_namespaces": [
