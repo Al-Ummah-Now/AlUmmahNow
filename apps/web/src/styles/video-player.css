@@ -53,6 +53,48 @@
   --video-transition-slow: 0.3s ease;
 }
 
+/*
+  Epic 1 (Story 1.1) - player chrome colour tokens.
+  The controls are drawn over arbitrary video frames, so the player chrome is a
+  dark scrim with light foreground in BOTH themes (the page theme only changes
+  surrounding UI). Ratios are against the worst case: the lightest scrim value
+  composited over a pure-white frame.
+    scrim (0.72 black over white)  = #474747
+    --vp-fg #ffffff on #474747       = 9.3:1  (text, icons - needs 4.5:1)
+    --vp-fg-muted #e5e7eb on #474747 = 7.5:1
+    --vp-focus #ffb84d on #474747    = 5.4:1, on solid #000 = 12.2:1 (needs 3:1)
+    --vp-track rgba(255,255,255,.45) over #474747 = #9a9a9a -> 3.3:1 vs scrim
+  .dark keeps the same scrim (contrast already maximal) with a slightly
+  cooler surface for menus so both themes are visually consistent.
+*/
+.video-js {
+  --vp-scrim-strong: rgba(0, 0, 0, 0.88);
+  --vp-scrim-weak: rgba(0, 0, 0, 0.72);
+  --vp-surface: #111827;
+  --vp-surface-border: rgba(255, 255, 255, 0.24);
+  --vp-fg: #ffffff;
+  --vp-fg-muted: #e5e7eb;
+  --vp-hover-bg: rgba(255, 255, 255, 0.18);
+  --vp-active-bg: rgba(255, 255, 255, 0.3);
+  --vp-track: rgba(255, 255, 255, 0.45);
+  --vp-focus: #ffb84d;
+  --vp-focus-halo: #000000;
+  --vp-selected-bg: #ffffff;
+  --vp-selected-fg: #111827;
+  --vp-touch-target: 44px;
+  color: var(--vp-fg);
+}
+
+.dark .video-js {
+  --vp-surface: #030712;
+}
+
+@media (pointer: coarse) {
+  .video-js {
+    --vp-touch-target: 48px;
+  }
+}
+
 .video-js {
   font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
@@ -60,23 +102,26 @@
 /* Big play button styling */
 .video-js .vjs-big-play-button {
   border-radius: 50%;
-  border: none;
-  background-color: oklch(var(--primary) / 0.9);
+  border: 3px solid var(--vp-fg); /* non-text contrast: white ring vs scrim/video */
+  background-color: var(--vp-scrim-strong);
+  color: var(--vp-fg);
   transition: background-color var(--video-transition-base), transform var(--video-transition-fast);
 }
 
 /* Consolidated hover states */
 .video-js .vjs-big-play-button:hover,
-.dark .video-js .vjs-big-play-button:hover {
-  background-color: oklch(var(--primary) / 1);
+.dark .video-js .vjs-big-play-button:hover,
+.video-js:hover .vjs-big-play-button {
+  background-color: #000000;
   transform: scale(1.05);
 }
 
 /* Consolidated focus states */
 .video-js .vjs-big-play-button:focus-visible {
-  outline: 3px solid oklch(var(--ring));
+  outline: 3px solid var(--vp-focus);
   outline-offset: 4px;
-  background-color: oklch(var(--primary) / 1);
+  box-shadow: 0 0 0 8px var(--vp-focus-halo);
+  background-color: #000000;
 }
 
 /* Enable pointer events for click-to-play functionality */
@@ -96,11 +141,15 @@
 /* Control bar styling - WCAG 2.1 AA compliant contrast */
 /* V3 Design: 64px height with vertically centered controls */
 .video-js .vjs-control-bar {
+  /* Story 1.1: dark scrim in both themes - >= 9.3:1 for white controls even
+     over a white frame (previously the gradient tokens were invalid CSS and the
+     bar rendered transparent: white icons over video measured ~2.8:1) */
   background: linear-gradient(
     to top,
-    oklch(var(--background) / 0.98),
-    oklch(var(--background) / 0.75)
+    var(--vp-scrim-strong),
+    var(--vp-scrim-weak)
   );
+  color: var(--vp-fg);
   backdrop-filter: blur(var(--video-blur-amount));
   -webkit-backdrop-filter: blur(var(--video-blur-amount));
   padding: 0 1.25rem; /* Horizontal padding only, vertical centering handled by height */
@@ -117,11 +166,16 @@
   overflow: visible !important; /* Allow quality menu to extend outside control bar */
 }
 
-/* Consolidated focus indicators for control buttons */
+/* Consolidated focus indicators for control buttons (Story 1.4 AC 5) */
 .video-js .vjs-control-bar button:focus-visible,
-.dark .video-js .vjs-control-bar button:focus-visible {
-  outline: 2px solid oklch(var(--ring));
+.dark .video-js .vjs-control-bar button:focus-visible,
+.video-js .vjs-control-bar [role="slider"]:focus-visible,
+.video-js .vjs-menu li:focus-visible,
+.video-js .vjs-menu li.vjs-menu-item:focus {
+  outline: 3px solid var(--vp-focus);
   outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--vp-focus-halo);
+  text-shadow: none;
 }
 
 /* Accessibility: Enhanced contrast for control icons */
@@ -143,37 +197,25 @@
   transform: none;
 }
 
-/* Dark mode specific adjustments */
-.dark .video-js .vjs-big-play-button {
-  background-color: oklch(var(--primary) / 0.85);
-}
-
-.dark .video-js .vjs-big-play-button:focus-visible {
-  outline-color: oklch(var(--ring));
-}
+/* Dark mode: same high-contrast scrim as light mode (see tokens above) */
 
 /* RTL big play button support */
 [dir="rtl"] .video-js .vjs-big-play-button::before {
   transform: scaleX(-1);
 }
 
-.dark .video-js .vjs-control-bar {
-  background: linear-gradient(
-    to top,
-    oklch(var(--card) / 0.98), /* Increased from 0.9 for better contrast in dark mode */
-    oklch(var(--card) / 0.75) /* Increased from 0.4 to meet 4.5:1 ratio in dark mode */
-  );
-}
+
 
 /* Enhanced control button sizing and spacing */
-/* V3 Design: 36px buttons, vertically centered */
+/* Story 1.5: 44x44px minimum (48px on coarse pointers) - was 36px (32px mobile) */
 .video-js .vjs-control-bar button {
-  min-width: 2.25rem; /* 36px - matches V3 design */
-  min-height: 2.25rem; /* 36px - matches V3 design */
-  width: 2.25rem; /* Fixed width for consistency */
-  height: 2.25rem; /* Fixed height for consistency */
+  min-width: var(--vp-touch-target);
+  min-height: var(--vp-touch-target);
+  width: var(--vp-touch-target);
+  height: var(--vp-touch-target);
   padding: 0.5rem; /* Padding for icons */
-  margin: 0 0.125rem; /* Spacing between buttons */
+  margin: 0 0.125rem; /* >= 4px between adjacent targets (with the bar gap) */
+  color: var(--vp-fg);
   border-radius: 0.375rem; /* Rounded corners */
   transition: all 0.2s ease;
   display: flex;
@@ -182,8 +224,16 @@
 }
 
 .video-js .vjs-control-bar button:hover {
-  background: oklch(var(--muted) / 0.3);
+  background: var(--vp-hover-bg);
   transform: scale(1.05);
+}
+
+/* Story 1.5 AC 3: pressed / touch feedback */
+.video-js .vjs-control-bar button:active,
+.video-js .vjs-control-bar .vjs-touch-active,
+.video-js .vjs-big-play-button.vjs-touch-active {
+  background: var(--vp-active-bg);
+  transform: scale(0.94);
 }
 
 /* Enhanced time display readability */
@@ -203,7 +253,7 @@
   justify-content: center; /* Horizontally center text */
   height: 100%; /* Fill control bar height */
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: oklch(var(--foreground));
+  color: var(--vp-fg);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
@@ -225,20 +275,20 @@
   min-width: 3.5rem !important; /* Increased from default */
   font-size: 0.9375rem !important; /* Larger font */
   font-weight: 600;
-  padding: 0.625rem 0.75rem !important;
-  background: oklch(var(--muted) / 0.2);
+  padding: 0 !important;
+  background: transparent;
   border-radius: 0.375rem;
 }
 
 .video-js .vjs-quality-selector:hover {
-  background: oklch(var(--muted) / 0.4);
+  background: var(--vp-hover-bg);
 }
 
 /* Quality selector button text */
 .video-js .vjs-quality-selector .vjs-menu-button-text {
   font-size: 0.9375rem !important;
   font-weight: 600;
-  color: oklch(var(--foreground));
+  color: var(--vp-fg);
 }
 
 /* Quality selector and menu button - allow overflow for menu */
@@ -261,9 +311,9 @@
   /* Ensure menu appears above everything */
   z-index: 9999 !important;
 
-  /* Visual styling */
-  background: oklch(var(--card)) !important;
-  border: 1px solid oklch(var(--border)) !important;
+  /* Visual styling - dark surface in both themes; Video.js menu text is white */
+  background: var(--vp-surface) !important;
+  border: 1px solid var(--vp-surface-border) !important;
   border-radius: 0.5rem !important;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
               0 4px 6px -4px rgba(0, 0, 0, 0.2) !important;
@@ -324,14 +374,10 @@
     border: 3px solid currentColor;
   }
 
-  .video-js .vjs-control-bar {
-    background: oklch(var(--background)); /* Solid background for maximum contrast */
-    border-top: 2px solid oklch(var(--foreground)); /* Add border for definition */
-  }
-  
+  .video-js .vjs-control-bar,
   .dark .video-js .vjs-control-bar {
-    background: oklch(var(--card)); /* Solid background in dark mode */
-    border-top: 2px solid oklch(var(--card-foreground)); /* Border for definition */
+    background: #000000; /* Solid background: 21:1 for the white controls */
+    border-top: 2px solid #ffffff; /* Border for definition */
   }
 }
 
@@ -352,8 +398,8 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: oklch(var(--background) / 0.9);
-  color: oklch(var(--foreground));
+  background: color-mix(in oklch, var(--background) 90%, transparent);
+  color: var(--foreground);
   padding: 1rem 1.5rem;
   border-radius: 0.75rem;
   display: flex;
@@ -387,8 +433,8 @@
 
 /* Dark mode volume indicator */
 .dark .vjs-volume-indicator {
-  background: oklch(var(--card) / 0.95);
-  color: oklch(var(--card-foreground));
+  background: color-mix(in oklch, var(--card) 95%, transparent);
+  color: var(--card-foreground);
 }
 
 
@@ -437,7 +483,7 @@
 }
 
 .video-js .vjs-volume-bar {
-  background: oklch(var(--muted) / 0.7); /* Darker background for better visibility */
+  background: var(--vp-track); /* >= 3:1 against the scrim (non-text contrast) */
   border-radius: 0.375rem; /* More rounded */
   box-shadow: var(--video-shadow-inner), 0 1px 2px rgba(0, 0, 0, 0.1); /* Enhanced shadow */
   height: 0.5rem; /* 8px - matches V3 design */
@@ -449,7 +495,7 @@
 }
 
 .video-js .vjs-volume-bar:hover {
-  background: oklch(var(--muted) / 0.8); /* Darker on hover */
+  background: rgba(255, 255, 255, 0.55);
   transform: scaleY(1.1); /* Slightly taller on hover */
 }
 
@@ -490,9 +536,14 @@
 /* Consolidated volume control focus states */
 .video-js .vjs-volume-bar:focus,
 .video-js .vjs-volume-bar:focus-visible {
-  outline: 2px solid oklch(var(--ring));
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px oklch(var(--ring) / 0.2);
+  outline: 3px solid var(--vp-focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--vp-focus-halo);
+}
+
+/* Keyboard users see the handle as soon as the slider is focused */
+.video-js .vjs-volume-bar:focus-visible .vjs-volume-level::after {
+  opacity: 1;
 }
 
 /* Ensure volume panel is accessible via keyboard */
@@ -524,8 +575,8 @@
 /* High contrast mode support */
 @media (prefers-contrast: high) {
   .vjs-volume-indicator {
-    background: oklch(var(--background));
-    border: 2px solid oklch(var(--foreground));
+    background: var(--background);
+    border: 2px solid var(--foreground);
   }
 
   .video-js .vjs-volume-bar {
@@ -543,8 +594,8 @@
   bottom: calc(100% + 0.5rem);
   left: 0;
   transform: translateX(-50%);
-  background: oklch(var(--background) / 0.95);
-  border: 2px solid oklch(var(--border));
+  background: color-mix(in oklch, var(--background) 95%, transparent);
+  border: 2px solid var(--border);
   border-radius: 0.5rem;
   padding: 0.375rem;
   pointer-events: none;
@@ -576,7 +627,7 @@
   margin-top: 0.375rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: oklch(var(--foreground));
+  color: var(--foreground);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   white-space: nowrap;
 }
@@ -586,7 +637,7 @@
   position: absolute;
   top: 0;
   height: 100%;
-  background: oklch(var(--primary) / 0.3);
+  background: color-mix(in oklch, var(--primary) 30%, transparent);
   pointer-events: none;
   z-index: 1;
   border-radius: inherit;
@@ -610,7 +661,7 @@
   height: 0.75rem; /* 12px - matches V3 design */
   width: 100%;
   border-radius: 0.5rem; /* Rounded for modern look */
-  background: oklch(var(--muted) / 0.7); /* Darker background for better visibility */
+  background: var(--vp-track); /* >= 3:1 against the scrim (non-text contrast) */
   transition: height var(--video-transition-fast), box-shadow var(--video-transition-fast), background var(--video-transition-fast);
   box-shadow: var(--video-shadow-inner), 0 1px 3px rgba(0, 0, 0, 0.15); /* Enhanced shadow */
   overflow: visible; /* Allow handle to show outside */
@@ -618,7 +669,7 @@
 
 .video-js .vjs-progress-control:hover .vjs-progress-holder {
   height: 1rem; /* Increased from 0.625rem for better visibility on hover */
-  background: oklch(var(--muted) / 0.8); /* Darker on hover */
+  background: rgba(255, 255, 255, 0.55);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); /* Enhanced shadow on hover */
 }
 
@@ -639,13 +690,13 @@
 
 /* Load progress (buffered) */
 .video-js .vjs-load-progress {
-  background: oklch(var(--primary) / 0.25); /* Lighter for distinction */
+  background: rgba(255, 255, 255, 0.25); /* buffered: lighter than played, darker than handle */
   border-radius: 0.5rem;
 }
 
 /* Buffered ranges */
 .video-js .vjs-load-progress div {
-  background: oklch(var(--primary) / 0.35); /* Slightly darker buffered segments */
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 0.5rem;
 }
 
@@ -657,16 +708,16 @@
 
 /* Dark mode adjustments */
 .dark .vjs-thumbnail-holder {
-  background: oklch(var(--card) / 0.95);
-  border-color: oklch(var(--border));
+  background: color-mix(in oklch, var(--card) 95%, transparent);
+  border-color: var(--border);
 }
 
 .dark .vjs-thumbnail-time {
-  color: oklch(var(--card-foreground));
+  color: var(--card-foreground);
 }
 
 .dark .vjs-watched-segment {
-  background: oklch(var(--primary) / 0.25);
+  background: color-mix(in oklch, var(--primary) 25%, transparent);
 }
 
 /* Enhanced RTL progress bar support */
@@ -762,17 +813,17 @@
 /* Accessibility: High contrast mode */
 @media (prefers-contrast: high) {
   .vjs-thumbnail-holder {
-    background: oklch(var(--background));
-    border: 3px solid oklch(var(--foreground));
+    background: var(--background);
+    border: 3px solid var(--foreground);
   }
 
   .vjs-watched-segment {
-    background: oklch(var(--primary) / 0.5);
-    border-top: 1px solid oklch(var(--primary));
+    background: color-mix(in oklch, var(--primary) 50%, transparent);
+    border-top: 1px solid var(--primary);
   }
 
   .video-js .vjs-progress-holder {
-    border: 1px solid oklch(var(--border));
+    border: 1px solid var(--border);
   }
 }
 
@@ -828,8 +879,9 @@
 /* Consolidated focus states for progress control */
 .video-js .vjs-progress-control:focus-visible,
 .video-js .vjs-progress-holder:focus-visible {
-  outline: 2px solid oklch(var(--ring));
-  outline-offset: 2px;
+  outline: 3px solid var(--vp-focus);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 7px var(--vp-focus-halo);
   border-radius: var(--video-border-radius-small);
 }
 
@@ -868,8 +920,8 @@
   position: relative;
   max-width: 28rem;
   width: 90%;
-  background: oklch(var(--card));
-  border: 1px solid oklch(var(--border));
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 1rem;
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   animation: vjs-resume-scale-in 0.2s ease-out;
@@ -894,10 +946,10 @@
   right: 1rem;
   z-index: 10;
   padding: 0.5rem;
-  background: oklch(var(--background) / 0.5);
-  border: 1px solid oklch(var(--border));
+  background: color-mix(in oklch, var(--background) 50%, transparent);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
-  color: oklch(var(--foreground));
+  color: var(--foreground);
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -906,12 +958,12 @@
 }
 
 .vjs-resume-prompt-close:hover {
-  background: oklch(var(--background) / 0.8);
+  background: color-mix(in oklch, var(--background) 80%, transparent);
   transform: scale(1.1);
 }
 
 .vjs-resume-prompt-close:focus-visible {
-  outline: 2px solid oklch(var(--ring));
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
@@ -935,7 +987,7 @@
   min-width: 120px;
   border-radius: 0.5rem;
   overflow: hidden;
-  background: oklch(var(--muted));
+  background: var(--muted);
 }
 
 .vjs-resume-prompt-thumbnail img {
@@ -953,12 +1005,12 @@
   left: 0;
   right: 0;
   height: 4px;
-  background: oklch(var(--muted) / 0.4);
+  background: color-mix(in oklch, var(--muted) 40%, transparent);
 }
 
 .vjs-resume-prompt-thumbnail-progress-bar {
   height: 100%;
-  background: oklch(var(--primary));
+  background: var(--primary);
   transition: width 0.3s ease;
 }
 
@@ -972,18 +1024,18 @@
   font-size: 1.25rem;
   font-weight: 700;
   margin: 0 0 0.25rem 0;
-  color: oklch(var(--card-foreground));
+  color: var(--card-foreground);
 }
 
 .vjs-resume-prompt-subtitle {
   font-size: 0.875rem;
-  color: oklch(var(--muted-foreground));
+  color: var(--muted-foreground);
   margin: 0 0 0.5rem 0;
 }
 
 .vjs-resume-prompt-video-title {
   font-size: 0.875rem;
-  color: oklch(var(--card-foreground));
+  color: var(--card-foreground);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -999,7 +1051,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 1rem;
-  background: oklch(var(--muted) / 0.5);
+  background: color-mix(in oklch, var(--muted) 50%, transparent);
   border-radius: 0.5rem;
   margin-bottom: 1.5rem;
   justify-content: center;
@@ -1008,14 +1060,14 @@
 .vjs-resume-prompt-time-icon {
   width: 1.5rem;
   height: 1.5rem;
-  color: oklch(var(--primary));
+  color: var(--primary);
   flex-shrink: 0;
 }
 
 .vjs-resume-prompt-time-text {
   font-size: 1.5rem;
   font-weight: 700;
-  color: oklch(var(--card-foreground));
+  color: var(--card-foreground);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -1045,18 +1097,18 @@
 
 /* Primary button (Resume) */
 .vjs-resume-prompt-button-primary {
-  background: oklch(var(--primary));
-  color: oklch(var(--primary-foreground));
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .vjs-resume-prompt-button-primary:hover {
-  background: oklch(var(--primary) / 0.9);
+  background: color-mix(in oklch, var(--primary) 90%, transparent);
   transform: translateY(-1px);
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
 .vjs-resume-prompt-button-primary:focus-visible {
-  outline: 2px solid oklch(var(--ring));
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
@@ -1067,17 +1119,17 @@
 /* Secondary button (Start Over) */
 .vjs-resume-prompt-button-secondary {
   background: transparent;
-  color: oklch(var(--card-foreground));
-  border: 1px solid oklch(var(--border));
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
 }
 
 .vjs-resume-prompt-button-secondary:hover {
-  background: oklch(var(--muted));
-  border-color: oklch(var(--border));
+  background: var(--muted);
+  border-color: var(--border);
 }
 
 .vjs-resume-prompt-button-secondary:focus-visible {
-  outline: 2px solid oklch(var(--ring));
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
@@ -1089,13 +1141,13 @@
 
 .vjs-resume-prompt-countdown-text {
   font-size: 0.875rem;
-  color: oklch(var(--muted-foreground));
+  color: var(--muted-foreground);
   margin: 0;
 }
 
 .vjs-resume-prompt-countdown-number {
   font-weight: 700;
-  color: oklch(var(--primary));
+  color: var(--primary);
   font-size: 1rem;
 }
 
@@ -1103,7 +1155,7 @@
 .vjs-resume-prompt-hint {
   text-align: center;
   font-size: 0.75rem;
-  color: oklch(var(--muted-foreground));
+  color: var(--muted-foreground);
   margin: 0;
 }
 
@@ -1146,29 +1198,29 @@
 }
 
 .dark .vjs-resume-prompt-close {
-  background: oklch(var(--background) / 0.6);
+  background: color-mix(in oklch, var(--background) 60%, transparent);
 }
 
 .dark .vjs-resume-prompt-close:hover {
-  background: oklch(var(--background) / 0.9);
+  background: color-mix(in oklch, var(--background) 90%, transparent);
 }
 
 /* Accessibility: High contrast mode */
 @media (prefers-contrast: high) {
   .vjs-resume-prompt-modal {
-    border: 2px solid oklch(var(--foreground));
+    border: 2px solid var(--foreground);
   }
 
   .vjs-resume-prompt-button-primary {
-    border: 2px solid oklch(var(--primary));
+    border: 2px solid var(--primary);
   }
 
   .vjs-resume-prompt-button-secondary {
-    border: 2px solid oklch(var(--border));
+    border: 2px solid var(--border);
   }
 
   .vjs-resume-prompt-close {
-    border: 2px solid oklch(var(--border));
+    border: 2px solid var(--border);
   }
 }
 
@@ -1204,8 +1256,8 @@
   top: 1rem;
   right: 1rem;
   z-index: 5;
-  background: oklch(var(--background) / 0.85);
-  color: oklch(var(--foreground));
+  background: color-mix(in oklch, var(--background) 85%, transparent);
+  color: var(--foreground);
   padding: 0.5rem 0.875rem;
   border-radius: 0.5rem;
   display: flex;
@@ -1222,8 +1274,8 @@
 
 /* Dark mode viewer count */
 .dark .vjs-viewer-count-overlay {
-  background: oklch(var(--card) / 0.9);
-  color: oklch(var(--card-foreground));
+  background: color-mix(in oklch, var(--card) 90%, transparent);
+  color: var(--card-foreground);
 }
 
 /* Live indicator container */
@@ -1232,8 +1284,8 @@
   align-items: center;
   gap: 0.375rem;
   padding: 0.25rem 0.625rem;
-  background: oklch(var(--destructive) / 0.15);
-  border: 1px solid oklch(var(--destructive) / 0.3);
+  background: color-mix(in oklch, var(--destructive) 15%, transparent);
+  border: 1px solid color-mix(in oklch, var(--destructive) 30%, transparent);
   border-radius: 0.375rem;
 }
 
@@ -1241,7 +1293,7 @@
 .vjs-live-dot {
   width: 0.5rem;
   height: 0.5rem;
-  background: oklch(var(--destructive));
+  background: var(--destructive);
   border-radius: 50%;
   animation: vjs-live-pulse 2s ease-in-out infinite;
 }
@@ -1262,7 +1314,7 @@
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: oklch(var(--destructive));
+  color: var(--destructive);
   letter-spacing: 0.05em;
 }
 
@@ -1291,7 +1343,7 @@
 /* Viewer count number */
 .vjs-viewer-count-number {
   font-weight: 700;
-  color: oklch(var(--primary));
+  color: var(--primary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 1rem;
   letter-spacing: -0.025em;
@@ -1300,7 +1352,7 @@
 /* Viewer count label */
 .vjs-viewer-count-label {
   font-size: 0.8125rem;
-  color: oklch(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-weight: 500;
 }
 
@@ -1311,12 +1363,12 @@
   gap: 0.25rem;
   margin-left: 0.375rem;
   padding-left: 0.375rem;
-  border-left: 1px solid oklch(var(--border));
+  border-left: 1px solid var(--border);
 }
 
 .vjs-disconnected-icon {
   font-size: 0.875rem;
-  color: oklch(var(--destructive));
+  color: var(--destructive);
   line-height: 1;
 }
 
@@ -1345,7 +1397,7 @@
   padding-left: 0;
   padding-right: 0.375rem;
   border-left: none;
-  border-right: 1px solid oklch(var(--border));
+  border-right: 1px solid var(--border);
 }
 
 
@@ -1358,12 +1410,12 @@
 /* High contrast mode */
 @media (prefers-contrast: high) {
   .vjs-viewer-count-overlay {
-    background: oklch(var(--background));
-    border: 2px solid oklch(var(--foreground));
+    background: var(--background);
+    border: 2px solid var(--foreground);
   }
 
   .vjs-live-indicator {
-    border: 2px solid oklch(var(--destructive));
+    border: 2px solid var(--destructive);
   }
 }
 
@@ -1394,8 +1446,6 @@
   }
 
   .video-js .vjs-control-bar button {
-    min-width: 2.5rem;
-    min-height: 2.5rem;
     padding: 0.5rem;
   }
 
@@ -1445,10 +1495,12 @@
     font-size: 0.6875rem;
   }
 
-  /* Enhanced touch target for progress bar */
+  /* Enhanced touch target for progress bar: the whole 48px-tall control is the
+     hit area (Video.js forwards presses on it to the seek bar) */
   .video-js .vjs-progress-control {
     height: var(--video-touch-target-size);
-    padding: 1rem 0;
+    min-height: var(--vp-touch-target);
+    padding: 0;
     touch-action: manipulation; /* Improve touch responsiveness */
   }
 
@@ -1574,7 +1626,7 @@
   /* Improved tap feedback */
   .video-js .vjs-control-bar button:hover,
   .video-js .vjs-control-bar button:focus {
-    background-color: oklch(var(--muted) / 0.3);
+    background-color: var(--vp-hover-bg);
     border-radius: var(--video-border-radius-small);
   }
 
@@ -1600,9 +1652,10 @@
     flex-shrink: 1 !important; /* Allow shrinking */
   }
 
-  /* Reduce volume slider width on mobile */
-  .video-js .vjs-volume-bar {
-    width: 2.5rem !important; /* 40px instead of 60px */
+  /* Phones control volume with hardware keys; the 40px-wide inline slider was
+     too small to operate by touch, so the mute toggle remains as the target */
+  .video-js .vjs-volume-panel .vjs-volume-control {
+    display: none !important;
   }
 
   /* Reduce timer width on mobile */
@@ -1611,12 +1664,24 @@
     font-size: 0.75rem !important; /* Smaller font */
   }
 
-  /* Reduce button sizes on mobile */
+  /* Story 1.5: buttons keep the 44/48px touch target on phones (previously
+     forced down to 32px). Fit is preserved by hiding the volume slider and the
+     keyboard-help button and letting the progress bar shrink. */
   .video-js .vjs-control-bar button {
-    min-width: 2rem !important; /* 32px instead of 40px */
-    min-height: 2rem !important;
-    width: 2rem !important;
-    height: 2rem !important;
+    min-width: var(--vp-touch-target) !important;
+    min-height: var(--vp-touch-target) !important;
+    width: var(--vp-touch-target) !important;
+    height: var(--vp-touch-target) !important;
+  }
+
+  .video-js .vjs-keyboard-help-button {
+    display: none !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .video-js .vjs-progress-control {
+    min-width: 3.5rem !important;
   }
 }
 
@@ -1627,10 +1692,10 @@
     gap: 0.5625rem;
   }
 
-  /* Tablet touch targets */
+  /* Tablet touch targets (inherit the 44/48px token) */
   .video-js .vjs-control-bar button {
-    min-width: 2.25rem;
-    min-height: 2.25rem;
+    min-width: var(--vp-touch-target);
+    min-height: var(--vp-touch-target);
   }
 
   .video-js .vjs-big-play-button {
@@ -1649,8 +1714,13 @@
 
   /* Enhanced touch feedback */
   .video-js .vjs-control-bar button:active {
-    background-color: oklch(var(--muted) / 0.4);
+    background-color: var(--vp-active-bg);
     transform: scale(0.95);
+  }
+
+  /* Keyboard help is irrelevant without a keyboard and costs a 48px slot */
+  .video-js .vjs-keyboard-help-button {
+    display: none !important;
   }
 
   /* Larger progress bar for touch accuracy */
@@ -1673,7 +1743,7 @@
   position: relative;
   background: none;
   border: none;
-  color: oklch(var(--foreground));
+  color: var(--vp-fg, #ffffff);
   cursor: pointer;
   padding: 0.5rem;
   border-radius: var(--video-border-radius-small);
@@ -1684,11 +1754,11 @@
 }
 
 .vjs-keyboard-help-button:hover {
-  background-color: oklch(var(--muted) / 0.3);
+  background-color: var(--vp-hover-bg, rgba(255, 255, 255, 0.18));
 }
 
 .vjs-keyboard-help-button:focus-visible {
-  outline: 2px solid oklch(var(--ring));
+  outline: 3px solid var(--vp-focus, #ffb84d);
   outline-offset: 2px;
 }
 
@@ -1731,8 +1801,8 @@
   max-width: 48rem;
   width: 90%;
   max-height: 80vh;
-  background: oklch(var(--card));
-  border: 1px solid oklch(var(--border));
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: var(--video-border-radius);
   box-shadow: var(--video-shadow);
   animation: vjs-help-scale-in var(--video-transition-base) ease-out;
@@ -1758,7 +1828,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem;
-  border-bottom: 1px solid oklch(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .vjs-keyboard-help-title {
@@ -1767,23 +1837,23 @@
   gap: 0.75rem;
   font-size: 1.25rem;
   font-weight: 600;
-  color: oklch(var(--card-foreground));
+  color: var(--card-foreground);
   margin: 0;
 }
 
 .vjs-keyboard-help-icon {
   width: 1.5rem;
   height: 1.5rem;
-  color: oklch(var(--primary));
+  color: var(--primary);
   flex-shrink: 0;
 }
 
 .vjs-keyboard-help-close {
   padding: 0.5rem;
-  background: oklch(var(--muted) / 0.5);
-  border: 1px solid oklch(var(--border));
+  background: color-mix(in oklch, var(--muted) 50%, transparent);
+  border: 1px solid var(--border);
   border-radius: var(--video-border-radius-small);
-  color: oklch(var(--foreground));
+  color: var(--foreground);
   cursor: pointer;
   transition: all var(--video-transition-base);
   display: flex;
@@ -1792,12 +1862,12 @@
 }
 
 .vjs-keyboard-help-close:hover {
-  background: oklch(var(--muted) / 0.8);
+  background: color-mix(in oklch, var(--muted) 80%, transparent);
   transform: scale(1.05);
 }
 
 .vjs-keyboard-help-close:focus-visible {
-  outline: 2px solid oklch(var(--ring));
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
@@ -1819,7 +1889,7 @@
 .vjs-keyboard-help-category-title {
   font-size: 1.125rem;
   font-weight: 500;
-  color: oklch(var(--card-foreground));
+  color: var(--card-foreground);
   margin: 0 0 0.75rem 0;
 }
 
@@ -1834,14 +1904,14 @@
   align-items: center;
   gap: 1rem;
   padding: 0.75rem;
-  background: oklch(var(--muted) / 0.5);
+  background: color-mix(in oklch, var(--muted) 50%, transparent);
   border-radius: var(--video-border-radius-small);
 }
 
 .vjs-keyboard-help-shortcut-icon {
   width: 1rem;
   height: 1rem;
-  color: oklch(var(--muted-foreground));
+  color: var(--muted-foreground);
   flex-shrink: 0;
 }
 
@@ -1856,34 +1926,34 @@
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  background: oklch(var(--background));
-  border: 1px solid oklch(var(--border));
+  background: var(--background);
+  border: 1px solid var(--border);
   border-radius: 0.25rem;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .vjs-keyboard-help-key-separator {
-  color: oklch(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 0.75rem;
 }
 
 .vjs-keyboard-help-description {
   flex: 1;
   font-size: 0.875rem;
-  color: oklch(var(--muted-foreground));
+  color: var(--muted-foreground);
   line-height: 1.4;
 }
 
 /* Help modal footer */
 .vjs-keyboard-help-footer {
   padding: 1rem 1.5rem;
-  border-top: 1px solid oklch(var(--border));
-  background: oklch(var(--muted) / 0.25);
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 25%, transparent);
 }
 
 .vjs-keyboard-help-footer-text {
   font-size: 0.875rem;
-  color: oklch(var(--muted-foreground));
+  color: var(--muted-foreground);
   text-align: center;
   margin: 0;
 }
@@ -1947,15 +2017,15 @@
 /* High contrast mode */
 @media (prefers-contrast: high) {
   .vjs-keyboard-help-modal {
-    border: 2px solid oklch(var(--foreground));
+    border: 2px solid var(--foreground);
   }
 
   .vjs-keyboard-help-close {
-    border: 2px solid oklch(var(--border));
+    border: 2px solid var(--border);
   }
 
   .vjs-keyboard-help-key {
-    border: 2px solid oklch(var(--foreground));
+    border: 2px solid var(--foreground);
   }
 }
 
@@ -1984,4 +2054,85 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+
+/* ========================================
+   Epic 1 accessibility additions (Stories 1.1, 1.4, 1.5)
+   ======================================== */
+
+/* Menu items (quality, captions): white on the dark surface (17.7:1); the
+   selected item is inverted and also marked with a check so selection is not
+   conveyed by colour alone (WCAG 1.4.1). */
+.video-js .vjs-menu li.vjs-menu-item {
+  color: var(--vp-fg);
+  min-height: var(--vp-touch-target);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9375rem;
+  text-transform: none;
+}
+
+.video-js .vjs-menu li.vjs-menu-item:hover,
+.video-js .vjs-menu li.vjs-menu-item:focus {
+  background-color: var(--vp-hover-bg);
+  color: var(--vp-fg);
+}
+
+.video-js .vjs-menu li.vjs-selected,
+.video-js .vjs-menu li.vjs-selected:hover,
+.video-js .vjs-menu li.vjs-selected:focus {
+  background-color: var(--vp-selected-bg);
+  color: var(--vp-selected-fg);
+}
+
+.video-js .vjs-menu li.vjs-selected::before {
+  content: "\2713";
+  margin-inline-end: 0.5rem;
+  font-weight: 700;
+}
+
+.video-js .vjs-menu li.vjs-menu-title {
+  color: var(--vp-fg-muted);
+}
+
+/* Time tooltip on the seek bar: dark text on white (Video.js default) */
+.video-js .vjs-progress-control .vjs-time-tooltip,
+.video-js .vjs-progress-control .vjs-mouse-display .vjs-time-tooltip {
+  background-color: #ffffff;
+  color: #111827;
+  font-size: 0.8125rem;
+}
+
+/* Touch targets: the volume control box is the slider's hit area (Video.js
+   forwards presses on it to the bar), give it the full target height. */
+.video-js .vjs-volume-panel .vjs-volume-control {
+  min-height: var(--vp-touch-target);
+}
+
+.video-js .vjs-progress-control {
+  min-height: var(--vp-touch-target);
+}
+
+/* Remaining-time display is not interactive but sits between targets; keep it
+   readable at 14px/600 (white on scrim >= 9.3:1). */
+.video-js .vjs-remaining-time .vjs-remaining-time-display {
+  color: var(--vp-fg);
+}
+
+/* Keyboard feedback/volume overlays sit on top of video: use the scrim */
+.video-js .vjs-keyboard-feedback,
+.video-js .vjs-volume-indicator {
+  background: var(--vp-scrim-strong);
+  color: var(--vp-fg);
+  border: 1px solid var(--vp-surface-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-js .vjs-control-bar button:active,
+  .video-js .vjs-control-bar .vjs-touch-active,
+  .video-js .vjs-control-bar button:hover {
+    transform: none;
+  }
 }

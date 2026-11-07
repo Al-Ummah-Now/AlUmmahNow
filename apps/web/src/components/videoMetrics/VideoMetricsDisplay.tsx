@@ -5,6 +5,7 @@ import { useRealTimeVideoMetrics, useRealTimePresence } from '@/hooks/useRealTim
 import { Eye, Heart, MessageCircle, Users, ThumbsDown } from 'lucide-react';
 import * as VideosAPI from '@/lib/api/videos';
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface VideoMetricsDisplayProps {
   videoId: string;
@@ -26,6 +27,7 @@ export function VideoMetricsDisplay({
   onMetricsUpdate
 }: VideoMetricsDisplayProps) {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -154,12 +156,16 @@ export function VideoMetricsDisplay({
   };
 
   return (
-    <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+    <div
+      className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400"
+      role="group"
+      aria-label={t.a11y.videoStats}
+    >
       {/* View count */}
       <div className="flex items-center gap-1">
-        <Eye className="w-4 h-4" />
-        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-600' : ''}`}>
-          {formatNumber(metrics.viewCount)} views
+        <Eye className="w-4 h-4" aria-hidden="true" />
+        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
+          {formatNumber(metrics.viewCount)} {t.video.views}
         </span>
       </div>
 
@@ -167,13 +173,16 @@ export function VideoMetricsDisplay({
       <button
         onClick={handleLike}
         disabled={!user || isLoading}
-        className={`flex items-center gap-1 transition-all duration-200 ${
+        className={`flex items-center justify-center gap-1 min-h-11 min-w-11 px-2 rounded-md transition-all duration-200 active:scale-95 ${
           !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
-        } ${isLiked ? 'text-red-500' : ''}`}
-        title={!user ? 'Sign in to like' : isLiked ? 'Unlike' : 'Like'}
+        } ${isLiked ? 'text-red-600 dark:text-red-400' : ''}`}
+        title={!user ? t.a11y.signInToReact : isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
+        aria-label={isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
+        aria-pressed={isLiked}
+        aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
       >
-        <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
-        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-600' : ''}`}>
+        <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} aria-hidden="true" />
+        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
           {formatNumber(metrics.likesCount)}
         </span>
       </button>
@@ -182,21 +191,24 @@ export function VideoMetricsDisplay({
       <button
         onClick={handleDislike}
         disabled={!user || isLoading}
-        className={`flex items-center gap-1 transition-all duration-200 ${
+        className={`flex items-center justify-center gap-1 min-h-11 min-w-11 px-2 rounded-md transition-all duration-200 active:scale-95 ${
           !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
-        } ${isDisliked ? 'text-blue-500' : ''}`}
-        title={!user ? 'Sign in to dislike' : isDisliked ? 'Remove dislike' : 'Dislike'}
+        } ${isDisliked ? 'text-blue-700 dark:text-blue-300' : ''}`}
+        title={!user ? t.a11y.signInToReact : isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo}
+        aria-label={isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo}
+        aria-pressed={isDisliked}
+        aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
       >
-        <ThumbsDown className={`w-4 h-4 ${isDisliked ? 'fill-current' : ''}`} />
-        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-600' : ''}`}>
+        <ThumbsDown className={`w-4 h-4 ${isDisliked ? 'fill-current' : ''}`} aria-hidden="true" />
+        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
           {formatNumber(metrics.dislikesCount)}
         </span>
       </button>
 
       {/* Comments */}
-      <div className="flex items-center gap-1">
-        <MessageCircle className="w-4 h-4" />
-        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-600' : ''}`}>
+      <div className="flex items-center gap-1" aria-label={t.a11y.commentsCount.replace('{count}', String(metrics.commentsCount))}>
+        <MessageCircle className="w-4 h-4" aria-hidden="true" />
+        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
           {formatNumber(metrics.commentsCount)}
         </span>
       </div>
@@ -204,12 +216,18 @@ export function VideoMetricsDisplay({
       {/* Live viewers (if available) */}
       {channelId && presenceConnected && viewerCount > 0 && (
         <div className="flex items-center gap-1">
-          <Users className="w-4 h-4" />
-          <span className="text-red-500 font-medium">
-            {formatNumber(viewerCount)} watching
+          <Users className="w-4 h-4" aria-hidden="true" />
+          <span className="text-red-600 dark:text-red-400 font-medium">
+            {t.a11y.watchingNow.replace('{count}', formatNumber(viewerCount))}
           </span>
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" aria-hidden="true" />
         </div>
+      )}
+
+      {!user && (
+        <span id={`metrics-signin-hint-${videoId}`} className="sr-only">
+          {t.a11y.signInToReact}
+        </span>
       )}
 
       {/* Connection status indicator */}
