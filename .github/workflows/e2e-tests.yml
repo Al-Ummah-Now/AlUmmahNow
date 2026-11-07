@@ -242,11 +242,6 @@ jobs:
           WEB_APP_URL: https://videos.qa.alummahnow.net
           OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
 
-      - name: Generate HTML report
-        if: always()
-        working-directory: apps/web
-        run: pnpm exec playwright show-report --host 0.0.0.0
-
       - name: Upload full test results
         if: always()
         uses: actions/upload-artifact@v4
