@@ -3,114 +3,92 @@
 import type { Report, ReportStats } from '@al-ummah/shared-types';
 import { getAdminSession } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { AdminApiError, type ActionResult } from './errors';
 import type {
   ListReportsParams,
   ListReportsResponse,
   TakeActionParams,
   ActionResponse,
+  IndexStats,
 } from './types';
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL || 'http://127.0.0.1:3090';
 
-async function fetchAdmin<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
+type ApiEnvelope = {
+  success?: boolean;
+  result?: unknown;
+  error?: string;
+  errors?: { message?: string }[];
+  [key: string]: unknown;
+};
+
+function envelopeError(body: ApiEnvelope, fallback: string): string {
+  return body.error || body.errors?.[0]?.message || fallback;
+}
+
+/**
+ * Call admin-api with the session's bearer token and return the parsed JSON
+ * envelope. Throws AdminApiError (with the HTTP status) on any failure.
+ */
+async function requestAdmin(endpoint: string, options: RequestInit = {}): Promise<ApiEnvelope> {
   const method = options.method || 'GET';
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
-  logger.info(`[API Request] ${method} ${endpoint}`, {
-    requestId,
-    url: `${ADMIN_API_URL}${endpoint}`,
-    method,
-    hasBody: !!options.body,
-  });
-
-  // Get session for auth token
-  const session = await getAdminSession();
-
-  if (!session) {
-    logger.error(`[API Error] Not authenticated`, { requestId, endpoint });
-    throw new Error('Not authenticated');
-  }
-
-  logger.debug(`[API Auth] Session retrieved`, {
-    requestId,
-    hasAccessToken: !!session.accessToken,
-    tokenLength: session.accessToken?.length,
-  });
-
   const url = `${ADMIN_API_URL}${endpoint}`;
 
+  logger.info(`[API Request] ${method} ${endpoint}`, { requestId, url, method, hasBody: !!options.body });
+
+  const session = await getAdminSession();
+  if (!session) {
+    logger.error('[API Error] Not authenticated', { requestId, endpoint });
+    throw new AdminApiError('Not authenticated', 401);
+  }
+
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       ...options,
+      cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.accessToken}`,
+        Authorization: `Bearer ${session.accessToken}`,
         ...options.headers,
       },
     });
-
-    logger.info(`[API Response] ${response.status} ${method} ${endpoint}`, {
-      requestId,
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      let errorData: Record<string, unknown> = {};
-      try {
-        errorData = JSON.parse(errorBody);
-      } catch {
-        errorData = { raw: errorBody };
-      }
-
-      logger.error(`[API Error] ${response.status} ${method} ${endpoint}`, {
-        requestId,
-        status: response.status,
-        statusText: response.statusText,
-        error: errorData,
-      });
-
-      throw new Error(
-        (errorData as { error?: string }).error ||
-        `Admin API error: ${response.statusText}`
-      );
-    }
-
-    const data = await response.json();
-
-    if (!data.success) {
-      logger.error(`[API Error] Request failed (success=false)`, {
-        requestId,
-        endpoint,
-        error: data.error,
-        data,
-      });
-      throw new Error(data.error || 'Admin API request failed');
-    }
-
-    logger.debug(`[API Success] ${method} ${endpoint}`, {
-      requestId,
-      hasResult: !!data.result,
-    });
-
-    return data.result;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Admin API error')) {
-      throw error; // Re-throw API errors
-    }
-
-    logger.error(`[API Error] Network/fetch error`, {
+    logger.error('[API Error] Network/fetch error', {
       requestId,
       endpoint,
       error: error instanceof Error ? error.message : String(error),
     });
-    throw error;
+    throw new AdminApiError('Admin API unreachable', 503);
   }
+
+  const text = await response.text();
+  let body: ApiEnvelope = {};
+  try {
+    body = text ? (JSON.parse(text) as ApiEnvelope) : {};
+  } catch {
+    body = { raw: text };
+  }
+
+  logger.info(`[API Response] ${response.status} ${method} ${endpoint}`, {
+    requestId,
+    status: response.status,
+    ok: response.ok,
+  });
+
+  if (!response.ok || body.success === false) {
+    const message = envelopeError(body, `Admin API error: ${response.status} ${response.statusText}`);
+    logger.error(`[API Error] ${response.status} ${method} ${endpoint}`, { requestId, status: response.status, error: message });
+    throw new AdminApiError(message, response.ok ? 500 : response.status);
+  }
+
+  return body;
+}
+
+async function fetchAdmin<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const body = await requestAdmin(endpoint, options);
+  return body.result as T;
 }
 
 export async function listReports(params?: ListReportsParams): Promise<ListReportsResponse> {
@@ -125,16 +103,34 @@ export async function listReports(params?: ListReportsParams): Promise<ListRepor
 }
 
 export async function getReport(reportId: string): Promise<{ report: Report }> {
-  return fetchAdmin<{ report: Report }>(`/api/moderation/reports/${reportId}`);
+  return fetchAdmin<{ report: Report }>(`/api/moderation/reports/${encodeURIComponent(reportId)}`);
 }
 
-export async function takeAction(reportId: string, params: TakeActionParams): Promise<ActionResponse> {
-  return fetchAdmin<ActionResponse>(`/api/moderation/reports/${reportId}/action`, {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
+/**
+ * Server action used by the report page. Returns a result object instead of
+ * throwing, because production builds redact server-action error messages.
+ */
+export async function takeAction(reportId: string, params: TakeActionParams): Promise<ActionResult<ActionResponse>> {
+  try {
+    const data = await fetchAdmin<ActionResponse>(`/api/moderation/reports/${encodeURIComponent(reportId)}/action`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    return { ok: true, data };
+  } catch (error) {
+    if (error instanceof AdminApiError) {
+      return { ok: false, status: error.status, error: error.message };
+    }
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }
 
 export async function getStats(): Promise<ReportStats> {
   return fetchAdmin<ReportStats>('/api/moderation/reports/stats');
+}
+
+export async function getIndexStatus(): Promise<IndexStats> {
+  const body = await requestAdmin('/api/indices?operation=status');
+  const stats = body.stats as IndexStats | undefined;
+  return stats ?? { indices: [], totalVideos: 0 };
 }

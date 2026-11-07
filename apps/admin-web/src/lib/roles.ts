@@ -33,6 +33,15 @@ export function hasAdminAccess(role?: string): boolean {
 }
 
 /**
+ * Pick the highest-privilege admin role from the auth server's role list
+ * (display names or ids). Returns undefined when the user has none.
+ */
+export function highestAdminRole(roles?: readonly string[]): SystemRole | undefined {
+  const normalized = (roles ?? []).map((r) => normalizeRole(r));
+  return ADMIN_ROLES.find((role) => normalized.includes(role));
+}
+
+/**
  * Check if a role is super admin
  */
 export function isSuperAdmin(role?: string): boolean {

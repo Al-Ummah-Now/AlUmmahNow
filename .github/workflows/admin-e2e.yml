@@ -1,0 +1,135 @@
+name: Admin Web E2E (QA)
+
+# Playwright UI suite for apps/admin-web, run against the deployed QA
+# environment (admin.qa.alummahnow.net + admin.api.qa.alummahnow.net).
+# The suite files and dismisses its own moderation reports and edits/reverts
+# one translation key, so runs are serialised across the repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      admin_web_url:
+        description: 'admin-web base URL'
+        required: false
+        default: 'https://admin.qa.alummahnow.net'
+  pull_request:
+    branches: [main, develop, integrate/qa-features]
+    paths:
+      - 'apps/admin-web/**'
+      - 'apps/admin-api/**'
+      - '.github/workflows/admin-e2e.yml'
+  schedule:
+    - cron: '30 3 * * *'
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: admin-e2e-qa
+  cancel-in-progress: false
+
+jobs:
+  admin-e2e:
+    name: Admin E2E - ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Forks do not receive secrets; the suite cannot log in without them
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, webkit, mobile]
+
+    env:
+      CI: true
+      ADMIN_WEB_URL: ${{ github.event.inputs.admin_web_url || 'https://admin.qa.alummahnow.net' }}
+      ADMIN_API_URL: https://admin.api.qa.alummahnow.net
+      VIDEOS_API_URL: https://videos.api.qa.alummahnow.net
+      OPENAUTH_URL: https://auth.qa.alummahnow.net
+      QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.4
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+
+      - name: Check QA credentials
+        run: |
+          if [ -z "$QA_SEED_PASSWORD" ]; then
+            echo "::error::QA_SEED_PASSWORD secret is not available to this run"
+            exit 1
+          fi
+
+      - name: Install Playwright browsers
+        working-directory: apps/admin-web
+        # Global setup always logs in with Chromium; WebKit only for its project
+        run: |
+          if [ "${{ matrix.project }}" = "webkit" ]; then
+            pnpm exec playwright install --with-deps chromium webkit
+          else
+            pnpm exec playwright install --with-deps chromium
+          fi
+
+      - name: Run admin-web E2E suite
+        working-directory: apps/admin-web
+        run: pnpm exec playwright test --project=${{ matrix.project }}
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-e2e-report-${{ matrix.project }}
+          path: apps/admin-web/playwright-report/
+          retention-days: 30
+
+      - name: Upload test results (traces, videos, JUnit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-e2e-results-${{ matrix.project }}
+          path: |
+            apps/admin-web/test-results/
+            !apps/admin-web/e2e/.auth/
+          retention-days: 14
+
+      - name: Publish JUnit summary
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: apps/admin-web/test-results/junit.xml
+          check_name: Admin E2E Results (${{ matrix.project }})
+        continue-on-error: true

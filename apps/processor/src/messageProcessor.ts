@@ -756,7 +756,7 @@ export class MessageProcessor {
         const createdAt = timestamp || new Date().toISOString();
 
         await env.REPORTS_DB.prepare(`
-          INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at)
+          INSERT OR IGNORE INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at)
           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
         `).bind(reportId, entityType, entityId, reporterId, reason, description || null, createdAt).run();
 
@@ -767,23 +767,31 @@ export class MessageProcessor {
         break;
 
       case MessageType.ReportResolve:
-        const { moderatorId, action, moderatorNotes } = message.payload as {
+        const { moderatorId, action, moderatorNotes, status } = message.payload as {
           moderatorId?: string;
           action?: string;
           moderatorNotes?: string;
+          status?: string;
         };
         const resolvedAt = new Date().toISOString();
+        // Dismissals must stay 'dismissed'; older admin-api builds sent no
+        // status, so derive it from the action in that case.
+        const finalStatus = status === 'dismissed' || status === 'resolved'
+          ? status
+          : action === 'dismissed' ? 'dismissed' : 'resolved';
 
+        // admin-api has usually written this row already; never erase the
+        // notes it stored when the message carries none.
         await env.REPORTS_DB.prepare(`
           UPDATE reports
-          SET status = 'resolved',
-              moderator_id = ?,
-              action = ?,
-              moderator_notes = ?,
-              resolved_at = ?,
+          SET status = ?,
+              moderator_id = COALESCE(?, moderator_id),
+              action = COALESCE(?, action),
+              moderator_notes = COALESCE(?, moderator_notes),
+              resolved_at = COALESCE(resolved_at, ?),
               updated_at = ?
           WHERE id = ?
-        `).bind(moderatorId, action, moderatorNotes || null, resolvedAt, resolvedAt, reportId).run();
+        `).bind(finalStatus, moderatorId ?? null, action ?? null, moderatorNotes || null, resolvedAt, resolvedAt, reportId).run();
 
         this.logger.info(`Report ${reportId} resolved by moderator ${moderatorId}`, {
           action,

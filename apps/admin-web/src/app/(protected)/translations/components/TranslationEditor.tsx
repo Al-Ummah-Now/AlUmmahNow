@@ -1,57 +1,98 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useAdminTranslations } from '@/hooks/useAdminTranslations';
 import type { SupportedLanguage, AppTranslations } from '@al-ummah/shared-types';
+import { useLanguage } from '@/i18n/I18nProvider';
+import { translateDynamic } from '@/i18n/translate';
+import { ErrorAlert, fieldClass } from '@/components/ui';
+import { logger } from '@/lib/logger-client';
 
 interface TranslationEditorProps {
   availableLocales: string[];
 }
 
+interface FlatEntry {
+  /** Path inside the section, e.g. ["tabs", "home"]. */
+  path: string[];
+  /** Display key, e.g. "tabs.home". */
+  key: string;
+  value: string;
+}
+
+/**
+ * Sections can contain nested groups (e.g. channel.tabs.*). Flatten them so
+ * every leaf string is editable on its own row; editing a group as a whole
+ * would stringify it to "[object Object]" and corrupt the stored data.
+ */
+function flattenSection(node: unknown, prefix: string[] = []): FlatEntry[] {
+  if (!node || typeof node !== 'object') return [];
+  const entries: FlatEntry[] = [];
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    const path = [...prefix, k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      entries.push(...flattenSection(v, path));
+    } else {
+      entries.push({ path, key: path.join('.'), value: v == null ? '' : String(v) });
+    }
+  }
+  return entries;
+}
+
+function buildNestedUpdate(section: string, path: string[], value: string): Partial<AppTranslations> {
+  const leaf = path.reduceRight<unknown>((acc, segment) => ({ [segment]: acc }), value);
+  return { [section]: leaf } as Partial<AppTranslations>;
+}
+
+const SUPPORTED: SupportedLanguage[] = ['en', 'ar'];
+
 export function TranslationEditor({ availableLocales }: TranslationEditorProps) {
+  const { t } = useLanguage();
+  const locales = availableLocales.filter((l): l is SupportedLanguage => SUPPORTED.includes(l as SupportedLanguage));
   const [selectedLocale, setSelectedLocale] = useState<SupportedLanguage>('en');
   const [selectedSection, setSelectedSection] = useState<string>('common');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localeId = useId();
+  const sectionId = useId();
+  const searchId = useId();
 
-  const {
-    translations,
-    isLoading,
-    isError,
-    error,
-    isUpdating,
-    updateTranslations,
-    refetch,
-  } = useAdminTranslations(selectedLocale);
+  const { translations, isLoading, isError, isUpdating, updateTranslations, refetch } =
+    useAdminTranslations(selectedLocale);
 
-  // Get available sections from translations
+  useEffect(() => () => {
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+  }, []);
+
   const sections = useMemo(() => {
     if (!translations) return [];
     return Object.keys(translations).sort();
   }, [translations]);
 
-  // Get keys for the selected section
-  const sectionKeys = useMemo(() => {
-    if (!translations || !selectedSection) return [];
-    const section = translations[selectedSection as keyof AppTranslations];
-    if (!section || typeof section !== 'object') return [];
-    return Object.entries(section).filter(([key, value]) => {
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        return (
-          key.toLowerCase().includes(searchLower) ||
-          String(value).toLowerCase().includes(searchLower)
-        );
-      }
-      return true;
-    });
-  }, [translations, selectedSection, searchTerm]);
+  const activeSection = sections.includes(selectedSection) ? selectedSection : sections[0] ?? selectedSection;
 
-  const handleStartEdit = (key: string, value: string) => {
-    setEditingKey(key);
-    setEditValue(value);
+  const sectionEntries = useMemo(() => {
+    if (!translations || !activeSection) return [];
+    const entries = flattenSection(translations[activeSection as keyof AppTranslations]);
+    if (!searchTerm) return entries;
+    const needle = searchTerm.toLowerCase();
+    return entries.filter((e) => e.key.toLowerCase().includes(needle) || e.value.toLowerCase().includes(needle));
+  }, [translations, activeSection, searchTerm]);
+
+  const valueDir = selectedLocale === 'ar' ? 'rtl' : 'ltr';
+
+  const flashStatus = (status: 'success' | 'error', ms: number) => {
+    setSaveStatus(status);
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+    statusTimer.current = setTimeout(() => setSaveStatus('idle'), ms);
+  };
+
+  const handleStartEdit = (entry: FlatEntry) => {
+    setEditingKey(entry.key);
+    setEditValue(entry.value);
   };
 
   const handleCancelEdit = () => {
@@ -59,35 +100,29 @@ export function TranslationEditor({ availableLocales }: TranslationEditorProps) 
     setEditValue('');
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingKey || !selectedSection) return;
-
+  const handleSaveEdit = async (entry: FlatEntry) => {
     setSaveStatus('saving');
     try {
-      await updateTranslations(
-        {
-          [selectedSection]: {
-            [editingKey]: editValue,
-          },
-        } as Partial<AppTranslations>,
-        'merge'
-      );
-      setSaveStatus('success');
+      await updateTranslations(buildNestedUpdate(activeSection, entry.path, editValue), 'merge');
       setEditingKey(null);
       setEditValue('');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch {
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      flashStatus('success', 4000);
+    } catch (error) {
+      logger.warn('[translations] Save failed', {
+        locale: selectedLocale,
+        key: `${activeSection}.${entry.key}`,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      flashStatus('error', 5000);
     }
   };
 
   if (isLoading) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-surface border border-border rounded-lg p-6" role="status" aria-live="polite">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          <span className="ml-3 text-gray-400">Loading translations...</span>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" aria-hidden="true"></div>
+          <span className="ms-3 text-fg-muted">{t('translations.loading')}</span>
         </div>
       </div>
     );
@@ -95,48 +130,60 @@ export function TranslationEditor({ availableLocales }: TranslationEditorProps) 
 
   if (isError) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6">
-        <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded">
-          <p className="font-medium">Failed to load translations</p>
-          <p className="text-sm mt-1">{error?.message}</p>
+      <div className="bg-surface border border-border rounded-lg p-6">
+        <ErrorAlert testId="translations-error">
+          <p className="font-medium">{t('translations.loadFailed')}</p>
           <button
+            type="button"
             onClick={() => refetch()}
-            className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
+            className="mt-3 bg-btn-banned hover:bg-btn-banned-hover text-white px-4 py-2 rounded text-sm"
           >
-            Retry
+            {t('common.retry')}
           </button>
-        </div>
+        </ErrorAlert>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg overflow-hidden">
-      {/* Header Controls */}
-      <div className="p-4 border-b border-gray-700 flex flex-wrap gap-4 items-center">
-        {/* Language Selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-gray-400 text-sm">Language:</label>
+    <div className="bg-surface border border-border rounded-lg overflow-hidden" data-testid="translation-editor">
+      <div className="p-4 border-b border-border flex flex-wrap gap-4 items-end">
+        <div className="flex flex-col gap-1">
+          <label htmlFor={localeId} className="text-fg-muted text-sm">
+            {t('translations.language')}
+          </label>
           <select
+            id={localeId}
+            data-testid="translation-locale"
             value={selectedLocale}
-            onChange={(e) => setSelectedLocale(e.target.value as SupportedLanguage)}
-            className="bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+            onChange={(e) => {
+              setSelectedLocale(e.target.value as SupportedLanguage);
+              handleCancelEdit();
+            }}
+            className={fieldClass}
           >
-            {availableLocales.map((locale) => (
+            {locales.map((locale) => (
               <option key={locale} value={locale}>
-                {locale.toUpperCase()} - {locale === 'en' ? 'English' : locale === 'ar' ? 'Arabic' : locale}
+                {locale.toUpperCase()} - {translateDynamic(t, 'translations.localeName', locale)}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Section Selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-gray-400 text-sm">Section:</label>
+        <div className="flex flex-col gap-1">
+          <label htmlFor={sectionId} className="text-fg-muted text-sm">
+            {t('translations.section')}
+          </label>
           <select
-            value={selectedSection}
-            onChange={(e) => setSelectedSection(e.target.value)}
-            className="bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+            id={sectionId}
+            data-testid="translation-section"
+            value={activeSection}
+            onChange={(e) => {
+              setSelectedSection(e.target.value);
+              handleCancelEdit();
+            }}
+            className={fieldClass}
+            dir="ltr"
           >
             {sections.map((section) => (
               <option key={section} value={section}>
@@ -146,100 +193,107 @@ export function TranslationEditor({ availableLocales }: TranslationEditorProps) 
           </select>
         </div>
 
-        {/* Search */}
-        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+        <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+          <label htmlFor={searchId} className="text-fg-muted text-sm">
+            {t('translations.search')}
+          </label>
           <input
-            type="text"
-            placeholder="Search keys or values..."
+            id={searchId}
+            type="search"
+            data-testid="translation-search"
+            placeholder={t('translations.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+            className={fieldClass}
           />
         </div>
 
-        {/* Status Indicator */}
-        {saveStatus === 'saving' && (
-          <span className="text-yellow-400 text-sm flex items-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-400"></div>
-            Saving...
-          </span>
-        )}
-        {saveStatus === 'success' && (
-          <span className="text-green-400 text-sm">Saved successfully!</span>
-        )}
-        {saveStatus === 'error' && (
-          <span className="text-red-400 text-sm">Failed to save</span>
-        )}
+        <div role="status" aria-live="polite" className="min-h-[1.5rem] text-sm" data-testid="save-status">
+          {saveStatus === 'saving' && <span className="text-warning-fg">{t('translations.saving')}</span>}
+          {saveStatus === 'success' && <span className="text-success-fg">{t('translations.saved')}</span>}
+          {saveStatus === 'error' && <span className="text-danger-fg">{t('translations.saveFailed')}</span>}
+        </div>
       </div>
 
-      {/* Translation Keys Table */}
       <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-700">
+        <table className="w-full" data-testid="translation-table">
+          <caption className="sr-only">{t('translations.tableCaption', { section: activeSection })}</caption>
+          <thead className="bg-surface-2">
             <tr>
-              <th className="text-left px-4 py-3 text-gray-300 font-medium w-1/4">Key</th>
-              <th className="text-left px-4 py-3 text-gray-300 font-medium">Value</th>
-              <th className="text-right px-4 py-3 text-gray-300 font-medium w-24">Actions</th>
+              <th scope="col" className="text-start px-4 py-3 text-fg-muted font-medium w-1/4">
+                {t('translations.colKey')}
+              </th>
+              <th scope="col" className="text-start px-4 py-3 text-fg-muted font-medium">
+                {t('translations.colValue')}
+              </th>
+              <th scope="col" className="text-end px-4 py-3 text-fg-muted font-medium w-24">
+                {t('translations.colActions')}
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700">
-            {sectionKeys.length === 0 ? (
+          <tbody className="divide-y divide-border">
+            {sectionEntries.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
-                  {searchTerm
-                    ? 'No keys match your search'
-                    : 'No keys in this section'}
+                <td colSpan={3} className="px-4 py-8 text-center text-fg-muted">
+                  {searchTerm ? t('translations.noMatches') : t('translations.noKeys')}
                 </td>
               </tr>
             ) : (
-              sectionKeys.map(([key, value]) => (
-                <tr key={key} className="hover:bg-gray-700/50">
+              sectionEntries.map((entry) => (
+                <tr key={entry.key} className="hover:bg-surface-hover" data-testid="translation-row" data-key={entry.key}>
                   <td className="px-4 py-3">
-                    <code className="text-blue-400 text-sm bg-gray-900 px-2 py-1 rounded">
-                      {key}
+                    <code className="text-link text-sm bg-surface-2 px-2 py-1 rounded break-all" dir="ltr">
+                      {entry.key}
                     </code>
                   </td>
                   <td className="px-4 py-3">
-                    {editingKey === key ? (
+                    {editingKey === entry.key ? (
                       <textarea
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-blue-500 focus:outline-none resize-y min-h-[60px]"
+                        aria-label={t('translations.valueFor', { key: entry.key })}
+                        className="w-full bg-surface-2 text-fg px-3 py-2 rounded border border-focus focus:outline-none focus-visible:ring-2 focus-visible:ring-focus resize-y min-h-[60px]"
                         autoFocus
-                        dir={selectedLocale === 'ar' ? 'rtl' : 'ltr'}
+                        dir={valueDir}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') handleCancelEdit();
+                        }}
                       />
                     ) : (
-                      <span
-                        className="text-gray-200 block break-words"
-                        dir={selectedLocale === 'ar' ? 'rtl' : 'ltr'}
-                      >
-                        {String(value)}
+                      <span className="text-fg block break-words" dir={valueDir} data-testid="translation-value">
+                        {entry.value}
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    {editingKey === key ? (
+                  <td className="px-4 py-3 text-end">
+                    {editingKey === entry.key ? (
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={handleSaveEdit}
+                          type="button"
+                          onClick={() => handleSaveEdit(entry)}
                           disabled={isUpdating}
-                          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-1 rounded text-sm"
+                          aria-label={t('translations.saveKey', { key: entry.key })}
+                          className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent px-3 py-1 rounded text-sm"
                         >
-                          Save
+                          {t('common.save')}
                         </button>
                         <button
+                          type="button"
                           onClick={handleCancelEdit}
-                          className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded text-sm"
+                          aria-label={t('translations.cancelEdit', { key: entry.key })}
+                          className="bg-surface-2 hover:bg-surface-hover border border-border text-fg px-3 py-1 rounded text-sm"
                         >
-                          Cancel
+                          {t('common.cancel')}
                         </button>
                       </div>
                     ) : (
                       <button
-                        onClick={() => handleStartEdit(key, String(value))}
-                        className="text-blue-400 hover:text-blue-300 text-sm"
+                        type="button"
+                        onClick={() => handleStartEdit(entry)}
+                        aria-label={t('translations.editKey', { key: entry.key })}
+                        className="text-link hover:text-link-hover text-sm px-2 py-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                       >
-                        Edit
+                        {t('common.edit')}
                       </button>
                     )}
                   </td>
@@ -250,11 +304,9 @@ export function TranslationEditor({ availableLocales }: TranslationEditorProps) 
         </table>
       </div>
 
-      {/* Footer with count */}
-      <div className="p-4 border-t border-gray-700 text-gray-400 text-sm">
-        Showing {sectionKeys.length} key{sectionKeys.length !== 1 ? 's' : ''} in{' '}
-        <span className="text-white">{selectedSection}</span>
-        {searchTerm && ` matching "${searchTerm}"`}
+      <div className="p-4 border-t border-border text-fg-muted text-sm" data-testid="translation-count">
+        {t('translations.showing', { count: sectionEntries.length, section: activeSection })}
+        {searchTerm && ` ${t('translations.matching', { term: searchTerm })}`}
       </div>
     </div>
   );

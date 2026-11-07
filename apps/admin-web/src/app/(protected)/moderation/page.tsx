@@ -1,130 +1,109 @@
 import Link from 'next/link';
 import { listReports } from '@/lib/api/admin';
-import type { ReportStatus, ReportableEntityType } from '@al-ummah/shared-types';
+import type { ListReportsResponse } from '@/lib/api/types';
+import { getI18n } from '@/i18n/server';
+import { formatDate, translateDynamic } from '@/i18n/translate';
+import { ErrorAlert, StatusChip, linkClass } from '@/components/ui';
+import { logger } from '@/lib/logger';
+import { FilterBar } from './FilterBar';
+import { PAGE_SIZE, moderationHref, parseModerationFilters } from './filters';
 
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
-  searchParams: Promise<{
-    status?: ReportStatus;
-    entity_type?: ReportableEntityType;
-    page?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-const statusColors: Record<ReportStatus, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-400',
-  reviewing: 'bg-blue-500/20 text-blue-400',
-  resolved: 'bg-green-500/20 text-green-400',
-  dismissed: 'bg-gray-500/20 text-gray-400',
-};
+const thClass = 'text-start px-4 sm:px-6 py-3 text-fg-muted font-medium whitespace-nowrap';
+const pagerClass =
+  'px-4 py-2 bg-surface border border-border text-fg rounded hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
 
 export default async function ModerationPage({ searchParams }: PageProps) {
-  const params = await searchParams;
-  const page = parseInt(params.page || '1', 10);
-  const limit = 20;
-  const offset = (page - 1) * limit;
+  const filters = parseModerationFilters(await searchParams);
+  const { t, locale } = await getI18n();
+  const { page } = filters;
 
-  let data = null;
-  let error = null;
+  let data: ListReportsResponse | null = null;
+  let failed = false;
 
   try {
     data = await listReports({
-      status: params.status,
-      entity_type: params.entity_type,
-      limit,
-      offset,
+      status: filters.status,
+      entity_type: filters.entity_type,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
     });
   } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to load reports';
+    failed = true;
+    logger.error('[moderation] Failed to load reports', { error: e instanceof Error ? e.message : String(e) });
   }
 
-  const totalPages = data ? Math.ceil(data.total / limit) : 0;
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 0;
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-white">Moderation Queue</h1>
-        <div className="flex gap-2">
-          <select
-            className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2"
-            defaultValue={params.status || ''}
-          >
-            <option value="">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="reviewing">Reviewing</option>
-            <option value="resolved">Resolved</option>
-            <option value="dismissed">Dismissed</option>
-          </select>
-          <select
-            className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2"
-            defaultValue={params.entity_type || ''}
-          >
-            <option value="">All Types</option>
-            <option value="video">Video</option>
-            <option value="comment">Comment</option>
-            <option value="channel">Channel</option>
-            <option value="playlist">Playlist</option>
-          </select>
+      <div className="flex flex-wrap justify-between items-end gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-fg">{t('moderation.title')}</h1>
+          {data && (
+            <p className="text-fg-muted mt-1" data-testid="reports-total" data-total={data.total}>
+              {t('moderation.totalCount', { count: data.total })}
+            </p>
+          )}
         </div>
+        <FilterBar status={filters.status} entityType={filters.entity_type} />
       </div>
 
-      {error && (
-        <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-6">
-          {error}
-        </div>
-      )}
+      {failed && <ErrorAlert testId="reports-error">{t('errors.loadReports')}</ErrorAlert>}
 
       {data && data.reports.length === 0 && (
-        <div className="bg-gray-800 rounded-lg p-8 text-center text-gray-400">
-          No reports found
+        <div className="bg-surface border border-border rounded-lg p-8 text-center text-fg-muted" data-testid="reports-empty">
+          {t('moderation.noReports')}
         </div>
       )}
 
       {data && data.reports.length > 0 && (
         <>
-          <div className="bg-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-700">
+          <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+            <table className="w-full" data-testid="reports-table">
+              <caption className="sr-only">{t('moderation.tableCaption')}</caption>
+              <thead className="bg-surface-2">
                 <tr>
-                  <th className="text-left px-6 py-3 text-gray-300 font-medium">Type</th>
-                  <th className="text-left px-6 py-3 text-gray-300 font-medium">Reason</th>
-                  <th className="text-left px-6 py-3 text-gray-300 font-medium">Status</th>
-                  <th className="text-left px-6 py-3 text-gray-300 font-medium">Date</th>
-                  <th className="text-left px-6 py-3 text-gray-300 font-medium">Actions</th>
+                  <th scope="col" className={thClass}>{t('moderation.colType')}</th>
+                  <th scope="col" className={thClass}>{t('moderation.colReason')}</th>
+                  <th scope="col" className={thClass}>{t('moderation.colStatus')}</th>
+                  <th scope="col" className={thClass}>{t('moderation.colDate')}</th>
+                  <th scope="col" className={thClass}>{t('moderation.colActions')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700">
+              <tbody className="divide-y divide-border">
                 {data.reports.map((report) => (
-                  <tr key={report.id} className="hover:bg-gray-700/50">
-                    <td className="px-6 py-4">
-                      <span className="capitalize text-white">{report.entity_type}</span>
-                      <span className="block text-xs text-gray-500 font-mono">
-                        {report.entity_id.slice(0, 8)}...
+                  <tr key={report.id} className="hover:bg-surface-hover" data-testid="report-row" data-report-id={report.id}>
+                    <td className="px-4 sm:px-6 py-4">
+                      <span className="text-fg">{translateDynamic(t, 'entityType', report.entity_type)}</span>
+                      <span className="block text-xs text-fg-subtle font-mono" dir="ltr">
+                        {report.entity_id.length > 12 ? `${report.entity_id.slice(0, 12)}…` : report.entity_id}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="capitalize text-gray-300">{report.reason}</span>
+                    <td className="px-4 sm:px-6 py-4">
+                      <span className="text-fg-muted">{translateDynamic(t, 'reason', report.reason)}</span>
                       {report.description && (
-                        <span className="block text-xs text-gray-500 truncate max-w-xs">
-                          {report.description}
-                        </span>
+                        <span className="block text-xs text-fg-subtle truncate max-w-xs">{report.description}</span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded text-sm ${statusColors[report.status]}`}>
-                        {report.status}
-                      </span>
+                    <td className="px-4 sm:px-6 py-4">
+                      <StatusChip status={report.status} label={translateDynamic(t, 'status', report.status)} />
                     </td>
-                    <td className="px-6 py-4 text-gray-400 text-sm">
-                      {new Date(report.created_at).toLocaleDateString()}
+                    <td className="px-4 sm:px-6 py-4 text-fg-muted text-sm whitespace-nowrap">
+                      <time dateTime={report.created_at}>{formatDate(report.created_at, locale)}</time>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <Link
-                        href={`/moderation/reports/${report.id}`}
-                        className="text-blue-400 hover:text-blue-300"
+                        href={`/moderation/reports/${encodeURIComponent(report.id)}`}
+                        className={linkClass}
+                        aria-label={t('moderation.viewReport', { id: report.id.slice(0, 8) })}
                       >
-                        View
+                        {t('moderation.view')}
                       </Link>
                     </td>
                   </tr>
@@ -134,27 +113,21 @@ export default async function ModerationPage({ searchParams }: PageProps) {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-6">
+            <nav aria-label={t('moderation.paginationLabel')} className="flex justify-center items-center gap-2 mt-6">
               {page > 1 && (
-                <Link
-                  href={`/moderation?page=${page - 1}`}
-                  className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
-                >
-                  Previous
+                <Link href={moderationHref({ ...filters, page: page - 1 })} className={pagerClass} rel="prev">
+                  {t('moderation.previous')}
                 </Link>
               )}
-              <span className="px-4 py-2 text-gray-400">
-                Page {page} of {totalPages}
+              <span className="px-4 py-2 text-fg-muted" data-testid="page-indicator" aria-current="page">
+                {t('moderation.pageOf', { page, total: totalPages })}
               </span>
               {page < totalPages && (
-                <Link
-                  href={`/moderation?page=${page + 1}`}
-                  className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
-                >
-                  Next
+                <Link href={moderationHref({ ...filters, page: page + 1 })} className={pagerClass} rel="next">
+                  {t('moderation.next')}
                 </Link>
               )}
-            </div>
+            </nav>
           )}
         </>
       )}
