@@ -6,9 +6,9 @@ import { Search, UploadCloud, Trash2, Eye, Edit } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
-import { deleteVideo } from '@/lib/api/videos';
+import { listVideos, deleteVideo } from '@/lib/api/videos';
 import { isChannelOwner } from '@/lib/channel-utils';
-import { getChannelById, getChannelVideos } from '@/lib/api/channels';
+import { getChannelById } from '@/lib/api/channels';
 import Image from 'next/image';
 import Link from 'next/link';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
@@ -64,13 +64,14 @@ export default function ChannelVideosPage() {
       setLoading(true);
       try {
         // Fetch videos and channel in parallel
-        // The channel endpoint pages this channel's videos (including the owner's
-        // private ones) from the index; follow the cursor to load them all.
+        // Management lists every video (shorts, live, private): the channel
+        // endpoint is the public Videos tab and hides shorts and live streams.
+        // /api/videos?channelId= pages this channel from the index; follow the cursor.
         const loadAllVideos = async () => {
           const all: VideoObject[] = [];
           let cursor: string | undefined;
           for (let page = 0; page < MAX_VIDEO_PAGES; page++) {
-            const result = await getChannelVideos(channelId, { limit: VIDEO_PAGE_SIZE, cursor, sort: 'latest' });
+            const result = await listVideos({ channelId, limit: VIDEO_PAGE_SIZE, cursor }, { channelId });
             if (!result) break;
             all.push(...result.data);
             // api-videos returns the cursor at the top level; the shared type nests it under `pagination`

@@ -24,10 +24,11 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
 
   return (
     <li className="flex gap-4 items-start p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-      <Link href={`/${lang}/video/${entry.videoId}`} className="relative flex-shrink-0 w-40 h-24 bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
+      {/* Same target as the title link: hidden from assistive tech and the tab order */}
+      <Link href={`/${lang}/video/${entry.videoId}`} aria-hidden="true" tabIndex={-1} className="relative flex-shrink-0 w-40 h-24 bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
         {entry.videoThumbnail && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={resolveUrl(entry.videoThumbnail)} alt={entry.videoTitle} className="w-full h-full object-cover" />
+          <img src={resolveUrl(entry.videoThumbnail)} alt="" className="w-full h-full object-cover" />
         )}
         <span className="absolute bottom-0 left-0 h-1 bg-red-600" style={{ width: `${percent}%` }} aria-hidden="true" />
       </Link>

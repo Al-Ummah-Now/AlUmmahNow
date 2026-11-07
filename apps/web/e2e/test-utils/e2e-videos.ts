@@ -356,10 +356,15 @@ export async function purgeStaleDisposables(user: AuthUser): Promise<void> {
   }
 }
 
-/** Bunny CDN base for a video, derived from its playUrl (https://vz-xxx.b-cdn.net/<id>/playlist.m3u8) */
+/**
+ * Bunny CDN folder of a video, derived from its playUrl by dropping the file
+ * name. Works for plain (https://vz-xxx.b-cdn.net/<id>/playlist.m3u8) and
+ * token-signed path URLs (https://vz-xxx.b-cdn.net/bcdn_token=…&token_path=…/<id>/playlist.m3u8),
+ * whose directory token then also covers the generated thumbnails.
+ */
 export function cdnBase(video: E2EVideo): string | null {
-  const match = video.playUrl?.match(/^(https:\/\/[^/]+)\/([^/]+)\//);
-  return match ? `${match[1]}/${match[2]}` : null;
+  if (!video.playUrl || !/^https:\/\/[^/]+\/.+\/[^/]+$/.test(video.playUrl)) return null;
+  return video.playUrl.replace(/\/[^/]+$/, '');
 }
 
 /**
@@ -374,7 +379,6 @@ export async function waitForThumbnails(user: AuthUser, videoId: string, timeout
     const video = await getVideo(u, videoId);
     const base = video ? cdnBase(video) : null;
     if (base) {
-      // The pull zone only serves requests referred by the web app
       const res = await fetch(`${base}/thumbnail_1.jpg`, { method: 'HEAD', headers: { Referer: `${webUrl}/` } });
       if (res.ok) return true;
     }
