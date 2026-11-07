@@ -6,6 +6,28 @@ import { useEffect, useRef, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
 import { useLanguage } from '@/hooks/useLanguage';
 
+// Whether a user has a profile almost never changes once it exists, so it is
+// remembered per user. Pages then render immediately and the check re-runs in
+// the background instead of hiding the page behind a ~1s Server Action.
+const PROFILE_KNOWN_KEY = (userId: string) => `aun_profile_exists_${userId}`;
+
+function isProfileKnown(userId: string): boolean {
+  try {
+    return localStorage.getItem(PROFILE_KNOWN_KEY(userId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberProfile(userId: string, exists: boolean): void {
+  try {
+    if (exists) localStorage.setItem(PROFILE_KNOWN_KEY(userId), '1');
+    else localStorage.removeItem(PROFILE_KNOWN_KEY(userId));
+  } catch {
+    // Storage unavailable: the check simply runs blocking next time
+  }
+}
+
 interface ProfileGuardProps {
   children: React.ReactNode;
 }
@@ -71,8 +93,14 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
       setHasChecked(false);
       setLastCheckedUserId(user.id);
       if (profileExists !== true) {
-        setProfileExists(null);
-        setIsCheckingProfile(true);
+        if (isProfileKnown(user.id)) {
+          // Known to exist: show the page now, re-check in the background
+          setProfileExists(true);
+          setIsCheckingProfile(false);
+        } else {
+          setProfileExists(null);
+          setIsCheckingProfile(true);
+        }
       }
     }
 
@@ -86,6 +114,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
       logger.debug('[ProfileGuard] Starting profile check...');
       try {
         const exists = await checkProfileExists(user);
+        if (user?.id) rememberProfile(user.id, exists);
         logger.debug('[ProfileGuard] checkProfileExists returned:', exists);
         setProfileExists(exists);
         setHasChecked(true);

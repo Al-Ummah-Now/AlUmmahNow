@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Channel } from '@al-ummah/shared-types';
 import { listChannels, createChannel as createChannelAPI, updateChannel as updateChannelAPI, deleteChannel as deleteChannelAPI } from '@/lib/api/channels';
 import { ChannelCreateRequest, ChannelUpdateRequest, ApiHeaders } from '@/lib/api/types';
@@ -8,6 +8,8 @@ import { logger } from '@/lib/logger-client';
 interface UseChannelsOptions {
   channelId?: string;
   autoFetch?: boolean;
+  /** Channels already loaded on the server: shown immediately, first fetch skipped */
+  initialChannels?: Channel[];
   // Note: userId is now extracted from JWT token in Authorization header server-side
 }
 
@@ -26,9 +28,10 @@ interface UseChannelsReturn {
  * Fetches channels using ChannelsAPI and provides CRUD operations
  */
 export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn => {
-  const { channelId, autoFetch = true } = options;
+  const { channelId, autoFetch = true, initialChannels } = options;
 
-  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channels, setChannels] = useState<Channel[]>(initialChannels ?? []);
+  const skipInitialFetch = useRef(initialChannels !== undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +96,10 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
   // Auto-fetch on mount if enabled
   useEffect(() => {
     if (autoFetch && channelId) {
+      if (skipInitialFetch.current) {
+        skipInitialFetch.current = false;
+        return;
+      }
       refetch();
     }
   }, [autoFetch, channelId, refetch]);

@@ -22,6 +22,7 @@ import { CreateChannelDialog } from './CreateChannelDialog';
  */
 export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> = ({
   className = '',
+  initialChannels,
 }) => {
   const router = useRouter();
   const { t, lang, dir } = useLanguage();
@@ -44,6 +45,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   } = useChannels({
     channelId,
     autoFetch: true,
+    initialChannels,
   });
 
   // Show toast message

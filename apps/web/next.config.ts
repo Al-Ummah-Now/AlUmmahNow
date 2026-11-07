@@ -41,6 +41,10 @@ const nextConfig = {
     },
 
     images: {
+        // Serve images straight from the CDN (Cloudflare in front of Bunny,
+        // cached at the edge). Optimization through /_next/image ran in the web
+        // Worker (cold starts, uncached) and did not resize on Workers anyway.
+        unoptimized: true,
         remotePatterns: [
           {
             protocol: "https",
