@@ -41,7 +41,7 @@ export default defineConfig({
    * whole 60-90min job (previously the E2E jobs hit their timeout-minutes and
    * were cancelled). globalTimeout caps the whole run; maxFailures aborts early.
    */
-  globalTimeout: process.env.CI ? 15 * 60 * 1000 : undefined,
+  globalTimeout: process.env.CI ? Number(process.env.E2E_GLOBAL_TIMEOUT_MINUTES || 45) * 60 * 1000 : undefined,
   maxFailures: process.env.CI ? 5 : 0,
   /* Expect timeout */
   expect: {
