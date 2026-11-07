@@ -54,6 +54,7 @@ describe('bunny signing', () => {
 		const exp = tokenExpiry(now);
 		const body = JSON.stringify({
 			video: {
+				id: VID,
 				playUrl: `https://${HOST}/${VID}/playlist.m3u8`,
 				thumbnailUrl: `https://${HOST}/${VID}/thumbnail.jpg`,
 				otherHost: `https://vz-25839d05-80d.b-cdn.net/${VID}/playlist.m3u8`,
@@ -73,13 +74,49 @@ describe('bunny signing', () => {
 	});
 
 	it('leaves already-signed URLs alone and is a no-op without a key or host', async () => {
-		const once = await signBunnyUrlsInText(`"https://${HOST}/${VID}/playlist.m3u8"`, HOST, KEY);
+		const record = JSON.stringify({ id: VID, playUrl: `https://${HOST}/${VID}/playlist.m3u8`, thumbnailUrl: `https://${HOST}/${VID}/thumbnail_3.jpg` });
+		const once = await signBunnyUrlsInText(record, HOST, KEY);
+		assert.match(JSON.parse(once).thumbnailUrl, /thumbnail_3\.jpg\?token=[^&]+&expires=\d+$/);
 		assert.equal(await signBunnyUrlsInText(once, HOST, KEY), once);
-		const thumb = await signBunnyUrlsInText(`"https://${HOST}/${VID}/thumbnail_3.jpg"`, HOST, KEY);
-		assert.match(thumb, /thumbnail_3\.jpg\?token=[^&]+&expires=\d+"$/);
-		assert.equal(await signBunnyUrlsInText(thumb, HOST, KEY), thumb);
-		const plain = `"https://${HOST}/${VID}/playlist.m3u8"`;
+		const plain = record;
 		assert.equal(await signBunnyUrlsInText(plain, HOST, ''), plain);
 		assert.equal(await signBunnyUrlsInText(plain, '', KEY), plain);
+	});
+
+	it('is not a signing oracle: only known URL fields of the matching record are signed', async () => {
+		const OTHER = '11111111-2222-3333-4444-555555555555';
+		const now = 1_794_070_000;
+		const body = JSON.stringify({
+			data: [
+				{
+					id: VID,
+					// User-written text is never signed
+					description: `watch https://${HOST}/${OTHER}/playlist.m3u8`,
+					// A record cannot obtain tokens for another video
+					thumbnailUrl: `https://${HOST}/${OTHER}/thumbnail.jpg`,
+					thumbnailSizes: { hd: `https://${HOST}/${VID}/thumbnail.jpg`, sd: `https://${HOST}/${OTHER}/thumbnail.jpg` },
+				},
+				// Only the canonical playlist gets a directory token
+				{ id: VID, playUrl: `https://${HOST}/${VID}/play_720p.mp4` },
+				// Comments etc. carry no matching id
+				{ id: 'comment-1', videoId: OTHER, text: `https://${HOST}/${OTHER}/playlist.m3u8` },
+				// Watch history style: the video id is in videoId
+				{ id: 'wh-1', videoId: VID, videoThumbnail: `https://${HOST}/${VID}/thumbnail.jpg` },
+			],
+		});
+		const out = JSON.parse(await signBunnyUrlsInText(body, HOST, KEY, now));
+		const [rec, mp4, comment, history] = out.data;
+		assert.equal(rec.description, `watch https://${HOST}/${OTHER}/playlist.m3u8`);
+		assert.equal(rec.thumbnailUrl, `https://${HOST}/${OTHER}/thumbnail.jpg`);
+		assert.match(rec.thumbnailSizes.hd, /\?token=/);
+		assert.equal(rec.thumbnailSizes.sd, `https://${HOST}/${OTHER}/thumbnail.jpg`);
+		assert.equal(mp4.playUrl, `https://${HOST}/${VID}/play_720p.mp4`);
+		assert.equal(comment.text, `https://${HOST}/${OTHER}/playlist.m3u8`);
+		assert.match(history.videoThumbnail, /\?token=/);
+	});
+
+	it('returns non-JSON bodies unchanged', async () => {
+		const text = `not json https://${HOST}/${VID}/playlist.m3u8`;
+		assert.equal(await signBunnyUrlsInText(text, HOST, KEY), text);
 	});
 });

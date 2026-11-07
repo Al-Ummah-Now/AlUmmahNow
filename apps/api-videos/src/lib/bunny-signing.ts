@@ -65,10 +65,25 @@ function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Fields that hold a still image of the record's video (file token) */
+const IMAGE_FIELDS = new Set(['thumbnailUrl', 'thumbnail', 'previewUrl', 'poster', 'videoThumbnail']);
+/** Field whose values are image URLs per size, e.g. { hd, sd } */
+const IMAGE_MAP_FIELD = 'thumbnailSizes';
+/** The only field that gets a directory token (it unlocks playback) */
+const PLAYLIST_FIELD = 'playUrl';
+const PLAYLIST_FILE = 'playlist.m3u8';
+
+type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+
 /**
- * Rewrite every unsigned https://<host>/<videoId>/<file> URL in a text body
- * (JSON) to its signed form. Already-signed URLs are left alone (their path
- * starts with bcdn_token=, not a video id). Tokens are computed once per video.
+ * Sign Bunny Stream URLs in a JSON response body.
+ *
+ * Not a signing oracle: only known URL fields are considered (never free text
+ * such as descriptions or comments), and a URL is signed only when its video
+ * id is the id (or videoId) of the object that holds it, so a record cannot
+ * obtain tokens for another video. Only the canonical playUrl
+ * (<id>/playlist.m3u8) gets a directory token; images get single-file tokens;
+ * anything else stays unsigned. Non-JSON bodies are returned unchanged.
  */
 export async function signBunnyUrlsInText(
 	text: string,
@@ -78,28 +93,63 @@ export async function signBunnyUrlsInText(
 ): Promise<string> {
 	if (!host || !securityKey || !text.includes(host)) return text;
 
-	const pattern = new RegExp(`https://${escapeRegExp(host)}/(${VIDEO_ID})/([^"'\\s\\\\<>]*)`, 'g');
-	const matches = [...text.matchAll(pattern)];
-	if (matches.length === 0) return text;
-
-	const expires = tokenExpiry(nowSeconds);
-	const directoryTokens = new Map<string, string>();
-	const fileTokens = new Map<string, string>();
-	for (const [, videoId, rest] of matches) {
-		if (IMAGE_FILE.test(rest)) {
-			const path = `/${videoId}/${rest}`;
-			if (!fileTokens.has(path)) fileTokens.set(path, await bunnyFileToken(securityKey, path, expires));
-		} else if (!rest.includes('token=') && !directoryTokens.has(videoId)) {
-			directoryTokens.set(videoId, await bunnyDirectoryToken(securityKey, videoId, expires));
-		}
+	let body: Json;
+	try {
+		body = JSON.parse(text) as Json;
+	} catch {
+		return text;
 	}
 
-	return text.replace(pattern, (match, videoId: string, rest: string) => {
-		const fileToken = fileTokens.get(`/${videoId}/${rest}`);
-		if (fileToken) return `https://${host}/${videoId}/${rest}?token=${fileToken}&expires=${expires}`;
-		const directoryToken = directoryTokens.get(videoId);
-		// Already file-signed (query token) or nothing to sign: leave as is
-		if (!directoryToken || rest.includes('token=')) return match;
-		return signedBunnyUrl(host, videoId, rest, directoryToken, expires);
-	});
+	const urlPattern = new RegExp(`^https://${escapeRegExp(host)}/(${VIDEO_ID})/([^?#"'\\s<>]+)$`);
+	const expires = tokenExpiry(nowSeconds);
+	const directoryTokens = new Map<string, string>();
+	let changed = false;
+
+	const signImage = async (url: string, owners: Set<string>): Promise<string> => {
+		const match = urlPattern.exec(url);
+		if (!match || !owners.has(match[1]) || !IMAGE_FILE.test(match[2])) return url;
+		const path = `/${match[1]}/${match[2]}`;
+		changed = true;
+		return `https://${host}${path}?token=${await bunnyFileToken(securityKey, path, expires)}&expires=${expires}`;
+	};
+
+	const signPlaylist = async (url: string, owners: Set<string>): Promise<string> => {
+		const match = urlPattern.exec(url);
+		if (!match || !owners.has(match[1]) || match[2] !== PLAYLIST_FILE) return url;
+		const videoId = match[1];
+		if (!directoryTokens.has(videoId)) {
+			directoryTokens.set(videoId, await bunnyDirectoryToken(securityKey, videoId, expires));
+		}
+		changed = true;
+		return signedBunnyUrl(host, videoId, PLAYLIST_FILE, directoryTokens.get(videoId)!, expires);
+	};
+
+	const walk = async (node: Json): Promise<void> => {
+		if (Array.isArray(node)) {
+			for (const item of node) await walk(item);
+			return;
+		}
+		if (!node || typeof node !== 'object') return;
+
+		const owners = new Set<string>();
+		if (typeof node.id === 'string') owners.add(node.id);
+		if (typeof node.videoId === 'string') owners.add(node.videoId);
+
+		for (const [key, value] of Object.entries(node)) {
+			if (typeof value === 'string') {
+				if (owners.size === 0) continue;
+				if (key === PLAYLIST_FIELD) node[key] = await signPlaylist(value, owners);
+				else if (IMAGE_FIELDS.has(key)) node[key] = await signImage(value, owners);
+			} else if (key === IMAGE_MAP_FIELD && value && typeof value === 'object' && !Array.isArray(value)) {
+				for (const [size, url] of Object.entries(value)) {
+					if (typeof url === 'string' && owners.size > 0) value[size] = await signImage(url, owners);
+				}
+			} else {
+				await walk(value);
+			}
+		}
+	};
+
+	await walk(body);
+	return changed ? JSON.stringify(body) : text;
 }
