@@ -7,6 +7,22 @@ import { VideoCategory, Channel } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
 import { isInternalRecord } from "../../lib/visibility";
+import { waitUntilOf } from "../../lib/search/ownership";
+import { INDEX_CURSOR_PREFIX, channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+
+type VideoSort = "date" | "views" | "title" | "likes";
+type VideoFilter = "all" | "public" | "private" | "live";
+
+/** Index orders matching /api/videos sorts; title and likes are sorted in memory. */
+const INDEX_SORT: Partial<Record<VideoSort, "latest" | "popular">> = { date: "latest", views: "popular" };
+
+/** Index flags matching the /api/videos `filter` parameter. */
+const INDEX_FILTER: Record<VideoFilter, { isPublic?: boolean; liveOnly?: boolean }> = {
+	all: {},
+	public: { isPublic: true },
+	private: { isPublic: false },
+	live: { liveOnly: true },
+};
 
 export class VideosList extends OptionalAuthRoute {
 	schema = {
@@ -118,40 +134,67 @@ export class VideosList extends OptionalAuthRoute {
 			return true;
 		};
 
-		// R2's native cursor pagination cuts the page before visibility filtering,
-		// so a page full of private/internal records used to come back nearly
-		// empty (the home page showed 1-3 videos and a "Load More" button). Keep
-		// reading whole R2 pages until `limit` visible videos are collected or the
-		// bucket is exhausted; the cursor always points after the last page read,
-		// so nothing is skipped (a response may hold up to 2*limit-1 videos).
-		const MAX_PAGES = 5;
-		const filteredVideos: VideoType[] = [];
-		let nextCursor = cursor;
-		for (let page = 0; page < MAX_PAGES; page++) {
-			const batch = await repository.listObjects(limit, nextCursor);
-			filteredVideos.push(...(batch.items || []).filter(isVisible));
-			nextCursor = batch.cursor || "";
-			if (!nextCursor || filteredVideos.length >= limit) break;
-		}
-		const videos = { cursor: nextCursor };
-		
-		// Sort videos based on sort parameter
-		filteredVideos.sort((a, b) => {
+		const compareVideos = (a: VideoType, b: VideoType) => {
 			switch (sort) {
-				case "date":
-					return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
 				case "views":
 					return (b.views || 0) - (a.views || 0);
 				case "title":
 					return (a.title || "").localeCompare(b.title || "");
 				case "likes":
-					const aLikes = a.likes?.length || 0;
-					const bLikes = b.likes?.length || 0;
-					return bLikes - aLikes;
+					return (b.likes?.length || 0) - (a.likes?.length || 0);
 				default:
 					return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
 			}
-		});
+		};
+
+		const filteredVideos: VideoType[] = [];
+		let nextCursor = cursor;
+		let source: "index" | "scan" = "scan";
+
+		// A channel filter is answered from the ownership index (D1): scanning the
+		// bucket and filtering afterwards returned empty pages for channels whose
+		// videos sat beyond the scanned window, sorted only within that window.
+		const indexed = filterChannelId
+			? await channelVideosFromIndex<VideoType>(c.env as never, {
+				channelId: filterChannelId,
+				cursor,
+				limit,
+				query: {
+					sort: INDEX_SORT[sort as VideoSort],
+					privateFor: userId || null,
+					...INDEX_FILTER[(filter || "all") as VideoFilter],
+				},
+				load: id => repository.getObject(id),
+				isListed: (video): video is VideoType => !!video && Boolean(isVisible(video)),
+				compare: INDEX_SORT[sort as VideoSort] ? undefined : compareVideos,
+				waitUntil: waitUntilOf(c as never),
+			})
+			: null;
+
+		if (indexed) {
+			source = "index";
+			filteredVideos.push(...indexed.videos);
+			nextCursor = indexed.cursor;
+		} else {
+			// R2's native cursor pagination cuts the page before visibility filtering,
+			// so a page full of private/internal records used to come back nearly
+			// empty (the home page showed 1-3 videos and a "Load More" button). Keep
+			// reading whole R2 pages until `limit` visible videos are collected or the
+			// bucket is exhausted; the cursor always points after the last page read,
+			// so nothing is skipped (a response may hold up to 2*limit-1 videos).
+			const MAX_PAGES = 5;
+			// An index cursor cannot resume an R2 listing (index became unavailable).
+			if (nextCursor?.startsWith(INDEX_CURSOR_PREFIX)) nextCursor = undefined;
+			for (let page = 0; page < MAX_PAGES; page++) {
+				const batch = await repository.listObjects(limit, nextCursor);
+				filteredVideos.push(...(batch.items || []).filter(isVisible));
+				nextCursor = batch.cursor || "";
+				if (!nextCursor || filteredVideos.length >= limit) break;
+			}
+			filteredVideos.sort(compareVideos);
+		}
+		logger.debug('[VideosList] Listed videos', { channelId: filterChannelId, source, count: filteredVideos.length });
+		const videos = { cursor: nextCursor };
 
 		// Fetch channel data for all videos
 		const channelIds = [...new Set(filteredVideos.map(v => v.channelId).filter(Boolean))];
