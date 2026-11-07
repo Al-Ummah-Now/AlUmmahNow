@@ -11,7 +11,9 @@ import { AlUmmahMessage, MessageType, QueueEnvironment } from '../types';
 describe('ReportResolve', () => {
   function setup() {
     const run = jest.fn().mockResolvedValue({ meta: { changes: 1 } });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typed params so mock.calls is typed
     const bind = jest.fn((..._args: unknown[]) => ({ run }));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typed params so mock.calls is typed
     const prepare = jest.fn((_sql: string) => ({ bind }));
     const env = {
       MESSAGE_QUEUE: { send: jest.fn() },
