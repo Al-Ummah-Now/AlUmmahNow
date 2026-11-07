@@ -72,6 +72,9 @@ This epic breakdown transforms comprehensive PRD requirements into bite-sized, i
 ### **Epics 9–24: Native Apps (viewer + Studio on all platforms)**
 See [`docs/native-apps/EPICS.md`](native-apps/EPICS.md): product family, Fanous design system, architecture, 16 epics, roadmap and open decisions.
 
+### **Epics 25–27: Sharing & embeds, embedded discussions, plans & entitlements**
+See [`docs/specs/EMBEDS-COMMENTS-TIERS.md`](specs/EMBEDS-COMMENTS-TIERS.md): embeddable player + JS API, "Ummah Comments" widget for external sites, and the tier/entitlement framework every feature must declare.
+
 ---
 
 ## GitHub Issues Coverage Analysis
