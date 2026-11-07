@@ -21,7 +21,8 @@ describe('EncryptedStorage', () => {
     await EncryptedStorage.setItem('watchProgress', { v1: { videoId: 'v1', currentTime: 42 } }, { ttlMs: DAY });
     const raw = localStorage.getItem(`${ENCRYPTED_KEY_PREFIX}watchProgress`)!;
     expect(raw).toBeTruthy();
-    expect(raw).not.toContain('v1');
+    // Plaintext markers long enough that random base64 ciphertext cannot contain them
+    expect(raw).not.toContain('videoId');
     expect(raw).not.toContain('currentTime');
     expect(JSON.parse(raw)).toEqual({ v: 1, iv: expect.any(String), ct: expect.any(String), exp: expect.any(Number) });
     await expect(EncryptedStorage.getItem('watchProgress')).resolves.toEqual({ v1: { videoId: 'v1', currentTime: 42 } });
