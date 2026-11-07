@@ -10,6 +10,9 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
   fluid: true,
   playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
   html5: {
+    // Emulate text tracks so cross-origin WebVTT (served by the API with CORS)
+    // loads consistently in every browser, including with MSE-based HLS.
+    nativeTextTracks: false,
     hls: {
       enableLowInitialPlaylist: true,
       smoothQualityChange: true,
@@ -25,6 +28,7 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
       'volumePanel',          // 2. Volume button with inline slider
       'progressControl',      // 3. Progress bar (center, large - 700px width)
       'remainingTimeDisplay', // 4. Time remaining display
+      'subsCapsButton',       // Subtitles/captions menu (hidden when the video has no tracks)
       'hlsQualitySelector',   // 5. Quality/Settings button
       'fullscreenToggle'      // 6. Fullscreen button (rightmost)
     ],

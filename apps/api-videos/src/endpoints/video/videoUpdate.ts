@@ -127,14 +127,25 @@ export class VideoUpdate extends AuthenticatedRoute {
 		}
 
 		// Update the video with new values
-		const updatedVideo = {
+		const { category, tags, ...restInput } = videoUpdateInput;
+		const updatedVideo: VideoType = {
 			...existingVideo,
-			...videoUpdateInput,
+			...restInput,
 			dateModified: new Date().toISOString(),
 			// Preserve localized fields if provided
 			titleLocalized: videoUpdateInput.titleLocalized ?? existingVideo.titleLocalized,
 			descriptionLocalized: videoUpdateInput.descriptionLocalized ?? existingVideo.descriptionLocalized,
+			// Tags replace the existing list (deduplicated); omitted keeps current tags
+			tags: tags !== undefined ? Array.from(new Set(tags)) : existingVideo.tags,
+			// Category: undefined keeps current value, null clears it
+			category: category === undefined ? existingVideo.category : (category ?? undefined),
 		};
+
+		logger.info('[VideoUpdate] Updating video', {
+			videoId: id,
+			userId: effectiveUserId,
+			fields: Object.keys(videoUpdateInput),
+		});
 
 		// Update the video in Bunny Stream if title changed
 		if (videoUpdateInput.title && videoUpdateInput.title !== existingVideo.title) {

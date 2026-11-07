@@ -88,6 +88,14 @@ export const VideoView = z.object({
     commentsCount: z.number(),
     isPublic: z.boolean(),
     isLive: z.boolean(),
+    titleLocalized: z.record(z.string()).optional(),
+    descriptionLocalized: z.record(z.string()).optional(),
+    thumbnailType: z.enum(['auto', 'custom']).optional(),
+    thumbnailSizes: z.record(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
+    category: z.string().optional(),
+    language: z.string().optional(),
+    duration: z.number().optional(),
     ...SoftDeleteFields,
     ...ModerationFields,
     // For detailed views, include recent comments
@@ -107,9 +115,11 @@ export const PlaylistView = z.object({
     dateModified: DateTime(),
     videosCount: z.number(),
     isPublic: z.boolean(),
+    name: Str().optional(), // Alias of title (shared-types Playlist uses `name`)
+    videos: z.array(Str()).optional(), // Ordered video IDs
     ...SoftDeleteFields,
     ...ModerationFields,
-    // Note: videos array removed to avoid circular reference
+    // Note: video objects are not embedded; use GET /api/playlists/:id?includeVideos=true
     // Use separate endpoint to get playlist videos if needed
 });
 

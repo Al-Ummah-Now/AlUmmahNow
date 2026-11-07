@@ -14,6 +14,8 @@ import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
+import SaveToPlaylist from "@/components/SaveToPlaylist";
+import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
 
 export default function VideoViewPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -89,6 +91,13 @@ export default function VideoViewPage() {
                   }}
                 />
               </div>
+
+              {/* Save to playlist (logged-in users with a channel) */}
+              {user && (
+                <div className="w-full max-w-4xl mt-4 px-4">
+                  {isRTL ? <SaveToPlaylistRTL videoId={videoId} /> : <SaveToPlaylist videoId={videoId} />}
+                </div>
+              )}
 
               {/* Report video (hidden for anonymous viewers and the owner) */}
               {!isOwnVideo && (

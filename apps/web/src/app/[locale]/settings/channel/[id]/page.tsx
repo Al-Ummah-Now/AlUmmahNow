@@ -142,6 +142,38 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             </div>
           </Link>
 
+          {/* Playlists */}
+          <Link
+            href={`/${locale}/settings/channel/${id}/playlists`}
+            className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
+          >
+            <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                <svg
+                  className="w-6 h-6 text-indigo-600 dark:text-indigo-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h12M4 10h12M4 14h8m6-2v8m-4-4h8"
+                  />
+                </svg>
+              </div>
+              <div className={isRTL ? 'text-right' : ''}>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  {t.playlist.managePlaylists}
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {t.playlist.managePlaylistsDescription}
+                </p>
+              </div>
+            </div>
+          </Link>
+
           {/* Channel Tabs */}
           <Link
             href={`/${locale}/settings/channel/${id}/tabs`}

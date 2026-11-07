@@ -1,3 +1,4 @@
+import type { VideoCategory } from '@al-ummah/shared-types';
 export type PaginationResponse<T> = {
     cursor: string;
     limit: number;
@@ -33,6 +34,9 @@ export interface VideoObject {
     commentsCount: number;
     isPublic?: boolean; // Added from API spec
     isLive?: boolean;   // Added from API spec
+    tags?: string[];
+    category?: VideoCategory;
+    thumbnailType?: 'auto' | 'custom';
     comments?: Comments[]; // Optional array of Comments
     likes?: Likes[];       // Optional array of Likes
     dislikes?: Dislikes[]; // Optional array of Dislikes

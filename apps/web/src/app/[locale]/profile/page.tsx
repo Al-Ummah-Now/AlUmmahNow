@@ -5,6 +5,7 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { useRouter, useParams } from 'next/navigation';
 import { ChannelManagementSection } from '@/components/channelManagement';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useCurrentChannel } from '@/hooks/useMultiAccount';
 
 const ProfilePage = () => {
   const params = useParams();
@@ -13,6 +14,11 @@ const ProfilePage = () => {
   const auth = useAuth();
   const router = useRouter();
   const { profile, isLoading, error } = useProfile(auth?.user || null);
+  const currentChannel = useCurrentChannel();
+  // Playlists belong to channels and are managed in channel settings
+  const playlistsHref = currentChannel
+    ? `/${locale}/settings/channel/${currentChannel.id}/playlists`
+    : `/${locale}/settings`;
 
   // Get localized name or fall back to default
   const getLocalizedName = (
@@ -112,7 +118,7 @@ const ProfilePage = () => {
                   </p>
                 </div>
                 <button
-                  onClick={() => router.push(`/${locale}/playlist/create`)}
+                  onClick={() => router.push(playlistsHref)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,7 +157,7 @@ const ProfilePage = () => {
                     {t.profile.firstPlaylistMessage || 'Create your first playlist to organize your videos'}
                   </p>
                   <button
-                    onClick={() => router.push(`/${locale}/playlist/create`)}
+                    onClick={() => router.push(playlistsHref)}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

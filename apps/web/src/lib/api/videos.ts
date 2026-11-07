@@ -14,6 +14,7 @@ import {
   SearchSuggestion,
   RecommendationRequest
 } from "./types";
+import type { BatchUploadInitiateResponse } from "@al-ummah/shared-types";
 import { apiRequestServer, buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
@@ -100,13 +101,13 @@ export async function createVideo(
  */
 export async function updateVideo(
   videoId: string,
-  data: Partial<VideoCreateRequest>,
+  data: Omit<Partial<VideoCreateRequest>, 'category'> & { category?: VideoCreateRequest['category'] | null },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ video: VideoObject }> | null> {
+): Promise<{ success: boolean; result?: { video: VideoObject }; error?: string } | null> {
   try {
     logger.info('[updateVideo] Updating video', { videoId, data });
 
-    return apiRequestServer<ApiResponse<{ video: VideoObject }>>(
+    return apiRequestServer<{ success: boolean; result?: { video: VideoObject }; error?: string }>(
       {
         method: 'PUT',
         url: buildApiUrl(`/api/videos/${videoId}`),
@@ -198,40 +199,6 @@ export async function bulkDeleteVideos(
     logger.error('bulkDeleteVideos error:', error);
     return null;
   }
-}
-
-/**
- * Upload custom thumbnail for a video
- * POST /api/videos/{id}/thumbnail
- */
-export async function uploadVideoThumbnail(
-  videoId: string,
-  file: File,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ thumbnailUrl: string }> | null> {
-  const formData = new FormData();
-  formData.append('thumbnail', file);
-
-  const authContext = await getServerAuthContext();
-
-  const response = await fetch(
-    buildApiUrl(`/api/videos/${videoId}/thumbnail`),
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authContext?.accessToken || ''}`,
-        'channelId': headers.channelId,
-      },
-      body: formData,
-    }
-  );
-
-  if (!response.ok) {
-    logger.error('uploadVideoThumbnail error:', response.statusText);
-    return null;
-  }
-
-  return response.json();
 }
 
 /**
@@ -841,69 +808,6 @@ export async function getRecommendedVideos(
 }
 
 /**
- * Upload a video file
- * POST /api/upload/video
- */
-export async function uploadVideo(
-  file: File,
-  metadata: {
-    title: string;
-    description?: string;
-    isPublic: boolean;
-    tags?: string[];
-  },
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ video: VideoObject }> | null> {
-  try {
-    const formData = new FormData();
-    formData.append('video', file);
-    formData.append('title', metadata.title);
-    formData.append('description', metadata.description || '');
-    formData.append('isPublic', metadata.isPublic.toString());
-    if (metadata.tags && metadata.tags.length > 0) {
-      formData.append('tags', JSON.stringify(metadata.tags));
-    }
-
-    const authContext = await getServerAuthContext();
-
-    const response = await fetch(
-      buildApiUrl('/api/upload/video'),
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${authContext?.accessToken || ''}`,
-          'channelId': headers.channelId,
-        },
-        body: formData,
-      }
-    );
-
-    if (!response.ok) {
-      let errorDetails = '';
-      try {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errorJson = await response.json();
-          errorDetails = JSON.stringify(errorJson);
-        } else {
-          errorDetails = await response.text();
-        }
-      } catch (_e) {
-        errorDetails = 'Unable to parse error details';
-      }
-      throw new Error(
-        `Error uploading video: ${response.status} ${response.statusText}. Details: ${errorDetails}`
-      );
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('uploadVideo error:', error);
-    return null;
-  }
-}
-
-/**
  * Initiate video upload - Create video record and get upload URL with TUS support
  * POST /api/videos/upload/initiate
  */
@@ -1011,8 +915,8 @@ export async function completeVideoUploadApi(
 }
 
 /**
- * Initiate batch video upload - Create multiple video records and get upload configurations
- * POST /api/videos/upload/batch-initiate
+ * Initiate batch video upload - Create multiple video records, each with a TUS proxy session
+ * POST /api/videos/upload/batch/initiate
  */
 export async function initiateBatchUploadApi(
   request: {
@@ -1031,42 +935,13 @@ export async function initiateBatchUploadApi(
     };
   },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{
-  success: boolean;
-  result?: Array<{
-    videoId: string;
-    tusEndpoint: string;
-    tusHeaders: {
-      AuthorizationSignature: string;
-      AuthorizationExpire: string;
-      LibraryId: string;
-      VideoId: string;
-    };
-    expiresAt: string;
-  }>;
-  error?: string;
-} | null> {
-  return apiRequestServer<{
-    success: boolean;
-    result?: Array<{
-      videoId: string;
-      tusEndpoint: string;
-      tusHeaders: {
-        AuthorizationSignature: string;
-        AuthorizationExpire: string;
-        LibraryId: string;
-        VideoId: string;
-      };
-      expiresAt: string;
-    }>;
-    error?: string;
-  }>({
+): Promise<BatchUploadInitiateResponse | null> {
+  return apiRequestServer<BatchUploadInitiateResponse>({
     method: 'POST',
-    url: buildApiUrl('/api/videos/upload/batch-initiate'),
+    url: buildApiUrl('/api/videos/upload/batch/initiate'),
     body: request,
     functionName: 'initiateBatchUploadApi'
   }, async () => ({
-    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);

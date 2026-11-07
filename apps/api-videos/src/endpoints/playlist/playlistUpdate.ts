@@ -7,6 +7,7 @@ import { transformPlaylistToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { isSameVideoSet } from "../../lib/playlists";
 
 export class PlaylistUpdate extends AuthenticatedRoute {
     schema = {
@@ -22,12 +23,7 @@ export class PlaylistUpdate extends AuthenticatedRoute {
             body: {
                 content: {
                     "application/json": {
-                        schema: z.object({
-                            title: Str({ required: false, description: "Playlist title" }),
-                            description: Str({ required: false, description: "Playlist description" }),
-                            thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
-                            isPublic: z.boolean().optional(),
-                        }),
+                        schema: PlaylistUpdateInput,
                     },
                 },
             },
@@ -96,12 +92,21 @@ export class PlaylistUpdate extends AuthenticatedRoute {
             }, 404);
         }
 
-        // Verify ownership (user must own the playlist via their channel)
-        if (existingPlaylist.channelId !== channelId) {
+        // Verify ownership by user (the channelId header is optional, so it
+        // cannot be the ownership check on its own)
+        if (existingPlaylist.userId !== userId) {
             return c.json({
                 success: false,
                 error: "Unauthorized - you can only update your own playlists",
             }, 403);
+        }
+
+        // Reordering: the new order must be a permutation of the current videos
+        if (updateData.videos && !isSameVideoSet(existingPlaylist.videos || [], updateData.videos)) {
+            return c.json({
+                success: false,
+                error: "videos must contain exactly the playlist's current video IDs (use the add/remove endpoints to change membership)",
+            }, 400);
         }
 
         // Update the playlist with new values

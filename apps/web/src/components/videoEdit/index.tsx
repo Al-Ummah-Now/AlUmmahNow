@@ -5,8 +5,11 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, FileText, Edit3 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { VideoObject } from '@/interfaces';
+import type { VideoCategory } from '@al-ummah/shared-types';
 import { updateVideo } from '@/lib/api/videos';
-import { updateChapters, type Chapter } from '@/lib/api/chapters';
+import { getChapters, updateChapters, type Chapter } from '@/lib/api/chapters';
+import { CategorySelector } from '@/components/videoUpload/CategorySelector';
+import { getInitialEditMetadata, normalizeTag, haveTagsChanged } from './edit-metadata';
 import VideoPreview from '@/components/videoPreview/index';
 import VideoPreviewRTL from '@/components/videoPreview/rtl/index';
 import ThumbnailSelector from './ThumbnailSelector';
@@ -30,7 +33,7 @@ type EditFormData = {
   descriptionEn: string;
   descriptionAr: string;
   tags: string[];
-  category: string;
+  category: VideoCategory | '';
   language: 'en' | 'ar' | 'both';
   isPublic: boolean;
   thumbnailUrl: string;
@@ -54,27 +57,51 @@ export default function VideoEdit({
   const [chapterMode, setChapterMode] = useState<'none' | 'manual' | 'upload'>('none');
   const [chapters, setChapters] = useState<Chapter[]>([]);
 
+  // Tags and category come from the stored video so editing never drops them
+  const initialMetadata = getInitialEditMetadata(video);
+
   const [formData, setFormData] = useState<EditFormData>({
     titleEn: video.titleLocalized?.en || video.title || '',
     titleAr: video.titleLocalized?.ar || '',
     descriptionEn: video.descriptionLocalized?.en || video.description || '',
     descriptionAr: video.descriptionLocalized?.ar || '',
-    tags: [], // TODO: Parse from video.tags if available
-    category: '', // TODO: Parse from video.category if available
+    tags: initialMetadata.tags,
+    category: initialMetadata.category,
     language: 'both',
     isPublic: video.isPublic !== false,
     thumbnailUrl: video.thumbnailUrl,
   });
 
+  // Load existing chapters so the editor starts from the saved state
+  useEffect(() => {
+    let cancelled = false;
+    getChapters(video.id)
+      .then((result) => {
+        const loaded = result?.success ? (result.chapters?.chapters || result.result?.chapters) : undefined;
+        if (!cancelled && loaded && loaded.length > 0) {
+          setChapters(loaded);
+        }
+      })
+      .catch((err) => {
+        logger.warn('[VideoEdit] Failed to load chapters', { videoId: video.id, error: err });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [video.id]);
+
   // Track changes
   useEffect(() => {
+    const original = getInitialEditMetadata(video);
     const hasChanges =
       formData.titleEn !== (video.titleLocalized?.en || video.title || '') ||
       formData.titleAr !== (video.titleLocalized?.ar || '') ||
       formData.descriptionEn !== (video.descriptionLocalized?.en || video.description || '') ||
       formData.descriptionAr !== (video.descriptionLocalized?.ar || '') ||
       formData.thumbnailUrl !== video.thumbnailUrl ||
-      formData.isPublic !== (video.isPublic !== false);
+      formData.isPublic !== (video.isPublic !== false) ||
+      formData.category !== original.category ||
+      haveTagsChanged(original.tags, formData.tags);
 
     setHasUnsavedChanges(hasChanges);
   }, [formData, video]);
@@ -86,13 +113,16 @@ export default function VideoEdit({
   };
 
   const handleAddTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
+    const tag = normalizeTag(tagInput);
+    if (tag && !formData.tags.includes(tag)) {
       setFormData((prev) => ({
         ...prev,
-        tags: [...prev.tags, tagInput.trim()],
+        tags: [...prev.tags, tag],
       }));
-      setTagInput('');
+      setError(null);
+      setSuccess(null);
     }
+    setTagInput('');
   };
 
   const handleRemoveTag = (tag: string) => {
@@ -126,16 +156,20 @@ export default function VideoEdit({
         },
         thumbnailUrl: formData.thumbnailUrl,
         isPublic: formData.isPublic,
+        tags: formData.tags,
+        // null clears a previously set category
+        category: formData.category || null,
       };
 
-      const result = await updateVideo(video.id, updateData, {  channelId });
+      const result = await updateVideo(video.id, updateData, { channelId: video.channelId || channelId });
 
-      if (result?.data?.video) {
-        setSuccess(t.video.updateSuccess ?? 'Video updated successfully');
+      if (result?.success && result.result?.video) {
+        setSuccess(t.video.updateSuccess ?? null);
         setHasUnsavedChanges(false);
-        onSave?.(result.data.video);
+        onSave?.(result.result.video);
       } else {
-        setError(t.video.updateFailed ?? 'Failed to update video');
+        logger.error('[VideoEdit] Update failed', { videoId: video.id, error: result?.error });
+        setError(t.video.updateFailed ?? null);
       }
     } catch (err) {
       logger.error('Error saving video:', err);
@@ -193,7 +227,7 @@ export default function VideoEdit({
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               }`}
             >
-              English
+              {t.languages.english}
             </button>
             <button
               onClick={() => setActiveTab('ar')}
@@ -203,7 +237,7 @@ export default function VideoEdit({
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               }`}
             >
-              العربية
+              {t.languages.arabic}
             </button>
           </div>
 
@@ -219,7 +253,7 @@ export default function VideoEdit({
                   value={formData.titleEn}
                   onChange={(e) => handleInputChange('titleEn', e.target.value)}
                   className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
-                  placeholder="Enter video title in English"
+                  placeholder={t.video.enterTitleEnglish}
                 />
               </div>
 
@@ -232,7 +266,7 @@ export default function VideoEdit({
                   onChange={(e) => handleInputChange('descriptionEn', e.target.value)}
                   rows={6}
                   className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white resize-none"
-                  placeholder="Enter video description in English"
+                  placeholder={t.video.enterDescriptionEnglish}
                 />
               </div>
             </div>
@@ -250,7 +284,7 @@ export default function VideoEdit({
                   value={formData.titleAr}
                   onChange={(e) => handleInputChange('titleAr', e.target.value)}
                   className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
-                  placeholder="أدخل عنوان الفيديو بالعربية"
+                  placeholder={t.video.enterTitleArabic}
                 />
               </div>
 
@@ -263,7 +297,7 @@ export default function VideoEdit({
                   onChange={(e) => handleInputChange('descriptionAr', e.target.value)}
                   rows={6}
                   className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white resize-none"
-                  placeholder="أدخل وصف الفيديو بالعربية"
+                  placeholder={t.video.enterDescriptionArabic}
                 />
               </div>
             </div>
@@ -288,7 +322,7 @@ export default function VideoEdit({
               type="text"
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
               className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
               placeholder={t.video.enterTag}
             />
@@ -320,6 +354,16 @@ export default function VideoEdit({
             </div>
           )}
         </div>
+
+        {/* Category */}
+        <CategorySelector
+          value={formData.category || undefined}
+          onChange={(category) => {
+            setFormData((prev) => ({ ...prev, category: category || '' }));
+            setError(null);
+            setSuccess(null);
+          }}
+        />
 
         {/* Privacy */}
         <div>
@@ -365,9 +409,9 @@ export default function VideoEdit({
           scheduledPublishStatus={video.scheduledPublishStatus}
           onScheduleChange={(scheduled, date) => {
             if (scheduled && date) {
-              setSuccess('Video scheduled successfully');
+              setSuccess(t.schedule?.scheduleSuccess ?? null);
             } else if (!scheduled) {
-              setSuccess('Schedule cancelled');
+              setSuccess(t.schedule?.scheduleCancelled ?? null);
             }
           }}
         />
@@ -398,7 +442,7 @@ export default function VideoEdit({
                 <div className="text-left">
                   <div className="font-medium dark:text-white">{t.video.manualChapters}</div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Create chapters manually
+                    {t.video.createChaptersManually}
                   </div>
                 </div>
               </button>
@@ -410,7 +454,7 @@ export default function VideoEdit({
                 <div className="text-left">
                   <div className="font-medium dark:text-white">{t.video.importedChapters}</div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Upload chapter file
+                    {t.video.uploadChapterFile}
                   </div>
                 </div>
               </button>
@@ -429,7 +473,7 @@ export default function VideoEdit({
                     const result = await updateChapters(video.id, newChapters, 'manual');
                     if (result?.success) {
                       setChapters(newChapters);
-                      setSuccess(t.video.chaptersParsed ?? 'Chapters saved successfully');
+                      setSuccess(t.video.chaptersParsed ?? null);
                       setChapterMode('none');
                     } else {
                       setError(result?.error || t.errors.genericError);
@@ -479,7 +523,7 @@ export default function VideoEdit({
                     {chapters.length} {t.video.chaptersDetected}
                   </p>
                   <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                    Click button to edit chapters
+                    {t.video.clickToEditChapters}
                   </p>
                 </div>
                 <button

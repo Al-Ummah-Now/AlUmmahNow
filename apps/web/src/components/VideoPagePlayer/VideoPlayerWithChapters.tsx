@@ -1,136 +1,105 @@
 /**
- * Video Player with Chapters Integration Example
+ * Video Player with Chapters and Subtitles
  *
- * This component demonstrates how to integrate chapter components
- * with the CustomVideoPlayer.
- *
- * Features:
- * - Chapter markers on progress bar
- * - Collapsible chapter list
- * - Current chapter overlay
- * - Keyboard shortcuts (N/P for next/previous chapter, C to toggle list)
+ * Wraps CustomVideoPlayer for the watch page:
+ * - Loads chapters (GET /api/videos/:id/chapters) and renders markers inside
+ *   the Video.js progress bar, a current-chapter overlay and a chapter list
+ * - Loads subtitle tracks (GET /api/videos/:id/subtitles) into the player
  */
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import CustomVideoPlayer, { CustomVideoPlayerProps } from '../VideoPlayer/CustomVideoPlayer';
 import { ChapterMarkers } from './ChapterMarkers';
 import { ChapterList } from './ChapterList';
 import { CurrentChapter } from './CurrentChapter';
 import { useVideoChapters } from '@/hooks/useVideoChapters';
+import { useVideoSubtitles } from '@/hooks/useVideoSubtitles';
+import { useLanguage } from '@/hooks/useLanguage';
 import type { Player } from 'video.js';
 
 interface VideoPlayerWithChaptersProps extends CustomVideoPlayerProps {
   videoId: string;
   enableChapters?: boolean;
+  enableSubtitles?: boolean;
   showChapterOverlay?: boolean;
 }
 
 export function VideoPlayerWithChapters({
   videoId,
   enableChapters = true,
+  enableSubtitles = true,
   showChapterOverlay = true,
+  onPlayerReady,
   ...playerProps
 }: VideoPlayerWithChaptersProps) {
-  const playerRef = useRef<Player | null>(null);
+  const { lang } = useLanguage();
+  const [player, setPlayer] = useState<Player | null>(null);
+  const [progressHolder, setProgressHolder] = useState<HTMLElement | null>(null);
   const [isChapterListOpen, setIsChapterListOpen] = useState(false);
-  const [duration, setDuration] = useState(0);
 
-  // Use the existing useVideoChapters hook
   const {
     chapters,
     currentChapter,
     currentChapterIndex,
+    duration,
     seekToChapter,
-    nextChapter,
-    previousChapter,
     hasChapters,
   } = useVideoChapters({
     videoId,
-    player: playerRef.current,
+    player,
     enabled: enableChapters,
   });
 
-  // Track player duration
+  const textTracks = useVideoSubtitles(videoId, lang, enableSubtitles);
+
+  const handlePlayerReady = useCallback((readyPlayer: Player) => {
+    setPlayer(readyPlayer);
+    onPlayerReady?.(readyPlayer);
+  }, [onPlayerReady]);
+
+  // Locate the Video.js progress holder so markers sit on the real seek bar
   useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
-
-    const updateDuration = () => {
-      const d = player.duration();
-      if (d && !isNaN(d)) {
-        setDuration(d);
-      }
-    };
-
-    player.on('loadedmetadata', updateDuration);
-    player.on('durationchange', updateDuration);
-
-    return () => {
-      player.off('loadedmetadata', updateDuration);
-      player.off('durationchange', updateDuration);
-    };
-  }, []);
-
-  // Keyboard shortcuts for chapters
-  useEffect(() => {
-    if (!enableChapters || !hasChapters) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle if not typing in an input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-
-      switch (e.key.toLowerCase()) {
-        case 'n':
-          e.preventDefault();
-          nextChapter();
-          break;
-        case 'p':
-          e.preventDefault();
-          previousChapter();
-          break;
-        case 'c':
-          e.preventDefault();
-          setIsChapterListOpen(prev => !prev);
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [enableChapters, hasChapters, nextChapter, previousChapter]);
+    if (!player) {
+      setProgressHolder(null);
+      return;
+    }
+    const root = player.el();
+    const holder = root?.querySelector('.vjs-progress-holder') as HTMLElement | null;
+    setProgressHolder(holder || null);
+  }, [player]);
 
   const toggleChapterList = useCallback(() => {
     setIsChapterListOpen(prev => !prev);
   }, []);
 
+  const showChapters = enableChapters && hasChapters && !!player;
+
   return (
     <div className="relative">
-      {/* Video Player */}
       <CustomVideoPlayer
         {...playerProps}
         videoId={videoId}
+        textTracks={textTracks}
+        onPlayerReady={handlePlayerReady}
       />
 
-      {/* Chapter Components (only if chapters exist) */}
-      {enableChapters && hasChapters && playerRef.current && (
+      {showChapters && (
         <>
-          {/* Chapter Markers on Progress Bar */}
-          <ChapterMarkers
-            chapters={chapters}
-            currentChapter={currentChapter}
-            duration={duration}
-            onSeek={seekToChapter}
-            className="vjs-progress-control"
-          />
+          {/* Markers rendered into the Video.js progress bar (always LTR) */}
+          {progressHolder && duration > 0 && createPortal(
+            <ChapterMarkers
+              chapters={chapters}
+              currentChapter={currentChapter}
+              duration={duration}
+              onSeek={seekToChapter}
+              direction="ltr"
+            />,
+            progressHolder
+          )}
 
-          {/* Current Chapter Overlay */}
           {showChapterOverlay && (
             <CurrentChapter
               chapter={currentChapter}
@@ -138,7 +107,6 @@ export function VideoPlayerWithChapters({
             />
           )}
 
-          {/* Chapter List Panel */}
           <ChapterList
             chapters={chapters}
             currentChapter={currentChapter}
@@ -152,3 +120,5 @@ export function VideoPlayerWithChapters({
     </div>
   );
 }
+
+export default VideoPlayerWithChapters;

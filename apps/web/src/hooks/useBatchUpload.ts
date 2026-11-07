@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { UploadQueueItem, VideoUploadMetadata, TusConfig } from '@al-ummah/shared-types';
+import { UploadQueueItem, VideoUploadMetadata } from '@al-ummah/shared-types';
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
-import { initiateBatchUpload } from '@/lib/actions/upload';
+import { buildBatchUploadEntries } from '@/lib/upload/batch-entries';
+import { initiateBatchUpload, completeVideoUpload } from '@/lib/actions/upload';
+import { getClientAuthHeaders } from '@/lib/auth/client-token';
+import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
+import { useLanguage } from '@/hooks/useLanguage';
 
 
 interface UseBatchUploadOptions {
@@ -20,9 +24,10 @@ export function useBatchUpload({
   userId: _userId, // Deprecated - no longer used
   channelId,
   sharedMetadata = {},
-  // onUploadComplete,
+  onUploadComplete,
   onError,
 }: UseBatchUploadOptions) {
+  const { t } = useLanguage();
   const [files, setFiles] = useState<UploadQueueItem[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -30,6 +35,18 @@ export function useBatchUpload({
 
   const batchManagerRef = useRef<BatchUploadManager | null>(null);
   const optimizerRef = useRef<UploadOptimizer | null>(null);
+
+  // Keep latest values for the long-lived manager callbacks
+  const channelIdRef = useRef(channelId);
+  const onUploadCompleteRef = useRef(onUploadComplete);
+  const onErrorRef = useRef(onError);
+  const uploadFailedMessageRef = useRef(t.errors.uploadFailed);
+  useEffect(() => {
+    channelIdRef.current = channelId;
+    onUploadCompleteRef.current = onUploadComplete;
+    onErrorRef.current = onError;
+    uploadFailedMessageRef.current = t.errors.uploadFailed;
+  }, [channelId, onUploadComplete, onError, t]);
 
   // Initialize managers
   useEffect(() => {
@@ -48,6 +65,25 @@ export function useBatchUpload({
         // Update file list from queue state
         const queueState = batchManagerRef.current!.getQueueState();
         setFiles(Array.from(queueState.values()));
+      });
+
+      // After TUS finishes, mark the upload complete so Bunny processing is
+      // tracked (same step the single-upload flow performs).
+      batchManagerRef.current.onUploadSuccess(async (item) => {
+        if (!item.videoId) return;
+        try {
+          const result = await completeVideoUpload(item.videoId, channelIdRef.current, item.file.size);
+          if (!result.success) {
+            logger.error('[useBatchUpload] Complete upload failed', { videoId: item.videoId, error: result.error });
+            onErrorRef.current?.(result.error || uploadFailedMessageRef.current);
+            return;
+          }
+          logger.info('[useBatchUpload] Upload completed', { videoId: item.videoId });
+          onUploadCompleteRef.current?.(item.videoId);
+        } catch (error) {
+          logger.error('[useBatchUpload] Complete upload threw', { videoId: item.videoId, error });
+          onErrorRef.current?.(error instanceof Error ? error.message : uploadFailedMessageRef.current);
+        }
       });
     }
 
@@ -73,13 +109,15 @@ export function useBatchUpload({
       if (!canHandle) {
         const recommendedBatchSize = optimizerRef.current.getRecommendedBatchSize();
         onError?.(
-          `Your device may not have enough memory for ${selectedFiles.length} files. Try uploading ${recommendedBatchSize} files at a time.`
+          t.batch.errors.deviceLimit
+            .replace('{count}', String(selectedFiles.length))
+            .replace('{recommended}', String(recommendedBatchSize))
         );
         setIsInitiating(false);
         return;
       }
 
-      // Initiate batch upload with backend
+      // Initiate batch upload with backend (one TUS proxy session per file)
       const initiateResult = await initiateBatchUpload(
         selectedFiles.map(file => ({
           title: file.name.replace(/\.[^/.]+$/, ''),
@@ -98,43 +136,36 @@ export function useBatchUpload({
       );
 
       if (!initiateResult.success || !initiateResult.result) {
-        throw new Error(initiateResult.error || 'Failed to initiate batch upload');
+        throw new Error(initiateResult.error || t.batch.errors.initiateFailed);
       }
 
-      // Create TUS configs map
-      const tusConfigs = new Map<string, { videoId: string; tusConfig: TusConfig }>();
-      initiateResult.result.forEach((config, index) => {
-        const file = selectedFiles[index];
-        if (file) {
-          tusConfigs.set(file.name, {
-            videoId: config.videoId,
-            tusConfig: {
-              tusEndpoint: config.tusEndpoint,
-              tusHeaders: config.tusHeaders,
-              chunkSize: optimizerRef.current!.getOptimalChunkSize(),
-              expiresAt: config.expiresAt,
-            },
-          });
-        }
+      // Browser uploads go straight to the API TUS proxy with the user's token
+      const authHeaders = await getClientAuthHeaders();
+      if (!authHeaders['Authorization']) {
+        throw new Error(t.errors.unauthorized);
+      }
+
+      const entries = buildBatchUploadEntries({
+        files: selectedFiles,
+        sessions: initiateResult.result,
+        apiUrl: getApiUrl(),
+        authorization: authHeaders['Authorization'],
+        chunkSize: optimizerRef.current.getOptimalChunkSize(),
       });
 
       // Add videos to batch manager
-      await batchManagerRef.current.addVideos(
-        selectedFiles,
-        sharedMetadata,
-        tusConfigs
-      );
+      await batchManagerRef.current.addVideos(entries, sharedMetadata);
 
       // Update local state
       const queueState = batchManagerRef.current.getQueueState();
       setFiles(Array.from(queueState.values()));
     } catch (error) {
-      logger.error('Failed to add files:', error);
-      onError?.(error instanceof Error ? error.message : 'Failed to add files to queue');
+      logger.error('[useBatchUpload] Failed to add files', { error });
+      onError?.(error instanceof Error ? error.message : t.batch.errors.initiateFailed);
     } finally {
       setIsInitiating(false);
     }
-  }, [channelId, sharedMetadata, onError]);
+  }, [channelId, sharedMetadata, onError, t]);
 
   /**
    * Remove a file from the queue

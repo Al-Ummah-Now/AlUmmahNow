@@ -6,7 +6,7 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
-import { generateTUSConfig } from "../../lib/bunny/tus";
+import { generateTUSConfig, createTusProxySession } from "../../lib/bunny/tus";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -351,30 +351,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				1 // 1 hour expiration
 			);
 
-			// Generate UUID for TUS session
-			const tusSessionId = crypto.randomUUID();
-
-			// Store TUS session in KV with UUID as key
-			const tusSessionData = {
+			// Store TUS proxy session in KV (1 hour expiration)
+			const tusSessionId = await createTusProxySession(c.env.TUS_SESSIONS, {
 				videoId,
 				userId,
 				channelId,
-				tusEndpoint: tusConfig.tusEndpoint,
-				tusHeaders: tusConfig.tusHeaders,
-				expiresAt: tusConfig.expiresAt,
-				createdAt: new Date().toISOString(),
-			};
-
-			await c.env.TUS_SESSIONS.put(
-				`tus:session:${tusSessionId}`,
-				JSON.stringify(tusSessionData),
-				{ expirationTtl: 3600 } // 1 hour expiration
-			);
-
-			logger.info('[UploadInitiate] TUS session created', {
-				tusSessionId,
-				videoId,
-				userId,
+				tusConfig,
 			});
 
 			// Return session ID to client (no TUS credentials exposed)
