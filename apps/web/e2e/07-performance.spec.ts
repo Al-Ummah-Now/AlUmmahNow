@@ -126,7 +126,7 @@ test.describe('Performance - Core Web Vitals', () => {
     test.skip(browserName !== 'chromium', 'Event Timing API (first-input) is Chromium-only');
 
     await page.goto('/en/');
-    await page.getByRole('button', { name: 'Navigation menu' }).click();
+    await page.getByRole('button', { name: 'Navigation menu', exact: true }).click();
     await expect(page.getByRole('menu')).toBeVisible();
 
     const delay = await page.evaluate(
