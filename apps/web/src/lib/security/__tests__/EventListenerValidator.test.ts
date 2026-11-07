@@ -113,7 +113,7 @@ describe('EventListenerValidator', () => {
       validator.install();
       let passiveRead = false;
       const options = Object.defineProperty({}, 'passive', { get: () => (passiveRead = true) });
-      window.addEventListener('test', null, options as AddEventListenerOptions);
+      window.addEventListener('test', null as unknown as EventListener, options as AddEventListenerOptions);
       expect(passiveRead).toBe(true);
       expect(logger.getBufferedEvents()).toHaveLength(0);
     });
