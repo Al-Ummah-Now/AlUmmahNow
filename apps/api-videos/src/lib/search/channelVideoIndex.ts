@@ -14,8 +14,15 @@ export const INDEX_CURSOR_PREFIX = 'idx:';
 
 /** Index pages read to fill one response when `isListed` drops videos. */
 const MAX_FILL_PAGES = 5;
-/** Upper bound on the videos loaded for an in-memory sort. */
-export const MAX_IN_MEMORY_SORT = 1000;
+/** Page size bounds for index reads (requests with a larger `limit` get this many). */
+export const MAX_INDEX_PAGE = 100;
+/**
+ * Upper bound on the videos loaded for an in-memory sort (title/likes have no
+ * index column); beyond it the sort covers the channel's newest videos only.
+ */
+export const MAX_IN_MEMORY_SORT = 200;
+/** Object loads run at once. */
+const LOAD_CONCURRENCY = 25;
 
 /** Offset for an index cursor, 0 when absent, null for a legacy R2 cursor. */
 export function indexOffset(cursor: string | undefined | null): number | null {
@@ -56,12 +63,19 @@ export async function channelVideosFromIndex<T>(
 	env: OwnershipEnv,
 	options: ChannelVideoIndexOptions<T>,
 ): Promise<ChannelVideoIndexResult<T> | null> {
-	const { channelId, cursor, limit, query, load, isListed, compare } = options;
+	const { channelId, cursor, query, load, isListed, compare } = options;
+	const limit = Math.min(Math.max(Math.floor(Number(options.limit)) || 1, 1), MAX_INDEX_PAGE);
 	const offset = indexOffset(cursor);
 	if (offset === null) return null;
 
-	const loadListed = async (ids: string[]): Promise<T[]> =>
-		(await Promise.all(ids.map(id => load(id)))).filter(isListed);
+	const loadListed = async (ids: string[]): Promise<T[]> => {
+		const listed: T[] = [];
+		for (let i = 0; i < ids.length; i += LOAD_CONCURRENCY) {
+			const loaded = await Promise.all(ids.slice(i, i + LOAD_CONCURRENCY).map(id => load(id)));
+			listed.push(...loaded.filter(isListed));
+		}
+		return listed;
+	};
 
 	const filledPages = async (): Promise<ChannelVideoIndexResult<T> | null> => {
 		const videos: T[] = [];

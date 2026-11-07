@@ -137,6 +137,9 @@ export function channelVideoIds(
   channelId: string,
   query: ChannelVideoQuery,
 ): Promise<{ ids: string[]; hasMore: boolean } | null> {
+  if (!(query.limit >= 1) || !(query.offset >= 0)) {
+    return Promise.reject(new Error(`channelVideoIds: invalid page (limit ${query.limit}, offset ${query.offset})`));
+  }
   return whenComplete(env, 'video', async db => {
     const order = CHANNEL_VIDEO_ORDER[query.sort] ?? CHANNEL_VIDEO_ORDER.latest;
     const where = [`kind = 'video'`, 'channel_id = ?', 'is_deleted = 0', 'is_hidden = 0'];

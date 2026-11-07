@@ -103,6 +103,18 @@ describe('GET /api/videos?channelId= (ownership index)', () => {
 		assert.deepEqual((await ids(visitor, `/api/videos?channelId=${CHANNEL}&limit=1&category=fiqh`, env)).ids, ['z-old'], 'fills past index pages without a match');
 	});
 
+	it('clamps out-of-range limits instead of looping over the index', async () => {
+		const env = await indexedEnv();
+		const app = buildApp(routes, null);
+		for (const limit of [0, -5]) {
+			const page = await ids(app, `/api/videos?channelId=${CHANNEL}&limit=${limit}`, env);
+			assert.deepEqual(page.ids, ['z-new'], `limit=${limit}`);
+			assert.equal(page.cursor, 'idx:1');
+		}
+		const big = await ids(app, `/api/videos?channelId=${CHANNEL}&limit=100000&sort=title`, env);
+		assert.deepEqual(big.ids, ['z-mid', 'z-old', 'z-new', 'z-live']);
+	});
+
 	it('still scans the bucket when the index is not complete', async () => {
 		const env = { videos: new MemoryBucket(bucketData()), channels: new MemoryBucket() };
 		const app = buildApp(routes, null);
