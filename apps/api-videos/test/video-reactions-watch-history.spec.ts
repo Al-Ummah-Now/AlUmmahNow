@@ -7,6 +7,7 @@ import { DislikeDelete } from '../src/endpoints/video/videoDislikeDelete';
 import { RecordWatchHistory } from '../src/endpoints/watch-history/record';
 import { UpdateWatchProgress } from '../src/endpoints/watch-history/update-progress';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
+import R2Repository from '../src/lib/r2Repo';
 
 /**
  * Regressions found by the watch page / history E2E specs:
@@ -80,6 +81,26 @@ describe('concurrent reactions', () => {
 		]);
 		assert.ok(ra.status < 300 && rb.status < 300, `statuses ${ra.status} ${rb.status}`);
 		assert.deepEqual(videos.read('v1').likes.map((l: any) => l.channelId).sort(), ['ch-a', 'ch-b']);
+	});
+});
+
+describe('R2Repository.updateObject', () => {
+	it('re-applies a change that lost the race instead of overwriting the other one (post index)', async () => {
+		const bucket = new MemoryBucket({ 'posts/c1/index.json': { postIds: ['old'] } });
+		const repo = new R2Repository<{ postIds: string[] }>(bucket as unknown as R2Bucket);
+		const add = (id: string) => repo.updateObject('posts/c1/index.json', (index) => {
+			index.postIds = [id, ...index.postIds];
+		});
+		await Promise.all([add('p1'), add('p2'), add('p3')]);
+		assert.deepEqual([...bucket.read('posts/c1/index.json').postIds].sort(), ['old', 'p1', 'p2', 'p3']);
+	});
+
+	it('creates a missing object from `initial` and returns null without it', async () => {
+		const bucket = new MemoryBucket();
+		const repo = new R2Repository<{ postIds: string[] }>(bucket as unknown as R2Bucket);
+		assert.equal(await repo.updateObject('missing', () => true), null);
+		await repo.updateObject('posts/c2/index.json', (i) => { i.postIds.push('p1'); }, { initial: () => ({ postIds: [] }) });
+		assert.deepEqual(bucket.read('posts/c2/index.json').postIds, ['p1']);
 	});
 });
 

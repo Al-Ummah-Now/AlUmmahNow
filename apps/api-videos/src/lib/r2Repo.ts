@@ -76,17 +76,24 @@ class R2Repository<T> {
    *
    * `mutate` may change the object in place and returns false to skip the
    * write (nothing to change). Resolves to the stored object, or null when
-   * the object does not exist.
+   * the object does not exist and no `initial` value is given (with
+   * `initial`, a missing object is created from it first).
    */
-  async updateObject(id: string, mutate: (data: T) => boolean | void, maxAttempts = 5): Promise<T | null> {
+  async updateObject(
+    id: string,
+    mutate: (data: T) => boolean | void,
+    opts: { maxAttempts?: number; initial?: () => T } = {},
+  ): Promise<T | null> {
+    const maxAttempts = opts.maxAttempts ?? 5;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const object = await this.bucket.get(id);
-      if (!object) return null;
-      const data = await object.json<T>();
+      if (!object && !opts.initial) return null;
+      const data = object ? await object.json<T>() : opts.initial!();
       if (mutate(data) === false) return data;
       const written = await this.bucket.put(id, JSON.stringify(data), {
         httpMetadata: { contentType: 'application/json' },
-        onlyIf: { etagMatches: object.etag },
+        // A missing object is created unconditionally (only the very first write can race)
+        ...(object ? { onlyIf: { etagMatches: object.etag } } : {}),
       });
       if (written) return data;
       logger.warn('[R2Repository] Concurrent update, retrying', { id, attempt });
