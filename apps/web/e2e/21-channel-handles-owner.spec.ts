@@ -84,9 +84,12 @@ test.describe('Channel @handle URLs - anonymous viewer', () => {
   });
 
   test('an unknown handle shows the not-found page', async ({ page }) => {
-    await page.goto(`/en/@no-such-handle-${uniqueSuffix()}`);
-    // Shared localized 404 page (components/NotFoundPage; its h1 is the localized message)
+    const response = await page.goto(`/en/@no-such-handle-${uniqueSuffix()}`);
+    // A real 404, not a 200 "soft 404" streamed before the layout's notFound()
+    expect(response?.status()).toBe(404);
+    // Shared localized 404 page (components/NotFoundPage; its h1 is the localized message), one site header
     await expect(page.getByTestId('not-found-page').getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('banner')).toHaveCount(1);
     await expect(page.getByTestId('channel-handle')).toHaveCount(0);
   });
 });

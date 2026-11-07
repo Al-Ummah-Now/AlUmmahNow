@@ -86,10 +86,11 @@ test.describe('Channel header', () => {
   });
 
   test('CHTAB-004 unknown channel id renders the not-found page', async ({ page }) => {
-    // Streaming responses already sent 200 by the time the layout calls notFound(),
-    // so assert the not-found UI rather than the status code
-    await page.goto('/en/channels/00000000-0000-0000-0000-000000000000');
+    // A real 404 (the root layout no longer streams a 200 shell before notFound())
+    const response = await page.goto('/en/channels/00000000-0000-0000-0000-000000000000');
+    expect(response?.status()).toBe(404);
     await expect(page.getByTestId('not-found-page')).toBeVisible();
+    await expect(page.getByRole('banner')).toHaveCount(1);
     await expect(page.getByTestId('channel-tabs')).toHaveCount(0);
     await expect(page.getByTestId('channel-header')).toHaveCount(0);
   });
