@@ -21,6 +21,13 @@ import { AUTH_STATE, type AuthUser } from './auth-state';
 
 export const API_URL = (process.env.API_URL || 'https://videos.api.qa.alummahnow.net').replace(/\/$/, '');
 const SAMPLE_VIDEO = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample.mp4');
+/** 40-second clip for flows that need a longer video (chapters must be >= 10s each) */
+const LONG_SAMPLE_VIDEO = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample-40s.mp4');
+const SAMPLES = {
+  short: { file: SAMPLE_VIDEO, duration: 4 },
+  long: { file: LONG_SAMPLE_VIDEO, duration: 40 },
+} as const;
+export type SampleVideo = keyof typeof SAMPLES;
 const LOCK_DIR = path.join(__dirname, '..', '.auth', '.seed-lock');
 const LOCK_STALE_MS = 5 * 60 * 1000;
 
@@ -142,11 +149,12 @@ export async function getVideo(u: UserApi, videoId: string): Promise<E2EVideo | 
 /** Uploads the sample clip as a new video and returns it */
 export async function uploadVideo(
   u: UserApi,
-  opts: { title: string; titleAr?: string; isPublic: boolean; channelIndex?: number; description?: string },
+  opts: { title: string; titleAr?: string; isPublic: boolean; channelIndex?: number; description?: string; sample?: SampleVideo },
 ): Promise<E2EVideo> {
   const channelId = u.channelIds[opts.channelIndex ?? 0];
   if (!channelId) throw new Error('User has no channel to upload to');
-  const fileSize = fs.statSync(SAMPLE_VIDEO).size;
+  const sample = SAMPLES[opts.sample ?? 'short'];
+  const fileSize = fs.statSync(sample.file).size;
   const description = opts.description ?? 'Uploaded by the Playwright E2E suite';
   const initiate = await u.api.post<{ result?: { videoId?: string; tusSessionId?: string } }>(
     '/api/videos/upload/initiate',
@@ -165,8 +173,8 @@ export async function uploadVideo(
   const videoId = initiate.data.result?.videoId;
   const tusSessionId = initiate.data.result?.tusSessionId;
   if (!videoId || !tusSessionId) throw new Error(`Upload initiate for "${opts.title}" returned no videoId/tusSessionId`);
-  await u.api.tusUpload({ token: u.token, tusSessionId, videoId, filePath: SAMPLE_VIDEO, mimeType: 'video/mp4' });
-  await u.api.post('/api/videos/upload/complete', { videoId, fileSize, duration: 4 }, { token: u.token, channelId });
+  await u.api.tusUpload({ token: u.token, tusSessionId, videoId, filePath: sample.file, mimeType: 'video/mp4' });
+  await u.api.post('/api/videos/upload/complete', { videoId, fileSize, duration: sample.duration }, { token: u.token, channelId });
   const video: E2EVideo = { id: videoId, title: opts.title, channelId, isPublic: opts.isPublic };
   // initiate stores only the plain title/description; set the localized fields explicitly
   await setLocalizedMetadata(u, video, { en: opts.title, ar: opts.titleAr || '' }, { en: description, ar: '' });
@@ -303,7 +311,7 @@ export function disposableTitle(label: string): string {
 export async function createDisposableVideo(
   user: AuthUser,
   label: string,
-  opts: { isPublic?: boolean; channelIndex?: number; titleAr?: string } = {},
+  opts: { isPublic?: boolean; channelIndex?: number; titleAr?: string; sample?: SampleVideo } = {},
 ): Promise<E2EVideo> {
   const u = userApi(user);
   return uploadVideo(u, {
@@ -311,6 +319,7 @@ export async function createDisposableVideo(
     titleAr: opts.titleAr,
     isPublic: opts.isPublic ?? false,
     channelIndex: opts.channelIndex,
+    sample: opts.sample,
   });
 }
 

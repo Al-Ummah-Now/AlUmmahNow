@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { openAccountMenu } from './test-utils/navigation';
 
 /**
  * Performance E2E Tests
@@ -126,8 +127,8 @@ test.describe('Performance - Core Web Vitals', () => {
     test.skip(browserName !== 'chromium', 'Event Timing API (first-input) is Chromium-only');
 
     await page.goto('/en/');
-    await page.getByRole('button', { name: 'Navigation menu' }).click();
-    await expect(page.getByRole('menu')).toBeVisible();
+    // The account menu trigger (exact name; the drawer toggle is "Open navigation menu")
+    await openAccountMenu(page);
 
     const delay = await page.evaluate(
       () =>

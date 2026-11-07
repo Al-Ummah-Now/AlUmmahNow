@@ -73,7 +73,7 @@ test.describe('Profile Pages - authenticated', () => {
   test('profile form switches to Arabic fields', async ({ page }) => {
     await page.goto('/en/profile/edit');
 
-    await page.getByRole('button', { name: 'العربية' }).click();
+    await page.getByRole('button', { name: /^(Arabic|العربية)$/ }).click();
     const firstNameAr = page.locator('input[name="firstNameAr"]');
     await expect(firstNameAr).toBeVisible();
     await expect(firstNameAr).toHaveAttribute('dir', 'rtl');
