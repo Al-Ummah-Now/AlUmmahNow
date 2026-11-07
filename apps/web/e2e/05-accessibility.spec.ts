@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Locator } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
+import { menuTrigger } from './test-utils/navigation';
 
 /**
  * Accessibility E2E Tests (WCAG basics)
@@ -74,23 +75,23 @@ test.describe('Accessibility - Keyboard Navigation', () => {
     const card = page.getByTestId('video-card').first();
     await expect(card).toBeVisible();
 
-    const href = await card.getAttribute('href');
-    const target = new RegExp(`${href!.replace(/[?]/g, '\\?')}$`);
-    // Retried: the grid can re-render (client data load) between focus and Enter
+    // Retried: the grid can re-render (client data load, other runs adding
+    // videos) between focus and Enter, so the href is re-read on every attempt
     await expect(async () => {
-      if (!target.test(page.url())) {
+      if (!/\/en\/video\?vid=/.test(page.url())) {
+        const href = await card.getAttribute('href');
         await card.focus();
-        await expect(card).toBeFocused();
+        await expect(card).toBeFocused({ timeout: 3000 });
         await page.keyboard.press('Enter');
+        await expect(page).toHaveURL(new RegExp(`${href!.replace(/[?]/g, '\\?')}$`), { timeout: 5000 });
       }
-      await expect(page).toHaveURL(target, { timeout: 5000 });
-    }).toPass();
+    }).toPass({ timeout: 60000 });
   });
 
   test('header menu button is keyboard operable', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
     await page.goto('/en/');
-    const trigger = page.getByRole('button', { name: 'Navigation menu', exact: true });
+    const trigger = menuTrigger(page);
 
     await trigger.focus();
     await expect(trigger).toBeFocused();
@@ -157,7 +158,7 @@ test.describe('Accessibility - RTL Support', () => {
   test('RTL header menu is keyboard operable', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
     await page.goto('/ar/');
-    const trigger = page.getByRole('button', { name: 'قائمة التنقل', exact: true });
+    const trigger = menuTrigger(page);
 
     await trigger.focus();
     await page.keyboard.press('Enter');

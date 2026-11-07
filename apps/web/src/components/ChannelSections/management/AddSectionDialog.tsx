@@ -12,187 +12,101 @@ import {
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { SectionForm } from './SectionForm';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface AddSectionDialogProps {
   channelId: string;
-  onAdd: (section: ChannelSectionCreateInput) => void;
+  onAdd: (section: ChannelSectionCreateInput) => void | Promise<void>;
   disabled?: boolean;
 }
 
-interface SectionTypeOption {
-  type: ChannelSectionType;
-  label: string;
-  description: string;
-}
-
-const SECTION_TYPES: SectionTypeOption[] = [
-  {
-    type: 'featured_videos',
-    label: 'Featured videos',
-    description: 'Specific videos you choose',
-  },
-  {
-    type: 'recent_uploads',
-    label: 'Recent uploads',
-    description: 'Your latest videos',
-  },
-  {
-    type: 'popular_uploads',
-    label: 'Popular uploads',
-    description: 'Your most-viewed videos',
-  },
-  {
-    type: 'single_playlist',
-    label: 'Single playlist',
-    description: 'One featured playlist',
-  },
-  {
-    type: 'multiple_playlists',
-    label: 'Featured playlists',
-    description: 'Specific playlists you choose',
-  },
-  {
-    type: 'subscribed_channels',
-    label: 'Subscribed channels',
-    description: 'Channels you subscribe to',
-  },
-  {
-    type: 'liked_videos',
-    label: 'Liked videos',
-    description: 'Videos you liked',
-  },
+export const SECTION_TYPES: ChannelSectionType[] = [
+  'featured_videos',
+  'recent_uploads',
+  'popular_uploads',
+  'single_playlist',
+  'multiple_playlists',
+  'subscribed_channels',
+  'liked_videos',
 ];
 
 export function AddSectionDialog({ channelId, onAdd, disabled }: AddSectionDialogProps) {
+  const { t, isRTL } = useLanguage();
+  const s = t.channelManage.sections;
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ChannelSectionType | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleTypeSelect = (type: ChannelSectionType) => {
-    setSelectedType(type);
-  };
-
-  const handleBack = () => {
-    setSelectedType(null);
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-    setSelectedType(null);
-    setIsCreating(false);
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      setSelectedType(null);
+      setIsCreating(false);
+    }
   };
 
   const handleFormSubmit = async (data: ChannelSectionCreateInput) => {
     setIsCreating(true);
     try {
       await onAdd(data);
-      handleClose();
+      handleOpenChange(false);
     } catch (_error) {
-      // Error already logged by parent component
+      // Error already logged and shown by the parent page
     } finally {
       setIsCreating(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button
           variant="outline"
-          className="
-            w-full
-            h-11             /* Mobile: standard height */
-            md:h-10          /* Desktop: slightly smaller */
-            text-sm
-            md:text-base
-          "
+          className="w-full h-11 md:h-10 text-sm md:text-base"
           disabled={disabled}
+          data-testid="add-section-button"
         >
-          <Plus className="w-4 h-4 mr-2" />
-          Add section
+          <Plus className="w-4 h-4 me-2" />
+          {s.addSection}
         </Button>
       </DialogTrigger>
 
       <DialogContent
-        className="
-          max-w-2xl
-          max-h-[85vh]     /* Mobile: more space */
-          md:max-h-[80vh]  /* Desktop: slightly less */
-          overflow-y-auto
-          p-4              /* Mobile: compact padding */
-          md:p-6           /* Desktop: more padding */
-        "
+        className="max-w-2xl max-h-[85vh] md:max-h-[80vh] overflow-y-auto p-4 md:p-6"
+        dir={isRTL ? 'rtl' : 'ltr'}
       >
         <DialogHeader>
           <DialogTitle className="text-lg md:text-xl">
-            {selectedType ? 'Configure section' : 'Add channel section'}
+            {selectedType ? s.configureSection : s.addChannelSection}
           </DialogTitle>
         </DialogHeader>
 
         {!selectedType ? (
-          // Section type selector
-          <div className="
-            grid
-            grid-cols-1       /* Mobile: 1 column */
-            sm:grid-cols-2    /* Tablet+: 2 columns */
-            gap-2             /* Mobile: compact gap */
-            md:gap-3          /* Desktop: more space */
-            mt-4
-          ">
-            {SECTION_TYPES.map((option) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3 mt-4" data-testid="section-type-options">
+            {SECTION_TYPES.map((type) => (
               <button
-                key={option.type}
-                onClick={() => handleTypeSelect(option.type)}
-                className="
-                  p-3               /* Mobile: compact padding */
-                  md:p-4            /* Desktop: more padding */
-                  text-left
-                  border
-                  border-gray-200
-                  dark:border-gray-700
-                  rounded-lg
-                  hover:border-blue-500
-                  hover:bg-blue-50
-                  dark:hover:bg-blue-900/20
-                  dark:hover:border-blue-600
-                  transition-colors
-                  focus:outline-none
-                  focus:ring-2
-                  focus:ring-blue-500
-                  focus:ring-offset-2
-                  dark:focus:ring-offset-gray-900
-                  active:scale-[0.98]  /* Mobile: tap feedback */
-                "
+                key={type}
+                type="button"
+                data-section-type={type}
+                onClick={() => setSelectedType(type)}
+                className="p-3 md:p-4 text-start border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:hover:border-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 active:scale-[0.98]"
               >
-                <div className="
-                  font-medium
-                  text-sm           /* Mobile: smaller text */
-                  md:text-base      /* Desktop: normal text */
-                  text-gray-900
-                  dark:text-gray-100
-                ">
-                  {option.label}
+                <div className="font-medium text-sm md:text-base text-gray-900 dark:text-gray-100">
+                  {s.typeLabels[type]}
                 </div>
-                <div className="
-                  text-xs           /* Mobile: extra small */
-                  md:text-sm        /* Desktop: small */
-                  text-gray-600
-                  dark:text-gray-400
-                  mt-1
-                ">
-                  {option.description}
+                <div className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {s.typeDescriptions[type]}
                 </div>
               </button>
             ))}
           </div>
         ) : (
-          // Section form
           <div className="mt-4">
             <SectionForm
               channelId={channelId}
               sectionType={selectedType}
               onSubmit={handleFormSubmit}
-              onCancel={handleBack}
+              onCancel={() => setSelectedType(null)}
               isLoading={isCreating}
             />
           </div>

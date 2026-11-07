@@ -50,6 +50,8 @@ const customJestConfig = {
     '/node_modules/',
     '/.next/',
     '/.open-next/',
+    // Playwright specs (run with `playwright test`, not jest)
+    '<rootDir>/e2e/',
   ],
   // Build output contains copies of workspace packages; keep them out of the
   // module map or jest reports duplicate packages (e.g. @al-ummah/logger).

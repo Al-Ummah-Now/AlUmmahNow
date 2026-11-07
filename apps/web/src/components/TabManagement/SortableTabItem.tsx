@@ -58,6 +58,8 @@ export function SortableTabItem({
         transition-all
       `}
       dir={isRTL ? 'rtl' : 'ltr'}
+      data-testid="tab-item"
+      data-tab-id={tab.id}
     >
       {/* Drag handle */}
       <button
@@ -77,7 +79,8 @@ export function SortableTabItem({
           dark:hover:text-gray-300
           touch-manipulation
         "
-        aria-label={t.channel.tabs.drag_to_reorder}
+        aria-label={`${t.channel.tabs.drag_to_reorder}: ${tabName}`}
+        data-testid="tab-drag-handle"
       >
         <GripVertical className="w-5 h-5" />
       </button>

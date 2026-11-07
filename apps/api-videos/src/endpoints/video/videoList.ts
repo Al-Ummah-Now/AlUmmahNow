@@ -77,11 +77,8 @@ export class VideosList extends OptionalAuthRoute {
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		
-		// Use R2's native cursor pagination
-		const videos = await repository.listObjects(limit, cursor);
-		
 		// Filter videos based on privacy settings, user context, and filters
-		let filteredVideos = (videos.items || []).filter(video => {
+		const isVisible = (video: VideoType) => {
 			// Internal records (section indexes, live streams) share the bucket
 			if (isInternalRecord(video)) {
 				return false;
@@ -119,7 +116,24 @@ export class VideosList extends OptionalAuthRoute {
 
 			// If video is public (true) or undefined/null (default to public), always show it
 			return true;
-		});
+		};
+
+		// R2's native cursor pagination cuts the page before visibility filtering,
+		// so a page full of private/internal records used to come back nearly
+		// empty (the home page showed 1-3 videos and a "Load More" button). Keep
+		// reading whole R2 pages until `limit` visible videos are collected or the
+		// bucket is exhausted; the cursor always points after the last page read,
+		// so nothing is skipped (a response may hold up to 2*limit-1 videos).
+		const MAX_PAGES = 5;
+		const filteredVideos: VideoType[] = [];
+		let nextCursor = cursor;
+		for (let page = 0; page < MAX_PAGES; page++) {
+			const batch = await repository.listObjects(limit, nextCursor);
+			filteredVideos.push(...(batch.items || []).filter(isVisible));
+			nextCursor = batch.cursor || "";
+			if (!nextCursor || filteredVideos.length >= limit) break;
+		}
+		const videos = { cursor: nextCursor };
 		
 		// Sort videos based on sort parameter
 		filteredVideos.sort((a, b) => {

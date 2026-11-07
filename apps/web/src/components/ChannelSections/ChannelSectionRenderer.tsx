@@ -15,7 +15,9 @@ import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   getSectionChannelIds,
+  getSectionPlaylistIds,
   getSectionPopulatedChannels,
+  getSectionVideoIds,
   type PopulatedChannelSection,
 } from './sectionData';
 
@@ -61,7 +63,7 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
     case 'featuredVideos':
       return (
         <FeaturedVideosSection
-          videoIds={section.videoIds || []}
+          videoIds={getSectionVideoIds(section)}
           title={section.title}
           channelId={channelId}
         />
@@ -76,13 +78,13 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
     case 'multiplePlaylists':
       return (
         <MultiplePlaylistsSection
-          title={section.title || 'Playlists'}
-          playlistIds={section.playlistIds || []}
+          title={section.title || t.channel.featuredPlaylists}
+          playlistIds={getSectionPlaylistIds(section)}
         />
       );
 
     case 'singlePlaylist':
-      return <SinglePlaylistSection playlistId={section.playlistIds?.[0] || ''} />;
+      return <SinglePlaylistSection playlistId={getSectionPlaylistIds(section)[0] || ''} />;
 
     case 'allPlaylists':
       return <AllPlaylistsSection channelId={channelId} />;

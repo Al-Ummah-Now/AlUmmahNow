@@ -28,7 +28,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
   maxDate,
   className = '',
 }) => {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const [isScheduled, setIsScheduled] = useState<boolean>(!!initialSchedule);
   const [dateTimeValue, setDateTimeValue] = useState<string>('');
@@ -159,7 +159,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
     if (!dateTimeValue) return '';
     try {
       const date = new Date(dateTimeValue);
-      return date.toLocaleString('en-US', {
+      return date.toLocaleString(lang === 'ar' ? 'ar' : 'en-US', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
@@ -174,14 +174,14 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`space-y-4 ${className}`} data-testid="upload-schedule">
       {/* Schedule Toggle */}
       <div className="space-y-3">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <p id="upload-schedule-options-label" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {t.schedule?.schedulingOptions || 'Scheduling Options'}
-        </label>
+        </p>
 
-        <div className="space-y-2">
+        <div className="space-y-2" role="radiogroup" aria-labelledby="upload-schedule-options-label">
           {/* Publish Immediately */}
           <label className="flex items-center p-3 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
             <input
@@ -190,9 +190,10 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
               checked={!isScheduled}
               onChange={() => handleToggleSchedule(false)}
               disabled={disabled}
+              data-testid="upload-schedule-now"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
             />
-            <div className="ml-3">
+            <div className="ms-3">
               <div className="text-sm font-medium text-gray-900 dark:text-white">
                 {t.schedule?.publishImmediately || 'Publish immediately'}
               </div>
@@ -210,9 +211,10 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
               checked={isScheduled}
               onChange={() => handleToggleSchedule(true)}
               disabled={disabled}
+              data-testid="upload-schedule-later"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
             />
-            <div className="ml-3">
+            <div className="ms-3">
               <div className="text-sm font-medium text-gray-900 dark:text-white">
                 {t.schedule?.scheduleLater || 'Schedule for later'}
               </div>
@@ -229,29 +231,32 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
         <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           {/* DateTime Input */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="upload-schedule-datetime" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               {t.schedule?.dateAndTime || 'Date and Time'}
             </label>
             <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <div className="absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none">
                 <Calendar size={18} className="text-gray-400" />
               </div>
               <input
                 type="datetime-local"
+                id="upload-schedule-datetime"
+                data-testid="upload-schedule-datetime"
                 value={dateTimeValue}
                 onChange={(e) => handleDateTimeChange(e.target.value)}
                 min={getMinDateTime()}
                 max={getMaxDateTime()}
                 disabled={disabled}
-                className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                className="w-full ps-10 pe-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 required
               />
               {dateTimeValue && !disabled && (
                 <button
                   type="button"
                   onClick={handleClearSchedule}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  aria-label="Clear date"
+                  data-testid="upload-schedule-clear"
+                  className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  aria-label={t.schedule?.clearDate || 'Clear date'}
                 >
                   <X size={18} />
                 </button>
@@ -260,16 +265,16 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
           </div>
 
           {/* Timezone Display */}
-          <div className="flex items-start space-x-2 text-xs text-gray-600 dark:text-gray-400">
+          <div className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
             <Clock size={14} className="mt-0.5 flex-shrink-0" />
-            <span>
+            <span data-testid="upload-schedule-timezone">
               {t.schedule?.timezone || 'Timezone'}: <span className="font-medium">{timezone}</span>
             </span>
           </div>
 
           {/* Preview */}
           {dateTimeValue && !error && (
-            <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+            <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md" role="status" data-testid="upload-schedule-preview">
               <Info size={16} className="text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-blue-900 dark:text-blue-100">
                 <div className="font-medium mb-1">{t.schedule?.videoWillBePublished || 'This video will be published on'}:</div>
@@ -280,7 +285,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
 
           {/* Error Message */}
           {error && (
-            <div className="flex items-start space-x-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-md">
+            <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-md" role="alert" data-testid="upload-schedule-error">
               <AlertCircle size={16} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
               <span className="text-sm text-red-900 dark:text-red-100">{error}</span>
             </div>
@@ -291,6 +296,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
             <input
               type="checkbox"
               id="notifyOnPublish"
+              data-testid="upload-schedule-notify"
               checked={notifyOnPublish}
               onChange={(e) => handleNotifyChange(e.target.checked)}
               disabled={disabled}
@@ -298,7 +304,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
             />
             <label
               htmlFor="notifyOnPublish"
-              className="ml-2 block text-sm text-gray-700 dark:text-gray-300"
+              className="ms-2 block text-sm text-gray-700 dark:text-gray-300"
             >
               {t.schedule?.notifyOnPublish || 'Notify subscribers when published'}
             </label>

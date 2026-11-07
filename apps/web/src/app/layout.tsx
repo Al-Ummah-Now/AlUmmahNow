@@ -2,7 +2,6 @@ import React from "react";
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { ThemeProvider } from "@/components/themeProvider";
 import { authenticated } from "../lib/actions"
-import { Suspense } from "react"
 import type { Metadata, Viewport } from 'next'
 import { headers } from "next/headers";
 import { DEFAULT_LOCALE, LOCALE_REQUEST_HEADER } from "@/lib/i18n/locales";
@@ -104,7 +103,10 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
       </head>
       <body className="font-inter">
         <SecurityBootstrap />
-        <Suspense>
+        {/* No <Suspense> around the app: with one, the shell (and a 200 status)
+            streamed before a page or layout could call notFound(), so unknown
+            channels/handles/playlists were soft 404s rendered twice. Every route
+            is dynamic (cookies/headers above), so nothing needs the boundary. */}
           <QueryProvider>
             <NuqsAdapter>
               <ThemeProvider
@@ -123,7 +125,10 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                           <SkipLinks />
                           {/* Header */}
                           <Navigation></Navigation>
-                          {children}
+                          {/* Skip-link target for pages without <main id="main-content"> (PAGE_CONTENT_ID in SkipLinks; a literal because this is a server component) */}
+                          <div id="page-content" className="flex flex-1 flex-col">
+                            {children}
+                          </div>
 
                           {/* Real-time notification center */}
                           <NotificationCenter />
@@ -141,7 +146,6 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
             </ThemeProvider>
             </NuqsAdapter>
           </QueryProvider>
-        </Suspense>
       </body>
       <script async nonce={nonce} type="text/javascript" src="https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>
 

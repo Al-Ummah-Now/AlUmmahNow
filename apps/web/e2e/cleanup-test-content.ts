@@ -23,6 +23,13 @@ const SEED_TITLE_SET = new Set<string>(Object.values(SEED_TITLES));
 
 export interface CleanupOptions {
   keepSeed: boolean;
+  /**
+   * Only delete videos created at least this long ago. The teardown passes a
+   * grace period so it never deletes the in-flight disposable videos of other
+   * Playwright runs (local or CI) sharing the same E2E users; those runs clean
+   * up after themselves.
+   */
+  minAgeMs?: number;
   dryRun?: boolean;
   log?: (message: string) => void;
 }
@@ -41,7 +48,11 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
 
     const own = new Set(u.channelIds);
     const videos = (await listOwnVideos(u)).filter((v) => own.has(v.channelId));
-    const targets = videos.filter((v) => !(opts.keepSeed && SEED_TITLE_SET.has(v.title)));
+    const cutoff = Date.now() - (opts.minAgeMs ?? 0);
+    const createdAt = (v: { dateCreated?: string }) => new Date(v.dateCreated || 0).getTime();
+    const targets = videos.filter(
+      (v) => !(opts.keepSeed && SEED_TITLE_SET.has(v.title)) && createdAt(v as { dateCreated?: string }) <= cutoff,
+    );
     log(`[cleanup] ${user}: ${videos.length} owned, ${targets.length} to delete`);
     if (opts.dryRun || targets.length === 0) continue;
 
@@ -67,7 +78,8 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
 /** Playwright globalTeardown: remove everything the run created, keep seed videos */
 export default async function globalTeardown(): Promise<void> {
   try {
-    await cleanupTestVideos({ keepSeed: true, log: (m) => console.log(m) });
+    // 30 minutes covers any test still running in a concurrent run
+    await cleanupTestVideos({ keepSeed: true, minAgeMs: 30 * 60 * 1000, log: (m) => console.log(m) });
   } catch (error) {
     // Cleanup must not fail the run
     console.warn('[cleanup] teardown failed', error);

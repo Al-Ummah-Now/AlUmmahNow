@@ -121,13 +121,13 @@ describe('CommunityTabContent', () => {
 
     render(<CommunityTabContent channelId="channel-1" />);
 
-    const likeButton = await screen.findByRole('button', { name: EN_TRANSLATIONS.community.like });
+    const likeButton = await screen.findByRole('button', { name: new RegExp(`^${EN_TRANSLATIONS.community.like}\\b`) });
     fireEvent.click(likeButton);
 
     await waitFor(() =>
       expect(mockLike).toHaveBeenCalledWith('channel-1', 'post-1', { channelId: 'viewer-channel' })
     );
-    expect(await screen.findByRole('button', { name: EN_TRANSLATIONS.community.unlike })).toHaveTextContent('5');
+    expect(await screen.findByRole('button', { name: new RegExp(`^${EN_TRANSLATIONS.community.unlike}\\b`) })).toHaveTextContent('5');
   });
 
   it('starts liked when the viewer already liked the post', async () => {
@@ -135,7 +135,7 @@ describe('CommunityTabContent', () => {
 
     render(<CommunityTabContent channelId="channel-1" />);
 
-    expect(await screen.findByRole('button', { name: EN_TRANSLATIONS.community.unlike })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: new RegExp(`^${EN_TRANSLATIONS.community.unlike}\\b`) })).toBeInTheDocument();
   });
 
   const pollPost = () =>

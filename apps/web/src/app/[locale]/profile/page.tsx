@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { ChannelManagementSection } from '@/components/channelManagement';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useCurrentChannel } from '@/hooks/useMultiAccount';
+import { SignInPrompt } from '@/components/common/SignInPrompt';
 
 const ProfilePage = () => {
   const params = useParams();
@@ -41,6 +42,10 @@ const ProfilePage = () => {
     profile?.email ||
     auth?.user?.email ||
     '';
+
+  if (!auth?.user) {
+    return <SignInPrompt title={t.profile.signInTitle} message={t.profile.signInMessage} />;
+  }
 
   return (
     <div className="profile-page flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
@@ -78,6 +83,7 @@ const ProfilePage = () => {
                 >
                   {/* Edit Button - Always visible */}
                   <button
+                    data-testid="profile-edit-button"
                     onClick={() => router.push(`/${locale}/profile/edit`)}
                     className={`absolute top-4 ${isRTL ? 'left-4' : 'right-4'} inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg`}
                   >
@@ -108,7 +114,7 @@ const ProfilePage = () => {
                   }}
                 />
               </div>
-              <h1 className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{displayHeading}</h1>
+              <h1 data-testid="profile-heading" className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{displayHeading}</h1>
             </section>
 
             {/* Channel Management Section */}
@@ -161,7 +167,7 @@ const ProfilePage = () => {
                   <p className="text-gray-600 dark:text-gray-400 text-lg font-medium mb-2">
                     {t.common.noResults}
                   </p>
-                  <p className="text-gray-500 dark:text-gray-500 text-sm mb-4">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
                     {t.profile.firstPlaylistMessage || 'Create your first playlist to organize your videos'}
                   </p>
                   <button

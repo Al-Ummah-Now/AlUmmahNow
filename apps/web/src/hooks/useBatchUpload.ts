@@ -5,6 +5,7 @@ import { UploadQueueItem, VideoUploadMetadata } from '@al-ummah/shared-types';
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { buildBatchUploadEntries } from '@/lib/upload/batch-entries';
+import { hasActiveUploads } from '@/lib/upload/batch-status';
 import { initiateBatchUpload, completeVideoUpload } from '@/lib/actions/upload';
 import { getClientAuthHeaders } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
@@ -63,8 +64,13 @@ export function useBatchUpload({
         setOverallProgress(progress.overallProgress);
 
         // Update file list from queue state
-        const queueState = batchManagerRef.current!.getQueueState();
-        setFiles(Array.from(queueState.values()));
+        const queueItems = Array.from(batchManagerRef.current!.getQueueState().values());
+        setFiles(queueItems);
+        // Once nothing is pending, uploading or paused the batch is over, so the
+        // page shows its actions again (Start / Add Videos) instead of hiding them forever
+        if (!hasActiveUploads(queueItems)) {
+          setIsUploading(false);
+        }
       });
 
       // After TUS finishes, mark the upload complete so Bunny processing is
@@ -175,11 +181,10 @@ export function useBatchUpload({
 
     const item = files.find(f => f.id === fileId);
     if (item && (item.status === 'pending' || item.status === 'cancelled' || item.status === 'failed')) {
-      batchManagerRef.current.cancelUpload(fileId);
-
-      // Update local state
-      const queueState = batchManagerRef.current.getQueueState();
-      setFiles(Array.from(queueState.values()).filter(f => f.id !== fileId));
+      // removeUpload drops it from the manager's queue too; cancelUpload only
+      // marked it cancelled, so the removed file came back on the next update
+      batchManagerRef.current.removeUpload(fileId);
+      setFiles(Array.from(batchManagerRef.current.getQueueState().values()));
     }
   }, [files]);
 
@@ -192,6 +197,9 @@ export function useBatchUpload({
     setIsUploading(true);
     try {
       await batchManagerRef.current.startUploads();
+      if (!hasActiveUploads(Array.from(batchManagerRef.current.getQueueState().values()))) {
+        setIsUploading(false);
+      }
     } catch (error) {
       logger.error('Failed to start uploads:', error);
       onError?.(error instanceof Error ? error.message : 'Failed to start uploads');

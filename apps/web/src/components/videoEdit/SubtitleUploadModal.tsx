@@ -233,6 +233,7 @@ export default function SubtitleUploadModal({
             >
               <SelectTrigger
                 id="language"
+                data-testid="subtitle-language"
                 className="
                   w-full
                   h-10
@@ -310,7 +311,8 @@ export default function SubtitleUploadModal({
                 onChange={handleFileInputChange}
                 className="hidden"
                 disabled={isUploading}
-                aria-label="File input"
+                aria-label={t.subtitle?.uploadFileArea || 'Upload subtitle file'}
+                data-testid="subtitle-file-input"
               />
 
               {!selectedFile && (
@@ -399,6 +401,7 @@ export default function SubtitleUploadModal({
               <input
                 type="checkbox"
                 id="isDefault"
+                data-testid="subtitle-is-default"
                 checked={isDefault}
                 onChange={(e) => setIsDefault(e.target.checked)}
                 disabled={isUploading}
@@ -446,7 +449,7 @@ export default function SubtitleUploadModal({
 
           {/* Error Message */}
           {error && (
-            <div className="
+            <div role="alert" data-testid="subtitle-upload-error" className="
               flex
               items-start
               gap-2
@@ -481,7 +484,7 @@ export default function SubtitleUploadModal({
 
           {/* Success Message */}
           {success && (
-            <div className="
+            <div role="status" data-testid="subtitle-upload-success" className="
               flex
               items-center
               gap-2
@@ -524,7 +527,9 @@ export default function SubtitleUploadModal({
             dark:border-gray-700
           ">
             <Button
+              type="button"
               variant="outline"
+              data-testid="subtitle-upload-cancel"
               onClick={() => handleOpenChange(false)}
               disabled={isUploading}
               className="
@@ -540,6 +545,8 @@ export default function SubtitleUploadModal({
               {t.common?.cancel || 'Cancel'}
             </Button>
             <Button
+              type="button"
+              data-testid="subtitle-upload-submit"
               onClick={handleUpload}
               disabled={
                 !selectedFile ||

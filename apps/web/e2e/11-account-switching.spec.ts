@@ -88,11 +88,17 @@ test.describe('Account Switching', () => {
 
     let menu = await openAccountMenu(page);
     await account(menu, multi.email).getByRole('menuitem').click();
-    menu = await openAccountMenu(page);
     const second = multi.channels.find((c) => !c.isMain)!;
-    const secondOption = menu.locator(`[data-testid="nav-channel-option"][data-channel-id="${second.id}"]`);
-    await secondOption.click();
-    await expect(secondOption).toHaveAttribute('aria-checked', 'true');
+    const optionSelector = `[data-testid="nav-channel-option"][data-channel-id="${second.id}"]`;
+    // The menu re-renders (and may close) while the account switch settles:
+    // reopen it and click until the second channel is the checked one
+    await expect(async () => {
+      menu = await openAccountMenu(page);
+      const option = menu.locator(optionSelector);
+      if ((await option.getAttribute('aria-checked')) !== 'true') await option.click();
+      menu = await openAccountMenu(page);
+      await expect(menu.locator(optionSelector)).toHaveAttribute('aria-checked', 'true', { timeout: 3000 });
+    }).toPass({ timeout: 30000 });
 
     // Back to the single account: its own channel is active
     await account(menu, single.email).getByRole('menuitem').click();

@@ -19,7 +19,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
   return (
     // Fixed height (h-14): the account menu swaps a skeleton for the avatar
     // after hydration, which must not push the page content down (layout shift)
-    <header className="header flex items-center justify-between px-2 h-14 bg-[#093041]  text-black dark:text-white ">
+    <header className="header flex items-center justify-between px-2 h-14 bg-[#093041] text-white ">
       {/* Menu Section */}
       <div className="flex-1 flex items-center justify-start space-x-4">
         <IcoButton

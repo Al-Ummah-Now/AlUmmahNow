@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import VideoCard from '../../videoCard';
 import { SectionHeader } from '../SectionHeader';
+import { resolveSectionTitle } from '../sectionData';
 import { logger } from '@/lib/logger-client';
 import { listVideos } from '@/lib/api/videos';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -13,8 +14,8 @@ interface LikedVideosSectionProps {
   title?: string;
 }
 
-export function LikedVideosSection({ channelId }: LikedVideosSectionProps) {
-  const { t, locale } = useLanguage();
+export function LikedVideosSection({ channelId, title }: LikedVideosSectionProps) {
+  const { t } = useLanguage();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -55,8 +56,8 @@ export function LikedVideosSection({ channelId }: LikedVideosSectionProps) {
   return (
     <section className="space-y-4">
       <SectionHeader
-        title={t.channel.likedVideos}
-        viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}/liked` : undefined}
+        title={resolveSectionTitle(title, t.channel.likedVideos)}
+
       />
 
       {videos.length === 0 ? (

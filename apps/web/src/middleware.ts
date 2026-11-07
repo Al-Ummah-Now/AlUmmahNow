@@ -149,6 +149,15 @@ export function middleware(request: NextRequest) {
 
           return NextResponse.redirect(new URL(redirectPath, request.url));
         }
+      } else {
+        // No locale prefix (e.g. /video?vid=..., /does-not-exist). Every page
+        // lives under /[locale], so send it there: real pages keep working and
+        // unknown ones get the localized 404 with a real 404 status instead of
+        // the [locale] layout's notFound() answering 200 (soft 404).
+        const preferredLocale = getLanguagePreferenceFromCookie(request) || DEFAULT_LOCALE;
+        const target = new URL(`/${preferredLocale}${pathname}`, request.url);
+        target.search = request.nextUrl.search;
+        return NextResponse.redirect(target);
       }
     }
   }

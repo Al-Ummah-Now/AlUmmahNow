@@ -15,7 +15,10 @@ import { getTranslations as getApiTranslations } from "@/lib/api/i18n";
 import { getTranslations as getStaticTranslations } from "@/lib/i18n/utils";
 import { logger } from "@/lib/logger-client";
 import type { SupportedLanguage } from "@/lib/i18n/types";
-import type { AppTranslations } from "@al-ummah/shared-types";
+import type { AppTranslations as ApiAppTranslations } from "@al-ummah/shared-types";
+// The merged result always starts from the static web translations, so it has
+// the full web shape (a superset of the shared/API type)
+import type { AppTranslations } from "@/lib/i18n/types";
 
 /**
  * Deep merge translations with key-by-key fallback
@@ -29,7 +32,7 @@ import type { AppTranslations } from "@al-ummah/shared-types";
  */
 function deepMergeTranslations(
   staticTrans: AppTranslations,
-  apiTrans: AppTranslations | undefined | null
+  apiTrans: ApiAppTranslations | undefined | null
 ): AppTranslations {
   // If no API translations, return static
   if (!apiTrans) {

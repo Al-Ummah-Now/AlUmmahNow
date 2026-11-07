@@ -19,7 +19,8 @@ interface ChannelHeaderProps {
 }
 
 export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeaderProps) {
-  const { user } = useMultiAccount();
+  // While the session loads `user` is still null: treat that as "checking", not anonymous
+  const { user, loading: authLoading } = useMultiAccount();
   // Server-side ownership plus a client fallback (e.g. right after switching accounts)
   const owner = isOwner || (!!user && user.id === channel.userId);
   const t = getTranslations(locale as 'en' | 'ar');
@@ -50,7 +51,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800" dir="ltr">
+    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800" data-testid="channel-header" dir="ltr">
       {/* Channel Cover/Banner */}
       {channel.coverUrl && (
         <div className="relative w-full h-48 md:h-64 lg:h-80 bg-gray-200 dark:bg-gray-800">
@@ -112,17 +113,19 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                 {user && isSubscribed && !isLoading && <ChannelBellMenu channelId={channel.id} />}
                 <button
                   onClick={handleSubscribe}
-                  disabled={isLoading || checkingSubscription}
+                  data-testid="channel-subscribe-button"
+                  aria-pressed={isSubscribed}
+                  disabled={authLoading || isLoading || checkingSubscription}
                   className={cn(
                     'px-4 py-1.5 text-sm font-semibold rounded-lg transition-all shadow-md hover:shadow-lg flex-shrink-0',
                     'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500',
                     isSubscribed
                       ? 'bg-gray-200 hover:bg-gray-300 text-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white'
                       : 'bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-gray-900',
-                    (isLoading || checkingSubscription) && 'opacity-50 cursor-not-allowed'
+                    (authLoading || isLoading || checkingSubscription) && 'opacity-50 cursor-not-allowed'
                   )}
                 >
-                  {isLoading || checkingSubscription ? (
+                  {authLoading || isLoading || checkingSubscription ? (
                     <span className="flex items-center gap-2">
                       <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -148,7 +151,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
 
             <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
               {subscriberCount !== undefined && (
-                <span>
+                <span data-testid="channel-subscriber-count">
                   {formatSubscriberCount(subscriberCount)} {t.channel.subscribers.toLowerCase()}
                 </span>
               )}

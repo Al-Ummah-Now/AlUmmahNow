@@ -56,8 +56,14 @@ async function deleteChannelsNamed(name: string) {
 async function createChannelViaMenu(page: Page, name: string, placeholder: string, createLabel: string) {
   const menu = await openAccountMenu(page);
   await menu.getByTestId('nav-create-channel').click();
-  await menu.getByPlaceholder(placeholder).fill(name);
-  await menu.getByRole('button', { name: createLabel, exact: true }).click();
+  const input = menu.getByPlaceholder(placeholder);
+  const create = menu.getByRole('button', { name: createLabel, exact: true });
+  // Retried: a re-render right after opening the form can drop the typed value
+  await expect(async () => {
+    if ((await input.inputValue()) !== name) await input.fill(name);
+    await expect(create).toBeEnabled({ timeout: 2000 });
+  }).toPass({ timeout: 20000 });
+  await create.click();
 
   const created = menu.getByTestId('nav-channel-option').filter({ hasText: name });
   await expect(created).toBeVisible();

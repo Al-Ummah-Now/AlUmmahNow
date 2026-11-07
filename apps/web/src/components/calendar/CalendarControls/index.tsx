@@ -42,7 +42,7 @@ export function CalendarControls({
   return (
     <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${className}`}>
       {/* Left Section: Navigation + Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 min-w-0 max-w-full">
         {/* Navigation Buttons */}
         <div className="flex items-center gap-1">
           <button
@@ -77,7 +77,7 @@ export function CalendarControls({
         </button>
 
         {/* Current Period Header */}
-        <h2 data-testid="calendar-header" aria-live="polite" className="text-lg font-semibold text-gray-900 dark:text-white ms-2 min-w-[280px] transition-all duration-200">
+        <h2 data-testid="calendar-header" aria-live="polite" className="text-lg font-semibold text-gray-900 dark:text-white ms-2 sm:min-w-[280px] transition-all duration-200">
           {headerText}
         </h2>
       </div>

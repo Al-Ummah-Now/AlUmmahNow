@@ -255,8 +255,9 @@ export class VideoSearch extends OptionalAuthRoute {
 						if (title.startsWith(term)) score += 30;
 					});
 
-					// Boost popular videos slightly
-					score += Math.min(video.views || 0, 100) * 0.1;
+					// Boost popular videos slightly, but only ones that matched:
+					// boosting every video let any query match all viewed videos
+					if (score > 0) score += Math.min(video.views || 0, 100) * 0.1;
 				}
 
 				return { video, score };

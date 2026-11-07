@@ -18,8 +18,18 @@ const isRemoteTarget = baseURL.startsWith('https://');
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
+/*
+ * The axe-on-every-page sweep (e2e/a11y) and the visual snapshots (e2e/visual)
+ * run in their own projects, once, on Desktop Chrome; the browser/device
+ * projects run every other spec.
+ */
+const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//];
+
 export default defineConfig({
   testDir: './e2e',
+  /* Visual baselines are OS-independent paths; they are generated on Linux in CI */
+  snapshotPathTemplate: '{testDir}/visual/__screenshots__/{projectName}/{arg}{ext}',
+  testIgnore: DEDICATED_DIRS,
 
   /* Run global setup before all tests */
   globalSetup: require.resolve('./e2e/auth.setup'),
@@ -42,7 +52,7 @@ export default defineConfig({
    * were cancelled). globalTimeout caps the whole run; maxFailures aborts early.
    */
   globalTimeout: process.env.CI ? Number(process.env.E2E_GLOBAL_TIMEOUT_MINUTES || 45) * 60 * 1000 : undefined,
-  maxFailures: process.env.CI ? 5 : 0,
+  maxFailures: process.env.CI ? Number(process.env.E2E_MAX_FAILURES || 5) : 0,
   /* Expect timeout */
   expect: {
     timeout: 30000,
@@ -137,6 +147,22 @@ export default defineConfig({
     {
       name: 'Mobile Safari',
       use: { ...devices['iPhone 12'] },
+    },
+
+    /* axe-core WCAG 2.1 AA sweep of every page, en/ar x light/dark */
+    {
+      name: 'a11y',
+      testMatch: /a11y\/.*\.spec\.ts/,
+      testIgnore: [],
+      use: { ...devices['Desktop Chrome'] },
+    },
+
+    /* Visual snapshots of key pages (baselines generated on Linux in CI) */
+    {
+      name: 'visual',
+      testMatch: /visual\/.*\.spec\.ts/,
+      testIgnore: [],
+      use: { ...devices['Desktop Chrome'] },
     },
 
     /* Test against branded browsers. */

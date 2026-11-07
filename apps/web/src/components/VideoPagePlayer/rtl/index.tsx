@@ -13,7 +13,7 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
 
-  const title = getLocalizedValue((options as PlayerOptions & { titleLocalized?: Record<string, string> }).titleLocalized, options.title, 'ar');
+  const title = getLocalizedValue(options.titleLocalized, options.title, 'ar');
 
   // Convert PlayerOptions to CustomVideoPlayer props. Same source resolution as
   // the LTR variant (API playUrl first) and memoized so re-renders don't hand

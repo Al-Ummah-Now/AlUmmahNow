@@ -129,6 +129,15 @@ export function getAllTimezones(): Array<{ value: string; label: string; offset:
 }
 
 /**
+ * Whether a timezone is one of the COMMON_TIMEZONES dropdown options. A stored
+ * or detected zone outside the list (e.g. "UTC") must be added as its own
+ * option, otherwise the select shows (and saves) the first entry instead.
+ */
+export function isListedTimezone(timezone: string): boolean {
+  return getAllTimezones().some(tz => tz.value === timezone);
+}
+
+/**
  * Get timezone display name
  * Returns a friendly name like "Dubai (GST) UTC+4"
  */

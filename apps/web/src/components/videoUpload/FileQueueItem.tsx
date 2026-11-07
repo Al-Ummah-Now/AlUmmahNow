@@ -114,7 +114,7 @@ export function FileQueueItem({
   const canRemove = file.status === 'pending' || file.status === 'cancelled' || file.status === 'failed';
 
   return (
-    <div className="
+    <div data-testid="batch-file" data-status={file.status} data-video-id={file.videoId || ''} className="
       border border-gray-200 dark:border-gray-700
       rounded-lg
       p-3
@@ -134,7 +134,7 @@ export function FileQueueItem({
           {/* File Name & Size */}
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex-1 min-w-0">
-              <h3 className="
+              <h3 data-testid="batch-file-name" className="
                 text-sm font-medium
                 text-gray-900 dark:text-white
                 truncate
@@ -149,7 +149,7 @@ export function FileQueueItem({
             {/* Status Badge */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {getStatusIcon(file.status)}
-              <span className={`text-xs font-medium ${getStatusColor(file.status)}`}>
+              <span data-testid="batch-file-status" className={`text-xs font-medium ${getStatusColor(file.status)}`}>
                 {getStatusText(file.status)}
               </span>
             </div>
@@ -195,6 +195,8 @@ export function FileQueueItem({
           <div className="flex flex-wrap gap-2 mt-2">
             {canPause && (
               <button
+                type="button"
+                data-testid="batch-file-pause"
                 onClick={onPause}
                 className="
                   flex items-center gap-1
@@ -217,6 +219,8 @@ export function FileQueueItem({
 
             {canResume && (
               <button
+                type="button"
+                data-testid="batch-file-resume"
                 onClick={onResume}
                 className="
                   flex items-center gap-1
@@ -239,6 +243,8 @@ export function FileQueueItem({
 
             {canRetry && (
               <button
+                type="button"
+                data-testid="batch-file-retry"
                 onClick={onRetry}
                 className="
                   flex items-center gap-1
@@ -261,6 +267,8 @@ export function FileQueueItem({
 
             {canCancel && (
               <button
+                type="button"
+                data-testid="batch-file-cancel"
                 onClick={onCancel}
                 className="
                   flex items-center gap-1
@@ -283,6 +291,8 @@ export function FileQueueItem({
 
             {canRemove && (
               <button
+                type="button"
+                data-testid="batch-file-remove"
                 onClick={onRemove}
                 className="
                   flex items-center gap-1

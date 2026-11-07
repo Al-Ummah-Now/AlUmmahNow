@@ -931,8 +931,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             {t.upload.dragDropFiles}
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t.upload.supports} {VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY} • {t.upload.max} {VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE_DISPLAY} • {t.upload.max} {VIDEO_UPLOAD_CONFIG.MAX_DURATION_DISPLAY}
+          {/* Size and duration are unlimited (TUS), so only the formats are listed;
+              the old line read "Max No limit • Max No limit" in both languages */}
+          <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="upload-supported-formats">
+            {t.upload.supports} MP4, MOV, AVI, WebM
           </p>
         </div>
       </div>

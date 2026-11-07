@@ -406,6 +406,18 @@ const UploadPage: React.FC = () => {
         {/* Batch Upload Mode */}
         {uploadMode === 'batch' && !uploadComplete && (
           <>
+            {/* Kept mounted outside the drop area so "Add Videos" can open it once the queue has files */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={handleBatchFileSelect}
+              className="hidden"
+              aria-label={t.upload.batchFileInput}
+              data-testid="batch-file-input"
+            />
+
             {/* File Selection Area */}
             {files.length === 0 && !isInitiating && (
               <div className="mb-6">
@@ -422,15 +434,8 @@ const UploadPage: React.FC = () => {
                     relative
                   "
                   onClick={() => fileInputRef.current?.click()}
+                  data-testid="batch-dropzone"
                 >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="video/*"
-                    multiple
-                    onChange={handleBatchFileSelect}
-                    className="hidden"
-                  />
                   <FileStack size={48} className="mx-auto mb-4 text-gray-400 dark:text-gray-500" />
                   <h3 className="text-base md:text-lg font-medium text-gray-900 dark:text-white mb-2">
                     {t.batch.dragDropMultiple}
@@ -447,7 +452,7 @@ const UploadPage: React.FC = () => {
 
             {/* Batch Upload Queue */}
             {(files.length > 0 || isInitiating) && (
-              <div className="mb-6">
+              <div className="mb-6" data-testid="batch-queue-container" data-initiating={isInitiating ? 'true' : 'false'}>
                 <BatchUploadQueue
                   files={files}
                   overallProgress={overallProgress}
@@ -468,6 +473,8 @@ const UploadPage: React.FC = () => {
             {files.length > 0 && !isUploading && (
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <button
+                  type="button"
+                  data-testid="batch-start"
                   onClick={startUpload}
                   disabled={isInitiating || files.every(f => f.status === 'completed' || f.status === 'cancelled')}
                   className="
@@ -485,6 +492,8 @@ const UploadPage: React.FC = () => {
                   {t.batch.startUploads}
                 </button>
                 <button
+                  type="button"
+                  data-testid="batch-add-videos"
                   onClick={() => fileInputRef.current?.click()}
                   className="
                     flex-1
@@ -532,7 +541,7 @@ const UploadPage: React.FC = () => {
               {uploadMode === 'batch' && (
                 <li className="flex items-start">
                   <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>
-                  <span>Batch uploads support 1-15 videos simultaneously for efficient content publishing</span>
+                  <span>{t.upload.batchGuideline}</span>
                 </li>
               )}
             </ul>

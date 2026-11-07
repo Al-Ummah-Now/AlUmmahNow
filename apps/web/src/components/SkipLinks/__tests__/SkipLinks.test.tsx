@@ -55,6 +55,22 @@ describe('SkipLinks', () => {
     expect(document.activeElement).toBe(document.getElementById('main-content'));
   });
 
+  it('falls back to the page content wrapper on pages without a <main> landmark (LTR + RTL)', () => {
+    for (const lang of ['en', 'ar'] as const) {
+      mockLang = lang;
+      mockPathname = `/${lang}/dashboard/videos`;
+      const { unmount } = render(
+        <>
+          <SkipLinks />
+          <div id="page-content"><h1>Dashboard</h1></div>
+        </>
+      );
+      fireEvent.click(screen.getAllByRole('link')[0]);
+      expect(document.activeElement).toBe(document.getElementById('page-content'));
+      unmount();
+    }
+  });
+
   it('adds player and comments targets on the watch page and focuses the player root', () => {
     mockPathname = '/en/video/abc-123';
     render(

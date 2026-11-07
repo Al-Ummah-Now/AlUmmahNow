@@ -1765,6 +1765,78 @@ export interface AppTranslations {
     loadMore?: string;
     collapse?: string;
     expand?: string;
+    pageTitle?: string;
+    pageDescription?: string;
+  };
+
+  /**
+   * Channel management (settings pages, section manager, channel header owner actions).
+   * Optional here: web ships the strings statically; API overrides are partial.
+   */
+  channelManage?: {
+    breadcrumb: string;
+    settingsLink: string;
+    postActions: string;
+    sections: {
+      title: string;
+      description: string;
+      publish: string;
+      publishing: string;
+      sectionsUsed: string;
+      unpublishedChanges: string;
+      empty: string;
+      maxReached: string;
+      deleteTitle: string;
+      deleteConfirm: string;
+      delete: string;
+      cancel: string;
+      created: string;
+      updated: string;
+      deleted: string;
+      published: string;
+      loadFailed: string;
+      createFailed: string;
+      updateFailed: string;
+      deleteFailed: string;
+      publishFailed: string;
+      addSection: string;
+      addChannelSection: string;
+      configureSection: string;
+      editSection: string;
+      dragToReorder: string;
+      deleteSection: string;
+      automaticContent: string;
+      videosCount: string;
+      playlistsCount: string;
+      channelsCount: string;
+      typeLabels: Record<string, string>;
+      typeDescriptions: Record<string, string>;
+      form: {
+        sectionTitle: string;
+        enterSectionTitle: string;
+        charactersCount: string;
+        playlistIds: string;
+        enterOnePlaylistId: string;
+        enterPlaylistIds: string;
+        enterExactlyOnePlaylistId: string;
+        separatePlaylistIds: string;
+        videoIds: string;
+        enterVideoIds: string;
+        separateVideoIds: string;
+        automaticMessage: string;
+        createSection: string;
+        creating: string;
+        saveSection: string;
+        saving: string;
+        cancel: string;
+        titleRequired: string;
+        titleTooLong: string;
+        titleInvalidChars: string;
+        playlistRequired: string;
+        singlePlaylistOnly: string;
+        videoRequired: string;
+      };
+    };
   };
 
   /**

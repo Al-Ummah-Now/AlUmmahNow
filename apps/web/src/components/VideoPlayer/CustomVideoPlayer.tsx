@@ -248,6 +248,10 @@ export default function CustomVideoPlayer({
       const fallbackSource = fallbackStrategyRef.current.getNextFallback(categorizedError);
       if (fallbackSource) {
         handleSourceChange(fallbackSource);
+      } else {
+        // Nothing left to fall back to: don't offer a "try another format"
+        // button that would do nothing
+        setCurrentError({ ...categorizedError, fallbackAvailable: false });
       }
     }
   }, [onError, handleSourceChange]);
@@ -495,6 +499,17 @@ export default function CustomVideoPlayer({
             }
           }
         });
+
+        // Video.js reports an unsupported source ("No compatible source", code 4)
+        // before `ready`, so the listener above never sees it. Surface an error
+        // that is already set so the localized ErrorDisplay replaces the player.
+        if (hasErrorMethod(player)) {
+          const earlyError = player.error();
+          if (earlyError && handleVideoErrorRef.current) {
+            logger.warn('[CustomVideoPlayer] Player errored before ready', { code: earlyError.code });
+            handleVideoErrorRef.current(earlyError);
+          }
+        }
 
         // ==================== Phase 3: Advanced Analytics ====================
 

@@ -76,12 +76,15 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
     }
   };
 
-  if (loading) {
+  // Only blank the feed on the first load: the feed reloads once the viewer's active
+  // channel is known (for like state), and unmounting the cards would collapse any
+  // comment thread the viewer already opened.
+  if (loading && posts.length === 0) {
     return (
       <div className="space-y-6" aria-busy="true" aria-label={t.community.loading} data-testid="community-posts-loading">
         {[1, 2, 3].map((i) => (
           <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 animate-pulse">
-            <div className={cn('flex items-center gap-3 mb-4', isRTL && 'flex-row-reverse')}>
+            <div className={cn('flex items-center gap-3 mb-4')}>
               <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full" />
               <div className="flex-1">
                 <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2" />

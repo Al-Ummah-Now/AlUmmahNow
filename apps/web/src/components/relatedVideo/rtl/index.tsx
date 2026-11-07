@@ -12,6 +12,7 @@ const RelatedVideoRTL: React.FC<VideoInfo> = (info) => {
   return (
     <Link
       href={`/ar/video?vid=${info.id}`}
+      data-testid="related-video"
       className="flex items-center space-x-4 rtl:space-x-reverse cursor-pointer rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800" dir="rtl"
     >
       <div className="w-1/3 bg-gray-300 rounded-lg overflow-hidden h-16 relative max-w-[100px]">

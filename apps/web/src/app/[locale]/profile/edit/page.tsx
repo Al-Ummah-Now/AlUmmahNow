@@ -5,8 +5,9 @@ import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
+import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
+import { SignInPrompt } from '@/components/common/SignInPrompt';
 
 const ProfileEditPage = () => {
   const { t, lang: locale } = useLanguage();
@@ -86,11 +87,11 @@ const ProfileEditPage = () => {
         setSaveState('success');
       } else {
         setSaveState('error');
-        setErrorMessage('Failed to save profile. Please try again.');
+        setErrorMessage(t.profile.saveFailed);
       }
     } catch (error) {
       setSaveState('error');
-      setErrorMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
+      setErrorMessage(error instanceof Error ? error.message : t.profile.unexpectedError);
     }
   };
 
@@ -128,6 +129,10 @@ const ProfileEditPage = () => {
   const displayFirstName = getLocalizedName(profile?.firstName, profile?.firstNameLocalized);
   const displayLastName = getLocalizedName(profile?.lastName, profile?.lastNameLocalized);
 
+  if (!auth?.user) {
+    return <SignInPrompt title={t.profile.signInTitle} message={t.profile.signInMessage} />;
+  }
+
   return (
     <div className="profile-edit-page flex flex-col flex-1 bg-gray-100 dark:bg-gray-900">
       <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
@@ -137,7 +142,17 @@ const ProfileEditPage = () => {
             {/* Cover Photo */}
             <div
               className="cover-photo h-48 bg-gray-300 dark:bg-gray-700 rounded-md overflow-hidden cursor-pointer relative"
+              role="button"
+              tabIndex={0}
+              aria-label={t.channel.clickToChangeCover}
+              data-testid="profile-cover-upload"
               onClick={() => document.getElementById('coverPhotoInput')?.click()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  document.getElementById('coverPhotoInput')?.click();
+                }
+              }}
               style={{
                 backgroundImage: profile?.coverUrl ? `url(${profile.coverUrl})` : 'none',
                 backgroundSize: 'cover',
@@ -145,7 +160,7 @@ const ProfileEditPage = () => {
               }}
             >
               {/* Edit indicator - always visible */}
-              <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg flex items-center gap-2 text-white pointer-events-none">
+              <div className="absolute top-4 end-4 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg flex items-center gap-2 text-white pointer-events-none">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -168,8 +183,18 @@ const ProfileEditPage = () => {
 
             {/* Profile Photo */}
             <div
-              className="profile-photo w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-700 border-4 border-gray-50 dark:border-gray-900 absolute bottom-[-24px] left-4 cursor-pointer overflow-hidden relative group/avatar"
+              className="profile-photo w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-700 border-4 border-gray-50 dark:border-gray-900 absolute bottom-[-24px] start-4 cursor-pointer overflow-hidden relative group/avatar"
+              role="button"
+              tabIndex={0}
+              aria-label={t.channel.clickToChangeAvatar}
+              data-testid="profile-avatar-upload"
               onClick={() => document.getElementById('profilePhotoInput')?.click()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  document.getElementById('profilePhotoInput')?.click();
+                }
+              }}
               style={{
                 backgroundImage: profile?.avatarUrl ? `url(${profile.avatarUrl})` : `url(/avatar.png)`,
                 backgroundSize: 'cover',
@@ -347,6 +372,9 @@ const ProfileEditPage = () => {
                 onChange={(e) => setTimezone(e.target.value)}
                 className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
               >
+                {timezone && !isListedTimezone(timezone) && (
+                  <option value={timezone}>{getTimezoneDisplayName(timezone)}</option>
+                )}
                 {Object.entries(COMMON_TIMEZONES).map(([region, timezones]) => (
                   <optgroup key={region} label={region}>
                     {timezones.map((tz) => (

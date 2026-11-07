@@ -97,8 +97,9 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
       return c.json({ error: "Video ID is required" }, 400);
     }
 
-    // Parse request body
-    const body = await c.req.json<WatchProgressUpdate>();
+    // Use the validated body: getValidatedData() already consumed the request
+    // stream, so c.req.json() threw "Body has already been used" (500)
+    const body = request.body as WatchProgressUpdate;
     const { progress, duration } = body;
 
     try {

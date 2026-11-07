@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import VideoCard from '../../videoCard';
 import { SectionHeader } from '../SectionHeader';
+import { resolveSectionTitle } from '../sectionData';
 import { listVideos } from '@/lib/api/videos';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
@@ -13,7 +14,7 @@ interface RecentUploadsSectionProps {
   title?: string;
 }
 
-export function RecentUploadsSection({ channelId }: RecentUploadsSectionProps) {
+export function RecentUploadsSection({ channelId, title }: RecentUploadsSectionProps) {
   const { t, locale } = useLanguage();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,8 +59,8 @@ export function RecentUploadsSection({ channelId }: RecentUploadsSectionProps) {
   return (
     <section className="space-y-4">
       <SectionHeader
-        title={t.channel.recentUploads}
-        viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}` : undefined}
+        title={resolveSectionTitle(title, t.channel.recentUploads)}
+        viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}?tab=videos` : undefined}
       />
 
       {videos.length === 0 ? (

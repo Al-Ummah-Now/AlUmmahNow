@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import VideoCard from '../../videoCard';
 import { SectionHeader } from '../SectionHeader';
+import { resolveSectionTitle } from '../sectionData';
 import { logger } from '@/lib/logger-client';
 import { getVideoById } from '@/lib/api/videos';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -14,7 +15,7 @@ interface FeaturedVideosSectionProps {
   channelId?: string;
 }
 
-export function FeaturedVideosSection({ videoIds, channelId }: FeaturedVideosSectionProps) {
+export function FeaturedVideosSection({ videoIds, title, channelId }: FeaturedVideosSectionProps) {
   const { t, locale } = useLanguage();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,8 +66,8 @@ export function FeaturedVideosSection({ videoIds, channelId }: FeaturedVideosSec
   return (
     <section className="space-y-4">
       <SectionHeader
-        title={t.channel.featuredVideos}
-        viewAllHref={channelId && videos.length > 0 ? `/${locale}/channels/${channelId}` : undefined}
+        title={resolveSectionTitle(title, t.channel.featuredVideos)}
+        viewAllHref={channelId && videos.length > 0 ? `/${locale}/channels/${channelId}?tab=videos` : undefined}
       />
 
       {videos.length === 0 ? (

@@ -93,14 +93,18 @@ export class LikeDelete extends AuthenticatedRoute {
 			timestamp: new Date().toISOString(),
 		});
 
-		video.likes = video.likes.filter((l) => l.id !== like.id);
+		// Conditional write: a concurrent reaction on this video is re-read, not overwritten
+		video = (await repository.updateObject(video.id, (fresh) => {
+			const before = (fresh.likes || []).length;
+			fresh.likes = (fresh.likes || []).filter((l) => !(l.channelId === channelId && l.entityId === id));
+			return fresh.likes.length !== before;
+		})) ?? video;
+		video.likes = video.likes || [];
 		// Keep the liked-videos index while another of the user's channels still likes it
 		if (!video.likes.some((l) => l.userId === userId)) {
 			await removeLike(c.env.NOTIFICATIONS_DB, userId, id);
 		}
 		// Note: likesCount is calculated in view layer, not stored
-
-		await repository.putObject(video.id, video);
 
 		broadcastInBackground(c, `video:${id}`, 'video_unliked', {
 			videoId: id,
@@ -109,7 +113,8 @@ export class LikeDelete extends AuthenticatedRoute {
 			dislikesCount: video.dislikes?.length || 0,
 		});
 
-		return true;
+		// chanfana cannot build a response from a bare boolean (it 500ed after the change was stored)
+		return { success: true };
 	}
 }
 

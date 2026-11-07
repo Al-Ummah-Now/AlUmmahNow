@@ -1015,6 +1015,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
         const playerOptions = {
             id: video.id,
             title: video.title,
+            titleLocalized: video.titleLocalized,
             description: video.description || '',
             channel: video.channel,
             channelName: video.channelName,
@@ -1035,6 +1036,8 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             commentsCount: video.commentsCount,
             userId: video.userId,
             channelId: video.channelId,
+            likes: (video.likes || []).map(({ userId, channelId }) => ({ userId, channelId })),
+            dislikes: (video.dislikes || []).map(({ userId, channelId }) => ({ userId, channelId })),
         };
 
         logger.info('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
