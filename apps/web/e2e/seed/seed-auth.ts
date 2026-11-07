@@ -22,7 +22,7 @@ export interface AuthConfig {
 
 export interface SessionTokens {
   accessToken: string;
-  /** JWT `sub` — the id api-videos uses as userId / profile id */
+  /** User id as api-videos sees it (JWT properties.id, e.g. "usr_…"); also the profile id */
   userId: string;
   /** Decoded JWT payload (for role/claim diagnostics only; never logged whole) */
   claims: Record<string, unknown>;
@@ -78,7 +78,11 @@ async function waitForAuthStep(page: Page, cfg: AuthConfig, timeoutMs = 45000): 
   throw new Error(`Timed out waiting for OpenAuth step (url=${new URL(page.url()).pathname})`);
 }
 
-async function extractSession(page: Page, cfg: AuthConfig): Promise<SessionTokens> {
+/**
+ * Reads the web session cookie of a page's browser context and returns the
+ * active account's access token. Waits up to 20s for the cookie to appear.
+ */
+export async function extractSession(page: Page, cfg: Pick<AuthConfig, 'webUrl'>): Promise<SessionTokens> {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
     const cookies = await page.context().cookies(cfg.webUrl);
@@ -96,10 +100,12 @@ async function extractSession(page: Page, cfg: AuthConfig): Promise<SessionToken
       if (!accessToken) throw new Error(`${SESSION_COOKIE} cookie has no access token for the active account`);
       maskSecret(accessToken);
       const claims = decodeJwtPayload(accessToken);
-      const sub = typeof claims.sub === 'string' ? claims.sub : undefined;
+      // api-videos identifies users by properties.id (e.g. "usr_…", also the
+      // web session's account key); the JWT `sub` ("user:…") is a different value.
       const props = claims.properties as { id?: string } | undefined;
-      const userId = sub || props?.id;
-      if (!userId) throw new Error('Access token has no sub / properties.id');
+      const sub = typeof claims.sub === 'string' ? claims.sub : undefined;
+      const userId = props?.id || accountId || sub;
+      if (!userId) throw new Error('Access token has no properties.id / sub');
       return { accessToken, userId, claims };
     }
     await page.waitForTimeout(500);
@@ -107,25 +113,33 @@ async function extractSession(page: Page, cfg: AuthConfig): Promise<SessionToken
   throw new Error(`Web app did not set the ${SESSION_COOKIE} cookie after the OAuth callback`);
 }
 
-/** Password login. Never registers. */
+/**
+ * Password login on an existing page, leaving the page on the web app with
+ * the session cookie set (so callers can keep or save the browser state).
+ * Never registers.
+ */
+export async function loginOnPage(page: Page, cfg: AuthConfig, email: string, password: string): Promise<LoginOutcome> {
+  await page.goto(authorizeUrl(cfg), { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('input[name="email"]', { timeout: 30000 });
+  await page.fill('input[name="email"]', email);
+  await page.fill('input[name="password"]', password);
+  await submitForm(page);
+  const step = await waitForAuthStep(page, cfg);
+  if (step === 'web') {
+    return { ok: true, session: await extractSession(page, cfg) };
+  }
+  const message = step === 'alert' ? await readAlert(page) : 'unexpected code step during login';
+  // OpenAuth's password provider reports "Password is incorrect." both for a
+  // wrong password and for an email that has no account.
+  const reason = /incorrect|invalid|not found/i.test(message) ? 'invalid_credentials' : 'unknown';
+  return { ok: false, reason, message };
+}
+
+/** Password login in a throwaway browser context. Never registers. */
 export async function loginWithPassword(browser: Browser, cfg: AuthConfig, email: string, password: string): Promise<LoginOutcome> {
   const context = await browser.newContext();
-  const page = await context.newPage();
   try {
-    await page.goto(authorizeUrl(cfg), { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('input[name="email"]', { timeout: 30000 });
-    await page.fill('input[name="email"]', email);
-    await page.fill('input[name="password"]', password);
-    await submitForm(page);
-    const step = await waitForAuthStep(page, cfg);
-    if (step === 'web') {
-      return { ok: true, session: await extractSession(page, cfg) };
-    }
-    const message = step === 'alert' ? await readAlert(page) : 'unexpected code step during login';
-    // OpenAuth's password provider reports "Password is incorrect." both for a
-    // wrong password and for an email that has no account.
-    const reason = /incorrect|invalid|not found/i.test(message) ? 'invalid_credentials' : 'unknown';
-    return { ok: false, reason, message };
+    return await loginOnPage(await context.newPage(), cfg, email, password);
   } finally {
     await context.close();
   }

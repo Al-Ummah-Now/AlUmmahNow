@@ -757,7 +757,7 @@ async function main(): Promise<void> {
     if (MODE !== 'check') throw new Error('Creator session unavailable');
     return;
   }
-  log.info('Creator token', { sub: creator.userId, exp: decodeJwtPayload(creator.accessToken).exp });
+  log.info('Creator token', { userId: creator.userId, exp: decodeJwtPayload(creator.accessToken).exp });
 
   log.group('Channels');
   const creatorExisting = await listOwnChannels(creator);
