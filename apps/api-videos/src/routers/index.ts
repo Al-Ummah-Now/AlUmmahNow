@@ -13,6 +13,8 @@ import monitoringRouter from './monitoring.router';
 import i18nRouter from './i18n.router';
 import discoveryRouter from './discovery.router';
 import privacyRouter from './privacy.router';
+import libraryRouter from './library.router';
+import notificationsRouter from './notifications.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -81,6 +83,12 @@ export function registerAllRouters(openapi: any) {
   // Privacy domain - GDPR export, erasure, consent audit trail
   openapi.route('/api/privacy', privacyRouter);
 
+  // Library domain - Watch later, liked videos, saved posts (Story 29.6)
+  openapi.route('/api/library', libraryRouter);
+
+  // Notifications domain - notification center, settings, per-channel bell (Story 29.10)
+  openapi.route('/api/notifications', notificationsRouter);
+
   // Monitoring domain - health checks, metrics, status page (root level)
   openapi.route('', monitoringRouter);
 }
@@ -102,4 +110,6 @@ export {
   discoveryRouter,
   monitoringRouter,
   privacyRouter,
+  libraryRouter,
+  notificationsRouter,
 };

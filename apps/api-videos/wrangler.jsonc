@@ -121,6 +121,16 @@
 			"remote": true
 		}
 	],
+	"d1_databases": [
+		{
+			// Notification center + library indexes (Epic 29); migrations live in apps/processor.
+			// PLACEHOLDER: create the production database first (see apps/processor/wrangler.jsonc)
+			// and replace this id with the one `npx wrangler d1 create al-ummah-now-notifications` returns.
+			"binding": "NOTIFICATIONS_DB",
+			"database_name": "al-ummah-now-notifications",
+			"database_id": "00000000-0000-0000-0000-000000000000"
+		}
+	],
 	"kv_namespaces": [
 		{
 			"binding": "RATE_LIMIT_KV",

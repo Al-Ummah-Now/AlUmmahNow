@@ -4,6 +4,7 @@ import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground } from "../../lib/websocket-notify";
+import { removeLike } from "../../lib/library";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class LikeDelete extends AuthenticatedRoute {
@@ -75,7 +76,13 @@ export class LikeDelete extends AuthenticatedRoute {
 			);
 		}
 
-		const like = video.likes.find((like) => like.channelId === channelId && like.entityId === id);		
+		const like = (video.likes || []).find((like) => like.channelId === channelId && like.entityId === id);
+
+		// Unlike is idempotent: nothing stored for this channel means nothing to remove
+		if (!like) {
+			await removeLike(c.env.NOTIFICATIONS_DB, userId, id);
+			return c.json({ success: true }, 200);
+		}
 
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoUnlike, {
@@ -87,6 +94,10 @@ export class LikeDelete extends AuthenticatedRoute {
 		});
 
 		video.likes = video.likes.filter((l) => l.id !== like.id);
+		// Keep the liked-videos index while another of the user's channels still likes it
+		if (!video.likes.some((l) => l.userId === userId)) {
+			await removeLike(c.env.NOTIFICATIONS_DB, userId, id);
+		}
 		// Note: likesCount is calculated in view layer, not stored
 
 		await repository.putObject(video.id, video);
