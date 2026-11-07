@@ -99,6 +99,11 @@ export enum MessageType {
   // Client-side telemetry forwarded by the web app (A/B exposures, performance beacons).
   // Appended last: values are numeric and already-queued messages must keep their meaning.
   ClientAnalyticsEvent,
+
+  // GDPR erasure completed in api-videos (payload: { userId, timestamp }).
+  // Consumers anonymise copies they own (e.g. processor: D1 moderation reports).
+  // Appended last for the same reason as above.
+  UserDataErased,
 }
 
 // Generic message structure for queue messages

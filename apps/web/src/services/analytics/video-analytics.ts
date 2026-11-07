@@ -5,7 +5,8 @@ import { logger } from '@/lib/logger-client';
  * Tracks video playback events with:
  * - Event queueing and batch sending
  * - Automatic flush on timer and page unload
- * - LocalStorage backup for offline scenarios
+ * - Consent-gated: nothing is queued or sent without 'analytics' consent
+ *   (Story 1.3); failed batches are retried from memory only, never persisted
  * - Non-blocking implementation (never blocks video playback)
  *
  * Phase 1.5: Basic events (ready, play, pause, ended, error)
@@ -19,6 +20,12 @@ import {
   VideoEventType,
   VideoError
 } from './types';
+import { hasConsent } from '@/lib/consent/ConsentManager';
+
+/** Legacy localStorage backup key; no longer written, purged on start. */
+const LEGACY_PENDING_KEY = 'pendingVideoAnalytics';
+/** Cap on events retried in memory after failed flushes. */
+const MAX_QUEUED_EVENTS = 500;
 
 /**
  * Main VideoAnalytics class for tracking video events
@@ -33,6 +40,7 @@ export class VideoAnalytics {
   private unloadHandler?: () => void;
   private visibilityHandler?: () => void;
   private pendingFlushes: Promise<void>[] = [];
+  private consentCheck: () => boolean;
 
   // Phase 3: Quartile tracking state (prevent duplicate events)
   private quartilesFired = new Set<25 | 50 | 75>();
@@ -43,7 +51,7 @@ export class VideoAnalytics {
   constructor(
     videoId: string,
     _userId?: string,
-    config?: Partial<AnalyticsConfig>
+    config?: Partial<AnalyticsConfig> & { consentCheck?: () => boolean }
   ) {
     this.videoId = videoId;
     this.sessionId = this.generateSessionId();
@@ -56,6 +64,13 @@ export class VideoAnalytics {
       enableDebugLogging: process.env.NODE_ENV === 'development',
       ...config
     };
+    this.consentCheck = config?.consentCheck ?? (() => hasConsent('analytics'));
+
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(LEGACY_PENDING_KEY);
+    } catch {
+      // storage unavailable
+    }
 
     this.startFlushTimer();
     this.setupUnloadHandler();
@@ -428,6 +443,19 @@ export class VideoAnalytics {
    * Add event to queue
    */
   private addEvent(event: Partial<AnalyticsEvent>): void {
+    if (!this.consentCheck()) {
+      // Without consent only the anonymous view count survives: a bare 'ready'
+      // event (video id + time, no session id). The /api/analytics/video route
+      // uses nothing else from it. Everything else is dropped.
+      if (event.eventType === 'ready') {
+        this.eventQueue.push({
+          videoId: this.videoId,
+          eventType: 'ready',
+          timestamp: new Date().toISOString(),
+        } as AnalyticsEvent);
+      }
+      return;
+    }
     const fullEvent: AnalyticsEvent = {
       videoId: this.videoId,
       
@@ -456,6 +484,14 @@ export class VideoAnalytics {
   private async flush(): Promise<void> {
     if (this.eventQueue.length === 0) {
       return;
+    }
+    if (!this.consentCheck()) {
+      // Consent missing or withdrawn after events were queued: keep only
+      // anonymous view-count events, reduced to their minimal form.
+      this.eventQueue = this.eventQueue
+        .filter(queued => queued.eventType === 'ready')
+        .map(queued => ({ videoId: queued.videoId, eventType: 'ready', timestamp: queued.timestamp }) as AnalyticsEvent);
+      if (this.eventQueue.length === 0) return;
     }
 
     const events = [...this.eventQueue];
@@ -488,11 +524,11 @@ export class VideoAnalytics {
       } catch (error) {
         logger.error('[VideoAnalytics] Failed to send events:', error);
 
-        // Re-add events to queue on failure
+        // Re-add events to the in-memory queue for the next flush (bounded)
         this.eventQueue.unshift(...events);
-
-        // Store in localStorage as backup
-        this.storeEventsLocally(events);
+        if (this.eventQueue.length > MAX_QUEUED_EVENTS) {
+          this.eventQueue.splice(0, this.eventQueue.length - MAX_QUEUED_EVENTS);
+        }
       } finally {
         // Remove by reference instead of index to avoid race conditions
         if (promiseHolder.promise) {
@@ -507,62 +543,6 @@ export class VideoAnalytics {
     promiseHolder.promise = flushPromise;
     this.pendingFlushes.push(flushPromise);
     return flushPromise;
-  }
-
-  /**
-   * Store events in localStorage as backup
-   */
-  private storeEventsLocally(events: AnalyticsEvent[]): void {
-    try {
-      const stored = localStorage.getItem('pendingVideoAnalytics') || '[]';
-
-      // Safely parse JSON with validation
-      let pending: AnalyticsEvent[];
-      try {
-        const parsed = JSON.parse(stored);
-        pending = Array.isArray(parsed) ? parsed : [];
-      } catch (parseError) {
-        // If parsing fails or result isn't an array, start fresh
-        logger.warn('[VideoAnalytics] Failed to parse pendingVideoAnalytics from localStorage. Data may be corrupted and will be reset.', parseError);
-        pending = [];
-      }
-
-      // Limit stored events to prevent quota exhaustion (5-10MB typical limit)
-      const MAX_STORED_EVENTS = 1000; // ~100-200KB depending on event size
-      const combined = [...pending, ...events];
-      const limited = combined.slice(-MAX_STORED_EVENTS); // Keep only most recent
-
-      try {
-        localStorage.setItem(
-          'pendingVideoAnalytics',
-          JSON.stringify(limited)
-        );
-
-        if (this.config.enableDebugLogging) {
-          logger.debug(`[VideoAnalytics] Stored ${events.length} events locally`);
-          if (combined.length > MAX_STORED_EVENTS) {
-            logger.warn(`[VideoAnalytics] Dropped ${combined.length - MAX_STORED_EVENTS} old events`);
-          }
-        }
-      } catch (storageError) {
-        // Handle quota exceeded error gracefully
-        if (storageError instanceof DOMException && storageError.name === 'QuotaExceededError') {
-          logger.warn('[VideoAnalytics] localStorage quota exceeded, clearing old events');
-          localStorage.removeItem('pendingVideoAnalytics');
-          // Try storing just the new events
-          try {
-            localStorage.setItem('pendingVideoAnalytics', JSON.stringify(events));
-          } catch {
-            // If still fails, give up gracefully
-            logger.error('[VideoAnalytics] Cannot store events, quota exceeded');
-          }
-        } else {
-          throw storageError; // Re-throw other storage errors
-        }
-      }
-    } catch (error) {
-      logger.error('[VideoAnalytics] Failed to store events locally:', error);
-    }
   }
 
   /**

@@ -2,6 +2,7 @@ import { logger } from '@/lib/logger-client';
 import { Experiment, ExperimentAssignment } from './feature-flags';
 import { trackExperimentEvent } from './analytics';
 import { quotaManager } from '@/lib/storage/quota-manager';
+import { hasConsent } from '@/lib/consent/ConsentManager';
 
 export interface ExperimentResult {
   variant: 'control' | 'treatment';
@@ -74,7 +75,7 @@ export class ABTestingEngine {
 
   private persistAssignments(): void {
     try {
-      if (typeof window === 'undefined' || !this.userId) return;
+      if (typeof window === 'undefined' || !this.userId || !hasConsent('experiments')) return;
 
       const persisted = quotaManager.safeGetItem(STORAGE_KEY_AB_ASSIGNMENTS) || '{}';
       const allAssignments = JSON.parse(persisted);
@@ -123,6 +124,12 @@ export class ABTestingEngine {
 
     if (!experiment.enabled) {
       throw new Error(`Experiment ${experiment.id} is not enabled`);
+    }
+
+    // GDPR (Story 1.3): without 'experiments' consent users get the default
+    // experience; nothing is assigned, persisted or tracked.
+    if (!hasConsent('experiments')) {
+      throw new Error(`Experiments consent not given for ${experiment.id}`);
     }
 
     const existingAssignment = this.assignments.get(experiment.id);
