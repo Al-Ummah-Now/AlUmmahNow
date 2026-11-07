@@ -1346,6 +1346,10 @@ export interface AppTranslations {
     loginSuccess: string;
     logoutSuccess: string;
     loginFailed: string;
+    callbackErrorTitle: string;
+    callbackErrorMessage: string;
+    tryAgain: string;
+    backHome: string;
     // Extended auth fields for Arabic translations
     signIn?: string;
     signOut?: string;

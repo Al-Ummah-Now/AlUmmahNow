@@ -1089,6 +1089,10 @@ export const AR_TRANSLATIONS: AppTranslations = {
     loginSuccess: 'تم تسجيل الدخول بنجاح',
     logoutSuccess: 'تم تسجيل الخروج بنجاح',
     loginFailed: 'فشل تسجيل الدخول',
+    callbackErrorTitle: 'لم يكتمل تسجيل الدخول',
+    callbackErrorMessage: 'تعذّر تسجيل دخولك. إذا كنت تعيد تعيين كلمة المرور، فتأكد من أن البريد الإلكتروني مرتبط بحساب، أو أنشئ حسابًا جديدًا.',
+    tryAgain: 'حاول مرة أخرى',
+    backHome: 'العودة إلى الرئيسية',
   },
 
   errors: {

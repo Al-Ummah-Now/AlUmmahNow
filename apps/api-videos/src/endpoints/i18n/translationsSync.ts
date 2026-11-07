@@ -1059,6 +1059,10 @@ const EN_TRANSLATIONS: AppTranslations = {
     loginSuccess: 'Login successful',
     logoutSuccess: 'Logout successful',
     loginFailed: 'Login failed',
+    callbackErrorTitle: 'Sign-in did not finish',
+    callbackErrorMessage: 'We could not sign you in. If you were resetting your password, check that the email address belongs to an account, or create one.',
+    tryAgain: 'Try again',
+    backHome: 'Back to home',
   },
   errors: {
     genericError: 'An error occurred',
@@ -2582,6 +2586,10 @@ const AR_TRANSLATIONS: AppTranslations = {
     loginSuccess: 'تم تسجيل الدخول بنجاح',
     logoutSuccess: 'تم تسجيل الخروج بنجاح',
     loginFailed: 'فشل تسجيل الدخول',
+    callbackErrorTitle: 'لم يكتمل تسجيل الدخول',
+    callbackErrorMessage: 'تعذّر تسجيل دخولك. إذا كنت تعيد تعيين كلمة المرور، فتأكد من أن البريد الإلكتروني مرتبط بحساب، أو أنشئ حسابًا جديدًا.',
+    tryAgain: 'حاول مرة أخرى',
+    backHome: 'العودة إلى الرئيسية',
   },
   errors: {
     genericError: 'حدث خطأ',

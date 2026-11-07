@@ -82,6 +82,17 @@ export async function GET(req: NextRequest) {
   const localeParam = url.searchParams.get("locale") ?? req.cookies.get("auth_locale")?.value ?? null;
   const locale = localeParam && isLocaleSupported(localeParam) ? localeParam : DEFAULT_LOCALE;
 
+  // The auth server reports failures (cancelled sign-in, failed password
+  // reset, ...) as ?error=...; with no code there is nothing to exchange.
+  const authError = url.searchParams.get("error");
+  if (authError || !code) {
+    logger.warn("[OAuth Callback] Sign-in returned without a code", {
+      error: authError,
+      description: url.searchParams.get("error_description"),
+    });
+    return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
+  }
+
   const result = await validate(code, url);
   logger.debug("[result]", result)
 
@@ -105,6 +116,10 @@ export async function GET(req: NextRequest) {
     logger.debug("[redirect]", `${url.origin}/${locale}`)
     return NextResponse.redirect(`${url.origin}/${locale}?session_updated=true`);
   }
-  return NextResponse.json(result.error, { status: 400 });
+  // Error objects serialize to {}, so never answer with the raw error
+  logger.error("[OAuth Callback] Code exchange failed", {
+    error: result.error instanceof Error ? result.error.message : String(result.error),
+  });
+  return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
 
 }
