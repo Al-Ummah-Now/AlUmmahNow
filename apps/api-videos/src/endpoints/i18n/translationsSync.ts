@@ -14,6 +14,19 @@ import { TranslationData, I18nMetadata, I18nConfig, AppTranslations, LIBRARY_AR,
 
 // English translations (embedded from static files)
 const EN_TRANSLATIONS: AppTranslations = {
+  imageCrop: {
+    avatarTitle: 'Adjust photo',
+    coverTitle: 'Adjust cover',
+    hint: 'Drag to reposition. Use the slider, mouse wheel or + / - to zoom. Arrow keys move the image.',
+    zoom: 'Zoom',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    reset: 'Reset',
+    apply: 'Apply',
+    cancel: 'Cancel',
+    previewLabel: 'Image crop area. Use arrow keys to move and plus or minus to zoom.',
+    loadFailed: 'This image could not be opened. Try a JPEG or PNG file.',
+  },
   library: LIBRARY_EN,
   notificationCenter: NOTIFICATION_CENTER_EN,
   a11y: {
@@ -1524,6 +1537,19 @@ const EN_TRANSLATIONS: AppTranslations = {
 
 // Arabic translations - EXACT same structure as English
 const AR_TRANSLATIONS: AppTranslations = {
+  imageCrop: {
+    avatarTitle: 'ضبط الصورة',
+    coverTitle: 'ضبط صورة الغلاف',
+    hint: 'اسحب لتغيير الموضع. استخدم شريط التمرير أو عجلة الفأرة أو + / - للتكبير. تحرّك الصورة بمفاتيح الأسهم.',
+    zoom: 'تكبير',
+    zoomIn: 'تكبير',
+    zoomOut: 'تصغير',
+    reset: 'إعادة تعيين',
+    apply: 'تطبيق',
+    cancel: 'إلغاء',
+    previewLabel: 'منطقة قص الصورة. استخدم مفاتيح الأسهم للتحريك وزر الزائد أو الناقص للتكبير.',
+    loadFailed: 'تعذّر فتح هذه الصورة. جرّب ملف JPEG أو PNG.',
+  },
   library: LIBRARY_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,
   a11y: {

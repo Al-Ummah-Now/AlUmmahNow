@@ -116,6 +116,19 @@ export interface UpdateTranslationsResponse {
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  imageCrop: {
+    avatarTitle: string;
+    coverTitle: string;
+    hint: string;
+    zoom: string;
+    zoomIn: string;
+    zoomOut: string;
+    reset: string;
+    apply: string;
+    cancel: string;
+    previewLabel: string;
+    loadFailed: string;
+  };
   /** Library hub, Watch later, liked videos, saved posts (Story 29.6) */
   library: LibraryTranslations;
   /** Notification center, settings and per-channel bell (Story 29.10) */

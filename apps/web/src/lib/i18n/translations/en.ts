@@ -8,6 +8,19 @@ import type { AppTranslations } from '../types';
 import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from './library-notifications';
 
 export const EN_TRANSLATIONS: AppTranslations = {
+  imageCrop: {
+    avatarTitle: 'Adjust photo',
+    coverTitle: 'Adjust cover',
+    hint: 'Drag to reposition. Use the slider, mouse wheel or + / - to zoom. Arrow keys move the image.',
+    zoom: 'Zoom',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    reset: 'Reset',
+    apply: 'Apply',
+    cancel: 'Cancel',
+    previewLabel: 'Image crop area. Use arrow keys to move and plus or minus to zoom.',
+    loadFailed: 'This image could not be opened. Try a JPEG or PNG file.',
+  },
   library: LIBRARY_EN,
   notificationCenter: NOTIFICATION_CENTER_EN,
   common: {

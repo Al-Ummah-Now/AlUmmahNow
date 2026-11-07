@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
+import ImageCropDialog from "@/components/ImageCropDialog";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
@@ -95,6 +96,9 @@ const ProfileEditPage = () => {
     }
   };
 
+  // Picked image waiting to be positioned/zoomed before upload
+  const [cropping, setCropping] = useState<{ type: 'profilePhoto' | 'coverPhoto'; file: File } | null>(null);
+
   const handlePhotoUpdate = (type: 'profilePhoto' | 'coverPhoto', file: File) => {
     // Logic to handle photo update
     if (!profile) return;
@@ -176,7 +180,9 @@ const ProfileEditPage = () => {
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
-                  if (e.target.files?.[0]) handlePhotoUpdate('coverPhoto', e.target.files[0]);
+                  const picked = e.target.files?.[0];
+                  e.target.value = '';
+                  if (picked) setCropping({ type: 'coverPhoto', file: picked });
                 }}
               />
             </div>
@@ -219,11 +225,23 @@ const ProfileEditPage = () => {
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
-                  if (e.target.files?.[0]) handlePhotoUpdate('profilePhoto', e.target.files[0]);
+                  const picked = e.target.files?.[0];
+                  e.target.value = '';
+                  if (picked) setCropping({ type: 'profilePhoto', file: picked });
                 }}
               />
             </div>
           </div>
+          <ImageCropDialog
+            file={cropping?.file ?? null}
+            kind={cropping?.type === 'coverPhoto' ? 'cover' : 'avatar'}
+            onCancel={() => setCropping(null)}
+            onApply={(cropped) => {
+              const type = cropping?.type;
+              setCropping(null);
+              if (type) handlePhotoUpdate(type, cropped);
+            }}
+          />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-12">{t.profile.welcomeUser?.replace('{name}', `${displayFirstName} ${displayLastName}`) || `${t.common.welcome} ${displayFirstName} ${displayLastName}!`}</h1>
           <p className="text-gray-600 dark:text-gray-400">{t.profile.editProfileDescription || 'Edit your profile information below.'}</p>
         </section>

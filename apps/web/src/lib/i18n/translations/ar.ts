@@ -8,6 +8,19 @@ import type { AppTranslations } from '../types';
 import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from './library-notifications';
 
 export const AR_TRANSLATIONS: AppTranslations = {
+  imageCrop: {
+    avatarTitle: 'ضبط الصورة',
+    coverTitle: 'ضبط صورة الغلاف',
+    hint: 'اسحب لتغيير الموضع. استخدم شريط التمرير أو عجلة الفأرة أو + / - للتكبير. تحرّك الصورة بمفاتيح الأسهم.',
+    zoom: 'تكبير',
+    zoomIn: 'تكبير',
+    zoomOut: 'تصغير',
+    reset: 'إعادة تعيين',
+    apply: 'تطبيق',
+    cancel: 'إلغاء',
+    previewLabel: 'منطقة قص الصورة. استخدم مفاتيح الأسهم للتحريك وزر الزائد أو الناقص للتكبير.',
+    loadFailed: 'تعذّر فتح هذه الصورة. جرّب ملف JPEG أو PNG.',
+  },
   library: LIBRARY_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,
   common: {

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { getChannelById } from '@/lib/api/channels';
 import { uploadFileDirect } from '@/lib/api/direct-upload';
+import ImageCropDialog from '@/components/ImageCropDialog';
 import { updateChannelProfile } from '@/lib/api/channel-profile';
 import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
 import { channelPath } from '@/lib/channel-url';
@@ -39,6 +40,8 @@ function ChannelEditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Picked image waiting to be positioned/zoomed before upload
+  const [cropping, setCropping] = useState<{ type: 'avatar' | 'cover'; file: File } | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [about, setAbout] = useState<ChannelAboutValues>({ handle: '', links: [], contactEmail: '', location: '' });
   const [handleStatus, setHandleStatus] = useState<HandleStatus>({ state: 'idle' });
@@ -266,7 +269,9 @@ function ChannelEditPage() {
             accept="image/*"
             className="hidden"
             onChange={(e) => {
-              if (e.target.files?.[0]) handlePhotoUpdate('cover', e.target.files[0]);
+              const picked = e.target.files?.[0];
+              e.target.value = '';
+              if (picked) setCropping({ type: 'cover', file: picked });
             }}
           />
           {/* Avatar Preview */}
@@ -308,11 +313,24 @@ function ChannelEditPage() {
               accept="image/*"
               className="hidden"
               onChange={(e) => {
-                if (e.target.files?.[0]) handlePhotoUpdate('avatar', e.target.files[0]);
+                const picked = e.target.files?.[0];
+              e.target.value = '';
+              if (picked) setCropping({ type: 'avatar', file: picked });
               }}
             />
           </div>
         </div>
+
+        <ImageCropDialog
+          file={cropping?.file ?? null}
+          kind={cropping?.type ?? 'avatar'}
+          onCancel={() => setCropping(null)}
+          onApply={(cropped) => {
+            const type = cropping?.type;
+            setCropping(null);
+            if (type) void handlePhotoUpdate(type, cropped);
+          }}
+        />
 
         {/* Channel Info & Edit Form */}
         <div className="pt-16 pb-5 px-5 bg-white dark:bg-gray-800">
