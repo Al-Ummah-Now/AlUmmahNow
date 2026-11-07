@@ -117,7 +117,7 @@ export default function LikeButton({
       )}>
         {/* Accessible name = action + visible count (label-in-name) */}
         <span className="sr-only">{liked ? t.community.unlike : t.community.like}</span>{' '}
-        {formatCount(likes)}
+        <span data-testid="post-like-count">{formatCount(likes)}</span>
       </span>
     </button>
   );

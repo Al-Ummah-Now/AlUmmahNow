@@ -42,6 +42,8 @@ function dynamicRegions(page: Page) {
   return [
     page.locator('img'),
     page.locator('video, .video-js, .custom-video-player'),
+    // Whole grids: the number of cards on QA changes between runs
+    page.getByTestId('video-grid'),
     page.getByTestId('video-card'),
     page.getByTestId('video-card-rtl'),
     page.getByTestId('channel-tile'),

@@ -172,6 +172,9 @@ test.describe('Thumbnail Management - Accessibility', () => {
     await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
     const option = page.getByTestId('thumbnail-auto-option').first();
+    // Headless Chromium can leave the page without window focus after navigation,
+    // which reports every element as "inactive" to toBeFocused()
+    await page.bringToFront();
     await option.focus();
     await expect(option).toBeFocused();
     await page.keyboard.press('Enter');

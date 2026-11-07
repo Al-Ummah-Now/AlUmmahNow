@@ -71,7 +71,7 @@ export function VideoGrid({
   }
 
   return (
-    <div className={gridClasses} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div data-testid="video-grid" className={gridClasses} dir={isRTL ? 'rtl' : 'ltr'}>
       {videos.map((video) => (
         <VideoCard key={video.id} {...video} />
       ))}

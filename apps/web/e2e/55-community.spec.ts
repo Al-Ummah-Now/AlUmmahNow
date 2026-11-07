@@ -209,17 +209,17 @@ test.describe('Community tab - engagement', () => {
       const like = card.getByRole('button', { name: 'Like' });
       await expect(like).toBeEnabled();
       await expect(like).toHaveAttribute('aria-pressed', 'false');
-      await expect(like).toHaveText('0');
+      await expect(like.getByTestId('post-like-count')).toHaveText('0');
 
       await like.click();
       const unlike = card.getByRole('button', { name: 'Unlike' });
       await expect(unlike).toHaveAttribute('aria-pressed', 'true');
-      await expect(unlike).toHaveText('1');
+      await expect(unlike.getByTestId('post-like-count')).toHaveText('1');
       await expect.poll(async () => (await listPosts('multi', channelId(), viewer)).find((p) => p.id === post.id)?.viewerHasLiked).toBe(true);
 
       await unlike.click();
       await expect(card.getByRole('button', { name: 'Like' })).toHaveAttribute('aria-pressed', 'false');
-      await expect(card.getByRole('button', { name: 'Like' })).toHaveText('0');
+      await expect(card.getByRole('button', { name: 'Like' }).getByTestId('post-like-count')).toHaveText('0');
       await expect.poll(async () => (await listPosts('multi', channelId(), viewer)).find((p) => p.id === post.id)?.viewerHasLiked).toBe(false);
     } finally {
       await unlikePost('multi', viewer, channelId(), post.id);

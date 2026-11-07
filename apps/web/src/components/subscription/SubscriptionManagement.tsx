@@ -141,7 +141,7 @@ export const SubscriptionManagement: React.FC = () => {
                 onClick={() => handleUnsubscribe(channel.id)}
                 disabled={isLoading}
                 aria-label={s.unsubscribeFrom.replace('{name}', channel.name)}
-                className="text-red-600 hover:text-red-700 flex items-center gap-1"
+                className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1"
               >
                 <X className="w-4 h-4" />
                 <span className="hidden sm:inline">{s.unsubscribe}</span>
