@@ -277,7 +277,7 @@ export async function ensureSeedVideos(user: AuthUser): Promise<Record<string, E
  * A public video for one spec file: created in beforeAll, removed in afterAll
  * (seed videos are private). Returns getters so describes can share it.
  */
-export function usePublicDisposable(user: AuthUser, label: string) {
+export function setupPublicDisposable(user: AuthUser, label: string) {
   let video: E2EVideo | null = null;
   return {
     create: async () => {

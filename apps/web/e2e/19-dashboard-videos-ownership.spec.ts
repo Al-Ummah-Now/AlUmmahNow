@@ -17,7 +17,7 @@ import {
   deleteVideoQuietly,
   ensureSeedVideos,
   getVideo,
-  usePublicDisposable,
+  setupPublicDisposable,
   userApi,
   type E2EVideo,
 } from './test-utils/e2e-videos';
@@ -25,7 +25,7 @@ import {
 let singleSeed: Record<string, E2EVideo> = {};
 let multiSeed: Record<string, E2EVideo> = {};
 // Seed videos are private; privacy checks use a public video this file creates and deletes
-const publicVideo = usePublicDisposable('single', 'ownership-public');
+const publicVideo = setupPublicDisposable('single', 'ownership-public');
 
 test.beforeAll(async () => {
   test.setTimeout(240000);

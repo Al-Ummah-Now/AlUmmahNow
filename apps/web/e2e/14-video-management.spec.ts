@@ -7,7 +7,7 @@ import {
   deleteVideoQuietly,
   ensureSeedVideos,
   getVideo,
-  usePublicDisposable,
+  setupPublicDisposable,
   userApi,
   type E2EVideo,
 } from './test-utils/e2e-videos';
@@ -25,7 +25,7 @@ import {
 test.use({ storageState: AUTH_STATE.single });
 
 let seed: Record<string, E2EVideo> = {};
-const publicVideo = usePublicDisposable('single', 'dashboard-public');
+const publicVideo = setupPublicDisposable('single', 'dashboard-public');
 
 test.beforeAll(async () => {
   test.setTimeout(180000);
