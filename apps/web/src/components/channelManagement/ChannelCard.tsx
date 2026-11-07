@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { DeleteChannelDialog } from '@/components/channelManagement/DeleteChannelDialog';
 import { ChannelCardProps } from './types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -15,18 +16,15 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   onView,
 }) => {
   const { t, dir, lang } = useLanguage();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const name = getLocalizedValue(channel.nameLocalized, channel.name, lang);
   const description = getLocalizedValue(channel.descriptionLocalized, channel.description, lang);
 
+  // Opens the shared confirmation dialog (type-the-name, main-channel handling)
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const confirmMessage = lang === 'ar'
-      ? `هل أنت متأكد من حذف "${name}"؟`
-      : `Are you sure you want to delete "${name}"?`;
-    if (window.confirm(confirmMessage)) {
-      onDelete(channel.id);
-    }
+    setDeleteOpen(true);
   };
 
   const handleEdit = (e: React.MouseEvent) => {
@@ -37,10 +35,6 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   const handleView = () => {
     onView(channel.id);
   };
-
-  const cannotDeleteMessage = lang === 'ar'
-    ? 'لا يمكن حذف القناة الرئيسية'
-    : 'Cannot delete main channel';
 
   return (
     <div
@@ -135,6 +129,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             variant="outline"
             size="sm"
             onClick={handleEdit}
+            aria-label={`${t.common.edit}: ${name}`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -149,8 +144,9 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             variant="destructive"
             size="sm"
             onClick={handleDelete}
-            disabled={channel.isMain}
-            title={channel.isMain ? cannotDeleteMessage : t.channel.deleteChannel}
+            title={t.channel.deleteChannel}
+            aria-label={`${t.channel.deleteChannel}: ${name}`}
+            data-testid="channel-card-delete"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -162,6 +158,16 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             </svg>
           </Button>
         </div>
+      </div>
+
+      {/* Delete confirmation (shared dialog); clicks inside must not open the channel */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <DeleteChannelDialog
+          channel={{ id: channel.id, name: channel.name, nameLocalized: channel.nameLocalized, isMain: channel.isMain }}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onDeleted={() => onDelete(channel.id)}
+        />
       </div>
     </div>
   );

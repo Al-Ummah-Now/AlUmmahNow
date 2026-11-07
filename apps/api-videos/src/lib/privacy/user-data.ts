@@ -498,6 +498,10 @@ export async function eraseUserData(
 						const channelId = channel.id ?? key;
 						if (!ctx.checkpoint.o.includes(channelId)) ctx.checkpoint.o.push(channelId);
 						if (!ctx.checkpoint.k.includes(key)) ctx.checkpoint.k.push(key);
+						// Free the channel's @handle (index entry in channel_tabs, see lib/channelHandles.ts)
+						if (typeof channel.handle === 'string' && channel.handle) {
+							await deleteKeys(asBucket(env.channel_tabs), [`channel-handles/${channel.handle.toLowerCase()}`], ctx.budget);
+						}
 						continue;
 					}
 					const { list, removed } = stripUserReactions(channel.subscriptions, userId);

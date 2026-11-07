@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, FileText, Edit3 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { VideoObject } from '@/interfaces';
-import type { VideoCategory } from '@al-ummah/shared-types';
+import type { VideoCommentSettings as CommentSettings, VideoCategory } from '@al-ummah/shared-types';
 import { updateVideo } from '@/lib/api/videos';
 import { getChapters, updateChapters, type Chapter } from '@/lib/api/chapters';
 import { CategorySelector } from '@/components/videoUpload/CategorySelector';
@@ -37,7 +37,14 @@ type EditFormData = {
   language: 'en' | 'ar' | 'both';
   isPublic: boolean;
   thumbnailUrl: string;
+  commentSettings: CommentSettings;
 };
+
+const COMMENT_SETTING_OPTIONS: CommentSettings[] = ['on', 'held', 'off'];
+
+function initialCommentSettings(video: { commentSettings?: unknown }): CommentSettings {
+  return video.commentSettings === 'held' || video.commentSettings === 'off' ? video.commentSettings : 'on';
+}
 
 export default function VideoEdit({
   video,
@@ -70,6 +77,7 @@ export default function VideoEdit({
     language: 'both',
     isPublic: video.isPublic !== false,
     thumbnailUrl: video.thumbnailUrl,
+    commentSettings: initialCommentSettings(video as { commentSettings?: unknown }),
   });
 
   // Load existing chapters so the editor starts from the saved state
@@ -100,6 +108,7 @@ export default function VideoEdit({
       formData.descriptionAr !== (video.descriptionLocalized?.ar || '') ||
       formData.thumbnailUrl !== video.thumbnailUrl ||
       formData.isPublic !== (video.isPublic !== false) ||
+      formData.commentSettings !== initialCommentSettings(video as { commentSettings?: unknown }) ||
       formData.category !== original.category ||
       haveTagsChanged(original.tags, formData.tags);
 
@@ -159,6 +168,7 @@ export default function VideoEdit({
         tags: formData.tags,
         // null clears a previously set category
         category: formData.category || null,
+        commentSettings: formData.commentSettings,
       };
 
       const result = await updateVideo(video.id, updateData, { channelId: video.channelId || channelId });
@@ -426,6 +436,30 @@ export default function VideoEdit({
             </label>
           </div>
         </div>
+
+        {/* Comment settings (Story 29.2) */}
+        <fieldset data-testid="video-edit-comment-settings">
+          <legend className="block text-sm font-medium mb-1 dark:text-white">{t.comments.settingsLabel}</legend>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t.comments.settingsHelp}</p>
+          <div className="space-y-2">
+            {COMMENT_SETTING_OPTIONS.map((option) => (
+              <label key={option} className="flex items-center gap-3 p-3 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                <input
+                  type="radio"
+                  name="commentSettings"
+                  value={option}
+                  checked={formData.commentSettings === option}
+                  onChange={() => setFormData((prev) => ({ ...prev, commentSettings: option }))}
+                  className="w-4 h-4"
+                  data-testid={`video-edit-comments-${option}`}
+                />
+                <span className="dark:text-white">
+                  {option === 'on' ? t.comments.settingOn : option === 'held' ? t.comments.settingHeld : t.comments.settingOff}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         {/* Schedule Publication Section */}
         <ScheduleSection

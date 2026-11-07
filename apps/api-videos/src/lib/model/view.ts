@@ -86,6 +86,7 @@ export const VideoView = z.object({
     likesCount: z.number(),
     dislikesCount: z.number(),
     commentsCount: z.number(),
+    commentSettings: z.enum(["on", "held", "off"]).optional().describe("Comments: on, held for review, off"),
     isPublic: z.boolean(),
     isLive: z.boolean(),
     titleLocalized: z.record(z.string()).optional(),
@@ -161,6 +162,10 @@ export const ChannelView = z.object({
     isPrivate: z.boolean().optional(), // User-controlled privacy
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
+    handle: Str().optional().describe("Unique @handle (display casing)"),
+    links: z.array(z.object({ title: Str(), url: Str() })).optional(),
+    contactEmail: Str().optional(),
+    location: Str().optional(),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     playlistsCount: z.number(),

@@ -19,6 +19,8 @@ import { useVideoChapters } from '@/hooks/useVideoChapters';
 import { useVideoSubtitles } from '@/hooks/useVideoSubtitles';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { Player } from 'video.js';
+import { PLAYER_SEEK_EVENT, type PlayerSeekDetail } from '@/lib/video/comment-timestamps';
+import { logger } from '@/lib/logger-client';
 
 interface VideoPlayerWithChaptersProps extends CustomVideoPlayerProps {
   videoId: string;
@@ -70,6 +72,28 @@ export function VideoPlayerWithChapters({
     const holder = root?.querySelector('.vjs-progress-holder') as HTMLElement | null;
     setProgressHolder(holder || null);
   }, [player]);
+
+  // Comment timestamps ("12:34") seek this player
+  useEffect(() => {
+    if (!player) return undefined;
+    const onSeek = (event: Event) => {
+      const detail = (event as CustomEvent<PlayerSeekDetail>).detail;
+      if (!detail || detail.videoId !== videoId || !Number.isFinite(detail.seconds)) return;
+      try {
+        player.currentTime(detail.seconds);
+        const played = player.play();
+        if (played && typeof (played as Promise<void>).catch === 'function') {
+          (played as Promise<void>).catch(() => undefined);
+        }
+        player.el()?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (player.el() as HTMLElement | null)?.focus?.();
+      } catch (error) {
+        logger.warn('[VideoPlayerWithChapters] Seek from comment failed', { videoId, error });
+      }
+    };
+    window.addEventListener(PLAYER_SEEK_EVENT, onSeek);
+    return () => window.removeEventListener(PLAYER_SEEK_EVENT, onSeek);
+  }, [player, videoId]);
 
   const toggleChapterList = useCallback(() => {
     setIsChapterListOpen(prev => !prev);
