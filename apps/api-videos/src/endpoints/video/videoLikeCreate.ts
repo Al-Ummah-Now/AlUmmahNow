@@ -110,10 +110,14 @@ export class LikeCreate extends AuthenticatedRoute {
 		if (!video.likes) {
 			video.likes = [];
 		}
-		video.likes.push(like);
 		// Note: likesCount is calculated in view layer, not stored
-
-		await repository.putObject(video.id, video);
+		// Conditional write: a concurrent reaction on this video is re-read, not overwritten
+		video = (await repository.updateObject(video.id, (fresh) => {
+			fresh.likes = fresh.likes || [];
+			if (fresh.likes.some((l) => l.entityId === id && l.channelId === channelId)) return false;
+			fresh.likes.push(like);
+			return true;
+		})) ?? video;
 
 		broadcastInBackground(c, `video:${id}`, 'video_liked', {
 			videoId: id,

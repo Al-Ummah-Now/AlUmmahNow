@@ -19,17 +19,29 @@ export class MemoryBucket {
 		}
 	}
 
+	/** Version per key, exposed as the R2 etag (for conditional puts). */
+	versions = new Map<string, number>();
+
+	etag(key: string): string {
+		return `v${this.versions.get(key) ?? 0}`;
+	}
+
 	async get(key: string) {
 		this.calls++;
 		const raw = this.store.get(key);
 		if (raw === undefined) return null;
-		return { key, json: async () => JSON.parse(raw), text: async () => raw };
+		return { key, etag: this.etag(key), json: async () => JSON.parse(raw), text: async () => raw };
 	}
 
-	async put(key: string, value: string) {
+	/** Like R2: resolves to null when an `onlyIf.etagMatches` precondition fails. */
+	async put(key: string, value: string, options?: { onlyIf?: { etagMatches?: string } }) {
 		this.calls++;
+		const expected = options?.onlyIf?.etagMatches;
+		if (expected !== undefined && expected !== this.etag(key)) return null;
 		this.store.set(key, value);
 		this.uploaded.set(key, new Date());
+		this.versions.set(key, (this.versions.get(key) ?? 0) + 1);
+		return { key, etag: this.etag(key) };
 	}
 
 	async delete(keys: string | string[]) {

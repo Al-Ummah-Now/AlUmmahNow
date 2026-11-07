@@ -67,6 +67,33 @@ class R2Repository<T> {
     await this.bucket.put(id, JSON.stringify(data), options);
   }
 
+  /**
+   * Read-modify-write with optimistic concurrency: the write only succeeds if
+   * the object is unchanged since it was read (R2 conditional put on the
+   * etag), otherwise it re-reads and re-applies `mutate`. Concurrent updates
+   * to one record (e.g. two viewers liking the same video) no longer drop
+   * each other's change.
+   *
+   * `mutate` may change the object in place and returns false to skip the
+   * write (nothing to change). Resolves to the stored object, or null when
+   * the object does not exist.
+   */
+  async updateObject(id: string, mutate: (data: T) => boolean | void, maxAttempts = 5): Promise<T | null> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const object = await this.bucket.get(id);
+      if (!object) return null;
+      const data = await object.json<T>();
+      if (mutate(data) === false) return data;
+      const written = await this.bucket.put(id, JSON.stringify(data), {
+        httpMetadata: { contentType: 'application/json' },
+        onlyIf: { etagMatches: object.etag },
+      });
+      if (written) return data;
+      logger.warn('[R2Repository] Concurrent update, retrying', { id, attempt });
+    }
+    throw new Error(`Concurrent updates to ${id}: gave up after ${maxAttempts} attempts`);
+  }
+
   async deleteObject(id: string): Promise<void> {
     await this.bucket.delete(id);
   }

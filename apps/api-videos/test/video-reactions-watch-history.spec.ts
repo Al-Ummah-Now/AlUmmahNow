@@ -56,6 +56,33 @@ describe('video likes / dislikes', () => {
 	});
 });
 
+describe('concurrent reactions', () => {
+	it('two channels liking the same video at once both keep their like', async () => {
+		const videos = new MemoryBucket({ v1: videoFixture() });
+		// Interleave: both requests read the video before either writes it
+		const realGet = videos.get.bind(videos);
+		let reads = 0;
+		let release: () => void = () => undefined;
+		const bothRead = new Promise<void>((r) => { release = r; });
+		videos.get = async (key: string) => {
+			const obj = await realGet(key);
+			if (++reads === 2) release();
+			if (reads <= 2) await bothRead;
+			return obj;
+		};
+		const e = { videos, queue: new MemoryQueue() };
+		const a = buildApp(reactionRoutes, { userId: 'alice' });
+		const b = buildApp(reactionRoutes, { userId: 'bob' });
+
+		const [ra, rb] = await Promise.all([
+			a.request('/api/videos/v1/likes', { method: 'POST', headers: { channelId: 'ch-a' } }, e),
+			b.request('/api/videos/v1/likes', { method: 'POST', headers: { channelId: 'ch-b' } }, e),
+		]);
+		assert.ok(ra.status < 300 && rb.status < 300, `statuses ${ra.status} ${rb.status}`);
+		assert.deepEqual(videos.read('v1').likes.map((l: any) => l.channelId).sort(), ['ch-a', 'ch-b']);
+	});
+});
+
 describe('watch history recording', () => {
 	it('records a view and then updates its progress', async () => {
 		const videos = new MemoryBucket({ v1: videoFixture({ title: 'Lecture', channelName: 'Chan' }) });
