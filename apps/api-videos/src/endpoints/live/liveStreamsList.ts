@@ -68,7 +68,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			// Since R2Repository doesn't support prefix directly, we'll need to use the R2 bucket directly for listing
 			const listResult = await bucket.list({
 				prefix: "livestream:",
-				cursor,
+				cursor: cursor || undefined,
 				limit,
 			});
 
