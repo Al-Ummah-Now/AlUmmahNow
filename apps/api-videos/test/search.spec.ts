@@ -324,7 +324,7 @@ describe('search index sync on R2 writes', () => {
 		const before = db.queries;
 		await env.videos.put('v1', JSON.stringify(videoFixture({ title: 'Aqeedah 101', dateModified: '2026-02-02T00:00:00.000Z' })));
 		await flush();
-		assert.equal(db.queries - before, 1, 'only the hash lookup runs');
+		assert.equal(db.queries - before, 2, 'only the ownership upsert and the search hash lookup run');
 	});
 
 	it('returns env untouched without SEARCH_DB', () => {

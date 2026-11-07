@@ -25,6 +25,7 @@ import {
 	resolveHandle,
 } from "../../lib/channelHandles";
 import { buildChannelAbout, computeChannelTotals, isChannelVisibleTo } from "../../lib/channelAbout";
+import { channelTotalsFromIndex, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 
 type ChannelType = z.infer<typeof BusinessChannel>;
 
@@ -139,8 +140,15 @@ export class ChannelAbout extends OptionalAuthRoute {
 		if (!channel) {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
-		const totals = await computeChannelTotals(c.env.videos, id);
-		logger.debug('[ChannelAbout] Totals', { channelId: id, ...totals });
+		// Ownership index: one aggregate query. Until the index is complete,
+		// scan the videos bucket as before and rebuild the index in the background.
+		let totals = await channelTotalsFromIndex(c.env as never, id);
+		const source = totals ? "index" : "scan";
+		if (!totals) {
+			totals = await computeChannelTotals(c.env.videos, id);
+			scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "video");
+		}
+		logger.debug('[ChannelAbout] Totals', { channelId: id, source, ...totals });
 		return { success: true, result: buildChannelAbout(channel, totals) };
 	}
 }

@@ -5,7 +5,8 @@
 #   INTERNAL_API_KEY=... ./scripts/search-backfill.sh https://videos.api.qa.alummahnow.net [entity ...]
 #
 # Walks every bucket page by page through POST /internal/search/backfill, then
-# prunes rows that were not refreshed during this run (objects that no longer exist).
+# prunes rows that were not refreshed during this run (objects that no longer exist),
+# then runs the ownership index pass for channels and videos.
 # Entities default to: channel video playlist post (channels first so their
 # visibility applies to the content they own).
 set -euo pipefail
@@ -47,4 +48,19 @@ for entity in "${ENTITIES[@]}"; do
   echo "[$entity] $pages page(s): $totals (pruned rows older than this run)"
 done
 
-curl -sS -H "X-API-Key: $INTERNAL_API_KEY" "$BASE_URL/internal/search/stats" | jq '.tables'
+# Ownership index (all videos and channels, including private ones). The pass
+# keeps its cursor server-side; repeat until it reports done.
+for entity in channel video; do
+  case " ${ENTITIES[*]} " in *" $entity "*) ;; *) continue ;; esac
+  while :; do
+    response=$(curl -sS -X POST -H "X-API-Key: $INTERNAL_API_KEY" "$BASE_URL/internal/search/ownership-backfill?entity=$entity&pages=10")
+    if [ "$(echo "$response" | jq -r '.success')" != "true" ]; then
+      echo "[$entity] ownership backfill failed: $response" >&2
+      exit 1
+    fi
+    [ "$(echo "$response" | jq -r '.done')" = "true" ] && break
+  done
+  echo "[$entity] ownership index complete: $(echo "$response" | jq -r '.complete')"
+done
+
+curl -sS -H "X-API-Key: $INTERNAL_API_KEY" "$BASE_URL/internal/search/stats" | jq '{tables, ownership}'

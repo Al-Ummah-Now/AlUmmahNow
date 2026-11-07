@@ -10,12 +10,21 @@
  *
  * Writes made by other workers reach the index through SearchIndexSync queue
  * messages (processor) and the daily reconciliation sweep (lib/search/backfill.ts).
+ *
+ * The ownership index (content_ownership, lib/search/ownership.ts) is updated
+ * for videos and channels too, but inline before put/delete resolves, so a
+ * client that creates a channel and immediately lists its channels sees it.
+ * A failed ownership write marks the index incomplete (readers scan R2 again
+ * until the next pass) instead of failing the request.
  */
 
 import {
   COMMUNITY_POST_KEY,
   SearchDb,
   SearchEntityType,
+  invalidateOwnership,
+  ownershipKindFor,
+  syncOwnershipSafely,
   syncSearchDocument,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
@@ -95,7 +104,22 @@ export class SearchSyncQueue {
   }
 }
 
-function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQueue): R2Bucket {
+async function syncOwnershipInline(db: SearchDb, type: SearchEntityType, id: string, object: unknown): Promise<void> {
+  const kind = ownershipKindFor(type);
+  if (!kind) return;
+  const outcome = await syncOwnershipSafely(db, kind, id, object);
+  if (outcome.ok === false) {
+    logger.warn('[SearchSync] Ownership index write failed; index marked incomplete', {
+      kind,
+      id,
+      error: outcome.error,
+      invalidated: outcome.invalidated,
+    });
+  }
+}
+
+function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQueue, db: SearchDb): R2Bucket {
+  const tracksOwnership = ownershipKindFor(type) !== null;
   return new Proxy(bucket, {
     get(target, prop) {
       if (prop === 'put') {
@@ -104,7 +128,22 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
           const id = searchIdForKey(type, key);
           // R2 returns null when an onlyIf precondition prevented the write.
           if (id && result !== null) {
-            const decoded = decodeValue(value);
+            let decoded = decodeValue(value);
+            if (decoded === undefined && tracksOwnership) {
+              // Streams/blobs cannot be re-read from the argument: read the stored object once for both indexes.
+              try {
+                const stored = await target.get(key);
+                decoded = stored ? await stored.json().catch(() => null) : null;
+              } catch (error) {
+                logger.warn('[SearchSync] Could not re-read object for the ownership index; index marked incomplete', {
+                  type,
+                  id,
+                  error: error instanceof Error ? error.message : String(error),
+                });
+                await invalidateOwnership(db, ownershipKindFor(type)!).catch(() => undefined);
+              }
+            }
+            if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, type, id, decoded);
             queue.enqueue(type, id, decoded !== undefined
               ? async () => decoded
               : async () => {
@@ -120,7 +159,9 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
           await target.delete(keys);
           for (const key of Array.isArray(keys) ? keys : [keys]) {
             const id = searchIdForKey(type, key);
-            if (id) queue.enqueue(type, id, async () => null);
+            if (!id) continue;
+            if (tracksOwnership) await syncOwnershipInline(db, type, id, null);
+            queue.enqueue(type, id, async () => null);
           }
         };
       }
@@ -141,7 +182,7 @@ export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionCont
   const wrapped: Record<string, unknown> = { ...(env as Record<string, unknown>) };
   for (const [binding, type] of Object.entries(SEARCH_BUCKETS)) {
     const bucket = wrapped[binding] as R2Bucket | undefined;
-    if (bucket && typeof bucket.put === 'function') wrapped[binding] = wrapBucket(bucket, type, queue);
+    if (bucket && typeof bucket.put === 'function') wrapped[binding] = wrapBucket(bucket, type, queue, db);
   }
   return wrapped as E;
 }

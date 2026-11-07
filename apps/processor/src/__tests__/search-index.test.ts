@@ -88,6 +88,33 @@ describe('search index sync', () => {
     expect(executed.some(e => e.sql.startsWith('DELETE FROM search_videos WHERE id = ?') && e.values[0] === 'v9')).toBe(true);
   });
 
+  it('keeps the ownership index in sync for private videos and deletes', async () => {
+    const { env, processor, executed } = setup();
+    const video = { id: 'v2', title: 'Draft', isPublic: false, channelId: 'c1', userId: 'u1', scheduledPublishStatus: 'scheduled' };
+    await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'video', id: 'v2', object: video }), env);
+    const upsert = executed.find(e => e.sql.includes('INSERT INTO content_ownership'));
+    expect(upsert?.values.slice(0, 5)).toEqual(['video', 'v2', 'u1', 'c1', 0]);
+
+    await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'channel', id: 'c1' }), env);
+    expect(executed.some(e => e.sql.startsWith('DELETE FROM content_ownership') && e.values[1] === 'c1')).toBe(true);
+  });
+
+  it('does not touch the ownership index for playlists', async () => {
+    const { env, processor, executed } = setup();
+    await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'playlist', id: 'p1', object: { id: 'p1', name: 'x' } }), env);
+    expect(executed.some(e => e.sql.includes('content_ownership'))).toBe(false);
+  });
+
+  it('flags banned content as hidden and deleted in the ownership index', async () => {
+    const { env, processor, executed } = setup();
+    await processor.processMessage(message(MessageType.ReportResolve, {
+      reportId: 'r1', entityType: 'channel', entityId: 'c9', moderatorId: 'mod', action: 'banned', timestamp: new Date().toISOString(),
+    }), env);
+    const update = executed.find(e => e.sql.startsWith('UPDATE content_ownership'));
+    expect(update?.sql).toContain('is_hidden = 1, is_deleted = 1');
+    expect(update?.values.slice(1)).toEqual(['channel', 'c9']);
+  });
+
   it('leaves the index alone for warnings', async () => {
     const { env, processor, executed } = setup();
     await processor.processMessage(message(MessageType.ReportResolve, {

@@ -12,6 +12,7 @@ import { enforceRetention } from './lib/privacy/retention';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
 import { withSearchSync } from './lib/search/sync';
 import { reconcileSearchIndex } from './lib/search/backfill';
+import { reconcileOwnershipIndex } from './lib/search/ownership';
 
 // TUS Proxy import (not in routers yet)
 import { createTusRouter } from "./endpoints/video/tus";
@@ -376,6 +377,12 @@ async function scheduled(_controller: ScheduledController, rawEnv: AppBindings, 
 				await reconcileSearchIndex(rawEnv as never);
 			} catch (error) {
 				logger.error('[SearchReconcile] Sweep failed', { error: error instanceof Error ? error.message : String(error) });
+			}
+			try {
+				// Ownership index: advance (and when finished, prune and mark complete) the full pass of videos and channels.
+				await reconcileOwnershipIndex(rawEnv as never);
+			} catch (error) {
+				logger.error('[Ownership] Reconcile failed', { error: error instanceof Error ? error.message : String(error) });
 			}
 		})(),
 	);

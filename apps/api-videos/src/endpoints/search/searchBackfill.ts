@@ -5,6 +5,7 @@ import { PublicRoute } from "../../base";
 import type { AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import { BACKFILL_MAX_PAGE, backfillSearchPage } from "../../lib/search/backfill";
+import { ownershipStats, runOwnershipPass } from "../../lib/search/ownership";
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string(), message: z.string().optional() });
 
@@ -74,6 +75,62 @@ export class SearchBackfillPost extends PublicRoute {
 }
 
 /**
+ * POST /internal/search/ownership-backfill
+ * Advance the ownership index rebuild pass for `entity` by up to `pages` pages.
+ * The cursor is kept server-side (search_meta), so call again until `done`;
+ * a finished pass prunes rows of deleted objects and marks the index complete,
+ * after which owner/channel listings read it instead of scanning R2.
+ * Guarded by X-API-Key = INTERNAL_API_KEY (src/index.ts, /internal/*).
+ */
+export class OwnershipBackfillPost extends PublicRoute {
+  schema = {
+    tags: ["Internal"],
+    summary: "Ownership index backfill (internal)",
+    description: "🔐 Requires `X-API-Key: <INTERNAL_API_KEY>`. Advances the full rebuild pass of the ownership index (all videos or channels, including private ones) by up to `pages` pages of 100 objects. Repeat until `done` is true; `complete` reports whether readers now trust the index. The daily cron and on-demand self-heal run the same pass.",
+    request: {
+      query: z.object({
+        entity: z.enum(["video", "channel"]),
+        pages: Num({ description: "Pages of 100 objects to process (1-50)", default: 10 }).optional(),
+      }),
+    },
+    responses: {
+      "200": {
+        description: "Pass advanced",
+        content: {
+          "application/json": {
+            schema: z.object({
+              success: z.boolean(),
+              kind: z.string(),
+              pages: z.number(),
+              scanned: z.number(),
+              done: z.boolean(),
+              complete: z.boolean(),
+            }),
+          },
+        },
+      },
+      "401": { description: "Missing or wrong X-API-Key", content: { "application/json": { schema: ErrorSchema } } },
+      "503": { description: "SEARCH_DB not bound", content: { "application/json": { schema: ErrorSchema } } },
+    },
+  };
+
+  async handle(c: AppContext) {
+    const { query } = await this.getValidatedData<typeof this.schema>();
+    const db = c.env.SEARCH_DB as SearchDb | undefined;
+    if (!db) return c.json({ success: false, error: "search_unavailable", message: "SEARCH_DB is not bound" }, 503);
+    const pages = Math.min(Math.max(1, Math.floor(Number(query.pages) || 10)), 50);
+    try {
+      const result = await runOwnershipPass(c.env as never, query.entity, { maxPages: pages });
+      logger.info("[Ownership] Backfill call finished", { ...result });
+      return c.json({ success: true, ...result });
+    } catch (error) {
+      logger.error("[Ownership] Backfill failed", { entity: query.entity, error: error instanceof Error ? error.message : String(error) });
+      return c.json({ success: false, error: "backfill_failed", message: error instanceof Error ? error.message : String(error) }, 500);
+    }
+  }
+}
+
+/**
  * GET /internal/search/stats
  * Row counts per index table (internal diagnostics).
  */
@@ -103,6 +160,12 @@ export class SearchIndexStats extends PublicRoute {
       const row = results[i].results?.[0] ?? {};
       tables[type] = { rows: Number(row.rows) || 0, searchable: Number(row.searchable) || 0 };
     });
-    return c.json({ success: true, tables, sweep: results[SEARCH_ENTITY_TYPES.length].results ?? [] });
+    let ownership: Awaited<ReturnType<typeof ownershipStats>> | null = null;
+    try {
+      ownership = await ownershipStats(db);
+    } catch (error) {
+      logger.warn("[SearchIndexStats] Ownership stats unavailable", { error: error instanceof Error ? error.message : String(error) });
+    }
+    return c.json({ success: true, tables, ownership, sweep: results[SEARCH_ENTITY_TYPES.length].results ?? [] });
   }
 }

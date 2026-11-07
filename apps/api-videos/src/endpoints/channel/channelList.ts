@@ -6,6 +6,8 @@ import { transformChannelsToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { logger } from "../../lib/logger";
+import { ownedChannelIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 
 export class ChannelsList extends OptionalAuthRoute {
 	schema = {
@@ -70,23 +72,24 @@ export class ChannelsList extends OptionalAuthRoute {
 		type ChannelType = z.infer<typeof BusinessChannel>;
 		const repository = new R2Repository<ChannelType>(bucket);
 		const mineOnly = Boolean(userId) && scope !== "all";
-		let Channels = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
+		let Channels: { cursor: string; items: ChannelType[] };
 
-		// "My channels" must not depend on where the owner's channels fall in the
-		// global listing order: keep paging until the owner's channels are found
-		// (bounded) instead of filtering a single page.
 		if (mineOnly) {
-			const MAX_PAGES = 50;
-			const collected = [...(Channels.items || [])];
-			let next = Channels.cursor;
-			let pages = 1;
-			while (next && pages < MAX_PAGES) {
-				const page = await repository.listObjects(100, next);
-				collected.push(...(page.items || []));
-				next = page.cursor;
-				pages++;
+			// "My channels": read the user's channel ids from the ownership index
+			// (O(user's channels)); objects are still loaded from R2 and filtered
+			// below exactly as before. Like the scan, the whole set is returned
+			// regardless of `limit`, in R2 key order, with an empty cursor.
+			const ids = await ownedChannelIds(c.env as never, userId);
+			if (ids) {
+				const items = await Promise.all(ids.map(id => repository.getObject(id)));
+				Channels = { cursor: "", items: items.filter((ch): ch is ChannelType => ch !== null) };
+				logger.debug('[ChannelsList] Served "mine" from ownership index', { userId, channels: ids.length });
+			} else {
+				Channels = await scanAllChannels(repository, limit, cursor);
+				scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'channel');
 			}
-			Channels = { ...Channels, items: collected, cursor: "" };
+		} else {
+			Channels = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
 		}
 
 		// Filter channels by userId if provided, and apply privacy/moderation filters
@@ -136,4 +139,24 @@ export class ChannelsList extends OptionalAuthRoute {
 
 		return response;
 	}
+}
+
+/**
+ * Fallback for "my channels" while the ownership index is incomplete: keep
+ * paging (bounded) so the result does not depend on where the owner's
+ * channels fall in the global listing order.
+ */
+async function scanAllChannels<T>(repository: R2Repository<T>, limit: number, cursor?: string): Promise<{ cursor: string; items: T[] }> {
+	const MAX_PAGES = 50;
+	const first = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
+	const collected = [...(first.items || [])];
+	let next = first.cursor;
+	let pages = 1;
+	while (next && pages < MAX_PAGES) {
+		const page = await repository.listObjects(100, next);
+		collected.push(...(page.items || []));
+		next = page.cursor;
+		pages++;
+	}
+	return { cursor: "", items: collected };
 }
