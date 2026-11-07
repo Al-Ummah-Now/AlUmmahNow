@@ -5,7 +5,7 @@ import { VideoObject } from '@al-ummah/shared-types';
 import VideoCard from '../../videoCard';
 import { SectionHeader } from '../SectionHeader';
 import { resolveSectionTitle } from '../sectionData';
-import { listVideos } from '@/lib/api/videos';
+import { getChannelVideos } from '@/lib/api/channels';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 
@@ -24,12 +24,9 @@ export function RecentUploadsSection({ channelId, title }: RecentUploadsSectionP
 
     async function fetchVideos() {
       try {
-        const result = await listVideos({
-          channelId,
-          limit: 12,
-          sortBy: 'date',
-          sortOrder: 'desc'
-        });
+        // The channel endpoint filters, sorts and pages by channel in the index;
+        // the generic list scans the whole bucket and can return an empty page
+        const result = await getChannelVideos(channelId, { limit: 12, sort: 'latest' });
 
         logger.info('RecentUploadsSection: API response received', {
           channelId,

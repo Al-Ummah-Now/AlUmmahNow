@@ -5,7 +5,7 @@
  * rendered empty ("Playlist not found").
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { ChannelSection } from '@al-ummah/shared-types';
 import {
   getSectionPlaylistIds,
@@ -29,7 +29,7 @@ jest.mock('@/hooks/useLanguage', () => ({
   }),
 }));
 
-jest.mock('@/lib/api/channels', () => ({ getChannelById: jest.fn() }));
+jest.mock('@/lib/api/channels', () => ({ getChannelById: jest.fn(), getChannelVideos: jest.fn() }));
 jest.mock('@/lib/api/channel-sections', () => ({ listChannelSectionsPopulated: jest.fn() }));
 jest.mock('@/lib/api/videos', () => ({ listVideos: jest.fn(), getVideoById: jest.fn() }));
 jest.mock('@/lib/api/playlists', () => ({ getPlaylistById: jest.fn(), listPlaylists: jest.fn() }));
@@ -48,6 +48,11 @@ jest.mock('../types/MultiplePlaylistsSection', () => ({
   MultiplePlaylistsSection: ({ playlistIds, title }: { playlistIds: string[]; title: string }) => (
     <div data-testid="multiple">{`${title}:${playlistIds.join(',')}`}</div>
   ),
+}));
+
+jest.mock('../../videoCard', () => ({
+  __esModule: true,
+  default: ({ id, title }: { id: string; title: string }) => <div data-testid="video-card">{`${id}:${title}`}</div>,
 }));
 
 const base = {
@@ -161,5 +166,34 @@ describe('SectionForm', () => {
     fireEvent.change(screen.getByLabelText(/Section title/), { target: { value: 'New' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(onSubmit).toHaveBeenCalledWith({ type: 'single_playlist', title: 'New', playlistId: 'p1' });
+  });
+});
+
+describe('upload sections load from the channel endpoint', () => {
+  // The generic /api/videos list scans the bucket page by page and returned an
+  // empty first page for channels whose videos sit later in the bucket.
+  const { getChannelVideos } = jest.requireMock('@/lib/api/channels') as { getChannelVideos: jest.Mock };
+  const { listVideos } = jest.requireMock('@/lib/api/videos') as { listVideos: jest.Mock };
+
+  beforeEach(() => {
+    getChannelVideos.mockReset();
+    listVideos.mockReset();
+    getChannelVideos.mockResolvedValue({ data: [{ id: 'v1', title: 'First' }], cursor: '' });
+  });
+
+  it('recent uploads asks for the latest videos of this channel', async () => {
+    const { RecentUploadsSection } = jest.requireActual('../types/RecentUploadsSection');
+    render(<RecentUploadsSection channelId="c1" />);
+    await waitFor(() => expect(screen.getByTestId('video-card')).toHaveTextContent('v1:First'));
+    expect(getChannelVideos).toHaveBeenCalledWith('c1', { limit: 12, sort: 'latest' });
+    expect(listVideos).not.toHaveBeenCalled();
+  });
+
+  it('popular uploads asks for the most popular videos of this channel', async () => {
+    const { PopularUploadsSection } = jest.requireActual('../types/PopularUploadsSection');
+    render(<PopularUploadsSection channelId="c1" />);
+    await waitFor(() => expect(screen.getByTestId('video-card')).toHaveTextContent('v1:First'));
+    expect(getChannelVideos).toHaveBeenCalledWith('c1', { limit: 12, sort: 'popular' });
+    expect(listVideos).not.toHaveBeenCalled();
   });
 });

@@ -376,11 +376,12 @@ export async function updateChannelCover(
  */
 export async function getChannelVideos(
   channelId: string,
-  params?: ListQueryParams
+  params?: ListQueryParams & { sort?: 'latest' | 'popular' | 'oldest' }
 ): Promise<PaginationResponse<VideoObject> | null> {
   const queryString = buildQueryParams({
     limit: params?.limit,
-    cursor: params?.cursor
+    cursor: params?.cursor,
+    sort: params?.sort
   });
 
   return apiRequestServer<PaginationResponse<VideoObject>>({
