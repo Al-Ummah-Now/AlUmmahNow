@@ -16,6 +16,7 @@ jest.mock('next/server', () => ({
 }));
 jest.mock('@/lib/actions', () => ({ getClient: async () => ({ exchange }) }));
 jest.mock('@/lib/auth', () => ({ setTokens: jest.fn() }));
+jest.mock('@/lib/profile-helpers', () => ({ getProfileCreationPath: (l: string) => `/${l}/profile/create` }));
 jest.mock('@/lib/logger-server', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 import { GET } from '../route';
