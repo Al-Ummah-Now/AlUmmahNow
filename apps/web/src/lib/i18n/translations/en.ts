@@ -70,6 +70,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     createChannel: 'Create Channel',
     channelName: 'Channel Name',
     enterChannelName: 'Enter channel name',
+    privacyAndCookies: 'Privacy & cookies',
     addAnotherAccount: 'Add another account',
     signOutOf: 'Sign out of',
     signOutOfAll: 'Sign out of all accounts',
@@ -1328,7 +1329,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
 
   privacy: {
     bannerTitle: 'We respect your privacy',
-    bannerDescription: 'We use strictly necessary storage to run the site. With your permission we also collect viewing analytics, run feature experiments and measure performance. You can change your choice at any time in Settings > Privacy.',
+    bannerDescription: 'We use strictly necessary storage to run the site. With your permission we also collect viewing analytics, run feature experiments and measure performance.',
+    bannerChoiceHint: 'You can change your choice at any time.',
+    bannerSettingsLink: 'Privacy settings',
     acceptAll: 'Accept all',
     rejectAll: 'Reject all',
     customize: 'Customize',

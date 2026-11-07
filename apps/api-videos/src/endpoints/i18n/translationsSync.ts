@@ -115,6 +115,7 @@ const EN_TRANSLATIONS: AppTranslations = {
     createChannel: 'Create Channel',
     channelName: 'Channel Name',
     enterChannelName: 'Enter channel name',
+    privacyAndCookies: 'Privacy & cookies',
     addAnotherAccount: 'Add another account',
     signOutOf: 'Sign out of',
     signOutOfAll: 'Sign out of all accounts',
@@ -1308,7 +1309,9 @@ const EN_TRANSLATIONS: AppTranslations = {
 
   privacy: {
     bannerTitle: 'We respect your privacy',
-    bannerDescription: 'We use strictly necessary storage to run the site. With your permission we also collect viewing analytics, run feature experiments and measure performance. You can change your choice at any time in Settings > Privacy.',
+    bannerDescription: 'We use strictly necessary storage to run the site. With your permission we also collect viewing analytics, run feature experiments and measure performance.',
+    bannerChoiceHint: 'You can change your choice at any time.',
+    bannerSettingsLink: 'Privacy settings',
     acceptAll: 'Accept all',
     rejectAll: 'Reject all',
     customize: 'Customize',
@@ -1483,6 +1486,7 @@ const AR_TRANSLATIONS: AppTranslations = {
     createChannel: 'إنشاء قناة',
     channelName: 'اسم القناة',
     enterChannelName: 'أدخل اسم القناة',
+    privacyAndCookies: 'الخصوصية وملفات تعريف الارتباط',
     addAnotherAccount: 'إضافة حساب آخر',
     signOutOf: 'تسجيل الخروج من',
     signOutOfAll: 'تسجيل الخروج من جميع الحسابات',
@@ -2676,7 +2680,9 @@ const AR_TRANSLATIONS: AppTranslations = {
 
   privacy: {
     bannerTitle: 'نحترم خصوصيتك',
-    bannerDescription: 'نستخدم التخزين الضروري فقط لتشغيل الموقع. وبإذنك نجمع أيضاً إحصاءات المشاهدة ونجري تجارب على الميزات ونقيس الأداء. يمكنك تغيير اختيارك في أي وقت من الإعدادات > الخصوصية.',
+    bannerDescription: 'نستخدم التخزين الضروري فقط لتشغيل الموقع. وبإذنك نجمع أيضاً إحصاءات المشاهدة ونجري تجارب على الميزات ونقيس الأداء.',
+    bannerChoiceHint: 'يمكنك تغيير اختيارك في أي وقت.',
+    bannerSettingsLink: 'إعدادات الخصوصية',
     acceptAll: 'قبول الكل',
     rejectAll: 'رفض الكل',
     customize: 'تخصيص',

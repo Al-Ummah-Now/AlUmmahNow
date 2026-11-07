@@ -61,6 +61,7 @@ export class EventListenerValidator {
   private readonly allowlist: Set<string>;
   private readonly denylist = new Set<string>();
   private readonly mode: ValidatorMode;
+  private readonly reportedUnlisted = new Set<string>();
   private readonly logger: SecurityEventLogger;
   private readonly sourceCache = new WeakMap<object, ListenerValidationResult>();
   private installed: InstalledTarget[] = [];
@@ -96,9 +97,12 @@ export class EventListenerValidator {
     if (this.denylist.has(type)) {
       return { allowed: false, reason: 'event-type-blocked' };
     }
-    if (!this.allowlist.has(type)) {
-      return { allowed: false, reason: 'event-type-not-allowlisted' };
-    }
+    // Unlisted event types are allowed: libraries (e.g. Video.js media events,
+    // React/input handling) legitimately use many types. They are reported once
+    // per type for review; malicious handlers are still blocked by the source
+    // patterns below and the CSP.
+    const unlisted = !this.allowlist.has(type) && !this.reportedUnlisted.has(type);
+    if (unlisted) this.reportedUnlisted.add(type);
     if (listener === null || listener === undefined) {
       // addEventListener ignores null listeners; nothing to register.
       return { allowed: true };
@@ -110,7 +114,7 @@ export class EventListenerValidator {
     }
 
     const cached = this.sourceCache.get(listener as object);
-    if (cached) return cached;
+    if (cached) return unlisted ? { ...cached, suspicious: [...(cached.suspicious ?? []), 'event-type-not-allowlisted'] } : cached;
 
     const source = listenerSource(listener);
     const blocked = BLOCKED_HANDLER_PATTERNS.find(({ pattern }) => pattern.test(source));
@@ -121,7 +125,7 @@ export class EventListenerValidator {
           suspicious: SUSPICIOUS_HANDLER_PATTERNS.filter(({ pattern }) => pattern.test(source)).map(({ id }) => id),
         };
     this.sourceCache.set(listener as object, result);
-    return result;
+    return unlisted && result.allowed ? { ...result, suspicious: [...(result.suspicious ?? []), 'event-type-not-allowlisted'] } : result;
   }
 
   /**

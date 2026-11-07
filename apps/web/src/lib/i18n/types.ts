@@ -96,6 +96,7 @@ export interface AppTranslations {
     createChannel: string;
     channelName: string;
     enterChannelName: string;
+    privacyAndCookies: string;
     addAnotherAccount: string;
     signOutOf: string;
     signOutOfAll: string;
@@ -1446,6 +1447,8 @@ export interface AppTranslations {
   privacy: {
     bannerTitle: string;
     bannerDescription: string;
+    bannerChoiceHint: string;
+    bannerSettingsLink: string;
     acceptAll: string;
     rejectAll: string;
     customize: string;

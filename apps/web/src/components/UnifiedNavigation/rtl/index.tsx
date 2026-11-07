@@ -34,6 +34,7 @@ import {
   Calendar,
   History,
   Rss,
+  Settings,
 } from 'lucide-react';
 import { getTranslations } from '@/lib/i18n';
 
@@ -253,14 +254,19 @@ export function UnifiedNavigationRTL() {
       icon: History,
       href: '/ar/history',
     },
+    {
+      label: tAr.header.settings,
+      icon: Settings,
+      href: '/ar/settings',
+    },
     ...(channels.length > 0 ? [
       {
-        label: 'فيديوهاتي',
+        label: tAr.video.myVideos,
         icon: Video,
         href: '/ar/dashboard/videos',
       },
       {
-        label: 'الفيديوهات المجدولة',
+        label: tAr.schedule?.scheduledVideos ?? tAr.video.videos,
         icon: Calendar,
         href: '/ar/scheduled-videos',
       },

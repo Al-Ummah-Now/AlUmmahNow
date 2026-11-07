@@ -70,6 +70,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     createChannel: 'إنشاء قناة',
     channelName: 'اسم القناة',
     enterChannelName: 'أدخل اسم القناة',
+    privacyAndCookies: 'الخصوصية وملفات تعريف الارتباط',
     addAnotherAccount: 'إضافة حساب آخر',
     signOutOf: 'تسجيل الخروج من',
     signOutOfAll: 'تسجيل الخروج من جميع الحسابات',
@@ -1232,7 +1233,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
 
   privacy: {
     bannerTitle: 'نحترم خصوصيتك',
-    bannerDescription: 'نستخدم التخزين الضروري فقط لتشغيل الموقع. وبإذنك نجمع أيضاً إحصاءات المشاهدة ونجري تجارب على الميزات ونقيس الأداء. يمكنك تغيير اختيارك في أي وقت من الإعدادات > الخصوصية.',
+    bannerDescription: 'نستخدم التخزين الضروري فقط لتشغيل الموقع. وبإذنك نجمع أيضاً إحصاءات المشاهدة ونجري تجارب على الميزات ونقيس الأداء.',
+    bannerChoiceHint: 'يمكنك تغيير اختيارك في أي وقت.',
+    bannerSettingsLink: 'إعدادات الخصوصية',
     acceptAll: 'قبول الكل',
     rejectAll: 'رفض الكل',
     customize: 'تخصيص',

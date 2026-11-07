@@ -11,6 +11,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useLanguage } from '@/hooks/useLanguage';
 import { ConsentManager, type ConsentChoices } from '@/lib/consent/ConsentManager';
 import { ConsentPreferences } from '../ConsentPreferences';
@@ -22,7 +23,7 @@ export interface ConsentBannerViewProps {
 const NONE: ConsentChoices = { analytics: false, experiments: false, performance: false };
 
 export function ConsentBannerView({ dir }: ConsentBannerViewProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const p = t.privacy;
   const [visible, setVisible] = useState(false);
   const [customizing, setCustomizing] = useState(false);
@@ -61,7 +62,11 @@ export function ConsentBannerView({ dir }: ConsentBannerViewProps) {
           {customizing ? p.preferencesTitle : p.bannerTitle}
         </h2>
         <p id="consent-banner-description" className="mt-2 text-start text-sm text-gray-600 dark:text-gray-300">
-          {p.bannerDescription}
+          {p.bannerDescription}{' '}
+          {p.bannerChoiceHint}{' '}
+          <Link href={`/${lang}/settings/privacy`} className="font-medium text-blue-700 underline hover:no-underline dark:text-blue-300">
+            {p.bannerSettingsLink}
+          </Link>
         </p>
 
         {customizing && (

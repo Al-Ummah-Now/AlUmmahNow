@@ -28,11 +28,13 @@ describe('EventListenerValidator', () => {
       expect(validator.validate('resize', { handleEvent: () => undefined }).allowed).toBe(true);
     });
 
-    it('rejects event types that are not allowlisted', () => {
+    it('allows event types that are not allowlisted but flags them once per type', () => {
       expect(validator.validate('keypress-logger', () => undefined)).toEqual({
-        allowed: false,
-        reason: 'event-type-not-allowlisted',
+        allowed: true,
+        suspicious: ['event-type-not-allowlisted'],
       });
+      // Reported only once per type
+      expect(validator.validate('keypress-logger', () => undefined)).toEqual({ allowed: true, suspicious: [] });
     });
 
     it('rejects invalid listeners and event types', () => {
@@ -83,16 +85,15 @@ describe('EventListenerValidator', () => {
       window.removeEventListener('resize', handler);
     });
 
-    it('does not register non-allowlisted global listeners and logs them', () => {
+    it('registers non-allowlisted global listeners (e.g. media events) and reports them', () => {
       validator.install();
       const handler = jest.fn();
       document.addEventListener('totally-unknown', handler);
       document.dispatchEvent(new Event('totally-unknown'));
-      expect(handler).not.toHaveBeenCalled();
+      expect(handler).toHaveBeenCalledTimes(1);
       expect(logger.getBufferedEvents()).toEqual([
         expect.objectContaining({
-          type: 'listener_blocked',
-          severity: 'medium',
+          type: 'listener_suspicious',
           reason: 'event-type-not-allowlisted',
           context: expect.objectContaining({ target: 'document', eventType: 'totally-unknown' }),
         }),
