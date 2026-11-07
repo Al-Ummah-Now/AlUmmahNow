@@ -94,19 +94,29 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
 
-  # Every UI spec on every browser/device project, sharded so each job stays
-  # well under the Playwright globalTimeout.
+  # Every UI spec on every browser/device project. One job per project, each
+  # with its own pinned QA users (E2E_USERS_TIMESTAMP): the specs mutate their
+  # users' channels, subscriptions and videos, so jobs running in parallel must
+  # never share accounts. Users are registered on first use and reused after.
   e2e:
-    name: E2E - ${{ matrix.project }} (${{ matrix.shard }}/3)
-    needs: auth-setup
+    name: E2E - ${{ matrix.project }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 110
 
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, firefox, webkit, 'Mobile Chrome', 'Mobile Safari']
-        shard: [1, 2, 3]
+        include:
+          - project: chromium
+            users: '1795000000001'
+          - project: firefox
+            users: '1795000000002'
+          - project: webkit
+            users: '1795000000003'
+          - project: 'Mobile Chrome'
+            users: '1795000000004'
+          - project: 'Mobile Safari'
+            users: '1795000000005'
 
     steps:
       - name: Checkout code
@@ -157,18 +167,13 @@ jobs:
           esac
           pnpm exec playwright install --with-deps chromium $B
 
-      - name: Download auth state
-        uses: actions/download-artifact@v4
-        with:
-          name: auth-state
-          path: apps/web/e2e/.auth/
-
       - name: Run E2E specs
         working-directory: apps/web
-        run: pnpm exec playwright test --project="${{ matrix.project }}" --shard=${{ matrix.shard }}/3
+        run: pnpm exec playwright test --project="${{ matrix.project }}"
         env:
           CI: true
-          SKIP_AUTH_SETUP: 'true'
+          E2E_USERS_TIMESTAMP: ${{ matrix.users }}
+          E2E_GLOBAL_TIMEOUT_MINUTES: '100'
           E2E_MAX_FAILURES: '40'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 
@@ -176,7 +181,7 @@ jobs:
         if: always()
         id: art
         shell: bash
-        run: echo "name=$(echo '${{ matrix.project }}' | tr ' ' '-')-${{ matrix.shard }}" >> $GITHUB_OUTPUT
+        run: echo "name=$(echo '${{ matrix.project }}' | tr ' ' '-')" >> $GITHUB_OUTPUT
 
       - name: Upload HTML report
         if: always()
@@ -199,7 +204,7 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: apps/web/test-results/junit.xml
-          check_name: E2E Results (${{ matrix.project }} ${{ matrix.shard }}/3)
+          check_name: E2E Results (${{ matrix.project }})
           comment_mode: off
 
   # axe-core WCAG 2.1 AA on every page, en/ar x light/dark (project "a11y")

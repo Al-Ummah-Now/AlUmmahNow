@@ -172,10 +172,14 @@ async function globalSetup(_config: FullConfig) {
   // E2E_REUSE_USERS_TIMESTAMP=<n> logs in to the existing test-*-<n> users
   // instead of registering new ones (no RESEND_API_KEY needed).
   const reuseTimestamp = process.env.E2E_REUSE_USERS_TIMESTAMP;
+  // E2E_USERS_TIMESTAMP=<n> pins a stable user set (e.g. one per CI project so
+  // parallel jobs never share accounts): log in to test-*-<n>, registering only
+  // the users that don't exist yet (needs RESEND_API_KEY the first time).
+  const pinnedTimestamp = process.env.E2E_USERS_TIMESTAMP;
 
   // Verify required environment variables
   const resendApiKey = process.env.RESEND_API_KEY;
-  if (!resendApiKey && !reuseTimestamp) {
+  if (!resendApiKey && !reuseTimestamp && !pinnedTimestamp) {
     throw new Error(
       'RESEND_API_KEY environment variable is required for test user registration. ' +
       'Get your API key from https://resend.com/api-keys'
@@ -214,7 +218,7 @@ async function globalSetup(_config: FullConfig) {
   const resendClient = resendApiKey ? new ResendTestClient(resendApiKey) : null;
 
   // Generate unique emails per test run to avoid conflicts
-  const timestamp = reuseTimestamp ? Number(reuseTimestamp) : Date.now();
+  const timestamp = reuseTimestamp ? Number(reuseTimestamp) : pinnedTimestamp ? Number(pinnedTimestamp) : Date.now();
   const testUsers: TestUser[] = [
     {
       email: `test-single-${timestamp}@delivered.resend.dev`,
@@ -264,10 +268,19 @@ async function globalSetup(_config: FullConfig) {
       const authorizeUrl = `${openAuthUrl}/authorize?redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&client_id=${clientId}`;
 
       ciLogger.info(`[Setup] Starting OAuth flow for ${user.email}`);
-      if (reuseTimestamp) {
+      let loggedIn = false;
+      if (reuseTimestamp || pinnedTimestamp) {
         const login = await loginOnPage(page, { issuerUrl: openAuthUrl, webUrl: webAppUrl, clientId }, user.email, user.password);
-        if (!login.ok) throw new Error(`Login for existing user ${user.email} failed: ${login.message}`);
-      } else {
+        if (login.ok) {
+          loggedIn = true;
+        } else if (reuseTimestamp) {
+          throw new Error(`Login for existing user ${user.email} failed: ${login.message}`);
+        } else {
+          ciLogger.info(`[Setup] Pinned user ${user.email} not found (${login.message}); registering it`);
+          if (!resendClient) throw new Error(`RESEND_API_KEY is required to register pinned user ${user.email}`);
+        }
+      }
+      if (!loggedIn) {
         await page.goto(authorizeUrl, { waitUntil: 'networkidle' });
 
         // Click the "Register" link to go to registration page

@@ -129,7 +129,7 @@ export function CommentBody({
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <h4 className="font-bold">{author}</h4>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {time}
             {isEdited && <span className="ms-1" data-testid="comment-edited">{t.comments.edited}</span>}
           </p>
@@ -187,7 +187,8 @@ export function CommentBody({
                   onClick={onLike}
                   disabled={!canReact}
                   aria-pressed={!!isLiked}
-                  aria-label={t.comments.like}
+                  // The visible count must be part of the accessible name (WCAG 2.5.3)
+                  aria-label={`${t.comments.like} ${likesCount ?? 0}`}
                   title={t.comments.like}
                   className={`flex items-center gap-1 disabled:opacity-50 ${isLiked ? 'text-yellow-600' : 'hover:text-gray-900 dark:hover:text-white'}`}
                 >
@@ -199,7 +200,7 @@ export function CommentBody({
                   onClick={onDislike}
                   disabled={!canReact}
                   aria-pressed={!!isDisliked}
-                  aria-label={t.comments.dislike}
+                  aria-label={`${t.comments.dislike} ${dislikesCount ?? 0}`}
                   title={t.comments.dislike}
                   className={`flex items-center gap-1 disabled:opacity-50 ${isDisliked ? 'text-yellow-600' : 'hover:text-gray-900 dark:hover:text-white'}`}
                 >

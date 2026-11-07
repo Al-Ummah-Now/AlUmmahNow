@@ -141,9 +141,9 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
           {t.channel.handleHelp.replace('{url}', previewUrl)}
         </p>
         <p id={ids.handleStatus} className="text-sm mt-1" aria-live="polite" data-testid="channel-handle-status" data-state={status.state}>
-          {status.state === 'checking' && <span className="text-gray-500">{t.channel.handleChecking}</span>}
+          {status.state === 'checking' && <span className="text-gray-500 dark:text-gray-400">{t.channel.handleChecking}</span>}
           {status.state === 'available' && <span className="text-green-700 dark:text-green-400">{t.channel.handleAvailable.replace('{handle}', normalizedHandle)}</span>}
-          {status.state === 'current' && <span className="text-gray-500">{t.channel.handleCurrent}</span>}
+          {status.state === 'current' && <span className="text-gray-500 dark:text-gray-400">{t.channel.handleCurrent}</span>}
           {status.state === 'unavailable' && <span className="text-red-600 dark:text-red-400">{problemText[status.reason]}</span>}
         </p>
       </div>

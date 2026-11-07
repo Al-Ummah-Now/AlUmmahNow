@@ -212,7 +212,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
             {thread.items.map((reply) => (
               <Comment key={reply.id} {...toCommentProps(reply, true)} />
             ))}
-            {thread.loading && <p className="text-sm text-gray-500" role="status">{t.comments.loading}</p>}
+            {thread.loading && <p className="text-sm text-gray-500 dark:text-gray-400" role="status">{t.comments.loading}</p>}
             {thread.nextCursor && !thread.loading && (
               <button type="button" onClick={() => loadMoreReplies(comment.id)} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
                 {t.comments.loadMoreReplies}
@@ -391,7 +391,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
 
       {/* Real-time update indicator */}
       {isConnected && comments.length > 0 && !commentsOff && (
-        <div className="text-xs text-green-600 text-center py-2">
+        <div className="text-xs text-green-700 dark:text-green-400 text-center py-2">
           {t.comments.liveUpdates}
         </div>
       )}
