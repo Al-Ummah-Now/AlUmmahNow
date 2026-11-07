@@ -34,6 +34,9 @@ jest.mock('@/components/videoCard/rtl/index', () => ({
 }));
 
 jest.mock('@/lib/api/channels', () => ({ listDirectoryChannels: jest.fn() }));
+// Signed-out viewer: no owner actions on the directory cards
+jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: null }) }));
+jest.mock('@/components/Channel/ChannelOwnerActions', () => ({ ChannelOwnerActions: () => null }));
 jest.mock('@/lib/api/videos', () => ({ fetchVideosWithPagination: jest.fn() }));
 
 const mockListChannels = listDirectoryChannels as jest.MockedFunction<typeof listDirectoryChannels>;

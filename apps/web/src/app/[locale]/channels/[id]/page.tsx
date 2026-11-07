@@ -1,4 +1,4 @@
-import { getChannelById } from '@/lib/api/channels';
+import { loadChannelById } from '@/lib/channel-loaders';
 import { getChannelTabConfig } from '@/lib/api/channel-tabs';
 import { notFound } from 'next/navigation';
 import { ChannelTabContent } from '@/components/ChannelTabs/ChannelTabContent';
@@ -25,7 +25,7 @@ interface ChannelPageProps {
 export default async function ChannelPage({ params }: ChannelPageProps) {
   const { id } = await params;
   const [channel, tabConfig] = await Promise.all([
-    getChannelById(id),
+    loadChannelById(id),
     getChannelTabConfig(id).catch(() => null),
   ]);
 

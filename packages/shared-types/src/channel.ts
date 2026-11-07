@@ -14,6 +14,12 @@ export interface Channel extends Timestamps, SoftDelete, Moderation {
   descriptionLocalized?: Record<string, string>; // Multi-language descriptions
   avatarUrl?: string;
   coverUrl?: string;
+  /** Unique @handle (Story 29.1); URLs: /{locale}/@{handle} */
+  handle?: string;
+  /** About tab links (http/https only) */
+  links?: Array<{ title: string; url: string }>;
+  contactEmail?: string;
+  location?: string;
   isMain: boolean;
   isVerified?: boolean;
 

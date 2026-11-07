@@ -28,6 +28,7 @@ import {
   SECURITY_HEADERS,
 } from '@/lib/security/csp';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
+import { handleRewritePath } from '@/lib/channel-url';
 
 /**
  * Build the CSP for this request. In production a fresh nonce is generated per
@@ -53,7 +54,7 @@ function createCsp(isDevelopment: boolean): { csp: string; nonce?: string } {
  * Continue the request with the CSP (and nonce) visible to server rendering,
  * and attach CSP + security headers to the response.
  */
-function nextWithSecurityHeaders(request: NextRequest, isDevelopment: boolean, locale?: string): NextResponse {
+function nextWithSecurityHeaders(request: NextRequest, isDevelopment: boolean, locale?: string, rewriteTo?: URL): NextResponse {
   const { csp, nonce } = createCsp(isDevelopment);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('Content-Security-Policy', csp);
@@ -61,7 +62,9 @@ function nextWithSecurityHeaders(request: NextRequest, isDevelopment: boolean, l
   // Forward the locale so the root layout can render <html lang dir> for it
   if (locale) requestHeaders.set(LOCALE_REQUEST_HEADER, locale);
 
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const response = rewriteTo
+    ? NextResponse.rewrite(rewriteTo, { request: { headers: requestHeaders } })
+    : NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('Content-Security-Policy', csp);
   Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
     response.headers.set(header, value);
@@ -99,6 +102,18 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(`/${preferredLocale}`, request.url));
   }
 
+  // Channel @handle URLs (Story 29.1): handles may contain `.`, so this runs
+  // before the static-file heuristic below
+  const handleRoute = handleRewritePath(pathname);
+  if (handleRoute && getSupportedLocaleCodes().includes(handleRoute.locale)) {
+    const target = request.nextUrl.clone();
+    target.pathname = handleRoute.path;
+    const response = nextWithSecurityHeaders(request, isDevelopment, handleRoute.locale, target);
+    response.headers.set('X-Locale', handleRoute.locale);
+    response.headers.set('X-Text-Direction', getTextDirection(handleRoute.locale));
+    return response;
+  }
+
   // Handle locale routes
   // Check if the first path segment is a locale code
   const localeMatch = pathname.match(/^\/([^\/]+)/);
@@ -110,7 +125,8 @@ export function middleware(request: NextRequest) {
     // Skip Next.js internals (_next), API routes (api), and static files
     const isNextInternal = potentialLocale.startsWith('_next');
     const isApiRoute = potentialLocale === 'api';
-    const isPublicFile = potentialLocale === 'public' || pathname.includes('.');
+    // (/{locale}/c/{handle} paths may contain dots but are pages)
+    const isPublicFile = potentialLocale === 'public' || (pathname.includes('.') && !/^\/[a-z]{2}\/c\//.test(pathname));
 
     if (!isNextInternal && !isApiRoute && !isPublicFile) {
       // Check if this looks like a locale code (2 letters)

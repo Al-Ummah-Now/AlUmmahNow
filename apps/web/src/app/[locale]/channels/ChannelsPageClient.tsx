@@ -6,11 +6,14 @@ import { ChannelTileGrid, ChannelTileGridSkeleton } from '@/components/ChannelTi
 import type { ChannelSummary } from '@/components/ChannelSections/sectionData';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { ChannelOwnerActions } from '@/components/Channel/ChannelOwnerActions';
 
 const PAGE_SIZE = 24;
 
 export function ChannelsPageClient() {
   const { t, dir } = useLanguage();
+  const { user } = useMultiAccount();
   const [channels, setChannels] = useState<ChannelSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +80,19 @@ export function ChannelsPageClient() {
             <p className="text-gray-600 dark:text-gray-400">{t.discovery.noChannelsDescription}</p>
           </div>
         ) : (
-          <ChannelTileGrid channels={channels} />
+          <ChannelTileGrid
+            channels={channels}
+            renderActions={(channel) =>
+              user && channel.userId === user.id ? (
+                <ChannelOwnerActions
+                  variant="compact"
+                  channel={{ id: channel.id, name: channel.name, nameLocalized: channel.nameLocalized, isMain: channel.isMain }}
+                  className="justify-center"
+                  onDeleted={(deletedId) => setChannels((prev) => prev.filter((c) => c.id !== deletedId))}
+                />
+              ) : null
+            }
+          />
         )}
 
         {nextCursor && (

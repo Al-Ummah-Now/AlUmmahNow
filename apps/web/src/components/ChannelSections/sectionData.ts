@@ -18,7 +18,7 @@ export type ChannelSummary = Pick<
   | 'isVerified'
   | 'subscribersCount'
   | 'videosCount'
->;
+> & Partial<Pick<Channel, 'handle' | 'userId' | 'isMain'>>;
 
 /**
  * Section as returned by GET /api/channels/{id}/sections/populated.

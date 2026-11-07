@@ -9,6 +9,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { resolveUrl } from '@/lib/utility';
 import { formatViewerCount } from '@/lib/utils/number-format';
 import type { ChannelSummary } from '@/components/ChannelSections/sectionData';
+import { channelPath } from '@/lib/channel-url';
 
 interface ChannelTileProps {
   channel: ChannelSummary;
@@ -39,7 +40,7 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
 
   return (
     <Link
-      href={`/${locale}/channels/${channel.id}`}
+      href={channelPath(locale, channel)}
       dir={dir}
       data-testid="channel-tile"
       className={`group flex flex-col items-center text-center gap-2 p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${className}`}
@@ -82,17 +83,30 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
 
 interface ChannelTileGridProps {
   channels: ChannelSummary[];
+  /**
+   * Extra controls under a tile (e.g. owner Manage/Delete). Rendered as a
+   * sibling of the tile link, never inside it, so they stay separately focusable.
+   */
+  renderActions?: (channel: ChannelSummary) => React.ReactNode;
 }
 
 /**
  * Responsive grid of channel tiles
  */
-export function ChannelTileGrid({ channels }: ChannelTileGridProps) {
+export function ChannelTileGrid({ channels, renderActions }: ChannelTileGridProps) {
   return (
     <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {channels.map((channel) => (
-        <ChannelTile key={channel.id} channel={channel} />
-      ))}
+      {channels.map((channel) => {
+        const actions = renderActions?.(channel);
+        return actions ? (
+          <div key={channel.id} className="flex flex-col gap-2" data-testid="channel-tile-with-actions">
+            <ChannelTile channel={channel} className="flex-1" />
+            {actions}
+          </div>
+        ) : (
+          <ChannelTile key={channel.id} channel={channel} />
+        );
+      })}
     </div>
   );
 }
