@@ -6,6 +6,7 @@ import R2Repository from "../../lib/r2Repo";
 import { VideoCategory, Channel } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
+import { isInternalRecord } from "../../lib/visibility";
 
 export class VideosList extends OptionalAuthRoute {
 	schema = {
@@ -81,6 +82,11 @@ export class VideosList extends OptionalAuthRoute {
 		
 		// Filter videos based on privacy settings, user context, and filters
 		let filteredVideos = (videos.items || []).filter(video => {
+			// Internal records (section indexes, live streams) share the bucket
+			if (isInternalRecord(video)) {
+				return false;
+			}
+
 			// Filter out soft-deleted videos
 			if (video.isDeleted) {
 				return false;
