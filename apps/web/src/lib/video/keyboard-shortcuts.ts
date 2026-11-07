@@ -76,6 +76,9 @@ const PERCENT_MULTIPLIER = 100;
 const EVENT_RATE_LIMIT_MS = 50; // Maximum 20 events per second
 const MAX_EVENT_QUEUE_SIZE = 100;
 
+/** Keys that only modify another key and never trigger a shortcut themselves */
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock']);
+
 /**
  * Configuration options for keyboard shortcuts
  */
@@ -413,7 +416,22 @@ export function setupKeyboardShortcuts(
         return;
       }
 
+      // The listener is registered on both the player and the document (for
+      // fullscreen); process each event once.
       if (processedEvents.has(event)) {
+        return;
+      }
+      processedEvents.add(event);
+
+      // A bare modifier press (e.g. Shift before "?") is never a shortcut and
+      // must not consume the rate-limit window of the key that follows it.
+      if (MODIFIER_KEYS.has(event.key)) {
+        return;
+      }
+
+      // Keep native keyboard behaviour for form fields, browser shortcuts,
+      // focused player controls and focused elements elsewhere on the page.
+      if (!shouldHandlePlayerShortcut(event, playerElement)) {
         return;
       }
 
@@ -428,19 +446,6 @@ export function setupKeyboardShortcuts(
         state.eventQueue.clear();
       }
       state.eventQueue.set(event.key, now);
-
-      // The listener is registered on both the player and the document (for
-      // fullscreen); process each event once.
-      if (processedEvents.has(event)) {
-        return;
-      }
-      processedEvents.add(event);
-
-      // Keep native keyboard behaviour for form fields, browser shortcuts,
-      // focused player controls and focused elements elsewhere on the page.
-      if (!shouldHandlePlayerShortcut(event, playerElement)) {
-        return;
-      }
 
       const key = event.key;
       let handled = false;

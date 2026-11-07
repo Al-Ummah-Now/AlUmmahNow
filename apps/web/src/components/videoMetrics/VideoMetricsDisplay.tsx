@@ -177,7 +177,8 @@ export function VideoMetricsDisplay({
           !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
         } ${isLiked ? 'text-red-600 dark:text-red-400' : ''}`}
         title={!user ? t.a11y.signInToReact : isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
-        aria-label={isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
+        // Name includes the visible count (WCAG 2.5.3 Label in Name)
+        aria-label={`${isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo} ${formatNumber(metrics.likesCount)}`}
         aria-pressed={isLiked}
         aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
       >
@@ -195,7 +196,7 @@ export function VideoMetricsDisplay({
           !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
         } ${isDisliked ? 'text-blue-700 dark:text-blue-300' : ''}`}
         title={!user ? t.a11y.signInToReact : isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo}
-        aria-label={isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo}
+        aria-label={`${isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo} ${formatNumber(metrics.dislikesCount)}`}
         aria-pressed={isDisliked}
         aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
       >

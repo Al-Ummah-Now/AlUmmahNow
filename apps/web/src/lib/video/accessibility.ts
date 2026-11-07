@@ -90,6 +90,38 @@ export function getAriaLabels(lang: 'en' | 'ar' = 'en'): AriaLabels {
 }
 
 /**
+ * Name the quality menu button (videojs-hls-quality-selector renders it with
+ * only an aria-hidden "Auto"/"720p" label). The accessible name includes the
+ * visible quality so it satisfies WCAG 2.5.3 Label in Name.
+ */
+export function labelQualityButton(button: HTMLElement, baseLabel: string): void {
+  const visible = button.querySelector('.vjs-icon-placeholder')?.textContent?.trim() ?? '';
+  const label = visible ? `${baseLabel}: ${visible}` : baseLabel;
+  if (button.getAttribute('aria-label') !== label) {
+    button.setAttribute('aria-label', label);
+  }
+  if (button.getAttribute('title') !== baseLabel) {
+    button.setAttribute('title', baseLabel);
+  }
+}
+
+/**
+ * A Video.js menu's title <li> sits inside role="menu" without a menu-item
+ * role (axe aria-required-children). Use it as the menu's accessible name and
+ * hide the title row itself from assistive technology.
+ */
+export function fixMenuTitle(menu: HTMLElement): void {
+  const title = menu.querySelector<HTMLElement>(':scope > li.vjs-menu-title');
+  if (!title) return;
+  const text = title.textContent?.trim();
+  if (text && menu.getAttribute('aria-label') !== text) {
+    menu.setAttribute('aria-label', text);
+  }
+  if (title.getAttribute('aria-hidden') !== 'true') title.setAttribute('aria-hidden', 'true');
+  if (title.hasAttribute('tabindex')) title.removeAttribute('tabindex');
+}
+
+/**
  * Screen reader announcement manager
  * Uses throttling to prevent announcement spam
  * Singleton pattern with reference counting to prevent memory leaks
@@ -190,6 +222,9 @@ export function setupAccessibility(
   // Create announcement manager
   const announcementManager = new AnnouncementManager();
 
+  // Observes control-bar menus so rebuilt menus keep their accessible names
+  let menuObserver: MutationObserver | null = null;
+
   // Track all event handlers for cleanup
   const eventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
 
@@ -257,19 +292,20 @@ export function setupAccessibility(
       seekSlider.setAttribute('aria-label', labels.progressBar);
     }
 
-    // Quality menu button (videojs-hls-quality-selector renders it without an
-    // accessible name). The plugin may (re)build the button once levels load.
-    const labelQualityButton = () => {
-      playerEl.querySelectorAll('.vjs-quality-selector .vjs-menu-button').forEach((button) => {
-        button.setAttribute('aria-label', translations.accessibility.qualityButton);
-        if (!button.getAttribute('title')) {
-          button.setAttribute('title', translations.accessibility.qualityButton);
-        }
+    // Menus (quality / captions) are rebuilt by Video.js and the quality plugin
+    // whenever levels or tracks change, so re-apply the fixes on DOM changes.
+    const fixMenus = () => {
+      playerEl.querySelectorAll<HTMLElement>('.vjs-quality-selector .vjs-menu-button').forEach((button) => {
+        labelQualityButton(button, translations.accessibility.qualityButton);
       });
+      playerEl.querySelectorAll<HTMLElement>('.vjs-menu-content[role="menu"]').forEach(fixMenuTitle);
     };
-    labelQualityButton();
-    eventHandlers.push({ event: 'loadedmetadata', handler: labelQualityButton });
-    player.on('loadedmetadata', labelQualityButton);
+    fixMenus();
+    const controlBar = playerEl.querySelector('.vjs-control-bar');
+    if (controlBar && typeof MutationObserver !== 'undefined') {
+      menuObserver = new MutationObserver(() => fixMenus());
+      menuObserver.observe(controlBar, { childList: true, subtree: true, characterData: true });
+    }
 
     // === Screen Reader Announcements ===
     // Moved inside ready() to avoid race conditions
@@ -367,6 +403,10 @@ export function setupAccessibility(
 
     // Remove high contrast listener
     highContrastQuery.removeEventListener('change', updateHighContrastMode);
+
+    // Stop observing menus
+    menuObserver?.disconnect();
+    menuObserver = null;
 
     // Cleanup announcements
     announcementManager.cleanup();

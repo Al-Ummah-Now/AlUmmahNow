@@ -1654,8 +1654,17 @@
 
   /* Phones control volume with hardware keys; the 40px-wide inline slider was
      too small to operate by touch, so the mute toggle remains as the target */
+  .video-js .vjs-volume-panel.vjs-volume-panel-horizontal .vjs-volume-control,
+  .video-js .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal,
   .video-js .vjs-volume-panel .vjs-volume-control {
     display: none !important;
+  }
+
+  .video-js .vjs-volume-panel,
+  .video-js .vjs-volume-panel.vjs-volume-panel-horizontal,
+  .video-js .vjs-volume-panel.vjs-hover,
+  .video-js .vjs-volume-panel.vjs-slider-active {
+    width: auto !important;
   }
 
   /* Reduce timer width on mobile */
