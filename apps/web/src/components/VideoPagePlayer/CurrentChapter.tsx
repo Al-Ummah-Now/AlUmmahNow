@@ -16,6 +16,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { VideoChapter } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getChapterTitle } from '@/lib/video/chapters';
 
 interface CurrentChapterProps {
   chapter: VideoChapter | null;
@@ -30,7 +31,7 @@ export function CurrentChapter({
   autoHideDelay = 3000,
   className = '',
 }: CurrentChapterProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, lang } = useLanguage();
   const [isVisible, setIsVisible] = useState(false);
   const [previousChapterId, setPreviousChapterId] = useState<string | null>(null);
 
@@ -137,7 +138,7 @@ export function CurrentChapter({
           line-clamp-2
           leading-snug
         ">
-          {chapter.title}
+          {getChapterTitle(chapter, lang)}
         </div>
       </div>
     </div>

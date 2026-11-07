@@ -14,7 +14,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { lang, t } = useLanguage();
   const locale = lang;
 
-  const title = getLocalizedValue((options as PlayerOptions & { titleLocalized?: Record<string, string> }).titleLocalized, options.title, locale);
+  const title = getLocalizedValue(options.titleLocalized, options.title, locale);
 
   // Convert PlayerOptions to CustomVideoPlayer props
   // Memoize to prevent new array reference on every render

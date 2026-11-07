@@ -45,7 +45,7 @@ function Harness({ onSeek = jest.fn() }: { onSeek?: (c: VideoChapter) => void })
 describe('ChapterList keyboard accessibility', () => {
   it('moves focus to the current chapter on open and back to the toggle on Escape', () => {
     render(<Harness />);
-    const toggle = screen.getByRole('button', { name: 'Show Chapters' });
+    const toggle = screen.getByRole('button', { name: 'Show Chapters 3' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(toggle);
 
@@ -55,13 +55,13 @@ describe('ChapterList keyboard accessibility', () => {
 
     fireEvent.keyDown(current, { key: 'Escape' });
     expect(screen.queryByRole('navigation', { name: 'Chapter List' })).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show Chapters' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show Chapters 3' }));
   });
 
   it('arrow keys move focus without seeking; Enter/click seeks', () => {
     const onSeek = jest.fn();
     render(<Harness onSeek={onSeek} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Show Chapters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show Chapters 3' }));
     const nav = screen.getByRole('navigation', { name: 'Chapter List' });
 
     fireEvent.keyDown(nav, { key: 'ArrowDown' });
@@ -78,7 +78,7 @@ describe('ChapterList keyboard accessibility', () => {
 
   it('chapter items and the close button use the 44px minimum target classes', () => {
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Show Chapters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show Chapters 3' }));
     expect(screen.getByRole('button', { name: 'Close' })).toHaveClass('min-w-11', 'min-h-11');
     for (const item of screen.getAllByRole('button', { name: /Introduction|Main topic|Questions/ })) {
       expect(item).toHaveClass('min-h-11');

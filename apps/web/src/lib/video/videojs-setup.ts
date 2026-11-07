@@ -4,6 +4,7 @@ import 'videojs-contrib-quality-levels';
 import 'videojs-hls-quality-selector';
 import videojsArabic from 'video.js/dist/lang/ar.json';
 import { logger } from '@/lib/logger-client';
+import type { QualityLevelList } from '@/lib/video/videojs';
 
 
 
@@ -110,6 +111,7 @@ export function createVideoPlayer(
       } else {
         logger.warn('HLS quality selector plugin not available');
       }
+      if (player) trackQualityLevelAvailability(player);
     });
 
     return player;
@@ -122,6 +124,24 @@ export function createVideoPlayer(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Video player initialization failed: ${errorMessage}`);
   }
+}
+
+export const NO_QUALITY_LEVELS_CLASS = 'vjs-no-quality-levels';
+
+/**
+ * Hides the quality menu while the stream exposes no renditions. Safari/iOS
+ * play HLS natively, so the quality-levels list stays empty and the button
+ * opened an empty "Quality" menu. The class is toggled as levels come and go.
+ */
+export function trackQualityLevelAvailability(player: Player): void {
+  const qualityLevels = (player as Player & { qualityLevels?: () => QualityLevelList }).qualityLevels?.();
+  const update = () => {
+    const empty = !qualityLevels || qualityLevels.length === 0;
+    player.el()?.classList.toggle(NO_QUALITY_LEVELS_CLASS, empty);
+  };
+  update();
+  qualityLevels?.on('addqualitylevel', update);
+  qualityLevels?.on('removequalitylevel', update);
 }
 
 /**

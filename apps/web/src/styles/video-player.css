@@ -270,6 +270,11 @@
   justify-content: center !important;
 }
 
+/* No renditions exposed (native HLS in Safari/iOS): hide the empty quality menu */
+.video-js.vjs-no-quality-levels .vjs-quality-selector {
+  display: none !important;
+}
+
 /* Improve quality selector visibility */
 .video-js .vjs-quality-selector {
   min-width: 3.5rem !important; /* Increased from default */

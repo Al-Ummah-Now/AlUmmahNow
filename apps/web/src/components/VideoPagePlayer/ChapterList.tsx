@@ -17,6 +17,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { VideoChapter } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getChapterTitle } from '@/lib/video/chapters';
 import { ChevronUp, List, X } from 'lucide-react';
 
 interface ChapterListProps {
@@ -52,7 +53,7 @@ export function ChapterList({
   onToggle,
   className = '',
 }: ChapterListProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, lang } = useLanguage();
   const currentChapterRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
@@ -150,10 +151,11 @@ export function ChapterList({
           shadow-lg
           ${className}
         `}
-        aria-label={isOpen ? t.video.hideChapters : t.video.showChapters}
         aria-expanded={isOpen}
         aria-controls="video-chapter-list"
       >
+        {/* Name comes from the content, so the visible count badge is part of it (WCAG 2.5.3 label in name) */}
+        <span className="sr-only">{isOpen ? t.video.hideChapters : t.video.showChapters}</span>
         {isOpen ? (
           <X className="w-6 h-6" aria-hidden="true" />
         ) : (
@@ -161,7 +163,6 @@ export function ChapterList({
         )}
         {chapters.length > 0 && !isOpen && (
           <span
-            aria-hidden="true"
             className="
               absolute
               -top-1
@@ -348,7 +349,7 @@ export function ChapterList({
                           }
                         `}
                       >
-                        {chapter.title}
+                        {getChapterTitle(chapter, lang)}
                       </p>
                       {isCurrent && (
                         <span className="

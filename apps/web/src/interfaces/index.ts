@@ -179,6 +179,8 @@ export interface CommentAuthor {
 export interface Likes {
     id: string;
     userId: string;
+    /** Channel the reaction was made as */
+    channelId?: string;
     videoId: string;
     dateCreated?: string;
 }
@@ -186,6 +188,8 @@ export interface Likes {
 export interface Dislikes {
     id: string;
     userId: string;
+    /** Channel the reaction was made as */
+    channelId?: string;
     videoId: string;
     dateCreated?: string;
 }

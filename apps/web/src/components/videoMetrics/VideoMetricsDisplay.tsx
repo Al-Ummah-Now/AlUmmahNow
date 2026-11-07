@@ -1,11 +1,13 @@
 import { logger } from '@/lib/logger-client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRealTimeVideoMetrics, useRealTimePresence } from '@/hooks/useRealTimeVideoMetrics';
 import { Eye, Heart, MessageCircle, Users, ThumbsDown } from 'lucide-react';
 import * as VideosAPI from '@/lib/api/videos';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
+import type { VideoReaction } from '@/components/VideoPagePlayer/interface';
 
 interface VideoMetricsDisplayProps {
   videoId: string;
@@ -14,6 +16,9 @@ interface VideoMetricsDisplayProps {
   initialLikesCount?: number;
   initialDislikesCount?: number;
   initialCommentsCount?: number;
+  /** Existing reactions on the video (from GET /api/videos/:id) */
+  likes?: VideoReaction[];
+  dislikes?: VideoReaction[];
   onMetricsUpdate?: (metrics: unknown) => void;
 }
 
@@ -24,13 +29,27 @@ export function VideoMetricsDisplay({
   initialLikesCount = 0,
   initialDislikesCount = 0,
   initialCommentsCount = 0,
+  likes,
+  dislikes,
   onMetricsUpdate
 }: VideoMetricsDisplayProps) {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { user: account, loading: accountLoading } = useMultiAccount();
+  // Reactions are made as the active channel (accounts without one react as the
+  // user). Wait for the account to load: reacting earlier would use the user id
+  // and then have the restored state reset once the channel is known.
+  const reactorChannelId = accountLoading ? '' : (account?.channel?.id || user?.id || '');
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Restore the viewer's existing reaction (after a reload the API still has it)
+  useEffect(() => {
+    if (!reactorChannelId) return;
+    setIsLiked(!!likes?.some((r) => r.channelId === reactorChannelId));
+    setIsDisliked(!!dislikes?.some((r) => r.channelId === reactorChannelId));
+  }, [reactorChannelId, likes, dislikes]);
 
   const { metrics, isConnected, updateMetrics } = useRealTimeVideoMetrics({
     videoId,
@@ -55,105 +74,63 @@ export function VideoMetricsDisplay({
     return num.toString();
   };
 
-  const handleLike = async () => {
-    if (!user || isLoading) return;
+  type Reaction = 'like' | 'dislike' | null;
+
+  /**
+   * Toggle the viewer's reaction. Updates optimistically, then calls the API
+   * (removing the opposite reaction first) and restores the previous counts
+   * and state when any call fails (the API helpers return null on failure).
+   */
+  const setReaction = async (target: Exclude<Reaction, null>) => {
+    if (!user || !reactorChannelId || isLoading) return;
+
+    const previous: Reaction = isLiked ? 'like' : isDisliked ? 'dislike' : null;
+    const next: Reaction = previous === target ? null : target;
+    const before = { likesCount: metrics.likesCount, dislikesCount: metrics.dislikesCount };
+    const headers = { channelId: reactorChannelId };
 
     setIsLoading(true);
+    updateMetrics({
+      likesCount: Math.max(0, before.likesCount - (previous === 'like' ? 1 : 0) + (next === 'like' ? 1 : 0)),
+      dislikesCount: Math.max(0, before.dislikesCount - (previous === 'dislike' ? 1 : 0) + (next === 'dislike' ? 1 : 0)),
+    });
+    setIsLiked(next === 'like');
+    setIsDisliked(next === 'dislike');
+
     try {
-      const headers = {
-        channelId: user.id || '',
-        userId: user.id || ''
-      };
-
-      if (isLiked) {
-        // Optimistically update UI before API call
-        updateMetrics({ likesCount: Math.max(0, metrics.likesCount - 1) });
-        setIsLiked(false);
-
-        await VideosAPI.unlikeVideo(videoId, headers);
-        logger.debug('👍 Video unliked');
-      } else {
-        // If currently disliked, remove dislike first
-        if (isDisliked) {
-          updateMetrics({
-            dislikesCount: Math.max(0, metrics.dislikesCount - 1),
-            likesCount: metrics.likesCount + 1
-          });
-          setIsDisliked(false);
-          await VideosAPI.removeVideoDislike(videoId, headers);
-        } else {
-          // Just add like
-          updateMetrics({ likesCount: metrics.likesCount + 1 });
-        }
-
-        setIsLiked(true);
-        await VideosAPI.likeVideo(videoId, headers);
-        logger.debug('👍 Video liked');
-      }
+      // Run every step even if one reports failure, then verify against the server
+      const results: unknown[] = [];
+      if (previous === 'like') results.push(await VideosAPI.unlikeVideo(videoId, headers));
+      if (previous === 'dislike') results.push(await VideosAPI.removeVideoDislike(videoId, headers));
+      if (next === 'like') results.push(await VideosAPI.likeVideo(videoId, headers));
+      if (next === 'dislike') results.push(await VideosAPI.dislikeVideo(videoId, headers));
+      if (results.some((result) => !result)) throw new Error('reaction request failed');
+      logger.debug('[VideoMetricsDisplay] Reaction updated', { videoId, previous, next });
     } catch (error) {
-      logger.error('Failed to toggle like:', error);
-      // Revert optimistic update on error
-      if (isLiked) {
-        updateMetrics({ likesCount: metrics.likesCount + 1 });
-        setIsLiked(true);
+      logger.error('[VideoMetricsDisplay] Failed to update reaction', { videoId, previous, next, error });
+      // A failed response does not prove the change was not stored: show what
+      // the server actually has, and fall back to the previous state if that
+      // cannot be read either.
+      const fresh = await VideosAPI.getVideoById(videoId).catch(() => null);
+      if (fresh) {
+        setIsLiked(!!fresh.likes?.some((r) => r.channelId === reactorChannelId));
+        setIsDisliked(!!fresh.dislikes?.some((r) => r.channelId === reactorChannelId));
+        updateMetrics({
+          likesCount: fresh.likes?.length ?? fresh.likesCount ?? before.likesCount,
+          dislikesCount: fresh.dislikes?.length ?? fresh.dislikesCount ?? before.dislikesCount,
+        });
       } else {
-        updateMetrics({ likesCount: Math.max(0, metrics.likesCount - 1) });
-        setIsLiked(false);
+        updateMetrics(before);
+        setIsLiked(previous === 'like');
+        setIsDisliked(previous === 'dislike');
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDislike = async () => {
-    if (!user || isLoading) return;
-
-    setIsLoading(true);
-    try {
-      const headers = {
-        channelId: user.id || '',
-        userId: user.id || ''
-      };
-
-      if (isDisliked) {
-        // Optimistically update UI before API call
-        updateMetrics({ dislikesCount: Math.max(0, metrics.dislikesCount - 1) });
-        setIsDisliked(false);
-
-        await VideosAPI.removeVideoDislike(videoId, headers);
-        logger.debug('👎 Video dislike removed');
-      } else {
-        // If currently liked, remove like first
-        if (isLiked) {
-          updateMetrics({
-            likesCount: Math.max(0, metrics.likesCount - 1),
-            dislikesCount: metrics.dislikesCount + 1
-          });
-          setIsLiked(false);
-          await VideosAPI.unlikeVideo(videoId, headers);
-        } else {
-          // Just add dislike
-          updateMetrics({ dislikesCount: metrics.dislikesCount + 1 });
-        }
-
-        setIsDisliked(true);
-        await VideosAPI.dislikeVideo(videoId, headers);
-        logger.debug('👎 Video disliked');
-      }
-    } catch (error) {
-      logger.error('Failed to toggle dislike:', error);
-      // Revert optimistic update on error
-      if (isDisliked) {
-        updateMetrics({ dislikesCount: metrics.dislikesCount + 1 });
-        setIsDisliked(true);
-      } else {
-        updateMetrics({ dislikesCount: Math.max(0, metrics.dislikesCount - 1) });
-        setIsDisliked(false);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const handleLike = () => setReaction('like');
+  const handleDislike = () => setReaction('dislike');
 
   return (
     <div
@@ -173,7 +150,7 @@ export function VideoMetricsDisplay({
       {/* Likes */}
       <button
         onClick={handleLike}
-        disabled={!user || isLoading}
+        disabled={!user || isLoading || !reactorChannelId}
         className={`flex items-center justify-center gap-1 min-h-11 min-w-11 px-2 rounded-md transition-all duration-200 active:scale-95 ${
           !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
         } ${isLiked ? 'text-red-600 dark:text-red-400' : ''}`}
@@ -193,7 +170,7 @@ export function VideoMetricsDisplay({
       {/* Dislikes */}
       <button
         onClick={handleDislike}
-        disabled={!user || isLoading}
+        disabled={!user || isLoading || !reactorChannelId}
         className={`flex items-center justify-center gap-1 min-h-11 min-w-11 px-2 rounded-md transition-all duration-200 active:scale-95 ${
           !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
         } ${isDisliked ? 'text-blue-700 dark:text-blue-300' : ''}`}

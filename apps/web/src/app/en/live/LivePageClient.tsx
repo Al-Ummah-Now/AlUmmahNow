@@ -75,7 +75,7 @@ function ErrorState({
         {t.live?.failedToLoadStreams || 'Failed to Load Streams'}
       </h2>
       <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
-        {error?.message || t.live?.failedToLoadStreamsDescription || 'An error occurred while loading live streams. Please try again.'}
+        {t.live?.failedToLoadStreamsDescription || error?.message || 'An error occurred while loading live streams. Please try again.'}
       </p>
       <button
         onClick={onRetry}
