@@ -49,7 +49,8 @@ export function ScheduledVideosList({
       return videos;
     }
     return videos.filter((video) => {
-      const scheduleStatus = (video as VideoObject & { scheduleStatus?: ScheduledPublishStatus }).scheduleStatus;
+      // Videos without a schedule status are listed because they are scheduled
+      const scheduleStatus = video.scheduledPublishStatus || 'scheduled';
       return scheduleStatus === filterStatus;
     });
   }, [videos, filterStatus]);
@@ -78,7 +79,7 @@ export function ScheduledVideosList({
       }
     } catch (err) {
       logger.error('Error canceling schedule:', err);
-      alert('An error occurred while canceling the schedule');
+      alert(t.errors.genericError);
     } finally {
       setActionLoading(null);
     }
@@ -104,11 +105,11 @@ export function ScheduledVideosList({
         // Refresh the list
         onRefresh?.();
       } else {
-        alert(result?.error || 'Failed to publish video');
+        alert(result?.error || t.errors.genericError);
       }
     } catch (err) {
       logger.error('Error publishing video:', err);
-      alert('An error occurred while publishing the video');
+      alert(t.errors.genericError);
     } finally {
       setActionLoading(null);
     }
@@ -152,11 +153,13 @@ export function ScheduledVideosList({
   return (
     <div className={className}>
       {/* Filters */}
-      <div className="mb-6 flex items-center space-x-4">
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+      <div className="mb-6 flex items-center gap-4">
+        <label htmlFor="scheduled-status-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">
           {t.schedule?.filterByStatus ?? 'Filter by status'}:
         </label>
         <select
+          id="scheduled-status-filter"
+          data-testid="scheduled-status-filter"
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value as ScheduledPublishStatus | 'all')}
           className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
@@ -179,10 +182,10 @@ export function ScheduledVideosList({
 
       {/* Error State */}
       {error && !isLoading && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start space-x-3">
+        <div role="alert" data-testid="scheduled-videos-error" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
           <div>
-            <h3 className="font-medium text-red-900 dark:text-red-100">Error</h3>
+            <h3 className="font-medium text-red-900 dark:text-red-100">{t.common.error}</h3>
             <p className="text-sm text-red-700 dark:text-red-200">{error.message}</p>
           </div>
         </div>
@@ -190,7 +193,7 @@ export function ScheduledVideosList({
 
       {/* Empty State */}
       {!isLoading && !error && filteredVideos.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div data-testid="scheduled-videos-empty" className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <Calendar className="mx-auto text-gray-400 mb-4" size={64} />
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             {t.schedule?.noScheduledVideos ?? 'No Scheduled Videos'}
@@ -203,10 +206,10 @@ export function ScheduledVideosList({
 
       {/* Videos List */}
       {!isLoading && !error && filteredVideos.length > 0 && (
-        <div className="space-y-4">
+        <div className="space-y-4" role="list" data-testid="scheduled-videos-list">
           {filteredVideos.map((video) => {
             // Extract schedule metadata from video object
-            const scheduleStatus = (video as VideoObject & { scheduleStatus?: ScheduledPublishStatus }).scheduleStatus || 'scheduled';
+            const scheduleStatus: ScheduledPublishStatus = video.scheduledPublishStatus || 'scheduled';
             const scheduledPublishDate = (video as VideoObject & { scheduledPublishDate?: string }).scheduledPublishDate;
             const canEdit = video.userId === auth.user?.id;
             const canCancel = canEdit && (scheduleStatus === 'scheduled' || scheduleStatus === 'publishing');
@@ -214,6 +217,10 @@ export function ScheduledVideosList({
             return (
               <div
                 key={video.id}
+                role="listitem"
+                data-testid="scheduled-video-item"
+                data-video-id={video.id}
+                data-status={scheduleStatus}
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
               >
                 <div className="p-4 md:p-6 flex flex-col md:flex-row gap-4">

@@ -157,6 +157,7 @@ const ProfileEditPage = () => {
               <input
                 type="file"
                 id="coverPhotoInput"
+                aria-label={t.channel.clickToChangeCover}
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
@@ -189,6 +190,7 @@ const ProfileEditPage = () => {
               <input
                 type="file"
                 id="profilePhotoInput"
+                aria-label={t.channel.clickToChangeAvatar}
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
@@ -207,7 +209,7 @@ const ProfileEditPage = () => {
           <form className="space-y-6" onSubmit={handleSubmit}>
             {/* First Name with Language Tabs */}
             <div className="block">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.firstName}</span>
+              <label htmlFor="profile-firstName" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.firstName}</label>
               <div className="flex gap-2 mb-3">
                 <button
                   type="button"
@@ -235,7 +237,7 @@ const ProfileEditPage = () => {
               {activeTab === 'en' && (
                 <input
                   type="text"
-                  name="firstNameEn"
+                  id="profile-firstName" name="firstNameEn"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
                   placeholder={t.profile.yourFirstName}
                   value={firstNameEn}
@@ -245,7 +247,7 @@ const ProfileEditPage = () => {
               {activeTab === 'ar' && (
                 <input
                   type="text"
-                  name="firstNameAr"
+                  id="profile-firstName" name="firstNameAr"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
                   placeholder={t.profile.firstNameArabic || 'الاسم الأول'}
                   value={firstNameAr}
@@ -257,11 +259,11 @@ const ProfileEditPage = () => {
 
             {/* Last Name with Language Tabs */}
             <div className="block">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.lastName}</span>
+              <label htmlFor="profile-lastName" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.lastName}</label>
               {activeTab === 'en' && (
                 <input
                   type="text"
-                  name="lastNameEn"
+                  id="profile-lastName" name="lastNameEn"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
                   placeholder={t.profile.yourLastName}
                   value={lastNameEn}
@@ -271,7 +273,7 @@ const ProfileEditPage = () => {
               {activeTab === 'ar' && (
                 <input
                   type="text"
-                  name="lastNameAr"
+                  id="profile-lastName" name="lastNameAr"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
                   placeholder={t.profile.lastNameArabic || 'اسم العائلة'}
                   value={lastNameAr}
@@ -283,11 +285,11 @@ const ProfileEditPage = () => {
 
             {/* Display Name */}
             <div className="block">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.displayName}</span>
+              <label htmlFor="profile-displayName" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.displayName}</label>
               {activeTab === 'en' && (
                 <input
                   type="text"
-                  name="displayNameEn"
+                  id="profile-displayName" name="displayNameEn"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
                   placeholder={t.profile.displayNameOptional}
                   value={displayNameEn}
@@ -297,7 +299,7 @@ const ProfileEditPage = () => {
               {activeTab === 'ar' && (
                 <input
                   type="text"
-                  name="displayNameAr"
+                  id="profile-displayName" name="displayNameAr"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
                   placeholder={t.profile.displayNameArabic}
                   value={displayNameAr}
@@ -309,10 +311,10 @@ const ProfileEditPage = () => {
 
             {/* Bio with Language Tabs */}
             <div className="block">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.bio}</span>
+              <label htmlFor="profile-bio" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">{t.profile.bio}</label>
               {activeTab === 'en' && (
                 <textarea
-                  name="bioEn"
+                  id="profile-bio" name="bioEn"
                   rows={4}
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors resize-y"
                   placeholder={t.profile.bioOptional}
@@ -322,7 +324,7 @@ const ProfileEditPage = () => {
               )}
               {activeTab === 'ar' && (
                 <textarea
-                  name="bioAr"
+                  id="profile-bio" name="bioAr"
                   rows={4}
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors resize-y"
                   placeholder={t.profile.bioArabic}
@@ -335,10 +337,11 @@ const ProfileEditPage = () => {
 
             {/* Timezone Selector */}
             <div className="block">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+              <label htmlFor="profile-timezone" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
                 {t.profile?.timezone || 'Timezone'}
-              </span>
+              </label>
               <select
+                id="profile-timezone"
                 name="timezone"
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}

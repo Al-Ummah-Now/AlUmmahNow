@@ -37,6 +37,7 @@ export interface VideoObject {
     tags?: string[];
     category?: VideoCategory;
     thumbnailType?: 'auto' | 'custom';
+    uploadStatus?: 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
     comments?: Comments[]; // Optional array of Comments
     likes?: Likes[];       // Optional array of Likes
     dislikes?: Dislikes[]; // Optional array of Dislikes

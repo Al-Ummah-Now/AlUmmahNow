@@ -12,7 +12,7 @@
 
 import type { Player } from 'video.js';
 import type { ExtendedPlayer } from './videojs';
-import { logger } from '@/lib/logger-server';
+import { logger } from '@/lib/logger-client';
 
 
 /**

@@ -4,6 +4,9 @@ import { ThemeProvider } from "@/components/themeProvider";
 import { authenticated } from "../lib/actions"
 import { Suspense } from "react"
 import type { Metadata, Viewport } from 'next'
+import { headers } from "next/headers";
+import { DEFAULT_LOCALE, LOCALE_REQUEST_HEADER } from "@/lib/i18n/locales";
+import { getTextDirection, isLocaleSupported } from "@/lib/i18n/utils";
 import "./globals.css";
 import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
@@ -63,9 +66,11 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
   const subject = await authenticated()
   const user = subject ? subject.properties : null;
+  const requestedLocale = (await headers()).get(LOCALE_REQUEST_HEADER);
+  const locale = requestedLocale && isLocaleSupported(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
       <head>
         {/* Font Awesome - Consider self-hosting for better performance */}
         <link

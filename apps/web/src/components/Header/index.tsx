@@ -21,7 +21,9 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
   };
 
   return (
-    <header className="header flex items-center justify-between px-2 bg-[#093041]  text-black dark:text-white ">
+    // Fixed height (h-14): the account menu swaps a skeleton for the avatar
+    // after hydration, which must not push the page content down (layout shift)
+    <header className="header flex items-center justify-between px-2 h-14 bg-[#093041]  text-black dark:text-white ">
       {/* Menu Section */}
       <div className="flex-1 flex items-center justify-start space-x-4">
         <IcoButton
@@ -29,6 +31,8 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse }) => {
           size="text-lg"
           color="text-[#ffa037]  bg-transparent"
           onClick={toggleCollapse}
+          ariaLabel={t.navigation.openMenu}
+          testId="nav-drawer-toggle"
         />
       </div>
 

@@ -79,6 +79,19 @@ export const AR_TRANSLATIONS: AppTranslations = {
     dark: 'داكن',
     channel: 'قناة',
     channels: 'قنوات',
+    removeAccount: 'إزالة الحساب',
+    signOutOfAllDescription: 'سيتم تسجيل خروجك من جميع الحسابات البالغ عددها {count}.',
+    openMenu: 'فتح القائمة',
+    theme: 'المظهر',
+    language: 'اللغة',
+    lightMode: 'الوضع الفاتح',
+    darkMode: 'الوضع الداكن',
+    switchToLanguage: 'التبديل إلى {language}',
+    homeLink: 'الرئيسية',
+    search: 'بحث',
+    upload: 'رفع فيديو',
+    subscriptions: 'الاشتراكات',
+    library: 'المكتبة',
   },
 
   channel: {
@@ -327,6 +340,13 @@ export const AR_TRANSLATIONS: AppTranslations = {
     oldest: 'الأقدم',
     views: 'مشاهدة',
     view: 'مشاهدة',
+    likeVideo: 'إعجاب',
+    unlikeVideo: 'إلغاء الإعجاب',
+    dislikeVideo: 'عدم إعجاب',
+    removeDislike: 'إزالة عدم الإعجاب',
+    signInToLike: 'سجّل الدخول للإعجاب',
+    signInToDislike: 'سجّل الدخول لعدم الإعجاب',
+    watching: 'يشاهدون الآن',
     // Date formatting
     today: 'اليوم',
     yesterday: 'أمس',
@@ -371,6 +391,10 @@ export const AR_TRANSLATIONS: AppTranslations = {
     deleteMultipleSuccess: 'تم حذف {count} فيديو بنجاح',
     noVideosFound: 'لم يتم العثور على فيديوهات',
     uploadFirstVideo: 'ارفع أول فيديو للبدء',
+    clearSearch: 'مسح البحث',
+    bulkDeletePartial: 'تم حذف {succeeded} فيديو، وتعذر حذف {failed}',
+    selectVideo: 'تحديد الفيديو',
+    videoStatus: 'الحالة',
     // Video Edit
     editVideoDetails: 'تعديل تفاصيل الفيديو',
     videoPreview: 'معاينة الفيديو',
@@ -537,6 +561,26 @@ export const AR_TRANSLATIONS: AppTranslations = {
     speed: 'سرعة الرفع',
     timeRemaining: 'الوقت المتبقي',
     bytesUploaded: 'تم رفعه',
+    // Metadata form
+    titlePlaceholderEn: 'العنوان بالإنجليزية',
+    titlePlaceholderAr: 'العنوان بالعربية',
+    descriptionPlaceholderEn: 'الوصف بالإنجليزية',
+    descriptionPlaceholderAr: 'الوصف بالعربية',
+    closeForm: 'إغلاق',
+    privateUntilScheduled: 'سيبقى الفيديو خاصاً حتى موعد النشر المجدول',
+    // Errors
+    invalidType: 'يرجى رفع ملف فيديو صالح ({types})',
+    authRequired: 'يجب تسجيل الدخول لرفع الفيديوهات.',
+    sessionMissing: 'تعذر إنشاء جلسة الرفع. يرجى المحاولة مرة أخرى.',
+    authTokenMissing: 'لم يتم العثور على رمز المصادقة. يرجى تسجيل الدخول مرة أخرى.',
+    completeFailed: 'تعذر إكمال الرفع',
+    processingFailed: 'فشلت معالجة الفيديو',
+    scheduleFailed: 'تم رفع الفيديو لكن فشلت الجدولة: {error}. يمكنك جدولته من صفحة تعديل الفيديو.',
+    // No-channel state
+    channelRequiredTitle: 'القناة مطلوبة',
+    channelRequiredMessage: 'تحتاج إلى إنشاء قناة قبل أن تتمكن من رفع الفيديوهات.',
+    createChannel: 'إنشاء قناة',
+    goHome: 'الذهاب إلى الرئيسية',
   },
 
   batch: {
@@ -657,6 +701,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
     willBePublishedOn: 'سيتم نشره في',
     localTime: 'الوقت المحلي',
     utcTime: 'التوقيت العالمي',
+    manageScheduledVideos: 'عرض وإدارة الفيديوهات المجدولة',
+    signInToViewScheduled: 'يرجى تسجيل الدخول لعرض الفيديوهات المجدولة.',
+    errorFetchingScheduled: 'تعذر تحميل الفيديوهات المجدولة',
     // Calendar View
     views: {
       list: 'قائمة',

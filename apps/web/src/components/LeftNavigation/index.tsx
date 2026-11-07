@@ -32,15 +32,17 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     const router = useRouter();
     const { user } = useMultiAccount();
     const activeChannel = user?.channel;
-    const { theme, setTheme } = useTheme();
+    // resolvedTheme: with the default "system" theme, `theme` is never 'dark',
+    // so toggling from a dark system preference would be a no-op
+    const { resolvedTheme: theme, setTheme } = useTheme();
     const { t, lang, oppositeLanguage, languages } = useLanguage();
 
     const allNavItems: NavItems[] = [
-        { label: lang === 'ar' ? "الرئيسية" : "Home", icon: "fa-house", href: `/${lang}/` },
-        { label: lang === 'ar' ? "بحث" : "Search", icon: "fa-magnifying-glass", href: `/${lang}/search` },
-        { label: lang === 'ar' ? "رفع" : "Upload", icon: "fa-upload", href: `/${lang}/upload` },
-        { label: lang === 'ar' ? "الاشتراكات" : "Subscriptions", icon: "fa-tv", href: "#" },
-        { label: lang === 'ar' ? "المكتبة" : "Library", icon: "fa-bookmark", href: "#" },
+        { label: t.navigation.homeLink, icon: "fa-house", href: `/${lang}/` },
+        { label: t.navigation.search, icon: "fa-magnifying-glass", href: `/${lang}/search` },
+        { label: t.navigation.upload, icon: "fa-upload", href: `/${lang}/upload` },
+        { label: t.navigation.subscriptions, icon: "fa-tv", href: "#" },
+        { label: t.navigation.library, icon: "fa-bookmark", href: "#" },
     ];
 
     // Filter out Upload if user has no active channel
@@ -74,6 +76,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
 
             {/* Navigation */}
             <nav
+                data-testid="side-nav"
                 className={`transition-all duration-300 ease-in-out ${withOverlay
                     ? "fixed top-0 bg-transparent z-50 h-screen"
                     : "bg-white dark:bg-gray-900 p-4 md:absolute"
@@ -86,6 +89,9 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                             style="fa-bars"
                             size="text-lg"
                             color="text-[#ffa037]  bg-transparent"
+                            onClick={onCollapse}
+                            ariaLabel={t.common.close}
+                            testId="nav-drawer-close"
                         />
                     </div>
                 )}
@@ -97,7 +103,8 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                             <button
                                 onClick={toggleTheme}
                                 className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
-                                aria-label={theme === 'dark' ? t.navigation?.light || 'Light Mode' : t.navigation?.dark || 'Dark Mode'}
+                                aria-label={theme === 'dark' ? t.navigation.lightMode : t.navigation.darkMode}
+                                data-testid="theme-toggle"
                                 suppressHydrationWarning
                             >
                                 <div
@@ -116,10 +123,10 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                                 </div>
                                 <div className="flex-1 text-left">
                                     <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                        Theme
+                                        {t.navigation.theme}
                                     </div>
                                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100" suppressHydrationWarning>
-                                        {theme === 'dark' ? 'Light' : 'Dark'}
+                                        {theme === 'dark' ? t.navigation.light : t.navigation.dark}
                                     </div>
                                 </div>
                             </button>
@@ -128,14 +135,15 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                             <button
                                 onClick={switchLanguage}
                                 className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
-                                aria-label={`Switch to ${languages[oppositeLanguage].displayName}`}
+                                aria-label={t.navigation.switchToLanguage.replace('{language}', languages[oppositeLanguage].displayName)}
+                                data-testid="language-toggle"
                             >
                                 <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500/20 transition-all duration-200">
                                     <Globe className="h-5 w-5" />
                                 </div>
                                 <div className="flex-1 text-left">
                                     <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                        Language
+                                        {t.navigation.language}
                                     </div>
                                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                         {languages[oppositeLanguage].displayName}

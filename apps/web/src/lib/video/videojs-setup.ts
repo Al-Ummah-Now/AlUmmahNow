@@ -2,7 +2,7 @@ import videojs, { type Player, type PlayerOptions } from 'video.js';
 import '@videojs/http-streaming';
 import 'videojs-contrib-quality-levels';
 import 'videojs-hls-quality-selector';
-import { logger } from '@/lib/logger-server';
+import { logger } from '@/lib/logger-client';
 
 
 export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {

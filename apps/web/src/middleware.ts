@@ -21,7 +21,7 @@ import {
   LANGUAGE_PREFERENCE_COOKIE,
   isLocaleSupported
 } from '@/lib/i18n/utils';
-import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
+import { DEFAULT_LOCALE, LOCALE_REQUEST_HEADER } from '@/lib/i18n/locales';
 
 /**
  * Generate CSP policy based on environment variables
@@ -141,11 +141,15 @@ export function middleware(request: NextRequest) {
       if (potentialLocale.length === 2) {
         // Check if the locale is supported
         if (supportedLocaleCodes.includes(potentialLocale)) {
-          // Valid supported locale - continue processing
-          const response = NextResponse.next();
+          // Valid supported locale - continue processing.
+          // Forward the locale to server components so the root layout can
+          // render <html lang dir> for the requested locale.
+          const direction = getTextDirection(potentialLocale);
+          const requestHeaders = new Headers(request.headers);
+          requestHeaders.set(LOCALE_REQUEST_HEADER, potentialLocale);
+          const response = NextResponse.next({ request: { headers: requestHeaders } });
 
           // Add locale and direction headers for the response
-          const direction = getTextDirection(potentialLocale);
           response.headers.set('X-Locale', potentialLocale);
           response.headers.set('X-Text-Direction', direction);
 

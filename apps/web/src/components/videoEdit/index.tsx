@@ -192,13 +192,13 @@ export default function VideoEdit({
   const VideoPreviewComponent = isRTL ? VideoPreviewRTL : VideoPreview;
 
   return (
-    <div className={`bg-white dark:bg-gray-900 rounded-lg shadow-lg ${className}`}>
+    <div data-testid="video-edit-form" className={`bg-white dark:bg-gray-900 rounded-lg shadow-lg ${className}`}>
       {/* Header */}
       <div className="border-b dark:border-gray-700 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold dark:text-white">{t.video.editVideoDetails}</h2>
           {hasUnsavedChanges && (
-            <span className="text-sm text-orange-600 dark:text-orange-400 font-medium">
+            <span data-testid="video-edit-unsaved" className="text-sm text-orange-600 dark:text-orange-400 font-medium">
               {t.video.unsavedChanges}
             </span>
           )}
@@ -218,8 +218,12 @@ export default function VideoEdit({
 
         {/* Language Tabs for Title and Description */}
         <div>
-          <div className="flex gap-2 border-b dark:border-gray-700 mb-4">
+          <div className="flex gap-2 border-b dark:border-gray-700 mb-4" role="tablist">
             <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'en'}
+              data-testid="video-edit-tab-en"
               onClick={() => setActiveTab('en')}
               className={`px-4 py-2 font-medium transition-colors ${
                 activeTab === 'en'
@@ -230,6 +234,10 @@ export default function VideoEdit({
               {t.languages.english}
             </button>
             <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'ar'}
+              data-testid="video-edit-tab-ar"
               onClick={() => setActiveTab('ar')}
               className={`px-4 py-2 font-medium transition-colors ${
                 activeTab === 'ar'
@@ -251,6 +259,8 @@ export default function VideoEdit({
                 <input
                   type="text"
                   value={formData.titleEn}
+                  data-testid="video-edit-title-en"
+                  aria-label={t.video.titleEnglish}
                   onChange={(e) => handleInputChange('titleEn', e.target.value)}
                   className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
                   placeholder={t.video.enterTitleEnglish}
@@ -263,6 +273,8 @@ export default function VideoEdit({
                 </label>
                 <textarea
                   value={formData.descriptionEn}
+                  data-testid="video-edit-description-en"
+                  aria-label={t.video.descriptionEnglish}
                   onChange={(e) => handleInputChange('descriptionEn', e.target.value)}
                   rows={6}
                   className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white resize-none"
@@ -282,6 +294,9 @@ export default function VideoEdit({
                 <input
                   type="text"
                   value={formData.titleAr}
+                  data-testid="video-edit-title-ar"
+                  aria-label={t.video.titleArabic}
+                  dir="rtl"
                   onChange={(e) => handleInputChange('titleAr', e.target.value)}
                   className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
                   placeholder={t.video.enterTitleArabic}
@@ -294,6 +309,9 @@ export default function VideoEdit({
                 </label>
                 <textarea
                   value={formData.descriptionAr}
+                  data-testid="video-edit-description-ar"
+                  aria-label={t.video.descriptionArabic}
+                  dir="rtl"
                   onChange={(e) => handleInputChange('descriptionAr', e.target.value)}
                   rows={6}
                   className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white resize-none"
@@ -308,7 +326,8 @@ export default function VideoEdit({
         <ThumbnailSelector
           videoId={video.id}
           currentThumbnailUrl={video.thumbnailUrl}
-          channelId={channelId}
+          playUrl={video.playUrl}
+          channelId={video.channelId || channelId}
           onThumbnailChange={(url) => handleInputChange('thumbnailUrl', url)}
         />
 
@@ -321,12 +340,16 @@ export default function VideoEdit({
             <input
               type="text"
               value={tagInput}
+              data-testid="video-edit-tag-input"
+              aria-label={t.video.enterTag}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
               className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
               placeholder={t.video.enterTag}
             />
             <button
+              type="button"
+              data-testid="video-edit-add-tag"
               onClick={handleAddTag}
               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
             >
@@ -339,10 +362,12 @@ export default function VideoEdit({
               {formData.tags.map((tag) => (
                 <span
                   key={tag}
+                  data-testid="video-edit-tag"
                   className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-full text-sm"
                 >
                   {tag}
                   <button
+                    type="button"
                     onClick={() => handleRemoveTag(tag)}
                     className="hover:text-red-500 transition-colors"
                     aria-label={t.video.removeTag}
@@ -376,6 +401,7 @@ export default function VideoEdit({
                 type="radio"
                 name="privacy"
                 checked={formData.isPublic}
+                data-testid="video-edit-privacy-public"
                 onChange={() => handleInputChange('isPublic', true)}
                 className="w-4 h-4"
               />
@@ -389,6 +415,7 @@ export default function VideoEdit({
                 type="radio"
                 name="privacy"
                 checked={!formData.isPublic}
+                data-testid="video-edit-privacy-private"
                 onChange={() => handleInputChange('isPublic', false)}
                 className="w-4 h-4"
               />
@@ -539,12 +566,12 @@ export default function VideoEdit({
 
         {/* Error/Success Messages */}
         {error && (
-          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+          <div role="alert" data-testid="video-edit-error" className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
             {error}
           </div>
         )}
         {success && (
-          <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400">
+          <div role="status" data-testid="video-edit-success" className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400">
             {success}
           </div>
         )}
@@ -552,6 +579,8 @@ export default function VideoEdit({
         {/* Action Buttons */}
         <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
           <button
+            type="button"
+            data-testid="video-edit-save"
             onClick={handleSave}
             disabled={isSaving || !hasUnsavedChanges}
             className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
@@ -559,6 +588,8 @@ export default function VideoEdit({
             {isSaving ? t.video.saving : t.video.saveChanges}
           </button>
           <button
+            type="button"
+            data-testid="video-edit-cancel"
             onClick={handleCancel}
             disabled={isSaving}
             className="px-6 py-3 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors dark:text-white font-medium"

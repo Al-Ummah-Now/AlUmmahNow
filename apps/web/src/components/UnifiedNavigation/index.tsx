@@ -179,6 +179,7 @@ export function UnifiedNavigation() {
           aria-label={t.navigation.navigationMenu}
           aria-expanded={isOpen}
           aria-haspopup="menu"
+          data-testid="nav-menu-trigger"
         >
           <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
             <User className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -200,6 +201,7 @@ export function UnifiedNavigation() {
             <div
               className="absolute right-0 mt-2 w-80 rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
               role="menu"
+              data-testid="nav-menu"
               aria-orientation="vertical"
             >
               {/* Sign In */}
@@ -272,6 +274,7 @@ export function UnifiedNavigation() {
         aria-label={t.navigation.navigationMenu}
         aria-expanded={isOpen}
         aria-haspopup="menu"
+        data-testid="nav-menu-trigger"
       >
         {/* Avatar: Show channel avatar if channel selected, otherwise user avatar */}
         {channel?.avatarUrl ? (
@@ -325,11 +328,13 @@ export function UnifiedNavigation() {
           <div
             className="absolute right-0 mt-2 w-80 max-h-[85vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
             role="menu"
+            data-testid="nav-menu"
             aria-orientation="vertical"
           >
             {/* Active Context Card */}
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700">
+            <div data-testid="nav-active-context" className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700">
               <Link
+                data-testid="nav-profile-link"
                 href={`/${lang}/profile`}
                 onClick={() => setIsOpen(false)}
                 className="flex items-center gap-3 mb-3 rounded-lg p-2 -m-2 hover:bg-white/60 dark:hover:bg-gray-800/60 transition-colors cursor-pointer"
@@ -360,6 +365,7 @@ export function UnifiedNavigation() {
               {/* Active Channel Display */}
               {channel ? (
                 <Link
+                  data-testid="nav-active-channel"
                   href={`/${lang}/channels/${channel.id}`}
                   onClick={() => setIsOpen(false)}
                   className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md hover:bg-white/80 dark:hover:bg-gray-800/80 transition-colors cursor-pointer"
@@ -386,7 +392,7 @@ export function UnifiedNavigation() {
                   </span>
                 </Link>
               ) : (
-                <div className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
+                <div data-testid="nav-no-active-channel" className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
                   <Tv className="h-4 w-4 text-gray-500" />
                   <span className="text-xs text-gray-600 dark:text-gray-400">
                     {t.navigation.noActiveChannel}
@@ -434,7 +440,7 @@ export function UnifiedNavigation() {
                 const channelCount = account.channelsCount || 0;
 
                 return (
-                  <div key={account.userId} className="mb-2">
+                  <div key={account.userId} className="mb-2" data-testid="nav-account" data-active={isActive ? 'true' : 'false'}>
                     {/* Account Header */}
                     <div className="group relative rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <button
@@ -489,7 +495,7 @@ export function UnifiedNavigation() {
                             removeAccount(account.userId);
                           }}
                           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Remove account"
+                          aria-label={t.navigation.removeAccount}
                         >
                           <LogOut className="h-4 w-4 text-red-600 dark:text-red-400" />
                         </button>
@@ -504,8 +510,10 @@ export function UnifiedNavigation() {
                           onClick={() => {
                             switchToChannel(null);
                           }}
+                          data-testid="nav-channel-option-none"
+                          aria-checked={!channel}
                           className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                          role="menuitem"
+                          role="menuitemradio"
                         >
                           <div className="h-6 w-6 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
                             <Tv className="h-3 w-3 text-gray-500 dark:text-gray-400" />
@@ -527,8 +535,11 @@ export function UnifiedNavigation() {
                             onClick={() => {
                               switchToChannel(ch.id);
                             }}
+                            data-testid="nav-channel-option"
+                            data-channel-id={ch.id}
+                            aria-checked={channel?.id === ch.id}
                             className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                            role="menuitem"
+                            role="menuitemradio"
                           >
                             <div className="relative flex-shrink-0">
                               {ch.avatarUrl ? (
@@ -562,6 +573,7 @@ export function UnifiedNavigation() {
                         {!isCreatingChannel ? (
                           <button
                             onClick={() => setIsCreatingChannel(true)}
+                            data-testid="nav-create-channel"
                             className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left mt-1"
                             role="menuitem"
                           >
@@ -625,6 +637,7 @@ export function UnifiedNavigation() {
                   addAccount();
                   setIsOpen(false);
                 }}
+                data-testid="nav-add-account"
                 className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
                 role="menuitem"
               >
@@ -642,6 +655,7 @@ export function UnifiedNavigation() {
                   logout();
                   setIsOpen(false);
                 }}
+                data-testid="nav-sign-out"
                 className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
                 role="menuitem"
               >
@@ -701,7 +715,7 @@ export function UnifiedNavigation() {
               {t.navigation.signOutOfAll}?
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              You will be logged out from all {accounts.length} accounts.
+              {t.navigation.signOutOfAllDescription.replace('{count}', String(accounts.length))}
             </p>
             <div className="flex gap-3 justify-end">
               <button

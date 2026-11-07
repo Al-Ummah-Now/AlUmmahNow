@@ -2,7 +2,7 @@
 import { logger } from '@/lib/logger-client';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -21,6 +21,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
   const [profileExists, setProfileExists] = useState<boolean | null>(null);
   const [hasChecked, setHasChecked] = useState(false);
   const [lastCheckedUserId, setLastCheckedUserId] = useState<string | null>(null);
+  const childrenShownRef = useRef(false);
 
   logger.debug('[ProfileGuard] State:', {
     hasUser: !!user,
@@ -61,13 +62,18 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
       return;
     }
 
-    // Reset check state if user changed
+    // Re-check when the user changes. The first check shows the loading
+    // state; later re-checks run in the background so the page below is not
+    // unmounted (which discarded in-progress form state, e.g. after a server
+    // action refreshed the session).
     if (user?.id && user.id !== lastCheckedUserId) {
       logger.debug('[ProfileGuard] User changed, resetting check state');
       setHasChecked(false);
-      setProfileExists(null);
       setLastCheckedUserId(user.id);
-      setIsCheckingProfile(true);
+      if (profileExists !== true) {
+        setProfileExists(null);
+        setIsCheckingProfile(true);
+      }
     }
 
     // Only check once per user session
@@ -115,15 +121,20 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
     };
 
     checkProfile();
-  }, [user, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, router]);
+  }, [user, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, profileExists, router]);
 
   const content = (() => {
     if (shouldSkipCheck) {
       logger.debug('[ProfileGuard] Rendering children (shouldSkipCheck)');
+      childrenShownRef.current = true;
       return <>{children}</>;
     }
 
-    if (isCheckingProfile) {
+    // While the session loads the page is already rendered (above); keep it
+    // mounted during the profile check instead of swapping in the spinner,
+    // which unmounted it and discarded anything the user had started (e.g. a
+    // selected upload file). A missing profile still redirects below.
+    if (isCheckingProfile && !childrenShownRef.current) {
       logger.debug('[ProfileGuard] Rendering loading state');
       return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">

@@ -11,6 +11,9 @@ import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
+import { useAuth } from "@/components/AuthProvider/authContext";
+import { useMultiAccount } from "@/hooks/useMultiAccount";
+import { login } from "@/lib/actions";
 import Link from "next/link";
 
 type UploadMode = 'single' | 'batch';
@@ -21,6 +24,11 @@ const UploadPage: React.FC = () => {
   const locale = params.locale as string;
   const router = useRouter();
   const { activeChannel } = useActiveChannel();
+  const auth = useAuth();
+  const { user: sessionUser, loading: sessionLoading } = useMultiAccount();
+  // The single uploader uploads to the session's active channel; fall back to
+  // it while the channel context is still loading the user's channels.
+  const uploadChannelId = activeChannel?.channelId || sessionUser?.channel?.id || '';
 
   const [uploadMode, setUploadMode] = useState<UploadMode>('single');
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -48,8 +56,7 @@ const UploadPage: React.FC = () => {
     cancelAll,
     clearQueue,
   } = useBatchUpload({
-    
-    channelId: activeChannel?.channelId || '',
+    channelId: uploadChannelId,
     onUploadComplete: (videoId) => {
       logger.debug('Video uploaded:', videoId);
     },
@@ -66,6 +73,10 @@ const UploadPage: React.FC = () => {
 
   const handleUploadProgress = (percentage: number) => {
     setUploadProgress(percentage);
+    // Progress after a failure means the upload was retried/resumed
+    if (percentage > 0) {
+      setUploadError(null);
+    }
   };
 
   const handleUploadError = (error: string) => {
@@ -137,31 +148,71 @@ const UploadPage: React.FC = () => {
     }
   }, [addFiles, t]);
 
+  // Signed-out visitors get a sign-in prompt instead of the channel error
+  if (!auth?.user) {
+    return (
+      <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div
+          className="max-w-2xl mx-auto w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 md:p-12 text-center"
+          data-testid="upload-sign-in"
+        >
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">{t.navigation.signIn}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">{t.upload.authRequired}</p>
+          <button
+            type="button"
+            onClick={() => { void login(locale); }}
+            className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium"
+          >
+            {t.navigation.signIn}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // Wait for the session's channels before deciding the user has none
+  if (!uploadChannelId && sessionLoading) {
+    return (
+      <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div
+          className="max-w-6xl mx-auto w-full h-64 rounded-lg bg-gray-200 dark:bg-gray-800 animate-pulse"
+          role="status"
+          aria-label={t.common.loading}
+          data-testid="upload-loading"
+        />
+      </main>
+    );
+  }
+
   // Show 403 error if user has no channel
-  if (!activeChannel) {
+  if (!uploadChannelId) {
     return (
       <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto w-full">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 md:p-12 text-center">
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 md:p-12 text-center"
+            data-testid="upload-channel-required"
+          >
             <ShieldAlert size={64} className="mx-auto mb-6 text-red-500" />
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              403 - Channel Required
+              {t.upload.channelRequiredTitle}
             </h1>
             <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
-              You need to create a channel before you can upload videos.
+              {t.upload.channelRequiredMessage}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 href={`/${locale}/profile/create`}
+                data-testid="upload-create-channel"
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
-                Create Channel
+                {t.upload.createChannel}
               </Link>
               <Link
                 href={`/${locale}`}
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
               >
-                Go to Home
+                {t.upload.goHome}
               </Link>
             </div>
           </div>
@@ -188,6 +239,10 @@ const UploadPage: React.FC = () => {
           <div className="mb-6">
             <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-1 bg-white dark:bg-gray-800">
               <button
+                type="button"
+                aria-label={t.upload.uploadVideo}
+                aria-pressed={uploadMode === 'single'}
+                data-testid="upload-mode-single"
                 onClick={() => handleModeChange('single')}
                 className={`
                   flex items-center gap-2
@@ -207,6 +262,10 @@ const UploadPage: React.FC = () => {
                 <span className="hidden sm:inline">{t.upload.uploadVideo}</span>
               </button>
               <button
+                type="button"
+                aria-label={t.batch.batchUpload}
+                aria-pressed={uploadMode === 'batch'}
+                data-testid="upload-mode-batch"
                 onClick={() => handleModeChange('batch')}
                 className={`
                   flex items-center gap-2
@@ -231,24 +290,35 @@ const UploadPage: React.FC = () => {
 
         {/* Upload Success State */}
         {uploadComplete && uploadedVideo && (
-          <div className="mb-8 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 md:p-6">
+          <div
+            className="mb-8 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 md:p-6"
+            data-testid="upload-success"
+            data-video-id={uploadedVideo.id}
+          >
             <div className="flex items-start">
-              <CheckCircle className="h-6 w-6 text-green-500 mt-1 mr-3 flex-shrink-0" />
+              <CheckCircle className="h-6 w-6 text-green-500 mt-1 me-3 flex-shrink-0" />
               <div className="flex-1">
                 <h3 className="text-base md:text-lg font-medium text-green-800 dark:text-green-200 mb-2">
                   {t.upload.uploadComplete}!
                 </h3>
+                <p className="text-sm md:text-base font-medium text-green-900 dark:text-green-100 mb-1" data-testid="upload-success-title">
+                  {uploadedVideo.title}
+                </p>
                 <p className="text-sm md:text-base text-green-700 dark:text-green-300 mb-4">
                   {t.upload.videoUploadedMessage || `Your video "${uploadedVideo.title}" has been uploaded and is now being processed.`}
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <button
+                    type="button"
+                    data-testid="upload-view-video"
                     onClick={handleViewVideo}
                     className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 font-medium text-sm"
                   >
                     {t.upload.viewVideo || 'View Video'}
                   </button>
                   <button
+                    type="button"
+                    data-testid="upload-another"
                     onClick={handleUploadAnother}
                     className="bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 px-4 py-2 rounded-md border border-green-600 dark:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 focus:outline-none focus:ring-2 focus:ring-green-500 font-medium text-sm"
                   >
@@ -262,9 +332,13 @@ const UploadPage: React.FC = () => {
 
         {/* Upload Error State */}
         {uploadError && (
-          <div className="mb-8 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 md:p-6">
+          <div
+            className="mb-8 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 md:p-6"
+            role="alert"
+            data-testid="upload-page-error"
+          >
             <div className="flex items-start">
-              <AlertCircle className="h-6 w-6 text-red-500 mt-1 mr-3 flex-shrink-0" />
+              <AlertCircle className="h-6 w-6 text-red-500 mt-1 me-3 flex-shrink-0" />
               <div className="flex-1">
                 <h3 className="text-base md:text-lg font-medium text-red-800 dark:text-red-200 mb-2">
                   {t.upload.uploadFailed}
@@ -273,6 +347,8 @@ const UploadPage: React.FC = () => {
                   {uploadError}
                 </p>
                 <button
+                  type="button"
+                  data-testid="upload-page-error-dismiss"
                   onClick={() => setUploadError(null)}
                   className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium text-sm"
                 >
@@ -288,9 +364,12 @@ const UploadPage: React.FC = () => {
           <>
             {/* Upload Progress */}
             {uploadProgress > 0 && uploadProgress < 100 && !uploadError && (
-              <div className="mb-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 md:p-6">
+              <div
+                className="mb-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 md:p-6"
+                data-testid="upload-page-progress"
+              >
                 <div className="flex items-start">
-                  <Upload className="h-6 w-6 text-blue-500 mt-1 mr-3 flex-shrink-0" />
+                  <Upload className="h-6 w-6 text-blue-500 mt-1 me-3 flex-shrink-0" />
                   <div className="flex-1">
                     <h3 className="text-base md:text-lg font-medium text-blue-800 dark:text-blue-200 mb-2">
                       {t.upload.uploading}
@@ -435,24 +514,24 @@ const UploadPage: React.FC = () => {
             </h3>
             <ul className="space-y-2 text-xs md:text-sm text-gray-600 dark:text-gray-400">
               <li className="flex items-start">
-                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>
                 <span>{t.upload.guidelineIslamicValues || 'Ensure your content aligns with Islamic values and community guidelines'}</span>
               </li>
               <li className="flex items-start">
-                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>
                 <span>{t.upload.guidelineFormats || `Supported formats: ${VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY}`}</span>
               </li>
               <li className="flex items-start">
-                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>
                 <span>{t.upload.guidelineMaxSize || `Maximum file size: ${VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE_DISPLAY}`}</span>
               </li>
               <li className="flex items-start">
-                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>
                 <span>{t.upload.guidelineProcessing || 'Processing may take several minutes after upload'}</span>
               </li>
               {uploadMode === 'batch' && (
                 <li className="flex items-start">
-                  <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>
                   <span>Batch uploads support 1-15 videos simultaneously for efficient content publishing</span>
                 </li>
               )}

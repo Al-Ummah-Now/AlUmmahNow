@@ -105,6 +105,21 @@ export interface AppTranslations {
     dark: string;
     channel: string;
     channels: string;
+    removeAccount: string;
+    /** Uses {count} placeholder */
+    signOutOfAllDescription: string;
+    openMenu: string;
+    theme: string;
+    language: string;
+    lightMode: string;
+    darkMode: string;
+    /** Uses {language} placeholder */
+    switchToLanguage: string;
+    homeLink: string;
+    search: string;
+    upload: string;
+    subscriptions: string;
+    library: string;
   };
 
   /**
@@ -323,6 +338,13 @@ export interface AppTranslations {
     oldest: string;
     views: string;
     view: string;
+    likeVideo: string;
+    unlikeVideo: string;
+    dislikeVideo: string;
+    removeDislike: string;
+    signInToLike: string;
+    signInToDislike: string;
+    watching: string;
     today: string;
     yesterday: string;
     daysAgo: string;
@@ -400,6 +422,10 @@ export interface AppTranslations {
     deleteMultipleSuccess?: string;
     noVideosFound?: string;
     uploadFirstVideo?: string;
+    clearSearch?: string;
+    bulkDeletePartial?: string;
+    selectVideo?: string;
+    videoStatus?: string;
     // Video Edit
     editVideoDetails?: string;
     videoPreview?: string;
@@ -572,6 +598,26 @@ export interface AppTranslations {
     speed: string;
     timeRemaining: string;
     bytesUploaded: string;
+    // Metadata form
+    titlePlaceholderEn: string;
+    titlePlaceholderAr: string;
+    descriptionPlaceholderEn: string;
+    descriptionPlaceholderAr: string;
+    closeForm: string;
+    privateUntilScheduled: string;
+    // Errors
+    invalidType: string;
+    authRequired: string;
+    sessionMissing: string;
+    authTokenMissing: string;
+    completeFailed: string;
+    processingFailed: string;
+    scheduleFailed: string;
+    // No-channel state
+    channelRequiredTitle: string;
+    channelRequiredMessage: string;
+    createChannel: string;
+    goHome: string;
   };
 
   /**
@@ -1302,6 +1348,9 @@ export interface AppTranslations {
     confirmPublishNow?: string;
     localTime?: string;
     utcTime?: string;
+    manageScheduledVideos?: string;
+    signInToViewScheduled?: string;
+    errorFetchingScheduled?: string;
     // Calendar View
     views?: {
       list: string;

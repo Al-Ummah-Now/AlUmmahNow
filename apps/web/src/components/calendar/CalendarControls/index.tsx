@@ -32,7 +32,10 @@ export function CalendarControls({
   onNavigateToday,
   className = '',
 }: CalendarControlsProps) {
-  const { t, locale } = useLanguage();
+  const { t, locale, isRTL } = useLanguage();
+  // Chevrons point in the reading direction: "previous" is to the right in RTL
+  const PreviousIcon = isRTL ? ChevronRight : ChevronLeft;
+  const NextIcon = isRTL ? ChevronLeft : ChevronRight;
 
   const headerText = formatDualCalendarHeader(currentDate, viewType, locale);
 
@@ -46,29 +49,35 @@ export function CalendarControls({
             onClick={onNavigatePrevious}
             className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             aria-label={(t.schedule?.calendar?.previous) ?? "Previous"}
+            data-testid="calendar-previous"
+            type="button"
           >
-            <ChevronLeft size={20} className="text-gray-700 dark:text-gray-300" />
+            <PreviousIcon size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
 
           <button
             onClick={onNavigateNext}
             className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             aria-label={(t.schedule?.calendar?.next) ?? "Next"}
+            data-testid="calendar-next"
+            type="button"
           >
-            <ChevronRight size={20} className="text-gray-700 dark:text-gray-300" />
+            <NextIcon size={20} className="text-gray-700 dark:text-gray-300" />
           </button>
         </div>
 
         {/* Today Button */}
         <button
           onClick={onNavigateToday}
+          data-testid="calendar-today"
+          type="button"
           className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         >
           {(t.schedule?.calendar?.today) ?? "Today"}
         </button>
 
         {/* Current Period Header */}
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white ml-2 min-w-[280px] transition-all duration-200">
+        <h2 data-testid="calendar-header" aria-live="polite" className="text-lg font-semibold text-gray-900 dark:text-white ms-2 min-w-[280px] transition-all duration-200">
           {headerText}
         </h2>
       </div>
@@ -79,6 +88,8 @@ export function CalendarControls({
         <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600">
           <button
             onClick={() => onViewTypeChange('month')}
+            data-testid="calendar-view-month"
+            type="button"
             className={`
               px-3 py-1.5 text-sm font-medium rounded-s-lg transition-colors
               ${
@@ -94,6 +105,8 @@ export function CalendarControls({
 
           <button
             onClick={() => onViewTypeChange('week')}
+            data-testid="calendar-view-week"
+            type="button"
             className={`
               px-3 py-1.5 text-sm font-medium border-s border-e border-gray-300 dark:border-gray-600 transition-colors
               ${
@@ -109,6 +122,8 @@ export function CalendarControls({
 
           <button
             onClick={() => onViewTypeChange('day')}
+            data-testid="calendar-view-day"
+            type="button"
             className={`
               px-3 py-1.5 text-sm font-medium rounded-e-lg transition-colors
               ${

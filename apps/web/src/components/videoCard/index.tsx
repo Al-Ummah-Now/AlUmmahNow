@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { redirect } from 'next/navigation';
+import Link from "next/link";
 import Image from "next/image";
 import { VideoObject, getLocalizedValue } from "@al-ummah/shared-types";
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
@@ -12,12 +12,15 @@ const VideoCard: React.FC<VideoObject> = (video) => {
 
     const title = getLocalizedValue(video.titleLocalized, video.title, locale);
 
-    const handleClick = () => {
-        redirect(`/${lang}/video?vid=${video.id}`);
-    }
-
+    // A real link (not an onClick redirect) so cards are keyboard focusable,
+    // can be opened in a new tab and are announced as links
     return (
-        <div className="video-card cursor-pointer bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden" onClick={handleClick}>
+        <Link
+            href={`/${lang}/video?vid=${video.id}`}
+            data-testid="video-card"
+            data-video-id={video.id}
+            className="video-card cursor-pointer bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden"
+        >
             {/* Thumbnail */}
             <div className="relative w-full h-48 bg-gray-200">
                 {video.thumbnailUrl && (
@@ -40,7 +43,7 @@ const VideoCard: React.FC<VideoObject> = (video) => {
                     {video.views} {t.video.videoViews.toLowerCase()} • {new Date(video.dateCreated).toLocaleDateString()}
                 </p>
             </div>
-        </div>
+        </Link>
     );
 };
 

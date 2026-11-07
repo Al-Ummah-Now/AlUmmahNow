@@ -79,6 +79,19 @@ export const EN_TRANSLATIONS: AppTranslations = {
     dark: 'Dark',
     channel: 'channel',
     channels: 'channels',
+    removeAccount: 'Remove account',
+    signOutOfAllDescription: 'You will be signed out of all {count} accounts.',
+    openMenu: 'Open menu',
+    theme: 'Theme',
+    language: 'Language',
+    lightMode: 'Light Mode',
+    darkMode: 'Dark Mode',
+    switchToLanguage: 'Switch to {language}',
+    homeLink: 'Home',
+    search: 'Search',
+    upload: 'Upload',
+    subscriptions: 'Subscriptions',
+    library: 'Library',
   },
 
   channel: {
@@ -327,6 +340,13 @@ export const EN_TRANSLATIONS: AppTranslations = {
     oldest: 'Oldest',
     views: 'views',
     view: 'view',
+    likeVideo: 'Like',
+    unlikeVideo: 'Unlike',
+    dislikeVideo: 'Dislike',
+    removeDislike: 'Remove dislike',
+    signInToLike: 'Sign in to like',
+    signInToDislike: 'Sign in to dislike',
+    watching: 'watching',
     // Date formatting
     today: 'Today',
     yesterday: 'Yesterday',
@@ -371,6 +391,10 @@ export const EN_TRANSLATIONS: AppTranslations = {
     deleteMultipleSuccess: '{count} videos deleted successfully',
     noVideosFound: 'No videos found',
     uploadFirstVideo: 'Upload your first video to get started',
+    clearSearch: 'Clear search',
+    bulkDeletePartial: 'Deleted {succeeded} video(s), but {failed} failed to delete',
+    selectVideo: 'Select video',
+    videoStatus: 'Status',
     // Video Edit
     editVideoDetails: 'Edit Video Details',
     videoPreview: 'Video Preview',
@@ -537,6 +561,26 @@ export const EN_TRANSLATIONS: AppTranslations = {
     speed: 'Upload Speed',
     timeRemaining: 'Time Remaining',
     bytesUploaded: 'Uploaded',
+    // Metadata form
+    titlePlaceholderEn: 'Title in English',
+    titlePlaceholderAr: 'Title in Arabic',
+    descriptionPlaceholderEn: 'Description in English',
+    descriptionPlaceholderAr: 'Description in Arabic',
+    closeForm: 'Close',
+    privateUntilScheduled: 'Video will be private until scheduled publish date',
+    // Errors
+    invalidType: 'Please upload a valid video file ({types})',
+    authRequired: 'Authentication required. Please log in to upload videos.',
+    sessionMissing: 'The upload session could not be created. Please try again.',
+    authTokenMissing: 'Authentication token not found. Please log in again.',
+    completeFailed: 'Failed to complete upload',
+    processingFailed: 'Video processing failed',
+    scheduleFailed: 'Video uploaded but scheduling failed: {error}. You can schedule it from the video edit page.',
+    // No-channel state
+    channelRequiredTitle: 'Channel Required',
+    channelRequiredMessage: 'You need to create a channel before you can upload videos.',
+    createChannel: 'Create Channel',
+    goHome: 'Go to Home',
   },
 
   batch: {
@@ -657,6 +701,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
     willBePublishedOn: 'Will be published on',
     localTime: 'Local time',
     utcTime: 'UTC time',
+    manageScheduledVideos: 'View and manage your scheduled videos',
+    signInToViewScheduled: 'Please sign in to view your scheduled videos.',
+    errorFetchingScheduled: 'Could not load your scheduled videos',
     // Calendar View
     views: {
       list: 'List',

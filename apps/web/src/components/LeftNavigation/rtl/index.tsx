@@ -7,6 +7,9 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useTheme } from 'next-themes';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { Sun, Moon, Globe } from 'lucide-react';
+import { getTranslations } from '@/lib/i18n';
+
+const tAr = getTranslations('ar');
 
 interface NavItems {
     label: string;
@@ -31,22 +34,24 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     const router = useRouter();
     const { user } = useMultiAccount();
     const activeChannel = user?.channel;
-    const { theme, setTheme } = useTheme();
+    // resolvedTheme: with the default "system" theme, `theme` is never 'dark',
+    // so toggling from a dark system preference would be a no-op
+    const { resolvedTheme: theme, setTheme } = useTheme();
 
     const locale = 'ar';
 
     const allNavItems: NavItems[] = [
-        { label: "الرئيسية", icon: "fa-house", href: `/${locale}/` }, // Home
-        { label: "الشائع", icon: "fa-magnifying-glass", href: `/${locale}/search` }, // Trending
-        { label: "رفع فيديو", icon: "fa-upload", href: `/${locale}/upload` }, // Upload
-        { label: "الاشتراكات", icon: "fa-tv", href: "#" }, // Subscriptions
-        { label: "المكتبة", icon: "fa-bookmark", href: "#" }, // Library
+        { label: tAr.navigation.homeLink, icon: "fa-house", href: `/${locale}/` },
+        { label: tAr.navigation.search, icon: "fa-magnifying-glass", href: `/${locale}/search` },
+        { label: tAr.navigation.upload, icon: "fa-upload", href: `/${locale}/upload` },
+        { label: tAr.navigation.subscriptions, icon: "fa-tv", href: "#" },
+        { label: tAr.navigation.library, icon: "fa-bookmark", href: "#" },
     ];
 
     // Filter out Upload if user has no active channel
     const navItems = activeChannel
         ? allNavItems
-        : allNavItems.filter(item => item.label !== "رفع فيديو");
+        : allNavItems.filter(item => item.icon !== "fa-upload");
 
     const toggleTheme = () => {
         setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -74,6 +79,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
 
             {/* Navigation */}
             <nav
+                data-testid="side-nav"
                 className={`${withOverlay? "fixed top-0 bg-transparent z-50 h-screen " : "bg-white dark:bg-gray-900 p-4 md:absolute"}
                     ${isCollapsed ? "w-0 hidden" : "w-48"}
                     transition-all duration-300`}
@@ -86,6 +92,9 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                             style="fa-bars"
                             size="text-lg"
                             color="text-[#ffa037] bg-transparent"
+                            onClick={onCollapse}
+                            ariaLabel={tAr.common.close}
+                            testId="nav-drawer-close"
                         />
                     </div>
                 )}
@@ -97,7 +106,8 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                             <button
                                 onClick={toggleTheme}
                                 className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
-                                aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}
+                                aria-label={theme === 'dark' ? tAr.navigation.lightMode : tAr.navigation.darkMode}
+                                data-testid="theme-toggle"
                                 suppressHydrationWarning
                             >
                                 <div
@@ -116,10 +126,10 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                                 </div>
                                 <div className="flex-1 text-right">
                                     <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                        المظهر
+                                        {tAr.navigation.theme}
                                     </div>
                                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100" suppressHydrationWarning>
-                                        {theme === 'dark' ? 'فاتح' : 'داكن'}
+                                        {theme === 'dark' ? tAr.navigation.light : tAr.navigation.dark}
                                     </div>
                                 </div>
                             </button>
@@ -128,14 +138,15 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                             <button
                                 onClick={switchLanguage}
                                 className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
-                                aria-label="التبديل إلى English"
+                                aria-label={tAr.navigation.switchToLanguage.replace('{language}', 'English')}
+                                data-testid="language-toggle"
                             >
                                 <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500/20 transition-all duration-200">
                                     <Globe className="h-5 w-5" />
                                 </div>
                                 <div className="flex-1 text-right">
                                     <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                        اللغة
+                                        {tAr.navigation.language}
                                     </div>
                                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                         English

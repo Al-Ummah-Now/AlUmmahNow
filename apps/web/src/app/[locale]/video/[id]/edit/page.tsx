@@ -20,48 +20,59 @@ export default function VideoEditPage() {
 
   const [video, setVideo] = useState<VideoObject | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Error kind rather than text, so the fetch below does not depend on (and
+  // re-run for) translation updates
+  const [error, setError] = useState<'notFound' | 'forbidden' | 'genericError' | null>(null);
+  const userId = user?.id;
 
   useEffect(() => {
-    const fetchVideo = async () => {
-      if (!user) {
-        router.push(`/${lang}`);
-        return;
-      }
+    if (!userId) {
+      router.push(`/${lang}`);
+    }
+  }, [userId, router, lang]);
 
+  // Fetch once per video/user; refetching on every render-time dependency
+  // change replaced the video mid-edit
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const fetchVideo = async () => {
       if (!videoId) {
-        setError(t.errors.notFound);
+        setError('notFound');
         setLoading(false);
         return;
       }
 
       try {
         const videoData = await getVideoById(videoId);
+        if (cancelled) return;
 
         if (!videoData) {
-          setError(t.errors.notFound);
-          setLoading(false);
+          setError('notFound');
           return;
         }
 
         // Check if user owns this video
-        if (videoData.userId !== user.id) {
-          setError(t.errors.forbidden);
-          setLoading(false);
+        if (videoData.userId !== userId) {
+          setError('forbidden');
           return;
         }
 
         setVideo(videoData);
       } catch (err) {
         logger.error('Error fetching video:', err);
-        setError(t.errors.genericError);
+        if (!cancelled) setError('genericError');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchVideo();
-  }, [videoId, user, router, lang, t]);
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId, userId]);
 
   const handleSave = (updatedVideo: VideoObject) => {
     setVideo(updatedVideo);
@@ -82,7 +93,7 @@ export default function VideoEditPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-lg text-gray-600 dark:text-gray-400">{t.common.loading}</div>
+        <div data-testid="video-edit-loading" className="text-lg text-gray-600 dark:text-gray-400">{t.common.loading}</div>
       </div>
     );
   }
@@ -90,9 +101,9 @@ export default function VideoEditPage() {
   if (error || !video) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center" data-testid="video-edit-page-error">
           <h1 className="text-2xl font-bold mb-4 dark:text-white">{t.common.error}</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">{error || t.errors.notFound}</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">{t.errors[error || 'notFound']}</p>
           <Link
             href={`/${lang}/dashboard/videos`}
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"

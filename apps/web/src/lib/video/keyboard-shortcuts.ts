@@ -38,7 +38,7 @@
 
 import type { ExtendedPlayer } from './videojs';
 import { getTranslations, isRTL, type SupportedLanguage } from './i18n';
-import { logger } from '@/lib/logger-server';
+import { logger } from '@/lib/logger-client';
 
 
 /**

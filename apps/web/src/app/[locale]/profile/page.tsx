@@ -33,6 +33,14 @@ const ProfilePage = () => {
 
   const displayFirstName = getLocalizedName(profile?.firstName, profile?.firstNameLocalized);
   const displayLastName = getLocalizedName(profile?.lastName, profile?.lastNameLocalized);
+  // Profiles may have only a display name (first/last are optional), so fall
+  // back to it, then the email, instead of rendering an empty heading
+  const displayHeading =
+    `${displayFirstName} ${displayLastName}`.trim() ||
+    getLocalizedName(profile?.displayName, profile?.displayNameLocalized) ||
+    profile?.email ||
+    auth?.user?.email ||
+    '';
 
   return (
     <div className="profile-page flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
@@ -100,7 +108,7 @@ const ProfilePage = () => {
                   }}
                 />
               </div>
-              <h1 className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{`${displayFirstName} ${displayLastName}`}</h1>
+              <h1 className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{displayHeading}</h1>
             </section>
 
             {/* Channel Management Section */}
