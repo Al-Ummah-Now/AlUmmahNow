@@ -16,7 +16,8 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   // Convert PlayerOptions to CustomVideoPlayer props
   const videoSources = [
     {
-      src: `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
+      // The API's playUrl carries the CDN token; the bare legacy URL is refused
+      src: options.playUrl || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
       type: 'application/x-mpegURL'
     }
   ];
