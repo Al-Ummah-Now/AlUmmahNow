@@ -13,9 +13,8 @@ import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
-import { transformVideoToView } from "../../lib/transformations";
 import { canViewVideo, VideoType } from "../../lib/playlists";
-import { isPostSaved, listLikedIds, listSavedPostIds, pruneLikes, savePost, unsavePost } from "../../lib/library";
+import { isPostSaved, listLikedIds, listSavedPostIds, pruneLikes, savePost, toLibraryVideoViews, unsavePost } from "../../lib/library";
 import { ResponseError } from "../../lib/types";
 
 const OptionalChannelHeader = z.object({ channelId: Str({ description: "Active channel ID" }).optional().nullable() });
@@ -49,7 +48,8 @@ export class LikedVideosList extends AuthenticatedRoute {
 		const videos = await Promise.all(page.items.map((i) => videoRepo.getObject(i.videoId)));
 
 		const missing: string[] = [];
-		const items = [];
+		const visible: VideoType[] = [];
+		const likedAt = new Map<string, number>();
 		for (let i = 0; i < page.items.length; i++) {
 			const video = videos[i];
 			if (!video || video.isDeleted) {
@@ -57,8 +57,13 @@ export class LikedVideosList extends AuthenticatedRoute {
 				continue;
 			}
 			if (!canViewVideo(video, userId)) continue;
-			items.push({ ...transformVideoToView(video), likedAt: new Date(page.items[i].likedAt).toISOString() });
+			visible.push(video);
+			likedAt.set(video.id, page.items[i].likedAt);
 		}
+		const items = (await toLibraryVideoViews(c.env.channels, visible)).map((v) => ({
+			...v,
+			likedAt: new Date(likedAt.get(v.id) || 0).toISOString(),
+		}));
 		if (missing.length > 0) await pruneLikes(db, userId, missing);
 
 		logger.info("[Library] Liked videos listed", { userId, returned: items.length, pruned: missing.length });

@@ -1,3 +1,4 @@
+import type { LibraryTranslations, NotificationCenterTranslations } from './i18n-library';
 /**
  * Internationalization (i18n) Types
  *
@@ -115,6 +116,10 @@ export interface UpdateTranslationsResponse {
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  /** Library hub, Watch later, liked videos, saved posts (Story 29.6) */
+  library: LibraryTranslations;
+  /** Notification center, settings and per-channel bell (Story 29.10) */
+  notificationCenter: NotificationCenterTranslations;
   /** Accessibility: skip links and accessible names for icon-only controls (Epic 1) */
   a11y: {
     skipLinks: string;
@@ -1465,6 +1470,12 @@ export interface AppTranslations {
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;
+      newVideoTitle: string;
+      newVideoMessage: string;
+      liveStartedTitle: string;
+      liveStartedMessage: string;
+      commentReplyTitle: string;
+      commentReplyMessage: string;
     };
     // Extended notifications fields for Arabic translations
     notifications?: string;

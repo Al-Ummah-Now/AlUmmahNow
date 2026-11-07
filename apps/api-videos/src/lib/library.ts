@@ -12,7 +12,9 @@
 
 import { logger } from './logger';
 import { decodeCursor, encodeCursor, clampLimit } from './notifications';
-import type { PlaylistType } from './playlists';
+import type { PlaylistType, VideoType } from './playlists';
+import R2Repository from './r2Repo';
+import { transformVideoToView } from './transformations';
 
 export const WATCH_LATER_SYSTEM_TYPE = 'watch_later';
 /** Entitlement `library.watchLater.maxItems` (Free default; same for every plan today). */
@@ -187,4 +189,21 @@ export async function listSavedPostIds(
 		nextCursor: rows.length > limit && last ? encodeCursor(last.saved_at, last.post_id) : null,
 		total: Number(total || 0),
 	};
+}
+
+/** View models for a page of videos, with channel name/avatar resolved once per channel. */
+export async function toLibraryVideoViews(channels: R2Bucket, videos: VideoType[]) {
+	const repo = new R2Repository<any>(channels);
+	const ids = [...new Set(videos.map((v) => v.channelId).filter(Boolean))];
+	const loaded = await Promise.all(
+		ids.map(async (id) => {
+			try {
+				return [id, await repo.getObject(id)] as const;
+			} catch {
+				return [id, null] as const;
+			}
+		}),
+	);
+	const byId = new Map(loaded);
+	return videos.map((v) => transformVideoToView(v, byId.get(v.channelId) || null));
 }

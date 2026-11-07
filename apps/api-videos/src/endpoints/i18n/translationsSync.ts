@@ -10,10 +10,12 @@ import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { PublicRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';
-import { TranslationData, I18nMetadata, I18nConfig, AppTranslations } from '@al-ummah/shared-types';
+import { TranslationData, I18nMetadata, I18nConfig, AppTranslations, LIBRARY_AR, LIBRARY_EN, NOTIFICATION_CENTER_AR, NOTIFICATION_CENTER_EN } from '@al-ummah/shared-types';
 
 // English translations (embedded from static files)
 const EN_TRANSLATIONS: AppTranslations = {
+  library: LIBRARY_EN,
+  notificationCenter: NOTIFICATION_CENTER_EN,
   a11y: {
     skipLinks: 'Skip links',
     skipToMainContent: 'Skip to main content',
@@ -1072,6 +1074,12 @@ const EN_TRANSLATIONS: AppTranslations = {
       uploadReadyMessage: 'Your video "{videoTitle}" has finished processing',
       uploadFailedTitle: 'Upload Failed',
       uploadFailedMessage: 'Your video "{videoTitle}" could not be processed',
+      newVideoTitle: 'New video',
+      newVideoMessage: '{channelName} uploaded "{videoTitle}"',
+      liveStartedTitle: 'Live now',
+      liveStartedMessage: '{channelName} is live: {streamTitle}',
+      commentReplyTitle: 'New reply',
+      commentReplyMessage: '{actorName} replied to your comment',
     },
   },
   subtitle: {
@@ -1382,6 +1390,8 @@ const EN_TRANSLATIONS: AppTranslations = {
 
 // Arabic translations - EXACT same structure as English
 const AR_TRANSLATIONS: AppTranslations = {
+  library: LIBRARY_AR,
+  notificationCenter: NOTIFICATION_CENTER_AR,
   a11y: {
     skipLinks: 'روابط التخطي',
     skipToMainContent: 'انتقل إلى المحتوى الرئيسي',
@@ -2440,6 +2450,12 @@ const AR_TRANSLATIONS: AppTranslations = {
       uploadReadyMessage: 'اكتملت معالجة الفيديو الخاص بك "{videoTitle}"',
       uploadFailedTitle: 'فشل الرفع',
       uploadFailedMessage: 'تعذرت معالجة الفيديو الخاص بك "{videoTitle}"',
+      newVideoTitle: 'فيديو جديد',
+      newVideoMessage: 'نشرت {channelName} الفيديو "{videoTitle}"',
+      liveStartedTitle: 'مباشر الآن',
+      liveStartedMessage: '{channelName} تبث مباشرة: {streamTitle}',
+      commentReplyTitle: 'رد جديد',
+      commentReplyMessage: 'ردّ {actorName} على تعليقك',
     },
   },
   subtitle: {

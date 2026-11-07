@@ -13,13 +13,13 @@ import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
-import { transformVideoToView } from "../../lib/transformations";
 import { canViewVideo, isSameVideoSet, VideoType } from "../../lib/playlists";
 import {
 	addToWatchLater,
 	newWatchLater,
 	pageIds,
 	removeFromWatchLater,
+	toLibraryVideoViews,
 	watchLaterId,
 	WatchLaterPlaylist,
 	WATCH_LATER_MAX_ITEMS,
@@ -64,9 +64,10 @@ export class WatchLaterList extends AuthenticatedRoute {
 
 		const videoRepo = new R2Repository<VideoType>(c.env.videos);
 		const videos = await Promise.all(page.ids.map((id) => videoRepo.getObject(id)));
-		const items = videos
-			.filter((v): v is VideoType => !!v && canViewVideo(v, userId))
-			.map((v) => transformVideoToView(v));
+		const items = await toLibraryVideoViews(
+			c.env.channels,
+			videos.filter((v): v is VideoType => !!v && canViewVideo(v, userId)),
+		);
 
 		logger.info("[WatchLater] Listed", { userId, total: ids.length, returned: items.length });
 		return {
