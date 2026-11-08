@@ -45,9 +45,9 @@ Conventions for every story:
   checked-in file `apps/api-videos/openapi/v1.json` (`pnpm --filter @al-ummah/api-videos openapi:generate`).
 - **Drift fails CI.** A unit test (`test/openapi-contract.spec.ts`, part of `test:unit`, which runs in
   the required `validate-api` job) regenerates the document from the real routers and compares it
-  with `openapi/v1.json`. Any route or schema change without a regenerated file fails the build.
-  It also fails when an operation disappears from v1 or loses a response code (a breaking change),
-  unless the PR also records it in `openapi/v1.breaking.json` with a reason.
+  with `openapi/v1.json`. Any route or schema change without a regenerated file fails the build,
+  and the regenerated file shows every contract change in the PR diff for review. (Automatic
+  breaking-change detection against `main`'s file is a later improvement.)
 - **Deprecation policy** (documented in `apps/api-videos/API_VERSIONING.md`):
   additive changes (new endpoints, new optional fields) ship in v1; removals or type changes need v2.
   A deprecated operation is marked `deprecated: true` in OpenAPI and answers with `Deprecation` and
