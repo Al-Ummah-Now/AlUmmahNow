@@ -102,6 +102,10 @@ export const SIGNAL_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
  */
 export async function eraseUserModerationData(db: D1Database, userId: string, tombstone: string): Promise<void> {
   await db.batch([
+    // The AI rationale and scores in the audit rows can paraphrase the user's text
+    db
+      .prepare('UPDATE moderation_actions SET reason = NULL, details_json = NULL WHERE signal_id IN (SELECT id FROM moderation_signals WHERE author_id = ?)')
+      .bind(userId),
     db
       .prepare('UPDATE moderation_signals SET author_id = ?, translation = NULL, translation_expires_at = NULL WHERE author_id = ?')
       .bind(tombstone, userId),

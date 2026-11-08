@@ -28,11 +28,6 @@ export type ScanOutcome =
   | { status: 'done'; signalId?: string; decision: string }
   | { status: 'retry'; error: string };
 
-/** Arabic letters from which text is translated before Llama Guard. */
-const MIN_ARABIC_LETTERS = 8;
-/** Latin letters from which mixed text is also checked untranslated. */
-const MIN_LATIN_LETTERS = 20;
-
 const SURFACES = new Set(['video_comment', 'community_post', 'post_comment', 'video_metadata']);
 
 export function isScanPayload(value: unknown): value is ModerationScanPayload {
@@ -80,17 +75,17 @@ export async function handleModerationScan(
   const scores: Record<string, number> = {};
 
   try {
-    // Llama Guard does not list Arabic, so any meaningful Arabic part is translated (not only
-    // Arabic-majority text: otherwise a few English words could carry Arabic abuse past it).
-    // Mixed text with a real Latin part is also checked as-is; the stricter verdict wins.
+    // Llama Guard does not list Arabic, so any Arabic is translated (not only Arabic-majority
+    // text: otherwise a few English words could carry Arabic abuse past it). Mixed text is also
+    // checked as-is; the stricter verdict wins.
     const arabic = arabicLetterCount(text);
     const latin = latinLetterCount(text);
     const guardInputs: string[] = [];
-    if (arabic >= MIN_ARABIC_LETTERS) {
+    if (arabic > 0) {
       translation = await translateToEnglish(ctx, text);
       models.push(MODELS.translate);
       guardInputs.push(translation);
-      if (latin >= MIN_LATIN_LETTERS) guardInputs.push(text);
+      if (latin > 0) guardInputs.push(text);
     } else {
       guardInputs.push(text);
     }
