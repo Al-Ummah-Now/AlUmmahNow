@@ -16,7 +16,7 @@ import privacyRouter from './privacy.router';
 import libraryRouter from './library.router';
 import notificationsRouter from './notifications.router';
 import searchRouter from './search.router';
-import appConfigRouter from './app-config.router';
+import appConfigRouter, { appConfigAdminRouter } from './app-config.router';
 import { continueWatchingRouter, watchStateRouter } from './watch-state.router';
 
 /**
@@ -94,6 +94,7 @@ export function registerAllRouters(openapi: any) {
   openapi.route('/api/notifications', notificationsRouter);
   // App config (Epic 9.3) - API versions and minimum supported app version
   openapi.route('/api/app-config', appConfigRouter);
+  openapi.route('/internal/app-config', appConfigAdminRouter);
   openapi.route('/api/watch-state', watchStateRouter);
   openapi.route('/api/continue-watching', continueWatchingRouter);
 

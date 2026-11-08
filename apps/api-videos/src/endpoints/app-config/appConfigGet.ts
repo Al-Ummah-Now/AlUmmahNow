@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { PublicRoute } from '../../base';
 import type { AppContext } from '../../base';
 import { APPS, PLATFORMS, SEMVER, buildAppConfig, loadVersionsDocument } from '../../lib/app-config';
+import { evaluateConfig, evaluateFlags, loadRules } from '../../lib/feature-flags';
 import { logger } from '../../lib/logger';
 
 const AppConfigResponse = z.object({
@@ -35,6 +36,13 @@ export class AppConfigGet extends PublicRoute {
 				app: z.enum(APPS),
 				version: z.string().regex(SEMVER).describe('Version of the running build (semver, e.g. 1.4.2)'),
 				locale: z.string().max(16).optional(),
+				installId: z
+					.string()
+					.min(8)
+					.max(64)
+					.regex(/^[A-Za-z0-9_-]+$/)
+					.optional()
+					.describe('Random per-install id (not tied to the user); keeps percentage rollouts stable'),
 			}),
 		},
 		responses: {
@@ -45,9 +53,21 @@ export class AppConfigGet extends PublicRoute {
 
 	async handle(c: AppContext) {
 		const { query } = await this.getValidatedData<typeof this.schema>();
-		const { doc, error } = await loadVersionsDocument(c.env.APP_CONFIG);
-		if (error) logger.warn('[AppConfig] Invalid versions document, using defaults', { error });
+		const [versions, flagRules, configRules] = await Promise.all([
+			loadVersionsDocument(c.env.APP_CONFIG),
+			loadRules(c.env.APP_CONFIG, 'flags'),
+			loadRules(c.env.APP_CONFIG, 'config'),
+		]);
+		for (const [name, error] of [['versions', versions.error], ['flags', flagRules.error], ['config', configRules.error]]) {
+			if (error) logger.warn(`[AppConfig] Invalid ${name} document, using defaults`, { error });
+		}
+		const ctx = { app: query.app, platform: query.platform, version: query.version, locale: query.locale, installId: query.installId };
 		c.header('Cache-Control', 'public, max-age=300');
-		return c.json(buildAppConfig({ app: query.app, platform: query.platform, version: query.version }, doc));
+		return c.json(
+			buildAppConfig(ctx, versions.doc, {
+				flags: evaluateFlags(flagRules.rules, ctx),
+				config: evaluateConfig(configRules.rules, ctx),
+			}),
+		);
 	}
 }
