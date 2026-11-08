@@ -56,6 +56,21 @@ function playerFrame(origin: string, src: string, size = 'width="640" height="36
     referrerpolicy="strict-origin-when-cross-origin"></iframe>`.replace('{origin}', origin);
 }
 
+/**
+ * PR runs target the already-deployed QA build, so the PR that adds /embed
+ * cannot pass these. A build without /embed redirects it to
+ * /{locale}/embed/... and 404s; PR runs skip then. Pushes to main never skip.
+ */
+let embedDeployed: boolean | undefined;
+test.beforeEach(async ({}, testInfo) => {
+  if (process.env.GITHUB_EVENT_NAME !== 'pull_request') return;
+  if (embedDeployed === undefined) {
+    const res = await fetch(`${baseOrigin(testInfo)}/embed/v/deploy-probe`).catch(() => null);
+    embedDeployed = !!res && res.status !== 404 && new URL(res.url).pathname.startsWith('/embed/');
+  }
+  test.skip(!embedDeployed, '/embed is not deployed on the target yet (it lands with the PR that adds it)');
+});
+
 async function messages(page: Page) {
   return page.evaluate(() => (window as unknown as { __aun: Array<{ origin: string; data: { event?: string; type: string; error?: { code: string } } }> }).__aun);
 }
