@@ -16,6 +16,7 @@ export interface PublicVideo {
   availableResolutions?: string[];
   playUrl?: string;
   channelId?: string;
+  thumbnailUrl?: string;
 }
 
 /**
