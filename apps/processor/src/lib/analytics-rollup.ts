@@ -13,9 +13,13 @@
  * analytics time series. Monthly documents keep reads to one or two objects per
  * entity for typical (<= 60 day) ranges.
  *
- * Rollups are best-effort read-modify-write updates: two consumers updating the
- * same document at the same instant can lose an increment. The lifetime `views`
- * counter on the video object remains the source of truth for totals.
+ * Rollups are read-modify-write updates. A queue batch is processed in parallel
+ * (index.ts), and a view and the watch-time reports of one watch usually share a
+ * batch, so updates of one document are chained per key within the isolate;
+ * without that, both read the same document and the last write dropped the
+ * other's increment. Two isolates updating the same document at the same instant
+ * can still lose an increment. The lifetime `views` counter on the video object
+ * remains the source of truth for totals.
  */
 
 import type { R2Bucket } from '../types';
@@ -96,7 +100,10 @@ export const MAX_WATCH_TIME_DELTA_SECONDS = 60;
 
 type Apply = (doc: MonthlyRollup | null, entityType: 'video' | 'channel', entityId: string, day: string, amount: number) => MonthlyRollup;
 
-async function updateRollup(
+/** Tail of the pending updates per rollup key in this isolate. */
+const pendingByKey = new Map<string, Promise<void>>();
+
+function updateRollup(
   bucket: R2Bucket,
   entityType: 'video' | 'channel',
   entityId: string,
@@ -105,6 +112,26 @@ async function updateRollup(
   apply: Apply = applyView
 ): Promise<void> {
   const key = rollupKey(entityType, entityId, day.slice(0, 7));
+  const previous = pendingByKey.get(key) ?? Promise.resolve();
+  const run = previous
+    .catch(() => undefined)
+    .then(() => writeRollup(bucket, key, entityType, entityId, day, watchTime, apply));
+  pendingByKey.set(key, run);
+  void run.catch(() => undefined).then(() => {
+    if (pendingByKey.get(key) === run) pendingByKey.delete(key);
+  });
+  return run;
+}
+
+async function writeRollup(
+  bucket: R2Bucket,
+  key: string,
+  entityType: 'video' | 'channel',
+  entityId: string,
+  day: string,
+  watchTime: number,
+  apply: Apply
+): Promise<void> {
   const existing = await bucket.get(key);
   const doc = existing ? await existing.json<MonthlyRollup>() : null;
   const updated = apply(doc, entityType, entityId, day, watchTime);

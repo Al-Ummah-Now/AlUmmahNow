@@ -133,4 +133,29 @@ describe('watch-time rollups (#235)', () => {
     expect(await recordWatchTimeRollup(bucket, { seconds: 5 }, Date.now())).toBe(false);
     expect(bucket.store.size).toBe(0);
   });
+
+  it('keeps every update when a batch updates the same rollup concurrently', async () => {
+    // Prod (2026-11-08): a view and a watch-time report of one queue batch are
+    // processed in parallel; both read the empty document and the last write won,
+    // so a 28.42s report vanished. Reads and writes here yield like R2 does.
+    const bucket = memoryBucket();
+    const tick = () => new Promise((r) => setTimeout(r, 1));
+    const get = bucket.get as jest.Mock;
+    const put = bucket.put as jest.Mock;
+    const realGet = get.getMockImplementation()!;
+    const realPut = put.getMockImplementation()!;
+    get.mockImplementation(async (key: string) => { await tick(); return realGet(key); });
+    put.mockImplementation(async (key: string, value: unknown) => { await tick(); return realPut(key, value); });
+    const ts = '2026-11-08T12:51:00.000Z';
+
+    await Promise.all([
+      recordViewRollup(bucket, { videoId: 'v1', videoChannelId: 'c1', timestamp: ts }, ts),
+      recordWatchTimeRollup(bucket, { videoId: 'v1', videoChannelId: 'c1', seconds: 28.42, timestamp: ts }, ts),
+      recordWatchTimeRollup(bucket, { videoId: 'v1', videoChannelId: 'c1', seconds: 30.02, timestamp: ts }, ts),
+    ]);
+
+    for (const key of ['analytics/rollups/video/v1/2026-11.json', 'analytics/rollups/channel/c1/2026-11.json']) {
+      expect((JSON.parse(bucket.store.get(key)!) as MonthlyRollup).days['2026-11-08']).toEqual({ views: 1, watchTime: 58.44 });
+    }
+  });
 });
