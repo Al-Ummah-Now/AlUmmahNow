@@ -1,5 +1,5 @@
 "use server"
-import { createClient } from "@al-ummah-now/openauth/client"
+import { getOpenAuthClient } from "./auth/openauth-client"
 import { redirect } from "next/navigation"
 import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
@@ -7,16 +7,7 @@ import { AuthSubject } from "@/interfaces"
 import { startSingleSignOut } from "./auth/single-sign-out"
 
 export async function getClient() {
-  // Both come from wrangler "vars". A missing ClientId used to be sent as the
-  // string "undefined", which the auth server will now reject.
-  const clientID = process.env.ClientId
-  const issuer = process.env.Issuer
-  if (!clientID || !issuer) {
-    throw new Error("Auth is not configured: set ClientId and Issuer in the wrangler vars")
-  }
-  const client = createClient({ clientID, issuer });
-
-  return client;
+  return getOpenAuthClient();
 }
 
 export async function authenticated(): Promise<AuthSubject | false> {

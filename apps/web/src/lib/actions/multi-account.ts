@@ -10,7 +10,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { headers as getHeaders, cookies as getCookies } from "next/headers";
-import { createClient } from "@al-ummah-now/openauth/client";
+import { getOpenAuthClient } from "../auth/openauth-client";
 import { SessionManager, type AccountInfo } from '../auth/session-manager';
 import { createChannel } from '../api/channels';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
@@ -22,10 +22,7 @@ import { logger } from '@/lib/logger-server';
  * Get OpenAuth client
  */
 async function getAuthClient() {
-  return createClient({
-    clientID: process.env.ClientId!,
-    issuer: process.env.Issuer!,
-  });
+  return getOpenAuthClient();
 }
 
 /**

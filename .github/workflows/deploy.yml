@@ -198,6 +198,10 @@ jobs:
         run: pnpm --filter @al-ummah/api-videos type-check
         timeout-minutes: 3
 
+      - name: API unit tests
+        run: pnpm --filter @al-ummah/api-videos test:unit
+        timeout-minutes: 3
+
       - name: Validate API deployment
         run: |
           cd apps/api-videos

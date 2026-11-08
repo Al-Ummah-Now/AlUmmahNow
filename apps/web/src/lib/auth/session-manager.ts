@@ -11,7 +11,7 @@
 
 import { cookies } from 'next/headers';
 import type { Channel, User } from '@al-ummah/shared-types';
-import { createClient } from "@al-ummah-now/openauth/client";
+import { getOpenAuthClient } from "./openauth-client";
 import { subjects } from '../auth';
 import { logger } from '@/lib/logger-server';
 
@@ -164,7 +164,7 @@ export class SessionManager {
     const usagePercent = ((sizeInBytes / COOKIE_SIZE_MAX) * 100).toFixed(1);
 
     // Always log size for monitoring
-    logger.info(`[SessionManager] Cookie size: ${sizeInKB} KB (${usagePercent}% of 4KB limit) | Accounts: ${accountCount}`);
+    logger.debug(`[SessionManager] Cookie size: ${sizeInKB} KB (${usagePercent}% of 4KB limit) | Accounts: ${accountCount}`);
 
     // Warn if approaching limit
     if (sizeInBytes >= COOKIE_SIZE_WARNING_THRESHOLD) {
@@ -313,10 +313,7 @@ export class SessionManager {
    * Get OpenAuth client instance
    */
   private static async getAuthClient() {
-    return createClient({
-      clientID: process.env.ClientId!,
-      issuer: process.env.Issuer!,
-    });
+    return getOpenAuthClient();
   }
 
   /**
@@ -462,7 +459,7 @@ export class SessionManager {
     const activeAccount = sessionData.accounts[sessionData.activeUserId];
     if (!activeAccount) return null;
 
-    logger.info('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
+    logger.debug('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
       userId: activeAccount.userId,
       email: activeAccount.email,
       'sessionData.activeChannelId': sessionData.activeChannelId,
@@ -478,7 +475,7 @@ export class SessionManager {
       const accountChannels = account.channels.filter(c => c.userId === account.userId);
 
       if (accountChannels.length !== account.channels.length) {
-        logger.info('[SessionManager] Cleaning channels for user:', {
+        logger.debug('[SessionManager] Cleaning channels for user:', {
           userId: account.userId,
           email: account.email,
           before: account.channels.length,
@@ -508,7 +505,7 @@ export class SessionManager {
       await this.setSessionData(sessionData);
     }
 
-    logger.info('[SessionManager.getActiveSession] TRACE AFTER FILTER:', {
+    logger.debug('[SessionManager.getActiveSession] TRACE AFTER FILTER:', {
       userId: activeAccount.userId,
       email: activeAccount.email,
       'sessionData.activeChannelId': sessionData.activeChannelId,
