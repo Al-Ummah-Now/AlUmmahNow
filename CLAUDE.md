@@ -42,6 +42,20 @@ This file contains the mandatory 10-step development workflow that MUST be follo
 
 **See `BEFORE_YOU_CODE.md` for complete details, checklists, and code examples.**
 
+## Deploy Rules
+
+**CRITICAL — production is deployed only from `main`, only by CI, and only when a release tag is pushed.**
+
+1. **Fix on `main`.** Every fix goes through a PR into `main`, including hotfixes. No `hotfix`, `qa` or long-lived release branches, and never deploy from a feature branch or a local checkout.
+2. **QA follows `main`.** Every push to `main` deploys QA (`deploy.yml` → `deploy-qa`). Merging is not a production release.
+3. **A tag releases production.** Pushing a tag `vYYYY.MM.DD` (a second release that day: `vYYYY.MM.DD.2`, and so on) on a commit that is on `main` starts `.github/workflows/release.yml`. It builds once, deploys stage, runs smoke and the release E2E suite on stage, then promotes production (0% → smoke → 100%, auto-rollback). The release refuses a tag whose commit is not on `main`.
+   ```bash
+   git fetch origin && git tag -a v2026.11.08 origin/main -m "Release v2026.11.08" && git push origin v2026.11.08
+   ```
+   Tag a commit only after its `deploy.yml` run on `main` and its QA deploy are green. Tags are never moved or deleted: to undo a release, run `.github/workflows/rollback.yml`, then fix forward on `main` and tag again. To retry a release that failed for a transient reason, re-run that tag's workflow run. Running `release.yml` by hand (Actions → Release → Run workflow on `main`) deploys **stage only** and never touches production. Releases queue one at a time, and GitHub keeps only the newest pending run, so if two tags are pushed while a release is running, only the later one is released.
+4. **No hand deploys to production.** Do not run `wrangler deploy`, `pnpm deploy:all`, `pnpm *:deploy` or `pnpm *:deploy:production` against production. The commands in [Deployment](#deployment) exist for CI and for an emergency only. An emergency deploy needs the owner's explicit go-ahead, comes from a clean checkout of a commit on `main`, and is followed by a tagged release of the same commit, so that CI is again the source of truth.
+5. **If CI is the blocker, fix CI.** A failing check, a missing secret or a broken workflow is fixed in a PR to `main`. It is never a reason to deploy by hand or to add `continue-on-error`.
+
 ## Code Quality Standards
 
 ### TODO Comments Policy
@@ -381,6 +395,9 @@ pnpm lint                # Lint all packages
 ```
 
 ### Deployment
+
+Production releases come from a tag on `main` (see [Deploy Rules](#deploy-rules)). These scripts are what CI runs. Do not run the production ones by hand.
+
 ```bash
 pnpm web:deploy:production      # Deploy web to production
 pnpm api:deploy                 # Deploy API to production
@@ -542,14 +559,16 @@ Note: **scheduler** and **log-service** have no CI validation or deployment jobs
 - Auto-cleanup when PR closes
 - **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
-**QA Deployment** (`deploy-qa` job): no longer triggered; it ran on pushes to `develop`, which CI no longer builds. QA deploys move to the release pipeline (`docs/release-pipeline/`).
+**QA Deployment** (`deploy-qa` job): runs on every push to `main` (and by `workflow_dispatch` on `main`).
 - All 6 apps deployed in a single `deploy-qa` job after validation
 - QA URLs: `qa.alummahnow.net`, `videos.qa.api.alummahnow.net`, `ws.qa.alummahnow.net`, `admin.qa.alummahnow.net`, `admin.qa.api.alummahnow.net`
 - Web and admin-web use `wrangler.qa.jsonc`; others use per-app `wrangler.qa.jsonc`
 
-**Production Deployment** (`deploy-production` job, **manual**: Actions → Deploy → Run workflow on `main`):
-- Does not run on merge. It never ran on push from Jan 2026 (validate jobs failed), so production has been deployed by hand; the release workflow (phase 7 of `docs/release-pipeline/PLAN.md`) replaces it with stage-then-promote
-- All 6 apps deployed in a single job after validation; check #208 (processor `REPORTS_DB` placeholder) before running it
+**Production Deployment** (`.github/workflows/release.yml`, triggered by pushing a `v*` tag on `main`; see [Deploy Rules](#deploy-rules)):
+- build once → stage (migrate, deploy, smoke, seed) → release E2E on stage → production (migrate, candidates at 0%, smoke through the version override, 100%, smoke, auto-rollback) → rollback dry run
+- The production job checks that the tagged commit is on `main`. Later merges to `main` do not affect a running release, because the release deploys the tag.
+- Rollback: `.github/workflows/rollback.yml` (start with `dry_run`) or `pnpm release:rollback --env production`. Code only; D1 migrations are expand-only.
+- `deploy.yml`'s old `deploy-production` job is superseded by the release workflow and is not used.
 - Web uses `wrangler.production.jsonc`; admin-web uses `wrangler.production.jsonc`; other apps use default wrangler config
 
 **Required Secrets**:
@@ -865,20 +884,13 @@ Note: If modifying `packages/logger`, rebuild it too: `pnpm --filter @al-ummah/l
 
 ### Deploying to Production
 
+Merge to `main` (QA deploys automatically), check QA, then tag the release. Never deploy production by hand (see [Deploy Rules](#deploy-rules)).
+
 ```bash
-# Deploy all 6 CI-managed apps to production in one command
-pnpm deploy:all
-
-# Or deploy individually
-pnpm web:deploy:production
-pnpm api:deploy
-pnpm processor:deploy
-pnpm websocket:deploy
-pnpm admin:deploy
-pnpm admin-web:deploy:production
-
-# Or push to main branch → GitHub Actions handles all 6 apps automatically
-git push origin main
+git fetch origin
+git tag -a v2026.11.08 origin/main -m "Release v2026.11.08"   # second release that day: v2026.11.08.2
+git push origin v2026.11.08                                    # starts release.yml: stage → E2E → production
+gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 ```
 
 ## Troubleshooting
@@ -924,6 +936,7 @@ Network-restricted environments may block Google Fonts. See `.github/CLAUDE.md` 
 5. **Test bilingual support** - verify both `/en/*` and `/ar/*` routes
 6. **API validation** - Use Swagger UI to test API endpoints
 7. **Auth service is separate** - Not part of this monorepo
+8. **Production = a release tag on `main`, deployed by CI** - never a hand deploy (see [Deploy Rules](#deploy-rules))
 
 ## Recommended Claude Code Agents
 
