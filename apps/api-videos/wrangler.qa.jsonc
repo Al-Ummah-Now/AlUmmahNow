@@ -77,6 +77,12 @@
   ],
   "d1_databases": [
     {
+      // Plans & entitlements (Epic 27). Schema is owned by apps/admin-api/migrations
+      "binding": "REPORTS_DB",
+      "database_name": "al-ummah-now-reports-qa",
+      "database_id": "eed66c4a-af26-4e07-9f9a-36f1e4ada555"
+    },
+    {
       // Notification center + library indexes (Epic 29); migrations live in apps/processor
       "binding": "NOTIFICATIONS_DB",
       "database_name": "al-ummah-now-notifications-qa",

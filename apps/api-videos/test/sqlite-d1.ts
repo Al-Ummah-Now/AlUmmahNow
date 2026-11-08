@@ -8,10 +8,10 @@ import { DatabaseSync } from 'node:sqlite';
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'processor', 'migrations-notifications');
 
-export function createSqliteD1() {
+export function createSqliteD1(migrationsDir: string = MIGRATIONS_DIR) {
 	const raw = new DatabaseSync(':memory:');
-	for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
-		raw.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
+	for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) {
+		raw.exec(readFileSync(join(migrationsDir, file), 'utf8'));
 	}
 	const prepare = (sql: string) => {
 		let params: any[] = [];

@@ -15,6 +15,7 @@ import discoveryRouter from './discovery.router';
 import privacyRouter from './privacy.router';
 import libraryRouter from './library.router';
 import notificationsRouter from './notifications.router';
+import entitlementsRouter from './entitlements.router';
 import searchRouter from './search.router';
 import appConfigRouter from './app-config.router';
 import { continueWatchingRouter, watchStateRouter } from './watch-state.router';
@@ -92,6 +93,7 @@ export function registerAllRouters(openapi: any) {
 
   // Notifications domain - notification center, settings, per-channel bell (Story 29.10)
   openapi.route('/api/notifications', notificationsRouter);
+  openapi.route('/api/entitlements', entitlementsRouter);
   // App config (Epic 9.3) - API versions and minimum supported app version
   openapi.route('/api/app-config', appConfigRouter);
   openapi.route('/api/watch-state', watchStateRouter);
