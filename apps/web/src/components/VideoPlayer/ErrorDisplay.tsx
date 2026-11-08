@@ -18,6 +18,8 @@ export interface ErrorDisplayProps {
   onFallback?: () => void;
   showDetails?: boolean;
   className?: string;
+  /** Regional format for dates, e.g. 'ar-EG' or 'en-GB'. Defaults to ar-SA / en-US. */
+  locale?: string;
 }
 
 /**
@@ -32,6 +34,7 @@ export function ErrorDisplay({
   onFallback,
   showDetails = false,
   className = '',
+  locale,
 }: ErrorDisplayProps): JSX.Element {
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
   const { t, isRTL, dir } = useVideoPlayerI18n(lang);
@@ -206,13 +209,11 @@ export function ErrorDisplay({
                   Rationale:
                   - ar-SA chosen as the most widely recognized Arabic locale format
                   - en-US provides 12-hour format familiar to English speakers
-                  - Keeps component interface simple (only 'en' | 'ar' instead of full locale strings)
                   - Browser's toLocaleString() handles proper formatting for each locale
 
-                  Note: For apps requiring regional variants (ar-EG, ar-MA, en-GB, etc.),
-                  consider adding an optional `locale` prop to ErrorDisplayProps.
+                  Callers needing a regional variant pass the `locale` prop.
                 */}
-                {new Date(error.timestamp).toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US')}
+                {new Date(error.timestamp).toLocaleString(locale ?? (lang === 'ar' ? 'ar-SA' : 'en-US'))}
               </div>
 
               <div className="pt-2 mt-2 border-t border-gray-700">

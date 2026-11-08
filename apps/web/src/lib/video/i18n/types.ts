@@ -50,7 +50,15 @@ export type SupportedLanguage = 'en' | 'ar';
  * Complete translation structure for video player
  * All translations must implement this interface to ensure completeness
  */
+/** Plural forms of one phrase; `other` is the required fallback. */
+export type PluralForms = Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
+
+export type PluralKey = 'videos' | 'comments' | 'views' | 'hours' | 'minutes' | 'seconds';
+
 export interface VideoPlayerTranslations {
+  /** Count-dependent phrases; see utils/plural.ts */
+  pluralization: Record<PluralKey, PluralForms>;
+
   /**
    * Player status messages
    */
@@ -258,4 +266,9 @@ export interface UseVideoPlayerI18nResult {
    * Text direction ('ltr' or 'rtl')
    */
   dir: 'ltr' | 'rtl';
+
+  /**
+   * Text for a count in the current language, e.g. plural('videos', 5)
+   */
+  plural: (key: PluralKey, count: number) => string;
 }
