@@ -1885,6 +1885,10 @@ export interface AppTranslations {
     removeFailed: string;
     clearFailed: string;
     totalCount: string;
+    pause: string;
+    resume: string;
+    pausedNotice: string;
+    pauseFailed: string;
   };
 
   settings?: {

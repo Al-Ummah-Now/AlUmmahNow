@@ -6,7 +6,6 @@
 
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { z } from "zod";
-import { Context } from "hono";
 import { listUserWatchHistory } from "./user-entries";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type {
@@ -99,7 +98,7 @@ export class ListWatchHistory extends AuthenticatedRoute {
     "required"
   );
 
-  async handle(c: Context) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.headers;
 

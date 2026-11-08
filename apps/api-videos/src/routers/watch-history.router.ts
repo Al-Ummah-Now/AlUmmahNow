@@ -11,6 +11,8 @@
  * - DELETE /:videoId    - Delete specific watch history entry
  * - POST /:videoId/progress   - Update watch progress for a video
  * - GET /:videoId/progress    - Get watch progress for a video
+ * - GET /settings             - { paused }
+ * - PUT /settings             - pause / resume recording
  */
 
 import { Hono } from 'hono';
@@ -23,6 +25,7 @@ import { DeleteWatchHistory } from '../endpoints/watch-history/delete';
 import { ClearWatchHistory } from '../endpoints/watch-history/clear';
 import { UpdateWatchProgress } from '../endpoints/watch-history/update-progress';
 import { GetWatchProgress } from '../endpoints/watch-history/get-progress';
+import { GetWatchHistorySettings, UpdateWatchHistorySettings } from '../endpoints/watch-history/settings';
 
 const app = new Hono();
 
@@ -31,6 +34,10 @@ export const watchHistoryRouter = fromHono(app, { base: '/api/watch-history' });
 // Register routes with paths RELATIVE to base (/api/watch-history)
 
 // Watch History Management
+// Pause / resume (registered before '/:videoId' routes)
+watchHistoryRouter.get('/settings', GetWatchHistorySettings);
+watchHistoryRouter.put('/settings', UpdateWatchHistorySettings);
+
 watchHistoryRouter.post('/', RecordWatchHistory);          // Record video view
 watchHistoryRouter.get('/', ListWatchHistory);             // List watch history
 watchHistoryRouter.delete('/', ClearWatchHistory);         // Clear all history

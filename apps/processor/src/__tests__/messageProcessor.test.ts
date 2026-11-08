@@ -194,6 +194,24 @@ describe('MessageProcessor', () => {
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalled();
     });
 
+    it('accepts WatchHistory events in the envelope api-videos now sends', async () => {
+      const message: AlUmmahMessage = {
+        id: 'wh-1',
+        type: MessageType.WatchHistory,
+        timestamp: Date.now(),
+        payload: { type: 'watch_progress', userId: 'u1', videoId: 'v1', progress: 30, duration: 100, timestamp: new Date().toISOString() },
+      } as AlUmmahMessage;
+      const result = await processor.processMessage(message, mockEnv);
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects the legacy { type: "WatchHistory", data } shape (why history events never landed)', async () => {
+      const legacy = { type: 'WatchHistory', data: { type: 'watch_started', userId: 'u1', videoId: 'v1' } } as unknown as AlUmmahMessage;
+      const result = await processor.processMessage(legacy, mockEnv);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Invalid message structure');
+    });
+
     it('should fail for invalid message structure', async () => {
       const message: AlUmmahMessage = {
         id: '', // Invalid empty ID

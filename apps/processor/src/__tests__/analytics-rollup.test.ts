@@ -65,6 +65,27 @@ describe('analytics rollups', () => {
     expect(channel.days['2026-11-06']).toEqual({ views: 1, watchTime: 12 });
   });
 
+  it('records the video rollup for legacy videos without a channel (prod payload shape)', async () => {
+    const bucket = memoryBucket();
+    // Shape of a real prod VideoView message for an imported video (channelId null)
+    const ok = await recordViewRollup(bucket, {
+      videoId: '0269b21b',
+      videoChannelId: null,
+      watchTime: 0,
+      timestamp: '2026-11-08T05:49:26.147Z',
+    }, Date.now());
+    expect(ok).toBe(true);
+    expect(JSON.parse(bucket.store.get('analytics/rollups/video/0269b21b/2026-11.json')!).days['2026-11-08'])
+      .toEqual({ views: 1, watchTime: 0 });
+    expect([...bucket.store.keys()].some((k) => k.includes('/channel/'))).toBe(false);
+  });
+
+  it('accepts the explicit trackedView marker', async () => {
+    const bucket = memoryBucket();
+    expect(await recordViewRollup(bucket, { videoId: 'v1', trackedView: true }, '2026-11-08T00:00:00Z')).toBe(true);
+    expect(bucket.store.has('analytics/rollups/video/v1/2026-11.json')).toBe(true);
+  });
+
   it('ignores view-like events that are not tracked views', async () => {
     const bucket = memoryBucket();
     expect(await recordViewRollup(bucket, { videoId: 'v1' }, Date.now())).toBe(false);

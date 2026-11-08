@@ -131,7 +131,10 @@ export class VideoView extends OptionalAuthRoute {
 			videoId: id,
 			videoTitle: video.title,
 			videoOwnerId: video.userId,
-			videoChannelId: video.channelId,
+			// Always present (null for legacy videos): the processor uses the key and
+			// trackedView to tell counted views from fetch/search telemetry
+			videoChannelId: video.channelId ?? null,
+			trackedView: true,
 			viewerId: userId,
 			viewerChannelId: channelId,
 			watchTime: viewData.watchTime,
