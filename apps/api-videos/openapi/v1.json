@@ -25,6 +25,160 @@
     }
   ],
   "paths": {
+    "/api/v1/account/deletion": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Delete my account (content, then identity)",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires a sign-in at most 10 minutes old (the token's `auth_time`); otherwise `401 insufficient_user_authentication`: sign in again with `prompt=login` and retry. Erases content in resumable passes (`status: \"erasing\"` → call again with `resumeToken`), then deletes the sign-in account. `502 code: auth_unavailable` is retryable: content erasure is idempotent. Body: `{ \"confirm\": \"DELETE\" }`.",
+        "operationId": "post_AccountDeletionPost",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "enum": [
+                      "DELETE"
+                    ]
+                  },
+                  "resumeToken": {
+                    "type": "string",
+                    "maxLength": 8192
+                  }
+                },
+                "required": [
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Progress or done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "erasing",
+                        "deleted"
+                      ],
+                      "description": "erasing: call again with resumeToken; deleted: done, sign the user out"
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "resumeToken": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "anonymized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "status",
+                    "complete"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing confirmation (code: confirmation_required)"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Content erased; the identity service could not be reached (code: auth_unavailable, retry)"
+          }
+        }
+      }
+    },
+    "/api/v1/account/export": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Export my data (content and account) as one download",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication. `content` is the same as `/api/privacy/export` (paged: while `content.complete` is false call again with `?resume=`; later pages carry only `content`). `account` is the sign-in account (profile, roles, sessions, audit trail) from the identity service, on the first page.",
+        "operationId": "get_AccountExportGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "required": false,
+            "name": "resume",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON attachment: { formatVersion, exportedAt, content, account }"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/analytics": {
       "get": {
         "tags": [

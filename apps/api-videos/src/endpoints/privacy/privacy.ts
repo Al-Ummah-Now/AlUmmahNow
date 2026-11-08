@@ -18,7 +18,7 @@ import { requireSecret } from '../../lib/env-helpers';
 import Queue, { MessageType } from '../../lib/queue';
 import { BunnyStreamClient } from '../../lib/bunny/stream';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget, asBucket, readJson, writeJson } from '../../lib/privacy/scan';
-import { collectUserData, eraseUserData, type PrivacyBuckets } from '../../lib/privacy/user-data';
+import { collectUserData, eraseUserData, type ErasureSummary, type PrivacyBuckets } from '../../lib/privacy/user-data';
 
 export const CONSENT_HISTORY_LIMIT = 50;
 
@@ -40,6 +40,59 @@ function buckets(c: AppContext): PrivacyBuckets {
 function budgetFor(c: AppContext): OperationBudget {
 	const configured = Number((c.env as unknown as { PRIVACY_OP_BUDGET?: string }).PRIVACY_OP_BUDGET);
 	return new OperationBudget(Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_OPERATION_BUDGET);
+}
+
+/**
+ * One bounded, idempotent erasure pass for `userId` (profile last), with the
+ * follow-ups: Bunny media removal, the processor's UserDataErased and
+ * VideoDelete messages. Shared by DELETE /api/privacy/data and in-app account
+ * deletion (Epic 9.7). Call again with `resumeToken` while `complete` is false.
+ */
+export async function runErasurePass(c: AppContext, userId: string, resumeToken?: string): Promise<ErasureSummary> {
+	const env = c.env;
+	let bunny: { client: BunnyStreamClient; libraryId: number } | null = null;
+	const onVideoDeleted = async (videoId: string) => {
+		try {
+			if (!bunny) {
+				const key = await requireSecret(env['bunny-stream-key'], 'bunny-stream-key');
+				const libraryId = parseInt(await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id'), 10);
+				bunny = { client: new BunnyStreamClient(key), libraryId };
+			}
+			await bunny.client.deleteVideo(bunny.libraryId, videoId);
+		} catch (error) {
+			// Media removal is best-effort: the R2 record is already gone, so the
+			// stream is unreachable from the app. Logged for manual follow-up.
+			logger.warn('[Privacy] Failed to delete Bunny Stream media', {
+				videoId,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	};
+
+	const budget = budgetFor(c);
+	const summary = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted }, { resumeToken });
+
+	try {
+		const queue = new Queue(c.env.queue);
+		if (summary.complete) {
+			// Lets the processor anonymise copies it owns (D1 moderation reports).
+			await queue.send(MessageType.UserDataErased, { userId, timestamp: new Date().toISOString() });
+		}
+		for (const videoId of summary.deletedVideoIds) {
+			await queue.send(MessageType.VideoDelete, { videoId, userId, reason: 'gdpr-erasure', timestamp: new Date().toISOString() });
+		}
+	} catch (error) {
+		logger.error('[Privacy] Failed to queue erasure follow-up', { userId, error: error instanceof Error ? error.message : String(error) });
+	}
+
+	logger.info('[Privacy] User data erased', {
+		userId,
+		complete: summary.complete,
+		deleted: summary.deleted,
+		anonymized: summary.anonymized,
+		operations: budget.spent,
+	});
+	return summary;
 }
 
 export class PrivacyExport extends AuthenticatedRoute {
@@ -108,50 +161,8 @@ export class PrivacyErase extends AuthenticatedRoute {
 			return c.json({ success: false, code: 'confirmation_required', error: 'Send {"confirm":"DELETE"} to erase your data' }, 400);
 		}
 
-		const env = c.env;
-		let bunny: { client: BunnyStreamClient; libraryId: number } | null = null;
-		const onVideoDeleted = async (videoId: string) => {
-			try {
-				if (!bunny) {
-					const key = await requireSecret(env['bunny-stream-key'], 'bunny-stream-key');
-					const libraryId = parseInt(await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id'), 10);
-					bunny = { client: new BunnyStreamClient(key), libraryId };
-				}
-				await bunny.client.deleteVideo(bunny.libraryId, videoId);
-			} catch (error) {
-				// Media removal is best-effort: the R2 record is already gone, so the
-				// stream is unreachable from the app. Logged for manual follow-up.
-				logger.warn('[Privacy] Failed to delete Bunny Stream media', {
-					videoId,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
-		};
-
-		const budget = budgetFor(c);
 		const resumeToken = typeof body.resumeToken === 'string' ? body.resumeToken : undefined;
-		const summary = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted }, { resumeToken });
-
-		try {
-			const queue = new Queue(c.env.queue);
-			if (summary.complete) {
-				// Lets the processor anonymise copies it owns (D1 moderation reports).
-				await queue.send(MessageType.UserDataErased, { userId, timestamp: new Date().toISOString() });
-			}
-			for (const videoId of summary.deletedVideoIds) {
-				await queue.send(MessageType.VideoDelete, { videoId, userId, reason: 'gdpr-erasure', timestamp: new Date().toISOString() });
-			}
-		} catch (error) {
-			logger.error('[Privacy] Failed to queue erasure follow-up', { userId, error: error instanceof Error ? error.message : String(error) });
-		}
-
-		logger.info('[Privacy] User data erased', {
-			userId,
-			complete: summary.complete,
-			deleted: summary.deleted,
-			anonymized: summary.anonymized,
-			operations: budget.spent,
-		});
+		const summary = await runErasurePass(c, userId, resumeToken);
 		return c.json({ success: true, ...summary });
 	}
 }
