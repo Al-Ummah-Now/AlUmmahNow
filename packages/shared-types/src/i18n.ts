@@ -1,4 +1,5 @@
 import type { LibraryTranslations, NotificationCenterTranslations } from './i18n-library';
+import type { BulkEditTranslations } from './i18n-bulk-edit';
 import type { CommunityGuidelinesTranslations } from './i18n-community-guidelines';
 /**
  * Internationalization (i18n) Types
@@ -132,6 +133,7 @@ export interface AppTranslations {
   };
   /** Library hub, Watch later, liked videos, saved posts (Story 29.6) */
   library: LibraryTranslations;
+  bulkEdit: BulkEditTranslations;
   communityGuidelines: CommunityGuidelinesTranslations;
   /** Notification center, settings and per-channel bell (Story 29.10) */
   notificationCenter: NotificationCenterTranslations;

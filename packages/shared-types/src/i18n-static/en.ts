@@ -8,6 +8,7 @@
 
 import type { AppTranslations } from '../i18n';
 import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from '../i18n-library';
+import { BULK_EDIT_EN } from '../i18n-bulk-edit';
 import { COMMUNITY_GUIDELINES_EN } from '../i18n-community-guidelines';
 
 export const EN_TRANSLATIONS: AppTranslations = {
@@ -25,6 +26,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     loadFailed: 'This image could not be opened. Try a JPEG or PNG file.',
   },
   library: LIBRARY_EN,
+  bulkEdit: BULK_EDIT_EN,
   communityGuidelines: COMMUNITY_GUIDELINES_EN,
   notificationCenter: NOTIFICATION_CENTER_EN,
   common: {
