@@ -15,6 +15,7 @@ import {
 } from "../../lib/discovery";
 import type { SearchDb } from "@al-ummah/shared-types";
 import { suggestFromIndex } from "../../lib/search/query";
+import { isWatchHistoryPaused } from "../../lib/watch-history";
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
@@ -239,7 +240,8 @@ export class RecommendationsGet extends OptionalAuthRoute {
         }
       }
 
-      if (userId) {
+      // While watch history is paused it is not used for recommendations (#242)
+      if (userId && !(await isWatchHistoryPaused(c.env.profiles, userId).catch(() => false))) {
         try {
           const history = await loadWatchHistory(c.env.watch_history, userId);
           for (const entry of history.slice(0, 10)) {

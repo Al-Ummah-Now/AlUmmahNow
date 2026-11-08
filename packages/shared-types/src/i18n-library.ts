@@ -16,6 +16,10 @@ export interface LibraryTranslations {
   savedPosts: string;
   seeAll: string;
   emptyHistory: string;
+  /** Home shelf of started, unfinished videos (#242) */
+  continueWatching: string;
+  /** Accessible label of a tile's watched-progress bar */
+  watchedPercent: string;
   emptyWatchLater: string;
   emptyLiked: string;
   emptyPlaylists: string;
@@ -108,6 +112,8 @@ export const LIBRARY_EN: LibraryTranslations = {
   savedPosts: 'Saved posts',
   seeAll: 'See all',
   emptyHistory: 'Videos you watch will appear here',
+  continueWatching: 'Continue watching',
+  watchedPercent: '{percent}% watched',
   emptyWatchLater: 'Save videos to watch later and they will appear here',
   emptyLiked: 'Videos you like will appear here',
   emptyPlaylists: 'Playlists you create will appear here',
@@ -145,6 +151,8 @@ export const LIBRARY_AR: LibraryTranslations = {
   savedPosts: 'المنشورات المحفوظة',
   seeAll: 'عرض الكل',
   emptyHistory: 'ستظهر هنا الفيديوهات التي تشاهدها',
+  continueWatching: 'متابعة المشاهدة',
+  watchedPercent: 'تمت مشاهدة {percent}%',
   emptyWatchLater: 'احفظ الفيديوهات لمشاهدتها لاحقًا وستظهر هنا',
   emptyLiked: 'ستظهر هنا الفيديوهات التي تعجبك',
   emptyPlaylists: 'ستظهر هنا قوائم التشغيل التي تنشئها',

@@ -6,6 +6,7 @@ import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
 import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
+import { isWatchHistoryPaused } from "../../lib/watch-history";
 
 const VideoResponseSchema = z.object({
   id: z.string(),
@@ -114,7 +115,8 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
       let watchedVideoIds: Set<string> = new Set();
 
       // Get user's watch history if excludeWatched is true and user is authenticated
-      if (excludeWatched && userId) {
+      // While watch history is paused it is not used for recommendations (#242)
+      if (excludeWatched && userId && !(await isWatchHistoryPaused(c.env.profiles, userId).catch(() => false))) {
         try {
           const watchHistoryBucket = c.env.watch_history;
           if (watchHistoryBucket) {

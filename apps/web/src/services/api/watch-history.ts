@@ -376,11 +376,12 @@ export class WatchHistoryService {
    * Uses the browser auth token (cookies are httpOnly).
    */
   static async list(
-    params: { limit?: number; cursor?: string } = {}
+    params: { limit?: number; cursor?: string; completed?: boolean } = {}
   ): Promise<WatchHistoryPage | null> {
     try {
       const query = new URLSearchParams({ sort: 'newest', limit: String(params.limit ?? 20) });
       if (params.cursor) query.set('cursor', params.cursor);
+      if (params.completed !== undefined) query.set('completed', String(params.completed));
       const response = await fetch(`${apiBase()}/api/watch-history?${query.toString()}`, {
         headers: await getClientAuthHeaders(),
       });
