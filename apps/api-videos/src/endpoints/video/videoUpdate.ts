@@ -12,6 +12,7 @@ import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
 import { announceNewVideo } from "../../lib/notification-events";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 
 export class VideoUpdate extends AuthenticatedRoute {
 	schema = {
@@ -182,6 +183,11 @@ export class VideoUpdate extends AuthenticatedRoute {
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});
+
+		// Re-scan only when the scanned text changed (title, description, tags, localized variants)
+		if (videoScanText(updatedVideo) !== videoScanText(existingVideo)) {
+			scanInBackground(c, { surface: 'video_metadata', event: 'edit', subjectId: id, authorId: effectiveUserId, channelId, text: videoScanText(updatedVideo) });
+		}
 
 		// Transform to view model for response
 		const videoView = transformVideoToView(updatedVideo);

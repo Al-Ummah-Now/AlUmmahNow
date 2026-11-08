@@ -4,6 +4,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import type { PostComment } from '@al-ummah/shared-types';
+import { scanInBackground } from '../../lib/moderation-scan';
 
 const updateCommentRequestSchema = z.object({
   content: z
@@ -142,6 +143,8 @@ export class UpdatePostComment extends AuthenticatedRoute {
       },
       timestamp: comment.updatedAt,
     });
+
+    scanInBackground(c, { surface: 'post_comment', event: 'edit', subjectId: commentId, parentId: postId, authorId: userId, channelId: postChannelId, text: comment.content });
 
     return c.json({
       success: true,

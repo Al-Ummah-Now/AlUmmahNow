@@ -99,11 +99,12 @@ export const APPS: AppRule[] = [
 				{ kind: 'kv_namespaces', name: 'RATE_LIMIT_KV' },
 				{ kind: 'kv_namespaces', name: 'TUS_SESSIONS' },
 				{ kind: 'queue_producer', name: 'queue' },
+				{ kind: 'queue_producer', name: 'MODERATION_QUEUE' },
 				{ kind: 'r2_buckets', name: 'videos' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'd1_databases', name: 'SEARCH_DB' }] }),
+		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'd1_databases', name: 'SEARCH_DB' }] }),
 	},
 	{
 		app: 'processor',

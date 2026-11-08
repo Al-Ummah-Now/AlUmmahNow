@@ -14,6 +14,7 @@ import type {
 } from '@al-ummah/shared-types';
 import { findPostComment, getChannelObject, topLevelCommentKey } from './post-comment-helpers';
 import { notifyUserInBackground } from '../../lib/websocket-notify';
+import { scanInBackground } from '../../lib/moderation-scan';
 
 // Sanitization configuration for comments
 // Allows basic formatting while preventing XSS attacks
@@ -267,6 +268,8 @@ export class CreatePostComment extends AuthenticatedRoute {
       parentCommentId: requestBody.parentCommentId,
       timestamp: comment.createdAt,
     });
+
+    scanInBackground(c, { surface: 'post_comment', event: 'create', subjectId: comment.id, parentId: postId, authorId: userId, channelId: postChannelId, text: comment.content });
 
     // Notify the author of the comment that was replied to (persisted in the notification center)
     if (requestBody.parentCommentId && replyToUserId && replyToUserId !== userId) {

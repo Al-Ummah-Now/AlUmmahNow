@@ -110,6 +110,10 @@
       {
         "queue": "al-ummah-now-videos-qa",
         "binding": "queue"
+      },
+      {
+        "queue": "al-ummah-now-moderation-qa",
+        "binding": "MODERATION_QUEUE"
       }
     ]
   },

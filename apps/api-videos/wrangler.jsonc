@@ -165,6 +165,10 @@
 			{
 				"queue": "al-ummah-now-videos",
 				"binding": "queue"
+			},
+			{
+				"queue": "al-ummah-now-moderation",
+				"binding": "MODERATION_QUEUE"
 			}
 		]
 	},
@@ -345,6 +349,10 @@
 					{
 						"queue": "al-ummah-now-videos-stage",
 						"binding": "queue"
+					},
+					{
+						"queue": "al-ummah-now-moderation-stage",
+						"binding": "MODERATION_QUEUE"
 					}
 				]
 			},
