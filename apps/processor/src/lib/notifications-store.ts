@@ -185,7 +185,7 @@ export async function purgeExpiredNotifications(db: D1Database, now = Date.now()
   return (result as { meta?: { changes?: number } })?.meta?.changes ?? 0;
 }
 
-/** GDPR erasure: a user's notifications, settings and subscriber rows are personal data. */
+/** GDPR erasure: a user's notifications, settings, subscriber rows and push devices are personal data. */
 export async function eraseUserNotifications(db: D1Database, userId: string): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(userId),
@@ -193,5 +193,6 @@ export async function eraseUserNotifications(db: D1Database, userId: string): Pr
     db.prepare('DELETE FROM channel_subscribers WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM liked_videos WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM saved_posts WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM push_devices WHERE user_id = ?').bind(userId),
   ]);
 }
