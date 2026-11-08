@@ -8,6 +8,7 @@ interface SecretStoreSecret {
 interface Env {
 	WEBSOCKET_DO: DurableObjectNamespace;
 	PRESENCE_KV: KVNamespace;
+	TOKEN_REVOCATIONS?: KVNamespace;
 
 	// Auth environment variables (from secrets/environment)
 	Issuer?: string;

@@ -95,6 +95,8 @@
     { "name": "WATCH_TIME_LIMITER", "namespace_id": "2203", "simple": { "limit": 6, "period": 60 } }
   ],
   "kv_namespaces": [
+			// Token revocation list written by the auth worker (#437)
+			{ "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" },
     {
       "binding": "RATE_LIMIT_KV",
       "id": "7da4b66fae594a0e9e5af8ef1e0d698d"

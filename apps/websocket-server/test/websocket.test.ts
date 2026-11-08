@@ -5,6 +5,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { __setJwksForTests } from '../src/auth.ts';
+import { clearRevocationCache } from '../src/token-revocation.ts';
 import { WebSocketDurableObject } from '../src/websocket.ts';
 import { ISSUER, WEB_CLIENT, makeSigner, unsignedToken, type Signer } from './helpers.ts';
 
@@ -38,7 +39,7 @@ after(() => {
   (globalThis as any).Response = RealResponse;
 });
 
-function makeDO() {
+function makeDO(extraEnv: Record<string, unknown> = {}) {
   const kv = new Map<string, string>();
   const env = {
     Issuer: ISSUER,
@@ -49,6 +50,7 @@ function makeDO() {
       put: async (k: string, v: string) => { kv.set(k, v); },
       delete: async (k: string) => { kv.delete(k); },
     },
+    ...extraEnv,
   };
   const ctx = { acceptWebSocket() {} };
   const durable = new WebSocketDurableObject(ctx as any, env as any) as any;
@@ -147,4 +149,43 @@ test('internal /broadcast still reaches subscribers', async () => {
   }));
   assert.equal(res.status, 200);
   assert.equal(ws.last().type, 'notification');
+});
+
+// #437: revoked sign-ins and expired tokens
+
+const nowS = () => Math.floor(Date.now() / 1000);
+const revocations = (entries: Record<string, unknown>) => ({ get: async (k: string) => entries[k] ?? null });
+
+test('a token of a revoked sign-in cannot authenticate the socket', async () => {
+  clearRevocationCache();
+  const { durable } = makeDO({ TOKEN_REVOCATIONS: revocations({ 'u:user-123': { v: 1, before: nowS() + 5 } }) });
+  const ws = await connect(durable, '');
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'authenticate', token: await signer.sign({ auth_time: nowS() - 60 }) }));
+  assert.equal(ws.last().code, 'AUTH_FAILED');
+  assert.equal(durable.connections.get(ws).authenticated, false);
+  clearRevocationCache();
+});
+
+test('once its token expires a socket drops private channels, keeps public ones, and re-authenticates in place', async () => {
+  clearRevocationCache();
+  const { durable } = makeDO();
+  const ws = await connect(durable, '');
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'authenticate', token: await signer.sign() }));
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'subscribe', channel: 'video:v1' }));
+  const conn = durable.connections.get(ws);
+  assert.equal(conn.authExpiresAt > nowS(), true);
+  assert.equal(durable.channelManager.getChannelSubscribers('user:user-123').size, 1);
+
+  conn.authExpiresAt = nowS() - 1; // the token has expired
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'subscribe', channel: 'video:v2' }));
+  assert.ok(ws.sent.some((m) => m.code === 'AUTH_EXPIRED'));
+  assert.equal(conn.authenticated, false);
+  assert.equal(durable.channelManager.getChannelSubscribers('user:user-123').size, 0);
+  assert.equal(durable.channelManager.getChannelSubscribers('video:v1').size, 1);
+
+  // Fresh token: back in, same session, public channels intact
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'authenticate', token: await signer.sign() }));
+  assert.equal(conn.authenticated, true);
+  assert.equal(durable.channelManager.getChannelSubscribers('user:user-123').size, 1);
+  assert.equal(durable.channelManager.getChannelSubscribers('video:v1').size, 1);
 });

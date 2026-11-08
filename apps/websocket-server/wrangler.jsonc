@@ -43,6 +43,8 @@
 	 * KV Namespace for presence tracking and state
 	 */
 	"kv_namespaces": [
+			// Token revocation list written by the auth worker (#437)
+			{ "binding": "TOKEN_REVOCATIONS", "id": "2afbb5f5d5414c9ea1a7d54013cfe724", "preview_id": "e6e662fc9cd9420797ddfa8060eb6956" },
 		{
 			"binding": "PRESENCE_KV",
 			"id": "a3dbf9b2b80c4a3ea101281e19fd8407",
@@ -98,6 +100,8 @@
 				]
 			},
 			"kv_namespaces": [
+			// Token revocation list written by the auth worker (#437)
+			{ "binding": "TOKEN_REVOCATIONS", "id": "0831520b71144a6e848ed62918602c13" },
 				{
 					"binding": "PRESENCE_KV",
 					"id": "03ba69245a7c40f4952ac5e0a9b402ca"

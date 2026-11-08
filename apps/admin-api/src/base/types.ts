@@ -30,6 +30,9 @@ export interface AdminBindings {
   // Queue
   queue: any;
 
+  /** Token revocation list written by the auth worker (#437) */
+  TOKEN_REVOCATIONS?: KVNamespace;
+
   // Environment variables
   /** Default daily neuron cap shown when D1 has none (mirrors the processor's var) */
   AI_MODERATION_DAILY_NEURON_CAP?: string;

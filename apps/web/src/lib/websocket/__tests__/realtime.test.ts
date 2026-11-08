@@ -140,4 +140,29 @@ describe('WebSocketManager subscriptions', () => {
     deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
     expect(subscribes(sent).map(m => m.channel)).toEqual(['channel:c1', 'channel:c1']);
   });
+
+  describe('token expiry on an open socket (#437)', () => {
+    function attachSocket(manager: WebSocketManager) {
+      const sent: Array<Record<string, unknown>> = [];
+      const ws = { readyState: WebSocket.OPEN, send: (raw: string) => sent.push(JSON.parse(raw)) };
+      (manager as unknown as { ws: unknown }).ws = ws;
+      return sent;
+    }
+    function deliver(manager: WebSocketManager, message: unknown) {
+      (manager as unknown as { handleMessage: (m: unknown) => void }).handleMessage(message);
+    }
+
+    it('re-authenticates with a fresh token on AUTH_EXPIRED and resubscribes', async () => {
+      let n = 0;
+      const manager = new WebSocketManager({ url: 'wss://example/ws', reconnectInterval: 1000, maxReconnectAttempts: 1, heartbeatInterval: 30000, getAuthToken: async () => `token-${++n}` });
+      const sent = attachSocket(manager);
+      deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
+      manager.subscribe('notifications', jest.fn());
+      deliver(manager, { type: 'error', error: 'Token expired; authenticate again', code: 'AUTH_EXPIRED' });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(sent.filter((m) => m.type === 'authenticate').map((m) => m.token)).toEqual(['token-1']);
+      deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
+      expect(sent.filter((m) => m.type === 'subscribe' && m.channel === 'notifications')).toHaveLength(2);
+    });
+  });
 });
