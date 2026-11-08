@@ -155,6 +155,10 @@ const bunnyKey = await c.env["bunny-stream-key"].text();
 
 ### Adding New Endpoints
 
+> Public routes are a versioned contract (`/api/v1`, see `API_VERSIONING.md`). After adding or
+> changing a chanfana route, run `pnpm openapi:generate` and commit `openapi/v1.json`; the unit
+> tests fail on drift.
+
 1. Create endpoint file in appropriate `src/endpoints/[category]/` directory
 2. Import endpoint class in `src/index.ts`
 3. Register with OpenAPI router: `openapi.get("/api/path", EndpointClass)`

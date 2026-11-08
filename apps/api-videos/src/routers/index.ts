@@ -16,6 +16,7 @@ import privacyRouter from './privacy.router';
 import libraryRouter from './library.router';
 import notificationsRouter from './notifications.router';
 import searchRouter from './search.router';
+import appConfigRouter from './app-config.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -90,6 +91,9 @@ export function registerAllRouters(openapi: any) {
 
   // Notifications domain - notification center, settings, per-channel bell (Story 29.10)
   openapi.route('/api/notifications', notificationsRouter);
+  // App config (Epic 9.3) - API versions and minimum supported app version
+  openapi.route('/api/app-config', appConfigRouter);
+
   // Search v2 domain - index-backed search, explore, internal backfill (root level)
   openapi.route('', searchRouter);
 

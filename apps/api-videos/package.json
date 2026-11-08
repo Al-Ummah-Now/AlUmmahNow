@@ -15,6 +15,7 @@
     "clean": "rm -rf .wrangler",
     "test": "npm run test:api",
     "test:unit": "tsx --conditions=import --test test/*.spec.ts",
+    "openapi:generate": "tsx --conditions=import scripts/generate-openapi.ts",
     "test:api": "curl -s http://127.0.0.1:3086/test | jq .",
     "test:health": "curl -s http://127.0.0.1:3086/health | jq .",
     "test:metrics": "curl -s http://127.0.0.1:3086/metrics | jq ."
