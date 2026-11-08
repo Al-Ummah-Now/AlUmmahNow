@@ -1,5 +1,4 @@
 import type { Browser, Page } from '@playwright/test';
-import { ResendTestClient } from '../test-utils/resend-client';
 import { seedLogger as log, maskSecret } from './seed-logger';
 
 /**
@@ -155,7 +154,7 @@ export async function registerAccount(
   cfg: AuthConfig,
   email: string,
   password: string,
-  resend: ResendTestClient,
+  readCode: (email: string) => Promise<string | null>,
 ): Promise<SessionTokens> {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -178,11 +177,9 @@ export async function registerAccount(
     // Up to 3 attempts: the newest matching Resend email can briefly be one
     // from an earlier, abandoned attempt.
     for (let attempt = 1; step === 'code' && attempt <= 3; attempt++) {
-      log.info('Registration requires an emailed code; reading it via Resend', { email, attempt });
-      const html = await resend.getVerificationEmail(email, 15, 3000);
-      if (!html) throw new Error(`No verification email received for ${email}`);
-      const code = resend.extractVerificationCode(html);
-      if (!code) throw new Error(`Could not extract verification code for ${email}`);
+      log.info('Registration requires an emailed code; reading it', { email, attempt });
+      const code = await readCode(email);
+      if (!code) throw new Error(`No verification code received for ${email}`);
       maskSecret(code);
       const input = await page.waitForSelector(CODE_INPUT_SELECTOR, { timeout: 10000 });
       await input.fill(code);
@@ -193,7 +190,7 @@ export async function registerAccount(
         if (!/code/i.test(message) || attempt === 3) {
           throw new Error(`Verification failed for ${email}: ${message}`);
         }
-        log.warn('Verification code rejected, retrying with a fresh email lookup', { email, message });
+        log.warn('Verification code rejected, retrying with a fresh code lookup', { email, message });
         await page.waitForTimeout(5000);
         step = 'code';
       }

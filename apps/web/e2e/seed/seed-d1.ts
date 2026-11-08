@@ -88,6 +88,11 @@ export class D1Client {
     return rows.map((r) => r.role_id);
   }
 
+  /** Whether this auth database defines the role (stage mirrors production's roles, QA has more). */
+  roleExists(roleId: string): boolean {
+    return this.execute<{ id: string }>(`SELECT id FROM rbac_roles WHERE id = ${sqlString(roleId, SAFE_ID, 'role id')}`).length > 0;
+  }
+
   /** Idempotent role grant. Returns true when a row was inserted. */
   assignRole(userId: string, roleId: string): boolean {
     const before = this.listRoles(userId);

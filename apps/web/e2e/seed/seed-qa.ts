@@ -16,7 +16,9 @@
  *
  * Environment:
  *   QA_SEED_PASSWORD       password for all four seed accounts (required for apply)
- *   RESEND_API_KEY         only needed when an account must be registered
+ *   RESEND_API_KEY         only needed when a delivered.resend.dev account must be registered
+ *   SEED_EMAIL_DOMAIN      seed account mailbox domain (default delivered.resend.dev; stage: e2e.alummahnow.net,
+ *                          whose codes come from the auth server's E2E sink, needs E2E_CODE_SINK_SECRET)
  *   SEED_MODE              "apply" (default) or "check" (read-only: logins, D1 lookups, API reads)
  *   SEED_SKIP_ROLES        "true" to skip the D1 role assignment
  *   SEED_STRICT            "true" to fail the run on soft failures too
@@ -32,10 +34,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { ResendTestClient } from '../test-utils/resend-client';
+import { readSinkCode, SINK_DOMAIN } from '../test-utils/code-sink';
 import { ApiClient, ApiError } from './seed-api';
 import { loginWithPassword, registerAccount, decodeJwtPayload, type AuthConfig, type SessionTokens } from './seed-auth';
 import {
   SEED_ACCOUNTS,
+  SEED_EMAIL_DOMAIN,
   SEED_CHANNELS,
   VIEWER_CHANNEL,
   COMMUNITY_TEXT_POST,
@@ -173,7 +177,21 @@ type Sessions = Map<SeedRole, SessionTokens>;
 async function ensureAccounts(browser: Browser): Promise<Sessions> {
   log.group('Accounts');
   const sessions: Sessions = new Map();
+  // Sink accounts (stage) read codes from the auth server's E2E sink; the
+  // historical QA accounts at delivered.resend.dev read them through Resend.
+  const useSink = SEED_EMAIL_DOMAIN === SINK_DOMAIN;
   const resend = RESEND_API_KEY ? new ResendTestClient(RESEND_API_KEY) : null;
+  const readCode = async (email: string): Promise<string | null> => {
+    if (useSink) {
+      const code = await readSinkCode(authConfig.issuerUrl, email, 30000);
+      maskSecret(code);
+      return code;
+    }
+    const html = await resend!.getVerificationEmail(email, 15, 3000);
+    const code = html ? resend!.extractVerificationCode(html) : null;
+    if (code) maskSecret(code);
+    return code;
+  };
 
   for (const account of SEED_ACCOUNTS) {
     if (!PASSWORD) {
@@ -193,11 +211,13 @@ async function ensureAccounts(browser: Browser): Promise<Sessions> {
       record('account', account.email, 'missing', `login rejected: ${login.message}`);
       continue;
     }
-    if (!resend) {
-      throw new Error(`${account.email} cannot log in and RESEND_API_KEY is not set, so it cannot be registered`);
+    if (useSink ? !process.env.E2E_CODE_SINK_SECRET : !resend) {
+      throw new Error(
+        `${account.email} cannot log in and ${useSink ? 'E2E_CODE_SINK_SECRET' : 'RESEND_API_KEY'} is not set, so it cannot be registered`,
+      );
     }
     log.info('Login rejected; registering account', { email: account.email });
-    const session = await registerAccount(browser, authConfig, account.email, PASSWORD, resend);
+    const session = await registerAccount(browser, authConfig, account.email, PASSWORD, readCode);
     sessions.set(account.key, session);
     record('account', account.email, 'created', `userId=${session.userId}`);
     await sleep(2000);
@@ -224,6 +244,10 @@ async function ensureRoles(browser: Browser, sessions: Sessions): Promise<void> 
 
   for (const account of SEED_ACCOUNTS) {
     if (!account.rbacRoleId) continue;
+    if (!d1.roleExists(account.rbacRoleId)) {
+      record('role', `${account.email} -> ${account.rbacRoleId}`, 'skipped', `role not defined in ${D1_NAME}`);
+      continue;
+    }
     const userId = ids.get(account.email);
     if (!userId) {
       record('role', `${account.email} -> ${account.rbacRoleId}`, MODE === 'check' ? 'missing' : 'failed', 'user not found in D1 users table');
@@ -734,6 +758,7 @@ async function main(): Promise<void> {
     strict: STRICT,
     passwordProvided: PASSWORD.length > 0,
     resendKeyProvided: RESEND_API_KEY.length > 0,
+    emailDomain: SEED_EMAIL_DOMAIN,
   });
   if (MODE === 'apply' && !PASSWORD) throw new Error('QA_SEED_PASSWORD is required in apply mode');
 
