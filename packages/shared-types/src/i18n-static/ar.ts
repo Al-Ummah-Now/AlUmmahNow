@@ -8,6 +8,7 @@
 
 import type { AppTranslations } from '../i18n';
 import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from '../i18n-library';
+import { BULK_EDIT_AR } from '../i18n-bulk-edit';
 import { COMMUNITY_GUIDELINES_AR } from '../i18n-community-guidelines';
 
 export const AR_TRANSLATIONS: AppTranslations = {
@@ -25,6 +26,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     loadFailed: 'تعذّر فتح هذه الصورة. جرّب ملف JPEG أو PNG.',
   },
   library: LIBRARY_AR,
+  bulkEdit: BULK_EDIT_AR,
   communityGuidelines: COMMUNITY_GUIDELINES_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,
   common: {

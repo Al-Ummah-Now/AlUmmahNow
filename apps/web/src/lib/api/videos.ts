@@ -203,6 +203,44 @@ export async function bulkDeleteVideos(
 }
 
 /**
+ * Bulk Edit Videos (Epic 5.3)
+ * POST /api/videos/bulk-update
+ */
+export async function bulkUpdateVideos(
+  videoIds: string[],
+  changes: { isPublic?: boolean; category?: string | null; addTags?: string[]; removeTags?: string[] },
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<{
+  success: boolean;
+  results: Array<{ videoId: string; success: boolean; changed?: boolean; error?: string }>;
+  summary: { total: number; succeeded: number; failed: number };
+} | null> {
+  try {
+    logger.info('[bulkUpdateVideos] Editing videos', { count: videoIds.length, fields: Object.keys(changes) });
+    return apiRequestServer<{
+      success: boolean;
+      results: Array<{ videoId: string; success: boolean; changed?: boolean; error?: string }>;
+      summary: { total: number; succeeded: number; failed: number };
+    }>(
+      {
+        method: 'POST',
+        url: buildApiUrl('/api/videos/bulk-update'),
+        body: { videoIds, changes },
+        functionName: 'bulkUpdateVideos',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
+    );
+  } catch (error) {
+    logger.error('bulkUpdateVideos error:', error);
+    return null;
+  }
+}
+
+/**
  * Comment auth: the session's active channel wins over a caller-supplied id
  * (which may be a profile id), so api-videos' channel ownership check passes.
  */

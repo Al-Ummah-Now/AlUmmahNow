@@ -6,6 +6,7 @@ import { VideoCreate } from '../endpoints/video/videoCreate';
 import { VideoUpdate } from '../endpoints/video/videoUpdate';
 import { VideoDelete } from '../endpoints/video/videoDelete';
 import { VideoBulkDelete } from '../endpoints/video/videoBulkDelete';
+import { VideoBulkUpdate } from '../endpoints/video/videoBulkUpdate';
 import { VideoFetch } from '../endpoints/video/videoFetch';
 import { VideosList } from '../endpoints/video/videoList';
 import { VideoSearch } from '../endpoints/video/videoSearch';
@@ -92,6 +93,7 @@ videoRouter.delete('/:id', VideoDelete);
 
 // Bulk delete videos (authenticated)
 videoRouter.post('/bulk-delete', VideoBulkDelete);
+videoRouter.post('/bulk-update', VideoBulkUpdate);
 
 // Get video upload status (authenticated)
 videoRouter.get('/:id/upload-status', VideoUploadStatus);
