@@ -13,6 +13,7 @@ import type { WatchHistoryEvent } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
 import Queue, { MessageType } from './queue';
 import { logger } from './logger';
+import { canViewVideo, type VideoType } from './playlists';
 
 interface ProfileWithHistorySettings {
 	id: string;
@@ -115,4 +116,28 @@ export async function withChannelNames<T extends { channelId?: string; channelNa
     const name = missing(e) ? names.get(e.channelId as string) : null;
     return name ? { ...e, channelName: name } : e;
   });
+}
+
+/**
+ * Show each entry with its video's current thumbnail. The stored
+ * `videoThumbnail` is a snapshot from the first watch: empty when the video was
+ * not encoded yet, stale once the thumbnail changes. It stays as the fallback
+ * for a video that is gone or no longer viewable. Entries are not rewritten,
+ * and signing stays in the response middleware, so a URL is signed once.
+ */
+export async function withLiveThumbnails<T extends { videoId: string; videoThumbnail?: string }>(
+  videos: R2Bucket | undefined,
+  userId: string,
+  entries: T[],
+): Promise<T[]> {
+  if (!videos) return entries;
+  const repo = new R2Repository<VideoType>(videos);
+  return Promise.all(
+    entries.map(async (entry) => {
+      const video = (await repo.getObject(entry.videoId).catch(() => null)) as (VideoType & { thumbnail?: string }) | null;
+      if (!video || !canViewVideo(video, userId)) return entry;
+      const live = video.thumbnailUrl || video.thumbnail;
+      return live ? { ...entry, videoThumbnail: live } : entry;
+    }),
+  );
 }

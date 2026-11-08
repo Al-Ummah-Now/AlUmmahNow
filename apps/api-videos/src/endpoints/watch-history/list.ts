@@ -14,7 +14,7 @@ import type {
   WatchHistoryListRequest
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
-import { withChannelNames } from "../../lib/watch-history";
+import { withChannelNames, withLiveThumbnails } from "../../lib/watch-history";
 
 // Request query parameters schema
 const ListWatchHistoryQuery = z.object({
@@ -149,7 +149,11 @@ export class ListWatchHistory extends AuthenticatedRoute {
       // Apply pagination
       const startIndex = cursor ? parseInt(cursor, 10) : 0;
       const endIndex = startIndex + limit;
-      const paginatedEntries = await withChannelNames(c.env.channels, userEntries.slice(startIndex, endIndex));
+      const paginatedEntries = await withLiveThumbnails(
+        c.env.videos,
+        userId,
+        await withChannelNames(c.env.channels, userEntries.slice(startIndex, endIndex)),
+      );
       const hasMore = endIndex < userEntries.length;
       const nextCursor = hasMore ? String(endIndex) : undefined;
 

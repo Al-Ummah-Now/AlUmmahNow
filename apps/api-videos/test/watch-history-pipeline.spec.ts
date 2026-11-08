@@ -6,6 +6,7 @@ import { UpdateWatchProgress } from '../src/endpoints/watch-history/update-progr
 import { ListWatchHistory } from '../src/endpoints/watch-history/list';
 import { GetWatchHistorySettings, UpdateWatchHistorySettings } from '../src/endpoints/watch-history/settings';
 import { RecommendationsGet } from '../src/endpoints/discovery/discovery';
+import { signBunnyUrlsInText } from '../src/lib/bunny-signing';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 
 /**
@@ -197,5 +198,64 @@ describe('recommendations while watch history is paused (#242)', () => {
 		const body = (await res.json()) as { basedOn: string[]; data: { id: string }[] };
 		assert.ok(!body.basedOn.includes('history'), JSON.stringify(body.basedOn));
 		assert.ok(body.data.some((v) => v.id === 'v1'), 'history still filtered the results while paused');
+	});
+});
+
+describe('watch history thumbnails', () => {
+	const host = 'vz-test.b-cdn.net';
+	const videoId = '11111111-2222-4333-8444-555555555555';
+	const plain = `https://${host}/${videoId}/thumbnail.jpg`;
+
+	function entry(videoThumbnail?: string) {
+		return {
+			id: `me:${videoId}`,
+			userId: 'me',
+			videoId,
+			videoTitle: 'Lecture',
+			videoThumbnail,
+			videoDuration: 100,
+			channelId: 'c1',
+			channelName: 'Chan',
+			firstWatchedAt: '2026-11-01T00:00:00.000Z',
+			lastWatchedAt: '2026-11-01T00:00:00.000Z',
+			watchCount: 1,
+			progress: 10,
+			completed: false,
+			percentageWatched: 10,
+		};
+	}
+
+	async function listed(video: Record<string, unknown> | null, videoThumbnail?: string) {
+		const e = env(video ? { [videoId]: videoFixture({ id: videoId, ...video }) } : {});
+		e.watch_history = new MemoryBucket({ [`me:${videoId}`]: entry(videoThumbnail) });
+		const app = buildApp(routes, { userId: 'me' });
+		const res = await app.request('/api/watch-history', {}, e);
+		assert.equal(res.status, 200, await res.clone().text());
+		return (await res.text()) as string;
+	}
+	const thumbnailOf = (body: string) => JSON.parse(body).entries[0].videoThumbnail;
+
+	it('fills in a snapshot stored before the video had a thumbnail', async () => {
+		assert.equal(thumbnailOf(await listed({ thumbnailUrl: plain }, undefined)), plain);
+	});
+
+	it('prefers the live thumbnail over a stale snapshot', async () => {
+		assert.equal(thumbnailOf(await listed({ thumbnailUrl: plain }, `https://${host}/${videoId}/old.jpg`)), plain);
+	});
+
+	it('falls back to the snapshot for a deleted or no longer viewable video', async () => {
+		const snapshot = `https://${host}/${videoId}/old.jpg`;
+		assert.equal(thumbnailOf(await listed(null, snapshot)), snapshot);
+		assert.equal(thumbnailOf(await listed({ thumbnailUrl: plain, isPublic: false, userId: 'someone-else' }, snapshot)), snapshot);
+	});
+
+	it('is signed exactly once, even when the snapshot held an expired token', async () => {
+		const expired = `${plain}?token=old&expires=1`;
+		const signed = await signBunnyUrlsInText(await listed({ thumbnailUrl: plain }, expired), host, 'key');
+		const url = thumbnailOf(signed);
+		assert.ok(url.startsWith(`${plain}?token=`), url);
+		assert.equal(url.match(/token=/g)?.length, 1, url);
+		assert.ok(!url.includes('expires=1&') && !url.endsWith('expires=1'), url);
+		assert.equal(await signBunnyUrlsInText(signed, host, 'key'), signed);
 	});
 });
