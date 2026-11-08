@@ -1,3 +1,4 @@
+import { quotaRefusal, releaseReservation, reserveUpload, type UploadReservation } from "../../lib/upload-quota";
 import { Str, Num } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -26,6 +27,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							fileSize: Num({ description: "File size in bytes", required: true }),
 							mimeType: Str({ description: "MIME type of the video file", required: true }),
 							isPublic: z.boolean().optional().default(true),
+							durationSeconds: z.number().positive().optional().describe("Length read from the file; verified again after encoding"),
 							tags: z.string().optional().describe("Comma-separated tags"),
 							// The web uploader sends these; they were stripped by the schema, so the
 							// Arabic title/description and the category chosen on upload were lost
@@ -98,10 +100,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		// Get authenticated user ID
 		const userId = this.getUserId(c);
 
+		let reservation: UploadReservation | null = null;
+
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category } = request.body;
+			const { durationSeconds, title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -119,6 +123,13 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			}
 
 			const channelId = c.req.header('channelId') || userId;
+
+			const quota = await reserveUpload(c.env, { userId, count: 1, bytes: fileSize, declaredSeconds: durationSeconds });
+			if (quota.ok === false) {
+				logger.info('[UploadInitiate] Plan limit reached', { userId, key: quota.key, limit: quota.limit });
+				return c.json(quotaRefusal(quota, c.req.header('Accept-Language')), 402);
+			}
+			reservation = quota.reservation;
 
 			// Create video in Bunny Stream first to get video ID
 			logger.info('[DEBUG] Extracting Bunny secrets...', {
@@ -308,6 +319,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				...(category && { category }),
 				uploadStatus: 'uploading' as const,
 				fileSize: fileSize,  // Store file size directly
+				entitlementChecked: true,
+				usageBytes: fileSize,
 				originalFormat: mimeType,  // Store MIME type as original format
 			};
 
@@ -392,6 +405,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			});
 
 		} catch (error) {
+			await releaseReservation(c.env, reservation);
 			// Enhanced error logging
 			logger.error("Upload initiate error:", {
 				message: error instanceof Error ? error.message : String(error),

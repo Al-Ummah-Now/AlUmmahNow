@@ -1,3 +1,4 @@
+import { quotaRefusal, releaseReservation, reserveUpload, type UploadReservation } from "../../lib/upload-quota";
 import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
@@ -88,7 +89,7 @@ export class VideoUpload extends AuthenticatedRoute {
     async handle(c: AppContext) {
         // Get auth context
         const userId = this.getUserId(c);
-
+        let reservation: UploadReservation | null = null;
 
         try {
             // Parse multipart form data
@@ -166,6 +167,13 @@ export class VideoUpload extends AuthenticatedRoute {
                 }, 413);
             }
 
+            const quota = await reserveUpload(c.env, { userId, count: 1, bytes: file.size });
+            if (quota.ok === false) {
+            	logger.info('[VideoUpload] Plan limit reached', { userId, key: quota.key, limit: quota.limit });
+            	return c.json(quotaRefusal(quota, c.req.header('Accept-Language')), 402);
+            }
+            reservation = quota.reservation;
+
             const videoId = crypto.randomUUID();
             const channelId = c.req.header('channelId') || userId;
 
@@ -187,6 +195,8 @@ export class VideoUpload extends AuthenticatedRoute {
                 isLive,
                 tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
                 fileSize: file.size,
+                entitlementChecked: true,
+                usageBytes: file.size,
                 originalFormat: file.type,
                 uploadStatus: 'uploading' as const,
             };
@@ -251,6 +261,7 @@ export class VideoUpload extends AuthenticatedRoute {
             });
 
         } catch (error) {
+            await releaseReservation(c.env, reservation);
             logger.error("Video upload error:", error);
             return c.json({
                 success: false,

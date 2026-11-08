@@ -90,6 +90,12 @@ export const Video = z.object({
     fileSize: z.number().optional(),
     originalFormat: z.string().optional(),
     uploadStatus: z.enum(['initiated', 'uploading', 'processing', 'ready', 'failed']).optional(),
+    /** Upload started under plan limits (Epic 27); existing videos never have this. */
+    entitlementChecked: z.boolean().optional(),
+    /** Bytes this video added to the owner's storage counter. */
+    usageBytes: z.number().optional(),
+    /** Encoded length exceeded the owner's plan limit. */
+    durationLimitExceeded: z.boolean().optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),
