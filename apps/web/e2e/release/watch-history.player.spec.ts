@@ -12,6 +12,16 @@ import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 interface HistoryEntry {
   videoId: string;
   videoTitle?: string;
+  channelName?: string;
+}
+
+/** The channel's display name, or null for a video without a (still existing) channel. */
+async function channelName(channelId: string | undefined): Promise<string | null> {
+  if (!channelId) return null;
+  const res = await fetch(`${target().api}/api/channels/${encodeURIComponent(channelId)}`);
+  if (!res.ok) return null;
+  const body = (await res.json()) as { result?: { name?: string }; name?: string };
+  return (body.result ?? body).name || null;
 }
 
 test.describe('Release: watch history', () => {
@@ -38,6 +48,14 @@ test.describe('Release: watch history', () => {
         { message: 'the watched video never reached /api/watch-history', timeout: 30000 },
       )
       .toContain(video!.id);
+
+    // #294: channel uploads carry only channelId; the entry must name the channel
+    const expectedChannel = await channelName(video!.channelId);
+    if (expectedChannel) {
+      const res = await apiFetch(user, '/api/watch-history');
+      const entry = ((await res.json()) as { entries?: HistoryEntry[] }).entries?.find((e) => e.videoId === video!.id);
+      expect(entry?.channelName, 'history entry channel name (#294)').toBe(expectedChannel);
+    }
 
     await page.goto(`${target().web}/en/history`);
     await expect(page.getByText(video!.title, { exact: false }).first()).toBeVisible({ timeout: 30000 });
