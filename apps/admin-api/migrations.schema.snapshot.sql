@@ -2,13 +2,16 @@
 -- Schema after applying, in order:
 --   apps/admin-api/migrations/0001_create_reports_table.sql
 --   apps/admin-api/migrations/0002_ai_moderation.sql
+--   apps/admin-api/migrations/0003_channel_verification_log.sql
 
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
+CREATE TABLE channel_verification_log (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, verified INTEGER NOT NULL, note TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE moderation_actions (id TEXT PRIMARY KEY, signal_id TEXT, subject_type TEXT, subject_id TEXT, action TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT, model TEXT, prompt_version TEXT, category TEXT, score REAL, reason TEXT, details_json TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_appeals (id TEXT PRIMARY KEY, action_id TEXT, signal_id TEXT, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, user_id TEXT NOT NULL, message TEXT, status TEXT NOT NULL DEFAULT 'open', reviewer_id TEXT, resolved_at TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE moderation_signals (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, parent_id TEXT, surface TEXT NOT NULL, author_id TEXT, channel_id TEXT, language TEXT, categories_json TEXT NOT NULL DEFAULT '{}', top_category TEXT, top_score REAL, models TEXT, prompt_version TEXT, decision TEXT NOT NULL, skip_reason TEXT, priority INTEGER NOT NULL DEFAULT 0, review_status TEXT NOT NULL DEFAULT 'n/a', reviewer_id TEXT, reviewer_decision TEXT, reviewed_at TEXT, translation TEXT, translation_expires_at TEXT, created_at TEXT NOT NULL);
 CREATE TABLE reports (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (entity_type IN ('video', 'comment', 'channel', 'livestream', 'playlist', 'post')), entity_id TEXT NOT NULL, reporter_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other')), description TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewing', 'resolved', 'dismissed')), moderator_id TEXT, action TEXT CHECK (action IN ('warning', 'removed', 'banned', 'dismissed')), moderator_notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT, resolved_at TEXT);
+CREATE INDEX idx_channel_verification_log_channel ON channel_verification_log (channel_id, created_at);
 CREATE INDEX idx_modact_created ON moderation_actions(created_at DESC);
 CREATE INDEX idx_modact_signal ON moderation_actions(signal_id);
 CREATE INDEX idx_modact_subject ON moderation_actions(subject_type, subject_id);

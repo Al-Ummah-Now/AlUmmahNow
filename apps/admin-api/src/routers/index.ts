@@ -1,6 +1,7 @@
 import moderationRouter from './moderation.router';
 import indicesRouter from './indices.router';
 import i18nRouter from './i18n.router';
+import channelsRouter from './channels.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -15,4 +16,7 @@ export function registerAllRouters(openapi: any) {
 
   // Register i18n admin router at /api/i18n
   openapi.route('/api/i18n', i18nRouter);
+
+  // Channel administration (verification) at /api/channels
+  openapi.route('/api/channels', channelsRouter);
 }
