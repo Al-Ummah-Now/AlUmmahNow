@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type FullConfig, type Page } from '@playwright/test';
-import { ResendTestClient } from './test-utils/resend-client';
+import { readSinkCode, SINK_DOMAIN } from './test-utils/code-sink';
 import { ApiClient } from './seed/seed-api';
 import { extractSession, loginOnPage } from './seed/seed-auth';
 import { ensureChannels, ensureProfile, purgeDisposableChannels, type UserChannelSpec } from './seed/seed-users';
@@ -195,20 +195,23 @@ async function globalSetup(_config: FullConfig) {
 
   ciLogger.info('[Global Setup] Starting test user registration...');
 
+  // New users are registered with auth server code-sink addresses
+  // (@e2e.alummahnow.net): QA/stage store their verification codes instead of
+  // emailing them, and E2E_CODE_SINK_SECRET reads them back (#185).
   // E2E_REUSE_USERS_TIMESTAMP=<n> logs in to the existing test-*-<n> users
-  // instead of registering new ones (no RESEND_API_KEY needed).
+  // instead of registering new ones (no E2E_CODE_SINK_SECRET needed).
   const reuseTimestamp = process.env.E2E_REUSE_USERS_TIMESTAMP;
   // E2E_USERS_TIMESTAMP=<n> pins a stable user set (e.g. one per CI project so
   // parallel jobs never share accounts): log in to test-*-<n>, registering only
-  // the users that don't exist yet (needs RESEND_API_KEY the first time).
+  // the users that don't exist yet (needs E2E_CODE_SINK_SECRET the first time).
   const pinnedTimestamp = process.env.E2E_USERS_TIMESTAMP;
 
   // Verify required environment variables
-  const resendApiKey = process.env.RESEND_API_KEY;
-  if (!resendApiKey && !reuseTimestamp && !pinnedTimestamp) {
+  const sinkSecret = process.env.E2E_CODE_SINK_SECRET;
+  if (!sinkSecret && !reuseTimestamp && !pinnedTimestamp) {
     throw new Error(
-      'RESEND_API_KEY environment variable is required for test user registration. ' +
-      'Get your API key from https://resend.com/api-keys'
+      'E2E_CODE_SINK_SECRET environment variable is required for test user registration ' +
+      '(the auth server code sink; CI: secrets.E2E_CODE_SINK_SECRET_QA).'
     );
   }
 
@@ -241,20 +244,18 @@ async function globalSetup(_config: FullConfig) {
     fs.mkdirSync(authDir, { recursive: true });
   }
 
-  const resendClient = resendApiKey ? new ResendTestClient(resendApiKey) : null;
-
   // Generate unique emails per test run to avoid conflicts
   const timestamp = reuseTimestamp ? Number(reuseTimestamp) : pinnedTimestamp ? Number(pinnedTimestamp) : Date.now();
   const testUsers: TestUser[] = [
     {
-      email: `test-single-${timestamp}@delivered.resend.dev`,
+      email: `test-single-${timestamp}@${SINK_DOMAIN}`,
       password: 'TestPassword123!',
       name: 'Single Channel User',
       storageStatePath: path.join(authDir, 'user-single.json'),
       channels: [{ name: 'E2E Single Channel', description: 'E2E test channel (single-channel user)', isMain: true }],
     },
     {
-      email: `test-multi-${timestamp}@delivered.resend.dev`,
+      email: `test-multi-${timestamp}@${SINK_DOMAIN}`,
       password: 'TestPassword456!',
       name: 'Multi Channel User',
       storageStatePath: path.join(authDir, 'user-multi.json'),
@@ -264,7 +265,7 @@ async function globalSetup(_config: FullConfig) {
       ],
     },
     {
-      email: `test-none-${timestamp}@delivered.resend.dev`,
+      email: `test-none-${timestamp}@${SINK_DOMAIN}`,
       password: 'TestPassword789!',
       name: 'No Channels User',
       storageStatePath: path.join(authDir, 'user-none.json'),
@@ -273,7 +274,7 @@ async function globalSetup(_config: FullConfig) {
     {
       // Owns the throwaway channels specs create and delete (channel create /
       // delete / handle flows), so the users above keep a fixed channel set.
-      email: `test-scratch-${timestamp}@delivered.resend.dev`,
+      email: `test-scratch-${timestamp}@${SINK_DOMAIN}`,
       password: 'TestPassword321!',
       name: 'Scratch Channel User',
       storageStatePath: path.join(authDir, 'user-scratch.json'),
@@ -313,7 +314,7 @@ async function globalSetup(_config: FullConfig) {
           throw new Error(`Login for existing user ${user.email} failed: ${login.message}`);
         } else {
           ciLogger.info(`[Setup] Pinned user ${user.email} not found (${login.message}); registering it`);
-          if (!resendClient) throw new Error(`RESEND_API_KEY is required to register pinned user ${user.email}`);
+          if (!sinkSecret) throw new Error(`E2E_CODE_SINK_SECRET is required to register pinned user ${user.email}`);
         }
       }
       if (!loggedIn) {
@@ -346,19 +347,9 @@ async function globalSetup(_config: FullConfig) {
         if (codeInput) {
           ciLogger.info(`[Setup] Verification code required for ${user.email}`);
 
-          // Get verification code from Resend
-          if (!resendClient) throw new Error('RESEND_API_KEY is required to register users');
-          const emailHtml = await resendClient.getVerificationEmail(user.email);
-
-          if (!emailHtml) {
-            throw new Error('No verification email received within timeout period');
-          }
-
-          const code = resendClient.extractVerificationCode(emailHtml);
-
-          if (!code) {
-            throw new Error('Failed to extract verification code from email');
-          }
+          // Read the verification code from the auth server's code sink
+          if (!sinkSecret) throw new Error('E2E_CODE_SINK_SECRET is required to register users');
+          const code = await readSinkCode(openAuthUrl, user.email, 30000);
 
           ciLogger.info(`[Setup] Entering verification code for ${user.email}`);
 

@@ -1,0 +1,35 @@
+/**
+ * Release regression: the auth server's profile app (profile.auth.*) signs a
+ * new user up and back in. It is a separate OAuth client from the web app, so a
+ * client registry or redirect_uri mistake there shows up only here.
+ */
+import { test, expect } from '@playwright/test';
+import { sinkEmail, target, TEST_PASSWORD } from './targets';
+import { completeRegistration, expectNoErrorHop, recordNavigations } from './web-session';
+
+test.describe('Release: profile app sign-up and sign-in', () => {
+  test('register, then sign in again from a fresh session', async ({ page, context }) => {
+    const email = sinkEmail('rel-profile');
+    const navigations = recordNavigations(page);
+    const loggedIn = page.locator('#loggedInView');
+
+    await page.goto(target().profile);
+    await page.locator('#loggedOutView button:has-text("Sign In")').click();
+    await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
+    await completeRegistration(page, email);
+    await expect(loggedIn).toBeVisible({ timeout: 30000 });
+    expect(new URL(page.url()).origin).toBe(target().profile);
+
+    await context.clearCookies();
+    await page.goto(target().profile);
+    await page.locator('#loggedOutView button:has-text("Sign In")').click();
+    await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', TEST_PASSWORD);
+    await page.click('button[data-component="button"]');
+    await expect(loggedIn).toBeVisible({ timeout: 30000 });
+    await expect(loggedIn).toContainText(email);
+
+    expectNoErrorHop(navigations);
+  });
+});

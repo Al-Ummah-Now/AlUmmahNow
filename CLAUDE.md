@@ -567,6 +567,68 @@ Required checks on every PR (`deploy.yml` jobs `test` and `release-checks`). Scr
 | `pnpm check:schema` | a D1 migrations dir has no snapshot, or its snapshot (`<dir>.schema.snapshot.sql`, next to the dir) no longer matches the schema the migrations produce | Run `pnpm schema:snapshot` and commit the snapshot with the migration. Never edit a snapshot by hand. |
 | `pnpm test:scripts` | the release scripts' own tests fail | Fix the script or its test in `scripts/release/__tests__/`. |
 
+### Release regressions
+
+The release E2E suite is the gate: `apps/web/e2e/release/` with
+`apps/web/playwright.release.config.ts`, run by `.github/workflows/release-e2e.yml`.
+
+| Where | When | Target | Secrets |
+|---|---|---|---|
+| PR check `Release regressions (qa)` | every PR into `main` | QA (`E2E_ENV=qa`) | `E2E_CODE_SINK_SECRET_QA`, `TEST_PROMOTE_SECRET_QA` |
+| `workflow_call` from the release workflow | every release | stage (`env: stage`) | caller passes `E2E_CODE_SINK_SECRET` and `TEST_PROMOTE_SECRET` (stage values) |
+| `workflow_dispatch` | by hand | `qa` or `stage` | `*_QA` / `*_STAGE` repo secrets |
+
+Never production: the specs create accounts, channels and videos. Each spec
+registers its own user with an `@e2e.alummahnow.net` address (the auth
+server's code sink stores its verification code instead of emailing it; QA and
+stage only) and creates the data it needs; there are no seeded users and no
+global setup. Passwords are random per run, so the accounts left behind
+(including promoted admins) cannot be signed into later.
+
+| Spec | Covers |
+|---|---|
+| `signup-signin.spec.ts` | web sign-up → sink code → sign-in in a fresh session, en and ar; fails on any `error=` hop or `/auth/error` (the 2026-11-07 redirect_uri incident) |
+| `callback-errors.spec.ts` | `/api/callback` and `/api/callback/multi-account` land on the localized error page, never raw JSON (`{}`) |
+| `profile-signin.spec.ts` | the auth server's profile app (`profile.auth.*`) sign-up and sign-in |
+| `admin-signin.spec.ts` | admin-web refuses a user without an admin role (`/access-denied`); a user promoted with the auth server's `/test/promote` (`TEST_PROMOTE_SECRET`) reaches `/dashboard`. The admin case skips when the secret is missing |
+| `player.spec.ts` | an anonymous watch page really plays (media `currentTime` advances), en and ar |
+| `watch-history.player.spec.ts` | a signed-in watch reaches `GET /api/watch-history` and the `/history` page (#234) |
+| `uploads.spec.ts` | profile and channel avatar uploads store a served image (#229); a channel created in the account menu, then a video uploaded on `/upload` (TUS through the api-videos proxy), is listed in the owner's search and dashboard, then deleted. Encoding is not awaited |
+
+Playback specs (`*player.spec.ts`) run in the `player` project on branded
+Chrome (`channel: 'chrome'`): Playwright's bundled Chromium cannot decode the
+H.264 HLS streams. They pick a public, encoded video from `GET /api/videos`
+and skip with a reason when the environment has none (seed stage with at
+least one public video of 8s or more).
+
+The suite needs only `@playwright/test` (no monorepo install), so keep its
+imports inside `e2e/release/`, `e2e/test-utils/code-sink.ts` and
+`e2e/test-fixtures/`. Run it locally the way CI does:
+
+```bash
+SUITE=$(mktemp -d) && mkdir -p $SUITE/e2e/test-utils
+cp -R apps/web/e2e/release apps/web/e2e/test-fixtures $SUITE/e2e/
+cp apps/web/e2e/test-utils/code-sink.ts $SUITE/e2e/test-utils/
+cp apps/web/playwright.release.config.ts $SUITE/
+cd $SUITE && npm init -y >/dev/null && npm i @playwright/test@1.56.1 && npx playwright install chromium chrome
+E2E_ENV=qa E2E_CODE_SINK_SECRET=... TEST_PROMOTE_SECRET=... npx playwright test -c playwright.release.config.ts
+```
+
+(With a working `pnpm install`, `cd apps/web && pnpm exec playwright test -c playwright.release.config.ts` works too.)
+
+The suite tests the deployed environment, not the PR's code: a fix only turns
+its spec green after it is deployed to QA (merge to `main`).
+
+#### Legacy E2E suite
+
+`.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`, every other
+spec under `apps/web/e2e/`) is not a release gate. Its specs share pinned users
+and seeded data and are known to be flaky; fix them when touching their area,
+but gate on the release suite. Its `Auth Setup` job registers users with
+code-sink addresses (`E2E_CODE_SINK_SECRET` from `E2E_CODE_SINK_SECRET_QA`,
+#185), no longer through Resend.
+
+
 ## Development Workflow
 
 ### Working with the Monorepo

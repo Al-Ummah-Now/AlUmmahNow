@@ -9,7 +9,7 @@
  *   npx tsx e2e/run-auth-setup.ts
  *
  * Required environment variables:
- *   - RESEND_API_KEY: Resend API key for email verification
+ *   - E2E_CODE_SINK_SECRET: reads verification codes from the auth server code sink (QA/stage)
  *   - OPENAUTH_URL: OpenAuth server URL (default: http://localhost:3301)
  *   - WEB_APP_URL: Web app URL (default: http://localhost:3001)
  */
