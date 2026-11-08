@@ -5,7 +5,7 @@
  * The access token lives in httpOnly cookies, so client code cannot read it.
  * The websocket server verifies the token's ES256 signature against the auth
  * server's JWKS and takes the user id only from the token, so the browser must
- * send the real token. Expired tokens are refreshed first so reconnects succeed.
+ * send the real token. Tokens about to expire are refreshed first so reconnects succeed.
  */
 
 'use server';
@@ -18,10 +18,9 @@ export async function getRealtimeAccessToken(): Promise<string | null> {
   try {
     const session = await SessionManager.getActiveSession();
     if (session) {
-      // Refreshes and persists new tokens only when the current one has expired.
-      await SessionManager.refreshTokenForUser(session.userId);
-      const account = await SessionManager.getSessionForUser(session.userId);
-      return account?.accessToken ?? session.accessToken;
+      // Refreshes (and saves) the token when it expires soon; null when the
+      // sign-in has ended, so a dead token is never handed out
+      return await SessionManager.getValidAccessToken(session.userId);
     }
 
     // Legacy single-account cookies
