@@ -73,7 +73,7 @@ export const APPS: AppRule[] = [
 				Issuer: AUTH_ISSUER,
 				Audience: 'https://videos.alummahnow.net',
 				WEBSOCKET_URL: 'https://ws.alummahnow.net',
-				CORS_ORIGINS: 'https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net',
+				CORS_ORIGINS: 'https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net',
 			},
 			requiredBindings: [
 				INTERNAL_API_KEY,
