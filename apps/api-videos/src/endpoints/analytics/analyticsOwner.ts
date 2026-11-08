@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from "../../lib/logger";
+import { waitUntilOf } from "../../lib/search/ownership";
 import {
   AnalyticsChannel,
   AnalyticsVideo,
@@ -11,6 +12,7 @@ import {
   engagementRate,
   loadOwnedChannels,
   loadOwnedVideos,
+  OwnershipLookup,
   loadRollups,
   parseRange,
   rankTopVideos,
@@ -70,7 +72,8 @@ interface Scope {
  * With `channelId`, the user must own that channel; otherwise all owned channels.
  */
 async function loadScope(c: AppContext, userId: string, channelId?: string): Promise<Scope> {
-  const owned = await loadOwnedChannels(c.env.channels, userId);
+  const lookup: OwnershipLookup = { env: c.env as never, waitUntil: waitUntilOf(c as never) };
+  const owned = await loadOwnedChannels(c.env.channels, userId, lookup);
   let channels = owned;
   if (channelId) {
     const match = owned.find(ch => ch.id === channelId);
@@ -83,7 +86,7 @@ async function loadScope(c: AppContext, userId: string, channelId?: string): Pro
     channels = [match];
   }
   const videos = channels.length
-    ? await loadOwnedVideos(c.env.videos, userId, new Set(channels.map(ch => ch.id)))
+    ? await loadOwnedVideos(c.env.videos, userId, new Set(channels.map(ch => ch.id)), undefined, lookup)
     : [];
   return { ok: true, channels, videos };
 }

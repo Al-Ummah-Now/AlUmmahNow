@@ -332,24 +332,33 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     return run;
   }, [loadSessionData, router, t]);
 
-  // Reload channels (without triggering full loading state)
-  const reloadChannels = useCallback(async () => {
-    try {
-      setError(null);
+  // Reload channels (without triggering full loading state). Calls run one
+  // after another and each resolves once every earlier reload has finished:
+  // two overlapping reloads (e.g. the background refresh below and a save)
+  // left Server Actions in flight after the caller's await, and a navigation
+  // started then could be undone by the App Router.
+  const reloadChain = useRef<Promise<void>>(Promise.resolve());
+  const reloadChannels = useCallback(() => {
+    const run = reloadChain.current.then(async () => {
+      try {
+        setError(null);
 
-      await reloadUserChannels();
+        await reloadUserChannels();
 
-      // Update session data WITHOUT setting loading state
-      // This prevents UI flicker when reloading channels
-      const sessionInfo = await getActiveSessionInfo();
-      if (sessionInfo) {
-        setUser(sessionInfo.user);
-        setAccounts(sessionInfo.accounts);
+        // Update session data WITHOUT setting loading state
+        // This prevents UI flicker when reloading channels
+        const sessionInfo = await getActiveSessionInfo();
+        if (sessionInfo) {
+          setUser(sessionInfo.user);
+          setAccounts(sessionInfo.accounts);
+        }
+      } catch (err) {
+        logger.error('[MultiAccountProvider] Failed to reload channels:', err);
+        setError(t.errors.failedToLoad);
       }
-    } catch (err) {
-      logger.error('[MultiAccountProvider] Failed to reload channels:', err);
-      setError(t.errors.failedToLoad);
-    }
+    });
+    reloadChain.current = run;
+    return run;
   }, [t]);
 
   // Session channels are cached at sign-in, so avatars or names changed since

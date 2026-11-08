@@ -6,6 +6,7 @@ import { AnalyticsQueryInput } from "../../lib/model/input";
 import { AnalyticsSummaryView } from "../../lib/model/view";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from '../../lib/logger';
+import { waitUntilOf } from '../../lib/search/ownership';
 import {
 	AnalyticsChannel,
 	AnalyticsVideo,
@@ -17,6 +18,7 @@ import {
 	loadOwnedChannels,
 	loadOwnedVideos,
 	loadRollups,
+	OwnershipLookup,
 	parseRange,
 	previousRange,
 	rankTopVideos,
@@ -150,7 +152,8 @@ export class AnalyticsGet extends AuthenticatedRoute {
 		const previous = previousRange(range);
 		const spanning: DateRange = { from: previous.from, to: range.to };
 
-		const ownedChannels = await loadOwnedChannels(c.env.channels, userId);
+		const lookup: OwnershipLookup = { env: c.env as never, waitUntil: waitUntilOf(c as never) };
+		const ownedChannels = await loadOwnedChannels(c.env.channels, userId, lookup);
 		let channels: AnalyticsChannel[] = ownedChannels;
 		let videos: AnalyticsVideo[];
 		let rollups: MonthlyRollup[];
@@ -171,7 +174,7 @@ export class AnalyticsGet extends AuthenticatedRoute {
 				channels = [match];
 			}
 			videos = channels.length
-				? await loadOwnedVideos(c.env.videos, userId, new Set(channels.map(ch => ch.id)))
+				? await loadOwnedVideos(c.env.videos, userId, new Set(channels.map(ch => ch.id)), undefined, lookup)
 				: [];
 			rollups = await loadRollups(c.env.analytics_rollups, 'channel', channels.map(ch => ch.id), spanning);
 		}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Bell, BellOff, BellRing, Check } from 'lucide-react';
 import type { ChannelBellLevel } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -28,10 +28,14 @@ export function ChannelBellMenu({ channelId }: ChannelBellMenuProps) {
   const [bell, setBell] = useState<ChannelBellLevel>('highlights');
   const [message, setMessage] = useState<'saved' | 'error' | null>(null);
 
+  // Set once the user picks a level, so a slower initial load cannot overwrite it.
+  const chosen = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
+    chosen.current = false;
     void NotificationsService.channelBell(channelId).then((result) => {
-      if (!cancelled && result?.bell) setBell(result.bell);
+      if (!cancelled && !chosen.current && result?.bell) setBell(result.bell);
     });
     return () => {
       cancelled = true;
@@ -39,6 +43,7 @@ export function ChannelBellMenu({ channelId }: ChannelBellMenuProps) {
   }, [channelId]);
 
   const choose = async (level: ChannelBellLevel) => {
+    chosen.current = true;
     const previous = bell;
     setBell(level);
     const ok = await NotificationsService.setChannelBell(channelId, level);

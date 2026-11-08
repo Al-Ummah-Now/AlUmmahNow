@@ -93,8 +93,13 @@ test.describe('Per-channel bell and subscriber notifications', () => {
       await page.getByTestId('channel-bell-button').click();
       await page.getByTestId('channel-bell-option-all').click();
       await expect(bell).toHaveAttribute('data-bell', 'all');
-      const saved = await request.get(`${API_URL}/api/notifications/channels/${channelId}/bell`, { headers: headers('single') });
-      expect(((await saved.json()) as { result: { bell: string } }).result.bell).toBe('all');
+      // The menu updates optimistically; the PUT settles after.
+      await expect
+        .poll(async () => {
+          const saved = await request.get(`${API_URL}/api/notifications/channels/${channelId}/bell`, { headers: headers('single') });
+          return ((await saved.json()) as { result: { bell: string } }).result.bell;
+        })
+        .toBe('all');
 
       // Owner side: the processor stores a "new subscriber" notification (queue batches up to 30 s)
       let notificationId: string | undefined;

@@ -16,6 +16,12 @@ import { getServerAuthContext } from "./server-auth";
  * null when the user is signed out, lacks access, or the API is unavailable.
  * Callers render an empty state in that case - there is no sample data.
  */
+/**
+ * Analytics requests are aborted after this long so the dashboard can show an
+ * error instead of waiting on a stalled request.
+ */
+const ANALYTICS_TIMEOUT_MS = 20000;
+
 async function authFor(headers?: ApiHeaders) {
   const auth = await getServerAuthContext();
   if (!auth?.accessToken) return null;
@@ -34,7 +40,8 @@ export async function getSummary(
   return apiRequestServer<AnalyticsSummary>({
     method: 'GET',
     url: buildApiUrl(`/api/analytics/summary${query}`),
-    functionName: 'getAnalyticsSummary'
+    functionName: 'getAnalyticsSummary',
+    timeoutMs: ANALYTICS_TIMEOUT_MS,
   }, () => authFor(headers), true);
 }
 
@@ -51,7 +58,8 @@ export async function getChannelAnalytics(
   return apiRequestServer<ChannelAnalyticsData>({
     method: 'GET',
     url: buildApiUrl(`/api/analytics/channels/${encodeURIComponent(channelId)}${query}`),
-    functionName: 'getChannelAnalytics'
+    functionName: 'getChannelAnalytics',
+    timeoutMs: ANALYTICS_TIMEOUT_MS,
   }, () => authFor(headers), true);
 }
 
@@ -68,7 +76,8 @@ export async function getVideoAnalytics(
   return apiRequestServer<VideoAnalyticsData>({
     method: 'GET',
     url: buildApiUrl(`/api/analytics/videos/${encodeURIComponent(videoId)}${query}`),
-    functionName: 'getVideoAnalytics'
+    functionName: 'getVideoAnalytics',
+    timeoutMs: ANALYTICS_TIMEOUT_MS,
   }, () => authFor(headers), true);
 }
 
@@ -89,6 +98,28 @@ export async function getMetrics(
   return apiRequestServer<AnalyticsMetrics[]>({
     method: 'GET',
     url: buildApiUrl(`/api/analytics/metrics${query}`),
-    functionName: 'getAnalyticsMetrics'
+    functionName: 'getAnalyticsMetrics',
+    timeoutMs: ANALYTICS_TIMEOUT_MS,
   }, () => authFor(headers), true);
+}
+
+export interface AnalyticsDashboardData {
+  summary: AnalyticsSummary | null;
+  metrics: AnalyticsMetrics[] | null;
+  channel: ChannelAnalyticsData | null;
+}
+
+/**
+ * Everything the analytics page shows, in one server action: totals and the
+ * daily series for all of the user's channels, plus the selected channel's
+ * analytics. The three API calls run in parallel here, because server actions
+ * called from the browser run one at a time.
+ */
+export async function getAnalyticsDashboard(channelId?: string | null): Promise<AnalyticsDashboardData> {
+  const [summary, metrics, channel] = await Promise.all([
+    getSummary(),
+    getMetrics(),
+    channelId ? getChannelAnalytics(channelId) : Promise.resolve(null),
+  ]);
+  return { summary, metrics, channel };
 }

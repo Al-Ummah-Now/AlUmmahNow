@@ -6,7 +6,7 @@ import { login } from '@/lib/actions';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useCurrentChannel } from '@/hooks/useMultiAccount';
 import * as AnalyticsAPI from '@/lib/api/analytics';
-import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
+import type { AnalyticsDashboardData } from '@/lib/api/analytics';
 import AnalyticsDashboard from '@/components/analytics/AnalyticsDashboard';
 import AnalyticsDashboardRTL from '@/components/analytics/AnalyticsDashboard/rtl';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -17,12 +17,12 @@ const AnalyticsPage = () => {
   const currentChannel = useCurrentChannel();
   const channelId = currentChannel?.id;
   const userId = auth?.user?.id;
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [channelData, setChannelData] = useState<ChannelAnalyticsData | null>(null);
-  const [metrics, setMetrics] = useState<AnalyticsMetrics[] | null>(null);
+  const [data, setData] = useState<AnalyticsDashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
+  // Deliberately keyed on the user and channel only: translations swap in
+  // after the first render and must not discard a load already in flight.
   useEffect(() => {
     if (!userId) {
       setIsLoading(false);
@@ -30,37 +30,33 @@ const AnalyticsPage = () => {
     }
 
     let cancelled = false;
-    const loadAnalyticsData = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // Totals and the daily series cover every channel the user owns; the
-        // top videos list is for the channel currently selected (if any).
-        const [summaryData, metricsData, channelAnalytics] = await Promise.all([
-          AnalyticsAPI.getSummary(),
-          AnalyticsAPI.getMetrics(),
-          channelId ? AnalyticsAPI.getChannelAnalytics(channelId) : Promise.resolve(null),
-        ]);
-
+    setIsLoading(true);
+    setFailed(false);
+    AnalyticsAPI.getAnalyticsDashboard(channelId)
+      .then((result) => {
         if (cancelled) return;
-        setSummary(summaryData);
-        setMetrics(metricsData);
-        setChannelData(channelAnalytics);
-      } catch (err) {
+        // Signed-in users always get totals (zeros without channels); none
+        // means the API failed or timed out.
+        if (!result.summary && !result.metrics) {
+          setFailed(true);
+          logger.error('[AnalyticsPage] Analytics API returned no data', { channelId });
+          return;
+        }
+        setData(result);
+      })
+      .catch((err) => {
         if (cancelled) return;
-        setError(t.errors.genericError);
+        setFailed(true);
         logger.error('[AnalyticsPage] Failed to load analytics', { error: err });
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setIsLoading(false);
-      }
-    };
+      });
 
-    loadAnalyticsData();
     return () => {
       cancelled = true;
     };
-  }, [userId, channelId, t]);
+  }, [userId, channelId]);
 
   const Dashboard = isRTL ? AnalyticsDashboardRTL : AnalyticsDashboard;
 
@@ -96,14 +92,14 @@ const AnalyticsPage = () => {
     );
   }
 
-  if (error) {
+  if (failed) {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">
             {t.common.error}
           </h2>
-          <p className="text-gray-600 dark:text-gray-300">{error}</p>
+          <p className="text-gray-600 dark:text-gray-300">{t.errors.genericError}</p>
         </div>
       </div>
     );
@@ -122,9 +118,9 @@ const AnalyticsPage = () => {
         </div>
 
         <Dashboard
-          summary={summary}
-          channelData={channelData}
-          metrics={metrics}
+          summary={data?.summary ?? null}
+          channelData={data?.channel ?? null}
+          metrics={data?.metrics ?? null}
         />
       </div>
     </div>

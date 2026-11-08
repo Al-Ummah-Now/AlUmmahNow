@@ -66,10 +66,17 @@ export function UnifiedNavigation() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [accountProfiles, setAccountProfiles] = useState<Map<string, Profile>>(new Map());
 
+  // Profiles depend on who is signed in, not on the session's channel list:
+  // refetching on every session update (each channel reload) queued Server
+  // Actions behind it that could undo a navigation started meanwhile.
+  const userId = user?.id;
+  const userEmail = user?.email;
+  const accountsKey = accounts.map((account) => `${account.userId}:${account.email}`).join('|');
+
   // Fetch user profile for localized display name and avatar
   useEffect(() => {
-    if (user) {
-      fetchProfile(user, (profileData: Profile) => {
+    if (userId) {
+      fetchProfile({ id: userId, email: userEmail ?? '' }, (profileData: Profile) => {
         setProfile(profileData);
       }).catch((err: Error) => {
         logger.error('[UnifiedNavigation] Failed to load profile:', err);
@@ -77,7 +84,7 @@ export function UnifiedNavigation() {
     } else {
       setProfile(null);
     }
-  }, [user]);
+  }, [userId, userEmail]);
 
   // Fetch profiles for all accounts
   useEffect(() => {
@@ -104,7 +111,9 @@ export function UnifiedNavigation() {
     if (accounts.length > 0) {
       loadAccountProfiles();
     }
-  }, [accounts]);
+    // Keyed on the account ids and emails (accountsKey), not the array identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountsKey]);
 
   // Update local state when user changes
   useEffect(() => {

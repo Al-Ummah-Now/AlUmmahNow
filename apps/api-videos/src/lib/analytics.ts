@@ -13,6 +13,7 @@
  */
 
 import { logger } from './logger';
+import { OwnershipEnv, ownerContentIds, scheduleOwnershipHeal } from './search/ownership';
 
 export interface AnalyticsVideo {
   id: string;
@@ -277,16 +278,47 @@ async function readJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
   }
 }
 
+/**
+ * Where the loaders may read the ownership index instead of scanning a bucket:
+ * the worker env (SEARCH_DB + buckets) and the request's waitUntil, used to
+ * schedule a heal when the index cannot be trusted yet.
+ */
+export interface OwnershipLookup {
+  env: OwnershipEnv;
+  waitUntil: ((promise: Promise<unknown>) => void) | null;
+}
+
+/**
+ * Ids the user owns from the ownership index, or null when the caller must
+ * scan (no lookup given, index incomplete or unavailable; a heal is scheduled).
+ */
+async function indexedIds(
+  lookup: OwnershipLookup | undefined,
+  kind: 'video' | 'channel',
+  userId: string,
+  channelIds?: Set<string>
+): Promise<string[] | null> {
+  if (!lookup) return null;
+  const ids = await ownerContentIds(lookup.env, kind, userId, channelIds && [...channelIds]);
+  if (!ids) scheduleOwnershipHeal(lookup.env, lookup.waitUntil, kind);
+  return ids;
+}
+
 /** All channels owned by the user. */
-export async function loadOwnedChannels(bucket: R2Bucket, userId: string): Promise<AnalyticsChannel[]> {
+export async function loadOwnedChannels(bucket: R2Bucket, userId: string, lookup?: OwnershipLookup): Promise<AnalyticsChannel[]> {
+  const isOwned = (channel: AnalyticsChannel | null): channel is AnalyticsChannel =>
+    !!channel?.id && channel.userId === userId && !channel.isDeleted;
+  const ids = await indexedIds(lookup, 'channel', userId);
+  if (ids) {
+    const channels = await Promise.all(ids.map(id => readJson<AnalyticsChannel>(bucket, id)));
+    return channels.filter(isOwned);
+  }
   const owned: AnalyticsChannel[] = [];
   let cursor: string | undefined;
   do {
     const page = await bucket.list({ limit: 100, cursor });
     const channels = await Promise.all(page.objects.map(o => readJson<AnalyticsChannel>(bucket, o.key)));
-    for (const channel of channels) {
-      if (channel?.id && channel.userId === userId && !channel.isDeleted) owned.push(channel);
-    }
+    owned.push(...channels.filter(isOwned));
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
   return owned;
@@ -294,14 +326,23 @@ export async function loadOwnedChannels(bucket: R2Bucket, userId: string): Promi
 
 /**
  * Videos (any visibility) belonging to the given channels and owned by the user.
- * Scans at most `maxObjects` keys.
+ * Reads only those videos when the ownership index is complete; otherwise
+ * scans at most `maxObjects` keys.
  */
 export async function loadOwnedVideos(
   bucket: R2Bucket,
   userId: string,
   channelIds: Set<string>,
-  maxObjects = 2000
+  maxObjects = 2000,
+  lookup?: OwnershipLookup
 ): Promise<AnalyticsVideo[]> {
+  const isOwned = (video: AnalyticsVideo | null): video is AnalyticsVideo =>
+    !!video?.id && !video.isDeleted && video.userId === userId && (!video.channelId || channelIds.has(video.channelId));
+  const ids = await indexedIds(lookup, 'video', userId, channelIds);
+  if (ids) {
+    const videos = await Promise.all(ids.map(id => readJson<AnalyticsVideo>(bucket, id)));
+    return videos.filter(isOwned);
+  }
   const videos: AnalyticsVideo[] = [];
   let cursor: string | undefined;
   let scanned = 0;
@@ -312,10 +353,7 @@ export async function loadOwnedVideos(
       .filter(key => !SKIPPED_VIDEO_KEY_PREFIXES.some(prefix => key.startsWith(prefix)));
     scanned += keys.length;
     const items = await Promise.all(keys.map(key => readJson<AnalyticsVideo>(bucket, key)));
-    for (const video of items) {
-      if (!video?.id || video.isDeleted) continue;
-      if (video.userId === userId && (!video.channelId || channelIds.has(video.channelId))) videos.push(video);
-    }
+    videos.push(...items.filter(isOwned));
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor && scanned < maxObjects);
   return videos;
