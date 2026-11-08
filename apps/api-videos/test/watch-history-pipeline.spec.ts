@@ -77,6 +77,43 @@ describe('legacy videos', () => {
 	});
 });
 
+describe('channel name of channel uploads (#294)', () => {
+	function chanEnv() {
+		const e = env({ v1: videoFixture({ channelId: 'ch-lectures', title: 'QA Lecture 3' }) }) as any;
+		e.channels = new MemoryBucket({ 'ch-lectures': { id: 'ch-lectures', name: 'Al Ummah Now QA — Lectures' } });
+		return e;
+	}
+
+	it('looks the name up by channelId when the video has no channelName', async () => {
+		const e = chanEnv();
+		const app = buildApp(routes, { userId: 'me' });
+		const record = await app.request('/api/watch-history', { method: 'POST', headers: json, body: JSON.stringify({ videoId: 'v1', progress: 40, duration: 64 }) }, e);
+		assert.equal(record.status, 201);
+		assert.equal(e.watch_history.read('me:v1').channelName, 'Al Ummah Now QA — Lectures');
+	});
+
+	it('repairs entries stored as "Unknown Channel" when listing and on the next record', async () => {
+		const e = chanEnv();
+		e.watch_history = new MemoryBucket({
+			'me:v1': { id: 'me:v1', userId: 'me', videoId: 'v1', videoTitle: 'QA Lecture 3', videoDuration: 64, channelId: 'ch-lectures', channelName: 'Unknown Channel', firstWatchedAt: '2026-11-08T12:00:00.000Z', lastWatchedAt: '2026-11-08T12:00:00.000Z', watchCount: 1, progress: 40, completed: false, percentageWatched: 62 },
+		});
+		const app = buildApp(routes, { userId: 'me' });
+		const list = await (await app.request('/api/watch-history', {}, e)).json() as any;
+		assert.equal(list.entries[0].channelName, 'Al Ummah Now QA — Lectures');
+
+		await app.request('/api/watch-history', { method: 'POST', headers: json, body: JSON.stringify({ videoId: 'v1', progress: 50, duration: 64 }) }, e);
+		assert.equal(e.watch_history.read('me:v1').channelName, 'Al Ummah Now QA — Lectures');
+	});
+
+	it('keeps "Unknown Channel" when the channel no longer exists', async () => {
+		const e = chanEnv();
+		e.channels = new MemoryBucket();
+		const app = buildApp(routes, { userId: 'me' });
+		await app.request('/api/watch-history', { method: 'POST', headers: json, body: JSON.stringify({ videoId: 'v1', progress: 1, duration: 64 }) }, e);
+		assert.equal(e.watch_history.read('me:v1').channelName, 'Unknown Channel');
+	});
+});
+
 describe('pause watch history', () => {
 	it('defaults to not paused', async () => {
 		const e = env();

@@ -14,7 +14,7 @@ import type {
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { isWatchHistoryPaused, percentageOf, queueWatchHistoryEvent } from "../../lib/watch-history";
+import { isWatchHistoryPaused, percentageOf, queueWatchHistoryEvent, resolveVideoChannelName, UNKNOWN_CHANNEL_NAME } from "../../lib/watch-history";
 
 // Request schema
 const RecordWatchRequestSchema = z.object({
@@ -131,6 +131,10 @@ export class RecordWatchHistory extends AuthenticatedRoute {
         // Update existing entry
         watchEntry = {
           ...existingEntry,
+          // Entries recorded before #294 have no channel name
+          ...(existingEntry.channelName && existingEntry.channelName !== UNKNOWN_CHANNEL_NAME
+            ? {}
+            : { channelName: await resolveVideoChannelName(c.env.channels, video) }),
           lastWatchedAt: now,
           watchCount: existingEntry.watchCount + 1,
           progress,
@@ -148,8 +152,8 @@ export class RecordWatchHistory extends AuthenticatedRoute {
           videoThumbnail: video.thumbnailUrl || video.thumbnail,
           videoDuration: duration,
           channelId: video.channelId || "",
-          // Legacy (imported) videos only carry the channel name in `channel`
-          channelName: video.channelName || video.channel || "Unknown Channel",
+          // Channel uploads carry only channelId; legacy imports carry `channel`
+          channelName: await resolveVideoChannelName(c.env.channels, video),
           firstWatchedAt: now,
           lastWatchedAt: now,
           watchCount: 1,
