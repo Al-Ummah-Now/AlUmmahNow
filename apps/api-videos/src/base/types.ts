@@ -45,6 +45,8 @@ export interface AppBindings {
   /** Workers rate limiting: watch-time reports per playback session (#235). Optional: unlimited without it. */
   WATCH_TIME_LIMITER?: RateLimit;
   TUS_SESSIONS: KVNamespace;
+  /** Remote config: app version policies and feature flags (Epic 9.3 / 9.5). Optional: defaults without it. */
+  APP_CONFIG?: KVNamespace;
 
   // Queues
   queue: Queue;

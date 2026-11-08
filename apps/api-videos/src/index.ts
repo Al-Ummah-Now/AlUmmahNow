@@ -14,6 +14,8 @@ import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
 import { withSearchSync } from './lib/search/sync';
 import { reconcileSearchIndex } from './lib/search/backfill';
 import { reconcileOwnershipIndex } from './lib/search/ownership';
+import { API_VERSION_HEADER, deprecationHeaders, findDeprecation, resolveApiVersion, unsupportedVersionResponse } from './lib/api-version';
+import { buildContractDocument } from './lib/api-contract';
 
 // TUS Proxy import (not in routers yet)
 import { createTusRouter } from "./endpoints/video/tus";
@@ -60,7 +62,7 @@ app.use('*', cors({
 	origin: (origin, c) => isAllowedOrigin(origin, c.env.CORS_ORIGINS) ? origin : '',
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
 	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
-	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata'],
+	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata', 'X-API-Version', 'Deprecation', 'Sunset'],
 	maxAge: 600,
 	credentials: false,
 }));
@@ -82,6 +84,13 @@ for (const p of INTERNAL_PATHS) {
 
 // Add comprehensive logging middleware for ALL routes
 app.use('*', loggingMiddleware);
+
+// Public API contract (Epic 9.3), served as /api/v1/openapi.json. Registered
+// before the /api/* auth and URL-signing middleware: it is static and public.
+app.get('/api/openapi.json', async (c) => {
+	c.header('Cache-Control', 'public, max-age=300');
+	return c.json(await getContractDocument());
+});
 
 // ==========================================
 // OPTIONS HANDLERS
@@ -406,8 +415,35 @@ async function scheduled(_controller: ScheduledController, rawEnv: AppBindings, 
 	);
 }
 
-export default {
+/** Routes Hono really serves (method + path), for the contract test. */
+export function listServedRoutes(): { method: string; path: string }[] {
+	return app.routes.map((r) => ({ method: r.method, path: r.path }));
+}
+
+/** The public API contract (openapi/v1.json is generated from this; see lib/api-contract.ts). */
+export async function getContractDocument(): Promise<any> {
+	return buildContractDocument((openapi as any).schema);
+}
+
+/**
+ * `/api/v1/...` is served by the `/api/...` handlers (lib/api-version.ts).
+ * Versioned responses carry X-API-Version; deprecated operations carry
+ * Deprecation / Sunset headers.
+ */
+async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionContext): Promise<Response> {
+	const resolved = resolveApiVersion(request);
+	if (resolved.kind === 'unsupported') return unsupportedVersionResponse(resolved.version);
 	// Content buckets are wrapped so every R2 write also updates the search index (lib/search/sync.ts).
-	fetch: (request: Request, env: AppBindings, ctx: ExecutionContext) => app.fetch(request, withSearchSync(env, ctx), ctx),
+	const response = await app.fetch(resolved.request, withSearchSync(env, ctx), ctx);
+	const deprecation = findDeprecation(request.method, new URL(resolved.request.url).pathname);
+	if (resolved.kind === 'unversioned' && !deprecation) return response;
+	const out = new Response(response.body, response);
+	if (resolved.kind === 'versioned') out.headers.set(API_VERSION_HEADER, resolved.version);
+	if (deprecation) for (const [k, v] of Object.entries(deprecationHeaders(deprecation))) out.headers.set(k, v);
+	return out;
+}
+
+export default {
+	fetch: handleFetch,
 	scheduled,
 };
