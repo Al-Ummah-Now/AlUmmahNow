@@ -139,6 +139,8 @@ export interface ChannelVideoQuery {
   privateFor: boolean | string | null;
   /** Exclude live streams and videos shorter than 60 s (channel "Videos" tab). */
   longFormOnly?: boolean;
+  /** Only videos with a known duration under 60 s, not live (channel "Shorts" tab). */
+  shortsOnly?: boolean;
   /** Only public (`true`) or only private (`false`) videos. */
   isPublic?: boolean;
   /** Only live streams. */
@@ -163,6 +165,9 @@ export function channelVideoIds(
     const params: unknown[] = [channelId];
     if (query.longFormOnly) {
       where.push('is_live = 0', '(duration IS NULL OR duration = 0 OR duration >= 60)');
+    }
+    if (query.shortsOnly) {
+      where.push('is_live = 0', 'duration > 0', 'duration < 60');
     }
     if (query.liveOnly) where.push('is_live = 1');
     if (query.isPublic !== undefined) where.push(query.isPublic ? 'is_public = 1' : 'is_public = 0');

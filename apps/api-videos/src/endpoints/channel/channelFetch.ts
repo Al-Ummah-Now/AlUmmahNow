@@ -6,6 +6,8 @@ import { transformChannelToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { channelTotalsFromIndex } from "../../lib/search/ownership";
+import { logger } from "../../lib/logger";
 
 export class ChannelFetch extends OptionalAuthRoute {
 	schema = {
@@ -118,6 +120,15 @@ export class ChannelFetch extends OptionalAuthRoute {
 
 			// Transform to view model for response
 			const channelView = transformChannelToView(channel);
+
+			// Uploads don't append to channel.videos, so count from the ownership
+			// index (public, published videos; same rule as /about). Index
+			// unavailable or incomplete: keep the stored count.
+			const totals = await channelTotalsFromIndex(c.env as never, channel.id).catch((error) => {
+				logger.warn('[ChannelFetch] Video count from index failed', { channelId: channel.id, error: error instanceof Error ? error.message : String(error) });
+				return null;
+			});
+			if (totals) channelView.videosCount = totals.videosCount;
 
 			// Send queue message for channel view analytics
 			const queue = new Queue(c.env.queue);

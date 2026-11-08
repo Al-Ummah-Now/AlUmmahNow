@@ -12,6 +12,9 @@ import {
 } from '../src/lib/search/ownership';
 import { ChannelsList } from '../src/endpoints/channel/channelList';
 import { ChannelVideosList } from '../src/endpoints/channel/channelVideosList';
+import { ChannelShortsList } from '../src/endpoints/channel/channelShortsList';
+import { ChannelLiveList } from '../src/endpoints/channel/channelLiveList';
+import { ChannelFetch } from '../src/endpoints/channel/channelFetch';
 import { ChannelAbout } from '../src/endpoints/channel/channelHandle';
 import { VideoSearch } from '../src/endpoints/video/videoSearch';
 import { OwnershipBackfillPost } from '../src/endpoints/search/searchBackfill';
@@ -282,6 +285,71 @@ describe('endpoints served from the ownership index', () => {
 		const body = await (await app.request('/api/channels/empty/videos', {}, indexed)).json() as any;
 		assert.deepEqual(body.data, []);
 		assert.equal(indexed.videos.calls, 0);
+	});
+
+	/** Shorts and streams whose keys sort after the first bucket slice (the #296 repro). */
+	async function lateKeys() {
+		const data = populated();
+		const late = [
+			videoFixture({ id: 'zz-short-new', title: 'New short', channelId: 'mine1', duration: 6, views: 2, dateCreated: '2026-06-01T00:00:00.000Z' }),
+			videoFixture({ id: 'zz-short-old', title: 'Old short', channelId: 'mine1', duration: 45, views: 90, dateCreated: '2026-01-02T00:00:00.000Z' }),
+			videoFixture({ id: 'zz-short-private', title: 'Private short', channelId: 'mine1', duration: 20, isPublic: false }),
+			videoFixture({ id: 'zz-short-hidden', title: 'Hidden short', channelId: 'mine1', duration: 20, isHidden: true }),
+			videoFixture({ id: 'zz-short-live', title: 'Short live', channelId: 'mine1', duration: 20, isLive: true, dateCreated: '2026-07-01T00:00:00.000Z' }),
+			videoFixture({ id: 'zz-no-duration', title: 'Unknown length', channelId: 'mine1' }),
+		];
+		for (const v of late) data.videos[v.id] = v;
+		const scan = { videos: new MemoryBucket(data.videos), channels: new MemoryBucket(data.channels), queue: new MemoryQueue() };
+		const indexed = ownershipEnv(data);
+		await completeIndex(indexed.raw);
+		return { scan, indexed: indexed.raw };
+	}
+
+	it('GET /api/channels/:id/shorts finds shorts outside the first bucket slice (#296)', async () => {
+		const { scan, indexed } = await lateKeys();
+		const visitor = buildApp(r => r.get('/api/channels/:id/shorts', ChannelShortsList), null);
+		const owner = buildApp(r => r.get('/api/channels/:id/shorts', ChannelShortsList), { userId: 'owner' });
+
+		const scanned = await (await visitor.request('/api/channels/mine1/shorts', {}, scan)).json() as any;
+		assert.deepEqual(scanned.data.map((v: any) => v.id), ['m-d'], 'the old bucket slice misses the late shorts');
+
+		const latest = await (await visitor.request('/api/channels/mine1/shorts', {}, indexed)).json() as any;
+		assert.deepEqual(latest.data.map((v: any) => v.id), ['zz-short-new', 'zz-short-old', 'm-d']);
+		assert.equal(latest.data[0].channelName, 'Channel mine1');
+		const popular = await (await visitor.request('/api/channels/mine1/shorts?sort=popular', {}, indexed)).json() as any;
+		assert.deepEqual(popular.data.map((v: any) => v.id), ['m-d', 'zz-short-old', 'zz-short-new']);
+		const mine = await (await owner.request('/api/channels/mine1/shorts', {}, indexed)).json() as any;
+		assert.ok(mine.data.some((v: any) => v.id === 'zz-short-private'), 'the owner sees private shorts');
+
+		const page1 = await (await visitor.request('/api/channels/mine1/shorts?limit=2', {}, indexed)).json() as any;
+		assert.deepEqual(page1.data.map((v: any) => v.id), ['zz-short-new', 'zz-short-old']);
+		const page2 = await (await visitor.request(`/api/channels/mine1/shorts?limit=2&cursor=${page1.cursor}`, {}, indexed)).json() as any;
+		assert.deepEqual(page2.data.map((v: any) => v.id), ['m-d']);
+		assert.equal(page2.cursor, '');
+	});
+
+	it('GET /api/channels/:id/shorts 404s for a deleted channel', async () => {
+		const { indexed } = await lateKeys();
+		const app = buildApp(r => r.get('/api/channels/:id/shorts', ChannelShortsList), null);
+		assert.equal((await app.request('/api/channels/mine3/shorts', {}, indexed)).status, 404);
+	});
+
+	it('GET /api/channels/:id/live finds streams outside the first bucket slice', async () => {
+		const { scan, indexed } = await lateKeys();
+		const app = buildApp(r => r.get('/api/channels/:id/live', ChannelLiveList), null);
+		const scanned = await (await app.request('/api/channels/mine1/live', {}, scan)).json() as any;
+		assert.deepEqual(scanned.data, []);
+		const body = await (await app.request('/api/channels/mine1/live', {}, indexed)).json() as any;
+		assert.deepEqual(body.data.map((v: any) => v.id), ['zz-short-live']);
+	});
+
+	it('GET /api/channels/:id counts videos from the index, not channel.videos', async () => {
+		const { indexed } = await lateKeys();
+		const app = buildApp(r => r.get('/api/channels/:id', ChannelFetch), null);
+		const body = await (await app.request('/api/channels/mine1', {}, indexed)).json() as any;
+		const view = body.result ?? body;
+		// m-a, m-b, m-d, m-g + zz-short-new, zz-short-old, zz-short-live, zz-no-duration
+		assert.equal(view.videosCount, 8);
 	});
 
 	it('GET /api/channels/:id/about totals match the scan without reading the videos bucket', async () => {
