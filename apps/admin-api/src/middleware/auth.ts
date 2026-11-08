@@ -2,6 +2,7 @@ import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
+import { normalizeRoles, hasAdminRole, hasModeratorRole } from '../lib/roles';
 
 interface AuthPayload {
   sub: string;
@@ -35,14 +36,6 @@ export interface AuthContext {
   email?: string;
   payload: AuthPayload;
   roles?: string[];
-}
-
-/**
- * The auth server emits RBAC role display names ("Super Admin", "Admin",
- * "Moderator"); normalize to snake_case ids used throughout this service.
- */
-export function normalizeRole(role: string): string {
-  return String(role ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
 /**
@@ -96,7 +89,8 @@ export async function authMiddleware(c: Context, next: Next) {
     c.set('auth', {
       userId: payload.sub,
       email: payload.email,
-      roles: (payload.roles || []).map(normalizeRole),
+      // Tokens carry RBAC display names ("Super Admin"); store snake_case ids.
+      roles: normalizeRoles(payload.roles),
       payload
     } as AuthContext);
 
@@ -130,8 +124,8 @@ export async function adminMiddleware(c: Context, next: Next) {
 
     // Get roles from auth context (populated from token)
     const roles = auth.roles || [];
-    const isAdmin = roles.includes('admin') || roles.includes('super_admin');
-    const isModerator = roles.includes('moderator');
+    const isAdmin = hasAdminRole(roles);
+    const isModerator = hasModeratorRole(roles);
 
     logger.info('Admin middleware checking roles', {
       userId: auth.userId,
@@ -264,10 +258,9 @@ export function getUserRoles(c: Context): string[] {
 }
 
 export function isAdmin(c: Context): boolean {
-  return getUserRoles(c).includes('admin');
+  return hasAdminRole(getUserRoles(c));
 }
 
 export function isModerator(c: Context): boolean {
-  const roles = getUserRoles(c);
-  return roles.includes('admin') || roles.includes('moderator');
+  return hasModeratorRole(getUserRoles(c));
 }

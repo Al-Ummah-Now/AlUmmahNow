@@ -37,7 +37,8 @@ export interface AdminBindings {
 
   // WebSocket integration
   WEBSOCKET_URL?: string;
-  INTERNAL_API_KEY?: string;
+  // A Secrets Store binding in deployed workers, a plain string var in local dev
+  INTERNAL_API_KEY?: string | { get(): Promise<string> };
 }
 
 /**
