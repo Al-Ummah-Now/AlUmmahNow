@@ -201,7 +201,7 @@ jobs:
     needs: stage-e2e
     if: inputs.production
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment:
       name: production
       url: https://videos.alummahnow.net
@@ -257,6 +257,41 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:promote --env production --message "release ${GITHUB_SHA::7}"
+
+      - name: Install Chromium
+        run: (cd apps/web && pnpm exec playwright install --with-deps chromium)
+
+      # One test-release-*@delivered.resend.dev account signs up (code via the
+      # Resend API), signs in on web and profile, and is refused by admin.
+      - name: Production signed-in check
+        id: signedin
+        working-directory: apps/web
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          PROD_USER_FILE: ${{ runner.temp }}/prod-test-users
+        run: pnpm exec playwright test -c playwright.release-prod.config.ts
+
+      - name: Delete production test accounts
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROD_USER_FILE: ${{ runner.temp }}/prod-test-users
+        run: |
+          if [ -s "$PROD_USER_FILE" ]; then
+            node --experimental-strip-types --no-warnings scripts/release/delete-test-user.ts "$PROD_USER_FILE"
+          else
+            echo "no production test accounts were created"
+          fi
+
+      - name: Roll back (signed-in check failed)
+        if: failure() && steps.signedin.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm release:rollback --env production --reason "release ${GITHUB_SHA::7}: production signed-in check failed"
+          echo "### Rolled back: production signed-in check failed on ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Production result
         if: always()
