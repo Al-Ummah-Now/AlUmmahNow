@@ -72,7 +72,7 @@ export const APPS: AppRule[] = [
 			vars: {
 				Issuer: AUTH_ISSUER,
 				Audience: 'https://videos.alummahnow.net',
-				WEBSOCKET_URL: 'https://ws.alummahnow.net',
+				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
 				CORS_ORIGINS: 'https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net',
 			},
 			requiredBindings: [
@@ -94,7 +94,7 @@ export const APPS: AppRule[] = [
 		production: {
 			env: null,
 			name: 'al-ummah-now-processor',
-			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://ws.alummahnow.net' },
+			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'd1_databases', name: 'REPORTS_DB' },
@@ -102,7 +102,6 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		accepted: [{ match: 'd1_databases[0].database_id is an unfilled placeholder', issue: '#208' }],
 	},
 	{
 		app: 'websocket-server',
@@ -112,11 +111,31 @@ export const APPS: AppRule[] = [
 		production: {
 			env: null,
 			name: 'al-ummah-now-comms',
-			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://ws.alummahnow.net' },
+			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'durable_objects', name: 'WEBSOCKET_DO' },
 				{ kind: 'kv_namespaces', name: 'PRESENCE_KV' },
+			],
+			...PROD_GUARDS,
+		},
+	},
+	{
+		app: 'scheduler',
+		configPath: 'apps/scheduler/wrangler.jsonc',
+		dir: 'apps/scheduler',
+		deployFlags: 'any',
+		production: {
+			env: null,
+			name: 'al-ummah-scheduler',
+			vars: { WEBSOCKET_URL: 'https://realtime.alummahnow.net' },
+			requiredBindings: [
+				INTERNAL_API_KEY,
+				{ kind: 'queue_producer', name: 'QUEUE' },
+				{ kind: 'r2_buckets', name: 'VIDEOS' },
+				{ kind: 'r2_buckets', name: 'SCHEDULED_VIDEOS' },
+				{ kind: 'kv_namespaces', name: 'SCHEDULER_LOCKS' },
+				{ kind: 'durable_objects', name: 'SCHEDULER_LOCK' },
 			],
 			...PROD_GUARDS,
 		},

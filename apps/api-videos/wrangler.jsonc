@@ -176,7 +176,7 @@
 		// sign its URLs (playUrl, thumbnails) in API responses
 		"BUNNY_SIGN_URLS": "true",
 		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
-		"WEBSOCKET_URL": "https://ws.alummahnow.net",
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
 	},
 	/**
