@@ -8,6 +8,7 @@
     "deploy:qa": "CI=true wrangler deploy --config wrangler.qa.jsonc",
     "deploy:staging": "wrangler deploy --env staging",
     "type-check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix"
   },

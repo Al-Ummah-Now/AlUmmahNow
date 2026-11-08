@@ -4,6 +4,14 @@
 	"compatibility_date": "2024-09-01",
 	"compatibility_flags": ["nodejs_compat"],
 
+	// Production custom domain (zone alummahnow.net)
+	"routes": [
+		{
+			"pattern": "admin.api.alummahnow.net",
+			"custom_domain": true
+		}
+	],
+
 	// D1 database for moderation reports
 	"d1_databases": [
 		{
@@ -64,7 +72,8 @@
 	"vars": {
 		"ENVIRONMENT": "production",
 		"LOG_LEVEL": "info",
-		"WEBSOCKET_URL": "https://realtime.alummahnow.net"
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
+		"Issuer": "https://auth.alummahnow.net"
 	},
 
 	// Secrets Store

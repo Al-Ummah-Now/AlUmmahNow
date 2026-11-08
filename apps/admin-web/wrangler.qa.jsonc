@@ -3,9 +3,15 @@
   "name": "al-ummah-admin-web-qa",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-04-12",
-  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env"
+  ],
   "logpush": true,
   "minify": true,
+  // esbuild keepNames injects __name() into fn.toString() output, breaking
+  // next-themes inline script in the browser ("e is not defined").
+  "keep_names": false,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -21,6 +27,7 @@
     "API_URL": "https://videos.api.qa.alummahnow.net",
     "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
     "NEXT_PUBLIC_API_URL": "https://videos.api.qa.alummahnow.net",
-    "NEXT_PUBLIC_BASE_URL": "https://admin.api.qa.alummahnow.net"
+    "NEXT_PUBLIC_BASE_URL": "https://admin.qa.alummahnow.net",
+    "ClientId": "b24e39de-601d-463b-b50d-37a0a94e986b"
   }
 }

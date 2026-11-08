@@ -17,22 +17,40 @@ export type SystemRole = typeof SYSTEM_ROLES[number];
 export const ADMIN_ROLES: SystemRole[] = ['super_admin', 'admin', 'moderator'];
 
 /**
+ * Normalize a role name from the auth server to the internal form.
+ * The auth server emits RBAC role display names ("Super Admin", "Admin",
+ * "Moderator"); internally we use snake_case ids ("super_admin", ...).
+ */
+export function normalizeRole(role?: string): string {
+  return (role ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+/**
  * Check if a role has admin access
  */
 export function hasAdminAccess(role?: string): boolean {
-  return ADMIN_ROLES.includes(role as SystemRole);
+  return ADMIN_ROLES.includes(normalizeRole(role) as SystemRole);
+}
+
+/**
+ * Pick the highest-privilege admin role from the auth server's role list
+ * (display names or ids). Returns undefined when the user has none.
+ */
+export function highestAdminRole(roles?: readonly string[]): SystemRole | undefined {
+  const normalized = (roles ?? []).map((r) => normalizeRole(r));
+  return ADMIN_ROLES.find((role) => normalized.includes(role));
 }
 
 /**
  * Check if a role is super admin
  */
 export function isSuperAdmin(role?: string): boolean {
-  return role === 'super_admin';
+  return normalizeRole(role) === "super_admin";
 }
 
 /**
  * Check if a role can perform moderation actions
  */
 export function canModerate(role?: string): boolean {
-  return ADMIN_ROLES.includes(role as SystemRole);
+  return ADMIN_ROLES.includes(normalizeRole(role) as SystemRole);
 }

@@ -2,9 +2,15 @@
   "name": "al-ummah-admin-web",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-04-12",
-  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env"
+  ],
   "logpush": true,
   "minify": true,
+  // esbuild keepNames injects __name() into fn.toString() output, breaking
+  // next-themes inline script in the browser ("e is not defined").
+  "keep_names": false,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -20,6 +26,14 @@
     "API_URL": "https://videos.api.alummahnow.net",
     "ADMIN_API_URL": "https://admin.api.alummahnow.net",
     "NEXT_PUBLIC_API_URL": "https://videos.api.alummahnow.net",
-    "NEXT_PUBLIC_BASE_URL": "https://admin.alummahnow.net"
-  }
+    "NEXT_PUBLIC_BASE_URL": "https://admin.alummahnow.net",
+    "ClientId": "a24e39de-601d-463b-b50d-37a0a94e986b"
+  },
+  // Production custom domain (zone alummahnow.net)
+  "routes": [
+    {
+      "pattern": "admin.alummahnow.net",
+      "custom_domain": true
+    }
+  ]
 }
