@@ -8,6 +8,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { withAuthorizeLocale } from '@/lib/auth/authorize-locale';
 import { revalidatePath } from 'next/cache';
 import { headers as getHeaders, cookies as getCookies } from "next/headers";
 import { getOpenAuthClient } from "../auth/openauth-client";
@@ -41,7 +42,7 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
     "code"
   );
 
-  redirect(url);
+  redirect(withAuthorizeLocale(url, locale));
 }
 
 /**

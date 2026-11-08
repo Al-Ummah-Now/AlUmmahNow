@@ -1,5 +1,6 @@
 "use server"
 import { getOpenAuthClient } from "./auth/openauth-client"
+import { withAuthorizeLocale } from "./auth/authorize-locale"
 import { redirect } from "next/navigation"
 import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
@@ -133,7 +134,7 @@ export async function login(locale: string = 'en') {
     `${protocol}://${host}/api/callback`,
     "code",
   )
-  redirect(url)
+  redirect(withAuthorizeLocale(url, locale))
 }
 
 export async function logout(locale: string = 'en') {
