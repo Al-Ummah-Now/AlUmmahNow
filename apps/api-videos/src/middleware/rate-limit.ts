@@ -60,6 +60,91 @@ const RATE_LIMITS: Record<RateLimitTier, RateLimitConfig> = {
 };
 
 /**
+ * Video upload SESSIONS (#290). Counted once per video when an upload is
+ * initiated (initiate, batch initiate (one per video), direct and stream
+ * upload), never per TUS chunk: the TUS POST/HEAD/PATCH/DELETE of an initiated
+ * upload is authorised by its session (same user, checked in the TUS proxy).
+ * A batch may hold 15 videos, so a fresh hour must fit one full batch.
+ */
+export type UploadLimitProfile = 'standard' | 'relaxed';
+
+export const UPLOAD_SESSION_LIMITS: Record<UploadLimitProfile, RateLimitConfig> = {
+  // Production
+  standard: { perMinute: 15, perHour: 20, perDay: 50, maxConcurrent: 5 },
+  // QA and stage: enforced (so the limiter path runs there) but roomy enough for E2E and seeding
+  relaxed: { perMinute: 60, perHour: 300, perDay: 2000, maxConcurrent: 20 },
+};
+
+/** KV operation for upload sessions (a new key: counters from the old per-request limiter do not carry over) */
+export const UPLOAD_SESSION_OPERATION = 'video_upload_session';
+
+/**
+ * Limits for upload sessions in this env, or null when not enforced.
+ * UPLOAD_RATE_LIMIT ("standard" | "relaxed" | "off") wins; without it,
+ * development and preview are not enforced and everything else is standard.
+ */
+export function uploadSessionLimits(env: { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string }): RateLimitConfig | null {
+  const profile = env.UPLOAD_RATE_LIMIT;
+  if (profile === 'off') return null;
+  if (profile === 'standard' || profile === 'relaxed') return UPLOAD_SESSION_LIMITS[profile];
+  const environment = env.ENVIRONMENT || 'development';
+  return environment === 'development' || environment === 'preview' ? null : UPLOAD_SESSION_LIMITS.standard;
+}
+
+/** Upload sessions a request opens: one per video in a batch initiate (1..15), otherwise one. */
+export async function uploadSessionWeight(c: Context): Promise<number> {
+  if (!c.req.path.endsWith('/upload/batch/initiate')) return 1;
+  try {
+    const body = (await c.req.raw.clone().json()) as { videos?: unknown };
+    return Array.isArray(body?.videos) ? Math.min(15, Math.max(1, body.videos.length)) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/** Routes that open new upload sessions (POST only); everything else in an upload continues one */
+export const UPLOAD_SESSION_PATHS = [
+  '/api/videos/upload',
+  '/api/videos/upload/initiate',
+  '/api/videos/upload/batch/initiate',
+  '/api/videos/upload/stream',
+] as const;
+
+/**
+ * Calls that continue an initiated upload but are not idempotent: the TUS
+ * create (POST /api/videos/tus, which starts the Bunny upload for the session)
+ * and complete. A separate, looser bucket than sessions so normal retries never
+ * trip it, but one session cannot be replayed without bound. TUS PATCH/HEAD
+ * stay unlimited (owner-checked, bounded by the upload's length).
+ */
+export const UPLOAD_CONTINUE_PATHS = ['/api/videos/tus', '/api/videos/upload/complete'] as const;
+export const UPLOAD_CONTINUE_OPERATION = 'video_upload_continue';
+export const UPLOAD_CONTINUE_LIMITS: Record<UploadLimitProfile, RateLimitConfig> = {
+  standard: { perMinute: 30, perHour: 100, perDay: 300, maxConcurrent: 10 },
+  relaxed: { perMinute: 120, perHour: 1000, perDay: 5000, maxConcurrent: 40 },
+};
+
+export function uploadContinueLimitMiddleware() {
+  return rateLimitMiddleware(UPLOAD_CONTINUE_OPERATION, {
+    limits: (env) => {
+      const session = uploadSessionLimits(env as { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string });
+      if (!session) return null;
+      return session === UPLOAD_SESSION_LIMITS.relaxed ? UPLOAD_CONTINUE_LIMITS.relaxed : UPLOAD_CONTINUE_LIMITS.standard;
+    },
+    methods: ['POST'],
+  });
+}
+
+/** The upload-session limiter mounted on UPLOAD_SESSION_PATHS in index.ts */
+export function uploadSessionLimitMiddleware() {
+  return rateLimitMiddleware(UPLOAD_SESSION_OPERATION, {
+    limits: (env) => uploadSessionLimits(env as { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string }),
+    weight: uploadSessionWeight,
+    methods: ['POST'],
+  });
+}
+
+/**
  * Time window durations in seconds
  */
 const TIME_WINDOWS = {
@@ -150,10 +235,10 @@ function initRateLimitState(): RateLimitState {
 export async function checkRateLimit(
   kv: KVNamespace,
   userId: string,
-  operation: string
+  operation: string,
+  limits: RateLimitConfig = RATE_LIMITS[getUserTier(userId)],
+  weight = 1
 ): Promise<RateLimitResult> {
-  const tier = getUserTier(userId);
-  const limits = RATE_LIMITS[tier];
   const key = getRateLimitKey(userId, operation);
   const now = Math.floor(Date.now() / 1000);
 
@@ -204,34 +289,39 @@ export async function checkRateLimit(
     }
 
     // Check minute limit
-    if (state.minute >= limits.perMinute) {
+    if (state.minute + weight > limits.perMinute) {
       result.allowed = false;
       result.limitExceeded = 'minute';
-      result.retryAfter = result.resetAt.minute - now;
+      result.retryAfter = Math.max(1, result.resetAt.minute - now);
       return result;
     }
 
     // Check hour limit
-    if (state.hour >= limits.perHour) {
+    if (state.hour + weight > limits.perHour) {
       result.allowed = false;
       result.limitExceeded = 'hour';
-      result.retryAfter = result.resetAt.hour - now;
+      result.retryAfter = Math.max(1, result.resetAt.hour - now);
       return result;
     }
 
     // Check day limit
-    if (state.day >= limits.perDay) {
+    if (state.day + weight > limits.perDay) {
       result.allowed = false;
       result.limitExceeded = 'day';
-      result.retryAfter = result.resetAt.day - now;
+      result.retryAfter = Math.max(1, result.resetAt.day - now);
       return result;
     }
 
     // Increment counters
-    state.minute++;
-    state.hour++;
-    state.day++;
+    state.minute += weight;
+    state.hour += weight;
+    state.day += weight;
     state.concurrent++;
+    result.remaining = {
+      minute: Math.max(0, limits.perMinute - state.minute),
+      hour: Math.max(0, limits.perHour - state.hour),
+      day: Math.max(0, limits.perDay - state.day),
+    };
 
     // Save updated state to KV (with 1 day TTL)
     await kv.put(key, JSON.stringify(state), {
@@ -306,20 +396,37 @@ export async function releaseRateLimit(
  * );
  * ```
  */
-export function rateLimitMiddleware(operation: string) {
+export interface RateLimitOptions {
+  /** Limits for this env; null skips the check. Default: tier limits, skipped in development/preview. */
+  limits?: (env: Record<string, unknown>, userId: string) => RateLimitConfig | null;
+  /** How many units this request uses (default 1) */
+  weight?: (c: Context) => Promise<number>;
+  /** Only these methods are counted (default: all) */
+  methods?: string[];
+}
+
+export function rateLimitMiddleware(operation: string, options: RateLimitOptions = {}) {
   return async (c: Context, next: () => Promise<void>) => {
-    // Skip rate limiting in development/preview environments
-    const environment = c.env.ENVIRONMENT || 'development';
-    if (environment === 'development' || environment === 'preview') {
-      logger.info('[SECURITY] Skipping rate limit check in development/preview mode');
-      return next();
-    }
+    if (options.methods && !options.methods.includes(c.req.method)) return next();
+
+    const resolveLimits =
+      options.limits ??
+      ((env: Record<string, unknown>, userId: string) => {
+        const environment = (env.ENVIRONMENT as string) || 'development';
+        return environment === 'development' || environment === 'preview' ? null : RATE_LIMITS[getUserTier(userId)];
+      });
 
     // Get user ID from auth context
     const userId = c.get('userId');
 
     if (!userId) {
       // If no user ID, skip rate limiting (auth middleware should handle this)
+      return next();
+    }
+
+    const limits = resolveLimits(c.env ?? {}, userId);
+    if (!limits) {
+      logger.info('[SECURITY] Rate limit not enforced in this environment', { operation });
       return next();
     }
 
@@ -332,7 +439,8 @@ export function rateLimitMiddleware(operation: string) {
     }
 
     // Check rate limit
-    const result = await checkRateLimit(kv, userId, operation);
+    const weight = options.weight ? await options.weight(c) : 1;
+    const result = await checkRateLimit(kv, userId, operation, limits, weight);
 
     if (!result.allowed) {
       logger.warn('[SECURITY] Rate limit exceeded', {
@@ -354,9 +462,10 @@ export function rateLimitMiddleware(operation: string) {
         {
           'Retry-After': String(result.retryAfter || 60),
           'X-RateLimit-Limit': String(
-            result.limitExceeded === 'minute' ? RATE_LIMITS[getUserTier(userId)].perMinute :
-            result.limitExceeded === 'hour' ? RATE_LIMITS[getUserTier(userId)].perHour :
-            RATE_LIMITS[getUserTier(userId)].perDay
+            result.limitExceeded === 'minute' ? limits.perMinute :
+            result.limitExceeded === 'hour' ? limits.perHour :
+            result.limitExceeded === 'concurrent' ? limits.maxConcurrent :
+            limits.perDay
           ),
           'X-RateLimit-Remaining': String(
             result.limitExceeded === 'minute' ? result.remaining.minute :

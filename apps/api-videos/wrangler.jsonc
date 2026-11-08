@@ -213,6 +213,8 @@
 		"BUNNY_SIGN_URLS": "true",
 		// Name prefix for Bunny videos/collections this env creates (stage: "[stage] "; none in production)
 		"BUNNY_NAME_PREFIX": "",
+		// Upload-session limits (#290; middleware/rate-limit.ts): standard in production
+		"UPLOAD_RATE_LIMIT": "standard",
 		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net,https://cms.alummahnow.net"
@@ -383,6 +385,8 @@
 				"BUNNY_SIGN_URLS": "true",
 				// Stage shares the QA Bunny library: tag what stage creates there for cleanup
 				"BUNNY_NAME_PREFIX": "[stage] ",
+				// Enforced with roomy numbers so the limiter path runs before production
+				"UPLOAD_RATE_LIMIT": "relaxed",
 				"BUNNY_SIGN_HOSTNAME": "vz-cb79844a-c5d.b-cdn.net",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
 				"CORS_ORIGINS": "https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net"
