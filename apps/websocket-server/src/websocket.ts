@@ -161,8 +161,9 @@ export class WebSocketDurableObject extends DurableObject {
       
       const clientMessage = validationResult.data;
 
-      // A socket stays signed in only as long as its token (#437)
-      if (clientMessage.type !== 'authenticate') this.expireAuthIfNeeded(ws);
+      // A socket stays signed in only as long as its token (#437). Before a
+      // re-auth too, so a failed one leaves the socket signed out.
+      this.expireAuthIfNeeded(ws, { notify: clientMessage.type !== 'authenticate' });
 
       // Handle different message types
       switch (clientMessage.type) {
@@ -250,7 +251,10 @@ export class WebSocketDurableObject extends DurableObject {
    * sockets within one access-token lifetime: the fresh token is checked
    * against the revocation list.
    */
-  private expireAuthIfNeeded(ws: WebSocket, nowSeconds = Math.floor(Date.now() / 1000)): boolean {
+  private expireAuthIfNeeded(
+    ws: WebSocket,
+    { notify = true, nowSeconds = Math.floor(Date.now() / 1000) }: { notify?: boolean; nowSeconds?: number } = {},
+  ): boolean {
     const connection = this.connections.get(ws);
     if (!connection?.authenticated || connection.authExpiresAt === undefined || nowSeconds < connection.authExpiresAt) {
       return false;
@@ -260,12 +264,19 @@ export class WebSocketDurableObject extends DurableObject {
       if (!canSubscribeAnonymously(channel)) this.channelManager.unsubscribe(connection.sessionId, channel);
     }
     connection.authenticated = false;
-    this.sendMessage(ws, {
-      type: 'error',
-      error: 'Token expired; authenticate again',
-      code: 'AUTH_EXPIRED',
-    });
+    if (notify) {
+      this.sendMessage(ws, {
+        type: 'error',
+        error: 'Token expired; authenticate again',
+        code: 'AUTH_EXPIRED',
+      });
+    }
     return true;
+  }
+
+  /** A private channel's message must not reach a socket whose token has expired, even a silent one. */
+  private expiredForChannel(ws: WebSocket, channel: string): boolean {
+    return !canSubscribeAnonymously(channel) && this.expireAuthIfNeeded(ws);
   }
 
   /**
@@ -442,9 +453,9 @@ export class WebSocketDurableObject extends DurableObject {
       timestamp: Date.now(),
     };
 
-    for (const sessionId of subscribers) {
+    for (const sessionId of [...subscribers]) {
       const socket = this.sessionToWebSocket.get(sessionId);
-      if (socket) {
+      if (socket && !this.expiredForChannel(socket, channel)) {
         this.sendMessage(socket, message);
       }
     }
@@ -522,9 +533,9 @@ export class WebSocketDurableObject extends DurableObject {
   async broadcast(channel: string, message: ServerMessage): Promise<void> {
     const subscribers = this.channelManager.getChannelSubscribers(channel);
 
-    for (const sessionId of subscribers) {
+    for (const sessionId of [...subscribers]) {
       const ws = this.sessionToWebSocket.get(sessionId);
-      if (ws) {
+      if (ws && !this.expiredForChannel(ws, channel)) {
         this.sendMessage(ws, message);
       }
     }
