@@ -567,6 +567,28 @@ Required checks on every PR (`deploy.yml` jobs `test` and `release-checks`). Scr
 | `pnpm check:schema` | a D1 migrations dir has no snapshot, or its snapshot (`<dir>.schema.snapshot.sql`, next to the dir) no longer matches the schema the migrations produce | Run `pnpm schema:snapshot` and commit the snapshot with the migration. Never edit a snapshot by hand. |
 | `pnpm test:scripts` | the release scripts' own tests fail | Fix the script or its test in `scripts/release/__tests__/`. |
 
+### Release regressions (web)
+
+`.github/workflows/release-e2e.yml` runs `apps/web/e2e/release/` on every PR into
+`main` and `integrate/**`, against QA (`E2E_ENV=qa`); the release workflow will
+run the same specs against stage (`E2E_ENV=stage`). They do not use the legacy
+suite's seeded users or global setup.
+
+| Spec | Guards against |
+|---|---|
+| `signup-signin.spec.ts` (R1) | sign-up → email code → sign-in in a fresh session, en and ar; fails on any `error=` hop or `/auth/error` (the 2026-11-07 redirect_uri incident) |
+| `callback-errors.spec.ts` (R4) | `/api/callback` and `/api/callback/multi-account` answering raw JSON (`{}`) instead of the localized error page |
+
+Codes come from the auth server's E2E sink: sign-ups use `@e2e.alummahnow.net`
+addresses, and the spec reads the code with `E2E_CODE_SINK_SECRET` (QA/stage
+only; production has no sink). Run locally:
+
+```bash
+cd apps/web
+E2E_ENV=qa E2E_CODE_SINK_SECRET=... pnpm exec playwright test -c playwright.release.config.ts
+```
+
+
 ## Development Workflow
 
 ### Working with the Monorepo
