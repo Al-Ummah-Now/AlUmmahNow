@@ -10,6 +10,7 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	"version_metadata": { "binding": "CF_VERSION_METADATA" },
 	"observability": {
 		"enabled": true
 	},
@@ -71,5 +72,44 @@
 		"ip": "127.0.0.1",
 		"port": 3087,
 		"local_protocol": "http"
+	},
+	"env": {
+		// Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
+		"stage": {
+			"version_metadata": { "binding": "CF_VERSION_METADATA" },
+			"name": "al-ummah-now-comms-stage",
+			"routes": [
+				{
+					"pattern": "realtime.stage.alummahnow.net",
+					"custom_domain": true
+				}
+			],
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "WEBSOCKET_DO",
+						"class_name": "WebSocketDurableObject"
+					}
+				]
+			},
+			"kv_namespaces": [
+				{
+					"binding": "PRESENCE_KV",
+					"id": "03ba69245a7c40f4952ac5e0a9b402ca"
+				}
+			],
+			"vars": {
+				"ENVIRONMENT": "stage",
+				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
+				"Issuer": "https://auth.stage.alummahnow.net"
+			},
+			"secrets_store_secrets": [
+				{
+					"binding": "INTERNAL_API_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "internal-api-key-stage"
+				}
+			]
+		}
 	}
 }

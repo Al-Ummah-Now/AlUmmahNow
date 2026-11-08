@@ -48,11 +48,11 @@ jobs:
 		assert.ok(errors[0].includes('--config wrangler.production.jsonc'));
 	});
 
-	it('rejects --env for web and admin-web: they have no env blocks, only config files', () => {
+	it('rejects --env without --config for web and admin-web: their top-level wrangler.jsonc is the dev config', () => {
 		assert.equal(checkDeployCommands(scanWorkflow('x.yml', step('apps/admin-web', ' --env production')), APPS).length, 1);
 	});
 
-	for (const flags of [' --config wrangler.production.jsonc', ' -c wrangler.qa.jsonc', ' --config=wrangler.preview.jsonc', ' --dry-run']) {
+	for (const flags of [' --config wrangler.production.jsonc', ' --config wrangler.production.jsonc --env stage', ' -c wrangler.qa.jsonc', ' --config=wrangler.preview.jsonc', ' --dry-run']) {
 		it(`accepts web deploy with${flags}`, () => {
 			assert.deepEqual(checkDeployCommands(scanWorkflow('x.yml', step('apps/web', flags)), APPS), []);
 		});
@@ -196,5 +196,37 @@ describe('parseJsonc', () => {
   "list": [1, 2,],
 }`;
 		assert.deepEqual(parseJsonc(text), { url: 'https://example.com/a', list: [1, 2] });
+	});
+});
+
+describe('stage', () => {
+	const STAGED = ['web', 'admin-web', 'api-videos', 'processor', 'websocket-server', 'scheduler', 'admin-api'];
+
+	it('every app has env.stage and a stage rule, and passes it with production parity', () => {
+		for (const app of STAGED) {
+			assert.ok(load(app).env?.stage, `${app}: no env.stage`);
+			assert.ok(rule(app).stage, `${app}: no stage rule`);
+			assert.deepEqual(checkApp(rule(app), load(app)), [], app);
+		}
+	});
+
+	it('fails when a stage binding points at a production host or a QA resource', () => {
+		const config = load('api-videos');
+		(config.env!.stage.vars as Record<string, string>).Issuer = 'https://auth.alummahnow.net';
+		assert.ok(has(checkApp(rule('api-videos'), config), 'env.stage', 'Issuer'));
+		const qa = load('websocket-server');
+		(qa.env!.stage.vars as Record<string, string>).WEBSOCKET_URL = 'https://realtime.qa.alummahnow.net';
+		assert.ok(checkApp(rule('websocket-server'), qa).some((e) => e.includes('realtime.qa.alummahnow.net')));
+	});
+
+	it('fails when stage drops a production binding; a queue consumer may differ only by the -stage suffix', () => {
+		const config = load('processor');
+		const stage = config.env!.stage as { queues: { consumers: { queue: string }[] }; r2_buckets: unknown[] };
+		assert.deepEqual(checkApp(rule('processor'), config), []);
+		stage.r2_buckets = stage.r2_buckets.slice(1);
+		assert.ok(has(checkApp(rule('processor'), config), 'MESSAGES_BUCKET', 'in production but not in stage'));
+		const other = load('processor');
+		(other.env!.stage as typeof stage).queues.consumers[0].queue = 'some-other-queue';
+		assert.ok(has(checkApp(rule('processor'), other), 'queue_consumer'));
 	});
 });

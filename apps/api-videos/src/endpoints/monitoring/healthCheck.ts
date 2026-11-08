@@ -17,6 +17,8 @@ export class HealthCheck extends PublicRoute {
 							timestamp: z.string(),
 							version: z.string(),
 							environment: z.string(),
+							// Worker version id serving this request (release smoke checks it)
+							deployment: z.string(),
 							services: z.object({
 								database: z.object({
 									r2: z.object({
@@ -61,7 +63,8 @@ export class HealthCheck extends PublicRoute {
 			status: "healthy",
 			timestamp: new Date().toISOString(),
 			version: "1.0.0",
-			environment: "development",
+			environment: (c.env as { ENVIRONMENT?: string }).ENVIRONMENT ?? "unknown",
+			deployment: (c.env as { CF_VERSION_METADATA?: { id: string } }).CF_VERSION_METADATA?.id ?? 'unknown',
 			services: {
 				database: {
 					r2: r2Status,

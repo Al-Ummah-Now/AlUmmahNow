@@ -35,5 +35,27 @@
       "pattern": "admin.alummahnow.net",
       "custom_domain": true
     }
-  ]
+  ],
+  "env": {
+    // Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
+    "stage": {
+      "name": "al-ummah-admin-web-stage",
+      "routes": [
+        {
+          "pattern": "admin.stage.alummahnow.net",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "Issuer": "https://auth.stage.alummahnow.net",
+        "OPENAUTH_ISSUER": "https://auth.stage.alummahnow.net",
+        "NEXTJS_ENV": "stage",
+        "API_URL": "https://videos.api.stage.alummahnow.net",
+        "ADMIN_API_URL": "https://admin.api.stage.alummahnow.net",
+        "NEXT_PUBLIC_API_URL": "https://videos.api.stage.alummahnow.net",
+        "NEXT_PUBLIC_BASE_URL": "https://admin.stage.alummahnow.net",
+        "ClientId": "a24e39de-601d-463b-b50d-37a0a94e986b"
+      }
+    }
+  }
 }

@@ -1,0 +1,80 @@
+name: Rollback
+
+# One-click rollback (docs/release-pipeline/SPEC.md §8): puts workers back on the
+# version they served before their latest deployment (or on a given version), then
+# runs the smoke. Code only; D1 migrations are expand-only and are never undone.
+# Same as `pnpm release:rollback`. Start with dry_run to see the target versions.
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: 'Environment'
+        type: choice
+        options: [production, stage]
+        default: production
+      app:
+        description: 'Worker: all, or one of web, admin-web, api-videos, admin-api, websocket-server, processor, scheduler'
+        type: string
+        default: all
+      to:
+        description: 'Version id to roll back to (single app only; empty = the previous version)'
+        type: string
+        default: ''
+      reason:
+        description: 'Why (shown in the deployment message)'
+        type: string
+        required: true
+      dry_run:
+        description: 'Resolve the target versions only; move no traffic'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+
+# Never at the same time as a release (same group as release.yml)
+concurrency:
+  group: release-aun
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Rollback ${{ inputs.env }} (${{ inputs.dry_run && 'dry run' || 'live' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: ${{ inputs.env == 'production' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Roll back
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ENV: ${{ inputs.env }}
+          APP: ${{ inputs.app }}
+          TO: ${{ inputs.to }}
+          REASON: ${{ inputs.reason }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -o pipefail
+          args=(--env "$ENV" --app "$APP" --reason "$REASON (by $GITHUB_ACTOR)")
+          [ -n "$TO" ] && args+=(--to "$TO")
+          [ "$DRY_RUN" = true ] && args+=(--dry-run)
+          pnpm release:rollback "${args[@]}" | tee rollback.txt
+          { echo "### Rollback ($ENV, dry run: $DRY_RUN)"; echo '```'; cat rollback.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

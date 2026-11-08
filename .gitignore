@@ -72,3 +72,4 @@ logs/
 bmad/
 *.backup
 logs/
+release-result.json

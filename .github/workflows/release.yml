@@ -1,0 +1,286 @@
+name: Release
+
+# Stage-then-promote for the seven workers (docs/release-pipeline/SPEC.md §7):
+#   build once → stage (migrate, deploy the candidates through the same 0% → 100%
+#   promote, smoke, release E2E) → production (still the head of main?, migrate,
+#   candidates at 0%, pre-traffic smoke through the version override, 100%, smoke,
+#   auto-rollback) → rollback dry run (resolves each worker's target, moves nothing).
+# Nothing reaches production traffic without passing on stage first.
+# Rollback: .github/workflows/rollback.yml or `pnpm release:rollback --env production`.
+#
+# Manual (workflow_dispatch from main) until one run has passed end to end; then it
+# runs on every push to main and replaces deploy.yml's manual deploy-production job.
+
+on:
+  workflow_dispatch:
+    inputs:
+      production:
+        description: 'Promote to production after stage passes (false = stage only)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+
+# One release at a time, and never cancel one half-way through a promote
+concurrency:
+  group: release-aun
+  cancel-in-progress: false
+
+# The Cloudflare token is set only on the steps that call Cloudflare, never on
+# install/build steps (dependency lifecycle scripts run there).
+
+jobs:
+  build:
+    name: Build once (${{ matrix.part }})
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        part: [workers, web, admin-web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+
+      - name: Release checks (wrangler configs, release scripts)
+        if: matrix.part == 'workers'
+        run: |
+          pnpm check:config
+          pnpm test:scripts
+
+      # Bundles are env-independent (no build-time defines): the same files are
+      # uploaded to stage and to production with --no-bundle.
+      - name: Bundle the plain workers
+        if: matrix.part == 'workers'
+        run: |
+          for app in api-videos processor websocket-server scheduler admin-api; do
+            (cd "apps/$app" && pnpm wrangler deploy --dry-run -c wrangler.jsonc --outdir "../../dist/$app")
+            test -f "dist/$app/index.js"
+          done
+
+      # One OpenNext build per Next app; API_URL, WEBSOCKET_URL, the issuer and the
+      # client id are read at runtime from each env's wrangler vars, so the same
+      # build serves QA, stage and production (deploy.yml already ships one build
+      # to QA and production).
+      - name: Build ${{ matrix.part }} (OpenNext)
+        if: matrix.part != 'workers'
+        run: |
+          pnpm --filter "@al-ummah/${{ matrix.part }}" build
+          cd "apps/${{ matrix.part }}" && pnpm opennextjs-cloudflare build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.part }}
+          path: ${{ matrix.part == 'workers' && 'dist/' || format('apps/{0}/.open-next/', matrix.part) }}
+          include-hidden-files: true
+          retention-days: 30
+
+  stage:
+    name: Stage (migrate, deploy, smoke, E2E)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment:
+      name: staging
+      url: https://videos.stage.alummahnow.net
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-workers
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-web
+          path: apps/web/.open-next/
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-admin-web
+          path: apps/admin-web/.open-next/
+
+      # Expand-only migrations, rehearsed here before production gets them
+      - name: Migrate stage databases
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm release:migrate --env stage
+
+      # Same mechanics as production, so every release also rehearses the promote.
+      # A stage worker that does not exist yet is created by its first deploy.
+      - name: Deploy candidates to stage (0% + override smoke → 100% → smoke)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm release:promote --env stage --message "release ${GITHUB_SHA::7}"
+
+      - name: Stage result
+        if: always()
+        run: |
+          if [ -f release-result.json ]; then
+            { echo '### Stage release'; echo '```json'; cat release-result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Install Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Release E2E on stage
+        working-directory: apps/web
+        env:
+          E2E_ENV: stage
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_STAGE }}
+        run: pnpm exec playwright test -c playwright.release.config.ts
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: stage-e2e-report
+          path: |
+            apps/web/release-report/
+            apps/web/test-results/
+          retention-days: 14
+
+  production:
+    name: Production (migrate, 0% smoke, promote)
+    needs: stage
+    if: inputs.production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://videos.alummahnow.net
+    steps:
+      - uses: actions/checkout@v4
+
+      # A newer commit on main means this candidate is stale (e.g. built before a
+      # migration-carrying merge). Never promote it; release the new head instead.
+      - name: Still the head of main?
+        run: |
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "::error::main moved to ${head::7} while releasing ${GITHUB_SHA::7}; not promoting. Run the release from the new head."
+            echo "### Superseded: main is at ${head::7}; ${GITHUB_SHA::7} was not promoted" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-workers
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-web
+          path: apps/web/.open-next/
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-admin-web
+          path: apps/admin-web/.open-next/
+
+      - name: Migrate production databases
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm release:migrate --env production
+
+      - name: Promote (0% + override smoke → 100% → smoke, auto-rollback)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm release:promote --env production --message "release ${GITHUB_SHA::7}"
+
+      - name: Production result
+        if: always()
+        run: |
+          if [ -f release-result.json ]; then
+            { echo '### Production release'; echo '```json'; cat release-result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-result
+          path: release-result.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+  # Proves the one-command rollback can act on what was just released: resolves
+  # each production worker's rollback target and stops before moving traffic.
+  rollback-dry-run:
+    name: Rollback dry run (production)
+    needs: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve rollback targets (no traffic moved)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          pnpm release:rollback --env production --dry-run | tee rollback-dry-run.txt
+          { echo '### Rollback dry run (production)'; echo '```'; cat rollback-dry-run.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
