@@ -12,7 +12,10 @@
  *   written back (mergeSessionTokens);
  * - spend a given refresh token once per isolate (refreshTokensOnce) and
  *   remember what it was rotated into, so a request still holding the old one
- *   picks up the new pair instead of failing;
+ *   picks up the new pair instead of failing. That memory is keyed by userId
+ *   plus the old refresh token, applies only to that same account, lasts no
+ *   longer than the issuer's own 60 s reuse window, and is dropped when the
+ *   account signs out or its refresh definitively fails;
  * - when the issuer definitively rejects the refresh token, mark the account
  *   `needsSignIn` instead of sending a dead token forever.
  *
@@ -24,8 +27,12 @@ import type { SessionData, UserSession } from './session-manager';
 /** Refresh when the access token expires within this window. */
 export const REFRESH_AHEAD_MS = 2 * 60 * 1000;
 
-/** How long this isolate remembers that a refresh token was rotated. */
-export const ROTATION_MEMORY_MS = 2 * 60 * 1000;
+/**
+ * How long this isolate remembers that a refresh token was rotated: the
+ * issuer's reuse window. Within it, the issuer would hand out new tokens for
+ * the old refresh token anyway; remembering longer would widen that exposure.
+ */
+export const ROTATION_MEMORY_MS = 60 * 1000;
 const ROTATION_MEMORY_MAX = 500;
 const ROTATION_CHAIN_MAX = 5;
 const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
@@ -158,10 +165,14 @@ export function mergeSessionTokens(latest: SessionData | null | undefined, mine:
 // In-isolate rotation memory and single-flight
 // ---------------------------------------------------------------------------
 
-const rotations = new Map<string, { tokens: RotatedTokens; at: number }>();
+const rotations = new Map<string, { userId: string; tokens: RotatedTokens; at: number }>();
 const inflight = new Map<string, Promise<RefreshOutcome>>();
 
-export function rememberRotation(oldRefreshToken: string, tokens: RotatedTokens, now: number = Date.now()): void {
+function rotationKey(userId: string, refreshToken: string): string {
+  return `${userId}\u0000${refreshToken}`;
+}
+
+export function rememberRotation(userId: string, oldRefreshToken: string, tokens: RotatedTokens, now: number = Date.now()): void {
   if (rotations.size >= ROTATION_MEMORY_MAX) {
     // Maps iterate in insertion order: drop the oldest half
     for (const key of rotations.keys()) {
@@ -169,14 +180,18 @@ export function rememberRotation(oldRefreshToken: string, tokens: RotatedTokens,
       rotations.delete(key);
     }
   }
-  rotations.set(oldRefreshToken, { tokens, at: now });
+  rotations.set(rotationKey(userId, oldRefreshToken), { userId, tokens, at: now });
 }
 
-/** The newest pair this isolate rotated `refreshToken` into, if it did recently. */
-export function latestRotation(refreshToken: string, now: number = Date.now()): RotatedTokens | null {
+/**
+ * The newest pair this isolate rotated `refreshToken` of `userId` into, if it
+ * did so within the issuer's reuse window. Never another account's tokens.
+ */
+export function latestRotation(userId: string, refreshToken: string, now: number = Date.now()): RotatedTokens | null {
   let found: RotatedTokens | null = null;
-  let key = refreshToken;
+  let token = refreshToken;
   for (let hop = 0; hop < ROTATION_CHAIN_MAX; hop++) {
+    const key = rotationKey(userId, token);
     const entry = rotations.get(key);
     if (!entry) break;
     if (now - entry.at > ROTATION_MEMORY_MS) {
@@ -184,20 +199,29 @@ export function latestRotation(refreshToken: string, now: number = Date.now()): 
       break;
     }
     found = entry.tokens;
-    key = entry.tokens.refreshToken;
+    token = entry.tokens.refreshToken;
   }
   return found;
 }
 
+/** Forget every remembered rotation of `userId` (sign-out, rejected refresh). */
+export function forgetRotations(userId: string): void {
+  for (const [key, entry] of rotations) {
+    if (entry.userId === userId) rotations.delete(key);
+  }
+}
+
 /**
  * Swap in the newer pair for any account whose refresh token this isolate
- * already rotated (another request did it). Returns true when anything changed.
+ * already rotated (another request did it). Each account only ever receives
+ * its own rotation. Returns true when anything changed.
  */
 export function applyKnownRotations(data: SessionData, now: number = Date.now()): boolean {
   let changed = false;
-  for (const account of Object.values(data.accounts ?? {})) {
+  for (const [userId, account] of Object.entries(data.accounts ?? {})) {
     if (!account?.refreshToken || account.needsSignIn) continue;
-    const rotated = latestRotation(account.refreshToken, now);
+    if (account.userId && account.userId !== userId) continue;
+    const rotated = latestRotation(userId, account.refreshToken, now);
     if (rotated) {
       applyTokens(account, rotated);
       changed = true;
@@ -269,23 +293,24 @@ export async function requestTokenRefresh(refreshToken: string, options: Refresh
  * request, and a token this isolate rotated recently resolves to its successor
  * without asking the issuer again.
  */
-export function refreshTokensOnce(refreshToken: string, options: RefreshOptions = {}): Promise<RefreshOutcome> {
+export function refreshTokensOnce(userId: string, refreshToken: string, options: RefreshOptions = {}): Promise<RefreshOutcome> {
   const now = options.now ?? Date.now;
-  const known = latestRotation(refreshToken, now());
+  const known = latestRotation(userId, refreshToken, now());
   if (known) return Promise.resolve({ ok: true, tokens: known });
 
-  const running = inflight.get(refreshToken);
+  const key = rotationKey(userId, refreshToken);
+  const running = inflight.get(key);
   if (running) return running;
 
   const request = requestTokenRefresh(refreshToken, options)
     .then((outcome) => {
-      if (outcome.ok) rememberRotation(refreshToken, outcome.tokens, now());
+      if (outcome.ok) rememberRotation(userId, refreshToken, outcome.tokens, now());
       return outcome;
     })
     .finally(() => {
-      inflight.delete(refreshToken);
+      inflight.delete(key);
     });
-  inflight.set(refreshToken, request);
+  inflight.set(key, request);
   return request;
 }
 
@@ -324,14 +349,14 @@ export async function refreshAccountInSession(
   const now = options.now ?? Date.now;
   const spent = account.refreshToken;
 
-  const outcome = await refreshTokensOnce(spent, options);
+  const outcome = await refreshTokensOnce(userId, spent, options);
   if (outcome.ok) {
     applyTokens(account, outcome.tokens);
     return 'refreshed';
   }
   if (!outcome.definitive) return 'failed';
 
-  const rotated = latestRotation(spent, now());
+  const rotated = latestRotation(userId, spent, now());
   if (rotated) {
     applyTokens(account, rotated);
     return 'refreshed';
@@ -350,5 +375,6 @@ export async function refreshAccountInSession(
   }
 
   account.needsSignIn = true;
+  forgetRotations(userId);
   return 'needs-sign-in';
 }

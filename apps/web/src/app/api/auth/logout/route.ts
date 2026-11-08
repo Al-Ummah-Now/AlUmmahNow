@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { SIGN_IN_COOKIES, singleSignOutNext } from "@/lib/auth/single-sign-out"
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session-cookie"
 import { revokeTokensOnSignOut, type RevocableTokens } from "@/lib/auth/revoke-on-sign-out"
+import { forgetRotations } from "@/lib/auth/token-refresh"
 
 function storedAccounts(request: NextRequest): RevocableTokens[] {
   try {
@@ -19,7 +20,9 @@ function storedAccounts(request: NextRequest): RevocableTokens[] {
  * chain (or starts it, when opened directly).
  */
 export async function GET(request: NextRequest) {
-  await revokeTokensOnSignOut(storedAccounts(request))
+  const accounts = storedAccounts(request)
+  await revokeTokensOnSignOut(accounts)
+  for (const account of accounts) if (account.userId) forgetRotations(account.userId)
   const url = new URL(request.url)
   const response = NextResponse.redirect(
     singleSignOutNext(process.env.Issuer!, url.searchParams, url.origin),

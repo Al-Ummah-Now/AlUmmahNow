@@ -18,6 +18,7 @@ import { SESSION_COOKIE_NAME, sessionCookieOptions } from './session-cookie';
 import {
   applyKnownRotations,
   computeExpiresAt,
+  forgetRotations,
   mergeSessionTokens,
   refreshAccountInSession,
   shouldRefresh,
@@ -471,6 +472,7 @@ export class SessionManager {
 
     const removed = sessionData.accounts[userId];
     if (removed) await revokeTokensOnSignOut([removed]);
+    forgetRotations(userId);
     delete sessionData.accounts[userId];
 
     // If removed account was active, switch to another
@@ -979,7 +981,10 @@ export class SessionManager {
    */
   static async clearAllSessions(): Promise<void> {
     const sessionData = await this.getSessionData();
-    if (sessionData) await revokeTokensOnSignOut(Object.values(sessionData.accounts));
+    if (sessionData) {
+      await revokeTokensOnSignOut(Object.values(sessionData.accounts));
+      Object.keys(sessionData.accounts).forEach(forgetRotations);
+    }
     await this.setSessionData(null);
   }
 }

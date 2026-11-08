@@ -9,8 +9,12 @@ import {
   REFRESH_AHEAD_MS,
   __resetTokenRefreshStateForTests,
   accountExpiresAt,
+  ROTATION_MEMORY_MS,
   applyKnownRotations,
   computeExpiresAt,
+  forgetRotations,
+  latestRotation,
+  rememberRotation,
   isNewerTokenSet,
   mergeSessionTokens,
   refreshAccountInSession,
@@ -158,21 +162,21 @@ describe('talking to the issuer', () => {
     const issuer = fakeIssuer({ r1: { access: jwt('u1', NOW, 15 * MINUTE), refresh: 'r2' } });
     const options = { issuer: ISSUER, fetchImpl: issuer.fetchImpl, now: () => NOW };
 
-    const [a, b, c] = await Promise.all([refreshTokensOnce('r1', options), refreshTokensOnce('r1', options), refreshTokensOnce('r1', options)]);
+    const [a, b, c] = await Promise.all([refreshTokensOnce('u1', 'r1', options), refreshTokensOnce('u1', 'r1', options), refreshTokensOnce('u1', 'r1', options)]);
 
     expect(issuer.calls).toHaveLength(1);
     expect(a).toEqual(b);
     expect(b).toEqual(c);
 
     // A request still holding r1 afterwards gets r2 without a second /token call
-    expect(await refreshTokensOnce('r1', options)).toEqual(a);
+    expect(await refreshTokensOnce('u1', 'r1', options)).toEqual(a);
     expect(issuer.calls).toHaveLength(1);
   });
 
   it('lets a stale cookie pick up a rotation this isolate already made', async () => {
     const access = jwt('u1', NOW, 15 * MINUTE);
     const issuer = fakeIssuer({ r1: { access, refresh: 'r2' } });
-    await refreshTokensOnce('r1', { issuer: ISSUER, fetchImpl: issuer.fetchImpl, now: () => NOW });
+    await refreshTokensOnce('u1', 'r1', { issuer: ISSUER, fetchImpl: issuer.fetchImpl, now: () => NOW });
 
     const stale = sessionWith(account('u1', { accessToken: jwt('u1', NOW - 14 * MINUTE, 15 * MINUTE), refreshToken: 'r1' }));
     expect(applyKnownRotations(stale, NOW + 1000)).toBe(true);
@@ -238,5 +242,64 @@ describe('refreshAccountInSession', () => {
 
     expect(await refreshAccountInSession(data, 'u1', { issuer: ISSUER, fetchImpl: issuer.fetchImpl, now: () => NOW })).toBe('failed');
     expect(data.accounts.u1).toEqual(before);
+  });
+});
+
+describe('remembered rotations (security)', () => {
+  const rotated = () => ({ accessToken: jwt('u1', NOW, 15 * MINUTE), refreshToken: 'r2', expiresAt: NOW + 15 * MINUTE });
+  const holding = (userId: string, refreshToken: string) =>
+    sessionWith(account(userId, { accessToken: jwt(userId, NOW - 14 * MINUTE, 15 * MINUTE), refreshToken }));
+
+  it("applies only to the account it was made for, never to another user's cookie with the same old token", () => {
+    rememberRotation('u1', 'r1', rotated(), NOW);
+
+    const other = holding('u2', 'r1');
+    expect(applyKnownRotations(other, NOW + 1000)).toBe(false);
+    expect(other.accounts.u2.refreshToken).toBe('r1');
+    expect(latestRotation('u2', 'r1', NOW + 1000)).toBeNull();
+
+    // an account entry whose stored userId disagrees with its key gets nothing either
+    const mislabeled = holding('u1', 'r1');
+    mislabeled.accounts.u1.userId = 'u2';
+    expect(applyKnownRotations(mislabeled, NOW + 1000)).toBe(false);
+
+    const own = holding('u1', 'r1');
+    expect(applyKnownRotations(own, NOW + 1000)).toBe(true);
+    expect(own.accounts.u1.refreshToken).toBe('r2');
+  });
+
+  it("is kept no longer than the issuer's 60 s reuse window", () => {
+    expect(ROTATION_MEMORY_MS).toBe(60 * 1000);
+    rememberRotation('u1', 'r1', rotated(), NOW);
+
+    expect(latestRotation('u1', 'r1', NOW + 59 * 1000)).not.toBeNull();
+    const late = holding('u1', 'r1');
+    expect(applyKnownRotations(late, NOW + 61 * 1000)).toBe(false);
+    expect(late.accounts.u1.refreshToken).toBe('r1');
+    // and the expired entry is gone for good
+    expect(latestRotation('u1', 'r1', NOW + 1000)).toBeNull();
+  });
+
+  it('is forgotten when the account signs out (forgetRotations), leaving other accounts alone', () => {
+    rememberRotation('u1', 'r1', rotated(), NOW);
+    rememberRotation('u2', 'q1', { accessToken: jwt('u2', NOW, 15 * MINUTE), refreshToken: 'q2' }, NOW);
+
+    forgetRotations('u1');
+
+    expect(latestRotation('u1', 'r1', NOW + 1000)).toBeNull();
+    expect(latestRotation('u2', 'q1', NOW + 1000)?.refreshToken).toBe('q2');
+  });
+
+  it('is forgotten when the account\'s refresh definitively fails', async () => {
+    // r0 was rotated into r1 earlier; now r1 is rejected
+    rememberRotation('u1', 'r0', { accessToken: jwt('u1', NOW - 14 * MINUTE, 15 * MINUTE), refreshToken: 'r1' }, NOW - 10 * 1000);
+    const issuer = fakeIssuer({});
+    const data = holding('u1', 'r1');
+
+    expect(await refreshAccountInSession(data, 'u1', { issuer: ISSUER, fetchImpl: issuer.fetchImpl, now: () => NOW })).toBe('needs-sign-in');
+
+    // a cookie still holding r0 no longer gets anything from memory
+    expect(latestRotation('u1', 'r0', NOW)).toBeNull();
+    expect(applyKnownRotations(holding('u1', 'r0'), NOW)).toBe(false);
   });
 });

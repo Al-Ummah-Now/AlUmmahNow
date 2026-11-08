@@ -36,7 +36,7 @@ const revokeTokensOnSignOut = jest.fn(async () => undefined);
 jest.mock('../revoke-on-sign-out', () => ({ revokeTokensOnSignOut: (...args: unknown[]) => revokeTokensOnSignOut(...(args as [])) }));
 
 import { SessionManager, type SessionData, type UserSession } from '../session-manager';
-import { __resetTokenRefreshStateForTests } from '../token-refresh';
+import { __resetTokenRefreshStateForTests, latestRotation } from '../token-refresh';
 import { DAY, MINUTE, fakeIssuer, jwt } from './token-fixtures';
 
 const COOKIE = 'al_ummah_session';
@@ -214,5 +214,29 @@ describe('sign-out', () => {
     await SessionManager.clearAllSessions();
     expect(revokeTokensOnSignOut).toHaveBeenCalledWith([expect.objectContaining({ userId: 'u1', refreshToken: 'r1' })]);
     expect(jar.has(COOKIE)).toBe(false);
+  });
+
+  it('forgets remembered rotations so an old refresh token gets nothing afterwards', async () => {
+    useIssuer({ r1: { access: jwt('u1', Date.now(), 15 * MINUTE), refresh: 'r2' } });
+    writeAccount({ accessToken: jwt('u1', Date.now() - 20 * MINUTE, 15 * MINUTE), refreshToken: 'r1' });
+    await SessionManager.ensureFreshActiveSession();
+    expect(latestRotation('u1', 'r1')?.refreshToken).toBe('r2');
+
+    await SessionManager.removeAccount('u1');
+
+    expect(latestRotation('u1', 'r1')).toBeNull();
+    // a cookie replayed with the old token is not upgraded
+    writeAccount({ accessToken: jwt('u1', Date.now() - 20 * MINUTE, 15 * MINUTE), refreshToken: 'r1' });
+    expect((await SessionManager.getSessionForUser('u1'))?.refreshToken).toBe('r1');
+  });
+
+  it('clearAllSessions forgets every account\'s rotations', async () => {
+    useIssuer({ r1: { access: jwt('u1', Date.now(), 15 * MINUTE), refresh: 'r2' } });
+    writeAccount({ accessToken: jwt('u1', Date.now() - 20 * MINUTE, 15 * MINUTE), refreshToken: 'r1' });
+    await SessionManager.ensureFreshActiveSession();
+
+    await SessionManager.clearAllSessions();
+
+    expect(latestRotation('u1', 'r1')).toBeNull();
   });
 });
