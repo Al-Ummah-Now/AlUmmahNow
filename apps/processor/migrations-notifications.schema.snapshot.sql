@@ -2,11 +2,13 @@
 -- Schema after applying, in order:
 --   apps/processor/migrations-notifications/0001_notifications.sql
 --   apps/processor/migrations-notifications/0002_library_index.sql
+--   apps/processor/migrations-notifications/0003_push_devices.sql
 
 CREATE TABLE channel_subscribers (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, bell TEXT NOT NULL DEFAULT 'highlights' CHECK (bell IN ('all', 'highlights', 'none')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (channel_id, user_id));
 CREATE TABLE liked_videos (user_id TEXT NOT NULL, video_id TEXT NOT NULL, liked_at INTEGER NOT NULL, PRIMARY KEY (user_id, video_id));
 CREATE TABLE notification_settings (user_id TEXT NOT NULL, category TEXT NOT NULL, enabled INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, category));
 CREATE TABLE notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, category TEXT NOT NULL, notification_type TEXT NOT NULL, notification_key TEXT NOT NULL, params_json TEXT NOT NULL DEFAULT '{}', action_url TEXT, actor_id TEXT, entity_id TEXT, dedupe_key TEXT, is_read INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, read_at INTEGER);
+CREATE TABLE push_devices (install_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, provider TEXT NOT NULL CHECK (provider IN ('apns', 'fcm', 'wns', 'webpush')), token TEXT NOT NULL, locale TEXT, app_version TEXT, categories TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE saved_posts (user_id TEXT NOT NULL, post_id TEXT NOT NULL, channel_id TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (user_id, post_id));
 CREATE INDEX idx_channel_subscribers_user ON channel_subscribers(user_id);
 CREATE INDEX idx_liked_videos_user ON liked_videos(user_id, liked_at DESC, video_id);
@@ -15,4 +17,6 @@ CREATE INDEX idx_notifications_created ON notifications(created_at);
 CREATE UNIQUE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC, id DESC);
 CREATE INDEX idx_notifications_user_unread ON notifications(user_id, is_read);
+CREATE UNIQUE INDEX idx_push_devices_token ON push_devices(provider, token);
+CREATE INDEX idx_push_devices_user ON push_devices(user_id, updated_at DESC);
 CREATE INDEX idx_saved_posts_user ON saved_posts(user_id, saved_at DESC, post_id);
