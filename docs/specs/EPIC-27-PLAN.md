@@ -7,15 +7,28 @@
 
 **In scope (plumbing):** plans, plan versions, per-plan entitlement values, the entitlement catalogue, admin assignment, overrides, trials by expiry date, resolution, server-side enforcement, usage counters, audit trail, and the admin and user UIs.
 
-**Not in this plan, pending the owner (§10, Q1):** anything that takes money. That means `plan_prices`, `payment_providers`, `payment_events`, the `PaymentProvider` interface and adapters, checkout, `/api/billing/webhooks/*`, App Store / Google Play IAP, and any displayed price. Spec 27.1 and 27.7 describe these; D4 says "None at launch". They add tables later without changing anything below.
+**Deferred per D4 (owner decision, 2026-11-08):** anything that takes money. That means `plan_prices`, `payment_providers`, `payment_events`, the `PaymentProvider` interface and adapters, checkout, `/api/billing/webhooks/*`, App Store / Google Play IAP, and any displayed price. Spec 27.1, 27.6 (provider management) and 27.7 describe these; they add tables later without changing anything below.
 
 ### Invariants
 
-1. **No existing user or channel changes behaviour.** A subject with no assignment is on the default plan, and the default plan grants everything that works today.
-2. **No backfill.** "On the default plan" is the absence of a `subscriptions` row, so there is no data to rewrite.
+1. **Grandfathering: existing content is never deleted or hidden.** A limit blocks only NEW actions beyond it: a new channel, a new link, a new upload. Someone above a limit keeps everything, can keep saving at or below their current amount, and can reduce it. Tests assert this for every enforced key.
+2. **No backfill.** "On the default plan" is the absence of a `subscriptions` row, so there is no data to rewrite. Usage counts from rollout: existing videos have no stored size or duration, so they do not consume quota.
 3. **Checks are server-side.** UI hints are only hints.
-4. **Fail to today's behaviour.** If D1 or KV is unavailable, resolution returns the code defaults and logs a warning. An outage must not lock creators out.
-5. **Never break a live embed.** Lowering a limit blocks new additions only; existing items keep working (27.5).
+4. **Fail open.** If D1 or KV is unavailable, resolution returns the permissive catalogue fallbacks and logs a warning. An outage must not lock creators out.
+5. **Never break a live embed.** Lowering a limit blocks new additions only (27.5).
+6. **Affected users have an override path.** An admin can raise any limit for a user or channel in admin-web, with a reason and optional expiry. A user-level override also covers that user's channels.
+
+### Free plan (owner decision: real limits)
+
+| Key | Free | Today |
+|---|---|---|
+| `upload.monthlyUploads` | 10 per calendar month (UTC) | none |
+| `storage.gb` | 5 | none |
+| `channel.max` | 1 | none |
+| `channel.about.links.max` | 5 | 10 |
+| `upload.maxDurationMinutes` | 30 | none |
+
+All are ordinary rows, editable by admins with no deploy. Impact on existing data is measured by `scripts/entitlements/impact-report.mjs` and stated in the enforcement PR before it merges.
 
 ## 2. What exists today
 
@@ -30,9 +43,9 @@
 
 ## 3. Data model
 
-New migrations in `apps/admin-api/migrations/` (same `REPORTS_DB`, so no new database in three environments), append-only, with `pnpm schema:snapshot` committed alongside. api-videos gets a `REPORTS_DB` binding in `wrangler.qa.jsonc` and in `wrangler.jsonc` (top level and stage), plus the matching `scripts/release/apps.ts` entries. api-videos reads these tables and writes only through the admin-api-owned paths in §4.
+New migrations in `apps/admin-api/migrations/` (same `REPORTS_DB`, so no new database in three environments), append-only, with `pnpm schema:snapshot` committed alongside. api-videos gets a `REPORTS_DB` binding in `wrangler.qa.jsonc` and in `wrangler.jsonc` (top level and stage), plus the matching `scripts/release/apps.ts` entries. api-videos reads these tables and writes only `usage_counters`.
 
-`0002_plans_entitlements.sql`:
+`0004_plans_entitlements.sql`:
 
 ```sql
 plans (
@@ -93,16 +106,7 @@ The spec's `is_default` is an addition: it lets the default be data, as T1 requi
 
 **Values:** `value_json` holds a JSON boolean, number, enum string or list. A numeric limit with no ceiling is the string `"unlimited"`.
 
-`0003_seed_default_plan.sql`: one `INSERT OR IGNORE` for plan `free` (`active`, public, default, version 1), plus its entitlement rows. **Free's seeded values are today's behaviour**, which differs from the spec's suggested Free limits on anything already unlimited:
-
-| Keys | Seed | Why |
-|---|---|---|
-| `channel.about.links.max` | 10 | Today's hard limit |
-| `channel.handle`, `comments.*`, `share.shortLinks`, `embed.enabled` | true | Available to all today |
-| `channel.max`, `upload.maxDurationMinutes`, `upload.monthlyHours`, `storage.gb`, `live.monthlyMinutes` | `"unlimited"` | No limit today. The spec names these keys but gives no value |
-| Unbuilt-feature keys (`sites.max`, `discussions.*`, `embed.domains.max`, ...) | spec §27.4 Free column | Nothing to preserve; the feature adopts the key when built |
-
-Plus, Pro and Institution are seeded as `draft`, non-public, with the §27.4 values, for admins to edit.
+`0005_seed_plans.sql`: `INSERT OR IGNORE` rows for plan `free` (`active`, public, default, version 1) with the limits above and §27.4's Free column for unbuilt features. Keys the owner did not set and that have no limit today (`upload.monthlyHours`, `live.monthlyMinutes`, `analytics.retentionDays`) stay `"unlimited"`. Plus, Pro and Institution are seeded as `draft`, non-public, with the §27.4 values.
 
 **Data check:** `scripts/release/` gets no new gate; PR 1's test applies the migrations to an empty SQLite and asserts exactly one default plan, and that every catalogue key has a Free row. After the QA deploy, the same two assertions run as `SELECT`s against QA D1.
 
@@ -131,23 +135,26 @@ A key absent from a plan falls through to the next level.
 - Overrides: list, set, remove. Usage by subject. Audit log (read).
 - Every write validates against the catalogue, writes `plan_audit_log` in the same D1 batch, and requires a `reason` on assignments and overrides.
 
-**RBAC:** add `billing_admin` (write) and `billing_viewer` (read) to `roles.ts` in admin-api and admin-web; `admin` and `super_admin` are also allowed. The roles must also be created on the auth server (separate repo) before anyone can hold them (§10, Q3).
+**RBAC:** only `admin` and `super_admin` until the auth server has `billing_admin` and `billing_viewer` (§10, Q3).
 
 ## 5. Enforcement points
 
-| Key | Where | At limit |
-|---|---|---|
-| `channel.about.links.max` | Channel update: the Zod cap stays as an absolute ceiling raised to the catalogue maximum; the per-channel limit is checked in the handler | 402 (was 400); the settings UI stops adding rows |
-| `comments.replies`, `comments.settings`, `comments.heldForReview` | Comment create; per-video comment settings | 402 |
-| `channel.max` | `channelCreate` (user subject) | 402; existing channels untouched |
-| `upload.maxDurationMinutes`, `upload.monthlyHours` | TUS proxy create / upload start | 402 before bytes are sent |
-| `share.shortLinks`, `embed.enabled` | Short-link and embed routes, read from the same resolver; must fail open | Embed keeps playing (Invariant 5) |
+Subject: `user` for channels, uploads and storage; `channel` then its owner for links.
 
-Web changes to `links.max` must accept both 400 and 402 while the deploy rolls out. Keys for unbuilt features (`sites.*`, `discussions.*`, `embed.customColor`, ...) are catalogued and adopted by those features (Definition of Done addition, 27.2). Any that have no owning issue get a `queue` issue.
+| Key | Where | Rule | At limit |
+|---|---|---|---|
+| `channel.max` | `channelCreate` | Count the user's live channels from the existing owner scan | 402; existing channels untouched |
+| `channel.about.links.max` | `channelUpdate` | Allowed when the new count is within the limit, or does not exceed the channel's stored count | 402; the settings UI stops adding rows |
+| `upload.monthlyUploads`, `storage.gb` | All upload session paths, plus a TUS check that `Upload-Length` matches the declared size | Atomic conditional counter update | 402 before any bytes are sent |
+| `upload.maxDurationMinutes` | Initiate, from the duration the client declares; then verified from Bunny's length after encoding | Over the limit after encoding: upload marked failed and unpublished, kept for the owner. Applies only to uploads started under enforcement | 402, or a failed upload with a reason |
+
+Only uploads started after enforcement carry the `entitlementChecked` marker, so existing videos can never fail the duration check. Comment keys are `true` on every plan; they are not gated until a plan turns them off.
+
+Keys for unbuilt features are catalogued and adopted by those features.
 
 ## 6. Metering
 
-`upload.monthlyHours` and `storage.gb` first, since only those have a real event source. api-videos sends a `usage.increment` queue message; the processor (needs a `REPORTS_DB` binding, added with its `apps.ts` entry) upserts `usage_counters`. Messages carry an id, recorded for idempotence, so a retry does not double-count. Checks read the cached value. `usage` in the API reports `warning: true` at 80%; hard stop at 100%. With the seed at `"unlimited"`, nobody is affected until an admin sets a limit.
+`usage_counters` is written by api-videos at upload start with a conditional upsert, so parallel uploads cannot exceed a limit. This replaces the spec's queue → processor path, because a stale asynchronous count cannot enforce a hard stop and uploads are rare enough for a synchronous D1 write. Storage is decremented when a counted video is deleted; the monthly upload count is not, so deleting cannot reset it. `usage` in the API reports `warning: true` at 80%.
 
 ## 7. Admin UI (`apps/admin-web`)
 
@@ -157,13 +164,13 @@ New nav section **Plans**, hidden unless the role allows it, en/ar + RTL, TanSta
 - `plans/assignments`: find subject, assign, trial with expiry, overrides, bulk migrate with dry-run count and confirm.
 - `plans/usage`: usage vs limits. `plans/audit`: who, when, why.
 
-Provider management and prices (27.6) wait on Q1.
+Provider management and prices (27.6) are deferred.
 
 ## 8. User UI (`apps/web`)
 
 - `useEntitlement(key, subject)`, backed by a server action calling `GET /api/entitlements`. A failed fetch means allowed; the server still enforces.
 - `<PlanGate>` for disabled controls with "Available on {plan}". A shared handler turns 402 `upgrade_required` into a localized message.
-- `/[locale]/settings/channel/[id]/plan`: read-only current plan, limits and usage, with an 80% warning. No prices, no checkout, no upgrade button (Q2).
+- `/[locale]/settings/channel/[id]/plan`: read-only current plan, limits and usage, with an 80% warning. No prices, no checkout, no upgrade button.
 - Links editor in channel settings reads the limit instead of the constant. en/ar keys, logical CSS properties for RTL, and the repo's LTR/RTL component pattern where the surrounding component uses it.
 
 ## 9. Delivery and tests
@@ -174,21 +181,20 @@ Each PR is small, off fresh `origin/main`, and merges only with required checks 
 |---|---|---|
 | 1 | Migrations 0002/0003, snapshot, shared catalogue, resolver (pure) | Migration applies on empty SQLite; one default; every key seeded; full resolver precedence (expiry, trial end, version pinning, fall-through) |
 | 2 | api-videos binding, KV cache, `GET /api/entitlements`, helpers | `apps/api-videos/test/entitlements.spec.ts`: authz (owner, stranger, admin); **no row → today's values**; D1 down → defaults; 402 shape in en/ar |
-| 3 | Enforcement of existing keys (§5) | Each key: default plan passes as before; an override below usage returns 402; raising via override allows more than today |
+| 3 | Enforcement (§5), counters (§6), impact report script | Each key: at-limit 402; **grandfathering** (above limit keeps content, same-count save passes, reduction passes, only growth refused); override raises the limit; duration check ignores existing videos |
 | 4 | admin-api router, RBAC, audit, KV invalidation | Moderator / plain user 403; catalogue validation; publish bumps version and pins subscribers; default not archivable; every write audited; bulk dry-run writes nothing |
 | 5 | admin-web Plans UI | Component tests; release E2E `plans-admin.spec.ts`: promoted admin creates and publishes a plan, en and ar |
 | 6 | web hook, gate, plan page, links limit | Component tests including RTL; release E2E `plan-entitlements.spec.ts`: new user sees Free; after an admin override, a save over the limit shows the upgrade message, and an unassigned channel still saves 10 links |
-| 7 | Metering (queue → processor), usage in API and UIs | Processor idempotence; 80% and 100% boundaries |
 
 QA verification after each deploy: `/api/entitlements` for a fresh channel returns Free with today's values, the D1 assertions in §3, and the admin page in en and ar.
 
 Release E2E specs keep to the suite's constraints: own sink user, imports inside `e2e/release/`, never production.
 
-## 10. Open questions for the owner
+## 10. Owner decisions (2026-11-08)
 
-| # | Question | Default if unanswered |
-|---|---|---|
-| Q1 | Should Epic 27 now include any payment work (prices, providers, checkout, webhooks, IAP)? D4 says none at launch; the spec's Phase 5 includes it. | Excluded |
-| Q2 | With no billing, what does "Available on Pro" lead to? | Plain text, no link |
-| Q3 | `billing_admin` / `billing_viewer` need creating on the auth server. | `admin` and `super_admin` only until then |
-| Q4 | Should real limits on uploads, storage or channel count ever apply to Free? | `"unlimited"`, changeable by an admin with no deploy |
+| # | Decision |
+|---|---|
+| Q1 | Plumbing only; the spec's payment parts are deferred per D4 |
+| Q2 | "Available on {plan}" is plain text, with no link and no price |
+| Q3 | Only `admin` and `super_admin` manage plans until `billing_admin` / `billing_viewer` exist (queue issue on AlUmmahNowAuth) |
+| Q4 | Free has real limits (§1), and existing content is grandfathered |

@@ -56,3 +56,6 @@ export { AR_TRANSLATIONS } from './i18n-static/ar';
 
 // Search index: Arabic normalisation, documents, D1 store, API contracts (Epic 29)
 export * from './search';
+
+// Plans & entitlements catalogue and resolver (Epic 27)
+export * from './entitlements';
