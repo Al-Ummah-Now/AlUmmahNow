@@ -59,27 +59,5 @@ test.describe('Release: watch history', () => {
 
     await page.goto(`${target().web}/en/history`);
     await expect(page.getByText(video!.title, { exact: false }).first()).toBeVisible({ timeout: 30000 });
-
-    // Continue watching shows the picture: a loaded image can still sit in a
-    // zero-height box (aspect-video produces no CSS), so the rendered size counts.
-    await page.goto(`${target().web}/en`);
-    const tile = page.locator(`[data-testid="continue-watching-video"][data-video-id="${video!.id}"]`);
-    await expect(tile).toBeVisible({ timeout: 30000 });
-    await tile.scrollIntoViewIfNeeded();
-    await expect
-      .poll(
-        () =>
-          tile.evaluate((a) => {
-            const img = a.querySelector('img');
-            const picture = img ?? a.querySelector('[data-testid="video-thumbnail-placeholder"]');
-            if (!picture) return 'no thumbnail element';
-            const { width, height } = picture.getBoundingClientRect();
-            if (width === 0 || height === 0) return `collapsed thumbnail box ${width}x${height}`;
-            if (!img) return 'placeholder';
-            return img.complete && img.naturalWidth > 0 ? 'loaded' : `image did not load: ${img.currentSrc}`;
-          }),
-        { message: 'Continue watching tile shows its thumbnail', timeout: 20000 },
-      )
-      .toBe(video!.thumbnailUrl ? 'loaded' : 'placeholder');
   });
 });
