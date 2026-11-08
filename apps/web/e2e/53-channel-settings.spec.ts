@@ -32,42 +32,36 @@ const SETTINGS_PAGES = ['', '/edit', '/videos', '/tabs', '/sections', '/playlist
 test.describe('Settings overview', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('CHSET-001 lists every settings area with working links (en)', async ({ page }) => {
+  test('CHSET-001 shows the channel header and links every settings area (en)', async ({ page }) => {
     const { main } = channelsOf('single');
     await page.goto(`/en/settings/channel/${main.id}`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Channel Settings' })).toBeVisible();
+    await expect(page.getByTestId('channel-header').getByRole('heading', { level: 1 })).toHaveText(main.name);
+    await expect(page.getByTestId('channel-subscribe-button')).toHaveCount(0);
 
-    const cards: Array<[RegExp, string]> = [
-      [/General Settings/, '/edit'],
-      [/Video Management/, '/videos'],
-      [/Manage Playlists/i, '/playlists'],
-      [/Manage Channel Tabs/, '/tabs'],
-      [/Manage Sections/, '/sections'],
-      [/Community Posts/, '/community'],
-    ];
-    for (const [name, suffix] of cards) {
-      await expect(page.getByRole('link', { name })).toHaveAttribute('href', `/en/settings/channel/${main.id}${suffix}`);
+    const nav = page.getByTestId('channel-settings-nav');
+    await expect(nav.locator('[aria-current="page"]')).toHaveText('Overview');
+    for (const key of ['edit', 'videos', 'playlists', 'tabs', 'sections', 'community']) {
+      const suffix = key === 'edit' ? '/edit' : `/${key}`;
+      await expect(page.getByTestId(`channel-settings-${key}`)).toHaveAttribute('href', `/en/settings/channel/${main.id}${suffix}`);
     }
-    await expect(page.getByRole('link', { name: 'Back to Channel' })).toHaveAttribute('href', `/en/channels/${main.id}`);
 
-    await clickUntil(page.getByRole('link', { name: /Manage Channel Tabs/ }), async () =>
+    await clickUntil(nav.getByRole('link', { name: 'Tabs' }), async () =>
       expect(page).toHaveURL(new RegExp(`/settings/channel/${main.id}/tabs$`), { timeout: 5000 })
     );
-    await expect(page.getByRole('heading', { level: 1, name: 'Manage Channel Tabs' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Manage Channel Tabs' })).toBeVisible();
   });
 
   test('CHSET-002 Arabic overview is RTL with icons at the inline start', async ({ page }) => {
     const { main } = channelsOf('single');
     await page.goto(`/ar/settings/channel/${main.id}`);
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'إعدادات القناة' })).toBeVisible();
-    const card = page.getByRole('link', { name: /الإعدادات العامة/ });
+    await expect(page.getByTestId('channel-header')).toHaveAttribute('dir', 'rtl');
+    const card = page.getByTestId('channel-settings-edit');
     await expect(card).toHaveAttribute('href', `/ar/settings/channel/${main.id}/edit`);
     // In RTL the icon sits to the right of the card title
     const icon = card.locator('svg').first();
-    const heading = card.getByRole('heading');
-    expect(await centerX(icon)).toBeGreaterThan(await centerX(heading));
-    await expect(page.getByRole('link', { name: /^العودة (إلى ال|لل)قناة$/ })).toBeVisible();
+    const title = card.getByText('تخصيص القناة');
+    expect(await centerX(icon)).toBeGreaterThan(await centerX(title));
   });
 });
 
@@ -119,19 +113,17 @@ test.describe('Edit channel', () => {
       const marker = `وصف اختبار ${Date.now()}`;
       try {
         await page.goto(`/en/settings/channel/${target.id}/edit`);
-        await expect(page.getByRole('heading', { level: 1, name: 'Edit Channel' })).toBeVisible();
-        await expect(page.getByLabel(/Channel Name/)).toHaveValue(original.nameLocalized?.en || original.name);
+        const header = page.getByTestId('channel-header');
+        await expect(header.getByRole('heading', { level: 1 })).toHaveText(original.nameLocalized?.en || original.name);
 
-        await clickUntil(page.getByRole('button', { name: 'Arabic', exact: true }), async () =>
-          expect(page.locator('#channel-description-ar')).toBeVisible({ timeout: 3000 })
-        );
-        await fillStable(page.locator('#channel-description-ar'), marker);
+        // Switch the header to the Arabic version and edit the description in place
+        await page.getByTestId('edit-language-ar').click();
+        await header.getByRole('button', { name: /^Edit Channel Description \(Arabic\)/i }).click();
+        await fillStable(page.getByTestId('channel-description-input'), marker);
         await expect(page.getByText(`${marker.length}/500`)).toBeVisible();
-        await page.getByRole('button', { name: 'Save Changes' }).click();
-
-        // Saving lands on the channel page: /@handle once the channel has one, else /channels/{id}
-        const channelUrl = original.handle ? `/en/@${original.handle}` : `/en/channels/${target.id}`;
-        await expect(page).toHaveURL(new RegExp(`${channelUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+        await page.getByTestId('channel-description-input').press('Control+Enter');
+        await page.getByRole('button', { name: 'Save changes' }).click();
+        await expect(page.getByTestId('unsaved-changes-bar')).toHaveAttribute('data-state', 'saved');
         await expect
           .poll(async () => (await apiGet<{ descriptionLocalized?: Record<string, string> }>(`/api/channels/${target.id}`)).descriptionLocalized?.ar)
           .toBe(marker);
@@ -153,21 +145,20 @@ test.describe('Edit channel', () => {
     });
   });
 
-  test('CHSET-021 requires the English name and Cancel returns to settings (ar)', async ({ page }) => {
+  test('CHSET-021 requires the English name and Discard restores it (ar)', async ({ page }) => {
     const target = channelsOf('multi').other!;
     await page.goto(`/ar/settings/channel/${target.id}/edit`);
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'تعديل القناة' })).toBeVisible();
-    const name = page.locator('#channel-name-en');
+    await page.getByTestId('edit-language-en').click();
+    const header = page.getByTestId('channel-header');
+    await header.getByTestId('channel-name-edit').click();
+    const name = page.getByTestId('channel-name-input');
     await fillStable(name, '');
-    await page.getByRole('button', { name: 'حفظ التغييرات' }).click();
-    // Native validation blocks the submit
-    expect(await name.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
-    await expect(page).toHaveURL(/\/edit$/);
-
-    await page.getByRole('link', { name: 'إلغاء' }).click();
-    // Cancel returns to the channel settings overview
-    await expect(page).toHaveURL(new RegExp(`/ar/settings/channel/${target.id}$`));
+    await name.press('Enter');
+    await expect(page.getByTestId('channel-name-error')).toBeVisible();
+    await expect(name).toHaveAttribute('aria-invalid', 'true');
+    await page.getByTestId('channel-name-cancel').click();
+    await expect(page.getByTestId('unsaved-changes-bar')).toHaveCount(0);
     // Nothing was saved
     expect((await apiGet<{ name: string }>(`/api/channels/${target.id}`)).name).toBe(target.name);
   });
@@ -179,7 +170,7 @@ test.describe('Channel videos', () => {
   test('CHSET-030 lists the channel videos, including private ones, with search (en)', async ({ page }) => {
     const { main } = channelsOf('single');
     await page.goto(`/en/settings/channel/${main.id}/videos`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Video Management' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Video Management' })).toBeVisible();
     const seed = page.getByRole('heading', { level: 3, name: SEED_TITLES.singleVideo, exact: true });
     await expect(seed).toBeVisible();
 
@@ -192,7 +183,7 @@ test.describe('Channel videos', () => {
     const { main } = channelsOf('single');
     await page.goto(`/ar/settings/channel/${main.id}/videos`);
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'إدارة الفيديوهات' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'إدارة الفيديوهات' })).toBeVisible();
     await expect(page.getByPlaceholder(/فيديوهات\.\.\.$/)).toBeVisible();
   });
 });
@@ -224,7 +215,7 @@ test.describe('Tab management', () => {
   test('CHSET-040 shows every tab with the default marked (en)', async ({ page }) => {
     const config = await getTabConfig(target().id);
     await openTabs(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'Manage Channel Tabs' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Manage Channel Tabs' })).toBeVisible();
     const ids = await page.getByTestId('tab-item').evaluateAll((els) => els.map((e) => e.getAttribute('data-tab-id')));
     expect(ids).toEqual([...config.tabs].sort((a, b) => a.position - b.position).map((t) => t.id));
     await expect(row(page, config.defaultTab)).toContainText('Default Tab');
@@ -303,7 +294,7 @@ test.describe('Tab management', () => {
     const config = await getTabConfig(target().id);
     await openTabs(page, 'ar');
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'إدارة تبويبات القناة' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'إدارة تبويبات القناة' })).toBeVisible();
     await expect(row(page, config.defaultTab)).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('button', { name: 'حفظ التغييرات' })).toBeDisabled();
     // System tabs carry Arabic names
