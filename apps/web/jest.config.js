@@ -20,6 +20,8 @@ const customJestConfig = {
     '^react/(.*)$': '<rootDir>/../../node_modules/react/$1',
     '^react-dom/(.*)$': '<rootDir>/../../node_modules/react-dom/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
+    // ESM-only package; see __mocks__/openauth.js.
+    '^@al-ummah-now/openauth/(client|subject|error)$': '<rootDir>/__mocks__/openauth.js',
     // Mock CSS and style imports
     '\\.(css|less|sass|scss)$': 'identity-obj-proxy',
     '\\.(gif|ttf|eot|svg|png|jpg|jpeg)$': '<rootDir>/__mocks__/fileMock.js',
@@ -60,7 +62,6 @@ const customJestConfig = {
     '<rootDir>/src/components/__tests__/SearchFilters.test.tsx',
     '<rootDir>/src/lib/touch/__tests__/touch-feedback.test.ts',
     '<rootDir>/src/app/\\[locale\\]/channels/\\[id\\]/__tests__/routing.test.tsx',
-    '<rootDir>/src/lib/__tests__/api-client.test.ts',
   ],
   // Build output contains copies of workspace packages; keep them out of the
   // module map or jest reports duplicate packages (e.g. @al-ummah/logger).
