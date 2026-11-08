@@ -1,6 +1,6 @@
 'use server';
 
-import type { Report, ReportStats } from '@al-ummah/shared-types';
+import type { EntitlementDefinition, EntitlementValue, Report, ReportStats } from '@al-ummah/shared-types';
 import { getAdminSession } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { AdminApiError, type ActionResult } from './errors';
@@ -15,6 +15,11 @@ import type {
   AiConfigView,
   AiConfigPatch,
   AiUsageView,
+  PlanAuditEntry,
+  PlanDetail,
+  PlanMigration,
+  PlanRow,
+  SubjectState,
 } from './types';
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL || 'http://127.0.0.1:3090';
@@ -193,4 +198,54 @@ export async function updateAiConfig(patch: AiConfigPatch): Promise<ActionResult
 
 export async function getAiUsage(days = 30): Promise<AiUsageView> {
   return fetchAdmin<AiUsageView>(`/api/moderation/ai/usage?days=${days}`);
+}
+
+// Plans & entitlements (Epic 27)
+const planPath = (id: string) => `/api/plans/${encodeURIComponent(id)}`;
+const subjectPath = (subject: string) => `/api/plans/subjects/${encodeURIComponent(subject)}`;
+
+export async function getEntitlementCatalogue(): Promise<{ catalogue: EntitlementDefinition[] }> {
+  return fetchAdmin('/api/plans/catalogue');
+}
+export async function listPlans(): Promise<{ plans: PlanRow[] }> {
+  return fetchAdmin('/api/plans');
+}
+export async function getPlan(id: string): Promise<PlanDetail> {
+  return fetchAdmin(planPath(id));
+}
+export async function createPlan(input: { slug: string; name_en: string; name_ar: string; audience: string; cloneFrom?: string }): Promise<ActionResult<PlanDetail>> {
+  return mutate('/api/plans', 'POST', input);
+}
+export async function updatePlanDetails(id: string, input: { name_en: string; name_ar: string; is_public: boolean }): Promise<ActionResult<PlanDetail>> {
+  return mutate(planPath(id), 'PATCH', input);
+}
+export async function setPlanValues(id: string, values: Record<string, EntitlementValue>): Promise<ActionResult<PlanDetail>> {
+  return mutate(`${planPath(id)}/values`, 'PUT', { values });
+}
+export async function publishPlan(id: string): Promise<ActionResult<PlanDetail>> {
+  return mutate(`${planPath(id)}/publish`, 'POST', {});
+}
+export async function archivePlan(id: string): Promise<ActionResult<PlanDetail>> {
+  return mutate(`${planPath(id)}/archive`, 'POST', {});
+}
+export async function migratePlan(id: string, apply: boolean, reason: string): Promise<ActionResult<PlanMigration>> {
+  return mutate(`${planPath(id)}/migrate`, 'POST', { apply, reason });
+}
+export async function getSubject(subject: string): Promise<SubjectState> {
+  return fetchAdmin(subjectPath(subject));
+}
+export async function assignSubjectPlan(subject: string, input: { planId: string; status: 'active' | 'trialing'; expiresAt?: string | null; reason: string }): Promise<ActionResult<SubjectState>> {
+  return mutate(`${subjectPath(subject)}/assignment`, 'PUT', input);
+}
+export async function cancelSubjectPlan(subject: string, reason: string): Promise<ActionResult<SubjectState>> {
+  return mutate(`${subjectPath(subject)}/assignment/cancel`, 'POST', { reason });
+}
+export async function setSubjectOverride(subject: string, input: { key: string; value: EntitlementValue; expiresAt?: string | null; reason: string }): Promise<ActionResult<SubjectState>> {
+  return mutate(`${subjectPath(subject)}/overrides`, 'PUT', input);
+}
+export async function removeSubjectOverride(subject: string, key: string, reason: string): Promise<ActionResult<SubjectState>> {
+  return mutate(`${subjectPath(subject)}/overrides/remove`, 'POST', { key, reason });
+}
+export async function listPlanAudit(limit = 100): Promise<{ entries: PlanAuditEntry[] }> {
+  return fetchAdmin(`/api/plans/audit?limit=${limit}`);
 }

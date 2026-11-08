@@ -8,9 +8,10 @@ import { PreferencesControls } from './PreferencesControls';
 
 interface AdminNavProps {
   userEmail?: string;
+  canManagePlans?: boolean;
 }
 
-const NAV_ITEMS: { href: string; label: MessageKey }[] = [
+const BASE_NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/dashboard', label: 'nav.dashboard' },
   { href: '/moderation', label: 'nav.moderation' },
   { href: '/moderation/ai', label: 'nav.aiModeration' },
@@ -18,7 +19,10 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/indices', label: 'nav.indices' },
 ];
 
-export function AdminNav({ userEmail }: AdminNavProps) {
+const PLANS_NAV_ITEM: { href: string; label: MessageKey } = { href: '/plans', label: 'nav.plans' };
+
+export function AdminNav({ userEmail, canManagePlans = false }: AdminNavProps) {
+  const NAV_ITEMS = canManagePlans ? [...BASE_NAV_ITEMS, PLANS_NAV_ITEM] : BASE_NAV_ITEMS;
   const pathname = usePathname();
   const { t } = useLanguage();
 
