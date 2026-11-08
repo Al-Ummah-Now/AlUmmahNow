@@ -10,14 +10,15 @@
  */
 
 import type { NextRequest } from 'next/server';
-import { SESSION_COOKIE_NAME } from './session-cookie';
+import { presentSessionCookieNames, readSessionValue, writeSessionValue } from './session-cookie';
 import type { SessionData } from './session-manager';
 import { applyKnownRotations, refreshAccountInSession, shouldRefresh, type RefreshOptions } from './token-refresh';
 
 /** The new session cookie value when it changed, otherwise null. */
 export async function refreshSessionCookie(request: NextRequest, options: RefreshOptions = {}): Promise<string | null> {
   try {
-    const raw = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    // The session may be split across al_ummah_session(.N) (several accounts)
+    const raw = readSessionValue(request.cookies);
     if (!raw) return null;
 
     const data = JSON.parse(raw) as SessionData;
@@ -36,7 +37,7 @@ export async function refreshSessionCookie(request: NextRequest, options: Refres
 
     const value = JSON.stringify(data);
     // Updates the request's Cookie header, which the forwarded request copies
-    request.cookies.set(SESSION_COOKIE_NAME, value);
+    writeSessionValue(request.cookies, value, presentSessionCookieNames(request.cookies), false);
     return value;
   } catch {
     return null;

@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { SIGN_IN_COOKIES, singleSignOutNext } from "@/lib/auth/single-sign-out"
-import { SESSION_COOKIE_NAME } from "@/lib/auth/session-cookie"
+import { presentSessionCookieNames, readSessionValue } from "@/lib/auth/session-cookie"
 import { revokeTokensOnSignOut, type RevocableTokens } from "@/lib/auth/revoke-on-sign-out"
 import { forgetRotations } from "@/lib/auth/token-refresh"
 
 function storedAccounts(request: NextRequest): RevocableTokens[] {
   try {
-    const raw = request.cookies.get(SESSION_COOKIE_NAME)?.value
+    const raw = readSessionValue(request.cookies)
     const accounts = raw ? (JSON.parse(raw) as { accounts?: Record<string, RevocableTokens> }).accounts : undefined
     return accounts ? Object.values(accounts) : []
   } catch {
@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
     singleSignOutNext(process.env.Issuer!, url.searchParams, url.origin),
     302,
   )
-  for (const name of SIGN_IN_COOKIES) response.cookies.delete(name)
+  // Every account's session chunk (al_ummah_session.N), not only the first
+  for (const name of new Set([...SIGN_IN_COOKIES, ...presentSessionCookieNames(request.cookies)])) response.cookies.delete(name)
   response.headers.set("Cache-Control", "no-store")
   return response
 }

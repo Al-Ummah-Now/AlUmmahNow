@@ -43,7 +43,13 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
     "code"
   );
 
-  redirect(withAuthorizeLocale(url, locale));
+  // prompt=login: without it the auth server's shared sign-in (__session)
+  // answers with a code for the account that is already signed in, without a
+  // form, so "Add another account" just signed that account in again
+  const addUrl = new URL(url);
+  addUrl.searchParams.set("prompt", "login");
+
+  redirect(withAuthorizeLocale(addUrl.toString(), locale));
 }
 
 /**
