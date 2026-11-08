@@ -11,8 +11,6 @@ import type { AppRule, Binding, EnvRule } from './wrangler-config.ts';
 
 const AUTH_ISSUER = 'https://auth.alummahnow.net';
 const VIDEOS_API = 'https://videos.api.alummahnow.net';
-/** OpenAuth client id of the web app; its access tokens are what browsers send to the websocket server. */
-const WEB_CLIENT_ID = '3f8c9b2e-4d6a-4b8e-9f3a-2c7d5e8f1a6b';
 
 /** Production must not carry test-only material or point at QA / stage / preview. */
 const PROD_GUARDS: Pick<EnvRule, 'forbiddenNames' | 'forbiddenValues' | 'allowedHosts'> = {
@@ -118,7 +116,6 @@ export const APPS: AppRule[] = [
 				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
 				// Without Issuer the server cannot verify token signatures and refuses all tokens.
 				Issuer: AUTH_ISSUER,
-				ALLOWED_CLIENT_IDS: WEB_CLIENT_ID,
 			},
 			requiredBindings: [
 				INTERNAL_API_KEY,

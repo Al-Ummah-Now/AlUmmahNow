@@ -28,7 +28,11 @@ export interface AuthPayload {
 /** The subset of Env that authentication reads. */
 export interface AuthEnv {
   Issuer?: string;
-  /** Comma-separated OpenAuth client ids whose access tokens may connect. */
+  /**
+   * Optional comma-separated OpenAuth client ids whose access tokens may connect (checked
+   * against `aud`). Unset in prod/QA: the auth server issues tokens for any client_id, so an
+   * aud check adds no protection there, and the web worker's client id is not reliably set.
+   */
   ALLOWED_CLIENT_IDS?: string;
   ENVIRONMENT?: string;
 }

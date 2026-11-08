@@ -30,8 +30,7 @@
   "vars": {
     "ENVIRONMENT": "qa",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
-    "Issuer": "https://auth.qa.alummahnow.net",
-    "ALLOWED_CLIENT_IDS": "3f8c9b2e-4d6a-4b8e-9f3a-2c7d5e8f1a6b"
+    "Issuer": "https://auth.qa.alummahnow.net"
   },
   "secrets_store_secrets": [
     {
