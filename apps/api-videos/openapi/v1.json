@@ -1429,6 +1429,19 @@
             "required": false,
             "name": "locale",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "description": "Random per-install id (not tied to the user); keeps percentage rollouts stable"
+            },
+            "required": false,
+            "description": "Random per-install id (not tied to the user); keeps percentage rollouts stable",
+            "name": "installId",
+            "in": "query"
           }
         ],
         "responses": {

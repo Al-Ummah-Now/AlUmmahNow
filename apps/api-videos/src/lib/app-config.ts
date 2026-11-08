@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 import { CURRENT_API_VERSION, SUPPORTED_API_VERSIONS } from './api-version';
+import { readAppConfigDocument } from './app-config-store';
 
 export const PLATFORMS = ['ios', 'ipados', 'tvos', 'macos', 'android', 'androidtv', 'firetv', 'windows', 'linux', 'tizen', 'webos', 'web'] as const;
 export const APPS = ['viewer', 'studio', 'kids'] as const;
@@ -56,13 +57,17 @@ export function updateStatus(version: string, policy: VersionPolicy): UpdateStat
 /** Reads the `versions` document; invalid or missing documents fall back to the defaults (logged by the caller). */
 export async function loadVersionsDocument(kv: KVNamespace | undefined): Promise<{ doc?: VersionsDocument; error?: string }> {
 	if (!kv) return {};
-	const raw = await kv.get('versions', { type: 'json', cacheTtl: 60 });
+	const raw = await readAppConfigDocument(kv, 'versions');
 	if (raw == null) return {};
 	const parsed = VersionsDocumentSchema.safeParse(raw);
 	return parsed.success ? { doc: parsed.data } : { error: parsed.error.message };
 }
 
-export function buildAppConfig(input: { app: AppName; platform: Platform; version: string }, doc: VersionsDocument | undefined) {
+export function buildAppConfig(
+	input: { app: AppName; platform: Platform; version: string },
+	doc: VersionsDocument | undefined,
+	remote: { flags?: Record<string, unknown>; config?: Record<string, unknown> } = {},
+) {
 	const policy = policyFor(doc, input.app, input.platform);
 	return {
 		api: { current: CURRENT_API_VERSION, supported: [...SUPPORTED_API_VERSIONS] },
@@ -72,8 +77,8 @@ export function buildAppConfig(input: { app: AppName; platform: Platform; versio
 			latestVersion: policy.latestVersion ?? null,
 			storeUrl: policy.storeUrl ?? null,
 		},
-		// Filled by remote config (Epic 9.5).
-		flags: {} as Record<string, unknown>,
-		config: {} as Record<string, unknown>,
+		// Remote config (Epic 9.5, lib/feature-flags.ts)
+		flags: remote.flags ?? {},
+		config: remote.config ?? {},
 	};
 }
