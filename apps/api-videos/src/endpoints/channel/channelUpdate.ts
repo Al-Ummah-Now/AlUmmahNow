@@ -7,7 +7,7 @@ import { transformChannelToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { claimHandle, handleKey, normalizeHandleInput, releaseHandle } from "../../lib/channelHandles";
+import { canClaimOfficialHandles, claimHandle, handleKey, normalizeHandleInput, releaseHandle, validateHandleFormat } from "../../lib/channelHandles";
 import { logger } from "../../lib/logger";
 
 export class ChannelUpdate extends AuthenticatedRoute {
@@ -121,7 +121,11 @@ export class ChannelUpdate extends AuthenticatedRoute {
         // @handle claim/change (case-only changes keep the same index entry)
         let handle = existingChannel.handle;
         if (requestedHandle !== undefined && normalizeHandleInput(requestedHandle) !== (existingChannel.handle || '')) {
-            const claim = await claimHandle(c.env.channel_tabs, requestedHandle, existingChannel);
+            const allowOfficial = canClaimOfficialHandles(c.get('auth')?.payload?.roles);
+            const claim = await claimHandle(c.env.channel_tabs, requestedHandle, existingChannel, { allowOfficial });
+            if (claim.ok && allowOfficial && validateHandleFormat(claim.handle) === 'reserved') {
+                logger.info('[ChannelUpdate] Official handle claimed by Super Admin', { channelId: id, handle: claim.handle, userId });
+            }
             if (claim.ok === false) {
                 logger.info('[ChannelUpdate] Handle unavailable', { channelId: id, reason: claim.reason });
                 return c.json({

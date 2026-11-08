@@ -35,6 +35,27 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
 	'team', 'terms', 'test', 'trending', 'undefined', 'upload', 'user', 'users', 'video', 'videos', 'watch', 'www', 'lamahat',
 ]);
 
+/**
+ * Platform brand handles. Reserved for everyone except Super Admins, who may
+ * claim them for the official Al Ummah Now channels. Route and system words in
+ * RESERVED_HANDLES stay blocked for everyone.
+ */
+export const OFFICIAL_HANDLES: ReadonlySet<string> = new Set([
+	'alummah', 'alummahnow', 'al-ummah', 'al-ummah-now', 'ummah', 'ummahnow', 'official', 'lamahat',
+]);
+
+/** Roles (as issued by auth) that may claim OFFICIAL_HANDLES. */
+const OFFICIAL_HANDLE_ROLES = new Set(['super admin', 'super_admin', 'superadmin']);
+
+export function canClaimOfficialHandles(roles: readonly string[] | undefined | null): boolean {
+	return Array.isArray(roles) && roles.some((r) => OFFICIAL_HANDLE_ROLES.has(String(r).trim().toLowerCase()));
+}
+
+export interface HandleClaimOptions {
+	/** Allow OFFICIAL_HANDLES (caller has checked canClaimOfficialHandles). */
+	allowOfficial?: boolean;
+}
+
 export type HandleProblem = 'too_short' | 'too_long' | 'invalid_characters' | 'reserved' | 'taken';
 
 export interface HandleIndexEntry {
@@ -54,12 +75,13 @@ export function handleKey(handle: string): string {
 }
 
 /** Format-only validation (no uniqueness). */
-export function validateHandleFormat(input: string): HandleProblem | null {
+export function validateHandleFormat(input: string, options: HandleClaimOptions = {}): HandleProblem | null {
 	const handle = normalizeHandleInput(input);
 	if (handle.length < HANDLE_MIN_LENGTH) return 'too_short';
 	if (handle.length > HANDLE_MAX_LENGTH) return 'too_long';
 	if (!HANDLE_PATTERN.test(handle)) return 'invalid_characters';
-	if (RESERVED_HANDLES.has(handle.toLowerCase())) return 'reserved';
+	const lower = handle.toLowerCase();
+	if (RESERVED_HANDLES.has(lower) && !(options.allowOfficial && OFFICIAL_HANDLES.has(lower))) return 'reserved';
 	return null;
 }
 
@@ -115,9 +137,10 @@ export async function checkHandleAvailability(
 	bucket: R2Bucket,
 	handle: string,
 	channelId?: string,
+	options: HandleClaimOptions = {},
 ): Promise<{ available: boolean; handle: string; reason?: HandleProblem }> {
 	const normalized = normalizeHandleInput(handle);
-	const problem = validateHandleFormat(normalized);
+	const problem = validateHandleFormat(normalized, options);
 	if (problem) return { available: false, handle: normalized, reason: problem };
 	const entry = await readHandleEntry(bucket, normalized);
 	if (entry && entry.channelId !== channelId) return { available: false, handle: normalized, reason: 'taken' };
@@ -132,8 +155,9 @@ export async function claimHandle(
 	bucket: R2Bucket,
 	handle: string,
 	channel: { id?: string; userId?: string },
+	options: HandleClaimOptions = {},
 ): Promise<{ ok: true; handle: string } | { ok: false; reason: HandleProblem }> {
-	const availability = await checkHandleAvailability(bucket, handle, channel.id);
+	const availability = await checkHandleAvailability(bucket, handle, channel.id, options);
 	if (!availability.available) return { ok: false, reason: availability.reason || 'taken' };
 
 	const entry: HandleIndexEntry = {

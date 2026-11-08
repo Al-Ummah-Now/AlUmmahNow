@@ -16,6 +16,7 @@ import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, PublicRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import {
+	canClaimOfficialHandles,
 	checkHandleAvailability,
 	handleKey,
 	claimDefaultHandle,
@@ -57,7 +58,8 @@ export class ChannelHandleAvailability extends OptionalAuthRoute {
 
 	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
-		const result = await checkHandleAvailability(c.env.channel_tabs, request.params.handle, request.query.channelId || undefined);
+		const allowOfficial = canClaimOfficialHandles(this.getAuth(c)?.payload?.roles);
+		const result = await checkHandleAvailability(c.env.channel_tabs, request.params.handle, request.query.channelId || undefined, { allowOfficial });
 		return { success: true, result };
 	}
 }
