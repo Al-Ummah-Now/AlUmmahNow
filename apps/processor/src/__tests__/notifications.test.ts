@@ -179,9 +179,14 @@ describe('notification center (processor)', () => {
   it('erases a user’s notification data on UserDataErased', async () => {
     await insertNotification(db, { notificationId: 'a', recipientUserId: 'gone', notificationKey: 'newSubscriber' });
     db.raw.prepare("INSERT INTO liked_videos VALUES ('gone', 'v1', 0)").run();
+    const device = "INSERT INTO push_devices (install_id, user_id, platform, provider, token, created_at, updated_at) VALUES (?, ?, 'ios', 'apns', ?, 0, 0)";
+    db.raw.prepare(device).run('install-gone', 'gone', 'a'.repeat(64));
+    db.raw.prepare(device).run('install-kept', 'kept', 'b'.repeat(64));
     await processor().processMessage(message(MessageType.UserDataErased, { userId: 'gone' }), env());
     expect(rows('SELECT * FROM notifications')).toEqual([]);
     expect(rows('SELECT * FROM liked_videos')).toEqual([]);
+    // Push tokens are personal data too (Epic 9.4)
+    expect(rows('SELECT user_id FROM push_devices')).toEqual([{ user_id: 'kept' }]);
   });
 
   it('purges notifications older than 90 days (cron)', async () => {
