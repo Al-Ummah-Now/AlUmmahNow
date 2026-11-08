@@ -7,6 +7,8 @@ import { test, expect } from '@playwright/test';
 import { target } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 
+const RECOMMENDATIONS_BUDGET_MS = 1000;
+
 async function recommendedIds(videoId: string): Promise<string[]> {
   const res = await fetch(`${target().api}/api/recommendations?videoId=${encodeURIComponent(videoId)}&limit=15`);
   expect(res.ok, `GET /api/recommendations answered ${res.status}`).toBe(true);
@@ -33,4 +35,21 @@ test.describe('Release: related videos on the watch page', () => {
       expect(recommended, `first related video ${shown[0]} is a recommendation`).toContain(shown[0]);
     });
   }
+
+  // Stage only: PR runs target QA, which still serves the previous main.
+  test('recommendations answer within the latency budget', async () => {
+    test.skip(process.env.E2E_ENV !== 'stage', 'the budget is enforced on the release candidate (stage)');
+    const video = await findPlayableVideo();
+    test.skip(!video, NO_PLAYABLE_VIDEO);
+    const url = `${target().api}/api/recommendations?videoId=${encodeURIComponent(video!.id)}&limit=15`;
+
+    // The first request warms the cache; the budget applies to what viewers get.
+    await fetch(url);
+    const started = Date.now();
+    const res = await fetch(url);
+    await res.arrayBuffer();
+    const elapsed = Date.now() - started;
+    expect(res.ok).toBe(true);
+    expect(elapsed, `GET /api/recommendations took ${elapsed} ms`).toBeLessThan(RECOMMENDATIONS_BUDGET_MS);
+  });
 });

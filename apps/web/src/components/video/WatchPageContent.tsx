@@ -40,6 +40,7 @@ type VideoState =
 export default function WatchPageContent({ videoId }: { videoId: string }) {
   const [state, setState] = useState<VideoState>({ status: 'loading' });
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(true);
   const { user } = useAuth();
   const { t, lang, isRTL } = useLanguage();
   // ?t=754 / ?t=12m34s starts the video there (share links "at current time")
@@ -61,8 +62,8 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
   const related = relatedVideos.filter((video) => video.id !== videoId);
   const renderRelated = (keyPrefix: string) =>
     isRTL
-      ? <RelatedVideosSectionRTL relatedVideos={related} />
-      : <RelatedVideosSection relatedVideos={related} keyPrefix={keyPrefix} />;
+      ? <RelatedVideosSectionRTL relatedVideos={related} loading={relatedLoading} />
+      : <RelatedVideosSection relatedVideos={related} keyPrefix={keyPrefix} loading={relatedLoading} />;
 
   useEffect(() => {
     let cancelled = false;
@@ -78,14 +79,25 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
   }, [videoId]);
 
   useEffect(() => {
+    // Started alongside the video details. The shelf is related to the video,
+    // so it is not requested again when the auth state settles.
     let cancelled = false;
-    fetchRelatedVideos(videoId).then((videos) => {
-      if (!cancelled) setRelatedVideos(videos);
-    });
+    setRelatedVideos([]);
+    setRelatedLoading(true);
+    fetchRelatedVideos(videoId)
+      .then((videos) => {
+        if (!cancelled) setRelatedVideos(videos);
+      })
+      .catch((error) => {
+        logger.warn('[WatchPage] Related videos failed to load', { videoId, error });
+      })
+      .finally(() => {
+        if (!cancelled) setRelatedLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [videoId, user?.id]);
+  }, [videoId]);
 
   if (state.status === 'notFound') {
     return (
