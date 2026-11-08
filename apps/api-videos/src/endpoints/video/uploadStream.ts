@@ -1,3 +1,4 @@
+import { quotaRefusal, reserveUpload } from "../../lib/upload-quota";
 import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
@@ -88,6 +89,12 @@ export class UploadStreamEndpoint extends AuthenticatedRoute {
 					success: false,
 					error: "Missing videoId or file"
 				}, 400);
+			}
+
+			const quota = await reserveUpload(c.env, { userId, count: 0, bytes: file.size });
+			if (quota.ok === false) {
+				logger.info('[UploadStream] Plan limit reached', { userId, key: quota.key, limit: quota.limit });
+				return c.json(quotaRefusal(quota, c.req.header('Accept-Language')), 402);
 			}
 
 			logger.info('[UploadStream] Starting upload', {

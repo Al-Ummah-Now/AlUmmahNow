@@ -1,3 +1,4 @@
+import { releaseVideoStorage } from "../../lib/upload-quota";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -111,6 +112,7 @@ export class VideoBulkDelete extends AuthenticatedRoute {
 
 					// Delete the video
 					await repository.deleteObject(videoId);
+					await releaseVideoStorage(c.env, video);
 
 					return {
 						videoId,

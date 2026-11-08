@@ -9,6 +9,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { canClaimOfficialHandles, claimHandle, handleKey, normalizeHandleInput, releaseHandle, validateHandleFormat } from "../../lib/channelHandles";
 import { logger } from "../../lib/logger";
+import { getEntitlements, requestLanguage, upgradeRequiredBody } from "../../lib/entitlements";
+import { linksAllowed } from "../../lib/upload-quota";
 
 export class ChannelUpdate extends AuthenticatedRoute {
     schema = {
@@ -117,6 +119,17 @@ export class ChannelUpdate extends AuthenticatedRoute {
         }
 
         const { handle: requestedHandle, contactEmail, location, ...restInput } = channelUpdateInput;
+
+        // A limit only blocks adding links; a channel above it keeps what it has.
+        if (restInput.links !== undefined) {
+            const snapshot = await getEntitlements(c.env, [{ type: "channel", id }, { type: "user", id: userId }]);
+            const linkLimit = snapshot.entitlements["channel.about.links.max"].value;
+            const storedLinks = existingChannel.links?.length ?? 0;
+            if (!linksAllowed(linkLimit, storedLinks, restInput.links.length)) {
+                logger.info("[ChannelUpdate] Link limit reached", { channelId: id, storedLinks, requested: restInput.links.length, limit: linkLimit });
+                return c.json(upgradeRequiredBody("channel.about.links.max", typeof linkLimit === "number" ? linkLimit : null, storedLinks, requestLanguage(c.req.header("Accept-Language"))), 402);
+            }
+        }
 
         // @handle claim/change (case-only changes keep the same index entry)
         let handle = existingChannel.handle;

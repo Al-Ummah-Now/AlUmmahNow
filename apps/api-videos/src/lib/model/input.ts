@@ -108,7 +108,8 @@ export const ChannelLinkInput = z.object({
     url: z.string().trim().max(500).url().refine((u) => /^https?:\/\//i.test(u), { message: "Only http(s) links are allowed" }),
 });
 
-export const MAX_CHANNEL_LINKS = 10;
+// Absolute ceiling for any plan; the per-channel limit comes from entitlements.
+export const MAX_CHANNEL_LINKS = 100;
 
 export const ChannelUpdateInput = z.object({
     name: Str({ required: false, description: "Channel name" }),

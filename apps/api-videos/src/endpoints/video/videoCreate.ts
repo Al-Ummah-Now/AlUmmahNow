@@ -1,3 +1,4 @@
+import { quotaRefusal, reserveUpload } from "../../lib/upload-quota";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -80,6 +81,12 @@ export class VideoCreate extends AuthenticatedRoute {
 		// Get authenticated user ID
 		const effectiveUserId = this.getUserId(c);
 
+		const quota = await reserveUpload(c.env, { userId: effectiveUserId, count: 1, bytes: 0 });
+		if (quota.ok === false) {
+			logger.info('[VideoCreate] Plan limit reached', { userId: effectiveUserId, key: quota.key, limit: quota.limit });
+			return c.json(quotaRefusal(quota, c.req.header('Accept-Language')), 402);
+		}
+
 		// Create the business video object
 		const video = {
 			...inputVideo,
@@ -95,6 +102,7 @@ export class VideoCreate extends AuthenticatedRoute {
 			dislikes: [],
 			isPublic: inputVideo.isPublic ?? true,
 			isLive: inputVideo.isLive ?? false,
+			entitlementChecked: true,
 			// Ensure localized fields are stored
 			titleLocalized: inputVideo.titleLocalized,
 			descriptionLocalized: inputVideo.descriptionLocalized,

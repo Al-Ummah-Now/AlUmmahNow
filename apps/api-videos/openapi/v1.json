@@ -3833,7 +3833,7 @@
                         "url"
                       ]
                     },
-                    "maxItems": 10,
+                    "maxItems": 100,
                     "description": "About links (replaces the list)"
                   },
                   "contactEmail": {
@@ -22791,6 +22791,11 @@
                           "type": "number",
                           "description": "File size in bytes"
                         },
+                        "durationSeconds": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "description": "Length read from the file; verified again after encoding"
+                        },
                         "mimeType": {
                           "type": "string",
                           "description": "MIME type of the video file"
@@ -23223,6 +23228,11 @@
                   "isPublic": {
                     "type": "boolean",
                     "default": true
+                  },
+                  "durationSeconds": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Length read from the file; verified again after encoding"
                   },
                   "tags": {
                     "type": "string",

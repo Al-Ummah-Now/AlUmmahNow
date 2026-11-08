@@ -9,6 +9,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { claimDefaultHandle } from "../../lib/channelHandles";
 import { logger } from "../../lib/logger";
+import { checkNumericLimit } from "@al-ummah/shared-types";
+import { getEntitlements, requestLanguage, upgradeRequiredBody } from "../../lib/entitlements";
 
 export class ChannelCreate extends AuthenticatedRoute {
 	schema = {
@@ -81,20 +83,26 @@ export class ChannelCreate extends AuthenticatedRoute {
 		// submits and accidental duplicates). Channel creation is rare, so a
 		// bounded scan of the bucket is acceptable here.
 		const wantedName = String(channelInput.name ?? "").trim().toLocaleLowerCase();
-		if (wantedName) {
-			const existingRepo = new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels);
-			let cursor: string | undefined;
-			for (let page = 0; page < 50; page++) {
-				const batch = await existingRepo.listObjects(100, cursor);
-				const clash = (batch.items || []).some((ch) =>
-					ch.userId === userId && !ch.isDeleted && String(ch.name ?? "").trim().toLocaleLowerCase() === wantedName
-				);
-				if (clash) {
-					return c.json({ success: false, error: "You already have a channel with this name" }, 409);
-				}
-				if (!batch.cursor) break;
-				cursor = batch.cursor;
+		const existingRepo = new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels);
+		let ownedChannels = 0;
+		let cursor: string | undefined;
+		for (let page = 0; page < 50; page++) {
+			const batch = await existingRepo.listObjects(100, cursor);
+			const owned = (batch.items || []).filter((ch) => ch.userId === userId && !ch.isDeleted);
+			ownedChannels += owned.length;
+			if (wantedName && owned.some((ch) => String(ch.name ?? "").trim().toLocaleLowerCase() === wantedName)) {
+				return c.json({ success: false, error: "You already have a channel with this name" }, 409);
 			}
+			if (!batch.cursor) break;
+			cursor = batch.cursor;
+		}
+
+		// A limit only blocks a new channel; channels above it are kept.
+		const snapshot = await getEntitlements(c.env, [{ type: "user", id: userId }]);
+		const channelLimit = checkNumericLimit(snapshot.entitlements["channel.max"].value, ownedChannels, 1);
+		if (!channelLimit.allowed) {
+			logger.info("[ChannelCreate] Channel limit reached", { userId, ownedChannels, limit: channelLimit.limit });
+			return c.json(upgradeRequiredBody("channel.max", channelLimit.limit, ownedChannels, requestLanguage(c.req.header("Accept-Language"))), 402);
 		}
 
 		// Create business channel object

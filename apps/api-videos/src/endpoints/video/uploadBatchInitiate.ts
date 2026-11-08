@@ -1,3 +1,4 @@
+import { quotaRefusal, releaseReservation, reserveUpload, type UploadReservation } from "../../lib/upload-quota";
 import { Str, Num } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
@@ -17,6 +18,7 @@ const BatchVideoSchema = z.object({
 	title: Str({ description: "Video title" }),
 	description: Str({ description: "Video description" }).optional(),
 	fileSize: Num({ description: "File size in bytes", required: true }),
+	durationSeconds: z.number().positive().optional().describe("Length read from the file; verified again after encoding"),
 	mimeType: Str({ description: "MIME type of the video file", required: true }),
 	isPublic: z.boolean().optional(),
 	tags: z.string().optional().describe("Comma-separated tags"),
@@ -98,6 +100,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const userId = this.getUserId(c);
+		let reservation: UploadReservation | null = null;
 
 		try {
 			const request = await this.getValidatedData<typeof this.schema>();
@@ -118,6 +121,13 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				return c.json({ success: false, error: "sharedMetadata.channelId must match the channelId header" }, 400);
 			}
 			const channelId = headerChannelId || userId;
+
+			const quota = await reserveUpload(c.env, { userId, count: videos.length, bytes: videos.reduce((sum, v) => sum + v.fileSize, 0), declaredSeconds: Math.max(0, ...videos.map((v) => v.durationSeconds ?? 0)) || undefined });
+			if (quota.ok === false) {
+				logger.info('[UploadBatchInitiate] Plan limit reached', { userId, key: quota.key, limit: quota.limit });
+				return c.json(quotaRefusal(quota, c.req.header('Accept-Language')), 402);
+			}
+			reservation = quota.reservation;
 
 			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 			const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
@@ -168,6 +178,8 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 					category: sharedMetadata?.category,
 					uploadStatus: 'uploading',
 					fileSize: videoData.fileSize,
+					entitlementChecked: true,
+					usageBytes: videoData.fileSize,
 					originalFormat: videoData.mimeType,
 				};
 
@@ -209,6 +221,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 
 			return c.json({ success: true, result: results });
 		} catch (error) {
+			await releaseReservation(c.env, reservation);
 			logger.error("[UploadBatchInitiate] Batch upload initiate error", {
 				userId,
 				error: error instanceof Error ? error.message : String(error),

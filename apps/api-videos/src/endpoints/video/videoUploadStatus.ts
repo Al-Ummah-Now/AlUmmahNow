@@ -1,3 +1,4 @@
+import { exceedsDurationLimit } from "../../lib/upload-quota";
 import { OpenAPIRoute, Str } from "chanfana";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";
@@ -208,6 +209,13 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 			message = "Upload or processing failed";
 		}
 
+		// A plan-limit failure is final: Bunny still reports the encode as finished
+		if (video.durationLimitExceeded) {
+			status = "failed";
+			progress = 0;
+			message = "This video is longer than your plan allows";
+		}
+
 		// Update R2 object if status changed or resolutions need updating
 		const needsUpdate = bunnyStreamStatus && (
 			video.uploadStatus !== status ||
@@ -239,6 +247,18 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 				// Update duration if available
 				if (bunnyStreamStatus.length) {
 					video.duration = bunnyStreamStatus.length;
+				}
+
+				// Length is only trustworthy once encoded. The file stays with its owner,
+				// unpublished; only uploads started under enforcement can get here.
+				if (bunnyStreamStatus.length && !video.durationLimitExceeded && await exceedsDurationLimit(c.env, video, bunnyStreamStatus.length)) {
+					logger.info('[VideoUploadStatus] Plan duration limit exceeded', { videoId: id, length: bunnyStreamStatus.length });
+					video.durationLimitExceeded = true;
+					video.isPublic = false;
+					video.uploadStatus = 'failed';
+					status = "failed";
+					progress = 0;
+					message = "This video is longer than your plan allows";
 				}
 
 				// Update storage size if available

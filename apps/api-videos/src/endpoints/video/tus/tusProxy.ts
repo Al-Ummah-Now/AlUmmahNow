@@ -162,6 +162,16 @@ export class TusProxy {
         return c.json({ error: 'Unauthorized' }, 403);
       }
 
+      // The quota was reserved for the declared size, so the upload cannot be larger
+      const quotaVideo = this.env.videos ? await new R2Repository<z.infer<typeof BusinessVideo>>(this.env.videos).getObject(videoId) : null;
+      if (quotaVideo?.entitlementChecked && quotaVideo.usageBytes) {
+        const declared = parseInt(uploadLength || '', 10);
+        if (!Number.isFinite(declared) || declared > quotaVideo.usageBytes) {
+          logger.warn('[TUS Proxy] Upload-Length does not match the declared size', { videoId, uploadLength, declared: quotaVideo.usageBytes });
+          return c.json({ error: 'Upload-Length exceeds the declared file size' }, 400);
+        }
+      }
+
       logger.info('[TUS Proxy] Retrieved TUS session', {
         tusSessionId,
         videoId,
