@@ -8,7 +8,7 @@
     "build": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "deploy:qa": "CI=true wrangler deploy --config wrangler.qa.jsonc",
-    "cf-typegen": "wrangler types",
+    "cf-typegen": "wrangler types --env-file .dev.vars.example --strict-vars=false",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .wrangler",
     "verify": "node verify.js",

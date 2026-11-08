@@ -1,0 +1,3 @@
+# Local-only secrets for this worker: copy to .dev.vars (gitignored, never commit it).
+# `pnpm cf-typegen` reads ONLY this file (wrangler types --env-file), so real values never
+# reach generated types. Keep values as placeholders, e.g. MY_SECRET=replace-me

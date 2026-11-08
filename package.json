@@ -67,7 +67,8 @@
     "admin-web:deploy:qa": "turbo run deploy:qa --filter=@al-ummah/admin-web",
     "admin-web:deploy:production": "turbo run deploy:production --filter=@al-ummah/admin-web",
     "deploy:all": "pnpm run web:deploy:production && pnpm run api:deploy && pnpm run processor:deploy && pnpm run websocket:deploy && pnpm run admin:deploy",
-    "deploy:qa": "pnpm run web:deploy:qa && pnpm run api:deploy:qa && pnpm run processor:deploy:qa && pnpm run websocket:deploy:qa && pnpm run admin:deploy:qa && pnpm run admin-web:deploy:qa"
+    "deploy:qa": "pnpm run web:deploy:qa && pnpm run api:deploy:qa && pnpm run processor:deploy:qa && pnpm run websocket:deploy:qa && pnpm run admin:deploy:qa && pnpm run admin-web:deploy:qa",
+    "check:committed-secrets": "node scripts/check-committed-secrets.mjs"
   },
   "devDependencies": {
     "tsx": "^4.20.6",
