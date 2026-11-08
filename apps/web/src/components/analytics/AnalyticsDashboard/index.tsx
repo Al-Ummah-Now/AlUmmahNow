@@ -1,138 +1,126 @@
+'use client';
+
 import React from 'react';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
+import { useLanguage } from '@/hooks/useLanguage';
 import AnalyticsCard from '../AnalyticsCard';
 import MetricsChart from '../MetricsChart';
 
-interface AnalyticsDashboardProps {
+export interface AnalyticsDashboardProps {
   summary: AnalyticsSummary | null;
   channelData: ChannelAnalyticsData | null;
   metrics: AnalyticsMetrics[] | null;
+  /** Card implementation (the RTL dashboard passes the RTL card) */
+  CardComponent?: typeof AnalyticsCard;
+}
+
+type ChangeField = 'views' | 'likes' | 'comments' | 'subscribers';
+
+/**
+ * Compare the second half of the daily series with the first half (by default
+ * the last 14 days vs the 14 before). Returns undefined when there's no baseline.
+ */
+export function periodChange(
+  metrics: AnalyticsMetrics[] | null,
+  field: ChangeField
+): { label: string; type: 'positive' | 'negative' | 'neutral' } | undefined {
+  if (!metrics || metrics.length < 2) return undefined;
+  const half = Math.floor(metrics.length / 2);
+  const before = metrics.slice(0, half).reduce((n, m) => n + (m[field] || 0), 0);
+  const after = metrics.slice(metrics.length - half).reduce((n, m) => n + (m[field] || 0), 0);
+  if (before === 0) return undefined;
+  const pct = Math.round(((after - before) / before) * 1000) / 10;
+  return {
+    label: `${pct > 0 ? '+' : ''}${pct}%`,
+    type: pct > 0 ? 'positive' : pct < 0 ? 'negative' : 'neutral',
+  };
 }
 
 const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   summary,
   channelData,
-  metrics
+  metrics,
+  CardComponent = AnalyticsCard,
 }) => {
+  const { t, lang, isRTL } = useLanguage();
+  const d = t.analytics.dashboard;
+  const fmt = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar' : 'en-US');
+
   if (!summary) {
     return (
-      <div className="text-center py-8">
-        <p className="text-gray-600 dark:text-gray-300">No analytics data available</p>
+      <div className="text-center py-8" dir={isRTL ? 'rtl' : 'ltr'}>
+        <p className="text-gray-600 dark:text-gray-300">{d.noData}</p>
       </div>
     );
   }
 
+  const change = (field: ChangeField) => {
+    const result = periodChange(metrics, field);
+    return result
+      ? { change: d.changeVsPrevious.replace('{change}', result.label), changeType: result.type }
+      : {};
+  };
+
   return (
-    <div className="space-y-8">
-      {/* Overview Cards */}
+    <div className="space-y-8" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <AnalyticsCard
-          title="Total Views"
-          value={summary.totalViews.toLocaleString()}
-          change="+12.5%"
-          changeType="positive"
-          icon="eye"
-        />
-        <AnalyticsCard
-          title="Total Likes"
-          value={summary.totalLikes.toLocaleString()}
-          change="+8.3%"
-          changeType="positive"
-          icon="heart"
-        />
-        <AnalyticsCard
-          title="Total Comments"
-          value={summary.totalComments.toLocaleString()}
-          change="+15.2%"
-          changeType="positive"
-          icon="message"
-        />
-        <AnalyticsCard
-          title="Subscribers"
-          value={summary.totalSubscribers.toLocaleString()}
-          change="+5.1%"
-          changeType="positive"
-          icon="users"
-        />
+        <CardComponent title={d.totalViews} value={fmt(summary.totalViews)} icon="eye" {...change('views')} />
+        <CardComponent title={d.totalLikes} value={fmt(summary.totalLikes)} icon="heart" {...change('likes')} />
+        <CardComponent title={d.totalComments} value={fmt(summary.totalComments)} icon="message" {...change('comments')} />
+        <CardComponent title={t.analytics.subscribers} value={fmt(summary.totalSubscribers)} icon="users" {...change('subscribers')} />
       </div>
 
-      {/* Performance Metrics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AnalyticsCard
-          title="Total Videos"
-          value={summary.totalVideos.toString()}
-          subtitle="Published content"
-          icon="video"
-        />
-        <AnalyticsCard
-          title="Avg Views per Video"
-          value={summary.avgViewsPerVideo.toLocaleString()}
-          subtitle="Performance indicator"
-          icon="trending"
-        />
+        <CardComponent title={d.totalVideos} value={fmt(summary.totalVideos)} subtitle={d.publishedContent} icon="video" />
+        <CardComponent title={d.avgViewsPerVideo} value={fmt(summary.avgViewsPerVideo)} subtitle={d.performanceIndicator} icon="trending" />
       </div>
 
-      {/* Engagement Rate Card */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-          Engagement Overview
-        </h3>
-        <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{d.engagementOverview}</h3>
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {summary.engagementRate.toFixed(1)}%
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-300">Overall Engagement Rate</p>
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{summary.engagementRate.toFixed(1)}%</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300">{d.overallEngagementRate}</p>
           </div>
           {summary.topVideo && (
-            <div className="text-right">
-              <p className="text-sm font-medium text-gray-800 dark:text-white">
-                Top Performing Video:
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">
-                {summary.topVideo.title}
-              </p>
+            <div className="text-end">
+              <p className="text-sm font-medium text-gray-800 dark:text-white">{d.topPerformingVideo}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">{summary.topVideo.title}</p>
               <p className="text-sm text-blue-600 dark:text-blue-400">
-                {summary.topVideo.views.toLocaleString()} views
+                {d.viewsCount.replace('{count}', fmt(summary.topVideo.views))}
               </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Metrics Chart */}
       {metrics && metrics.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-            Performance Trends
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{d.performanceTrends}</h3>
           <MetricsChart data={metrics} />
         </div>
       )}
 
-      {/* Top Performing Videos */}
       {channelData?.topPerformingVideos && channelData.topPerformingVideos.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-            Top Performing Videos
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{d.topPerformingVideos}</h3>
           <div className="space-y-4">
             {channelData.topPerformingVideos.slice(0, 5).map((video) => (
-              <div key={video.videoId} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-800 dark:text-white">
-                    {video.title}
-                  </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {new Date(video.dateCreated).toLocaleDateString()}
-                  </p>
+              <div key={video.videoId} className="flex items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-gray-800 dark:text-white truncate">{video.title}</h4>
+                  {video.dateCreated && (
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      {new Date(video.dateCreated).toLocaleDateString(lang === 'ar' ? 'ar' : 'en-US')}
+                    </p>
+                  )}
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <p className="font-semibold text-gray-800 dark:text-white">
-                    {video.views.toLocaleString()} views
+                    {d.viewsCount.replace('{count}', fmt(video.views))}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {video.likes} likes • {video.comments} comments
+                    {d.likesAndComments.replace('{likes}', fmt(video.likes)).replace('{comments}', fmt(video.comments))}
                   </p>
                 </div>
               </div>

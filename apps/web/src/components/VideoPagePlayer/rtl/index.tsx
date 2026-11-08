@@ -1,36 +1,50 @@
 "use client";
-import React from "react";
+import React, { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "../interface";
-import CustomVideoPlayer from "@/components/VideoPlayer/CustomVideoPlayer";
+import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlayerWithChapters";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
+import { useLanguage } from "@/hooks/useLanguage";
 
 const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
 
-  const title = getLocalizedValue((options as PlayerOptions & { titleLocalized?: Record<string, string> }).titleLocalized, options.title, 'ar');
+  const title = getLocalizedValue(options.titleLocalized, options.title, 'ar');
 
-  // Convert PlayerOptions to CustomVideoPlayer props
-  const videoSources = [
+  // Convert PlayerOptions to CustomVideoPlayer props. Same source resolution as
+  // the LTR variant (API playUrl first) and memoized so re-renders don't hand
+  // the player a new sources array, which would reload the video.
+  const videoSources = useMemo(() => [
     {
-      // The API's playUrl carries the CDN token; the bare legacy URL is refused
-      src: options.playUrl || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
+      src: options.playUrl || '',
       type: 'application/x-mpegURL'
     }
-  ];
+  ], [options.playUrl, options.id]);
 
   // Use poster from options (API-provided thumbnail URL) or fallback to default pattern
-  const posterUrl = options.poster || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
+  const posterUrl = useMemo(() => {
+    // Bunny keeps the thumbnail next to the playlist, so derive it from this
+    // video's own library (QA/prod differ) rather than a hard-coded host.
+    const derived = options.playUrl?.endsWith('/playlist.m3u8')
+      ? options.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg')
+      : '';
+    const poster = options.poster || derived;
+    if (poster && !poster.startsWith('http://') && !poster.startsWith('https://')) {
+      return `https://${poster}`;
+    }
+    return poster;
+  }, [options.poster, options.id]);
 
   return (
     <>
       <div className="flex w-full mt-0 relative dark:bg-gray-900" dir="rtl">
         <div className="w-full rounded-lg overflow-visible 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
           {/* New Custom Video.js Player with Arabic/RTL support */}
-          <CustomVideoPlayer
+          <VideoPlayerWithChapters
             videoId={options.id}
             userId={user?.id}
             sources={videoSources}
@@ -38,11 +52,11 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             controls={true}
             autoplay={false}
             enableAnalytics={true}
-            enableWebSocket={true}
+            enableWebSocket={false}
             isLive={false}
             lang="ar"
             className="w-full"
-            ariaLabel={`فيديو: ${removeUnwantedChars(title)}`}
+            ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
           />
         </div>
       </div>
@@ -51,11 +65,11 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
       <div className="flex space-x-4 mt-4 justify-start items-center w-full" dir="rtl">
         <Link
           href={`/ar/channels/${options.channel}`}
-          className="w-10 h-10 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
+          className="w-11 h-11 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
         >
           <Image
             src={options.channelAvatar || '/avatar.png'}
-            alt="صورة القناة"
+            alt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(options.channelName))}
             sizes="10vw"
             className="bg-gray-500"
             fill

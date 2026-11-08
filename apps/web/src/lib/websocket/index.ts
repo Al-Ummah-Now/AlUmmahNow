@@ -1,6 +1,6 @@
 // WebSocket manager and utilities
 export { WebSocketManager } from './WebSocketManager';
-export { WebSocketProvider, useWebSocket, useWebSocketSubscription } from './WebSocketProvider';
+export { WebSocketProvider, useWebSocket, useWebSocketSubscription, useOptionalWebSocketSubscription } from './WebSocketProvider';
 
 // Export types
 export type {

@@ -57,6 +57,9 @@ export function VariableGuide({ onInsertVariable }: VariableGuideProps) {
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       {/* Header */}
       <button
+        type="button"
+        aria-expanded={isExpanded}
+        data-testid="variable-guide-toggle"
         onClick={() => setIsExpanded(!isExpanded)}
         className="
           w-full
@@ -160,6 +163,10 @@ export function VariableGuide({ onInsertVariable }: VariableGuideProps) {
 
                     {/* Copy/Insert Button */}
                     <button
+                      type="button"
+                      data-testid="variable-guide-insert"
+                      data-variable={variable.variable}
+                      aria-label={`${onInsertVariable ? (isRTL ? 'إدراج' : 'Insert') : (isRTL ? 'نسخ' : 'Copy')} ${variable.variable}`}
                       onClick={() => handleInsertVariable(variable.variable)}
                       className="
                         flex-shrink-0
@@ -191,7 +198,7 @@ export function VariableGuide({ onInsertVariable }: VariableGuideProps) {
                       ) : (
                         <>
                           <Copy className="w-3 h-3" />
-                          <span>{isRTL ? 'نسخ' : 'Copy'}</span>
+                          <span>{onInsertVariable ? (isRTL ? 'إدراج' : 'Insert') : (isRTL ? 'نسخ' : 'Copy')}</span>
                         </>
                       )}
                     </button>

@@ -1,47 +1,45 @@
 import Link from 'next/link';
 import { getAdminSession } from '@/lib/auth';
+import { getI18n } from '@/i18n/server';
+import { PublicShell } from '@/components/PublicShell';
+import { primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 
 export default async function HomePage() {
   const session = await getAdminSession();
+  const { t } = await getI18n();
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+    <PublicShell>
       <div className="text-center">
-        <h1 className="text-5xl font-bold text-white mb-4">Al Ummah Now</h1>
-        <p className="text-xl text-gray-400 mb-8">Admin Panel</p>
+        <h1 className="text-4xl sm:text-5xl font-bold text-fg mb-4">{t('common.appName')}</h1>
+        <p className="text-xl text-fg-muted mb-8">{t('common.adminPanel')}</p>
 
         {session ? (
           <div className="space-y-4">
-            <p className="text-gray-300">Welcome, {session.user.email}</p>
-            <div className="flex gap-4 justify-center">
-              <Link
-                href="/dashboard"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded transition-colors"
-              >
-                Go to Dashboard
+            <p className="text-fg-muted" data-testid="welcome">
+              {t('home.welcome', { email: session.user.email })}
+            </p>
+            <div className="flex flex-wrap gap-4 justify-center">
+              <Link href="/dashboard" className={primaryButtonClass}>
+                {t('common.goToDashboard')}
               </Link>
               <form action="/api/logout" method="POST">
-                <button
-                  type="submit"
-                  className="bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-6 rounded transition-colors"
-                >
-                  Logout
+                <button type="submit" className={secondaryButtonClass}>
+                  {t('common.logout')}
                 </button>
               </form>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-gray-400 mb-6">Please login to access the admin panel</p>
-            <Link
-              href="/login"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded transition-colors inline-block"
-            >
-              Login
-            </Link>
+            <p className="text-fg-muted mb-6">{t('home.pleaseLogin')}</p>
+            {/* Plain anchor: /login redirects off-site to the auth server */}
+            <a href="/login" className={primaryButtonClass}>
+              {t('common.login')}
+            </a>
           </div>
         )}
       </div>
-    </div>
+    </PublicShell>
   );
 }

@@ -15,6 +15,7 @@ import {
   removeUserAccount,
   switchChannel,
   reloadUserChannels,
+  reloadActiveProfile,
   createChannelForActiveUser,
   logoutCurrentAccount,
   logoutAllAccounts,
@@ -65,7 +66,11 @@ interface MultiAccountContextValue {
   removeAccount: (userId: string) => Promise<void>;
   switchToChannel: (channelId: string | null) => Promise<void>;
   createChannel: (data: ChannelCreateRequest) => Promise<Channel | null>;
+  /** True while a channel creation request is in flight */
+  creatingChannel: boolean;
   reloadChannels: () => Promise<void>;
+  /** Re-read the active profile (name, avatar) into the session */
+  reloadProfile: () => Promise<void>;
   logout: () => Promise<void>;
   logoutAll: (skipConfirmation?: boolean) => Promise<void>;
   refresh: () => Promise<void>;
@@ -293,46 +298,88 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     }
   }, [loadSessionData, router, t]);
 
-  // Create a new channel
-  const createChannel = useCallback(async (data: ChannelCreateRequest): Promise<Channel | null> => {
-    try {
-      setError(null);
+  // Create a new channel. Repeated calls while a request is in flight (double
+  // clicks, Enter + click) share that request instead of creating duplicates.
+  const createChannelInFlight = useRef<Promise<Channel | null> | null>(null);
+  const [creatingChannel, setCreatingChannel] = useState(false);
+  const createChannel = useCallback((data: ChannelCreateRequest): Promise<Channel | null> => {
+    if (createChannelInFlight.current) return createChannelInFlight.current;
+    const run = (async () => {
+      setCreatingChannel(true);
+      try {
+        setError(null);
 
-      const newChannel = await createChannelForActiveUser(data);
+        const newChannel = await createChannelForActiveUser(data);
 
-      if (newChannel) {
-        await loadSessionData();
-        router.refresh();
-        return newChannel;
+        if (newChannel) {
+          await loadSessionData();
+          router.refresh();
+          return newChannel;
+        }
+
+        setError(t.errors.failedToCreate);
+        return null;
+      } catch (err) {
+        logger.error('[MultiAccountProvider] Failed to create channel:', err);
+        setError(t.errors.failedToCreate);
+        return null;
+      } finally {
+        createChannelInFlight.current = null;
+        setCreatingChannel(false);
       }
-
-      return null;
-    } catch (err) {
-      logger.error('[MultiAccountProvider] Failed to create channel:', err);
-      setError(t.errors.failedToCreate);
-      return null;
-    }
+    })();
+    createChannelInFlight.current = run;
+    return run;
   }, [loadSessionData, router, t]);
 
-  // Reload channels (without triggering full loading state)
-  const reloadChannels = useCallback(async () => {
-    try {
-      setError(null);
+  // Reload channels (without triggering full loading state). Calls run one
+  // after another and each resolves once every earlier reload has finished:
+  // two overlapping reloads (e.g. the background refresh below and a save)
+  // left Server Actions in flight after the caller's await, and a navigation
+  // started then could be undone by the App Router.
+  const reloadChain = useRef<Promise<void>>(Promise.resolve());
+  const reloadChannels = useCallback(() => {
+    const run = reloadChain.current.then(async () => {
+      try {
+        setError(null);
 
-      await reloadUserChannels();
+        await reloadUserChannels();
 
-      // Update session data WITHOUT setting loading state
-      // This prevents UI flicker when reloading channels
-      const sessionInfo = await getActiveSessionInfo();
-      if (sessionInfo) {
-        setUser(sessionInfo.user);
-        setAccounts(sessionInfo.accounts);
+        // Update session data WITHOUT setting loading state
+        // This prevents UI flicker when reloading channels
+        const sessionInfo = await getActiveSessionInfo();
+        if (sessionInfo) {
+          setUser(sessionInfo.user);
+          setAccounts(sessionInfo.accounts);
+        }
+      } catch (err) {
+        logger.error('[MultiAccountProvider] Failed to reload channels:', err);
+        setError(t.errors.failedToLoad);
       }
-    } catch (err) {
-      logger.error('[MultiAccountProvider] Failed to reload channels:', err);
-      setError(t.errors.failedToLoad);
-    }
+    });
+    reloadChain.current = run;
+    return run;
   }, [t]);
+
+  // Session channels are cached at sign-in, so avatars or names changed since
+  // then (or on another device) would never reach the navigation. Refresh them
+  // once per tab, after the page's own requests (Server Actions run one at a
+  // time, so this must not queue ahead of them).
+  const signedInUserId = user?.id;
+  useEffect(() => {
+    if (!signedInUserId) return;
+    const key = `aun_channels_refreshed_${signedInUserId}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, String(Date.now()));
+    } catch {
+      // Storage unavailable (private mode): refresh on every load instead
+    }
+    const timer = window.setTimeout(() => {
+      void reloadChannels();
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [signedInUserId, reloadChannels]);
 
   // Logout current account
   const logout = useCallback(async () => {
@@ -422,6 +469,15 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     await loadSessionData();
   }, [loadSessionData]);
 
+  const reloadProfile = useCallback(async () => {
+    await reloadActiveProfile();
+    const sessionInfo = await getActiveSessionInfo();
+    if (sessionInfo) {
+      setUser(sessionInfo.user);
+      setAccounts(sessionInfo.accounts);
+    }
+  }, []);
+
   const value: MultiAccountContextValue = {
     user,
     accounts,
@@ -432,7 +488,9 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     removeAccount,
     switchToChannel,
     createChannel,
+    creatingChannel,
     reloadChannels,
+    reloadProfile,
     logout,
     logoutAll,
     refresh,

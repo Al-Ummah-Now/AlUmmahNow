@@ -174,7 +174,7 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
     const listResult = await c.env.channel_sections.list({
       prefix: `${channelId}/`,
       limit,
-      cursor,
+      cursor: cursor || undefined,
     });
 
     // Fetch full objects

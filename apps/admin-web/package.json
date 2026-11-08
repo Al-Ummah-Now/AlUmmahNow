@@ -12,6 +12,9 @@
     "deploy:qa": "opennextjs-cloudflare build && CI=true wrangler deploy --config wrangler.qa.jsonc",
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
@@ -26,7 +29,9 @@
     "valibot": "^1.2.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
     "@eslint/eslintrc": "^3.3.1",
+    "@playwright/test": "^1.56.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.0",

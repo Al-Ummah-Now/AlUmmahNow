@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/hooks/useLanguage';
 import { login } from '@/lib/actions';
+import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
 
 /**
  * Shown when the sign-in flow returns without a session (the auth server
@@ -17,6 +18,7 @@ export default function AuthErrorPage() {
 
   return (
     <main
+      id={MAIN_CONTENT_ID}
       data-testid="auth-error-page"
       className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 px-4"
       dir={isRTL ? 'rtl' : 'ltr'}

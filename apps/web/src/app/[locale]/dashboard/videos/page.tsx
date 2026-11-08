@@ -8,9 +8,10 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VideoObject } from '@/interfaces';
-import { searchVideos, deleteVideo, bulkDeleteVideos } from '@/lib/api/videos';
+import { searchVideos, bulkDeleteVideos } from '@/lib/api/videos';
 import Image from 'next/image';
 import Link from 'next/link';
+import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,12 +26,19 @@ import {
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
 type FilterDuration = 'all' | 'short' | 'standard' | 'long';
-type SortBy = 'date' | 'views' | 'title';
+type SortBy = DashboardSort;
+type VideoStatus = Exclude<FilterStatus, 'all'>;
+
+/** Upload/processing status of a video; videos without one are treated as ready */
+function getVideoStatus(video: VideoObject): VideoStatus {
+  const status = video.uploadStatus;
+  return status === 'processing' || status === 'uploading' || status === 'failed' ? status : 'ready';
+}
 
 export default function VideoDashboardPage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
-  const { user: multiAccountUser } = useMultiAccount();
+  const { user: multiAccountUser, loading: multiAccountLoading } = useMultiAccount();
   const router = useRouter();
 
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -56,17 +64,25 @@ export default function VideoDashboardPage() {
       return;
     }
 
-    // Redirect users without channels to main page
+    // Redirect users without channels to main page, once the session's
+    // channels have loaded (an unloaded session also has no channels)
+    if (multiAccountLoading) return;
     const userChannels = multiAccountUser?.channels || [];
     if (userChannels.length === 0) {
       router.push(`/${lang}`);
     }
-  }, [user, multiAccountUser?.channels, router, lang]);
+  }, [user, multiAccountUser, multiAccountLoading, router, lang]);
 
   // Fetch videos using single API call with filters
   useEffect(() => {
+    // Ignore responses from superseded requests (rapid filter changes can
+    // otherwise resolve out of order and show stale results)
+    let cancelled = false;
+
     const fetchVideos = async () => {
-      if (!user) return;
+      // Wait for the session's channels, but don't block on a background
+      // session reload once channels are known
+      if (!user || (multiAccountLoading && !multiAccountUser?.channels?.length)) return;
 
       setLoading(true);
       try {
@@ -82,27 +98,35 @@ export default function VideoDashboardPage() {
           return;
         }
 
-        // Single API call with server-side filtering
-        const result = await searchVideos(
-          '', // Empty query to get all videos
-          {
-            channelIds, // Pass all user's channel IDs
-            isOwner: true, // Mark as owner request for proper filtering
-            durationFilter: durationFilter, // Use the new durationFilter parameter
-            sortBy: sortBy === 'date' ? 'date' : sortBy === 'views' ? 'views' : 'relevance',
-            sortOrder: 'desc',
-          },
-          {
-            limit: 100, // Get more videos at once for owner dashboard
-          },
-          {  channelId: channelIds[0] || user.id }
-        );
-
-        const allVideos = result?.data || [];
+        // One search across all the user's channels, following the cursor so
+        // owners with more than a page of videos see all of them (bounded)
+        const MAX_PAGES = 10;
+        const allVideos: VideoObject[] = [];
+        let cursor: string | undefined;
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const result = await searchVideos(
+            '', // Empty query to get all videos
+            {
+              channelIds, // Pass all user's channel IDs
+              isOwner: true, // Mark as owner request for proper filtering
+              durationFilter: durationFilter, // Use the new durationFilter parameter
+              sortBy: sortBy === 'date' ? 'date' : sortBy === 'views' ? 'views' : 'relevance',
+              sortOrder: 'desc',
+            },
+            {
+              limit: 100, // Get more videos at once for owner dashboard
+              ...(cursor && { cursor }),
+            },
+            {  channelId: channelIds[0] || user.id }
+          );
+          allVideos.push(...(result?.data || []));
+          // GET /api/videos/search returns the next-page cursor at the top level
+          cursor = (result as { cursor?: string } | null)?.cursor || result?.pagination?.nextCursor || undefined;
+          if (!cursor) break;
+        }
 
         logger.debug('[VideoDashboard] Fetched videos:', allVideos.length);
         logger.debug('[VideoDashboard] Video IDs:', allVideos.map(v => v.id));
-        logger.debug('[VideoDashboard] Looking for video: e1b093a6-929c-452f-b1cf-c31d1990dd85');
         logger.debug('[VideoDashboard] Channel IDs used in query:', channelIds);
 
         // Filter videos by privacy setting (server-side filtering not yet available)
@@ -113,19 +137,24 @@ export default function VideoDashboardPage() {
           );
         }
 
+        if (cancelled) return;
         setVideos(filtered);
         setFilteredVideos(filtered);
       } catch (error) {
         logger.error('Error fetching videos:', error);
+        if (cancelled) return;
         setVideos([]);
         setFilteredVideos([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchVideos();
-  }, [user, multiAccountUser?.channels, durationFilter, sortBy, privacyFilter]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, multiAccountUser?.channels, multiAccountLoading, durationFilter, sortBy, privacyFilter]);
 
   // Apply client-side search and status filtering
   useEffect(() => {
@@ -138,30 +167,14 @@ export default function VideoDashboardPage() {
       );
     }
 
-    // Status filter (client-side until API supports it)
+    // Status filter (client-side; the search API has no status parameter)
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(() => {
-        // Assuming we have a status field, otherwise default to 'ready'
-        const status = 'ready'; // Placeholder - will be implemented when video.status is available
-        return status === statusFilter;
-      });
+      filtered = filtered.filter((video) => getVideoStatus(video) === statusFilter);
     }
 
-    // Sorting is already handled by API, but apply for client-side search results
-    if (searchQuery) {
-      filtered.sort((a, b) => {
-        switch (sortBy) {
-          case 'date':
-            return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
-          case 'views':
-            return (b.views || 0) - (a.views || 0);
-          case 'title':
-            return a.title.localeCompare(b.title);
-          default:
-            return 0;
-        }
-      });
-    }
+    // Always sort on the client: the search API has no title sort (it was sent as
+    // "relevance"), so choosing "Title" left the list in date order
+    filtered.sort((a, b) => compareDashboardVideos(a, b, sortBy));
 
     setFilteredVideos(filtered);
   }, [videos, searchQuery, statusFilter, sortBy]);
@@ -192,9 +205,21 @@ export default function VideoDashboardPage() {
   const confirmDeleteVideo = async () => {
     if (!user || !videoToDelete) return;
 
+    // The API validates that the channelId header belongs to the caller, so
+    // it must be the video's channel (not the user id)
+    const target = videos.find((v) => v.id === videoToDelete);
+    const channelId = target?.channelId || multiAccountUser?.channels?.[0]?.id;
+    if (!channelId) {
+      setErrorMessage(t.errors?.genericError || 'An error occurred');
+      setDeleteDialogOpen(false);
+      return;
+    }
+
     try {
-      const result = await deleteVideo(videoToDelete, {  channelId: user.id });
-      if (result) {
+      // The bulk endpoint reports per-video success; DELETE /api/videos/:id
+      // rejected every request on API builds before its param-name fix
+      const result = await bulkDeleteVideos([videoToDelete], { channelId });
+      if (result?.results?.[0]?.success) {
         setVideos((prev) => prev.filter((v) => v.id !== videoToDelete));
         setSelectedVideos((prev) => {
           const newSet = new Set(prev);
@@ -205,6 +230,7 @@ export default function VideoDashboardPage() {
         setVideoToDelete(null);
       } else {
         setErrorMessage(t.errors?.genericError || 'An error occurred');
+        setDeleteDialogOpen(false);
       }
     } catch (error) {
       logger.error('Error deleting video:', error);
@@ -223,13 +249,39 @@ export default function VideoDashboardPage() {
     if (!user) return;
 
     try {
-      const videoIdsArray = Array.from(selectedVideos);
-
-      // Call bulk delete API
-      const result = await bulkDeleteVideos(videoIdsArray, {
-        
-        channelId: user.id
+      // One bulk request per channel: the channelId header must be a channel
+      // the caller owns, and selected videos can span several channels
+      const fallbackChannelId = multiAccountUser?.channels?.[0]?.id || '';
+      const idsByChannel = new Map<string, string[]>();
+      Array.from(selectedVideos).forEach((videoId) => {
+        const channelId = videos.find((v) => v.id === videoId)?.channelId || fallbackChannelId;
+        idsByChannel.set(channelId, [...(idsByChannel.get(channelId) || []), videoId]);
       });
+
+      const responses = await Promise.all(
+        Array.from(idsByChannel.entries()).map(([channelId, videoIds]) =>
+          bulkDeleteVideos(videoIds, { channelId })
+        )
+      );
+      const result = responses.every((r) => r === null)
+        ? null
+        : {
+            results: responses.flatMap((r, index) =>
+              r
+                ? r.results
+                : Array.from(idsByChannel.values())[index].map((videoId) => ({ videoId, success: false }))
+            ),
+            summary: responses.reduce(
+              (acc, r, index) => {
+                const count = Array.from(idsByChannel.values())[index].length;
+                return {
+                  succeeded: acc.succeeded + (r?.summary.succeeded ?? 0),
+                  failed: acc.failed + (r ? r.summary.failed : count),
+                };
+              },
+              { succeeded: 0, failed: 0 }
+            ),
+          };
 
       if (!result) {
         setErrorMessage(t.errors?.genericError || 'Failed to delete videos');
@@ -262,7 +314,11 @@ export default function VideoDashboardPage() {
       // Show appropriate message
       if (result.summary.failed > 0) {
         if (result.summary.succeeded > 0) {
-          setErrorMessage(`Deleted ${result.summary.succeeded} video(s), but ${result.summary.failed} failed to delete`);
+          setErrorMessage(
+            (t.video.bulkDeletePartial || t.errors?.genericError || '')
+              .replace('{succeeded}', result.summary.succeeded.toString())
+              .replace('{failed}', result.summary.failed.toString())
+          );
         } else {
           setErrorMessage(t.errors?.genericError || 'Failed to delete videos');
         }
@@ -280,7 +336,8 @@ export default function VideoDashboardPage() {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // floor, not ceil: with ceil anything uploaded in the last 24 hours showed "Yesterday"
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) return t.video.today;
     if (diffDays === 1) return t.video.yesterday;
@@ -307,19 +364,22 @@ export default function VideoDashboardPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="absolute start-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
-                type="text"
+                type="search"
+                data-testid="dashboard-search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.video.searchVideos}
-                className="w-full pl-10 pr-10 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                aria-label={t.video.searchVideos}
+                className="w-full ps-10 pe-10 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  aria-label="Clear search"
+                  data-testid="dashboard-search-clear"
+                  className="absolute end-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  aria-label={t.video.clearSearch || t.search.clear}
                 >
                   <X size={18} />
                 </button>
@@ -329,6 +389,8 @@ export default function VideoDashboardPage() {
             {/* Filters Row */}
             <div className="flex flex-wrap gap-4">
               <select
+                data-testid="dashboard-filter-status"
+                aria-label={t.video.allStatus}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
                 className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -341,6 +403,8 @@ export default function VideoDashboardPage() {
               </select>
 
               <select
+                data-testid="dashboard-filter-privacy"
+                aria-label={t.video.filterByPrivacy}
                 value={privacyFilter}
                 onChange={(e) => setPrivacyFilter(e.target.value as FilterPrivacy)}
                 className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -351,6 +415,8 @@ export default function VideoDashboardPage() {
               </select>
 
               <select
+                data-testid="dashboard-filter-duration"
+                aria-label={t.video.allVideos}
                 value={durationFilter}
                 onChange={(e) => setDurationFilter(e.target.value as FilterDuration)}
                 className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -362,6 +428,8 @@ export default function VideoDashboardPage() {
               </select>
 
               <select
+                data-testid="dashboard-sort"
+                aria-label={t.search.sortBy}
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
                 className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -374,12 +442,13 @@ export default function VideoDashboardPage() {
 
             {/* Bulk Actions */}
             {selectedVideos.size > 0 && (
-              <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <span className="text-sm font-medium dark:text-white">
+              <div data-testid="dashboard-bulk-actions" className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <span data-testid="dashboard-selected-count" data-count={selectedVideos.size} className="text-sm font-medium dark:text-white">
                   {t.video.videosSelected?.replace('{count}', selectedVideos.size.toString()) || `${selectedVideos.size} videos selected`}
                 </span>
                 <button
                   onClick={handleSelectAll}
+                  data-testid="dashboard-select-all"
                   className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                 >
                   {selectedVideos.size === filteredVideos.length ? t.video.deselectAll : t.video.selectAll}
@@ -387,6 +456,7 @@ export default function VideoDashboardPage() {
                 <div className="flex-1" />
                 <button
                   onClick={handleDeleteSelected}
+                  data-testid="dashboard-delete-selected"
                   className="flex items-center gap-2 px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 >
                   <Trash2 size={16} />
@@ -399,20 +469,27 @@ export default function VideoDashboardPage() {
 
         {/* Video Grid */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
+          <div data-testid="dashboard-loading" className="flex items-center justify-center py-20">
             <div className="text-gray-500 dark:text-gray-400">{t.common.loading}</div>
           </div>
         ) : filteredVideos.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center">
+          <div data-testid="dashboard-empty" className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center">
             <UploadCloud size={64} className="mx-auto mb-4 text-gray-400" />
             <h2 className="text-2xl font-semibold mb-2 dark:text-white">{t.video.noVideosFound}</h2>
             <p className="text-gray-600 dark:text-gray-400">{t.video.uploadFirstVideo}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div data-testid="dashboard-video-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredVideos.map((video) => (
               <div
                 key={video.id}
+                data-testid="dashboard-video-card"
+                data-video-id={video.id}
+                data-channel-id={video.channelId || ''}
+                data-privacy={video.isPublic ? 'public' : 'private'}
+                data-status={getVideoStatus(video)}
+                data-duration={video.duration ?? ''}
+                data-created={video.dateCreated || ''}
                 onClick={(e) => {
                   // Only toggle selection if clicking on the card itself, not buttons or links
                   const target = e.target as HTMLElement;
@@ -433,7 +510,9 @@ export default function VideoDashboardPage() {
                     type="checkbox"
                     checked={selectedVideos.has(video.id)}
                     onChange={() => handleSelectVideo(video.id)}
-                    className="absolute top-3 left-3 w-5 h-5 z-10 cursor-pointer"
+                    data-testid="dashboard-video-select"
+                    aria-label={`${t.video.selectVideo || t.video.selectAll}: ${video.title}`}
+                    className="absolute top-3 start-3 w-5 h-5 z-10 cursor-pointer"
                   />
 
                   {/* Thumbnail Image */}
@@ -476,21 +555,28 @@ export default function VideoDashboardPage() {
 
                 {/* Video Details - Matching VideoCard style */}
                 <div className="p-4">
-                  <h3 className="text-lg truncate font-[Tahoma]">
+                  <h3 data-testid="dashboard-video-title" className="text-lg truncate font-[Tahoma]">
                     {video.title}
                   </h3>
                   <p className="text-sm truncate">{video.channelName || video.channel}</p>
-                  <p className="text-sm">
+                  <p className="text-sm" data-testid="dashboard-video-meta">
                     {video.views || 0} {t.video.videoViews?.toLowerCase() || 'views'} • {formatDate(video.dateCreated)}
                   </p>
 
-                  {/* Privacy Badge */}
-                  <div className="mt-2">
+                  {/* Privacy + status badges */}
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <span
+                      data-testid="dashboard-video-status"
+                      className="inline-block px-2 py-1 rounded text-xs font-medium bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                    >
+                      {t.video[getVideoStatus(video)]}
+                    </span>
+                    <span
+                      data-testid="dashboard-video-privacy"
                       className={`inline-block px-2 py-1 rounded text-xs font-medium ${
                         video.isPublic
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                       }`}
                     >
                       {video.isPublic ? t.video.public : t.video.private}
@@ -501,6 +587,7 @@ export default function VideoDashboardPage() {
                   <div className="flex gap-2 mt-3">
                     <Link
                       href={`/${lang}/video?vid=${video.id}`}
+                      data-testid="dashboard-video-view"
                       className="flex-1 flex items-center justify-center gap-1 px-2 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
                     >
                       <Eye size={14} />
@@ -508,6 +595,7 @@ export default function VideoDashboardPage() {
                     </Link>
                     <Link
                       href={`/${lang}/video/${video.id}/edit`}
+                      data-testid="dashboard-video-edit"
                       className="flex-1 flex items-center justify-center gap-1 px-2 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
                     >
                       <Edit size={14} />
@@ -515,6 +603,7 @@ export default function VideoDashboardPage() {
                     </Link>
                     <button
                       onClick={() => handleDeleteVideo(video.id)}
+                      data-testid="dashboard-video-delete"
                       className="px-2 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                       aria-label={t.common.delete}
                     >
@@ -529,7 +618,7 @@ export default function VideoDashboardPage() {
 
         {/* Error Message Banner */}
         {errorMessage && (
-          <div className="fixed top-4 right-4 left-4 md:left-auto md:w-96 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 shadow-lg z-50">
+          <div role="alert" data-testid="dashboard-error" className="fixed top-4 end-4 start-4 md:start-auto md:w-96 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 shadow-lg z-50">
             <div className="flex items-start gap-3">
               <div className="flex-1">
                 <p className="text-sm font-medium text-red-800 dark:text-red-200">
@@ -538,6 +627,7 @@ export default function VideoDashboardPage() {
               </div>
               <button
                 onClick={() => setErrorMessage(null)}
+                aria-label={t.common.close}
                 className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
               >
                 <X size={18} />

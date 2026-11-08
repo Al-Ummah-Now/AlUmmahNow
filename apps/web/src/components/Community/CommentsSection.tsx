@@ -1,6 +1,8 @@
+'use client';
+
 import { logger } from '@/lib/logger-client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { PostComment } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import CommentForm from './CommentForm';
@@ -40,7 +42,8 @@ export default function CommentsSection({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('top');
-  const [cursor, setCursor] = useState<string | undefined>();
+  // Cursor lives in a ref so loading a page does not re-trigger the initial-load effect
+  const cursorRef = useRef<string | undefined>(undefined);
   const [hasMore, setHasMore] = useState(false);
   const [totalComments, setTotalComments] = useState(commentsCount);
 
@@ -50,7 +53,7 @@ export default function CommentsSection({
     if (reset) {
       setLoading(true);
       setComments([]);
-      setCursor(undefined);
+      cursorRef.current = undefined;
     } else {
       setLoadingMore(true);
     }
@@ -58,7 +61,7 @@ export default function CommentsSection({
     try {
       const result = await listPostComments(postChannelId, postId, {
         limit: 20,
-        cursor: reset ? undefined : cursor,
+        cursor: reset ? undefined : cursorRef.current,
         sortBy,
       });
 
@@ -68,16 +71,16 @@ export default function CommentsSection({
         } else {
           setComments((prev) => [...prev, ...result.comments]);
         }
-        setCursor(result.pagination.cursor);
+        cursorRef.current = result.pagination.cursor;
         setHasMore(result.pagination.hasNext);
       }
     } catch (error) {
-      logger.error('Failed to load comments:', error);
+      logger.error('[CommentsSection] Failed to load comments', { postId, error });
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [postChannelId, postId, sortBy, cursor]);
+  }, [postChannelId, postId, sortBy]);
 
   useEffect(() => {
     loadComments(true);
@@ -90,7 +93,13 @@ export default function CommentsSection({
 
   const handleCommentUpdated = (updatedComment: PostComment) => {
     setComments((prev) =>
-      prev.map((c) => (c.id === updatedComment.id ? updatedComment : c))
+      prev.map((c) => {
+        if (c.id === updatedComment.id) {
+          return updatedComment;
+        }
+        // Only one comment can be pinned per post
+        return updatedComment.isPinned && c.isPinned ? { ...c, isPinned: false } : c;
+      })
     );
   };
 

@@ -6,8 +6,9 @@ import { useRouter, useParams } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { login } from '@/lib/actions';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName } from '@/utils/timezoneUtils';
+import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 
 const ProfileCreatePage = () => {
@@ -116,7 +117,15 @@ const ProfileCreatePage = () => {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 dark:text-gray-400">{t.errors.unauthorized}</p>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">{t.navigation.signIn}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{t.errors.unauthorized}</p>
+          <button
+            type="button"
+            onClick={() => { void login(locale); }}
+            className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {t.navigation.signIn}
+          </button>
         </div>
       </div>
     );
@@ -133,10 +142,11 @@ const ProfileCreatePage = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor="profile-email" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.email}
               </label>
               <input
+                id="profile-email"
                 type="email"
                 value={auth.user?.email || ''}
                 disabled
@@ -173,13 +183,13 @@ const ProfileCreatePage = () => {
 
             {/* First Name with Language Tabs */}
             <div>
-              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor="profile-firstName" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.firstName} <span className="text-red-500 dark:text-red-400">*</span>
               </label>
               {activeTab === 'en' && (
                 <input
                   type="text"
-                  name="firstNameEn"
+                  id="profile-firstName" name="firstNameEn"
                   required
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.yourFirstName}
@@ -188,7 +198,7 @@ const ProfileCreatePage = () => {
               {activeTab === 'ar' && (
                 <input
                   type="text"
-                  name="firstNameAr"
+                  id="profile-firstName" name="firstNameAr"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.firstNameArabic || 'الاسم الأول'}
                   dir="rtl"
@@ -198,13 +208,13 @@ const ProfileCreatePage = () => {
 
             {/* Last Name with Language Tabs */}
             <div>
-              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor="profile-lastName" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.lastName}
               </label>
               {activeTab === 'en' && (
                 <input
                   type="text"
-                  name="lastNameEn"
+                  id="profile-lastName" name="lastNameEn"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.yourLastName}
                 />
@@ -212,7 +222,7 @@ const ProfileCreatePage = () => {
               {activeTab === 'ar' && (
                 <input
                   type="text"
-                  name="lastNameAr"
+                  id="profile-lastName" name="lastNameAr"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.lastNameArabic || 'اسم العائلة'}
                   dir="rtl"
@@ -222,13 +232,13 @@ const ProfileCreatePage = () => {
 
             {/* Display Name */}
             <div>
-              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor="profile-displayName" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.displayName}
               </label>
               {activeTab === 'en' && (
                 <input
                   type="text"
-                  name="displayNameEn"
+                  id="profile-displayName" name="displayNameEn"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.displayNameOptional}
                 />
@@ -236,7 +246,7 @@ const ProfileCreatePage = () => {
               {activeTab === 'ar' && (
                 <input
                   type="text"
-                  name="displayNameAr"
+                  id="profile-displayName" name="displayNameAr"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.displayNameArabic}
                   dir="rtl"
@@ -247,12 +257,12 @@ const ProfileCreatePage = () => {
 
             {/* Bio */}
             <div>
-              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor="profile-bio" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.bio}
               </label>
               {activeTab === 'en' && (
                 <textarea
-                  name="bioEn"
+                  id="profile-bio" name="bioEn"
                   rows={3}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.bioOptional}
@@ -260,7 +270,7 @@ const ProfileCreatePage = () => {
               )}
               {activeTab === 'ar' && (
                 <textarea
-                  name="bioAr"
+                  id="profile-bio" name="bioAr"
                   rows={3}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.bioArabic}
@@ -271,15 +281,18 @@ const ProfileCreatePage = () => {
 
             {/* Timezone Selector */}
             <div>
-              <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor="profile-timezone" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile?.timezone || 'Timezone'}
               </label>
               <select
-                name="timezone"
+                id="profile-timezone" name="timezone"
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
                 className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
               >
+                {timezone && !isListedTimezone(timezone) && (
+                  <option value={timezone}>{getTimezoneDisplayName(timezone)}</option>
+                )}
                 {Object.entries(COMMON_TIMEZONES).map(([region, timezones]) => (
                   <optgroup key={region} label={region}>
                     {timezones.map((tz) => (

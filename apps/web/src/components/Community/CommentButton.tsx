@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { getTranslations } from '@/lib/i18n';
 
 interface CommentButtonProps {
   postId: string;
@@ -63,12 +64,12 @@ export default function CommentButton({
           ? 'bg-blue-50 dark:bg-blue-900/20'
           : 'hover:bg-gray-100 dark:hover:bg-gray-700',
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        isRTL && 'flex-row-reverse'
+        'flex-row'
       )}
-      aria-label={isRTL ? 'التعليقات' : 'Comments'}
       aria-pressed={showComments}
     >
       <svg
+        aria-hidden="true"
         className={cn(
           'w-5 h-5 transition-colors',
           showComments
@@ -94,6 +95,8 @@ export default function CommentButton({
             : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-200'
         )}
       >
+        {/* Accessible name = label + visible count (label-in-name) */}
+        <span className="sr-only">{getTranslations(isRTL ? 'ar' : 'en').community.commentsButton}</span>{' '}
         {formatCount(commentCount)}
       </span>
     </button>

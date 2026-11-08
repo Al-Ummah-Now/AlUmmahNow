@@ -72,7 +72,8 @@ export const APPS: AppRule[] = [
 			name: 'videos',
 			vars: {
 				Issuer: AUTH_ISSUER,
-				Audience: 'https://videos.alummahnow.net',
+				// The API's own base URL (subtitle links are built from it); not a JWT audience check
+				Audience: 'https://videos.api.alummahnow.net',
 				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
 				CORS_ORIGINS: 'https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net',
 			},

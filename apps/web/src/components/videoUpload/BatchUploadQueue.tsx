@@ -49,14 +49,14 @@ export function BatchUploadQueue({
   const hasActiveTasks = stats.uploading > 0 || stats.pending > 0 || stats.paused > 0;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 md:p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 md:p-6" data-testid="batch-queue" data-total={stats.total} data-completed={stats.completed}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h2 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">
             {t.batch.uploadQueue}
           </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1" data-testid="batch-summary">
             {t.batch.ofCompleted.replace('{completed}', stats.completed.toString()).replace('{total}', stats.total.toString())}
           </p>
         </div>
@@ -65,6 +65,8 @@ export function BatchUploadQueue({
         <div className="flex flex-wrap gap-2">
           {stats.paused > 0 && (
             <button
+              type="button"
+              data-testid="batch-resume-all"
               onClick={onResumeAll}
               className="
                 flex items-center gap-1.5
@@ -87,6 +89,8 @@ export function BatchUploadQueue({
 
           {stats.uploading > 0 && (
             <button
+              type="button"
+              data-testid="batch-pause-all"
               onClick={onPauseAll}
               className="
                 flex items-center gap-1.5
@@ -109,6 +113,8 @@ export function BatchUploadQueue({
 
           {stats.failed > 0 && (
             <button
+              type="button"
+              data-testid="batch-retry-failed"
               onClick={() => {
                 files.filter(f => f.status === 'failed').forEach(f => onRetryFile(f.id));
               }}
@@ -133,6 +139,8 @@ export function BatchUploadQueue({
 
           {hasActiveTasks && (
             <button
+              type="button"
+              data-testid="batch-cancel-all"
               onClick={onCancelAll}
               className="
                 flex items-center gap-1.5
@@ -161,11 +169,18 @@ export function BatchUploadQueue({
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
             {t.batch.overallProgress}
           </span>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="batch-overall-percent">
             {overallProgress.toFixed(0)}%
           </span>
         </div>
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+        <div
+          className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5"
+          role="progressbar"
+          aria-label={t.batch.overallProgress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(overallProgress)}
+        >
           <div
             className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
             style={{ width: `${overallProgress}%` }}

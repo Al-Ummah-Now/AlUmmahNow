@@ -5,17 +5,65 @@
  * - recent_uploads: Latest videos from the channel
  * - popular_uploads: Most viewed videos from the channel
  * - liked_videos: Videos liked by the channel owner
- * - subscribed_channels: Channels the user is subscribed to
+ * - subscribed_channels: Public channels the channel owner is subscribed to
  */
 
 import R2Repository from './r2Repo';
-import { VideoObject, ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
+import { VideoObject, ChannelSection, ChannelSectionView, Channel, Profile } from '@al-ummah/shared-types';
 import { logger } from './logger';
+import { isVideoRemoved } from './visibility';
+import { channelVideosFromIndex } from './search/channelVideoIndex';
+
+/**
+ * Public-safe channel summary returned in populated section content.
+ * Deliberately excludes owner email, subscriber lists and other private fields.
+ */
+export interface PublicChannelSummary {
+  id: string;
+  name: string;
+  nameLocalized?: Record<string, string>;
+  description?: string;
+  descriptionLocalized?: Record<string, string>;
+  avatarUrl?: string;
+  coverUrl?: string;
+  isVerified?: boolean;
+  subscribersCount: number;
+  videosCount: number;
+}
 
 export interface SectionContent {
   videos?: VideoObject[];
   playlists?: any[];
-  channels?: any[];
+  channels?: PublicChannelSummary[];
+}
+
+/**
+ * Stored channel shape in R2 (business model carries raw relation arrays)
+ */
+type StoredChannel = Channel & {
+  subscribers?: unknown[];
+  videos?: unknown[];
+};
+
+function isPubliclyVisibleChannel(channel: StoredChannel | null): channel is StoredChannel {
+  return !!channel && !channel.isDeleted && !channel.isHidden && !channel.isPrivate;
+}
+
+function toPublicChannelSummary(channel: StoredChannel): PublicChannelSummary {
+  return {
+    id: channel.id,
+    name: channel.name,
+    nameLocalized: channel.nameLocalized,
+    description: channel.description,
+    descriptionLocalized: channel.descriptionLocalized,
+    avatarUrl: channel.avatarUrl,
+    coverUrl: channel.coverUrl,
+    isVerified: channel.isVerified,
+    subscribersCount: Array.isArray(channel.subscribers)
+      ? channel.subscribers.length
+      : channel.subscribersCount || 0,
+    videosCount: Array.isArray(channel.videos) ? channel.videos.length : channel.videosCount || 0,
+  };
 }
 
 /**
@@ -31,11 +79,11 @@ export async function populateSectionContent(
   try {
     switch (section.type) {
       case 'recent_uploads':
-        content.videos = await getRecentUploads(section.channelId, section.itemCount || 12, env);
+        content.videos = await getChannelUploads(section.channelId, section.itemCount || 12, env, 'latest');
         break;
 
       case 'popular_uploads':
-        content.videos = await getPopularUploads(section.channelId, section.itemCount || 12, env);
+        content.videos = await getChannelUploads(section.channelId, section.itemCount || 12, env, 'popular');
         break;
 
       case 'liked_videos':
@@ -44,7 +92,6 @@ export async function populateSectionContent(
         break;
 
       case 'subscribed_channels':
-        // For now, return empty - would need subscription tracking
         content.channels = await getSubscribedChannels(section.channelId, section.itemCount || 12, env);
         break;
 
@@ -78,70 +125,52 @@ export async function populateSectionContent(
   return content;
 }
 
+/** Parallel reads per batch when the index cannot answer and the bucket is scanned */
+const SCAN_CONCURRENCY = 25;
+
 /**
- * Get recent uploads for a channel
+ * A channel's public uploads, newest first (`latest`) or most viewed first
+ * (`popular`). Answered from the ownership index (D1); falls back to a bucket
+ * scan, read in parallel batches, while the index is unavailable.
  */
-async function getRecentUploads(
+async function getChannelUploads(
   channelId: string,
   limit: number,
-  env: any
+  env: any,
+  sort: 'latest' | 'popular'
 ): Promise<VideoObject[]> {
+  const videoRepo = new R2Repository<VideoObject>(env.videos);
+  const isListed = (video: VideoObject | null): video is VideoObject =>
+    !!video && video.channelId === channelId && video.isPublic !== false && !isVideoRemoved(video);
+
   try {
-    const videoRepo = new R2Repository<VideoObject>(env.videos);
+    const indexed = await channelVideosFromIndex<VideoObject>(env, {
+      channelId,
+      cursor: undefined,
+      limit,
+      query: { sort, privateFor: null, isPublic: true },
+      load: id => videoRepo.getObject(id),
+      isListed,
+    });
+    if (indexed) return indexed.videos;
 
-    // List all videos with prefix (in R2, they're stored flat)
+    logger.info('[SectionPopulator] Ownership index unavailable; scanning bucket', { channelId, sort });
     const listResult = await env.videos.list({ limit: 1000 });
-
-    // Fetch and filter videos for this channel
+    const keys: string[] = (listResult.objects || []).map((obj: { key: string }) => obj.key);
     const videos: VideoObject[] = [];
-    for (const obj of listResult.objects) {
-      const video = await videoRepo.getObject(obj.key);
-      if (video && video.channelId === channelId && video.isPublic) {
-        videos.push(video);
-      }
+    for (let i = 0; i < keys.length; i += SCAN_CONCURRENCY) {
+      const batch = await Promise.all(keys.slice(i, i + SCAN_CONCURRENCY).map(key => videoRepo.getObject(key)));
+      videos.push(...batch.filter(isListed));
     }
 
-    // Sort by date created (newest first) and limit
     videos.sort((a, b) =>
-      new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()
+      sort === 'popular'
+        ? (b.views || 0) - (a.views || 0)
+        : new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()
     );
-
     return videos.slice(0, limit);
   } catch (error) {
-    logger.error('Failed to get recent uploads', { channelId, error });
-    return [];
-  }
-}
-
-/**
- * Get popular uploads for a channel (sorted by view count)
- */
-async function getPopularUploads(
-  channelId: string,
-  limit: number,
-  env: any
-): Promise<VideoObject[]> {
-  try {
-    const videoRepo = new R2Repository<VideoObject>(env.videos);
-
-    // List all videos
-    const listResult = await env.videos.list({ limit: 1000 });
-
-    // Fetch and filter videos for this channel
-    const videos: VideoObject[] = [];
-    for (const obj of listResult.objects) {
-      const video = await videoRepo.getObject(obj.key);
-      if (video && video.channelId === channelId && video.isPublic) {
-        videos.push(video);
-      }
-    }
-
-    // Sort by view count (highest first) and limit
-    videos.sort((a, b) => (b.views || 0) - (a.views || 0));
-
-    return videos.slice(0, limit);
-  } catch (error) {
-    logger.error('Failed to get popular uploads', { channelId, error });
+    logger.error('[SectionPopulator] Failed to get channel uploads', { channelId, sort, error });
     return [];
   }
 }
@@ -166,18 +195,42 @@ async function getLikedVideos(
 }
 
 /**
- * Get channels that the user is subscribed to
+ * Get the channels the channel owner is subscribed to.
+ *
+ * Subscriptions are only exposed because the channel owner explicitly added a
+ * "subscribed_channels" section to their channel page. Only public, non-deleted,
+ * non-hidden channels are returned, as public-safe summaries.
  */
 async function getSubscribedChannels(
   channelId: string,
   limit: number,
   env: any
-): Promise<any[]> {
+): Promise<PublicChannelSummary[]> {
   try {
-    // This would need subscription tracking
-    // For now, return empty array
-    logger.info('Subscribed channels feature not yet implemented', { channelId });
-    return [];
+    const channelRepo = new R2Repository<StoredChannel>(env.channels);
+    const channel = await channelRepo.getObject(channelId);
+    if (!channel?.userId) {
+      return [];
+    }
+
+    const profileRepo = new R2Repository<Profile>(env.profiles);
+    const profile = await profileRepo.getObject(channel.userId);
+    const subscribedTo = (profile?.subscribedTo || []).filter((id) => id !== channelId);
+
+    const summaries: PublicChannelSummary[] = [];
+    for (const subscribedChannelId of subscribedTo) {
+      if (summaries.length >= limit) break;
+      try {
+        const subscribedChannel = await channelRepo.getObject(subscribedChannelId);
+        if (isPubliclyVisibleChannel(subscribedChannel)) {
+          summaries.push(toPublicChannelSummary(subscribedChannel));
+        }
+      } catch (error) {
+        logger.warn('Failed to load subscribed channel', { channelId, subscribedChannelId, error });
+      }
+    }
+
+    return summaries;
   } catch (error) {
     logger.error('Failed to get subscribed channels', { channelId, error });
     return [];
@@ -197,7 +250,7 @@ async function getVideosByIds(
 
     for (const videoId of videoIds) {
       const video = await videoRepo.getObject(videoId);
-      if (video && video.isPublic) {
+      if (video && video.isPublic && !isVideoRemoved(video)) {
         videos.push(video);
       }
     }

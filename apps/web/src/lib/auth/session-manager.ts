@@ -23,6 +23,30 @@ const MAX_ACCOUNTS = 10; // Maximum number of accounts per browser
 const COOKIE_SIZE_WARNING_THRESHOLD = 3072; // 3KB (75% of 4KB limit)
 const COOKIE_SIZE_MAX = 4096; // 4KB browser limit
 
+/**
+ * Reduces an API channel record to the fields the UI reads from the session.
+ * The channel list endpoint returns full records (descriptions plus embedded
+ * playlist/video/subscriber arrays); caching those in the cookie overflowed
+ * the 4KB limit for accounts with ~4 channels, which made login fail.
+ */
+export function toSessionChannel(channel: Channel): Channel {
+  return {
+    id: channel.id,
+    userId: channel.userId,
+    email: channel.email,
+    name: channel.name,
+    nameLocalized: channel.nameLocalized,
+    avatarUrl: channel.avatarUrl,
+    isMain: channel.isMain,
+    isVerified: channel.isVerified,
+    isPrivate: channel.isPrivate,
+    subscribersCount: channel.subscribersCount,
+    videosCount: channel.videosCount,
+    dateCreated: channel.dateCreated,
+    dateModified: channel.dateModified,
+  } as Channel;
+}
+
 // Types
 export interface AuthTokens {
   accessToken: string;
@@ -587,7 +611,7 @@ export class SessionManager {
       );
 
       if (response?.data) {
-        account.channels = Array.isArray(response.data) ? response.data : [];
+        account.channels = Array.isArray(response.data) ? response.data.map(toSessionChannel) : [];
 
         // Set first channel as active if none selected AND channels exist
         // Clear active channel if no channels exist

@@ -68,12 +68,16 @@ import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
 import { BufferingIndicator } from './LoadingStates';
 import { ViewerCount } from './ViewerCount';
+import { KeyboardHelpModal } from './KeyboardHelpModal';
+import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
 import { useWatchProgress } from '@/hooks/useWatchProgress';
 import '@/styles/video-player.css';
+import '@/styles/keyboard-feedback.css';
 import type { Player } from 'video.js';
 import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
+import type { PlayerTextTrack } from '@/lib/video/subtitle-tracks';
 
 export interface CustomVideoPlayerProps {
   videoId: string;
@@ -94,6 +98,10 @@ export interface CustomVideoPlayerProps {
   lang?: 'en' | 'ar';
   onError?: (error: VideoError) => void;
   onSourceChange?: (source: VideoSource) => void;
+  /** Subtitle/caption tracks (WebVTT URLs) to attach to the player */
+  textTracks?: PlayerTextTrack[];
+  /** Called once the Video.js player is ready (e.g. for chapter integration) */
+  onPlayerReady?: (player: Player) => void;
 }
 
 /**
@@ -115,6 +123,8 @@ export default function CustomVideoPlayer({
   lang = 'en',
   onError,
   onSourceChange,
+  textTracks,
+  onPlayerReady,
 }: CustomVideoPlayerProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
   const playerRef = useRef<Player | null>(null);
@@ -130,12 +140,16 @@ export default function CustomVideoPlayer({
   const accessibilityCleanupRef = useRef<(() => void) | null>(null);
   const qualityLevelsCleanupRef = useRef<(() => void) | null>(null);
   const isInitializingRef = useRef(false);
+  const onPlayerReadyRef = useRef(onPlayerReady);
+  const addedTextTracksRef = useRef<Array<{ track: unknown }>>([]);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [bufferProgress, setBufferProgress] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isKeyboardHelpOpen, setIsKeyboardHelpOpen] = useState(false);
+  const touchFeedbackCleanupRef = useRef<(() => void) | null>(null);
 
   // Phase 3: Advanced analytics state tracking
   const seekStartTimeRef = useRef<number>(0);
@@ -234,6 +248,10 @@ export default function CustomVideoPlayer({
       const fallbackSource = fallbackStrategyRef.current.getNextFallback(categorizedError);
       if (fallbackSource) {
         handleSourceChange(fallbackSource);
+      } else {
+        // Nothing left to fall back to: don't offer a "try another format"
+        // button that would do nothing
+        setCurrentError({ ...categorizedError, fallbackAvailable: false });
       }
     }
   }, [onError, handleSourceChange]);
@@ -242,6 +260,55 @@ export default function CustomVideoPlayer({
   useEffect(() => {
     handleVideoErrorRef.current = handleVideoError;
   }, [handleVideoError]);
+
+  // Keep latest onPlayerReady without re-initializing the player
+  useEffect(() => {
+    onPlayerReadyRef.current = onPlayerReady;
+  }, [onPlayerReady]);
+
+  /**
+   * Attach subtitle tracks. Previously added remote tracks are removed first so
+   * switching videos (or reloading the track list) never duplicates tracks.
+   */
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!playerReady || !player || typeof player.addRemoteTextTrack !== 'function') return;
+
+    for (const added of addedTextTracksRef.current) {
+      try {
+        player.removeRemoteTextTrack?.(added.track);
+      } catch (err) {
+        logger.debug('[CustomVideoPlayer] Failed to remove text track', err);
+      }
+    }
+    addedTextTracksRef.current = [];
+
+    for (const track of textTracks || []) {
+      try {
+        const element = player.addRemoteTextTrack(
+          {
+            kind: track.kind,
+            src: track.src,
+            srclang: track.srclang,
+            label: track.label,
+            default: track.default,
+            mode: track.default ? 'showing' : 'disabled',
+          },
+          false
+        );
+        if (element) addedTextTracksRef.current.push(element);
+      } catch (err) {
+        logger.error('[CustomVideoPlayer] Failed to add text track', { srclang: track.srclang, err });
+      }
+    }
+
+    if ((textTracks || []).length > 0) {
+      logger.debug('[CustomVideoPlayer] Attached subtitle tracks', {
+        videoId,
+        languages: (textTracks || []).map((t) => t.srclang),
+      });
+    }
+  }, [playerReady, textTracks, videoId]);
 
   /**
    * Handle retry button click
@@ -332,7 +399,8 @@ export default function CustomVideoPlayer({
         controls,
         autoplay,
         sources,
-        poster
+        poster,
+        language: lang,
       });
 
       const player = playerRef.current;
@@ -346,6 +414,7 @@ export default function CustomVideoPlayer({
         isInitializingRef.current = false;
         setPlayerReady(true);
         analyticsRef.current?.trackReady();
+        onPlayerReadyRef.current?.(player);
 
         // Reset quartiles when video loads
         quartilesFiredRef.current.clear();
@@ -360,7 +429,12 @@ export default function CustomVideoPlayer({
         keyboardShortcutsCleanupRef.current = setupKeyboardShortcuts(player as ExtendedPlayer, {
           lang,
           showFeedback: true,
+          // Story 1.4 AC 3: "?" key and a control-bar button open the shortcut list
+          onShowHelp: () => setIsKeyboardHelpOpen(true),
         });
+
+        // Story 1.5 AC 3: visual (and, where supported, haptic) touch feedback
+        touchFeedbackCleanupRef.current = setupTouchFeedback(player.el() as HTMLElement);
 
         // Phase 4.19: Setup mobile touch controls on mobile devices
         if (isMobileDevice()) {
@@ -425,6 +499,17 @@ export default function CustomVideoPlayer({
             }
           }
         });
+
+        // Video.js reports an unsupported source ("No compatible source", code 4)
+        // before `ready`, so the listener above never sees it. Surface an error
+        // that is already set so the localized ErrorDisplay replaces the player.
+        if (hasErrorMethod(player)) {
+          const earlyError = player.error();
+          if (earlyError && handleVideoErrorRef.current) {
+            logger.warn('[CustomVideoPlayer] Player errored before ready', { code: earlyError.code });
+            handleVideoErrorRef.current(earlyError);
+          }
+        }
 
         // ==================== Phase 3: Advanced Analytics ====================
 
@@ -583,10 +668,10 @@ export default function CustomVideoPlayer({
 
     const player = playerRef.current as ExtendedPlayer;
     const currentSrc = player.currentSrc();
-    const newSrc = `https://vz-215a1ffd-a5a.b-cdn.net/${videoId}/playlist.m3u8`;
+    const newSrc = sources[0]?.src;
 
     // Only update if the source actually changed
-    if (currentSrc && currentSrc !== newSrc) {
+    if (currentSrc && newSrc && currentSrc !== newSrc) {
       logger.debug(`[CustomVideoPlayer] Video ID changed, updating source to ${videoId}`);
 
       // Reset quartiles for new video
@@ -660,6 +745,12 @@ export default function CustomVideoPlayer({
       if (keyboardShortcutsCleanupRef.current) {
         keyboardShortcutsCleanupRef.current();
         keyboardShortcutsCleanupRef.current = null;
+      }
+
+      // Cleanup touch feedback
+      if (touchFeedbackCleanupRef.current) {
+        touchFeedbackCleanupRef.current();
+        touchFeedbackCleanupRef.current = null;
       }
 
       // Cleanup mobile touch controls
@@ -753,6 +844,12 @@ export default function CustomVideoPlayer({
           />
         )}
       </div>
+
+      <KeyboardHelpModal
+        isOpen={isKeyboardHelpOpen}
+        onClose={() => setIsKeyboardHelpOpen(false)}
+        lang={lang}
+      />
     </div>
   );
 }

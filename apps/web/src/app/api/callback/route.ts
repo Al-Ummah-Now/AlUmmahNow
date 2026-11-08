@@ -1,4 +1,3 @@
-import { InvalidAccessTokenError } from "@al-ummah-now/openauth/error";
 import { setTokens } from "@/lib/auth"
 import { type NextRequest, NextResponse } from "next/server"
 import { getClient } from "@/lib/actions";
@@ -12,7 +11,7 @@ import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 // Discriminated union type for clearer type safety
 type ValidationResult =
   | { success: true; user?: User }
-  | { success: false; error: InvalidAccessTokenError };
+  | { success: false; error: Error };
 
 async function validate(code: string | null, url: URL): Promise<ValidationResult> {
   logger.debug("[code]", code)
@@ -20,8 +19,10 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
 
   const client = await getClient();
 
-  // Must be the exact redirect_uri sent to authorize (login() adds ?locale=);
-  // the issuer rejects the code when they differ
+  // Must be the exact redirect_uri sent to authorize (#209). login() now sends
+  // the bare callback and keeps the locale in the auth_locale cookie, but an
+  // authorize started by an older build carries ?locale= in redirect_uri; the
+  // issuer rejects the code when they differ.
   const locale = url.searchParams.get("locale");
   const redirectUri = `${url.origin}/api/callback${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`;
   const exchanged = await client.exchange(code!, redirectUri);
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
 
   // Get locale from query param, validate it, fallback to default
-  const localeParam = url.searchParams.get("locale");
+  const localeParam = url.searchParams.get("locale") ?? req.cookies.get("auth_locale")?.value ?? null;
   const locale = localeParam && isLocaleSupported(localeParam) ? localeParam : DEFAULT_LOCALE;
 
   // The auth server reports failures (cancelled sign-in, failed password

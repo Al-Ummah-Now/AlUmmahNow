@@ -1,4 +1,5 @@
 import { PublicRoute, AppContext } from "../../base";
+import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
@@ -143,7 +144,7 @@ export class RecentVideosSection extends PublicRoute {
             const video = await videoRepo.getObject(indexVideo.videoId);
             return video;
           })
-        ).then(results => results.filter(v => v !== null) as VideoObject[]);
+        ).then(results => results.filter(v => isVideoPubliclyVisible(v)) as VideoObject[]);
 
         // Apply category filter if needed (not in index)
         if (category) {
@@ -176,7 +177,7 @@ export class RecentVideosSection extends PublicRoute {
         // Filter and sort
         videos = videos
           .filter(v => {
-            if (v.isPublic === false) return false;
+            if (!isVideoPubliclyVisible(v)) return false;
             if (channelId && v.channelId !== channelId) return false;
             if (category && v.category !== category) return false;
             if (excludeChannels && excludeChannels.includes(v.channelId || '')) return false;

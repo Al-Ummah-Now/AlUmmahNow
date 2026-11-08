@@ -39,7 +39,12 @@ describe('GET /api/callback', () => {
     expect(exchange).not.toHaveBeenCalled();
   });
 
-  it('keeps the Arabic locale', async () => {
+  it('uses the locale cookie when the callback has no locale (Arabic)', async () => {
+    const res = await GET(request('https://videos.example/api/callback?error=access_denied', { auth_locale: 'ar' }));
+    expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/ar/auth/error' });
+  });
+
+  it('keeps the Arabic locale from the query', async () => {
     const res = await GET(request('https://videos.example/api/callback?locale=ar&error=access_denied'));
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/ar/auth/error' });
   });
@@ -54,12 +59,13 @@ describe('GET /api/callback', () => {
     exchange.mockResolvedValue({ err: new Error('invalid_grant') });
     const res = await GET(request('https://videos.example/api/callback?code=abc&locale=en'));
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/en/auth/error' });
+    // An authorize from an older build carried ?locale= in redirect_uri (#209)
     expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback?locale=en');
   });
 
-  it('exchanges with the exact redirect_uri used at authorize (no locale → bare callback)', async () => {
+  it('exchanges with the exact redirect_uri used at authorize (bare callback; locale is in a cookie)', async () => {
     exchange.mockResolvedValue({ err: new Error('invalid_grant') });
-    await GET(request('https://videos.example/api/callback?code=abc'));
+    await GET(request('https://videos.example/api/callback?code=abc', { auth_locale: 'ar' }));
     expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback');
   });
 });

@@ -105,14 +105,14 @@ export class VideoChaptersGet extends PublicRoute {
 
       // Parse chapters from description
       if (!video.description) {
+        // Not an error: most videos have no chapters. A 400 here logged a failed
+        // request in the browser console on every such watch page.
         logger.info('No description to parse chapters from', { videoId });
-        return c.json(
-          {
-            success: false,
-            message: 'No description to parse chapters from',
-          },
-          400
-        );
+        return c.json({
+          success: true,
+          chapters: null,
+          message: 'No chapters',
+        });
       }
 
       const parseResult = parseChapters(

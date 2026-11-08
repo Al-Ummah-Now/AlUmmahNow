@@ -10,8 +10,26 @@
 			"binding": "REPORTS_DB",
 			"database_name": "al-ummah-now-reports",
 			"database_id": "7bee932d-c6b1-47c2-ab70-7dba349104af"
+		},
+		{
+			// Notification center + library indexes (Epic 29). Shared with api-videos.
+			"binding": "NOTIFICATIONS_DB",
+			"database_name": "al-ummah-now-notifications",
+			"database_id": "2479ad9b-76f6-41e6-ac77-69e46faa5e69",
+			"migrations_dir": "migrations-notifications"
+		},
+		{
+			// Search index shared with api-videos (schema: apps/api-videos/migrations/search).
+			"binding": "SEARCH_DB",
+			"database_name": "al-ummah-now-search",
+			"database_id": "41064871-cf1f-46e9-b102-7b913240ad89"
 		}
 	],
+
+	// Daily notification retention sweep (90 days)
+	"triggers": {
+		"crons": ["41 3 * * *"]
+	},
 
 	// R2 bucket configuration
 	"r2_buckets": [

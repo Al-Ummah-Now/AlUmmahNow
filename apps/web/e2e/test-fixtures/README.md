@@ -14,6 +14,11 @@ The `createTestVideo()` helper function generates test files:
 const videoPath = await helpers.createTestVideo('test-video.mp4', 1024); // 1MB file
 ```
 
+`.mp4` files are built from the committed `e2e-sample.mp4` (a ~13 KB,
+2-second H.264/AAC clip) and padded to the requested size with an ISO-BMFF
+`free` box, so they remain valid videos that Bunny.net can encode. Other
+extensions (e.g. `.txt`) are filled with zero bytes.
+
 ## Test File Types
 
 ### Video Files
@@ -43,7 +48,7 @@ For more realistic tests, you can manually add:
 
 ## Important Notes
 
-- All files in this directory are ignored by git (see `.gitignore`)
+- Generated files in this directory are ignored by git (see `.gitignore`); only `e2e-sample.mp4` is committed
 - Tests create temporary files automatically
 - Files are cleaned up after test runs
 - Never commit large binary files to the repository

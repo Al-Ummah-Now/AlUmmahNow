@@ -9,7 +9,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { headers as getHeaders } from "next/headers";
+import { headers as getHeaders, cookies as getCookies } from "next/headers";
 import { createClient } from "@al-ummah-now/openauth/client";
 import { SessionManager, type AccountInfo } from '../auth/session-manager';
 import { createChannel } from '../api/channels';
@@ -36,9 +36,11 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
   const host = headers.get("host");
   const protocol = host?.includes("localhost") ? "http" : "https";
 
+  (await getCookies()).set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 });
+
   const client = await getAuthClient();
   const { url } = await client.authorize(
-    `${protocol}://${host}/api/callback/multi-account?locale=${locale}`,
+    `${protocol}://${host}/api/callback/multi-account`,
     "code"
   );
 
@@ -239,6 +241,20 @@ export async function reloadUserChannels(userId?: string): Promise<Channel[]> {
 }
 
 /**
+ * Re-read the active account's profile (display name, avatar) into the session,
+ * e.g. after the user changes their photo, so the navigation shows it.
+ */
+export async function reloadActiveProfile(): Promise<void> {
+  try {
+    const session = await SessionManager.getActiveSession();
+    if (!session) return;
+    await SessionManager.loadUserProfile(session.userId);
+  } catch (error) {
+    logger.error('[reloadActiveProfile] Error:', error);
+  }
+}
+
+/**
  * Create a new channel for the active user
  */
 export async function createChannelForActiveUser(
@@ -256,17 +272,22 @@ export async function createChannelForActiveUser(
       channelId: session.channelId || '', // Use empty string if no channel selected
     });
 
-    if (response?.data?.channel) {
+    // POST /api/channels responds with { success, result: { channel } };
+    // `data.channel` is kept for the ApiResponse shape the client is typed with
+    const created =
+      (response as { result?: { channel?: Channel } } | null)?.result?.channel ?? response?.data?.channel;
+
+    if (created) {
       // Reload channels to include the new one
       await SessionManager.loadUserChannels(session.userId);
 
       // If this is the first channel, set it as active
       if (!session.channelId) {
-        await SessionManager.setActiveChannel(response.data.channel.id);
+        await SessionManager.setActiveChannel(created.id);
       }
 
       revalidatePath('/');
-      return response.data.channel;
+      return created;
     }
 
     return null;

@@ -31,6 +31,14 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   });
   
   const wsManagerRef = useRef<WebSocketManager | null>(null);
+  
+  // Subscriptions made by children. Child effects run before this provider's
+  
+  // effect creates the manager (and the manager is recreated on sign-in), so
+  
+  // every subscription is kept here and replayed onto each new manager.
+  
+  const registryRef = useRef(new Set<{ channel: string; callback: (data: unknown) => void; off: (() => void) | null }>());
   const [isConnected, setIsConnected] = useState(false);
 
   // Initialize WebSocket manager
@@ -51,11 +59,16 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
     if (user?.id) {
       defaultConfig.userId = user.id;
-      // The server verifies this OpenAuth access token and derives the user from it.
+      // The server verifies this OpenAuth access token and derives the user from it;
+      // the manager fetches a fresh one on every (re)connect (#228).
       defaultConfig.getAuthToken = getRealtimeAccessToken;
     }
-
-    wsManagerRef.current = new WebSocketManager(defaultConfig);
+    let cancelled = false;
+    const manager = new WebSocketManager(defaultConfig);
+    wsManagerRef.current = manager;
+    registryRef.current.forEach((entry) => {
+      entry.off = manager.subscribe(entry.channel, entry.callback);
+    });
 
     // Listen for connection state changes
     const unsubscribeStateChange = wsManagerRef.current.onStateChange((state) => {
@@ -63,14 +76,21 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
       setIsConnected(state.status === 'connected');
     });
 
-    // Auto-connect for both authenticated and anonymous users
-    // Anonymous users can view real-time updates but cannot post
-    wsManagerRef.current.connect(user?.id).catch((error) => {
-      logger.error('Failed to connect to WebSocket:', error);
-    });
+    // Auto-connect for both authenticated and anonymous users. Authenticated
+    // users send their access token (from getAuthToken) in the first message.
+    void (async () => {
+      if (cancelled) return;
+      manager.connect(user?.id).catch((error) => {
+        logger.error("Failed to connect to WebSocket:", error);
+      });
+    })();
 
     return () => {
+      cancelled = true;
       unsubscribeStateChange();
+      registryRef.current.forEach((entry) => {
+        entry.off = null;
+      });
       if (wsManagerRef.current) {
         wsManagerRef.current.disconnect();
         wsManagerRef.current = null;
@@ -92,10 +112,13 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
   }, [user?.id]);
 
   const subscribe = useCallback((channel: string, callback: (data: unknown) => void): (() => void) | null => {
-    if (wsManagerRef.current) {
-      return wsManagerRef.current.subscribe(channel, callback);
-    }
-    return null;
+    const entry = { channel, callback, off: wsManagerRef.current ? wsManagerRef.current.subscribe(channel, callback) : null };
+    registryRef.current.add(entry);
+    return () => {
+      entry.off?.();
+      entry.off = null;
+      registryRef.current.delete(entry);
+    };
   }, []);
 
   const sendMessage = useCallback((type: string, data: unknown): void => {
@@ -160,4 +183,34 @@ export function useWebSocketSubscription(
   }, [channel, subscribe, ...deps]);
 
   return isConnected;
+}
+
+/**
+ * Like useWebSocketSubscription, but a no-op when rendered outside a
+ * WebSocketProvider (e.g. isolated widgets and tests), so realtime stays an
+ * enhancement on top of polling/fetching rather than a hard dependency.
+ */
+export function useOptionalWebSocketSubscription(
+  channel: string,
+  callback: (data: unknown) => void
+): boolean {
+  const context = useContext(WebSocketContext);
+  const subscribe = context?.subscribe;
+  const callbackRef = useRef(callback);
+
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+
+  useEffect(() => {
+    if (!channel || !subscribe) return undefined;
+    const unsubscribe = subscribe(channel, (data: unknown) => {
+      callbackRef.current(data);
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [channel, subscribe]);
+
+  return context?.isConnected ?? false;
 }

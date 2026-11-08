@@ -23,7 +23,8 @@ const Navigation: React.FC = memo(() => {
     const [profile, setProfile] = React.useState<Profile | null>(null);
     const auth = useAuth();
     const path = usePathname();
-    const rtl = path.indexOf('/ar') > -1;
+    // Locale prefix only: a later segment containing "/ar" must not flip the layout
+    const rtl = path === '/ar' || path.startsWith('/ar/');
 
     const toggleCollapse = () => {
         setIsCollapsed(!isCollapsed);
@@ -40,11 +41,11 @@ const Navigation: React.FC = memo(() => {
     return (
         <div style={{ direction: rtl ? "rtl" : "ltr" }}>
             {rtl
-                ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} />
-                : <Header profile={profile} toggleCollapse={toggleCollapse} />}
+                ? <HeaderRtl profile={profile} toggleCollapse={toggleCollapse} isNavOpen={!isCollapsed} />
+                : <Header profile={profile} toggleCollapse={toggleCollapse} isNavOpen={!isCollapsed} />}
             <div className="flex flex-1">
                 {/* Left Navigation */}
-                {path.indexOf('/ar') > -1
+                {rtl
                     ? <LeftNavigationRtl isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />
                     : <LeftNavigation isCollapsed={isCollapsed} withOverlay={true} onCollapse={() => setIsCollapsed(true)} />}
             </div>

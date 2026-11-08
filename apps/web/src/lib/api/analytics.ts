@@ -8,50 +8,45 @@ import {
   AnalyticsSummary,
   AnalyticsMetrics
 } from "./types";
-import { getApiUrl } from "@/lib/runtime-config";
-import { logger } from '@/lib/logger-server';
-
-
-const baseUrl = getApiUrl();
+import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
+import { getServerAuthContext } from "./server-auth";
 
 /**
- * Get analytics summary for a channel
+ * Analytics are owner-scoped: every call sends the session token and returns
+ * null when the user is signed out, lacks access, or the API is unavailable.
+ * Callers render an empty state in that case - there is no sample data.
+ */
+/**
+ * Analytics requests are aborted after this long so the dashboard can show an
+ * error instead of waiting on a stalled request.
+ */
+const ANALYTICS_TIMEOUT_MS = 20000;
+
+async function authFor(headers?: ApiHeaders) {
+  const auth = await getServerAuthContext();
+  if (!auth?.accessToken) return null;
+  return { ...auth, channelId: headers?.channelId || auth.channelId || '' };
+}
+
+/**
+ * Get analytics summary (all of the user's channels, or one via params.channelId)
  * GET /api/analytics/summary
  */
 export async function getSummary(
   params?: AnalyticsQueryParams,
   headers?: ApiHeaders
 ): Promise<AnalyticsSummary | null> {
-  try {
-    const queryParams = new URLSearchParams();
-    if (params?.channelId) queryParams.append('channelId', params.channelId);
-    if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
-    if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
-
-    const response = await fetch(
-      `${baseUrl}/api/analytics/summary?${queryParams.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching analytics summary: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('getSummary error:', error);
-    return getMockSummary(); // Return mock data for development
-  }
+  const query = buildQueryParams({ channelId: params?.channelId, dateFrom: params?.dateFrom, dateTo: params?.dateTo });
+  return apiRequestServer<AnalyticsSummary>({
+    method: 'GET',
+    url: buildApiUrl(`/api/analytics/summary${query}`),
+    functionName: 'getAnalyticsSummary',
+    timeoutMs: ANALYTICS_TIMEOUT_MS,
+  }, () => authFor(headers), true);
 }
 
 /**
- * Get channel analytics data
+ * Get channel analytics data (owner only)
  * GET /api/analytics/channels/{channelId}
  */
 export async function getChannelAnalytics(
@@ -59,35 +54,17 @@ export async function getChannelAnalytics(
   params?: AnalyticsQueryParams,
   headers?: ApiHeaders
 ): Promise<ChannelAnalyticsData | null> {
-  try {
-    const queryParams = new URLSearchParams();
-    if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
-    if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
-
-    const response = await fetch(
-      `${baseUrl}/api/analytics/channels/${channelId}?${queryParams.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching channel analytics: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('getChannelAnalytics error:', error);
-    return getMockChannelAnalytics(channelId);
-  }
+  const query = buildQueryParams({ dateFrom: params?.dateFrom, dateTo: params?.dateTo });
+  return apiRequestServer<ChannelAnalyticsData>({
+    method: 'GET',
+    url: buildApiUrl(`/api/analytics/channels/${encodeURIComponent(channelId)}${query}`),
+    functionName: 'getChannelAnalytics',
+    timeoutMs: ANALYTICS_TIMEOUT_MS,
+  }, () => authFor(headers), true);
 }
 
 /**
- * Get video analytics data
+ * Get video analytics data (owner only)
  * GET /api/analytics/videos/{videoId}
  */
 export async function getVideoAnalytics(
@@ -95,178 +72,54 @@ export async function getVideoAnalytics(
   params?: AnalyticsQueryParams,
   headers?: ApiHeaders
 ): Promise<VideoAnalyticsData | null> {
-  try {
-    const queryParams = new URLSearchParams();
-    if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
-    if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
-
-    const response = await fetch(
-      `${baseUrl}/api/analytics/videos/${videoId}?${queryParams.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching video analytics: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('getVideoAnalytics error:', error);
-    return getMockVideoAnalytics(videoId);
-  }
+  const query = buildQueryParams({ dateFrom: params?.dateFrom, dateTo: params?.dateTo });
+  return apiRequestServer<VideoAnalyticsData>({
+    method: 'GET',
+    url: buildApiUrl(`/api/analytics/videos/${encodeURIComponent(videoId)}${query}`),
+    functionName: 'getVideoAnalytics',
+    timeoutMs: ANALYTICS_TIMEOUT_MS,
+  }, () => authFor(headers), true);
 }
 
 /**
- * Get analytics metrics over time
+ * Get daily analytics metrics (oldest first)
  * GET /api/analytics/metrics
  */
 export async function getMetrics(
   params?: AnalyticsQueryParams,
   headers?: ApiHeaders
 ): Promise<AnalyticsMetrics[] | null> {
-  try {
-    const queryParams = new URLSearchParams();
-    if (params?.channelId) queryParams.append('channelId', params.channelId);
-    if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
-    if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-
-    const response = await fetch(
-      `${baseUrl}/api/analytics/metrics?${queryParams.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching analytics metrics: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('getMetrics error:', error);
-    return getMockMetrics();
-  }
+  const query = buildQueryParams({
+    channelId: params?.channelId,
+    dateFrom: params?.dateFrom,
+    dateTo: params?.dateTo,
+    limit: params?.limit,
+  });
+  return apiRequestServer<AnalyticsMetrics[]>({
+    method: 'GET',
+    url: buildApiUrl(`/api/analytics/metrics${query}`),
+    functionName: 'getAnalyticsMetrics',
+    timeoutMs: ANALYTICS_TIMEOUT_MS,
+  }, () => authFor(headers), true);
 }
 
-// Mock data functions for development
-function getMockSummary(): AnalyticsSummary {
-  return {
-    totalViews: 15420,
-    totalLikes: 1853,
-    totalComments: 324,
-    totalSubscribers: 567,
-    totalVideos: 42,
-    avgViewsPerVideo: 367,
-    engagementRate: 12.5,
-    topVideo: {
-      videoId: "top-video-id",
-      title: "Most Popular Video",
-      views: 3420,
-      likes: 456,
-      dislikes: 23,
-      comments: 87,
-      shares: 134,
-      watchTime: 2340,
-      avgViewDuration: 180,
-      clickThroughRate: 8.5,
-      engagementRate: 15.2,
-      dateCreated: "2024-01-15T10:30:00Z",
-      thumbnailUrl: "/placeholder-thumbnail.jpg"
-    }
-  };
+export interface AnalyticsDashboardData {
+  summary: AnalyticsSummary | null;
+  metrics: AnalyticsMetrics[] | null;
+  channel: ChannelAnalyticsData | null;
 }
 
-function getMockChannelAnalytics(channelId: string): ChannelAnalyticsData {
-  return {
-    channelId,
-    totalViews: 15420,
-    totalVideos: 42,
-    totalSubscribers: 567,
-    totalLikes: 1853,
-    totalComments: 324,
-    avgViewsPerVideo: 367,
-    avgEngagementRate: 12.5,
-    topPerformingVideos: [
-      {
-        videoId: "video-1",
-        title: "Top Performing Video #1",
-        views: 3420,
-        likes: 456,
-        dislikes: 23,
-        comments: 87,
-        shares: 134,
-        watchTime: 2340,
-        avgViewDuration: 180,
-        clickThroughRate: 8.5,
-        engagementRate: 15.2,
-        dateCreated: "2024-01-15T10:30:00Z"
-      },
-      {
-        videoId: "video-2",
-        title: "Top Performing Video #2",
-        views: 2890,
-        likes: 378,
-        dislikes: 18,
-        comments: 64,
-        shares: 98,
-        watchTime: 1980,
-        avgViewDuration: 165,
-        clickThroughRate: 7.2,
-        engagementRate: 13.8,
-        dateCreated: "2024-01-20T14:15:00Z"
-      }
-    ],
-    recentMetrics: getMockMetrics()
-  };
-}
-
-function getMockVideoAnalytics(videoId: string): VideoAnalyticsData {
-  return {
-    videoId,
-    title: "Sample Video Analytics",
-    views: 1250,
-    likes: 89,
-    dislikes: 7,
-    comments: 23,
-    shares: 34,
-    watchTime: 890,
-    avgViewDuration: 120,
-    clickThroughRate: 6.8,
-    engagementRate: 9.2,
-    dateCreated: "2024-01-10T09:00:00Z",
-    thumbnailUrl: "/placeholder-thumbnail.jpg"
-  };
-}
-
-function getMockMetrics(): AnalyticsMetrics[] {
-  const metrics: AnalyticsMetrics[] = [];
-  const now = new Date();
-
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-
-    metrics.push({
-      date: date.toISOString().split('T')[0],
-      views: Math.floor(Math.random() * 500) + 200,
-      likes: Math.floor(Math.random() * 50) + 10,
-      comments: Math.floor(Math.random() * 20) + 5,
-      shares: Math.floor(Math.random() * 15) + 3,
-      subscribers: Math.floor(Math.random() * 10) + 1,
-      watchTime: Math.floor(Math.random() * 1000) + 300
-    });
-  }
-
-  return metrics;
+/**
+ * Everything the analytics page shows, in one server action: totals and the
+ * daily series for all of the user's channels, plus the selected channel's
+ * analytics. The three API calls run in parallel here, because server actions
+ * called from the browser run one at a time.
+ */
+export async function getAnalyticsDashboard(channelId?: string | null): Promise<AnalyticsDashboardData> {
+  const [summary, metrics, channel] = await Promise.all([
+    getSummary(),
+    getMetrics(),
+    channelId ? getChannelAnalytics(channelId) : Promise.resolve(null),
+  ]);
+  return { summary, metrics, channel };
 }

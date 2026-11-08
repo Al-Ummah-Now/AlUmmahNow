@@ -15,3 +15,11 @@
 # Keep this directory in git
 !.gitignore
 !README.md
+# Tiny real H.264/AAC clip (4s 426x240, ~60KB) used to seed E2E videos without ffmpeg
+!e2e-sample.mp4
+# 1280x720 JPEG used as a custom thumbnail
+!e2e-thumbnail.jpg
+# 40s 160x90 H.264/AAC clip (~120KB) for chapter tests (chapters need >= 10s each)
+!e2e-sample-40s.mp4
+# 4s VP8 WebM (no audio) for browsers without H.264 (Playwright Chromium) in frame-extraction tests
+!e2e-sample.webm

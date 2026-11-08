@@ -6,16 +6,28 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: 'Regenerate the visual snapshot baselines (Linux) and commit them to this branch'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   packages: read
+  checks: write  # EnricoMi/publish-unit-test-result-action creates the JUnit check runs
+
+env:
+  OPENAUTH_URL: https://auth.qa.alummahnow.net
+  WEB_APP_URL: https://videos.qa.alummahnow.net
+  API_URL: https://videos.api.qa.alummahnow.net
+  OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
 
 jobs:
   # Centralized auth setup - runs once, shares auth state with all test jobs
   auth-setup:
     name: Auth Setup
-    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
+    runs-on: ubuntu-24.04  # Playwright 1.56 has no browser builds for ubuntu-latest (26.04)
     timeout-minutes: 10
 
     steps:
@@ -69,16 +81,9 @@ jobs:
         run: npx tsx e2e/run-auth-setup.ts
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://videos.qa.alummahnow.net
 
-      - name: Debug - List auth files
-        run: |
-          echo "Current directory: $(pwd)"
-          echo "Contents of apps/web/e2e/.auth/:"
-          ls -la apps/web/e2e/.auth/ || echo "Directory not found"
-          echo "Full path check:"
-          ls -la ${{ github.workspace }}/apps/web/e2e/.auth/ || echo "Full path directory not found"
+      - name: List auth files
+        run: ls -la apps/web/e2e/.auth/
 
       - name: Upload auth state
         uses: actions/upload-artifact@v4
@@ -89,16 +94,40 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
 
-  e2e-tests:
-    name: E2E Tests - Video Upload
-    needs: auth-setup
-    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
-    timeout-minutes: 60
+  # Every UI spec on every browser/device project. One job per project, each
+  # with its own pinned QA users (E2E_USERS_TIMESTAMP): the specs mutate their
+  # users' channels, subscriptions and videos, so jobs running in parallel must
+  # never share accounts. Users are registered on first use and reused after.
+  #
+  # The pinned users are global, not per run, so runs from different PRs or
+  # branches would share them too (one run's temp channels and setting changes
+  # then broke the other's specs). The job-level concurrency group queues a
+  # project's job until the previous run's job on the same users has finished.
+  # GitHub keeps one pending job per group: a newer queued run replaces an
+  # older one that has not started yet. A running job is never cancelled, as
+  # that would stop specs halfway through changing (and restoring) shared data.
+  e2e:
+    name: E2E - ${{ matrix.project }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    concurrency:
+      group: e2e-qa-users-${{ matrix.users }}
+      cancel-in-progress: false
 
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit]
+        include:
+          - project: chromium
+            users: '1795000000001'
+          - project: firefox
+            users: '1795000000002'
+          - project: webkit
+            users: '1795000000003'
+          - project: 'Mobile Chrome'
+            users: '1795000000004'
+          - project: 'Mobile Safari'
+            users: '1795000000005'
 
     steps:
       - name: Checkout code
@@ -140,143 +169,68 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: apps/web
-        # Always install chromium (needed by globalSetup) plus matrix browser
-        run: pnpm exec playwright install --with-deps chromium ${{ matrix.browser }}
+        # chromium is always needed (auth setup fallback); webkit serves Mobile Safari
+        run: |
+          case "${{ matrix.project }}" in
+            firefox) B=firefox ;;
+            webkit|'Mobile Safari') B=webkit ;;
+            *) B= ;;
+          esac
+          pnpm exec playwright install --with-deps chromium $B
 
-      - name: Download auth state
-        uses: actions/download-artifact@v4
-        with:
-          name: auth-state
-          path: apps/web/e2e/.auth/
-
-      - name: Run E2E tests
+      - name: Run E2E specs
         working-directory: apps/web
-        run: pnpm exec playwright test --project=${{ matrix.browser }} e2e/*video-upload*.spec.ts
+        run: pnpm exec playwright test --project="${{ matrix.project }}"
         env:
           CI: true
-          SKIP_AUTH_SETUP: 'true'
+          E2E_USERS_TIMESTAMP: ${{ matrix.users }}
+          E2E_GLOBAL_TIMEOUT_MINUTES: '100'
+          E2E_MAX_FAILURES: '40'
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://videos.qa.alummahnow.net
 
-      - name: Upload test results
+      - name: Artifact name
+        if: always()
+        id: art
+        shell: bash
+        run: echo "name=$(echo '${{ matrix.project }}' | tr ' ' '-')" >> $GITHUB_OUTPUT
+
+      - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ matrix.browser }}
+          name: playwright-report-${{ steps.art.outputs.name }}
           path: apps/web/playwright-report/
           retention-days: 30
 
-      - name: Upload test videos
-        if: failure()
+      - name: Upload traces, screenshots and videos
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-videos-${{ matrix.browser }}
+          name: test-results-${{ steps.art.outputs.name }}
           path: apps/web/test-results/
-          retention-days: 7
+          retention-days: 14
 
-  e2e-tests-full:
-    name: Full E2E Test Suite
-    needs: auth-setup
-    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
-    timeout-minutes: 90
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9.15.4
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build shared packages
-        run: |
-          pnpm --filter @al-ummah/shared-types build
-          pnpm --filter @al-ummah/logger build
-
-      - name: Install Playwright browsers
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps
-
-      - name: Download auth state
-        uses: actions/download-artifact@v4
-        with:
-          name: auth-state
-          path: apps/web/e2e/.auth/
-
-      - name: Run all E2E tests
-        working-directory: apps/web
-        run: pnpm exec playwright test
-        env:
-          CI: true
-          SKIP_AUTH_SETUP: 'true'
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://videos.qa.alummahnow.net
-
-      - name: Generate HTML report
-        if: always()
-        working-directory: apps/web
-        run: pnpm exec playwright show-report --host 0.0.0.0
-
-      - name: Upload full test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-full
-          path: apps/web/playwright-report/
-          retention-days: 30
-
-      - name: Upload JUnit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: junit-report
-          path: apps/web/test-results/junit.xml
-          retention-days: 30
-
-      - name: Publish test results
+      - name: Publish JUnit results
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: apps/web/test-results/junit.xml
-          check_name: E2E Test Results
+          check_name: E2E Results (${{ matrix.project }})
+          comment_mode: off
 
-  e2e-mobile:
-    name: Mobile E2E Tests
+  # axe-core WCAG 2.1 AA on every page, en/ar x light/dark (project "a11y")
+  # and visual snapshots of key pages (project "visual").
+  dedicated:
+    name: E2E - ${{ matrix.project }}
     needs: auth-setup
-    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
+    if: ${{ !inputs.update_snapshots }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     strategy:
       fail-fast: false
       matrix:
-        device: ['Pixel 5', 'iPhone 12']
+        project: [a11y, visual]
 
     steps:
       - name: Checkout code
@@ -304,7 +258,7 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium webkit
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Download auth state
         uses: actions/download-artifact@v4
@@ -312,25 +266,130 @@ jobs:
           name: auth-state
           path: apps/web/e2e/.auth/
 
-      - name: Run mobile E2E tests
+      - name: Run ${{ matrix.project }} project
         working-directory: apps/web
-        run: |
-          if [[ "${{ matrix.device }}" == "Pixel 5" ]]; then
-            pnpm exec playwright test --project="Mobile Chrome"
-          else
-            pnpm exec playwright test --project="Mobile Safari"
-          fi
+        run: pnpm exec playwright test --project=${{ matrix.project }}
         env:
           CI: true
           SKIP_AUTH_SETUP: 'true'
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://videos.qa.alummahnow.net
+          E2E_MAX_FAILURES: '0'
 
-      - name: Upload mobile test results
+      - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-test-results-${{ matrix.device }}
-          path: apps/web/test-results/
-          retention-days: 7
+          name: playwright-report-${{ matrix.project }}
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 30
+
+  # workflow_dispatch with update_snapshots=true: regenerate the Linux
+  # baselines in e2e/visual/__screenshots__ and commit them to the branch.
+  update-visual-snapshots:
+    name: Update visual snapshots
+    needs: auth-setup
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_snapshots }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Download auth state
+        uses: actions/download-artifact@v4
+        with:
+          name: auth-state
+          path: apps/web/e2e/.auth/
+
+      - name: Regenerate snapshots
+        working-directory: apps/web
+        run: pnpm exec playwright test --project=visual --update-snapshots=all
+        env:
+          CI: true
+          SKIP_AUTH_SETUP: 'true'
+          E2E_MAX_FAILURES: '0'
+
+      - name: Commit snapshots
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/e2e/visual/__screenshots__
+          if git diff --cached --quiet; then
+            echo "Snapshots unchanged"
+          else
+            git commit -m "test(e2e): update visual snapshots (Linux)"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push
+          fi
+
+  # Lighthouse CI budgets for home, watch, channel and search on QA.
+  # Non-blocking for now: assertions are warnings and the job may fail.
+  lighthouse:
+    name: Lighthouse (QA)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Resolve QA seed URLs
+        shell: bash
+        run: |
+          VIDEO=$(curl -fsS "$API_URL/api/videos?limit=100" | jq -r '[.data[] | select(.title | startswith("QA Lecture"))][0].id // empty')
+          CHANNEL=$(curl -fsS "$API_URL/api/channels?limit=200" | jq -r '[.data[] | select(.name | startswith("Al Ummah Now QA"))][0].id // empty')
+          echo "LHCI_WATCH_PATH=/en/video/${VIDEO}" >> $GITHUB_ENV
+          echo "LHCI_CHANNEL_PATH=/en/channels/${CHANNEL}" >> $GITHUB_ENV
+          echo "watch=$VIDEO channel=$CHANNEL"
+
+      - name: Run Lighthouse CI
+        working-directory: apps/web
+        run: npx --yes @lhci/cli@0.14.0 autorun --config=./lighthouserc.js
+        env:
+          LHCI_BASE_URL: ${{ env.WEB_APP_URL }}
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: apps/web/.lighthouseci/
+          retention-days: 30
+          include-hidden-files: true

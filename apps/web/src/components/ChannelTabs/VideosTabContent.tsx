@@ -44,7 +44,7 @@ export function VideosTabContent({ channelId }: VideosTabContentProps) {
   }, [channelId, videos.length, t]);
 
   return (
-    <div role="tabpanel" id="tabpanel-videos" aria-labelledby="tab-videos">
+    <div role="tabpanel" id="tabpanel-videos" data-testid="tabpanel-videos" aria-labelledby="tab-videos">
       {error ? (
         <div className="text-center py-12 text-red-600 dark:text-red-400">
           {error}

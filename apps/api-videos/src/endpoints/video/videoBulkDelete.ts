@@ -97,7 +97,7 @@ export class VideoBulkDelete extends AuthenticatedRoute {
 						return {
 							videoId,
 							success: false,
-							error: "Forbidden",
+							error: "Forbidden - you can only delete your own videos",
 						};
 					}
 

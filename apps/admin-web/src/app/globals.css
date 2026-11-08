@@ -3,46 +3,198 @@
 @config '../../tailwind.config.ts';
 
 /*
-  The default border color has changed to `currentColor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
+  Theme tokens. Light is the base; dark applies when the OS prefers dark and
+  the user has not forced light, or when the user explicitly picks dark
+  (data-theme is set on <html> by the server from the admin_theme cookie).
+  All colour pairs below meet WCAG AA (4.5:1) for normal text.
 */
+:root {
+  color-scheme: light;
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f9fafb;
+  --surface-hover: #eef2f7;
+  --border: #d1d5db;
+  --fg: #111827;
+  --fg-muted: #374151;
+  --fg-subtle: #4b5563;
+  --link: #1d4ed8;
+  --link-hover: #1e3a8a;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --on-accent: #ffffff;
+  --focus: #2563eb;
+  --danger-bg: #fef2f2;
+  --danger-border: #dc2626;
+  --danger-fg: #991b1b;
+  --success-fg: #166534;
+  --warning-fg: #92400e;
+  --info-fg: #1e40af;
+  --chip-pending-bg: #fef3c7;
+  --chip-pending-fg: #92400e;
+  --chip-reviewing-bg: #dbeafe;
+  --chip-reviewing-fg: #1e40af;
+  --chip-resolved-bg: #dcfce7;
+  --chip-resolved-fg: #166534;
+  --chip-dismissed-bg: #e5e7eb;
+  --chip-dismissed-fg: #374151;
+  --btn-warning: #a16207;
+  --btn-warning-hover: #854d0e;
+  --btn-removed: #c2410c;
+  --btn-removed-hover: #9a3412;
+  --btn-banned: #b91c1c;
+  --btn-banned-hover: #991b1b;
+  --btn-dismissed: #4b5563;
+  --btn-dismissed-hover: #374151;
+  --scrollbar-track: #e5e7eb;
+  --scrollbar-thumb: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #111827;
+    --surface: #1f2937;
+    --surface-2: #111827;
+    --surface-hover: #374151;
+    --border: #4b5563;
+    --fg: #f9fafb;
+    --fg-muted: #d1d5db;
+    --fg-subtle: #9ca3af;
+    --link: #93c5fd;
+    --link-hover: #bfdbfe;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --on-accent: #ffffff;
+    --focus: #60a5fa;
+    --danger-bg: #450a0a;
+    --danger-border: #ef4444;
+    --danger-fg: #fecaca;
+    --success-fg: #4ade80;
+    --warning-fg: #facc15;
+    --info-fg: #93c5fd;
+    --chip-pending-bg: #422006;
+    --chip-pending-fg: #fde047;
+    --chip-reviewing-bg: #172554;
+    --chip-reviewing-fg: #93c5fd;
+    --chip-resolved-bg: #052e16;
+    --chip-resolved-fg: #86efac;
+    --chip-dismissed-bg: #374151;
+    --chip-dismissed-fg: #e5e7eb;
+    --scrollbar-track: #1f2937;
+    --scrollbar-thumb: #4b5563;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111827;
+  --surface: #1f2937;
+  --surface-2: #111827;
+  --surface-hover: #374151;
+  --border: #4b5563;
+  --fg: #f9fafb;
+  --fg-muted: #d1d5db;
+  --fg-subtle: #9ca3af;
+  --link: #93c5fd;
+  --link-hover: #bfdbfe;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --on-accent: #ffffff;
+  --focus: #60a5fa;
+  --danger-bg: #450a0a;
+  --danger-border: #ef4444;
+  --danger-fg: #fecaca;
+  --success-fg: #4ade80;
+  --warning-fg: #facc15;
+  --info-fg: #93c5fd;
+  --chip-pending-bg: #422006;
+  --chip-pending-fg: #fde047;
+  --chip-reviewing-bg: #172554;
+  --chip-reviewing-fg: #93c5fd;
+  --chip-resolved-bg: #052e16;
+  --chip-resolved-fg: #86efac;
+  --chip-dismissed-bg: #374151;
+  --chip-dismissed-fg: #e5e7eb;
+  --scrollbar-track: #1f2937;
+  --scrollbar-thumb: #4b5563;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-focus: var(--focus);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-border: var(--danger-border);
+  --color-danger-fg: var(--danger-fg);
+  --color-success-fg: var(--success-fg);
+  --color-warning-fg: var(--warning-fg);
+  --color-info-fg: var(--info-fg);
+  --color-chip-pending-bg: var(--chip-pending-bg);
+  --color-chip-pending-fg: var(--chip-pending-fg);
+  --color-chip-reviewing-bg: var(--chip-reviewing-bg);
+  --color-chip-reviewing-fg: var(--chip-reviewing-fg);
+  --color-chip-resolved-bg: var(--chip-resolved-bg);
+  --color-chip-resolved-fg: var(--chip-resolved-fg);
+  --color-chip-dismissed-bg: var(--chip-dismissed-bg);
+  --color-chip-dismissed-fg: var(--chip-dismissed-fg);
+  --color-btn-warning: var(--btn-warning);
+  --color-btn-warning-hover: var(--btn-warning-hover);
+  --color-btn-removed: var(--btn-removed);
+  --color-btn-removed-hover: var(--btn-removed-hover);
+  --color-btn-banned: var(--btn-banned);
+  --color-btn-banned-hover: var(--btn-banned-hover);
+  --color-btn-dismissed: var(--btn-dismissed);
+  --color-btn-dismissed-hover: var(--btn-dismissed-hover);
+}
+
 @layer base {
   *,
   ::after,
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
+    border-color: var(--border);
   }
 }
 
-:root {
-  --background: #111827;
-  --foreground: #f9fafb;
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, 'Noto Sans Arabic', Roboto, sans-serif;
 }
 
-/* Custom scrollbar for dark theme */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1f2937;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4b5563;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
 }

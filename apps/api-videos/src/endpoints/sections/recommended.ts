@@ -1,4 +1,5 @@
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str, Bool } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
@@ -115,7 +116,7 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
       // Get user's watch history if excludeWatched is true and user is authenticated
       if (excludeWatched && userId) {
         try {
-          const watchHistoryBucket = c.env['watch-history'];
+          const watchHistoryBucket = c.env.watch_history;
           if (watchHistoryBucket) {
             const watchHistory = await getWatchHistory(watchHistoryBucket, userId);
             watchedVideoIds = new Set(watchHistory);
@@ -192,14 +193,14 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
                 }
                 return video;
               })
-            ).then(results => results.filter(v => v !== null) as VideoObject[]);
+            ).then(results => results.filter(v => isVideoPubliclyVisible(v)) as VideoObject[]);
 
             basedOn = "Weekly popular videos";
           } else {
             // Fallback to direct query
             const listResult = await videoRepo.listObjects(limit * 2, cursor);
             recommendedVideos = (listResult.items || [])
-              .filter(v => v.isPublic !== false && !watchedVideoIds.has(v.id))
+              .filter(v => isVideoPubliclyVisible(v) && !watchedVideoIds.has(v.id))
               .sort((a, b) => (b.views || 0) - (a.views || 0))
               .slice(0, limit);
 
@@ -262,7 +263,7 @@ async function getCategoryBasedRecommendations(
       const videos = await Promise.all(
         filteredVideos.slice(0, limit).map(v => videoRepo.getObject(v.videoId))
       );
-      return videos.filter(v => v !== null) as VideoObject[];
+      return videos.filter(v => isVideoPubliclyVisible(v)) as VideoObject[];
     }
   }
 
@@ -275,7 +276,7 @@ async function getCategoryBasedRecommendations(
         .slice(0, limit)
         .map(v => videoRepo.getObject(v.videoId))
     );
-    return videos.filter(v => v !== null) as VideoObject[];
+    return videos.filter(v => isVideoPubliclyVisible(v)) as VideoObject[];
   }
 
   return [];
@@ -293,7 +294,7 @@ async function getRandomRecommendations(
   // Fetch more videos than needed to account for filtering
   const listResult = await videoRepo.listObjects(limit * 3, cursor);
   const videos = (listResult.items || [])
-    .filter(v => v.isPublic !== false && !excludeIds.has(v.id));
+    .filter(v => isVideoPubliclyVisible(v) && !excludeIds.has(v.id));
 
   // Shuffle array
   for (let i = videos.length - 1; i > 0; i--) {
@@ -309,13 +310,10 @@ async function getRandomRecommendations(
  */
 async function getWatchHistory(watchHistoryBucket: R2Bucket, userId: string): Promise<string[]> {
   try {
-    const historyKey = `user:${userId}:history`;
-    const historyObject = await watchHistoryBucket.get(historyKey);
-
-    if (!historyObject) return [];
-
-    const history = await historyObject.json() as any;
-    return history.videos?.map((v: any) => v.videoId) || [];
+    // Watch history entries are stored one per video with key `<userId>:<videoId>`
+    const prefix = `${userId}:`;
+    const listing = await watchHistoryBucket.list({ prefix, limit: 1000 });
+    return listing.objects.map(object => object.key.slice(prefix.length)).filter(Boolean);
   } catch (error) {
     logger.error("Failed to get watch history", { error, userId });
     return [];

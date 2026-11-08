@@ -6,6 +6,7 @@ import {
   WebSocketEventType
 } from '@/interfaces/websocket';
 import { logger } from '@/lib/logger-client';
+import { sanitizeEventPayload, validateStructure } from '@/lib/security/InputSanitizer';
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -15,7 +16,17 @@ export class WebSocketManager {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private messageQueue: WebSocketMessage[] = [];
+  /** True once the server has accepted our authenticate message on this socket. */
+  private authenticated = false;
   private eventListeners: Map<string, Set<(data: WebSocketConnectionState) => void>> = new Map();
+
+  /** Set the token sent in the authenticate message on (re)connect. */
+  setAuthToken(token: string | undefined): void {
+    this.config.authToken = token;
+    if (token && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.sendAuthMessage(token);
+    }
+  }
 
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -57,6 +68,7 @@ export class WebSocketManager {
         this.ws.onopen = () => {
           logger.info('✅ WebSocket connected');
           this.state.status = 'connected';
+          this.authenticated = false;
           this.state.lastConnected = new Date();
           this.state.reconnectAttempts = 0;
 
@@ -72,7 +84,21 @@ export class WebSocketManager {
 
         this.ws.onmessage = (event) => {
           try {
-            const message: WebSocketMessage = JSON.parse(event.data);
+            // Story 1.2 AC 5: sanitize before the message is dispatched to handlers
+            // (drops prototype-pollution keys, non-JSON values, control characters,
+            // oversized structures). Text stays intact because React escapes it.
+            const { value: message, modified } = sanitizeEventPayload<WebSocketMessage>(
+              JSON.parse(typeof event.data === 'string' ? event.data : ''),
+              { stripMarkup: false, maxDepth: 8, maxStringLength: 10_000, maxArrayLength: 500 }
+            );
+            const shape = validateStructure(message, { required: { type: 'string' } });
+            if (!shape.valid) {
+              logger.warn('[WebSocket] Dropping malformed message', { errors: shape.errors });
+              return;
+            }
+            if (modified) {
+              logger.debug('[WebSocket] Message sanitized before dispatch', { type: message.type });
+            }
             this.handleMessage(message);
           } catch (error) {
             logger.error('❌ Error parsing WebSocket message:', error);
@@ -80,6 +106,7 @@ export class WebSocketManager {
         };
 
         this.ws.onclose = (event) => {
+          this.authenticated = false;
           logger.info('🔌 WebSocket closed', { code: event.code, reason: event.reason });
           this.state.status = 'disconnected';
           this.stopHeartbeat();
@@ -136,9 +163,10 @@ export class WebSocketManager {
     const subscription: WebSocketSubscription = { channel, callback };
     this.subscriptions.get(channel)!.push(subscription);
 
-    // Send subscription message if connected
-    if (this.state.status === 'connected') {
-      this.sendMessage('subscribe', { channel });
+    // The server only accepts subscriptions from an authenticated socket. Before
+    // that, the channel is kept and sent by resubscribeAll() once authenticated.
+    if (this.authenticated) {
+      this.sendChannelMessage('subscribe', channel);
     }
 
     logger.info(`📡 Subscribed to channel: ${channel}`);
@@ -154,13 +182,40 @@ export class WebSocketManager {
 
           if (channelSubs.length === 0) {
             this.subscriptions.delete(channel);
-            if (this.state.status === 'connected') {
-              this.sendMessage('unsubscribe', { channel });
+            if (this.authenticated) {
+              this.sendChannelMessage('unsubscribe', channel);
             }
           }
         }
       }
     };
+  }
+
+  /**
+   * Send a subscribe/unsubscribe frame. The server schema expects `channel` at
+   * the top level; `data.channel` is kept for older server builds.
+   */
+  private sendChannelMessage(type: 'subscribe' | 'unsubscribe', channel: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return; // re-sent by resubscribeAll() after the next authentication
+    }
+    try {
+      this.ws.send(JSON.stringify({
+        id: this.generateMessageId(),
+        type,
+        timestamp: Date.now(),
+        channel,
+        data: { channel },
+      }));
+      logger.info('📤 Sent channel message', { type, channel });
+    } catch (error) {
+      logger.error('❌ Error sending channel message:', error);
+    }
+  }
+
+  /** (Re)send every active subscription, e.g. after (re)authentication. */
+  private resubscribeAll(): void {
+    this.subscriptions.forEach((_subs, channel) => this.sendChannelMessage('subscribe', channel));
   }
 
   /**
@@ -227,6 +282,8 @@ export class WebSocketManager {
     // Handle authentication response
     if (message.type === 'authenticated') {
       logger.info('🔐 Authentication successful', { userId: (message.data as { userId?: string })?.userId });
+      this.authenticated = true;
+      this.resubscribeAll();
       return;
     }
 
@@ -242,8 +299,14 @@ export class WebSocketManager {
       return;
     }
 
-    // Route message to appropriate subscribers
-    const channelKey = this.getChannelKeyFromMessage(message);
+    // Route message to appropriate subscribers. Server broadcasts name their
+    // channel explicitly; older message shapes are routed by type + payload ids.
+    // Notifications are delivered below to every subscriber, so skip them here.
+    const channelKey = message.type === 'notification'
+      ? null
+      : (typeof message.channel === 'string' && this.subscriptions.has(message.channel)
+        ? message.channel
+        : this.getChannelKeyFromMessage(message));
     if (channelKey) {
       const subscribers = this.subscriptions.get(channelKey);
       if (subscribers) {

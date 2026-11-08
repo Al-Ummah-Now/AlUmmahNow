@@ -1,8 +1,11 @@
+'use client';
+
 import { logger } from '@/lib/logger-client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { likeCommunityPost, unlikeCommunityPost } from '@/lib/api/community-posts';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface LikeButtonProps {
   postChannelId: string;
@@ -19,13 +22,20 @@ export default function LikeButton({
   postId,
   initialLikes,
   initialLiked = false,
-  isRTL = false,
   channelId,
   userId,
 }: LikeButtonProps) {
+  const { t } = useLanguage();
   const [liked, setLiked] = useState(initialLiked);
   const [likes, setLikes] = useState(initialLikes);
   const [loading, setLoading] = useState(false);
+
+  // The feed is re-fetched once the viewer's channel is known; adopt the
+  // viewer-specific like state it returns
+  useEffect(() => {
+    setLiked(initialLiked);
+    setLikes(initialLikes);
+  }, [initialLiked, initialLikes]);
 
   const handleLikeClick = async () => {
     if (loading || !channelId || !userId) return;
@@ -50,7 +60,7 @@ export default function LikeButton({
         setLikes(previousLikes);
       }
     } catch (error) {
-      logger.error('Failed to toggle like:', error);
+      logger.error('[LikeButton] Failed to toggle post like', { postId, error });
       setLiked(previousLiked);
       setLikes(previousLikes);
     } finally {
@@ -76,11 +86,12 @@ export default function LikeButton({
         'flex items-center gap-2 px-4 py-2 rounded-full transition-all group',
         'hover:bg-gray-100 dark:hover:bg-gray-700',
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        isRTL && 'flex-row-reverse'
+        'flex-row'
       )}
-      aria-label={liked ? (isRTL ? 'إلغاء الإعجاب' : 'Unlike') : (isRTL ? 'إعجاب' : 'Like')}
+      aria-pressed={liked}
     >
       <svg
+        aria-hidden="true"
         className={cn(
           'w-5 h-5 transition-all',
           liked
@@ -104,7 +115,9 @@ export default function LikeButton({
           ? 'text-blue-600 dark:text-blue-400'
           : 'text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400'
       )}>
-        {formatCount(likes)}
+        {/* Accessible name = action + visible count (label-in-name) */}
+        <span className="sr-only">{liked ? t.community.unlike : t.community.like}</span>{' '}
+        <span data-testid="post-like-count">{formatCount(likes)}</span>
       </span>
     </button>
   );

@@ -1,23 +1,26 @@
 'use client';
 
-import { SectionHeader } from '../SectionHeader';
-import { logger } from '@/lib/logger-client';
+import { useLanguage } from '@/hooks/useLanguage';
+import { ChannelEventsSection } from './ChannelEventsSection';
 
 interface UpcomingEventsSectionProps {
   channelId: string;
+  title?: string;
 }
 
-export function UpcomingEventsSection({ channelId }: UpcomingEventsSectionProps) {
-  logger.info('UpcomingEventsSection: Rendering placeholder', { channelId });
+/**
+ * Channel section: the channel's scheduled (upcoming) live streams.
+ * Data source: GET /api/live-streams?status=scheduled&channelId=...
+ */
+export function UpcomingEventsSection({ channelId, title }: UpcomingEventsSectionProps) {
+  const { t } = useLanguage();
 
   return (
-    <section className="space-y-4">
-      <SectionHeader title="Upcoming live streams" />
-      <div className="p-8 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
-        <p className="text-gray-600 dark:text-gray-400">
-          Upcoming live streams section coming soon
-        </p>
-      </div>
-    </section>
+    <ChannelEventsSection
+      channelId={channelId}
+      status="scheduled"
+      title={title || t.channel.upcomingLiveStreams}
+      emptyMessage={t.discovery.upcomingEventsEmpty}
+    />
   );
 }

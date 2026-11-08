@@ -83,8 +83,9 @@ export class PlaylistRemoveVideo extends AuthenticatedRoute {
             }, 404);
         }
 
-        // Verify ownership
-        if (playlist.channelId !== channelId) {
+        // Verify ownership by user (the channelId header is optional, so it
+        // cannot be the ownership check on its own)
+        if (playlist.userId !== userId) {
             return c.json({
                 success: false,
                 error: "Unauthorized - you can only modify your own playlists",

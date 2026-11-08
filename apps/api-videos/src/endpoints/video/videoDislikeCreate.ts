@@ -105,10 +105,14 @@ export class DislikeCreate extends AuthenticatedRoute {
 			);
 		}
 
-		video.dislikes.push(dislike);
 		// Note: dislikesCount is calculated in view layer, not stored
-
-		await repository.putObject(video.id, video);
+		// Conditional write: a concurrent reaction on this video is re-read, not overwritten
+		await repository.updateObject(video.id, (fresh) => {
+			fresh.dislikes = fresh.dislikes || [];
+			if (fresh.dislikes.some((d) => d.channelId === channelId && d.entityId === id)) return false;
+			fresh.dislikes.push(dislike);
+			return true;
+		});
 
 		return {
 			success: true,

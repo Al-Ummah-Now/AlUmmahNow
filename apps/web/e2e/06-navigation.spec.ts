@@ -1,211 +1,171 @@
 import { test, expect } from './fixtures';
+import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { clickAndWaitForURL } from './test-utils/qa-content';
+import { openSideDrawer } from './test-utils/navigation';
 
 /**
- * Navigation and Routing E2E Tests
- * Tests for application navigation, routing, and deep linking
+ * Navigation and Routing E2E Tests (anonymous visitor)
  */
 
+test.use({ storageState: ANONYMOUS_STATE });
+
 test.describe('Navigation - English Routes', () => {
-  test('should navigate from homepage to video page', async ({ page }) => {
+  test('navigates from the homepage to a video page by clicking a card', async ({ page }) => {
     await page.goto('/en/');
+    const card = page.getByTestId('video-card').first();
+    await expect(card).toBeVisible();
+    const id = await card.getAttribute('data-video-id');
 
-    // Wait for page to load
-    await page.waitForLoadState('domcontentloaded');
-
-    // Check we're on the English homepage
-    await expect(page).toHaveURL(/\/en\/?$/);
-
-    // Page should be visible
-    await expect(page.locator('body')).toBeVisible();
+    await clickAndWaitForURL(page, card, new RegExp(`/en/video\\?vid=${id}$`));
+    await expect(page.locator('main')).toBeVisible();
   });
 
-  test('should navigate to profile creation page', async ({ page }) => {
+  test('profile creation page asks anonymous visitors to sign in', async ({ page }) => {
     await page.goto('/en/profile/create');
-
-    // Check URL
     await expect(page).toHaveURL(/\/en\/profile\/create/);
-
-    // Page should load
-    await expect(page.locator('body')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
   });
 
-  test('should handle direct video page navigation', async ({ page }) => {
+  test('keeps the vid query parameter on direct video navigation', async ({ page }) => {
     await page.goto('/en/video?vid=test-123');
-
-    // Check URL parameters preserved
     await expect(page).toHaveURL(/vid=test-123/);
-
-    // Page should load
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('should navigate between different sections', async ({ page }) => {
-    // Start on homepage
+  test('navigates between sections', async ({ page }) => {
     await page.goto('/en/');
     await expect(page).toHaveURL(/\/en\/?$/);
 
-    // Navigate to another page (adjust based on your actual routes)
-    await page.goto('/en/channels');
+    const response = await page.goto('/en/channels');
+    expect(response?.status()).toBe(200);
     await expect(page).toHaveURL(/\/en\/channels/);
-    await expect(page.locator('body')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  });
+
+  test('side drawer links navigate', async ({ page }) => {
+    await page.goto('/en/search');
+    await openSideDrawer(page);
+    await clickAndWaitForURL(page, page.getByTestId('side-nav').getByRole('link', { name: 'Home' }), /\/en\/?$/);
   });
 });
 
 test.describe('Navigation - Arabic Routes', () => {
-  test('should navigate from homepage to video page', async ({ page }) => {
+  test('Arabic homepage', async ({ page }) => {
     await page.goto('/ar/');
-
-    // Wait for page to load
-    await page.waitForLoadState('domcontentloaded');
-
-    // Check we're on the Arabic homepage
     await expect(page).toHaveURL(/\/ar\/?$/);
-
-    // Check for Arabic text content
-    await expect(page.locator('h1')).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
   });
 
-  test('should preserve RTL when navigating', async ({ page }) => {
+  test('preserves RTL when navigating', async ({ page }) => {
     await page.goto('/ar/');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
 
-    // Verify Arabic content
-    await expect(page.locator('h1')).toContainText('الفيديوهات');
-
-    // Navigate to another page
     await page.goto('/ar/channels');
-
-    // Page should load
-    await expect(page.locator('body')).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('div[dir="rtl"]').first()).toBeVisible();
   });
 
-  test('should handle query parameters in Arabic routes', async ({ page }) => {
+  test('keeps query parameters on Arabic routes', async ({ page }) => {
     await page.goto('/ar/video?vid=test-123');
-
-    // Check URL
     await expect(page).toHaveURL(/\/ar\/video\?vid=test-123/);
+  });
 
-    // Page should load
-    await expect(page.locator('body')).toBeVisible();
+  test('Arabic card links stay in the Arabic locale', async ({ page }) => {
+    await page.goto('/ar/');
+    const card = page.getByTestId('video-card').first();
+    await clickAndWaitForURL(page, card, /\/ar\/video\?vid=/);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 });
 
 test.describe('Navigation - Browser Controls', () => {
-  test('should support browser back button', async ({ page }) => {
-    // Navigate to homepage
+  test('supports the back button', async ({ page }) => {
     await page.goto('/en/');
-    await page.waitForLoadState('domcontentloaded');
-
-    // Navigate to another page
     await page.goto('/en/channels');
-    await page.waitForLoadState('domcontentloaded');
 
-    // Go back
     await page.goBack();
-
-    // Should be on homepage again
     await expect(page).toHaveURL(/\/en\/?$/);
   });
 
-  test('should support browser forward button', async ({ page }) => {
-    // Navigate to homepage
+  test('supports the forward button', async ({ page }) => {
     await page.goto('/en/');
-    await page.waitForLoadState('networkidle');
-
-    // Navigate to another page using link click for more realistic test
     await page.goto('/en/channels');
-    await page.waitForLoadState('networkidle');
 
-    // Go back - wait for navigation to complete
-    await Promise.all([
-      page.waitForURL(/\/en\/?$/, { timeout: 10000 }),
-      page.goBack()
-    ]);
-
-    // Verify we're back on homepage
+    await page.goBack();
     await expect(page).toHaveURL(/\/en\/?$/);
 
-    // Go forward - wait for navigation to complete
-    await Promise.all([
-      page.waitForURL(/\/en\/channels/, { timeout: 10000 }),
-      page.goForward()
-    ]);
-
-    // Should be on channels page again
+    await page.goForward();
     await expect(page).toHaveURL(/\/en\/channels/);
   });
 
-  test('should reload page correctly', async ({ page }) => {
+  test('client-side navigation works with back', async ({ page }) => {
     await page.goto('/en/');
+    await clickAndWaitForURL(page, page.getByTestId('video-card').first(), /\/en\/video\?vid=/);
 
-    // Reload the page
-    await page.reload();
-
-    // Should still be on the same page
+    await page.goBack();
     await expect(page).toHaveURL(/\/en\/?$/);
-    await expect(page.locator('body')).toBeVisible();
+    await expect(page.getByTestId('video-card').first()).toBeVisible();
+  });
+
+  test('reloads correctly', async ({ page }) => {
+    await page.goto('/en/');
+    const response = await page.reload();
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/en\/?$/);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 });
 
 test.describe('Navigation - Deep Linking', () => {
-  test('should handle deep links to specific videos', async ({ page }) => {
+  test('deep links to specific videos', async ({ page }) => {
     const videoId = 'deep-link-test-123';
     await page.goto(`/en/video?vid=${videoId}`);
-
-    // Check URL preserves video ID
     await expect(page).toHaveURL(new RegExp(`vid=${videoId}`));
   });
 
-  test('should handle deep links with multiple query parameters', async ({ page }) => {
+  test('deep links with multiple query parameters', async ({ page }) => {
     await page.goto('/en/video?vid=test-123&t=30&quality=720p');
 
-    // Check all parameters are preserved
-    const url = page.url();
-    expect(url).toContain('vid=test-123');
-    expect(url).toContain('t=30');
-    expect(url).toContain('quality=720p');
+    const url = new URL(page.url());
+    expect(url.searchParams.get('vid')).toBe('test-123');
+    expect(url.searchParams.get('t')).toBe('30');
+    expect(url.searchParams.get('quality')).toBe('720p');
   });
 
-  test('should handle hash fragments', async ({ page }) => {
+  test('preserves hash fragments', async ({ page }) => {
     await page.goto('/en/#section-1');
-
-    // Check hash is preserved
-    const url = page.url();
-    expect(url).toContain('#section-1');
+    expect(new URL(page.url()).hash).toBe('#section-1');
   });
 });
 
 test.describe('Navigation - Error Handling', () => {
-  test('should handle non-existent routes gracefully', async ({ page }) => {
+  test('unknown routes return 404', async ({ page }) => {
     const response = await page.goto('/en/this-route-does-not-exist-12345');
-
-    // Depending on implementation, might show 404 or redirect
-    // Adjust this test based on your actual 404 handling
-    expect(response?.status()).toBeTruthy();
+    expect(response?.status()).toBe(404);
   });
 
-  test('should handle missing language prefix gracefully', async ({ page }) => {
-    // Navigate without language prefix
-    const response = await page.goto('/');
+  test('unsupported locales redirect to the default locale', async ({ page }) => {
+    await page.goto('/xx/channels');
+    await expect(page).toHaveURL(/\/en\/channels/);
+  });
 
-    // Should redirect to default language or show something
-    expect(response?.status()).toBeTruthy();
-    await expect(page.locator('body')).toBeVisible();
+  test('the root redirects to a locale', async ({ page }) => {
+    const response = await page.goto('/');
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/(en|ar)\/?$/);
   });
 });
 
 test.describe('Navigation - Responsive Behavior', () => {
-  test('should navigate correctly on mobile viewport', async ({ page }) => {
+  test('navigates on a mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     await page.goto('/en/');
-    await expect(page).toHaveURL(/\/en\/?$/);
-
-    // Navigate to another page
-    await page.goto('/en/video?vid=mobile-test');
-    await expect(page).toHaveURL(/vid=mobile-test/);
+    const card = page.getByTestId('video-card').first();
+    await clickAndWaitForURL(page, card, /\/en\/video\?vid=/);
   });
 
-  test('should navigate correctly on tablet viewport', async ({ page }) => {
+  test('navigates on a tablet viewport', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
 
     await page.goto('/en/');

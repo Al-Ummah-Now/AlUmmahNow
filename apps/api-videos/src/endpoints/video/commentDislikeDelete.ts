@@ -1,124 +1,13 @@
-import { Str } from "chanfana";
-import { z } from "zod";
-import { Video, ResponseError } from "../../lib/types";
-import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { commentReactionSchema, handleCommentReaction } from './commentReaction';
 
-export class DislikeDelete extends AuthenticatedRoute {
-	schema = {
-		tags: ["Dislikes"],
-		summary: "Remove dislike from a video",
-		request: {
-			params: z.object({
-				id: Str({ description: "Video id" }),
-                cid: Str({ description: "Comment id" }),
-			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-			}),
-		},
-		responses: {
-			"200": {
-				description: "Returns success status",
-				content: {
-					"application/json": {
-						schema: {
-							success: true,
-						},
-					},
-				},
-			},
-			"400": {
-				description: "Bad request - invalid input data",
-				content: {
-					"application/json": {
-						schema: ResponseError,
-					},
-				},
-			},
-			"500": {
-				description: "Internal server error",
-				content: {
-					"application/json": {
-						schema: ResponseError,
-					},
-				},
-			},
-		},
-	};
+export class CommentDislikeDelete extends AuthenticatedRoute {
+	schema = commentReactionSchema('dislike', 'remove');
 
 	async handle(c: AppContext) {
-		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
-
-		// Retrieve the validated slug
 		const { id, cid } = request.params;
-		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
-
-        // Implement your own object fetch here
-        const bucket = c.env.videos;
-		type VideoType = z.infer<typeof Video>;
-		const repository = new R2Repository<VideoType>(bucket);
-		let video = await repository.getObject(id);
-		
-		const exists = video !== null;
-
-		if (!exists) {
-			return Response.json(
-				{
-					success: false,
-					error: "Object not found",
-				},
-				{
-					status: 404,
-				},
-			);
-		}
-
-		// Check privacy permissions
-		if (video.isPublic === false && (!userId || video.userId !== userId)) {
-			return Response.json(
-				{
-					success: false,
-					error: "Object not found", // Don't reveal that private video exists
-				},
-				{
-					status: 404,
-				},
-			);
-		}
-
-		const comment = video.comments.find((comment) => comment.id === cid);
-		if (!comment) {
-			return Response.json(
-				{
-					success: false,
-					error: "Object not found",
-				},
-				{
-					status: 404,
-				},
-			);
-		}		
-
-        const dislike = comment.dislikes.find((dislike) => dislike.channelId === channelId);
-		
-		const queue = new Queue(c.env.queue);
-		await queue.send(MessageType.CommentUndislike, {
-			dislikeId: dislike.id,
-			commentId: cid,
-			videoId: id,
-			userId: userId,
-			channelId: channelId,
-			timestamp: new Date().toISOString(),
-		});
-
-        comment.dislikes = comment.dislikes.filter((dislike) => dislike.channelId !== channelId);
-        // Note: dislikesCount is calculated in view layer, not stored
-
-        await repository.putObject(video.id, video);		return true;
+		return handleCommentReaction(c, { id, cid, channelId, userId: this.getUserId(c) }, 'dislike', 'remove');
 	}
 }
-

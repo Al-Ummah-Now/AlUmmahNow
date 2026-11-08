@@ -72,9 +72,10 @@ export const VideoUpdateInput = z.object({
     availableResolutions: z.array(z.string()).optional(),
     isPublic: z.boolean().optional(),
     isLive: z.boolean().optional(),
-    category: z.nativeEnum(VideoCategory).optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies')"),
-    tags: z.array(z.string()).optional().describe("Video tags for search and categorization"),
+    category: z.nativeEnum(VideoCategory).nullable().optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies'); null clears it"),
+    tags: z.array(z.string().trim().min(1).max(50)).max(30).optional().describe("Video tags for search and categorization (replaces existing tags)"),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
+    commentSettings: z.enum(['on', 'held', 'off']).optional().describe("Comments: on, held for the owner's review, or off"),
 });
 
 export const PlaylistUpdateInput = z.object({
@@ -82,6 +83,7 @@ export const PlaylistUpdateInput = z.object({
     description: Str({ required: false, description: "Playlist description" }),
     thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
     isPublic: z.boolean().optional(),
+    videos: z.array(Str()).optional().describe("Reorder videos: the playlist's current video IDs in the new order"),
 });
 
 export const ProfileUpdateInput = z.object({
@@ -100,6 +102,14 @@ export const ProfileUpdateInput = z.object({
     timezone: Str({ required: false, description: "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')" }),
 });
 
+/** About-tab link: http(s) URL only (rendered with rel="nofollow noopener noreferrer ugc") */
+export const ChannelLinkInput = z.object({
+    title: z.string().trim().min(1).max(50),
+    url: z.string().trim().max(500).url().refine((u) => /^https?:\/\//i.test(u), { message: "Only http(s) links are allowed" }),
+});
+
+export const MAX_CHANNEL_LINKS = 10;
+
 export const ChannelUpdateInput = z.object({
     name: Str({ required: false, description: "Channel name" }),
     nameLocalized: z.record(z.string()).optional().describe("Multi-language channel names"),
@@ -108,6 +118,10 @@ export const ChannelUpdateInput = z.object({
     isMain: z.boolean().optional(),
     avatarUrl: Str({ required: false, description: "Channel avatar URL" }),
     coverUrl: Str({ required: false, description: "Channel cover image URL" }),
+    handle: z.string().trim().max(31).optional().describe("Claim/change the channel @handle (3-30 chars: letters, digits, . _ -)"),
+    links: z.array(ChannelLinkInput).max(MAX_CHANNEL_LINKS).optional().describe("About links (replaces the list)"),
+    contactEmail: z.union([z.literal(''), z.string().trim().email().max(254)]).optional().describe("Public contact email; empty string clears it"),
+    location: z.string().trim().max(100).optional().describe("Location shown on the About tab; empty string clears it"),
 });
 
 export const CommentUpdateInput = z.object({

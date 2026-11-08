@@ -8,8 +8,10 @@
 
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
-import { useRouter } from 'next/navigation';
+import { useCurrentChannel } from '@/hooks/useMultiAccount';
+import { SignInPrompt } from '@/components/common/SignInPrompt';
 import Link from 'next/link';
+import { NotificationSettingsPanel } from '@/components/notifications/NotificationSettingsPanel';
 import {
   Settings,
   Video,
@@ -17,17 +19,22 @@ import {
   User,
   FileText,
   ChevronRight,
+  Shield,
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
-  const router = useRouter();
+  // The active channel lives in the multi-account session, not on the auth user
+  const currentChannel = useCurrentChannel();
 
-  // Redirect to login if not authenticated
   if (!user) {
-    router.push(`/${lang}/`);
-    return null;
+    return (
+      <SignInPrompt
+        title={t.settings?.signInTitle || t.navigation.signIn}
+        message={t.settings?.signInMessage || ''}
+      />
+    );
   }
 
   const settingsSections = [
@@ -42,14 +49,21 @@ export default function SettingsPage() {
       title: t.settings?.channelSettings || 'Channel Settings',
       description: t.settings?.channelSettingsDesc || 'Manage your channel settings and customization',
       icon: Tv,
-      href: user?.channel?.id ? `/${lang}/settings/channel/${user.channel.id}` : null,
-      available: !!user?.channel?.id,
+      href: currentChannel?.id ? `/${lang}/settings/channel/${currentChannel.id}` : null,
+      available: !!currentChannel?.id,
     },
     {
       title: t.settings?.profileSettings || 'Profile Settings',
       description: t.settings?.profileSettingsDesc || 'Update your profile information and preferences',
       icon: User,
       href: `/${lang}/profile`,
+      available: true,
+    },
+    {
+      title: t.privacy.settingsTitle,
+      description: t.privacy.settingsDescription,
+      icon: Shield,
+      href: `/${lang}/settings/privacy`,
       available: true,
     },
   ];
@@ -79,6 +93,8 @@ export default function SettingsPage() {
               return (
                 <div
                   key={section.title}
+                  data-testid="settings-section"
+                  data-available="false"
                   className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 opacity-50"
                 >
                   <div className="flex items-start gap-4">
@@ -92,7 +108,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {section.description}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         {t.settings?.notAvailable || 'Not available - requires an active channel'}
                       </p>
                     </div>
@@ -105,6 +121,8 @@ export default function SettingsPage() {
               <Link
                 key={section.title}
                 href={section.href!}
+                data-testid="settings-section"
+                data-available="true"
                 className="block bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-[#ffa037] dark:hover:border-[#ffa037] transition-all hover:shadow-lg group"
               >
                 <div className="flex items-start gap-4">
@@ -119,12 +137,15 @@ export default function SettingsPage() {
                       {section.description}
                     </p>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[#ffa037] group-hover:translate-x-1 transition-all" />
+                  <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[#ffa037] group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1 transition-all" />
                 </div>
               </Link>
             );
           })}
         </div>
+
+        {/* Notification categories (Story 29.10) */}
+        <NotificationSettingsPanel />
 
         {/* Quick Actions */}
         <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">

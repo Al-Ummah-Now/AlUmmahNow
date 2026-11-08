@@ -52,6 +52,22 @@ export const TEMPLATE_VARIABLES: Record<string, VariableProcessor> = {
   'part': (value?: string) => value || '[Part]',
   'chapter': (value?: string) => value || '[Chapter]',
   'season': (value?: string) => value || '[Season]',
+
+  // Variables the web template editor offers (apps/web/src/lib/upload/template-variables.ts).
+  // The web app fills these in on the upload form; they must validate here or saving a
+  // template that uses them fails.
+  'datetime': () => new Date().toLocaleString('en-US'),
+  'weekday': () => new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+  'hijri_month': () => getHijriDate(),
+  'islamic_month': () => getHijriDate(),
+  'series_name': (value?: string) => value || '[Series]',
+  'ayah': (value?: string) => value || '[Ayah]',
+  'juz': (value?: string) => value || '[Juz]',
+  'channel_name': (value?: string) => value || '[Channel]',
+  'uploader_name': (value?: string) => value || '[Uploader]',
+  'video_title': (value?: string) => value || '[Title]',
+  'video_duration': (value?: string) => value || '[Duration]',
+  'upload_date': () => new Date().toLocaleDateString('en-US'),
 };
 
 /**

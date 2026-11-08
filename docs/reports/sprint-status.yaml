@@ -12,11 +12,11 @@
 
 development_status:
   # Epic 1: Critical Accessibility & Security Compliance
-  1-1-wcag-color-contrast: ready-for-dev
-  1-2-security-vulnerabilities: ready-for-dev
-  1-3-gdpr-compliance: ready-for-dev
-  1-4-keyboard-navigation: ready-for-dev
-  1-5-mobile-touch-targets: ready-for-dev
+  1-1-wcag-color-contrast: review  # feat/epic1-accessibility (PR #166)
+  1-2-security-vulnerabilities: review  # 2026-11-06: re-verified, gaps fixed (PR #165)
+  1-3-gdpr-compliance: review  # 2026-11-06: implemented (PR #165)
+  1-4-keyboard-navigation: review  # feat/epic1-accessibility (PR #166)
+  1-5-mobile-touch-targets: review  # feat/epic1-accessibility (PR #166)
   
   # Epic 2: Advanced Video Player Analytics (Phase 3)
   # Epic 3: Internationalization Enhancement (Phase 2)

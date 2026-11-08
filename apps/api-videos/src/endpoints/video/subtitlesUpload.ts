@@ -30,7 +30,7 @@ export class SubtitlesUpload extends AuthenticatedRoute {
           content: {
             'multipart/form-data': {
               schema: z.object({
-                file: z.string({ description: 'Subtitle file content' }),
+                subtitle: z.string({ description: "Subtitle file (.srt, .vtt, .sbv); 'file' is accepted as an alias" }),
                 language: Str({
                   description: 'ISO 639-1 language code (e.g., en, ar, ur)',
                 }),
@@ -109,10 +109,30 @@ export class SubtitlesUpload extends AuthenticatedRoute {
     try {
       const userId = this.getUserId(c);
 
-      // Get validated data
+      // Get validated data (params/headers only - chanfana does not parse multipart bodies)
       const request = await this.getValidatedData<typeof this.schema>();
       const { videoId } = request.params;
-      const { file, language, label, isDefault } = request.body;
+
+      const form = await c.req.parseBody();
+      const rawFile = form['subtitle'] ?? form['file'];
+      const file = typeof rawFile === 'string'
+        ? rawFile
+        : rawFile instanceof File
+          ? await rawFile.text()
+          : '';
+      const language = typeof form['language'] === 'string' ? form['language'].trim() : '';
+      const label = typeof form['label'] === 'string' && form['label'].trim() ? form['label'].trim() : undefined;
+      const isDefault = form['isDefault'] === 'true' || form['isDefault'] === '1';
+
+      if (!file || !language) {
+        return c.json(
+          {
+            success: false,
+            error: "Both a subtitle file (field 'subtitle') and 'language' are required",
+          },
+          400
+        );
+      }
 
       // Initialize services
       const subtitleService = new SubtitleService();
@@ -174,7 +194,7 @@ export class SubtitlesUpload extends AuthenticatedRoute {
 
       // Generate API URL for WebVTT file
       // Subtitles are served directly via the API endpoint (no separate CDN needed)
-      const apiBaseUrl = c.env.Audience || 'https://videos.alummahnow.net';
+      const apiBaseUrl = c.env.Audience || new URL(c.req.url).origin;
       const subtitleUrl = `${apiBaseUrl}/api/videos/${videoId}/subtitles/${language}`;
 
       // Create complete track with URL

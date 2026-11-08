@@ -1,3 +1,16 @@
+import { createRequire } from "node:module";
+import path from "node:path";
+
+// jose's default Node build verifies JWTs through node:crypto, and workerd's
+// node:crypto EC support makes ES256 signature checks fail on Cloudflare
+// ("signature verification failed" for valid tokens). Force jose's WebCrypto
+// build, which is what the Workers runtime supports natively.
+const requireFromHere = createRequire(import.meta.url);
+const joseWebCrypto = path.join(
+  requireFromHere.resolve("jose").replace(/dist[\\/].*$/, ""),
+  "dist/browser/index.js",
+);
+
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
@@ -6,13 +19,18 @@ const nextConfig = {
     // Enable server-side source maps with webpack (more stable than Turbopack for Cloudflare Workers)
     webpack: (config: Record<string, unknown>, { isServer }: { isServer: boolean }) => {
         if (isServer) {
-            config.devtool = 'source-map';
+            config.devtool = "source-map";
         }
+        const resolve = (config.resolve ?? {}) as { alias?: Record<string, string> };
+        resolve.alias = { ...(resolve.alias ?? {}), jose$: joseWebCrypto };
+        config.resolve = resolve;
         return config;
     },
 
     // Empty turbopack config to silence Next.js 16 warning
-    turbopack: {},
+    turbopack: {
+        resolveAlias: { jose: path.relative(process.cwd(), joseWebCrypto) },
+    },
 
     // Increase body size limit for file uploads (default is 1MB)
     // Server Actions have a 1MB limit by default - increase to 10MB for image uploads
@@ -23,6 +41,10 @@ const nextConfig = {
     },
 
     images: {
+        // Serve images straight from the CDN (Cloudflare in front of Bunny,
+        // cached at the edge). Optimization through /_next/image ran in the web
+        // Worker (cold starts, uncached) and did not resize on Workers anyway.
+        unoptimized: true,
         remotePatterns: [
           {
             protocol: "https",

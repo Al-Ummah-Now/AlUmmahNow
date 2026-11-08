@@ -44,7 +44,7 @@ export function ShortsTabContent({ channelId }: ShortsTabContentProps) {
   }, [channelId, shorts.length, t]);
 
   return (
-    <div role="tabpanel" id="tabpanel-shorts" aria-labelledby="tab-shorts">
+    <div role="tabpanel" id="tabpanel-shorts" data-testid="tabpanel-shorts" aria-labelledby="tab-shorts">
       {error ? (
         <div className="text-center py-12 text-red-600 dark:text-red-400">
           {error}

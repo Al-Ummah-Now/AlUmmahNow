@@ -40,4 +40,6 @@ export interface CreateChannelFormData {
 
 export interface ChannelManagementSectionProps {
   className?: string;
+  /** Channels loaded on the server (profile page): rendered without a client fetch */
+  initialChannels?: Channel[];
 }

@@ -4,7 +4,8 @@ import {
   CommunityPost,
   PostType,
   PostStatus,
-  ListCommunityPostsResponse
+  ListCommunityPostsResponse,
+  VoteRecord,
 } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';
@@ -17,7 +18,7 @@ const querySchema = z.object({
 });
 
 export class ListCommunityPosts extends OptionalAuthRoute {
-  static schema = {
+  schema = {
     tags: ['Community'],
     summary: 'List community posts for a channel',
     request: {
@@ -138,6 +139,24 @@ export class ListCommunityPosts extends OptionalAuthRoute {
         if (!a.pinned && b.pinned) return 1;
         return 0;
       });
+
+      // Attach per-viewer state (liked / poll vote) for authenticated requests
+      const viewerId = this.getUserId(c);
+      if (viewerId) {
+        await Promise.all(
+          posts.map(async (post) => {
+            const like = await c.env.community_posts.head(`likes/${post.id}/${viewerId}.json`);
+            post.viewerHasLiked = like !== null;
+            if (post.type === PostType.POLL) {
+              const vote = await c.env.community_posts.get(`votes/${post.id}/${viewerId}.json`);
+              if (vote) {
+                const record = (await vote.json()) as VoteRecord;
+                post.viewerPollVote = record.optionIds;
+              }
+            }
+          })
+        );
+      }
 
       return c.json({
         posts,

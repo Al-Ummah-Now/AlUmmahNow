@@ -33,6 +33,19 @@ export interface TakeActionParams {
   notes?: string;
 }
 
+// Video section index status (admin-api GET /api/indices?operation=status)
+export interface IndexStatusEntry {
+  name: string;
+  lastUpdated: string;
+  count: number;
+  stale: boolean;
+}
+
+export interface IndexStats {
+  indices: IndexStatusEntry[];
+  totalVideos: number;
+}
+
 export interface ActionResponse {
   report: Report;
   contentAction: {

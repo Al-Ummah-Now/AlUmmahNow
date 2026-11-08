@@ -191,7 +191,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           {/* Footer - Manage Channels Link */}
           <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
             <Link
-              href="/ar/channels"
+              href="/ar/profile"
               className="text-sm text-[#ffa037] hover:text-[#ff8c1a] transition-colors duration-150"
               onClick={() => setIsOpen(false)}
             >

@@ -66,7 +66,7 @@ export function ScheduledVideoCalendar({
   error = null,
   className = '',
 }: ScheduledVideoCalendarProps) {
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
 
   // Transform videos to calendar events
   const events = useMemo(() => {
@@ -89,7 +89,7 @@ export function ScheduledVideoCalendar({
             currentDate={currentDate}
             onNavigate={onNavigate}
             onEventClick={onEventClick}
-            isRTL={false}
+            isRTL={isRTL}
           />
         );
       case 'week':
@@ -99,7 +99,7 @@ export function ScheduledVideoCalendar({
             currentDate={currentDate}
             onNavigate={onNavigate}
             onEventClick={onEventClick}
-            isRTL={false}
+            isRTL={isRTL}
           />
         );
       case 'day':
@@ -109,7 +109,7 @@ export function ScheduledVideoCalendar({
             currentDate={currentDate}
             onNavigate={onNavigate}
             onEventClick={onEventClick}
-            isRTL={false}
+            isRTL={isRTL}
           />
         );
     }
@@ -120,7 +120,7 @@ export function ScheduledVideoCalendar({
       {/* Error banner - shows above calendar */}
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
-          <div className="flex items-start space-x-3">
+          <div className="flex items-start gap-3">
             <AlertCircle className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
             <div>
               <h4 className="font-medium text-red-900 dark:text-red-100 text-sm">
@@ -134,7 +134,13 @@ export function ScheduledVideoCalendar({
         </div>
       )}
 
-      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 relative`}>
+      <div
+        role="application"
+        aria-label={t.schedule?.views?.calendar}
+        data-testid="scheduled-calendar"
+        data-view={viewType}
+        className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 relative`}
+      >
         {/* Loading overlay */}
         {isLoading && (
           <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">

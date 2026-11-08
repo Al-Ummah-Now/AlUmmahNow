@@ -86,7 +86,7 @@ export default function LiveError({ error, reset }: ErrorPageProps) {
         {/* Error details in development */}
         {process.env.NODE_ENV === 'development' && error.message && (
           <details className="mt-4 text-left">
-            <summary className="cursor-pointer text-sm text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+            <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
               Error details
             </summary>
             <pre className="mt-2 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs overflow-auto max-h-40 text-gray-800 dark:text-gray-200">
@@ -102,7 +102,7 @@ export default function LiveError({ error, reset }: ErrorPageProps) {
         {/* Try Again Button */}
         <button
           onClick={reset}
-          className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+          className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
           aria-label="Try loading the page again"
         >
           Try Again
@@ -119,7 +119,7 @@ export default function LiveError({ error, reset }: ErrorPageProps) {
       </div>
 
       {/* Additional Help Text */}
-      <p className="mt-8 text-sm text-gray-500 dark:text-gray-500 text-center transition-colors">
+      <p className="mt-8 text-sm text-gray-600 dark:text-gray-400 text-center transition-colors">
         If the problem persists, please{' '}
         <Link
           href="/en"

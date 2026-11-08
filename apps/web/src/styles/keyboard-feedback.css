@@ -20,8 +20,8 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: oklch(var(--background) / 0.9);
-  color: oklch(var(--foreground));
+  background: color-mix(in oklch, var(--background) 90%, transparent);
+  color: var(--foreground);
   padding: 1rem 1.5rem;
   border-radius: 0.75rem;
   font-size: 1.125rem;
@@ -50,8 +50,8 @@
 
 /* Dark mode */
 .dark .vjs-keyboard-feedback {
-  background: oklch(var(--card) / 0.95);
-  color: oklch(var(--card-foreground));
+  background: color-mix(in oklch, var(--card) 95%, transparent);
+  color: var(--card-foreground);
 }
 
 /* RTL support */
@@ -71,8 +71,8 @@
 /* High contrast mode support */
 @media (prefers-contrast: high) {
   .vjs-keyboard-feedback {
-    background: oklch(var(--background));
-    border: 2px solid oklch(var(--foreground));
+    background: var(--background);
+    border: 2px solid var(--foreground);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

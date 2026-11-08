@@ -1,213 +1,115 @@
 import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
+import { readSession } from './test-utils/auth-state';
 
 /**
- * Channel Management E2E Tests
- * Tests for channel pages and management functionality
- * Updated for current Next.js 15 implementation with ChannelTabContent
+ * Channel page E2E tests.
+ *
+ * The channel page is server-rendered, so browser-side route mocks never
+ * reach it. These tests use the single-channel E2E user's own channel
+ * (provisioned by auth.setup.ts with the default tab configuration) so they do
+ * not depend on how other channels in the target environment are configured.
  */
 
+function findChannelId(): string | null {
+  try {
+    return readSession('single').channels[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The selected tab must be unique and its panel rendered */
+async function expectSelectedTabPanel(page: Page, tab: string) {
+  const tabs = page.getByTestId('channel-tabs');
+  await expect(tabs.locator('[role="tab"][aria-selected="true"]')).toHaveCount(1);
+  await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
+  // An empty panel (e.g. no home sections) has zero height, so assert it is rendered
+  await expect(page.getByTestId(`tabpanel-${tab}`)).toBeAttached();
+}
+
 test.describe('Channel Pages', () => {
-  test.beforeEach(async ({ page }) => {
-    // Mock channel data for testing
-    await page.route('**/api/channels/test-channel-id', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'test-channel-id',
-          name: 'Test Channel',
-          handle: 'testchannel',
-          description: 'This is a test channel for E2E testing',
-          avatar: 'https://example.com/avatar.jpg',
-          cover: 'https://example.com/cover.jpg',
-          subscriberCount: 1000,
-          videoCount: 25,
-          createdAt: '2024-01-01T00:00:00Z',
-          tabs: ['home', 'videos', 'shorts', 'live', 'playlists', 'community', 'about'],
-          sections: [
-            {
-              id: 'featured',
-              title: 'Featured Videos',
-              type: 'video-grid',
-              videos: []
-            }
-          ]
-        })
-      });
-    });
+  let channelId: string | null = null;
 
-    // Mock channel tabs
-    await page.route('**/api/channels/test-channel-id/tabs', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([
-          { id: 'home', title: 'Home', enabled: true },
-          { id: 'videos', title: 'Videos', enabled: true },
-          { id: 'shorts', title: 'Shorts', enabled: true },
-          { id: 'live', title: 'Live', enabled: true },
-          { id: 'playlists', title: 'Playlists', enabled: true },
-          { id: 'community', title: 'Community', enabled: true },
-          { id: 'about', title: 'About', enabled: true }
-        ])
-      });
-    });
+  test.beforeAll(() => {
+    channelId = findChannelId();
+  });
 
-    // Mock channel sections
-    await page.route('**/api/channel-sections*', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([
-          {
-            id: 'featured',
-            channelId: 'test-channel-id',
-            title: 'Featured Videos',
-            type: 'video-grid',
-            position: 0,
-            enabled: true,
-            videos: []
-          }
-        ])
-      });
-    });
+  test.beforeEach(() => {
+    test.skip(!channelId, 'E2E single-channel user has no channel');
   });
 
   test('should load channel page with tabs', async ({ page }) => {
-    await page.goto('/en/channels/test-channel-id');
+    await page.goto(`/en/channels/${channelId}`);
 
-    // Page should load
-    await expect(page.locator('body')).toBeVisible();
-    
-    // Check for channel tabs
-    await expect(page.locator('[data-testid="channel-tabs"]')).toBeVisible();
-    
-    // Check for default tab (home)
-    await expect(page.locator('[data-testid="tab-home"]')).toHaveClass(/active/);
-    
-    // Check for channel sections
-    await expect(page.locator('[data-testid="channel-sections"]')).toBeVisible();
+    await expect(page.getByTestId('channel-tabs')).toBeVisible();
+    await expectSelectedTabPanel(page, 'home');
   });
 
   test('should switch between channel tabs', async ({ page }) => {
-    await page.goto('/en/channels/test-channel-id');
+    await page.goto(`/en/channels/${channelId}`);
+    await expect(page.getByTestId('channel-tabs')).toBeVisible();
 
-    // Click on videos tab
-    await page.click('[data-testid="tab-videos"]');
-    await expect(page.locator('[data-testid="tab-videos"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-testid="tabpanel-videos"]')).toBeVisible();
-
-    // Click on playlists tab
-    await page.click('[data-testid="tab-playlists"]');
-    await expect(page.locator('[data-testid="tab-playlists"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-testid="tabpanel-playlists"]')).toBeVisible();
-
-    // Click on about tab
-    await page.click('[data-testid="tab-about"]');
-    await expect(page.locator('[data-testid="tab-about"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-testid="tabpanel-about"]')).toBeVisible();
+    for (const tab of ['videos', 'playlists', 'about']) {
+      const button = page.getByTestId(`tab-${tab}`);
+      if ((await button.count()) === 0) continue; // tab disabled for this channel
+      await button.click();
+      await expect(page).toHaveURL(new RegExp(`tab=${tab}`));
+      await expectSelectedTabPanel(page, tab);
+    }
   });
 
   test('should handle tab navigation via URL parameters', async ({ page }) => {
-    // Navigate directly to videos tab
-    await page.goto('/en/channels/test-channel-id?tab=videos');
-    await expect(page.locator('[data-testid="tab-videos"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-testid="tabpanel-videos"]')).toBeVisible();
-
-    // Navigate to community tab
-    await page.goto('/en/channels/test-channel-id?tab=community');
-    await expect(page.locator('[data-testid="tab-community"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-testid="tabpanel-community"]')).toBeVisible();
+    await page.goto(`/en/channels/${channelId}?tab=videos`);
+    await expectSelectedTabPanel(page, 'videos');
   });
 
   test('channel page should be responsive', async ({ page }) => {
-    // Desktop
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto('/en/channels/test-channel-id');
-    await expect(page.locator('[data-testid="channel-tabs"]')).toBeVisible();
-    await expect(page.locator('[data-testid="channel-sections"]')).toBeVisible();
-
-    // Tablet
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto('/en/channels/test-channel-id');
-    await expect(page.locator('[data-testid="channel-tabs"]')).toBeVisible();
-    
-    // Mobile
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/en/channels/test-channel-id');
-    await expect(page.locator('[data-testid="channel-tabs"]')).toBeVisible();
-    
-    // Check for mobile-specific layout
-    await expect(page.locator('[data-testid="mobile-tab-container"]')).toBeVisible();
+    for (const viewport of [
+      { width: 1920, height: 1080 },
+      { width: 768, height: 1024 },
+      { width: 375, height: 667 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto(`/en/channels/${channelId}`);
+      await expect(page.getByTestId('channel-tabs')).toBeVisible();
+    }
   });
+});
 
-  test('should handle non-existent channel', async ({ page }) => {
-    // Mock 404 response
-    await page.route('**/api/channels/non-existent', route => {
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: 'Channel not found' })
-      });
-    });
-
-    await page.goto('/en/channels/non-existent');
-    
-    // Should show 404 page
-    await expect(page.locator('[data-testid="not-found-page"]')).toBeVisible();
-    await expect(page.locator('[data-testid="not-found-message"]')).toContainText('Channel not found');
+test.describe('Channel Pages - non-existent', () => {
+  test('should not render channel tabs for an unknown channel', async ({ page }) => {
+    await page.goto('/en/channels/00000000-0000-0000-0000-000000000000');
+    await expect(page.locator('body')).toBeVisible();
+    await expect(page.getByTestId('channel-tabs')).toHaveCount(0);
   });
 });
 
 test.describe('Channel Pages - RTL', () => {
-  test.beforeEach(async ({ page }) => {
-    // Mock Arabic channel data
-    await page.route('**/api/channels/test-channel-id', route => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'test-channel-id',
-          name: 'قناة الاختبار',
-          handle: 'testchannel',
-          description: 'هذه قناة اختبار للاختبار الآلي',
-          avatar: 'https://example.com/avatar.jpg',
-          cover: 'https://example.com/cover.jpg',
-          subscriberCount: 1000,
-          videoCount: 25,
-          createdAt: '2024-01-01T00:00:00Z',
-          tabs: ['home', 'videos', 'shorts', 'live', 'playlists', 'community', 'about']
-        })
-      });
-    });
+  let channelId: string | null = null;
+
+  test.beforeAll(() => {
+    channelId = findChannelId();
+  });
+
+  test.beforeEach(() => {
+    test.skip(!channelId, 'E2E single-channel user has no channel');
   });
 
   test('should load Arabic channel page with RTL layout', async ({ page }) => {
-    await page.goto('/ar/channels/test-channel-id');
+    await page.goto(`/ar/channels/${channelId}`);
 
-    // Page should load
-    await expect(page.locator('body')).toBeVisible();
-    
-    // Check for RTL direction
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    
-    // Check for Arabic content
-    await expect(page.locator('[data-testid="channel-name"]')).toContainText('قناة الاختبار');
-    
-    // Check for RTL tabs
-    await expect(page.locator('[data-testid="channel-tabs"]')).toBeVisible();
-    await expect(page.locator('[data-testid="channel-tabs"]')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(page.getByTestId('channel-tabs')).toBeVisible();
+    await expect(page.getByTestId('channel-tabs')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByTestId('tab-home')).toHaveText('الرئيسية');
   });
 
   test('should switch tabs in Arabic', async ({ page }) => {
-    await page.goto('/ar/channels/test-channel-id');
+    await page.goto(`/ar/channels/${channelId}`);
 
-    // Click on videos tab
-    await page.click('[data-testid="tab-videos"]');
-    await expect(page.locator('[data-testid="tab-videos"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-testid="tabpanel-videos"]')).toBeVisible();
-
-    // Verify Arabic content in tab
-    await expect(page.locator('[data-testid="videos-empty-message"]')).toContainText('لا توجد فيديوهات');
+    await page.getByTestId('tab-videos').click();
+    await expectSelectedTabPanel(page, 'videos');
   });
 });

@@ -40,6 +40,10 @@ export interface CommunityPost extends SoftDelete, Moderation {
   channelName: string;
   channelAvatar?: string;
   channelVerified: boolean;
+
+  // Viewer state (computed per request when authenticated, never stored)
+  viewerHasLiked?: boolean;
+  viewerPollVote?: string[];          // Option IDs the viewer voted for
 }
 
 export interface PostImage {

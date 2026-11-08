@@ -14,6 +14,7 @@ import {
   SearchSuggestion,
   RecommendationRequest
 } from "./types";
+import type { BatchUploadInitiateResponse } from "@al-ummah/shared-types";
 import { apiRequestServer, buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
@@ -100,13 +101,13 @@ export async function createVideo(
  */
 export async function updateVideo(
   videoId: string,
-  data: Partial<VideoCreateRequest>,
+  data: Omit<Partial<VideoCreateRequest>, 'category'> & { category?: VideoCreateRequest['category'] | null },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ video: VideoObject }> | null> {
+): Promise<{ success: boolean; result?: { video: VideoObject }; error?: string } | null> {
   try {
     logger.info('[updateVideo] Updating video', { videoId, data });
 
-    return apiRequestServer<ApiResponse<{ video: VideoObject }>>(
+    return apiRequestServer<{ success: boolean; result?: { video: VideoObject }; error?: string }>(
       {
         method: 'PUT',
         url: buildApiUrl(`/api/videos/${videoId}`),
@@ -201,37 +202,99 @@ export async function bulkDeleteVideos(
 }
 
 /**
- * Upload custom thumbnail for a video
- * POST /api/videos/{id}/thumbnail
+ * Comment auth: the session's active channel wins over a caller-supplied id
+ * (which may be a profile id), so api-videos' channel ownership check passes.
  */
-export async function uploadVideoThumbnail(
+async function commentAuthContext(fallbackChannelId?: string) {
+  const auth = await getServerAuthContext();
+  return {
+    channelId: auth?.channelId || fallbackChannelId || '',
+    accessToken: auth?.accessToken || '',
+  };
+}
+
+/** api-videos comment create/update response: { success, result: { comment } } */
+export interface CommentMutationResponse {
+  success: boolean;
+  result?: { comment: import('@/interfaces').Comments };
+  error?: string;
+}
+
+export interface CommentReactionResponse {
+  success: boolean;
+  result?: {
+    commentId: string;
+    likesCount: number;
+    dislikesCount: number;
+    isLiked: boolean;
+    isDisliked: boolean;
+  };
+  error?: string;
+}
+
+export interface CommentListResponse {
+  success: boolean;
+  result?: {
+    comments: import('@/interfaces').Comments[];
+    nextCursor: string | null;
+    total: number;
+  };
+  error?: string;
+}
+
+/**
+ * List comments for a video (pinned first, then newest first)
+ * GET /api/videos/{id}/comments
+ */
+export async function listVideoComments(
   videoId: string,
-  file: File,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ thumbnailUrl: string }> | null> {
-  const formData = new FormData();
-  formData.append('thumbnail', file);
+  params?: { limit?: number; cursor?: string | null }
+): Promise<CommentListResponse | null> {
+  const query = new URLSearchParams();
+  if (params?.limit) query.set('limit', String(params.limit));
+  if (params?.cursor) query.set('cursor', params.cursor);
+  const qs = query.toString();
 
-  const authContext = await getServerAuthContext();
-
-  const response = await fetch(
-    buildApiUrl(`/api/videos/${videoId}/thumbnail`),
+  return apiRequestServer<CommentListResponse>(
     {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authContext?.accessToken || ''}`,
-        'channelId': headers.channelId,
-      },
-      body: formData,
-    }
+      method: 'GET',
+      url: buildApiUrl(`/api/videos/${videoId}/comments${qs ? `?${qs}` : ''}`),
+      functionName: 'listVideoComments',
+    },
+    async () => {
+      const auth = await getServerAuthContext();
+      // Anonymous viewers get a public listing without reaction flags
+      return auth?.accessToken ? { channelId: auth.channelId || '', accessToken: auth.accessToken } : null;
+    },
+    false
   );
+}
 
-  if (!response.ok) {
-    logger.error('uploadVideoThumbnail error:', response.statusText);
+/**
+ * Remove dislike from a comment
+ * DELETE /api/videos/{id}/comments/{cid}/dislikes
+ */
+export async function removeVideoCommentDislike(
+  videoId: string,
+  commentId: string,
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentReactionResponse | null> {
+  try {
+    logger.info('[removeVideoCommentDislike] Removing comment dislike', { videoId, commentId });
+
+    return apiRequestServer<CommentReactionResponse>(
+      {
+        method: 'DELETE',
+        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/dislikes`),
+        functionName: 'removeVideoCommentDislike',
+      },
+      () => commentAuthContext(headers?.channelId),
+      true
+    );
+  } catch (error) {
+    logger.error('removeVideoCommentDislike error:', error);
     return null;
   }
-
-  return response.json();
 }
 
 /**
@@ -241,22 +304,19 @@ export async function uploadVideoThumbnail(
 export async function createVideoComment(
   videoId: string,
   data: CommentCreateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentMutationResponse | null> {
   try {
     logger.info('[createVideoComment] Creating comment', { videoId });
 
-    return apiRequestServer<ApiResponse<{ comment: import('@/interfaces').Comments }>>(
+    return apiRequestServer<CommentMutationResponse>(
       {
         method: 'POST',
         url: buildApiUrl(`/api/videos/${videoId}/comments`),
-        body: data,
+        body: { text: data.content, content: data.content },
         functionName: 'createVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -273,22 +333,19 @@ export async function updateVideoComment(
   videoId: string,
   commentId: string,
   data: CommentUpdateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ comment: import('@/interfaces').Comments }> | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentMutationResponse | null> {
   try {
     logger.info('[updateVideoComment] Updating comment', { videoId, commentId });
 
-    return apiRequestServer<ApiResponse<{ comment: import('@/interfaces').Comments }>>(
+    return apiRequestServer<CommentMutationResponse>(
       {
         method: 'PUT',
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}`),
-        body: data,
+        body: { text: data.content, content: data.content },
         functionName: 'updateVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -304,7 +361,7 @@ export async function updateVideoComment(
 export async function deleteVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<{ success: boolean } | null> {
   try {
     logger.info('[deleteVideoComment] Deleting comment', { videoId, commentId });
@@ -315,10 +372,7 @@ export async function deleteVideoComment(
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}`),
         functionName: 'deleteVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -450,21 +504,18 @@ export async function removeVideoDislike(
 export async function likeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentReactionResponse | null> {
   try {
     logger.info('[likeVideoComment] Liking comment', { videoId, commentId });
 
-    return apiRequestServer<{ success: boolean }>(
+    return apiRequestServer<CommentReactionResponse>(
       {
         method: 'POST',
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/likes`),
         functionName: 'likeVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -480,21 +531,18 @@ export async function likeVideoComment(
 export async function unlikeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentReactionResponse | null> {
   try {
     logger.info('[unlikeVideoComment] Unliking comment', { videoId, commentId });
 
-    return apiRequestServer<{ success: boolean }>(
+    return apiRequestServer<CommentReactionResponse>(
       {
         method: 'DELETE',
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/likes`),
         functionName: 'unlikeVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -510,21 +558,18 @@ export async function unlikeVideoComment(
 export async function dislikeVideoComment(
   videoId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
+  headers?: Pick<ApiHeaders, 'channelId'>
+): Promise<CommentReactionResponse | null> {
   try {
     logger.info('[dislikeVideoComment] Disliking comment', { videoId, commentId });
 
-    return apiRequestServer<{ success: boolean }>(
+    return apiRequestServer<CommentReactionResponse>(
       {
         method: 'POST',
         url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/dislikes`),
         functionName: 'dislikeVideoComment',
       },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
+      () => commentAuthContext(headers?.channelId),
       true
     );
   } catch (error) {
@@ -641,233 +686,60 @@ export async function searchVideos(
   }
 }
 
-// Helper functions for mock data
-
-function isLocalhost(): boolean {
-  return typeof window !== 'undefined' && window.location.hostname === 'localhost';
-}
-
-function getMockSuggestions(query: string): SearchSuggestion[] {
-  const suggestions = [
-    { text: 'Islamic lectures', type: 'category' as const, count: 150 },
-    { text: 'Quran recitation', type: 'category' as const, count: 89 },
-    { text: 'Islamic history', type: 'category' as const, count: 67 },
-    { text: 'Prayer guidance', type: 'category' as const, count: 45 },
-    { text: 'Islamic stories', type: 'category' as const, count: 34 }
-  ];
-
-  return suggestions
-    .filter(s => s.text.toLowerCase().includes(query.toLowerCase()))
-    .slice(0, 5);
-}
-
-// Constants for base64-encoded SVG data URIs
-const VIDEO_THUMBNAIL_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMzUgNzVMMTY1IDkwTDEzNSAxMDVWNzVaIiBmaWxsPSIjNjM2NzZEIi8+Cjx0ZXh0IHg9IjE2MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2MzY3NkQiPklzbGFtaWMgVmlkZW88L3RleHQ+Cjwvc3ZnPgo=';
-const AVATAR_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNiIgcj0iNiIgZmlsbD0iIzlCA0E0QjEiLz4KPHBhdGggZD0iTTggMzJDOCAyNi40NzcyIDEyLjQ3NzIgMjIgMTggMjJIMjJDMjcuNTIyOCAyMiAzMiAyNi40NzcyIDMyIDMyVjMySDhaIiBmaWxsPSIjOUNBM0FGIS8+Cjwvc3ZnPgo=';
-
-function getMockTrendingVideos(): VideoObject[] {
-  const videoThumbnail = VIDEO_THUMBNAIL_PLACEHOLDER;
-  const avatarPlaceholder = AVATAR_PLACEHOLDER;
-
-  return [
-    {
-      id: 'trending-1',
-      title: 'Understanding Islamic Ethics in Modern Times',
-      description: 'A comprehensive guide to applying Islamic principles in contemporary life',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-1',
-      channel: 'Islamic Studies',
-      channelId: 'channel-1',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Islamic Studies',
-      dateCreated: new Date(Date.now() - 86400000).toISOString(),
-      dateModified: new Date(Date.now() - 86400000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 15420,
-      likesCount: 342,
-      dislikesCount: 12,
-      commentsCount: 89,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: 'trending-2',
-      title: 'The Beauty of Quran Recitation',
-      description: 'Experience the divine beauty of Quranic verses with proper Tajweed',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-2',
-      channel: 'Quran Academy',
-      channelId: 'channel-2',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Quran Academy',
-      dateCreated: new Date(Date.now() - 172800000).toISOString(),
-      dateModified: new Date(Date.now() - 172800000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 8734,
-      likesCount: 234,
-      dislikesCount: 8,
-      commentsCount: 56,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: 'trending-3',
-      title: 'Islamic History: The Golden Age',
-      description: 'Discover the remarkable achievements during the Islamic Golden Age',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-3',
-      channel: 'History Channel',
-      channelId: 'channel-3',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'History Channel',
-      dateCreated: new Date(Date.now() - 259200000).toISOString(),
-      dateModified: new Date(Date.now() - 259200000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 12450,
-      likesCount: 567,
-      dislikesCount: 15,
-      commentsCount: 123,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: 'trending-4',
-      title: 'Prayer Guidance for New Muslims',
-      description: 'Step-by-step guide to performing the five daily prayers',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-4',
-      channel: 'Islamic Guidance',
-      channelId: 'channel-4',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Islamic Guidance',
-      dateCreated: new Date(Date.now() - 345600000).toISOString(),
-      dateModified: new Date(Date.now() - 345600000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 9876,
-      likesCount: 423,
-      dislikesCount: 7,
-      commentsCount: 89,
-      isPublic: true,
-      isLive: false
-    }
-  ];
-}
-
-function getMockRecommendations(): VideoObject[] {
-  const videoThumbnail = VIDEO_THUMBNAIL_PLACEHOLDER;
-  const avatarPlaceholder = AVATAR_PLACEHOLDER;
-
-  return [
-    {
-      id: 'rec-1',
-      title: 'Recommended: Islamic Architecture Through Ages',
-      description: 'Explore the beautiful architectural heritage of Islamic civilization',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-2',
-      channel: 'Islamic Heritage',
-      channelId: 'channel-2',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Islamic Heritage',
-      dateCreated: new Date(Date.now() - 172800000).toISOString(),
-      dateModified: new Date(Date.now() - 172800000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 8734,
-      likesCount: 234,
-      dislikesCount: 8,
-      commentsCount: 56,
-      isPublic: true,
-      isLive: false
-    },
-    {
-      id: 'rec-2',
-      title: 'Islamic Calligraphy: Art of Divine Words',
-      description: 'Learn the sacred art of Arabic calligraphy and its spiritual significance',
-      thumbnailUrl: videoThumbnail,
-      videoUrl: '#',
-      userId: 'mock-user-5',
-      channel: 'Islamic Arts',
-      channelId: 'channel-5',
-      channelAvatarUrl: avatarPlaceholder,
-      channelName: 'Islamic Arts',
-      dateCreated: new Date(Date.now() - 432000000).toISOString(),
-      dateModified: new Date(Date.now() - 432000000).toISOString(),
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-      views: 6543,
-      likesCount: 198,
-      dislikesCount: 4,
-      commentsCount: 67,
-      isPublic: true,
-      isLive: false
-    }
-  ];
+async function discoveryHeaders(): Promise<Record<string, string>> {
+  const accessToken = (await getServerAuthContext())?.accessToken;
+  return {
+    'Content-Type': 'application/json',
+    ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
+  };
 }
 
 /**
  * Get Search Suggestions
  * GET /api/search/suggestions
+ * Returns an empty list when nothing matches or the API is unavailable.
  */
 export async function getSearchSuggestions(
   query: string,
   limit: number = 5
 ): Promise<SearchSuggestion[]> {
-  // In development/demo environment, return mock data immediately
-  if (isLocalhost()) {
-    return getMockSuggestions(query);
-  }
+  if (!query.trim()) return [];
 
   try {
     const queryParams = new URLSearchParams({
-      q: query,
+      q: query.trim(),
       limit: limit.toString()
     });
 
     const response = await fetch(
       buildApiUrl(`/api/search/suggestions?${queryParams.toString()}`),
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
     );
 
     if (!response.ok) {
-      // Return mock suggestions for development
-      return getMockSuggestions(query);
+      logger.warn('[getSearchSuggestions] API error', { status: response.status });
+      return [];
     }
 
-    return await response.json();
+    const data = await response.json() as SearchSuggestion[] | { data?: SearchSuggestion[] };
+    return Array.isArray(data) ? data : data.data ?? [];
   } catch (error) {
-    logger.error('getSearchSuggestions error:', error);
-    return getMockSuggestions(query);
+    logger.error('[getSearchSuggestions] Request failed', { error });
+    return [];
   }
 }
 
 /**
  * Get Trending Content
  * GET /api/trending
+ * Returns an empty list when there is no trending activity or the API is unavailable.
  */
 export async function getTrendingVideos(
   period: 'hour' | 'day' | 'week' | 'month' = 'day',
   category?: string,
-  limit: number = 20
+  limit: number = 20,
+  language?: string
 ): Promise<VideoObject[]> {
-  // In development/demo environment, return mock data immediately to avoid network errors
-  if (isLocalhost()) {
-    return getMockTrendingVideos();
-  }
-
   try {
     const queryParams = new URLSearchParams({
       period,
@@ -877,33 +749,32 @@ export async function getTrendingVideos(
     if (category) {
       queryParams.append('category', category);
     }
+    if (language) {
+      queryParams.append('language', language);
+    }
 
     const response = await fetch(
       buildApiUrl(`/api/trending?${queryParams.toString()}`),
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
     );
 
     if (!response.ok) {
-      // Return mock trending content for development
-      return getMockTrendingVideos();
+      logger.warn('[getTrendingVideos] API error', { status: response.status });
+      return [];
     }
 
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
-    return data.videos || data.data || [];
+    return data.data || data.videos || [];
   } catch (error) {
-    logger.error('getTrendingVideos error:', error);
-    return getMockTrendingVideos();
+    logger.error('[getTrendingVideos] Request failed', { error });
+    return [];
   }
 }
 
 /**
  * Get Recommended Videos
  * GET /api/recommendations
+ * Sends the session token (when signed in) so the API can use watch history.
  */
 export async function getRecommendedVideos(
   request: RecommendationRequest,
@@ -921,85 +792,22 @@ export async function getRecommendedVideos(
       {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          ...(await discoveryHeaders()),
           ...(headers?.channelId && { 'channelId': headers.channelId }),
         },
       }
     );
 
     if (!response.ok) {
-      // Return mock recommendations for development
-      return getMockRecommendations();
+      logger.warn('[getRecommendedVideos] API error', { status: response.status });
+      return [];
     }
 
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
-    return data.videos || data.data || [];
+    return data.data || data.videos || [];
   } catch (error) {
-    logger.error('getRecommendedVideos error:', error);
-    return getMockRecommendations();
-  }
-}
-
-/**
- * Upload a video file
- * POST /api/upload/video
- */
-export async function uploadVideo(
-  file: File,
-  metadata: {
-    title: string;
-    description?: string;
-    isPublic: boolean;
-    tags?: string[];
-  },
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ video: VideoObject }> | null> {
-  try {
-    const formData = new FormData();
-    formData.append('video', file);
-    formData.append('title', metadata.title);
-    formData.append('description', metadata.description || '');
-    formData.append('isPublic', metadata.isPublic.toString());
-    if (metadata.tags && metadata.tags.length > 0) {
-      formData.append('tags', JSON.stringify(metadata.tags));
-    }
-
-    const authContext = await getServerAuthContext();
-
-    const response = await fetch(
-      buildApiUrl('/api/upload/video'),
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${authContext?.accessToken || ''}`,
-          'channelId': headers.channelId,
-        },
-        body: formData,
-      }
-    );
-
-    if (!response.ok) {
-      let errorDetails = '';
-      try {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errorJson = await response.json();
-          errorDetails = JSON.stringify(errorJson);
-        } else {
-          errorDetails = await response.text();
-        }
-      } catch (_e) {
-        errorDetails = 'Unable to parse error details';
-      }
-      throw new Error(
-        `Error uploading video: ${response.status} ${response.statusText}. Details: ${errorDetails}`
-      );
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('uploadVideo error:', error);
-    return null;
+    logger.error('[getRecommendedVideos] Request failed', { error });
+    return [];
   }
 }
 
@@ -1111,8 +919,8 @@ export async function completeVideoUploadApi(
 }
 
 /**
- * Initiate batch video upload - Create multiple video records and get upload configurations
- * POST /api/videos/upload/batch-initiate
+ * Initiate batch video upload - Create multiple video records, each with a TUS proxy session
+ * POST /api/videos/upload/batch/initiate
  */
 export async function initiateBatchUploadApi(
   request: {
@@ -1131,42 +939,13 @@ export async function initiateBatchUploadApi(
     };
   },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{
-  success: boolean;
-  result?: Array<{
-    videoId: string;
-    tusEndpoint: string;
-    tusHeaders: {
-      AuthorizationSignature: string;
-      AuthorizationExpire: string;
-      LibraryId: string;
-      VideoId: string;
-    };
-    expiresAt: string;
-  }>;
-  error?: string;
-} | null> {
-  return apiRequestServer<{
-    success: boolean;
-    result?: Array<{
-      videoId: string;
-      tusEndpoint: string;
-      tusHeaders: {
-        AuthorizationSignature: string;
-        AuthorizationExpire: string;
-        LibraryId: string;
-        VideoId: string;
-      };
-      expiresAt: string;
-    }>;
-    error?: string;
-  }>({
+): Promise<BatchUploadInitiateResponse | null> {
+  return apiRequestServer<BatchUploadInitiateResponse>({
     method: 'POST',
-    url: buildApiUrl('/api/videos/upload/batch-initiate'),
+    url: buildApiUrl('/api/videos/upload/batch/initiate'),
     body: request,
     functionName: 'initiateBatchUploadApi'
   }, async () => ({
-    
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
@@ -1236,6 +1015,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
         const playerOptions = {
             id: video.id,
             title: video.title,
+            titleLocalized: video.titleLocalized,
             description: video.description || '',
             channel: video.channel,
             channelName: video.channelName,
@@ -1254,6 +1034,10 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             likesCount: video.likesCount,
             dislikesCount: video.dislikesCount,
             commentsCount: video.commentsCount,
+            userId: video.userId,
+            channelId: video.channelId,
+            likes: (video.likes || []).map(({ userId, channelId }) => ({ userId, channelId })),
+            dislikes: (video.dislikes || []).map(({ userId, channelId }) => ({ userId, channelId })),
         };
 
         logger.info('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);

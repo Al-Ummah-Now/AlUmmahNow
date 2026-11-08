@@ -7,6 +7,7 @@ import {
   initiateBatchUploadApi
 } from "@/lib/api/videos";
 import { getServerAuthContext } from "@/lib/api/server-auth-v2";
+import type { BatchUploadInitiateResponse } from "@al-ummah/shared-types";
 
 /**
  * Initiate video upload - Server action with TUS support
@@ -134,21 +135,7 @@ export async function initiateBatchUpload(
     category?: string;
     isPublic?: boolean;
   }
-): Promise<{
-  success: boolean;
-  result?: Array<{
-    videoId: string;
-    tusEndpoint: string;
-    tusHeaders: {
-      AuthorizationSignature: string;
-      AuthorizationExpire: string;
-      LibraryId: string;
-      VideoId: string;
-    };
-    expiresAt: string;
-  }>;
-  error?: string;
-}> {
+): Promise<BatchUploadInitiateResponse> {
   const result = await initiateBatchUploadApi(
     { videos, sharedMetadata },
     {  channelId }

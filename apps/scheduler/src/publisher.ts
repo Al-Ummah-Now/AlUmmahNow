@@ -1,14 +1,17 @@
-import type { ScheduledVideoMetadata, VideoObject } from '@al-ummah/shared-types';
+import { MessageType } from '@al-ummah/shared-types';
+import type { ScheduledVideoMetadata, SearchIndexSyncPayload, VideoObject } from '@al-ummah/shared-types';
 import { logger } from './lib/logger';
 
 /**
  * Publish a scheduled video by updating its status to public
  * @param videoBucket R2 bucket containing videos
  * @param metadata Scheduled video metadata
+ * @param queue Optional event queue; when given, the processor adds the newly public video to the search index
  */
 export async function publishVideo(
   videoBucket: R2Bucket,
-  metadata: ScheduledVideoMetadata
+  metadata: ScheduledVideoMetadata,
+  queue?: Queue
 ): Promise<void> {
   // 1. Fetch current video data
   const videoObject = await videoBucket.get(metadata.videoId);
@@ -46,6 +49,16 @@ export async function publishVideo(
   );
 
   logger.info(`Successfully published video ${metadata.videoId} via scheduler`);
+
+  // 5. Search index (Story 29.9): the video is public now
+  if (queue) {
+    try {
+      const payload: SearchIndexSyncPayload = { entity: 'video', id: metadata.videoId, object: videoData };
+      await queue.send({ id: crypto.randomUUID(), type: MessageType.SearchIndexSync, payload, timestamp: Date.now() });
+    } catch (error) {
+      logger.warn(`Failed to queue search index sync for video ${metadata.videoId}`, error);
+    }
+  }
 }
 
 /**

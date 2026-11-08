@@ -11,6 +11,7 @@ import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type { WatchHistoryEntry } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
+import { listUserWatchHistory } from "./user-entries";
 
 const ClearResponseSchema = z.object({
   deleted: z.number().describe("Number of entries deleted"),
@@ -54,13 +55,8 @@ export class ClearWatchHistory extends AuthenticatedRoute {
         c.env.watch_history
       );
 
-      // List all watch history entries
-      const allEntriesResponse = await watchHistoryRepo.listObjects(1000);
-
-      // Filter entries for this user
-      const userEntries = allEntriesResponse.items.filter(
-        (entry) => entry.userId === userId
-      );
+      // List this user's watch history entries (prefix listing)
+      const userEntries = await listUserWatchHistory(c.env.watch_history, userId);
 
       // Delete all user's entries
       const deletePromises = userEntries.map((entry) =>

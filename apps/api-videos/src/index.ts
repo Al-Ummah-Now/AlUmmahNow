@@ -1,5 +1,5 @@
-import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { fromHono } from "chanfana";
+import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { Hono } from "hono";
 import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
@@ -9,6 +9,11 @@ import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
+import { enforceRetention } from './lib/privacy/retention';
+import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
+import { withSearchSync } from './lib/search/sync';
+import { reconcileSearchIndex } from './lib/search/backfill';
+import { reconcileOwnershipIndex } from './lib/search/ownership';
 
 // TUS Proxy import (not in routers yet)
 import { createTusRouter } from "./endpoints/video/tus";
@@ -59,6 +64,21 @@ app.use('*', cors({
 	maxAge: 600,
 	credentials: false,
 }));
+
+// Internal / diagnostic endpoints require the service-to-service key
+// (X-API-Key == INTERNAL_API_KEY). They mutate storage or expose internals.
+const INTERNAL_PATHS = ['/internal/*', '/test', '/test-error', '/api/i18n/sync'];
+for (const p of INTERNAL_PATHS) {
+	app.use(p, async (c, next) => {
+		const binding = (c.env as unknown as { INTERNAL_API_KEY?: string | { get(): Promise<string> } }).INTERNAL_API_KEY;
+		const expected = typeof binding === 'string' ? binding : await binding?.get();
+		const provided = c.req.header('X-API-Key');
+		if (!expected || !provided || provided !== expected) {
+			return c.json({ success: false, error: 'Unauthorized' }, 401);
+		}
+		return next();
+	});
+}
 
 // Add comprehensive logging middleware for ALL routes
 app.use('*', loggingMiddleware);
@@ -128,6 +148,7 @@ app.use('/api/videos/upload/resume/:videoId', rateLimitMiddleware('video_upload'
 // SECURITY: Apply rate limiting to community media uploads
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
 app.use('/api/community/media/upload/gif', rateLimitMiddleware('image_upload'));
+app.use('/api/videos/:id/thumbnail', rateLimitMiddleware('image_upload'));
 
 // ==========================================
 // TUS PROXY
@@ -347,4 +368,44 @@ app.get("/", async (c) => {
 // EXPORT
 // ==========================================
 
-export default app;
+/**
+ * Daily cron (wrangler `triggers.crons`): enforce data retention (Story 1.3, AC 5).
+ * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
+ */
+async function scheduled(_controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
+	// Retention deletes go through the search-sync wrapper so removed content leaves the index.
+	const env = withSearchSync(rawEnv, ctx);
+	ctx.waitUntil(
+		(async () => {
+			try {
+				// Story 29.9: daily reconciliation of the search index with R2 (a few pages per type per run).
+				await reconcileSearchIndex(rawEnv as never);
+			} catch (error) {
+				logger.error('[SearchReconcile] Sweep failed', { error: error instanceof Error ? error.message : String(error) });
+			}
+			try {
+				// Ownership index: advance (and when finished, prune and mark complete) the full pass of videos and channels.
+				await reconcileOwnershipIndex(rawEnv as never);
+			} catch (error) {
+				logger.error('[Ownership] Reconcile failed', { error: error instanceof Error ? error.message : String(error) });
+			}
+		})(),
+	);
+	ctx.waitUntil(
+		(async () => {
+			const budget = new OperationBudget(DEFAULT_OPERATION_BUDGET);
+			try {
+				const result = await enforceRetention(env, new Date(), budget);
+				logger.info('[Retention] Retention sweep finished', { ...result, operations: budget.spent });
+			} catch (error) {
+				logger.error('[Retention] Retention sweep failed', { error: error instanceof Error ? error.message : String(error) });
+			}
+		})(),
+	);
+}
+
+export default {
+	// Content buckets are wrapped so every R2 write also updates the search index (lib/search/sync.ts).
+	fetch: (request: Request, env: AppBindings, ctx: ExecutionContext) => app.fetch(request, withSearchSync(env, ctx), ctx),
+	scheduled,
+};

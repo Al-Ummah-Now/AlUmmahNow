@@ -4,6 +4,8 @@ import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { StoredComment, findStoredComment, removeStoredComment } from "../../lib/comments";
+import { broadcastInBackground } from "../../lib/websocket-notify";
 
 export class CommentDelete extends AuthenticatedRoute {
 	schema = {
@@ -76,12 +78,21 @@ export class CommentDelete extends AuthenticatedRoute {
 			}, 404);
 		}
 
-		const comment = video.comments.find(comment => comment.id === cid);
-		if (!comment) {
+		const found = findStoredComment(video.comments as unknown as StoredComment[], cid);
+		const comment = found?.comment;
+		if (!found || !comment) {
 			return c.json({
 				success: false,
 				error: "Comment not found",
 			}, 404);
+		}
+
+		// The comment author or the video owner may delete a comment
+		if (comment.userId !== userId && video.userId !== userId) {
+			return c.json({
+				success: false,
+				error: "Forbidden",
+			}, 403);
 		}
 
 		// Send queue message for comment deletion
@@ -94,11 +105,17 @@ export class CommentDelete extends AuthenticatedRoute {
 			timestamp: new Date().toISOString(),
 		});
 
-		// Remove the comment
-		video.comments = video.comments.filter(comment => comment.id !== cid);
+		// Remove the comment (a top-level comment takes its replies with it)
+		video.comments = removeStoredComment(video.comments as unknown as StoredComment[], cid).comments as unknown as typeof video.comments;
 
 		// Save updated video
 		await repository.putObject(video.id, video);
+
+		broadcastInBackground(c, `video:${id}`, 'comment_deleted', {
+			videoId: id,
+			commentId: cid,
+			parentCommentId: found.parent?.id || null,
+		});
 
 		return { success: true };
 	}

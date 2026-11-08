@@ -5,6 +5,16 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { countSubscribers } from "../../lib/subscriptions";
+
+const SubscriptionStatusResponse = z.object({
+	success: z.boolean(),
+	result: z.object({
+		channelId: z.string(),
+		isSubscribed: z.boolean(),
+		subscriberCount: z.number(),
+	}),
+});
 
 export class SubscriptionDelete extends AuthenticatedRoute {
 	schema = {
@@ -13,18 +23,17 @@ export class SubscriptionDelete extends AuthenticatedRoute {
 		request: {
 			params: z.object({
 				id: Str({ description: "Channel ID" }),
-				cid: Str({ description: "Subscriber ID" }),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
 			}),
 		},
 		responses: {
-			"201": {
+			"200": {
 				description: "Subscription deleted successfully",
 				content: {
 					"application/json": {
-						schema: Channel,
+						schema: SubscriptionStatusResponse,
 					},
 				},
 			},
@@ -60,7 +69,7 @@ export class SubscriptionDelete extends AuthenticatedRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Extract channel ID and subscriber ID
-		const { id, cid } = request.params;
+		const { id } = request.params;
 		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
@@ -90,18 +99,20 @@ export class SubscriptionDelete extends AuthenticatedRoute {
 			}
 
 			const subscription = channel.subscriptions.find(s => s.channelId === channelId);
-			channel.subscriptions = channel.subscriptions.filter(s => s.channelId !== channelId);
-						
-			const queue = new Queue(c.env.queue);
-			await queue.send(MessageType.Unsubscribe, {
-				subscriptionId: subscription.id,
-				targetChannelId: id,
-				subscriberChannelId: channelId,
-				userId: userId,
-				timestamp: new Date().toISOString(),
-			});
+			if (subscription) {
+				channel.subscriptions = channel.subscriptions.filter(s => s.channelId !== channelId);
 
-			await repository.putObject(id, channel);
+				await repository.putObject(id, channel);
+
+				const queue = new Queue(c.env.queue);
+				await queue.send(MessageType.Unsubscribe, {
+					subscriptionId: subscription.id,
+					targetChannelId: id,
+					subscriberChannelId: channelId,
+					userId: userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
 
 			// Update reverse index on subscriber's profile
 			try {
@@ -124,7 +135,17 @@ export class SubscriptionDelete extends AuthenticatedRoute {
 				logger.warn('Failed to update profile subscribedTo index:', profileError);
 			}
 
-			return channel;
+			return c.json(
+				{
+					success: true,
+					result: {
+						channelId: id,
+						isSubscribed: false,
+						subscriberCount: countSubscribers(channel.subscriptions),
+					},
+				},
+				200
+			);
 		}
 		catch (error) {
 			logger.error("Error fetching Profile:", error);

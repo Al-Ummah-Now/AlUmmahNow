@@ -3,6 +3,8 @@ import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { broadcastInBackground } from "../../lib/websocket-notify";
+import { recordLike } from "../../lib/library";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class LikeCreate extends AuthenticatedRoute {
@@ -93,6 +95,8 @@ export class LikeCreate extends AuthenticatedRoute {
 
         // Check if the user has already liked the video
         const alreadyLiked = (video.likes || []).find((existingLike) => existingLike.entityId === id && existingLike.channelId === channelId);
+        // Per-user liked-videos index (Library, Story 29.6); idempotent
+        await recordLike(c.env.NOTIFICATIONS_DB, userId, id);
         if (alreadyLiked) {
             return c.json(
                 {
@@ -106,9 +110,23 @@ export class LikeCreate extends AuthenticatedRoute {
 		if (!video.likes) {
 			video.likes = [];
 		}
-		video.likes.push(like);
 		// Note: likesCount is calculated in view layer, not stored
+		// Conditional write: a concurrent reaction on this video is re-read, not overwritten
+		video = (await repository.updateObject(video.id, (fresh) => {
+			fresh.likes = fresh.likes || [];
+			if (fresh.likes.some((l) => l.entityId === id && l.channelId === channelId)) return false;
+			fresh.likes.push(like);
+			return true;
+		})) ?? video;
 
-		await repository.putObject(video.id, video);        return true;
+		broadcastInBackground(c, `video:${id}`, 'video_liked', {
+			videoId: id,
+			userId,
+			likesCount: video.likes.length,
+			dislikesCount: video.dislikes?.length || 0,
+		});
+
+		// chanfana cannot build a response from a bare boolean (it 500ed after storing the like)
+		return { success: true };
     }
 }

@@ -17,6 +17,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { VideoChapter } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getChapterTitle } from '@/lib/video/chapters';
 import { ChevronUp, List, X } from 'lucide-react';
 
 interface ChapterListProps {
@@ -52,9 +53,24 @@ export function ChapterList({
   onToggle,
   className = '',
 }: ChapterListProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, lang } = useLanguage();
   const currentChapterRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const toggleButtonRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef(isOpen);
+
+  // Focus management: move focus into the panel when it opens (current
+  // chapter, else the first one) and back to the toggle button when it closes.
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      const target = currentChapterRef.current
+        ?? listRef.current?.querySelector<HTMLButtonElement>('[data-chapter-item]');
+      target?.focus({ preventScroll: true });
+    } else if (!isOpen && wasOpenRef.current) {
+      toggleButtonRef.current?.focus({ preventScroll: true });
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
 
   // Auto-scroll to current chapter
   useEffect(() => {
@@ -66,27 +82,34 @@ export function ChapterList({
     }
   }, [currentChapter, isOpen]);
 
-  // Keyboard navigation
+  // Keyboard navigation (list pattern): ArrowUp/ArrowDown/Home/End move focus
+  // between chapters, Enter/Space seeks (native button), Escape closes.
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!isOpen || chapters.length === 0) return;
 
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'Escape') {
       e.preventDefault();
-      const nextIndex = Math.min(currentChapterIndex + 1, chapters.length - 1);
-      if (nextIndex !== currentChapterIndex) {
-        onSeek(chapters[nextIndex]);
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prevIndex = Math.max(currentChapterIndex - 1, 0);
-      if (prevIndex !== currentChapterIndex) {
-        onSeek(chapters[prevIndex]);
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
+      e.stopPropagation();
       onToggle();
+      return;
     }
-  }, [isOpen, chapters, currentChapterIndex, onSeek, onToggle]);
+
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const items = Array.from(
+      listRef.current?.querySelectorAll<HTMLButtonElement>('[data-chapter-item]') ?? []
+    );
+    if (items.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const focusedIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    const fromIndex = focusedIndex >= 0 ? focusedIndex : Math.max(0, currentChapterIndex);
+    let nextIndex = fromIndex;
+    if (e.key === 'ArrowDown') nextIndex = Math.min(fromIndex + 1, items.length - 1);
+    if (e.key === 'ArrowUp') nextIndex = Math.max(fromIndex - 1, 0);
+    if (e.key === 'Home') nextIndex = 0;
+    if (e.key === 'End') nextIndex = items.length - 1;
+    items[nextIndex].focus();
+  }, [isOpen, chapters.length, currentChapterIndex, onToggle]);
 
   const handleChapterClick = useCallback((chapter: VideoChapter) => {
     onSeek(chapter);
@@ -100,6 +123,7 @@ export function ChapterList({
     <>
       {/* Toggle Button */}
       <button
+        ref={toggleButtonRef}
         type="button"
         onClick={onToggle}
         className={`
@@ -127,13 +151,15 @@ export function ChapterList({
           shadow-lg
           ${className}
         `}
-        aria-label={isOpen ? t.video.hideChapters : t.video.showChapters}
         aria-expanded={isOpen}
+        aria-controls="video-chapter-list"
       >
+        {/* Name comes from the content, so the visible count badge is part of it (WCAG 2.5.3 label in name) */}
+        <span className="sr-only">{isOpen ? t.video.hideChapters : t.video.showChapters}</span>
         {isOpen ? (
-          <X className="w-6 h-6" />
+          <X className="w-6 h-6" aria-hidden="true" />
         ) : (
-          <List className="w-6 h-6" />
+          <List className="w-6 h-6" aria-hidden="true" />
         )}
         {chapters.length > 0 && !isOpen && (
           <span
@@ -201,10 +227,11 @@ export function ChapterList({
               md:rounded-l-2xl
               md:rounded-tr-none
             `}
+            id="video-chapter-list"
             onKeyDown={handleKeyDown}
             role="navigation"
             aria-label={t.video.chapterList}
-            tabIndex={0}
+            tabIndex={-1}
           >
             {/* Header */}
             <div className="
@@ -222,11 +249,11 @@ export function ChapterList({
               z-10
             ">
               <div className="flex items-center gap-2">
-                <List className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                <List className="w-5 h-5 text-gray-600 dark:text-gray-300" aria-hidden="true" />
                 <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
                   {t.video.chapters}
                 </h3>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
                   ({chapters.length})
                 </span>
               </div>
@@ -234,15 +261,24 @@ export function ChapterList({
                 type="button"
                 onClick={onToggle}
                 className="
+                  inline-flex
+                  items-center
+                  justify-center
+                  min-w-11
+                  min-h-11
                   p-2
                   rounded-full
+                  text-gray-700
+                  dark:text-gray-200
                   hover:bg-gray-100
+                  active:bg-gray-200
                   dark:hover:bg-gray-800
+                  dark:active:bg-gray-700
                   transition-colors
                 "
                 aria-label={t.common.close}
               >
-                <ChevronUp className="w-5 h-5" />
+                <ChevronUp className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -260,10 +296,13 @@ export function ChapterList({
                     key={chapter.id}
                     ref={isCurrent ? currentChapterRef : null}
                     type="button"
+                    data-chapter-item=""
+                    aria-current={isCurrent ? 'true' : undefined}
                     onClick={() => handleChapterClick(chapter)}
                     className={`
                       w-full
-                      text-left
+                      min-h-11
+                      text-start
                       p-4
                       flex
                       gap-3
@@ -275,8 +314,8 @@ export function ChapterList({
                       dark:border-gray-800
                       last:border-b-0
                       ${isCurrent
-                        ? 'bg-primary/10 dark:bg-primary/20 border-l-4 border-l-primary'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                        ? 'bg-primary/10 dark:bg-primary/20 border-s-4 border-s-primary'
+                        : 'hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-gray-800 dark:active:bg-gray-700'
                       }
                     `}
                     dir={isRTL ? 'rtl' : 'ltr'}
@@ -310,7 +349,7 @@ export function ChapterList({
                           }
                         `}
                       >
-                        {chapter.title}
+                        {getChapterTitle(chapter, lang)}
                       </p>
                       {isCurrent && (
                         <span className="
@@ -328,8 +367,8 @@ export function ChapterList({
                     <span className="
                       flex-shrink-0
                       text-xs
-                      text-gray-400
-                      dark:text-gray-500
+                      text-gray-600
+                      dark:text-gray-400
                     ">
                       {index + 1}/{chapters.length}
                     </span>

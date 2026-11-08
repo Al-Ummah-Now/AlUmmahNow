@@ -1,7 +1,8 @@
 import { logger } from '@/lib/logger-client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { CHANNEL_DELETED_PARAM } from '@/components/channelManagement/DeleteChannelDialog';
 import { Channel } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useChannels } from '@/hooks/useChannels';
@@ -21,6 +22,7 @@ import { CreateChannelDialog } from './CreateChannelDialog';
  */
 export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> = ({
   className = '',
+  initialChannels,
 }) => {
   const router = useRouter();
   const { t, lang, dir } = useLanguage();
@@ -39,10 +41,11 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     isLoading,
     error,
     createChannel,
-    deleteChannel,
+    refetch,
   } = useChannels({
     channelId,
     autoFetch: true,
+    initialChannels,
   });
 
   // Show toast message
@@ -50,6 +53,16 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     setToastMessage(message);
     setTimeout(() => setToastMessage(null), 3000);
   };
+
+  // Success notice after deleting a channel (DeleteChannelDialog redirects here)
+  const searchParams = useSearchParams();
+  const deletedNotice = searchParams?.get(CHANNEL_DELETED_PARAM);
+  useEffect(() => {
+    if (!deletedNotice) return;
+    setToastMessage(t.channel.deleteSuccess);
+    const timer = setTimeout(() => setToastMessage(null), 4000);
+    return () => clearTimeout(timer);
+  }, [deletedNotice, t.channel.deleteSuccess]);
 
   // Handle create channel
   const handleCreateChannel = async (data: CreateChannelFormData) => {
@@ -75,17 +88,10 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     router.push(`/${locale}/settings/channel/${channel.id}/edit`);
   };
 
-  // Handle delete channel
+  // Called after DeleteChannelDialog deleted the channel: refresh the list
   const handleDeleteChannel = async (channelId: string) => {
-    logger.debug('ChannelManagementSection: Delete channel:', channelId);
-
-    const success = await deleteChannel(channelId);
-
-    if (success) {
-      showToast(t.success.deleted);
-    } else {
-      showToast(t.errors.genericError);
-    }
+    logger.debug('ChannelManagementSection: Channel deleted:', channelId);
+    await refetch();
   };
 
   // Handle view channel
@@ -169,7 +175,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
 
       {/* Toast Message */}
       {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-5">
+        <div className="fixed bottom-4 end-4 z-50 animate-in slide-in-from-bottom-5" role="status" data-testid="channel-toast">
           <div className="bg-gray-900 dark:bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg border border-gray-700">
             <p className="text-sm font-medium">{toastMessage}</p>
           </div>

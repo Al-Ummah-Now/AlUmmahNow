@@ -126,12 +126,15 @@ export async function login(locale: string = 'en') {
     }
   }
 
-  // Redirect to OAuth login with locale in callback URL
+  // Redirect to OAuth login. The redirect_uri must be byte-identical at
+  // /authorize and /token, so the locale travels in a short-lived cookie
+  // instead of the callback query string.
   const headers = await getHeaders()
   const host = headers.get("host")
   const protocol = host?.includes("localhost") ? "http" : "https"
+  ;(await getCookies()).set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 })
   const { url } = await client.authorize(
-    `${protocol}://${host}/api/callback?locale=${locale}`,
+    `${protocol}://${host}/api/callback`,
     "code",
   )
   redirect(url)

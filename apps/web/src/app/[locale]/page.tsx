@@ -7,6 +7,7 @@ import VideoCardLTR from "@/components/videoCard/index";
 import VideoCardRTL from "@/components/videoCard/rtl/index";
 import { useQueryState } from "nuqs";
 import { fetchVideosWithPagination } from "@/lib/api/videos";
+import { getNextVideosCursor } from "./videos/VideosPageClient";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 
@@ -16,7 +17,9 @@ const VideosPage: React.FC = () => {
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Starts true: the first page is fetched on mount, and rendering the
+  // placeholders from the first paint avoids a layout shift
+  const [loading, setLoading] = useState(true);
   const [isCollapsed, _setIsCollapsed] = useState(true);
 
   // Select VideoCard component based on locale
@@ -41,7 +44,8 @@ const VideosPage: React.FC = () => {
         const newVideos = data.data.filter(video => !existingIds.has(video.id));
         return [...prevVideos, ...newVideos];
       });
-      setNextCursor(data.pagination?.nextCursor ?? null); // Update the next cursor
+      // GET /api/videos returns a top-level `cursor` ("" when there are no more pages)
+      setNextCursor(getNextVideosCursor(data));
     } catch (error) {
       logger.error("Error fetching videos:", error);
     } finally {
@@ -77,9 +81,28 @@ const VideosPage: React.FC = () => {
         >
 <h1 className="text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400">{t.common.loading}</p>
+            // Card-sized placeholders reserve the grid's space so the cards
+            // (and the button below) don't shift the layout when they load
+            <div
+              role="status"
+              aria-busy="true"
+              data-testid="video-grid-loading"
+              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4"
+            >
+              <span className="sr-only">{t.common.loading}</span>
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} aria-hidden="true" className="flex flex-col rounded-lg shadow-md overflow-hidden bg-white dark:bg-gray-900">
+                  <div className="w-full h-48 bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                  <div className="p-4 space-y-2">
+                    <div className="h-5 w-3/4 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-4 w-1/2 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-4 w-1/3 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
+            <div data-testid="video-grid" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
               {videos.map((video) => (
                 <VideoCard key={video.id} {...video} />
               ))}
@@ -91,7 +114,7 @@ const VideosPage: React.FC = () => {
               disabled={!nextCursor || loading}
               className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
             >
-              {loading ? t.common.loading : t.common.viewAll}
+              {loading ? t.common.loading : t.common.loadMore}
             </button>
           </div>
         </main>

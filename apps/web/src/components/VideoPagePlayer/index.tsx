@@ -4,23 +4,23 @@ import Image from "next/image";
 import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "./interface";
-import CustomVideoPlayer from "@/components/VideoPlayer/CustomVideoPlayer";
+import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlayerWithChapters";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
 
 const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   const { user } = useAuth();
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const locale = lang;
 
-  const title = getLocalizedValue((options as PlayerOptions & { titleLocalized?: Record<string, string> }).titleLocalized, options.title, locale);
+  const title = getLocalizedValue(options.titleLocalized, options.title, locale);
 
   // Convert PlayerOptions to CustomVideoPlayer props
   // Memoize to prevent new array reference on every render
   const videoSources = useMemo(() => [
     {
-      src: options.playUrl || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/playlist.m3u8`,
+      src: options.playUrl || '',
       type: 'application/x-mpegURL'
     }
   ], [options.playUrl, options.id]);
@@ -28,7 +28,12 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
   // Use poster from options (API-provided thumbnail URL) or fallback to default pattern
   // Ensure the poster URL has the protocol (https://) - some API responses return relative URLs
   const posterUrl = useMemo(() => {
-    const poster = options.poster || `https://vz-215a1ffd-a5a.b-cdn.net/${options.id}/thumbnail.jpg`;
+    // Bunny keeps the thumbnail next to the playlist, so derive it from this
+    // video's own library (QA/prod differ) rather than a hard-coded host.
+    const derived = options.playUrl?.endsWith('/playlist.m3u8')
+      ? options.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg')
+      : '';
+    const poster = options.poster || derived;
     // If the poster URL doesn't start with http:// or https://, prepend https://
     if (poster && !poster.startsWith('http://') && !poster.startsWith('https://')) {
       return `https://${poster}`;
@@ -40,8 +45,8 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
     <>
       <div className="flex w-full mt-0 relative dark:bg-gray-900">
         <div className="w-full rounded-lg overflow-visible 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
-          {/* New Custom Video.js Player */}
-          <CustomVideoPlayer
+          {/* Video.js player with chapters and subtitles */}
+          <VideoPlayerWithChapters
             videoId={options.id}
             userId={user?.id}
             sources={videoSources}
@@ -53,7 +58,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             isLive={false}
             lang="en"
             className="w-full"
-            ariaLabel={`Video: ${removeUnwantedChars(title)}`}
+            ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
           />
         </div>
       </div>
@@ -66,14 +71,16 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
         </h1>
 
         {/* Channel Info */}
-        <div className="flex space-x-3 items-center">
+        <div className="flex space-x-3 rtl:space-x-reverse items-center">
           <Link
             href={`/${lang}/channels/${options.channel}`}
-            className="w-10 h-10 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
+            className="w-11 h-11 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
+            tabIndex={-1}
+            aria-hidden="true"
           >
             <Image
               src={options.channelAvatar || '/avatar.png'}
-              alt="Channel Avatar"
+              alt=""
               sizes="10vw"
               className="bg-gray-500"
               fill
@@ -82,7 +89,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
           <div>
             <Link
               href={`/${lang}/channels/${options.channel}`}
-              className="text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
+              className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
             >
               {removeUnwantedChars(options.channelName)}
             </Link>

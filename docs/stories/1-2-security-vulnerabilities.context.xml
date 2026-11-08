@@ -3,7 +3,7 @@
     <epicId>1</epicId>
     <storyId>2</storyId>
     <title>Remove Global Event Listener Security Vulnerabilities</title>
-    <status>drafted</status>
+    <status>review</status>
     <generatedAt>2025-11-06T16:30:00.000Z</generatedAt>
     <generator>BMAD Story Context Workflow</generator>
     <sourceStoryPath>docs/stories/1-2-security-vulnerabilities.md</sourceStoryPath>

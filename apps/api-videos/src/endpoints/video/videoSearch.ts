@@ -7,6 +7,8 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { Channel } from "@al-ummah/shared-types";
 import { logger } from "../../lib/logger";
+import { isVideoRemoved } from "../../lib/visibility";
+import { channelsVideoIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 
 export class VideoSearch extends OptionalAuthRoute {
 	schema = {
@@ -150,9 +152,33 @@ export class VideoSearch extends OptionalAuthRoute {
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 
-		// For now, get all videos and filter in memory
-		// In production, this should use a proper search index like Elasticsearch
-		let videos = !cursor ? await repository.listObjects(1000) : await repository.listObjects(1000, cursor);
+		// With channelIds, the ownership index lists the channels' videos
+		// (O(their videos)); the objects are then loaded and go through the same
+		// filtering, scoring and sorting as before. Without channelIds, or while
+		// the index is incomplete, every R2 page is scanned (bounded). The
+		// response `cursor` is an offset into the filtered, sorted results (see
+		// pagination below), not an R2 continuation token.
+		const indexedIds = channelIdList.length > 0 ? await channelsVideoIds(c.env as never, channelIdList) : null;
+		let videos: { cursor: string; items: VideoType[] };
+		if (indexedIds) {
+			const loaded = await Promise.all(indexedIds.map(id => repository.getObject(id)));
+			videos = { cursor: "", items: loaded.filter((video): video is VideoType => video !== null) };
+		} else {
+			if (channelIdList.length > 0) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'video');
+			const MAX_PAGES = 20;
+			videos = await repository.listObjects(1000);
+			const collected = [...(videos.items || [])];
+			let next = videos.cursor;
+			let pages = 1;
+			while (next && pages < MAX_PAGES) {
+				const page = await repository.listObjects(1000, next);
+				collected.push(...(page.items || []));
+				next = page.cursor;
+				pages++;
+			}
+			videos = { ...videos, items: collected, cursor: "" };
+		}
+		logger.debug('[VideoSearch] Candidates loaded', { source: indexedIds ? 'index' : 'scan', candidates: videos.items.length });
 
 		// Prepare for search scoring
 		const searchTerms = query ? query.toLowerCase().trim().split(/\s+/) : [];
@@ -161,6 +187,11 @@ export class VideoSearch extends OptionalAuthRoute {
 		// Filter and score videos
 		const scoredVideos = (videos.items || [])
 			.filter(video => {
+				// Soft-deleted and moderation-hidden videos never appear in search
+				if (isVideoRemoved(video)) {
+					return false;
+				}
+
 				// Channel filtering
 				if (channelIdList.length > 0 && !channelIdList.includes(video.channelId)) {
 					return false;
@@ -232,8 +263,9 @@ export class VideoSearch extends OptionalAuthRoute {
 						if (title.startsWith(term)) score += 30;
 					});
 
-					// Boost popular videos slightly
-					score += Math.min(video.views || 0, 100) * 0.1;
+					// Boost popular videos slightly, but only ones that matched:
+					// boosting every video let any query match all viewed videos
+					if (score > 0) score += Math.min(video.views || 0, 100) * 0.1;
 				}
 
 				return { video, score };

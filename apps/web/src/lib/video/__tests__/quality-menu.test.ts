@@ -9,10 +9,18 @@
  *  2. `.vjs-control-bar` had `contain: ... paint`, which clips descendants to
  *     the 64px bar - the menu opens above the bar, so it was clipped again.
  *
- * jsdom does no layout, so these tests pin the CSS contract.
+ * jsdom does no layout, so these tests pin the CSS contract; the E2E spec
+ * e2e/31-video-player.spec.ts (PLAYER-013) checks the menu in a real browser.
  */
+jest.mock('video.js', () => ({ __esModule: true, default: jest.fn() }));
+jest.mock('videojs-hls-quality-selector', () => ({}));
+jest.mock('video.js/dist/lang/ar.json', () => ({}));
+jest.mock('@/lib/logger-client', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
+
 import fs from 'fs';
 import path from 'path';
+import type { Player } from 'video.js';
+import { qualityButtonPlacementIndex } from '../videojs-setup';
 
 const playerCss = fs.readFileSync(path.join(__dirname, '../../../styles/video-player.css'), 'utf8');
 
@@ -46,5 +54,29 @@ describe('quality menu CSS', () => {
       const overflow = rule.match(/(?:^|[\s;])overflow:\s*([^;]+);/);
       if (overflow) expect(overflow[1]).toMatch(/visible/);
     }
+  });
+});
+
+describe('qualityButtonPlacementIndex', () => {
+  function playerWith(children: string[]): Player {
+    const components = children.map((name) => ({ name }));
+    return {
+      controlBar: {
+        children: () => components,
+        getChild: (name: string) => components.find((c) => c.name === name),
+      },
+    } as unknown as Player;
+  }
+
+  it('places the quality button just before the remaining-time display', () => {
+    const player = playerWith([
+      'playToggle', 'volumePanel', 'progressControl', 'remainingTimeDisplay', 'subsCapsButton', 'fullscreenToggle',
+    ]);
+    expect(qualityButtonPlacementIndex(player)).toBe(3);
+  });
+
+  it('falls back to the plugin default without a remaining-time display or control bar', () => {
+    expect(qualityButtonPlacementIndex(playerWith(['playToggle', 'fullscreenToggle']))).toBeUndefined();
+    expect(qualityButtonPlacementIndex({} as Player)).toBeUndefined();
   });
 });

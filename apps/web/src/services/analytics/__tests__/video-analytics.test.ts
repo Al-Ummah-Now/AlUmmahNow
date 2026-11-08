@@ -7,7 +7,7 @@
  * - Batch flushing
  * - Timer-based flushing
  * - Error handling
- * - LocalStorage fallback
+ * - No localStorage persistence (GDPR, Story 1.3) and consent gating
  * - Cleanup
  */
 
@@ -15,6 +15,10 @@
 
 import { VideoAnalytics, getVideoAnalytics, destroyVideoAnalytics, clearAllAnalytics } from '../video-analytics';
 import { VideoEventType, type AnalyticsEvent } from '../types';
+
+// Consent: granted by default in this suite; the consent-gating tests flip it.
+const mockHasConsent = jest.fn(() => true);
+jest.mock('@/lib/consent/ConsentManager', () => ({ hasConsent: (...args: unknown[]) => mockHasConsent(...(args as [])) }));
 
 // Mock fetch
 global.fetch = jest.fn();
@@ -298,7 +302,7 @@ describe('VideoAnalytics', () => {
   });
 
   describe('LocalStorage Fallback', () => {
-    it('should store events in localStorage on failure', async () => {
+    it('keeps failed events in memory for retry and never writes them to localStorage', async () => {
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
       const analytics = new VideoAnalytics('video-1', undefined, {
@@ -309,36 +313,20 @@ describe('VideoAnalytics', () => {
 
       await analytics.waitForPendingFlushes();
 
-      const stored = localStorageMock.getItem('pendingVideoAnalytics');
-      expect(stored).toBeTruthy();
-
-      const events = JSON.parse(stored!);
-      expect(events).toHaveLength(1);
-      expect(events[0].eventType).toBe(VideoEventType.PLAY);
+      expect(localStorageMock.getItem('pendingVideoAnalytics')).toBeNull();
+      expect(analytics.getQueueLength()).toBe(1);
 
       analytics.destroy();
     });
 
-    it('should append to existing localStorage data', async () => {
-      // Pre-populate localStorage
+    it('purges the legacy pendingVideoAnalytics backup on start', () => {
       localStorageMock.setItem('pendingVideoAnalytics', JSON.stringify([
         { eventType: 'ready', videoId: 'video-0' }
       ]));
 
-      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      const analytics = new VideoAnalytics('video-1');
 
-      const analytics = new VideoAnalytics('video-1', undefined, {
-        batchSize: 1
-      });
-
-      analytics.trackPlay(); // Triggers flush
-
-      await analytics.waitForPendingFlushes();
-
-      const stored = localStorageMock.getItem('pendingVideoAnalytics');
-      const events = JSON.parse(stored!);
-
-      expect(events).toHaveLength(2);
+      expect(localStorageMock.getItem('pendingVideoAnalytics')).toBeNull();
       analytics.destroy();
     });
 
@@ -1109,6 +1097,35 @@ describe('VideoAnalytics', () => {
       expect(qualityEvents[2].data.isUpgrade).toBe(true);
 
       analytics.destroy();
+    });
+  });
+
+  describe('Consent gating (GDPR, Story 1.3)', () => {
+    afterEach(() => mockHasConsent.mockReturnValue(true));
+
+    it('without analytics consent only an anonymous view-count event is queued', () => {
+      mockHasConsent.mockReturnValue(false);
+      const analytics = new VideoAnalytics('video-1', undefined, { batchSize: 100 });
+      analytics.trackReady();
+      analytics.trackPlay();
+      analytics.trackSeek(1, 20);
+      const queue = (analytics as any).eventQueue as AnalyticsEvent[];
+      expect(queue).toHaveLength(1);
+      expect(queue[0]).toEqual({ videoId: 'video-1', eventType: 'ready', timestamp: expect.any(String) });
+      expect(queue[0]).not.toHaveProperty('sessionId');
+      analytics.destroy();
+    });
+
+    it('withdrawing consent strips queued events down to anonymous view counts before sending', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({}) });
+      const analytics = new VideoAnalytics('video-1', undefined, { batchSize: 100 });
+      analytics.trackReady();
+      analytics.trackPlay();
+      mockHasConsent.mockReturnValue(false);
+      analytics.destroy();
+      await analytics.waitForPendingFlushes();
+      const body = JSON.parse((global.fetch as jest.Mock).mock.calls.at(-1)[1].body);
+      expect(body.events).toEqual([{ videoId: 'video-1', eventType: 'ready', timestamp: expect.any(String) }]);
     });
   });
 });

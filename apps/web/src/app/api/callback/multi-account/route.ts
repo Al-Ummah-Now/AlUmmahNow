@@ -11,7 +11,7 @@ import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 // Discriminated union type for clearer type safety
 type ValidationResult =
   | { success: true; user?: User }
-  | { success: false; error: InvalidAccessTokenError };
+  | { success: false; error: Error };
 
 async function validate(code: string | null, url: URL): Promise<ValidationResult> {
   logger.info("[Multi-Account Callback] code:", code);
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
 
   // Get locale from query param, validate it, fallback to default
-  const localeParam = url.searchParams.get("locale");
+  const localeParam = url.searchParams.get("locale") ?? req.cookies.get("auth_locale")?.value ?? null;
   const locale = localeParam && isLocaleSupported(localeParam) ? localeParam : DEFAULT_LOCALE;
 
   const result = await validate(code, url);

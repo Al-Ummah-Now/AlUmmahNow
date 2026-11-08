@@ -4,9 +4,10 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
+import R2Repository from '../../lib/r2Repo';
 
 export class DeleteCommunityPost extends AuthenticatedRoute {
-  static schema = addAuthToSchema({
+  schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Delete a community post',
     request: {
@@ -113,17 +114,13 @@ export class DeleteCommunityPost extends AuthenticatedRoute {
   }
 
   private async removeFromChannelIndex(c: any, channelId: string, postId: string) {
-    const indexKey = `posts/${channelId}/index.json`;
-    const existing = await c.env.community_posts.get(indexKey);
-
-    if (existing) {
-      const index = await existing.json();
-
-      // Remove post ID from index
-      index.postIds = index.postIds.filter(id => id !== postId);
+    type PostIndex = { postIds: string[]; lastUpdated: string };
+    // Conditional write: concurrent creates/deletes must not overwrite each other's index change
+    await new R2Repository<PostIndex>(c.env.community_posts).updateObject(`posts/${channelId}/index.json`, (index) => {
+      if (!index.postIds.includes(postId)) return false;
+      index.postIds = index.postIds.filter((id) => id !== postId);
       index.lastUpdated = new Date().toISOString();
-
-      await c.env.community_posts.put(indexKey, JSON.stringify(index));
-    }
+      return true;
+    });
   }
 }

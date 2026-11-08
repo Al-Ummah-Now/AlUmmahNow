@@ -44,7 +44,7 @@ export function PlaylistsTabContent({ channelId }: PlaylistsTabContentProps) {
   }, [channelId, playlists.length, t]);
 
   return (
-    <div role="tabpanel" id="tabpanel-playlists" aria-labelledby="tab-playlists">
+    <div role="tabpanel" id="tabpanel-playlists" data-testid="tabpanel-playlists" aria-labelledby="tab-playlists">
       {error ? (
         <div className="text-center py-12 text-red-600 dark:text-red-400">
           {error}

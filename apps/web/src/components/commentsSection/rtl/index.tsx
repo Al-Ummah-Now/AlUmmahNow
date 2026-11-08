@@ -1,16 +1,15 @@
 "use client";
 import React from "react";
-import CommentRTL, { CommentProps } from "@/components/comment/rtl";
+import CommentsSection, { CommentsSectionProps } from "@/components/commentsSection";
 
-const CommentsSectionRTL: React.FC<{ comments: CommentProps[] }> = ({ comments }) => {
+/**
+ * RTL comments section. The section itself renders RTL comment items when
+ * the active language is RTL; this wrapper forces the RTL document direction.
+ */
+const CommentsSectionRTL: React.FC<CommentsSectionProps> = (props) => {
   return (
-    <div dir="rtl">
-      <h2 className="text-lg font-bold mb-4">التعليقات</h2>
-      <div className="space-y-4">
-        {comments.map((comment, index) => (
-          <CommentRTL key={index} {...comment} />
-        ))}
-      </div>
+    <div dir="rtl" className="text-right">
+      <CommentsSection {...props} />
     </div>
   );
 };

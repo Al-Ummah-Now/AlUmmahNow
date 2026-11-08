@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
+import { getPlaylistById } from '@/lib/api/playlists';
 
 interface MultiplePlaylistsSectionProps {
   title: string;
@@ -24,11 +25,8 @@ export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylis
     async function fetchPlaylists() {
       try {
         const fetchedPlaylists = await Promise.all(
-          playlistIds.map(async (id) => {
-            const response = await fetch(`/api/playlists/${id}`);
-            const data = await response.json();
-            return data.success ? data.playlist : null;
-          })
+          // Fetch from the videos API (a relative /api/... URL would hit Next.js)
+          playlistIds.map(async (id) => (await getPlaylistById(id)) as Playlist | null)
         );
 
         const validPlaylists = fetchedPlaylists.filter((p): p is Playlist => p !== null);
@@ -89,7 +87,7 @@ export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylis
                       />
                     )}
                     <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
-                      {playlist.videosCount || 0} videos
+                      {playlist.videosCount || 0} {t.playlist.videosLabel}
                     </div>
                   </div>
                   <div className="p-3">

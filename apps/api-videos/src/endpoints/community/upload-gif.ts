@@ -7,6 +7,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateImageMagicBytes, readFileHeader } from '../../lib/security/magic-bytes';
 import { generateUniqueFilename } from '../../lib/security/filename-sanitize';
 import { logger } from '../../lib/logger';
+import { getChannelObject } from './post-comment-helpers';
 
 const MAX_GIF_SIZE = 10 * 1024 * 1024; // 10MB for GIFs
 
@@ -19,7 +20,7 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
     description: 'Upload a single GIF for a community post. Returns URL for uploaded GIF.',
     request: {
       headers: z.object({
-        channelId: Str({ description: "User's selected channel ID" }).optional(),
+        channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
       }),
       body: {
         content: {
@@ -69,8 +70,7 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
       const { channelId } = request.headers;
 
       // Verify channel ownership
-      const channelKey = `${channelId}/channel.json`;
-      const channelData = await c.env.channels.get(channelKey);
+      const channelData = await getChannelObject(c.env.channels, channelId);
 
       if (!channelData) {
         return c.json({ error: 'Channel not found' }, 404);

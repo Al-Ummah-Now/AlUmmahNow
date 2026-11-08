@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import VideoCard from '../../videoCard';
 import { SectionHeader } from '../SectionHeader';
-import { listVideos } from '@/lib/api/videos';
+import { resolveSectionTitle } from '../sectionData';
+import { getChannelVideos } from '@/lib/api/channels';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 
@@ -13,7 +14,7 @@ interface PopularUploadsSectionProps {
   title?: string;
 }
 
-export function PopularUploadsSection({ channelId }: PopularUploadsSectionProps) {
+export function PopularUploadsSection({ channelId, title }: PopularUploadsSectionProps) {
   const { t, locale } = useLanguage();
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,12 +24,9 @@ export function PopularUploadsSection({ channelId }: PopularUploadsSectionProps)
 
     async function fetchVideos() {
       try {
-        const result = await listVideos({
-          channelId,
-          limit: 12,
-          sortBy: 'views',
-          sortOrder: 'desc'
-        });
+        // The channel endpoint filters, sorts and pages by channel in the index;
+        // the generic list scans the whole bucket and can return an empty page
+        const result = await getChannelVideos(channelId, { limit: 12, sort: 'popular' });
 
         logger.info('PopularUploadsSection: API response received', {
           channelId,
@@ -58,8 +56,8 @@ export function PopularUploadsSection({ channelId }: PopularUploadsSectionProps)
   return (
     <section className="space-y-4">
       <SectionHeader
-        title={t.channel.popularUploads}
-        viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}` : undefined}
+        title={resolveSectionTitle(title, t.channel.popularUploads)}
+        viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}?tab=videos` : undefined}
       />
 
       {videos.length === 0 ? (

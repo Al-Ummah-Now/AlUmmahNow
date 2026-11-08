@@ -8,6 +8,7 @@ import {
   deleteSubtitle,
   setDefaultSubtitle,
 } from '@/lib/api/subtitles';
+import { upsertSubtitleTrack } from '@/lib/api/subtitle-utils';
 import type { SubtitleTrack } from '@/lib/api/subtitles-types';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitleUploadModal from './SubtitleUploadModal';
@@ -66,7 +67,8 @@ export default function SubtitleUploadSection({
   }, [loadSubtitles]);
 
   const handleUploadSuccess = (subtitle: SubtitleTrack) => {
-    setSubtitles((prev) => [...prev, subtitle]);
+    // Re-uploading a language replaces its track
+    setSubtitles((prev) => upsertSubtitleTrack(prev, subtitle));
   };
 
   const handleSetDefault = async (language: string) => {
@@ -179,6 +181,8 @@ export default function SubtitleUploadSection({
         </div>
 
         <Button
+          type="button"
+          data-testid="subtitle-add"
           onClick={() => setIsModalOpen(true)}
           disabled={isLoading || existingLanguages.length >= 10}
           className="
@@ -186,8 +190,8 @@ export default function SubtitleUploadSection({
             sm:w-auto
             h-10
             md:h-11
-            bg-blue-500
-            hover:bg-blue-600
+            bg-blue-600
+            hover:bg-blue-700
             text-white
             flex
             items-center
@@ -246,10 +250,12 @@ export default function SubtitleUploadSection({
               'Add subtitle tracks to make your video accessible in multiple languages'}
           </p>
           <Button
+            type="button"
+            data-testid="subtitle-add-first"
             onClick={() => setIsModalOpen(true)}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-4 h-4 me-2" />
             {t.subtitle?.uploadFirstSubtitle || 'Upload First Subtitle'}
           </Button>
         </Card>
@@ -270,6 +276,9 @@ export default function SubtitleUploadSection({
             return (
               <Card
                 key={subtitle.language}
+                data-testid="subtitle-track"
+                data-language={subtitle.language}
+                data-default={subtitle.isDefault ? 'true' : 'false'}
                 className="
                   p-4
                   md:p-5
@@ -349,6 +358,8 @@ export default function SubtitleUploadSection({
                       <Button
                         variant="outline"
                         size="sm"
+                        type="button"
+                        data-testid="subtitle-set-default"
                         onClick={() => handleSetDefault(subtitle.language)}
                         disabled={isProcessing}
                         className="
@@ -367,7 +378,7 @@ export default function SubtitleUploadSection({
                           <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />
                         ) : (
                           <>
-                            <StarOff className="w-3 h-3 md:w-4 md:h-4 mr-1" />
+                            <StarOff className="w-3 h-3 md:w-4 md:h-4 me-1" />
                             {t.subtitle?.setDefault || 'Set Default'}
                           </>
                         )}
@@ -377,6 +388,8 @@ export default function SubtitleUploadSection({
                     <Button
                       variant="outline"
                       size="sm"
+                      type="button"
+                      data-testid="subtitle-delete"
                       onClick={() => setDeleteConfirm(subtitle)}
                       disabled={isProcessing}
                       className="
@@ -463,6 +476,7 @@ export default function SubtitleUploadSection({
               {t.common?.cancel || 'Cancel'}
             </AlertDialogCancel>
             <AlertDialogAction
+              data-testid="subtitle-delete-confirm"
               onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
               className="
                 w-full

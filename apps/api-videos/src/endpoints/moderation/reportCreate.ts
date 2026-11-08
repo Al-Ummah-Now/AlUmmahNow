@@ -16,7 +16,7 @@ export class ReportCreate extends AuthenticatedRoute {
 		description: "🔒 **Authentication Required**: This endpoint requires a valid JWT token. Report inappropriate content, spam, harassment, or other violations.",
 		request: {
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }).optional(),
+				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
 			body: {
 				content: {
@@ -131,6 +131,9 @@ export class ReportCreate extends AuthenticatedRoute {
 				entityId: report.entityId,
 				reporterId: userId,
 				reason: report.reason,
+				// The processor persists this to D1; omitting it left every
+				// report in the admin queue without the reporter's description.
+				description: report.description,
 				timestamp: new Date().toISOString(),
 			});
 

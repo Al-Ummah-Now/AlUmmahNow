@@ -1,11 +1,16 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getChannelById, updateChannel, updateChannelAvatar, updateChannelCover } from '@/lib/api/channels';
+import { getChannelById } from '@/lib/api/channels';
+import { uploadFileDirect } from '@/lib/api/direct-upload';
+import ImageCropDialog from '@/components/ImageCropDialog';
+import { updateChannelProfile } from '@/lib/api/channel-profile';
+import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
+import { channelPath } from '@/lib/channel-url';
 import { useAuth } from '@/components/AuthProvider/authContext';
-import { useProfile } from '@/hooks/useProfile';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useLanguage } from '@/hooks/useLanguage';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
@@ -18,22 +23,30 @@ interface ChannelData {
   descriptionLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
+  handle?: string;
+  links?: Array<{ title: string; url: string }>;
+  contactEmail?: string;
+  location?: string;
 }
 
 function ChannelEditPage() {
   const { t } = useLanguage();
-  const router = useRouter();
   const params = useParams();
   const locale = params.locale as string;
   const channelId = params.id as string;
 
   const { user } = useAuth();
-  const { profile } = useProfile(user);
+  // Session channels feed the navigation avatar; refresh them after changes
+  const { reloadChannels } = useMultiAccount();
   const [channel, setChannel] = useState<ChannelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Picked image waiting to be positioned/zoomed before upload
+  const [cropping, setCropping] = useState<{ type: 'avatar' | 'cover'; file: File } | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
+  const [about, setAbout] = useState<ChannelAboutValues>({ handle: '', links: [], contactEmail: '', location: '' });
+  const [handleStatus, setHandleStatus] = useState<HandleStatus>({ state: 'idle' });
   const [formData, setFormData] = useState({
     name: '',
     nameEn: '',
@@ -45,15 +58,20 @@ function ChannelEditPage() {
     coverUrl: '',
   });
 
+  // The form is filled once per channel: later profile/session refreshes must not
+  // overwrite what the owner is typing
+  const initializedFor = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!channelId) return;
+    if (!channelId || initializedFor.current === channelId) return;
 
     const fetchChannel = async () => {
       setIsLoading(true);
       try {
         const channelData = await getChannelById(channelId);
 
-        if (channelData) {
+        if (channelData && initializedFor.current !== channelId) {
+          initializedFor.current = channelId;
           setChannel(channelData);
           setFormData({
             name: channelData.name || '',
@@ -65,6 +83,12 @@ function ChannelEditPage() {
             avatarUrl: channelData.avatarUrl || '',
             coverUrl: channelData.coverUrl || '',
           });
+          setAbout({
+            handle: channelData.handle || '',
+            links: channelData.links || [],
+            contactEmail: channelData.contactEmail || '',
+            location: channelData.location || '',
+          });
         }
       } catch (error) {
         logger.error('Error fetching channel', { error, channelId });
@@ -75,7 +99,10 @@ function ChannelEditPage() {
     };
 
     fetchChannel();
-  }, [channelId, user?.id, profile, t]);
+    // Load once per channel: re-running when the session or translations load would
+    // overwrite what the owner has already typed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,31 +111,47 @@ function ChannelEditPage() {
     setIsSaving(true);
     setError(null);
 
-    try {
-      const userChannelId = profile?.channels?.[0] || channelId;
-      await updateChannel(
-        channelId,
-        {
-          name: formData.nameEn || formData.name, // Legacy field (English)
-          nameLocalized: {
-            en: formData.nameEn,
-            ar: formData.nameAr
-          },
-          description: formData.descriptionEn || formData.description,
-          descriptionLocalized: {
-            en: formData.descriptionEn || '',
-            ar: formData.descriptionAr || ''
-          },
-          avatarUrl: formData.avatarUrl,
-          coverUrl: formData.coverUrl
-        },
-        { channelId: userChannelId }
-      );
+    if (!canSubmitAboutFields(about, handleStatus)) {
+      setIsSaving(false);
+      return;
+    }
 
-      router.push(`/${locale}/channels/${channelId}`);
+    try {
+      const result = await updateChannelProfile(channelId, {
+        name: formData.nameEn || formData.name, // Legacy field (English)
+        nameLocalized: {
+          en: formData.nameEn,
+          ar: formData.nameAr
+        },
+        description: formData.descriptionEn || formData.description,
+        descriptionLocalized: {
+          en: formData.descriptionEn || '',
+          ar: formData.descriptionAr || ''
+        },
+        // Only send the handle when it changed (an empty field keeps the current one)
+        ...(about.handle.trim() && about.handle.trim().replace(/^@+/, '') !== (channel?.handle || '') ? { handle: about.handle.trim() } : {}),
+        links: about.links.filter((l) => l.title.trim() || l.url.trim()).map((l) => ({ title: l.title.trim(), url: l.url.trim() })),
+        contactEmail: about.contactEmail.trim(),
+        location: about.location.trim(),
+      });
+
+      if (result.ok === false) {
+        logger.warn('Channel update rejected', { channelId, status: result.status, error: result.error, reason: result.reason });
+        if (result.reason) setHandleStatus({ state: 'unavailable', reason: result.reason });
+        setError(result.reason === 'taken' ? t.channel.handleTaken : t.channel.saveFailed);
+        setIsSaving(false);
+        return;
+      }
+
+      await reloadChannels();
+      // A full page load rather than router.push: the session refresh above
+      // queues more Server Actions (navigation profile reloads), and the App
+      // Router can apply one that resolves after a client-side push on top of
+      // the old route, which put the owner back on this form.
+      window.location.assign(channelPath(locale, { id: channelId, handle: result.channel.handle }));
     } catch (error) {
       logger.error('Error updating channel', { error, channelId });
-      setError(t.errors.genericError);
+      setError(t.channel.saveFailed);
       setIsSaving(false);
     }
   };
@@ -129,14 +172,12 @@ function ChannelEditPage() {
         setFormData({ ...formData, coverUrl: previewUrl });
       }
 
-      // Upload to server via Server Action (10MB limit configured in next.config.ts)
-      const userChannelId = profile?.channels?.[0] || channelId;
-      const uploadFn = type === 'avatar' ? updateChannelAvatar : updateChannelCover;
-
-      const updatedChannel = await uploadFn(
-        channelId,
+      // Upload straight from the browser to the API. Not via a Server Action:
+      // Cloudflare's WAF rule for CVE-2025-55183 blocks some image bodies (403).
+      const updatedChannel = await uploadFileDirect<ChannelData>(
+        `/api/channels/${channelId}/${type === 'avatar' ? 'avatar' : 'cover'}`,
         file,
-        { channelId: userChannelId }
+        { channelId }
       );
 
       if (updatedChannel) {
@@ -149,6 +190,7 @@ function ChannelEditPage() {
 
         // Update channel state
         setChannel(updatedChannel);
+        void reloadChannels();
       } else {
         throw new Error(t.errors.uploadFailed || 'Upload failed');
       }
@@ -235,7 +277,9 @@ function ChannelEditPage() {
             accept="image/*"
             className="hidden"
             onChange={(e) => {
-              if (e.target.files?.[0]) handlePhotoUpdate('cover', e.target.files[0]);
+              const picked = e.target.files?.[0];
+              e.target.value = '';
+              if (picked) setCropping({ type: 'cover', file: picked });
             }}
           />
           {/* Avatar Preview */}
@@ -277,11 +321,24 @@ function ChannelEditPage() {
               accept="image/*"
               className="hidden"
               onChange={(e) => {
-                if (e.target.files?.[0]) handlePhotoUpdate('avatar', e.target.files[0]);
+                const picked = e.target.files?.[0];
+              e.target.value = '';
+              if (picked) setCropping({ type: 'avatar', file: picked });
               }}
             />
           </div>
         </div>
+
+        <ImageCropDialog
+          file={cropping?.file ?? null}
+          kind={cropping?.type ?? 'avatar'}
+          onCancel={() => setCropping(null)}
+          onApply={(cropped) => {
+            const type = cropping?.type;
+            setCropping(null);
+            if (type) void handlePhotoUpdate(type, cropped);
+          }}
+        />
 
         {/* Channel Info & Edit Form */}
         <div className="pt-16 pb-5 px-5 bg-white dark:bg-gray-800">
@@ -343,7 +400,7 @@ function ChannelEditPage() {
 
             {/* Channel Name */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor={`channel-name-${activeTab}`} className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 {t.channel.channelName} {activeTab === 'en' && <span className="text-red-500">*</span>}
               </label>
               {activeTab === 'en' && (
@@ -355,6 +412,7 @@ function ChannelEditPage() {
                   maxLength={100}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder={t.channel.channelNameEnglish}
+                  id="channel-name-en"
                 />
               )}
               {activeTab === 'ar' && (
@@ -365,6 +423,7 @@ function ChannelEditPage() {
                   maxLength={100}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder={t.channel.channelNameArabic}
+                  id="channel-name-ar"
                   dir="rtl"
                 />
               )}
@@ -372,7 +431,7 @@ function ChannelEditPage() {
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor={`channel-description-${activeTab}`} className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 {t.channel.channelDescription}
               </label>
               {activeTab === 'en' && (
@@ -384,6 +443,7 @@ function ChannelEditPage() {
                     maxLength={500}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder={t.channel.channelDescriptionEnglish}
+                    id="channel-description-en"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                     {formData.descriptionEn.length}/500 {t.channel.charactersRemaining}
@@ -399,6 +459,7 @@ function ChannelEditPage() {
                     maxLength={500}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder={t.channel.channelDescriptionArabic}
+                    id="channel-description-ar"
                     dir="rtl"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -408,11 +469,22 @@ function ChannelEditPage() {
               )}
             </div>
 
+            {/* Handle, links, contact, location (Story 29.1) */}
+            <ChannelAboutFields
+              channelId={channelId}
+              currentHandle={channel.handle}
+              value={about}
+              onChange={setAbout}
+              onHandleStatusChange={setHandleStatus}
+              disabled={isSaving}
+            />
+
             {/* Buttons */}
             <div className="flex gap-4 pt-4">
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSaving || !canSubmitAboutFields(about, handleStatus)}
+                data-testid="channel-edit-save"
                 className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-semibold transition-colors"
               >
                 {isSaving ? (

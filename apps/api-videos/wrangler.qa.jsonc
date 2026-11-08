@@ -4,6 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-04-12",
   "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
   "observability": {
     "enabled": true
   },
@@ -63,6 +66,25 @@
     {
       "binding": "global_settings",
       "bucket_name": "global-settings-qa"
+    },
+    {
+      "binding": "analytics_rollups",
+      "bucket_name": "al-ummah-now-messages-qa"
+    }
+  ],
+  "d1_databases": [
+    {
+      // Notification center + library indexes (Epic 29); migrations live in apps/processor
+      "binding": "NOTIFICATIONS_DB",
+      "database_name": "al-ummah-now-notifications-qa",
+      "database_id": "61a2966a-66c2-4ae2-a98f-6e2e8cf6b880"
+    },
+    {
+      // Search index (Epic 29, Story 29.9). Schema: migrations/search
+      "binding": "SEARCH_DB",
+      "database_name": "al-ummah-now-search-qa",
+      "database_id": "0282bac3-5b70-4343-a991-937c732d981a",
+      "migrations_dir": "migrations/search"
     }
   ],
   "kv_namespaces": [
@@ -104,14 +126,22 @@
       "binding": "INTERNAL_API_KEY",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
       "secret_name": "internal-api-key-qa"
+    },
+    {
+      // Bunny Stream CDN token authentication key (signs video URLs)
+      "binding": "BUNNY_TOKEN_KEY",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "bunny-stream-token-key-qa"
     }
   ],
   "vars": {
     "ZONE": "al-ummah-now-images",
     "ClientId": "c1770235-e4b6-42f3-9eb4-3c03ca111b02",
     "Issuer": "https://auth.qa.alummahnow.net",
-    "Audience": "https://videos.qa.alummahnow.net",
+    "Audience": "https://videos.api.qa.alummahnow.net",
     "bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
+    // Flip to "true" together with enabling CDN token authentication on the library
+    "BUNNY_SIGN_URLS": "true",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
     "CORS_ORIGINS": "https://videos.qa.alummahnow.net,https://admin.qa.alummahnow.net"
   },

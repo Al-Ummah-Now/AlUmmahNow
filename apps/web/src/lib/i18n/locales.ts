@@ -57,6 +57,12 @@ export const LOCALES: LocaleConfig[] = [
 export const DEFAULT_LOCALE = 'en';
 
 /**
+ * Request header set by the middleware for locale routes so server
+ * components outside [locale] (the root layout) know the active locale.
+ */
+export const LOCALE_REQUEST_HEADER = 'x-locale';
+
+/**
  * Supported locale type (for TypeScript)
  */
 export type SupportedLocale = 'en' | 'ar'; // Update this when adding new supported locales

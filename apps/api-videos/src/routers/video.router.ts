@@ -11,6 +11,7 @@ import { VideosList } from '../endpoints/video/videoList';
 import { VideoSearch } from '../endpoints/video/videoSearch';
 import { VideoView } from '../endpoints/video/videoView';
 import { VideoUploadStatus } from '../endpoints/video/videoUploadStatus';
+import { VideoThumbnailUpload } from '../endpoints/video/videoThumbnailUpload';
 
 // Video upload endpoints
 import { VideoUpload } from '../endpoints/video/videoUpload';
@@ -29,6 +30,7 @@ import { SubtitlesUpload } from '../endpoints/video/subtitlesUpload';
 import { SubtitlesList } from '../endpoints/video/subtitlesList';
 import { SubtitlesGet } from '../endpoints/video/subtitlesGet';
 import { SubtitlesDelete } from '../endpoints/video/subtitlesDelete';
+import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
 
 // Video scheduling endpoints
 import { VideoScheduleCreate } from '../endpoints/video/scheduleCreate';
@@ -42,6 +44,9 @@ import { VideoSchedulePublishNow } from '../endpoints/video/schedulePublishNow';
 import { CommentCreate } from '../endpoints/video/commentCreate';
 import { CommentUpdate } from '../endpoints/video/commentUpdate';
 import { CommentDelete } from '../endpoints/video/commentDelete';
+import { CommentList } from '../endpoints/video/commentList';
+import { CommentRepliesList } from '../endpoints/video/commentRepliesList';
+import { CommentApprove } from '../endpoints/video/commentApprove';
 
 // Video like/dislike endpoints
 import { LikeCreate } from '../endpoints/video/videoLikeCreate';
@@ -49,8 +54,11 @@ import { LikeDelete } from '../endpoints/video/videoLikeDelete';
 import { DislikeCreate } from '../endpoints/video/videoDislikeCreate';
 import { DislikeDelete } from '../endpoints/video/videoDislikeDelete';
 
-// Comment like/dislike endpoints (re-using video like/dislike classes with different paths)
-// Note: Comment likes/dislikes are handled by the same endpoint classes but with comment-specific paths
+// Comment like/dislike endpoints
+import { CommentLikeCreate } from '../endpoints/video/commentLikeCreate';
+import { CommentLikeDelete } from '../endpoints/video/commentLikeDelete';
+import { CommentDislikeCreate } from '../endpoints/video/commentDislikeCreate';
+import { CommentDislikeDelete } from '../endpoints/video/commentDislikeDelete';
 
 const app = new Hono();
 
@@ -86,6 +94,9 @@ videoRouter.post('/bulk-delete', VideoBulkDelete);
 
 // Get video upload status (authenticated)
 videoRouter.get('/:id/upload-status', VideoUploadStatus);
+
+// Upload custom thumbnail (authenticated, owner only)
+videoRouter.post('/:id/thumbnail', VideoThumbnailUpload);
 
 // ==========================================
 // VIDEO UPLOAD OPERATIONS
@@ -132,6 +143,9 @@ videoRouter.get('/:videoId/subtitles/:language', SubtitlesGet);
 // Upload subtitle track (authenticated)
 videoRouter.post('/:videoId/subtitles', SubtitlesUpload);
 
+// Set default subtitle track (authenticated, owner only)
+videoRouter.put('/:videoId/subtitles/:language/default', SubtitlesSetDefault);
+
 // Delete subtitle track (authenticated)
 videoRouter.delete('/:videoId/subtitles/:language', SubtitlesDelete);
 
@@ -174,8 +188,17 @@ videoRouter.delete('/:id/dislikes', DislikeDelete);
 // VIDEO COMMENTS
 // ==========================================
 
-// Create comment (authenticated)
+// List comments (public; reaction flags when authenticated)
+videoRouter.get('/:id/comments', CommentList);
+
+// Create comment or reply (authenticated; parentCommentId for replies)
 videoRouter.post('/:id/comments', CommentCreate);
+
+// List replies of a comment (public; one level deep)
+videoRouter.get('/:id/comments/:cid/replies', CommentRepliesList);
+
+// Approve a held comment (video owner)
+videoRouter.post('/:id/comments/:cid/approve', CommentApprove);
 
 // Update comment (authenticated)
 videoRouter.put('/:id/comments/:cid', CommentUpdate);
@@ -184,16 +207,16 @@ videoRouter.put('/:id/comments/:cid', CommentUpdate);
 videoRouter.delete('/:id/comments/:cid', CommentDelete);
 
 // Like comment (authenticated)
-videoRouter.post('/:id/comments/:cid/likes', LikeCreate);
+videoRouter.post('/:id/comments/:cid/likes', CommentLikeCreate);
 
 // Remove like from comment (authenticated)
-videoRouter.delete('/:id/comments/:cid/likes', LikeDelete);
+videoRouter.delete('/:id/comments/:cid/likes', CommentLikeDelete);
 
 // Dislike comment (authenticated)
-videoRouter.post('/:id/comments/:cid/dislikes', DislikeCreate);
+videoRouter.post('/:id/comments/:cid/dislikes', CommentDislikeCreate);
 
 // Remove dislike from comment (authenticated)
-videoRouter.delete('/:id/comments/:cid/dislikes', DislikeDelete);
+videoRouter.delete('/:id/comments/:cid/dislikes', CommentDislikeDelete);
 
 // ==========================================
 // VIDEO ANALYTICS

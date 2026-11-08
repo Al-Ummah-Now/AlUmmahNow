@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger-client';
+import { hasConsent } from '@/lib/consent/ConsentManager';
 interface PerformanceMetrics {
   timeToFirstFrame: number;
   rebufferCount: number;
@@ -255,6 +256,8 @@ export class VideoPerformanceMonitor {
   }
 
   public async sendMetrics(): Promise<void> {
+    // GDPR (Story 1.3): player QoS beacons require 'performance' consent.
+    if (!hasConsent('performance')) return;
     try {
       const metricsToSend = this.prepareMetricsForSending();
 

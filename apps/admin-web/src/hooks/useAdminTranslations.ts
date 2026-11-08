@@ -131,7 +131,9 @@ export function useAdminTranslations(locale: SupportedLanguage) {
       mode?: 'merge' | 'replace'
     ) => updateMutation.mutateAsync({ locale, translations, mode }),
 
-    refetch: translationsQuery.refetch,
+    // isError covers both queries, so Retry must refetch both; refetching only
+    // the translations left the editor stuck on the error state.
+    refetch: () => Promise.all([translationsQuery.refetch(), metadataQuery.refetch()]),
   };
 }
 

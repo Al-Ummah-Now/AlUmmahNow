@@ -88,7 +88,7 @@ export default function LiveErrorAR({ error, reset }: ErrorPageProps) {
         {/* Error details in development */}
         {process.env.NODE_ENV === 'development' && error.message && (
           <details className="mt-4 text-right">
-            <summary className="cursor-pointer text-sm text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+            <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
               تفاصيل الخطأ
             </summary>
             <pre
@@ -107,7 +107,7 @@ export default function LiveErrorAR({ error, reset }: ErrorPageProps) {
         {/* Try Again Button */}
         <button
           onClick={reset}
-          className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+          className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
           aria-label="حاول تحميل الصفحة مرة أخرى"
         >
           حاول مرة أخرى
@@ -124,7 +124,7 @@ export default function LiveErrorAR({ error, reset }: ErrorPageProps) {
       </div>
 
       {/* Additional Help Text */}
-      <p className="mt-8 text-sm text-gray-500 dark:text-gray-500 text-center transition-colors">
+      <p className="mt-8 text-sm text-gray-600 dark:text-gray-400 text-center transition-colors">
         إذا استمرت المشكلة، يرجى{' '}
         <Link
           href="/ar"

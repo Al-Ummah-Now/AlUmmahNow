@@ -578,8 +578,14 @@ export function createTusRouter(): Hono {
     return proxy.handlePost(c);
   });
 
-  // HEAD - Get upload offset
-  router.on('HEAD', '/:uploadId', async (c) => {
+  // HEAD - Get upload offset.
+  // Hono dispatches HEAD requests to GET routes (and drops the body), so a
+  // route registered with router.on('HEAD') is never matched; without this
+  // every resume check returned 404 and tus restarted uploads from byte 0.
+  router.get('/:uploadId', async (c) => {
+    if (c.req.method !== 'HEAD') {
+      return new Response(null, { status: 405, headers: { Allow: 'POST, HEAD, PATCH, DELETE, OPTIONS' } });
+    }
     const authContext = getAuthContext(c);
     const uploadId = c.req.param('uploadId');
     const proxy = new TusProxy(c.env, authContext);

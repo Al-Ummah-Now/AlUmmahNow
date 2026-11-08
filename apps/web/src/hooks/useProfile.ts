@@ -4,18 +4,21 @@ import { fetchProfile } from '@/lib/api/profiles-client';
 import { logger } from '@/lib/logger-client';
 
 
-export const useProfile = (user: User | null) => {
-  const [profile, setProfile] = useState<Profile | null>(null);
+export const useProfile = (user: User | null, initialProfile?: Profile | null) => {
+  // A profile loaded on the server is used as-is; no client fetch for that user
+  const [profile, setProfile] = useState<Profile | null>(initialProfile ?? null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Track the last user we fetched for to prevent duplicates
-  const lastFetchedUserId = useRef<string | null>(null);
+  const lastFetchedUserId = useRef<string | null>(initialProfile?.id ?? null);
   const isFetching = useRef<boolean>(false);
 
   useEffect(() => {
     // Clear state if no user
     if (!user || !user.id) {
+      // Signed-in user not known yet on first render: keep a server-loaded profile
+      if (initialProfile) return;
       setProfile(null);
       setError(null);
       setIsLoading(false);
@@ -70,7 +73,7 @@ export const useProfile = (user: User | null) => {
       isFetching.current = false;
     });
 
-  }, [user]);
+  }, [user, initialProfile]);
 
   return { profile, isLoading, error };
 };

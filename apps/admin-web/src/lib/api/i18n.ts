@@ -193,7 +193,10 @@ export async function updateTranslations(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.accessToken}`,
       },
-      body: JSON.stringify({ translations, mode }),
+      // admin-api's contract is a boolean `merge` flag (default true); a
+      // `mode` field is ignored, so 'replace' used to silently merge.
+      body: JSON.stringify({ translations, merge: mode === 'merge' }),
+      cache: 'no-store',
     });
 
     logger.info(`[i18n] Update response`, {
