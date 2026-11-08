@@ -561,6 +561,9 @@ export default function CustomVideoPlayer({
           const currentTime = player.currentTime();
           const duration = player.duration();
 
+          // #235: real watch time (seeks/pauses break the run inside)
+          if (!player.paused()) analyticsRef.current?.trackPlayback(currentTime);
+
           // Skip if duration not available yet
           if (!duration || isNaN(duration) || duration === 0) {
             return;

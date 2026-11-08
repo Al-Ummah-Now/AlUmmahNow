@@ -90,6 +90,10 @@
       "migrations_dir": "migrations/search"
     }
   ],
+  // Watch-time reports per playback session (#235); videoWatchTime.ts
+  "ratelimits": [
+    { "name": "WATCH_TIME_LIMITER", "namespace_id": "2203", "simple": { "limit": 6, "period": 60 } }
+  ],
   "kv_namespaces": [
     {
       "binding": "RATE_LIMIT_KV",

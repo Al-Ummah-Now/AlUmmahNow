@@ -205,6 +205,23 @@ describe('MessageProcessor', () => {
       expect(result.success).toBe(true);
     });
 
+    it('consumes VideoWatchTime and adds the seconds to the video rollup (#235)', async () => {
+      const message: AlUmmahMessage = {
+        id: 'wt-1',
+        type: MessageType.VideoWatchTime,
+        timestamp: Date.now(),
+        payload: { videoId: 'v1', videoChannelId: null, seconds: 20, sessionId: 's-12345678', timestamp: '2026-11-08T10:00:00.000Z' },
+      } as AlUmmahMessage;
+      (mockEnv.MESSAGES_BUCKET as unknown as { get: jest.Mock }).get = jest.fn(async () => null);
+      const result = await processor.processMessage(message, mockEnv);
+      expect(result.success).toBe(true);
+      expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
+        'analytics/rollups/video/v1/2026-11.json',
+        expect.stringContaining('"watchTime":20'),
+        expect.anything()
+      );
+    });
+
     it('rejects the legacy { type: "WatchHistory", data } shape (why history events never landed)', async () => {
       const legacy = { type: 'WatchHistory', data: { type: 'watch_started', userId: 'u1', videoId: 'v1' } } as unknown as AlUmmahMessage;
       const result = await processor.processMessage(legacy, mockEnv);

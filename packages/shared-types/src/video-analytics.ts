@@ -35,6 +35,9 @@ export enum VideoEventType {
   QUARTILE_25 = 'quartile_25',
   QUARTILE_50 = 'quartile_50',
   QUARTILE_75 = 'quartile_75',
+
+  // #235: played seconds since the previous report (data: { seconds })
+  WATCH_TIME = 'watch_time',
 }
 
 /**

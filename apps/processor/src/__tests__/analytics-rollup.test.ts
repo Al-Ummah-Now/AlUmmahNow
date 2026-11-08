@@ -1,4 +1,4 @@
-import { applyView, recordViewRollup, rollupKey, toUtcDay, MonthlyRollup } from '../lib/analytics-rollup';
+import { applyView, applyWatchTime, recordViewRollup, recordWatchTimeRollup, rollupKey, toUtcDay, MonthlyRollup } from '../lib/analytics-rollup';
 import type { R2Bucket } from '../types';
 
 function memoryBucket(): R2Bucket & { store: Map<string, string> } {
@@ -97,5 +97,40 @@ describe('analytics rollups', () => {
     const putOnly = { put: jest.fn() } as unknown as R2Bucket;
     expect(await recordViewRollup(putOnly, { videoId: 'v1', videoChannelId: 'c1' }, Date.now())).toBe(false);
     expect(putOnly.put).not.toHaveBeenCalled();
+  });
+});
+
+describe('watch-time rollups (#235)', () => {
+  it('adds played seconds without counting a view, capped at 60 per report', () => {
+    let doc: MonthlyRollup | null = applyView(null, 'video', 'v1', '2026-11-06', 0);
+    doc = applyWatchTime(doc, 'video', 'v1', '2026-11-06', 30);
+    doc = applyWatchTime(doc, 'video', 'v1', '2026-11-06', 12.345);
+    doc = applyWatchTime(doc, 'video', 'v1', '2026-11-06', 500);
+    doc = applyWatchTime(doc, 'video', 'v1', '2026-11-06', -3);
+    expect(doc.days['2026-11-06']).toEqual({ views: 1, watchTime: 102.35 });
+  });
+
+  it('writes the video and channel rollups for a report', async () => {
+    const bucket = memoryBucket();
+    const ok = await recordWatchTimeRollup(bucket, { videoId: 'v1', videoChannelId: 'c1', seconds: 25, timestamp: '2026-11-06T10:00:00.000Z' }, Date.now());
+    expect(ok).toBe(true);
+    const video = JSON.parse(bucket.store.get('analytics/rollups/video/v1/2026-11.json')!) as MonthlyRollup;
+    const channel = JSON.parse(bucket.store.get('analytics/rollups/channel/c1/2026-11.json')!) as MonthlyRollup;
+    expect(video.days['2026-11-06']).toEqual({ views: 0, watchTime: 25 });
+    expect(channel.days['2026-11-06']).toEqual({ views: 0, watchTime: 25 });
+  });
+
+  it('writes only the video rollup for legacy videos without a channel', async () => {
+    const bucket = memoryBucket();
+    expect(await recordWatchTimeRollup(bucket, { videoId: 'v1', videoChannelId: null, seconds: 5, timestamp: '2026-11-06T10:00:00.000Z' }, Date.now())).toBe(true);
+    expect([...bucket.store.keys()]).toEqual(['analytics/rollups/video/v1/2026-11.json']);
+  });
+
+  it('ignores invalid reports', async () => {
+    const bucket = memoryBucket();
+    expect(await recordWatchTimeRollup(bucket, { videoId: 'v1', seconds: 0 }, Date.now())).toBe(false);
+    expect(await recordWatchTimeRollup(bucket, { videoId: 'v1', seconds: 'x' }, Date.now())).toBe(false);
+    expect(await recordWatchTimeRollup(bucket, { seconds: 5 }, Date.now())).toBe(false);
+    expect(bucket.store.size).toBe(0);
   });
 });

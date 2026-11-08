@@ -110,7 +110,7 @@ Daily views and watch time come from the rollups. Likes, comments and subscriber
 | Lifetime views, likes, comments per video and channel | Supported |
 | Daily views per video and channel | Supported from this fix on. Before it, empty for legacy videos and on prod overall. |
 | Daily likes, comments, new subscribers | Supported. Gross gains only, no unsubscribes. |
-| Watch time, average view duration | **0 everywhere.** The web route forwards `watchTime: 0`. |
+| Watch time, average view duration | Supported from #235 on: the player accumulates played (wall-clock) seconds, reports them as `watch_time` analytics events (with analytics consent only), and the web route forwards them to `POST /api/videos/:id/watch-time` (≤ 60 s per report, 6 reports/min per session and video via the `WATCH_TIME_LIMITER` binding). `MessageType.VideoWatchTime` (220) adds them to the rollups without counting a view. Data before the deploy stays 0. |
 | Retention curve, quartiles | Missing. The player tracks them, but the Next route drops everything except `ready`. |
 | Traffic sources, devices, geography | Missing. Hardcoded `direct`/`desktop`. |
 | Logged-in vs anonymous, unique viewers | Missing. The view call carries no identity. |
