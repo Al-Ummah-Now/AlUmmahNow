@@ -82,6 +82,7 @@ export async function completeAddAccount(code: string): Promise<void> {
       {
         accessToken: exchanged.tokens.access,
         refreshToken: exchanged.tokens.refresh,
+        expiresIn: exchanged.tokens.expiresIn,
       },
       {
         id: userInfo.id,

@@ -13,15 +13,25 @@ interface TokenInfo {
   accessToken: string | null;
   channelId: string | null;
   userId?: string;
+  /** When accessToken expires (epoch ms), when the server knows */
+  expiresAt?: number | null;
 }
 
 const TTL_MS = 60_000;
+/** Stop using a cached token this long before it expires (the server refreshes it). */
+const EXPIRY_MARGIN_MS = 90_000;
+
+function isFresh(entry: { info: TokenInfo; at: number }, now: number): boolean {
+  if (now - entry.at >= TTL_MS) return false;
+  const expiresAt = entry.info.expiresAt;
+  return typeof expiresAt !== 'number' || expiresAt - now > EXPIRY_MARGIN_MS;
+}
 let cached: { info: TokenInfo; at: number } | null = null;
 let inflight: Promise<TokenInfo> | null = null;
 
 export async function fetchClientAuthInfo(force = false): Promise<TokenInfo> {
   if (typeof window === 'undefined') return { accessToken: null, channelId: null };
-  if (!force && cached && Date.now() - cached.at < TTL_MS) return cached.info;
+  if (!force && cached && isFresh(cached, Date.now())) return cached.info;
   if (inflight) return inflight;
   inflight = (async () => {
     try {

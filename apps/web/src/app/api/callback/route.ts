@@ -54,6 +54,7 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
           {
             accessToken: exchanged.tokens.access,
             refreshToken: exchanged.tokens.refresh,
+            expiresIn: exchanged.tokens.expiresIn,
           },
           {
             id: user.id,

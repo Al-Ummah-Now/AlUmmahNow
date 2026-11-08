@@ -32,6 +32,18 @@ describe('client-token', () => {
     expect(getClientAuthToken()).toBe('tok');
   });
 
+  it('does not reuse a cached token that is about to expire', async () => {
+    const f = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ accessToken: 'old', channelId: null, expiresAt: Date.now() + 30_000 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ accessToken: 'new', channelId: null, expiresAt: Date.now() + 15 * 60_000 }) });
+    global.fetch = f as unknown as typeof fetch;
+
+    expect(await fetchClientAuthToken()).toBe('old');
+    expect(await fetchClientAuthToken()).toBe('new');
+    expect(await fetchClientAuthToken()).toBe('new');
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
   it('returns null when not authenticated', async () => {
     global.fetch = mockFetch(401, { accessToken: null }) as unknown as typeof fetch;
     expect(await fetchClientAuthToken()).toBeNull();

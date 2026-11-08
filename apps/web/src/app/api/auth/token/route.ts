@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SessionManager } from "@/lib/auth/session-manager";
+import { accessTokenExpiresAt } from "@/lib/auth/token-refresh";
 
 /**
  * Same-origin endpoint that hands the active account's access token to
@@ -16,7 +17,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const session = await SessionManager.getActiveSession();
+  // The middleware does not run for /api routes: refresh here, so the
+  // browser (TUS uploads, direct API calls) never gets a token about to expire
+  const session = await SessionManager.ensureFreshActiveSession();
   if (!session?.accessToken) {
     return NextResponse.json({ accessToken: null, channelId: null }, {
       status: 401,
@@ -25,7 +28,12 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { accessToken: session.accessToken, channelId: session.channelId ?? null, userId: session.userId },
+    {
+      accessToken: session.accessToken,
+      channelId: session.channelId ?? null,
+      userId: session.userId,
+      expiresAt: session.expiresAt ?? accessTokenExpiresAt(session.accessToken),
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

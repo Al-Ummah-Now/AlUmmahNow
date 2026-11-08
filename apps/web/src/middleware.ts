@@ -10,6 +10,7 @@
  * - Bunny CDN media source allowance
  * - WebSocket secure connection support
  * - Development vs production configuration
+ * - Access-token refresh ahead of expiry (see lib/auth/middleware-refresh.ts)
  */
 
 import { NextResponse } from 'next/server';
@@ -32,6 +33,8 @@ import { EMBED_REQUEST_HEADER, isEmbedPath, isOEmbedPath } from '@/lib/embed/rou
 import { parseEmbedLang } from '@/lib/embed/params';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { handleRewritePath } from '@/lib/channel-url';
+import { refreshSessionCookie } from '@/lib/auth/middleware-refresh';
+import { SESSION_COOKIE_NAME, sessionCookieOptions } from '@/lib/auth/session-cookie';
 
 /**
  * Build the CSP for this request. In production a fresh nonce is generated per
@@ -96,9 +99,24 @@ function getLanguagePreferenceFromCookie(request: NextRequest): string | null {
 }
 
 /**
- * Middleware function to handle locale validation and security headers
+ * Refreshes the session's access token when it is about to expire, then routes
+ * the request. The rotated cookie goes on the forwarded request (inside
+ * refreshSessionCookie, before routeRequest copies the request headers) so this
+ * render uses the new token, and on the response so the browser keeps it.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  const refreshedSession = await refreshSessionCookie(request);
+  const response = routeRequest(request);
+  if (refreshedSession) {
+    response.cookies.set(SESSION_COOKIE_NAME, refreshedSession, sessionCookieOptions());
+  }
+  return response;
+}
+
+/**
+ * Locale validation and security headers
+ */
+function routeRequest(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
   // Determine environment

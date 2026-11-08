@@ -52,8 +52,8 @@ describe('middleware', () => {
   const request = (path: string, headers: Record<string, string> = {}) =>
     new NextRequest(new URL(`https://${HOST}${path}`), { headers });
 
-  it('serves embed frames frameable by any origin, with the ?lang= locale', () => {
-    const response = middleware(request('/embed/v/abc?lang=ar'));
+  it('serves embed frames frameable by any origin, with the ?lang= locale', async () => {
+    const response = await middleware(request('/embed/v/abc?lang=ar'));
     expect(response.status).toBe(200);
     expect(frameAncestors(response.headers.get('Content-Security-Policy'))).toBe('frame-ancestors *');
     expect(response.headers.get('X-Frame-Options')).toBeNull();
@@ -62,21 +62,21 @@ describe('middleware', () => {
     expect(response.headers.get(`x-middleware-request-${EMBED_REQUEST_HEADER}`)).toBe('1');
   });
 
-  it('keeps app pages non-frameable and strips a client-sent embed header', () => {
-    const response = middleware(request('/en/video/abc', { [EMBED_REQUEST_HEADER]: '1' }));
+  it('keeps app pages non-frameable and strips a client-sent embed header', async () => {
+    const response = await middleware(request('/en/video/abc', { [EMBED_REQUEST_HEADER]: '1' }));
     expect(frameAncestors(response.headers.get('Content-Security-Policy'))).toBe("frame-ancestors 'none'");
     expect(response.headers.get('X-Frame-Options')).toBe('DENY');
     expect(response.headers.get(`x-middleware-request-${EMBED_REQUEST_HEADER}`)).toBeNull();
   });
 
-  it('does not locale-redirect /oembed', () => {
-    const response = middleware(request('/oembed?url=x'));
+  it('does not locale-redirect /oembed', async () => {
+    const response = await middleware(request('/oembed?url=x'));
     expect(response.headers.get('location')).toBeNull();
     expect(response.status).toBe(200);
   });
 
-  it('still redirects unknown /embed paths to the localized 404', () => {
-    const response = middleware(request('/embed/unknown'));
+  it('still redirects unknown /embed paths to the localized 404', async () => {
+    const response = await middleware(request('/embed/unknown'));
     expect(response.status).toBe(307);
   });
 });

@@ -14,11 +14,20 @@ import type { Channel, User } from '@al-ummah/shared-types';
 import { getOpenAuthClient } from "./openauth-client";
 import { subjects } from '../auth';
 import { logger } from '@/lib/logger-server';
+import { SESSION_COOKIE_NAME, sessionCookieOptions } from './session-cookie';
+import {
+  applyKnownRotations,
+  computeExpiresAt,
+  forgetRotations,
+  mergeSessionTokens,
+  refreshAccountInSession,
+  shouldRefresh,
+  type AccountRefreshResult,
+} from './token-refresh';
+import { revokeTokensOnSignOut } from './revoke-on-sign-out';
 
 
 // Session configuration
-const SESSION_COOKIE_NAME = 'al_ummah_session';
-const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
 const MAX_ACCOUNTS = 10; // Maximum number of accounts per browser
 const COOKIE_SIZE_WARNING_THRESHOLD = 3072; // 3KB (75% of 4KB limit)
 const COOKIE_SIZE_MAX = 4096; // 4KB browser limit
@@ -60,6 +69,16 @@ export interface UserSession {
   avatarUrl?: string;
   accessToken: string;
   refreshToken: string;
+  /**
+   * When accessToken expires (epoch ms). Missing in cookies written before it
+   * existed; token-refresh.ts then reads the JWT `exp` instead.
+   */
+  expiresAt?: number;
+  /**
+   * The issuer rejected the refresh token: the account must sign in again.
+   * Its tokens are never sent; getActiveSession() treats it as signed out.
+   */
+  needsSignIn?: boolean;
   channels: Channel[];
   activeChannelId: string | null;
   lastActivity: number;
@@ -76,6 +95,8 @@ export interface SessionContext {
   userId: string;
   accessToken: string;
   refreshToken: string;
+  /** When accessToken expires (epoch ms), when known */
+  expiresAt?: number;
   email: string;
   displayName: string;
   avatarUrl?: string;
@@ -97,7 +118,17 @@ export interface AccountInfo {
   avatarUrl?: string;
   isActive: boolean;
   channelsCount: number;
+  /** The account's sign-in has ended (refresh token rejected) */
+  needsSignIn?: boolean;
 }
+
+/** Result of SessionManager.refreshAccount */
+export type RefreshAccountResult =
+  | AccountRefreshResult
+  /** The token was still fresh (or another request already renewed it) */
+  | 'fresh'
+  /** Cookies cannot be written here (Server Component render): not refreshed */
+  | 'read-only';
 
 /**
  * Main SessionManager class
@@ -118,6 +149,9 @@ export class SessionManager {
 
       // Parse JSON from cookie
       const sessionData = JSON.parse(sessionCookie.value) as SessionData;
+      // Another request in this isolate may have rotated a refresh token this
+      // cookie still holds; use the newer pair (persisted on the next write)
+      applyKnownRotations(sessionData);
       return sessionData;
     } catch (error) {
       logger.error('[SessionManager] Failed to get session data:', error);
@@ -136,6 +170,11 @@ export class SessionManager {
       return;
     }
 
+    // Never write an older token pair over a newer one: the cookie may have
+    // been rewritten (e.g. by a token refresh) since `data` was read
+    mergeSessionTokens(this.parseSessionCookie(cookieStore.get(SESSION_COOKIE_NAME)?.value), data);
+    applyKnownRotations(data);
+
     // Serialize to JSON
     const jsonValue = JSON.stringify(data);
 
@@ -149,13 +188,39 @@ export class SessionManager {
     // Check cookie size
     this.checkCookieSize(jsonValue, data);
 
-    cookieStore.set(SESSION_COOKIE_NAME, jsonValue, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: SESSION_MAX_AGE,
-      path: '/',
-    });
+    cookieStore.set(SESSION_COOKIE_NAME, jsonValue, sessionCookieOptions());
+  }
+
+  private static parseSessionCookie(value: string | undefined): SessionData | null {
+    if (!value) return null;
+    try {
+      return JSON.parse(value) as SessionData;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The session cookie as it is now in this request (no legacy migration). */
+  private static async readStoredSession(): Promise<SessionData | null> {
+    const cookieStore = await cookies();
+    return this.parseSessionCookie(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  }
+
+  /**
+   * True when this context may write cookies (Route Handler, Server Action).
+   * Checked BEFORE spending a refresh token: a rotated token that cannot be
+   * saved is lost, and the old one dies after the issuer's 60 s reuse window.
+   */
+  private static async canWriteCookies(): Promise<boolean> {
+    try {
+      const cookieStore = await cookies();
+      const current = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+      if (current === undefined) return false;
+      cookieStore.set(SESSION_COOKIE_NAME, current, sessionCookieOptions());
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -290,6 +355,12 @@ export class SessionManager {
       const userInfo = verified.subject.properties;
       const userId = userInfo.id; // Extract userId from JWT subject
 
+      // verify() refreshes an expired token, rotating the refresh token: keep
+      // the new pair (the old refresh token stops working after 60 s)
+      const migratedTokens = 'tokens' in verified && verified.tokens
+        ? { access: verified.tokens.access, refresh: verified.tokens.refresh, expiresIn: verified.tokens.expiresIn }
+        : { access: accessToken.value, refresh: refreshToken.value, expiresIn: undefined };
+
       // Create new session structure
       // Note: OpenAuth JWT only includes id and email (see subjects.ts)
       const sessionData: SessionData = {
@@ -300,8 +371,9 @@ export class SessionManager {
             userId,
             email: userInfo.email,
             displayName: userInfo.email, // Use email as fallback, profile API will provide actual displayName
-            accessToken: accessToken.value,
-            refreshToken: refreshToken.value,
+            accessToken: migratedTokens.access,
+            refreshToken: migratedTokens.refresh,
+            expiresAt: computeExpiresAt(migratedTokens.access, migratedTokens.expiresIn),
             channels: [],
             activeChannelId: null,
             lastActivity: Date.now(),
@@ -372,6 +444,7 @@ export class SessionManager {
       avatarUrl: existing?.avatarUrl,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      expiresAt: computeExpiresAt(tokens.accessToken, tokens.expiresIn),
       channels,
       activeChannelId,
       lastActivity: Date.now(),
@@ -397,6 +470,9 @@ export class SessionManager {
     const sessionData = await this.getSessionData();
     if (!sessionData) return;
 
+    const removed = sessionData.accounts[userId];
+    if (removed) await revokeTokensOnSignOut([removed]);
+    forgetRotations(userId);
     delete sessionData.accounts[userId];
 
     // If removed account was active, switch to another
@@ -492,6 +568,15 @@ export class SessionManager {
     const activeAccount = sessionData.accounts[sessionData.activeUserId];
     if (!activeAccount) return null;
 
+    // The account's sign-in ended (refresh token rejected): signed out, so its
+    // dead token is never sent. Signing in again replaces the account.
+    if (activeAccount.needsSignIn) {
+      logger.info('[SessionManager.getActiveSession] Active account needs to sign in again', {
+        userId: activeAccount.userId,
+      });
+      return null;
+    }
+
     logger.debug('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
       userId: activeAccount.userId,
       email: activeAccount.email,
@@ -560,6 +645,7 @@ export class SessionManager {
         avatarUrl: account.avatarUrl,
         isActive: account.userId === sessionData.activeUserId,
         channelsCount: accountChannels.length,
+        ...(account.needsSignIn ? { needsSignIn: true } : {}),
       };
     });
 
@@ -567,6 +653,7 @@ export class SessionManager {
       userId: activeAccount.userId,
       accessToken: activeAccount.accessToken,
       refreshToken: activeAccount.refreshToken,
+      expiresAt: activeAccount.expiresAt,
       email: activeAccount.email,
       displayName: activeAccount.displayName,
       avatarUrl: activeAccount.avatarUrl,
@@ -596,6 +683,7 @@ export class SessionManager {
         avatarUrl: account.avatarUrl,
         isActive: account.userId === sessionData.activeUserId,
         channelsCount: accountChannels.length,
+        ...(account.needsSignIn ? { needsSignIn: true } : {}),
       };
     });
   }
@@ -729,35 +817,115 @@ export class SessionManager {
   }
 
   /**
-   * Refresh token for a specific user
+   * Refresh one account's tokens when they expire soon (or always, with
+   * `force`) and save them. Safe to call from anywhere:
+   * - in a Server Component render (read-only cookies) it does nothing, since
+   *   a rotated refresh token that cannot be saved would be lost;
+   * - concurrent calls share one /token request (token-refresh.ts);
+   * - on `invalid_grant` it adopts a newer pair another request stored, and
+   *   only otherwise marks the account `needsSignIn`.
+   *
+   * `staleAccessToken`: the token an API just answered 401 for. When the
+   * session already holds a different, fresh token, that one is used without
+   * refreshing again.
+   */
+  static async refreshAccount(
+    userId: string,
+    options: { force?: boolean; staleAccessToken?: string } = {},
+  ): Promise<{ result: RefreshAccountResult; account: UserSession | null }> {
+    const sessionData = await this.getSessionData();
+    const account = sessionData?.accounts[userId];
+    if (!sessionData || !account) return { result: 'missing', account: null };
+    if (account.needsSignIn) return { result: 'needs-sign-in', account };
+
+    const alreadyRenewed = options.staleAccessToken !== undefined && account.accessToken !== options.staleAccessToken;
+    if (!shouldRefresh(account) && (!options.force || alreadyRenewed)) {
+      return { result: 'fresh', account };
+    }
+
+    if (!(await this.canWriteCookies())) {
+      logger.debug('[SessionManager.refreshAccount] Read-only cookies here; not refreshing', { userId });
+      return { result: 'read-only', account };
+    }
+
+    const result = await refreshAccountInSession(sessionData, userId, {
+      reread: () => this.readStoredSession(),
+    });
+
+    if (result === 'refreshed') {
+      account.lastActivity = Date.now();
+      await this.setSessionData(sessionData);
+      logger.info('[SessionManager.refreshAccount] Tokens refreshed', { userId, expiresAt: account.expiresAt });
+    } else if (result === 'needs-sign-in') {
+      await this.setSessionData(sessionData);
+      logger.warn('[SessionManager.refreshAccount] Refresh token rejected; account needs to sign in again', { userId });
+    } else if (result === 'failed') {
+      logger.warn('[SessionManager.refreshAccount] Token refresh failed temporarily; keeping current token', { userId });
+    }
+
+    return { result, account: sessionData.accounts[userId] ?? null };
+  }
+
+  /**
+   * Refresh the active account when its token expires soon, then return the
+   * active session (null when signed out or the sign-in ended). For Route
+   * Handlers, which the middleware does not run for.
+   */
+  static async ensureFreshActiveSession(): Promise<SessionContext | null> {
+    const sessionData = await this.getSessionData();
+    if (sessionData?.accounts[sessionData.activeUserId]) {
+      await this.refreshAccount(sessionData.activeUserId);
+    }
+    return this.getActiveSession();
+  }
+
+  /**
+   * After an API answered 401 for `staleAccessToken`: refresh (once) and
+   * return the access token to retry with, or null when there is none.
+   * Without `userId`, the account holding that token (else the active one).
+   */
+  static async refreshAfterUnauthorized(userId: string | undefined, staleAccessToken: string): Promise<string | null> {
+    let targetUserId = userId;
+    if (!targetUserId) {
+      const sessionData = await this.getSessionData();
+      if (!sessionData) return null;
+      targetUserId = Object.values(sessionData.accounts).find(a => a.accessToken === staleAccessToken)?.userId
+        ?? sessionData.activeUserId;
+    }
+    const { result, account } = await this.refreshAccount(targetUserId, { force: true, staleAccessToken });
+    if ((result === 'refreshed' || result === 'fresh') && account && !account.needsSignIn && account.accessToken !== staleAccessToken) {
+      return account.accessToken;
+    }
+    return null;
+  }
+
+  /**
+   * Refresh token for a specific user when it expires soon.
+   * True when the account holds a usable token afterwards.
    */
   static async refreshTokenForUser(userId: string): Promise<boolean> {
-    const sessionData = await this.getSessionData();
-    if (!sessionData || !sessionData.accounts[userId]) {
-      return false;
-    }
-
-    const account = sessionData.accounts[userId];
-
     try {
-      const client = await this.getAuthClient();
-      const verified = await client.verify(subjects, account.accessToken, {
-        refresh: account.refreshToken,
-      });
-
-      // Check if verification was successful and tokens were refreshed
-      if (!verified.err && 'tokens' in verified && verified.tokens) {
-        account.accessToken = verified.tokens.access;
-        account.refreshToken = verified.tokens.refresh;
-        account.lastActivity = Date.now();
-        await this.setSessionData(sessionData);
-        return true;
-      }
+      const { result } = await this.refreshAccount(userId);
+      return result === 'refreshed' || result === 'fresh' || result === 'read-only' || result === 'failed';
     } catch (error) {
       logger.error(`[SessionManager] Token refresh failed for user ${userId}:`, error);
+      return false;
     }
+  }
 
-    return false;
+  /**
+   * The user's access token, refreshed first when it expires soon; null when
+   * the account is gone or must sign in again.
+   */
+  static async getValidAccessToken(userId: string): Promise<string | null> {
+    try {
+      const { account } = await this.refreshAccount(userId);
+      if (!account || account.needsSignIn) return null;
+      return account.accessToken;
+    } catch (error) {
+      logger.error('[SessionManager.getValidAccessToken] Failed', { userId, error });
+      return null;
+    }
   }
 
   /**
@@ -767,11 +935,10 @@ export class SessionManager {
     const sessionData = await this.getSessionData();
     if (!sessionData) return;
 
-    const refreshPromises = Object.keys(sessionData.accounts).map(userId =>
-      this.refreshTokenForUser(userId)
-    );
-
-    await Promise.allSettled(refreshPromises);
+    // One after the other: each saves the whole cookie
+    for (const userId of Object.keys(sessionData.accounts)) {
+      await this.refreshTokenForUser(userId);
+    }
   }
 
   /**
@@ -813,6 +980,11 @@ export class SessionManager {
    * Clear all sessions (logout all accounts)
    */
   static async clearAllSessions(): Promise<void> {
+    const sessionData = await this.getSessionData();
+    if (sessionData) {
+      await revokeTokensOnSignOut(Object.values(sessionData.accounts));
+      Object.keys(sessionData.accounts).forEach(forgetRotations);
+    }
     await this.setSessionData(null);
   }
 }
