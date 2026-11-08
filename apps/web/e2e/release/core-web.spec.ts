@@ -67,7 +67,13 @@ test.describe('Release: live comments', () => {
     await answerConsent(context);
     const author = await signUpOnWeb(page, 'rel-live-comment');
     await createProfile(author);
-    await page.goto(watchUrl(video!.id));
+    const channelRes = await apiFetch(author, '/api/channels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `Release E2E live ${Date.now().toString(36)}`, description: 'Created by the release E2E suite', isMain: true }),
+    });
+    expect(channelRes.status, 'POST /api/channels').toBeLessThan(300);
+    const channelId = ((await channelRes.json()) as { result: { channel: { id: string } } }).result.channel.id;
 
     const viewerContext = await browser.newContext();
     await answerConsent(viewerContext);
@@ -83,9 +89,14 @@ test.describe('Release: live comments', () => {
     await subscribed;
 
     const text = `release live comment ${Date.now()}`;
-    const section = page.getByTestId('comments-section');
-    await section.getByTestId('comment-input').fill(text);
-    await section.getByTestId('comment-submit').click();
+    // Through the API: commenting needs an active channel, and one created this
+    // way isn't in the web session. Delivery to the other viewer is what's tested.
+    const posted = await apiFetch(author, `/api/videos/${video!.id}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', channelId },
+      body: JSON.stringify({ text, channelId }),
+    });
+    expect(posted.status, `POST comment: ${await posted.clone().text()}`).toBeLessThan(300);
 
     await expect(viewer.getByTestId('comment').filter({ hasText: text }).first()).toBeVisible({ timeout: 20000 });
     await viewerContext.close();
@@ -93,7 +104,7 @@ test.describe('Release: live comments', () => {
     const list = await apiFetch(author, `/api/videos/${video!.id}/comments?limit=20`);
     const body = (await list.json()) as { result?: { comments?: Array<{ id: string; text: string }> } };
     const mine = body.result?.comments?.find((c) => c.text === text);
-    if (mine) await apiFetch(author, `/api/videos/${video!.id}/comments/${mine.id}`, { method: 'DELETE' });
+    if (mine) await apiFetch(author, `/api/videos/${video!.id}/comments/${mine.id}`, { method: 'DELETE', headers: { channelId } });
   });
 });
 
