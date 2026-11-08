@@ -16,6 +16,16 @@ import {
 import type { SearchDb } from "@al-ummah/shared-types";
 import { suggestFromIndex } from "../../lib/search/query";
 import { isWatchHistoryPaused } from "../../lib/watch-history";
+import { waitUntilOf } from "../../lib/search/ownership";
+import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
+import {
+  RecentHistory,
+  hydrateRanked,
+  hydrationCount,
+  loadCandidatePool,
+  loadRecentHistory,
+  recommendationsCachePath,
+} from "../../lib/recommendations";
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
@@ -158,28 +168,15 @@ export class TrendingGet extends OptionalAuthRoute {
   }
 }
 
-interface WatchEntry {
-  videoId?: string;
-  userId?: string;
-  lastWatchedAt?: string;
-}
+/** Seconds a recommendations result is reused (a viewer's own entry is shorter-lived). */
+const ANONYMOUS_RECOMMENDATIONS_TTL = 120;
+const PERSONAL_RECOMMENDATIONS_TTL = 60;
 
-async function loadWatchHistory(bucket: R2Bucket | undefined, userId: string): Promise<WatchEntry[]> {
-  if (!bucket) return [];
-  // Watch history entries are stored as `<userId>:<videoId>`.
-  const listing = await bucket.list({ prefix: `${userId}:`, limit: 200 });
-  const entries = await Promise.all(listing.objects.map(async object => {
-    try {
-      const body = await bucket.get(object.key);
-      return body ? await body.json<WatchEntry>() : null;
-    } catch (error) {
-      logger.warn("[Recommendations] Unreadable watch history entry", { key: object.key, error });
-      return null;
-    }
-  }));
-  return entries
-    .filter((entry): entry is WatchEntry => !!entry?.videoId)
-    .sort((a, b) => new Date(b.lastWatchedAt || 0).getTime() - new Date(a.lastWatchedAt || 0).getTime());
+interface RecommendationsBody {
+  success: true;
+  data: unknown[];
+  videos: unknown[];
+  basedOn: string[];
 }
 
 /**
@@ -221,51 +218,61 @@ export class RecommendationsGet extends OptionalAuthRoute {
     const { query } = await this.getValidatedData<typeof this.schema>();
     const limit = clampLimit(query.limit, 12, 50);
     const userId = this.getUserId(c);
+    const excludeWatched = query.excludeWatched === true;
+
+    // Anonymous responses must not satisfy a later signed-in request for the same URL.
+    c.header("Vary", "Authorization");
+    c.header("Cache-Control", userId ? "private, no-store" : `public, max-age=${ANONYMOUS_RECOMMENDATIONS_TTL}`);
 
     try {
-      const videos = await loadDiscoverableVideos(c.env.videos);
-      const byId = new Map(videos.map(v => [v.id, v]));
-      const seeds: DiscoveryVideo[] = [];
-      const basedOn: string[] = [];
-      const exclude = new Set<string>();
-
-      if (query.videoId) {
-        exclude.add(query.videoId);
-        const seed = byId.get(query.videoId) || await c.env.videos.get(query.videoId)
-          .then(o => (o ? o.json<DiscoveryVideo>() : null))
-          .catch(() => null);
-        if (seed) {
-          seeds.push(seed);
-          basedOn.push("video");
-        }
+      // While watch history is paused it is not used for recommendations (#242)
+      const historyPaused = userId
+        ? await isWatchHistoryPaused(c.env.profiles, userId).catch(() => false)
+        : false;
+      const cacheUrl = edgeCacheUrl(c.req.url, await recommendationsCachePath({
+        videoId: query.videoId, limit, userId, historyPaused, excludeWatched,
+      }));
+      const cached = await readEdgeCache<RecommendationsBody>(cacheUrl);
+      if (cached) {
+        c.header("X-Recommendations-Cache", "HIT");
+        return c.json(cached);
       }
 
-      // While watch history is paused it is not used for recommendations (#242)
-      if (userId && !(await isWatchHistoryPaused(c.env.profiles, userId).catch(() => false))) {
+      let history: RecentHistory = { watchedIds: [], seedIds: [] };
+      if (userId && !historyPaused) {
         try {
-          const history = await loadWatchHistory(c.env.watch_history, userId);
-          for (const entry of history.slice(0, 10)) {
-            const watched = byId.get(entry.videoId!);
-            if (watched) seeds.push(watched);
-          }
-          if (history.length > 0) basedOn.push("history");
-          if (query.excludeWatched) history.forEach(entry => exclude.add(entry.videoId!));
+          history = await loadRecentHistory(c.env.watch_history, userId);
         } catch (error) {
           logger.warn("[Recommendations] Failed to load watch history", { userId, error });
         }
       }
 
-      if (seeds.length === 0) basedOn.push("popular");
+      const pool = await loadCandidatePool(c.env, query.videoId, history.seedIds);
+      const exclude = new Set<string>(query.videoId ? [query.videoId] : []);
+      if (excludeWatched) history.watchedIds.forEach(id => exclude.add(id));
 
-      const ranked = rankRecommendations(videos, { seeds, exclude, limit, now: Date.now() });
-      const channels = await loadChannelMap(c.env.channels, ranked.map(r => r.video.channelId || ""));
-      const data = ranked.map(({ video, score }) => ({ ...toVideoResponse(video, channels), recommendationScore: score }));
-      logger.info("[Recommendations] Served recommendations", { videoId: query.videoId, userId, count: data.length, basedOn });
-      if (!userId) c.header("Cache-Control", "public, max-age=120");
-      return c.json({ success: true, data, videos: data, basedOn });
+      const basedOn: string[] = [];
+      if (query.videoId && pool.seeds.some(seed => seed.id === query.videoId)) basedOn.push("video");
+      if (history.watchedIds.length > 0) basedOn.push("history");
+      if (pool.seeds.length === 0) basedOn.push("popular");
+
+      const ranked = rankRecommendations(pool.candidates, {
+        seeds: pool.seeds,
+        exclude,
+        limit: hydrationCount(limit),
+        now: Date.now(),
+      });
+      const winners = await hydrateRanked(c.env.videos, ranked, limit);
+      const channels = await loadChannelMap(c.env.channels, winners.map(r => r.video.channelId || ""));
+      const data = winners.map(({ video, score }) => ({ ...toVideoResponse(video, channels), recommendationScore: score }));
+      const body: RecommendationsBody = { success: true, data, videos: data, basedOn };
+      writeEdgeCache(cacheUrl, body, userId ? PERSONAL_RECOMMENDATIONS_TTL : ANONYMOUS_RECOMMENDATIONS_TTL, waitUntilOf(c as never));
+      logger.info("[Recommendations] Served recommendations", { videoId: query.videoId, userId, count: data.length, basedOn, source: pool.source });
+      c.header("X-Recommendations-Cache", "MISS");
+      return c.json(body);
     } catch (error) {
       logger.error("[Recommendations] Failed to build recommendations", { error, videoId: query.videoId });
-      return c.json({ success: false, error: "Failed to load recommendations" }, 500);
+      return c.json({ success: false, error: "Failed to load recommendations" }, 500, { "Cache-Control": "no-store" });
     }
   }
 }

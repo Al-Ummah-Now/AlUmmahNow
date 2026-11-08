@@ -33,6 +33,8 @@ export interface DiscoveryVideo {
   tags?: string[];
   language?: string;
   likes?: Array<{ dateCreated?: string }>;
+  /** Set instead of `likes` on index rows, which store only the count. */
+  likesCount?: number;
   dislikes?: Array<{ dateCreated?: string }>;
   comments?: Array<{ dateCreated?: string; isDeleted?: boolean }>;
   isPublic?: boolean;
@@ -350,7 +352,7 @@ export function recommendationScore(candidate: DiscoveryVideo, profile: Recommen
   score += wordMatches;
 
   const views = Math.max(candidate.views || 0, 0);
-  const likes = Array.isArray(candidate.likes) ? candidate.likes.length : 0;
+  const likes = Array.isArray(candidate.likes) ? candidate.likes.length : Math.max(candidate.likesCount || 0, 0);
   const created = timeOf(candidate.dateCreated);
   const ageDays = Number.isFinite(created) ? Math.max((now - created) / (24 * HOUR_MS), 0) : 365;
   const prior = Math.log10(1 + views) * 0.5 + Math.log10(1 + likes) * 0.5 + 1 / (1 + ageDays / 30);
