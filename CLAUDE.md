@@ -547,8 +547,9 @@ Note: **scheduler** and **log-service** have no CI validation or deployment jobs
 - QA URLs: `qa.alummahnow.net`, `videos.qa.api.alummahnow.net`, `ws.qa.alummahnow.net`, `admin.qa.alummahnow.net`, `admin.qa.api.alummahnow.net`
 - Web and admin-web use `wrangler.qa.jsonc`; others use per-app `wrangler.qa.jsonc`
 
-**Production Deployment** (`main` branch):
-- All 6 apps deployed in a single `deploy-production` job after validation
+**Production Deployment** (`deploy-production` job, **manual**: Actions → Deploy → Run workflow on `main`):
+- Does not run on merge. It never ran on push from Jan 2026 (validate jobs failed), so production has been deployed by hand; the release workflow (phase 7 of `docs/release-pipeline/PLAN.md`) replaces it with stage-then-promote
+- All 6 apps deployed in a single job after validation; check #208 (processor `REPORTS_DB` placeholder) before running it
 - Web uses `wrangler.production.jsonc`; admin-web uses `wrangler.production.jsonc`; other apps use default wrangler config
 
 **Required Secrets**:
