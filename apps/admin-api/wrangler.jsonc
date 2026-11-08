@@ -91,7 +91,7 @@
 		// Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
 		"stage": {
 			// Workers Logs bills per line: log 10% of invocations (sampling drops errors too)
-			"observability": { "enabled": true, "head_sampling_rate": 0.1 },
+			"observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "head_sampling_rate": 0.1 } },
 			"version_metadata": { "binding": "CF_VERSION_METADATA" },
 			"name": "al-ummah-admin-api-stage",
 			"routes": [
@@ -172,7 +172,8 @@
 	"observability": {
 		"enabled": true,
 		// Low traffic: keep every invocation. Lower this when traffic grows.
-		"head_sampling_rate": 1
+		"head_sampling_rate": 1,
+		"logs": { "enabled": true, "head_sampling_rate": 1 }
 	},
 
 	// Development server configuration
