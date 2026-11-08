@@ -21,6 +21,7 @@ import {
   VideoError
 } from './types';
 import { hasConsent } from '@/lib/consent/ConsentManager';
+import { PlayedTimeAccumulator } from '@/lib/video/watch-time';
 
 /** Legacy localStorage backup key; no longer written, purged on start. */
 const LEGACY_PENDING_KEY = 'pendingVideoAnalytics';
@@ -47,6 +48,9 @@ export class VideoAnalytics {
 
   // Phase 3: Buffering state tracking
   private bufferStartTime?: number;
+
+  // #235: played seconds, reported as watch_time events at every flush
+  private played = new PlayedTimeAccumulator();
 
   constructor(
     videoId: string,
@@ -100,6 +104,7 @@ export class VideoAnalytics {
    * Track pause event
    */
   trackPause(): void {
+    this.played.break();
     this.addEvent({
       eventType: VideoEventType.PAUSE,
       relativeTime: Date.now() - this.startTime
@@ -110,6 +115,7 @@ export class VideoAnalytics {
    * Track video ended event
    */
   trackComplete(): void {
+    this.played.break();
     this.addEvent({
       eventType: VideoEventType.ENDED,
       relativeTime: Date.now() - this.startTime,
@@ -201,6 +207,7 @@ export class VideoAnalytics {
    * ```
    */
   trackSeek(fromTime: number, toTime: number): void {
+    this.played.break();
     this.addEvent({
       eventType: VideoEventType.SEEK,
       relativeTime: Date.now() - this.startTime,
@@ -479,9 +486,36 @@ export class VideoAnalytics {
   }
 
   /**
+   * Feed the played-time accumulator from timeupdate while the video plays
+   * (#235). Seeks/pauses break the run; the total goes out as watch_time
+   * events with the next flush.
+   */
+  trackPlayback(currentTime: number, nowMs: number = Date.now()): void {
+    this.played.tick(currentTime, nowMs);
+  }
+
+  /** Move accumulated played seconds into the queue as watch_time events. */
+  private drainWatchTime(): void {
+    const chunks = this.played.drain();
+    // Like every event but the anonymous view count: only with analytics consent
+    if (chunks.length === 0 || !this.consentCheck()) return;
+    for (const seconds of chunks) {
+      this.eventQueue.push({
+        videoId: this.videoId,
+        sessionId: this.sessionId,
+        timestamp: new Date().toISOString(),
+        relativeTime: Date.now() - this.startTime,
+        eventType: VideoEventType.WATCH_TIME,
+        data: { seconds },
+      } as AnalyticsEvent);
+    }
+  }
+
+  /**
    * Flush events to server
    */
   private async flush(): Promise<void> {
+    this.drainWatchTime();
     if (this.eventQueue.length === 0) {
       return;
     }

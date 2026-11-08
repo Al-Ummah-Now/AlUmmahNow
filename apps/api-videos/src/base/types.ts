@@ -42,6 +42,8 @@ export interface AppBindings {
 
   // KV Namespaces
   RATE_LIMIT_KV: KVNamespace;
+  /** Workers rate limiting: watch-time reports per playback session (#235). Optional: unlimited without it. */
+  WATCH_TIME_LIMITER?: RateLimit;
   TUS_SESSIONS: KVNamespace;
 
   // Queues

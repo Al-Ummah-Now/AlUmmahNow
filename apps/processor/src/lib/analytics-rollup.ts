@@ -69,17 +69,45 @@ export function applyView(
   return next;
 }
 
+/**
+ * Pure: add played seconds (#235 watch-time reports) to a monthly rollup
+ * document without counting a view.
+ */
+export function applyWatchTime(
+  doc: MonthlyRollup | null,
+  entityType: 'video' | 'channel',
+  entityId: string,
+  day: string,
+  seconds: number
+): MonthlyRollup {
+  const month = day.slice(0, 7);
+  const next: MonthlyRollup = doc && doc.month === month
+    ? { ...doc, days: { ...doc.days } }
+    : { entityType, entityId, month, days: {} };
+  const current = next.days[day] || { views: 0, watchTime: 0 };
+  const add = Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, MAX_WATCH_TIME_DELTA_SECONDS) : 0;
+  next.days[day] = { views: current.views, watchTime: Math.round((current.watchTime + add) * 100) / 100 };
+  next.updatedAt = new Date().toISOString();
+  return next;
+}
+
+/** Same cap as api-videos (videoWatchTime.ts): one report never adds more. */
+export const MAX_WATCH_TIME_DELTA_SECONDS = 60;
+
+type Apply = (doc: MonthlyRollup | null, entityType: 'video' | 'channel', entityId: string, day: string, amount: number) => MonthlyRollup;
+
 async function updateRollup(
   bucket: R2Bucket,
   entityType: 'video' | 'channel',
   entityId: string,
   day: string,
-  watchTime: number
+  watchTime: number,
+  apply: Apply = applyView
 ): Promise<void> {
   const key = rollupKey(entityType, entityId, day.slice(0, 7));
   const existing = await bucket.get(key);
   const doc = existing ? await existing.json<MonthlyRollup>() : null;
-  const updated = applyView(doc, entityType, entityId, day, watchTime);
+  const updated = apply(doc, entityType, entityId, day, watchTime);
   await bucket.put(key, JSON.stringify(updated), {
     httpMetadata: { contentType: 'application/json' },
   });
@@ -127,6 +155,37 @@ export async function recordViewRollup(
   await Promise.all([
     updateRollup(bucket, 'video', videoId, day, watchTime),
     channelId ? updateRollup(bucket, 'channel', channelId, day, watchTime) : Promise.resolve(),
+  ]);
+  return true;
+}
+
+export interface WatchTimeEventPayload {
+  videoId?: unknown;
+  videoChannelId?: unknown;
+  seconds?: unknown;
+  timestamp?: unknown;
+}
+
+/**
+ * Record a watch-time report (#235): the seconds go to the video rollup, and to
+ * the channel rollup when the video has a channel. Views are not touched.
+ * Returns false (and writes nothing) for an invalid payload.
+ */
+export async function recordWatchTimeRollup(
+  bucket: R2Bucket | undefined,
+  payload: WatchTimeEventPayload,
+  messageTimestamp: number | string
+): Promise<boolean> {
+  if (!bucket || typeof bucket.get !== 'function' || typeof bucket.put !== 'function') return false;
+  if (!payload || typeof payload.videoId !== 'string' || !payload.videoId) return false;
+  const seconds = typeof payload.seconds === 'number' ? payload.seconds : Number(payload.seconds);
+  if (!Number.isFinite(seconds) || seconds <= 0) return false;
+  const channelId = typeof payload.videoChannelId === 'string' ? payload.videoChannelId : '';
+  const day = toUtcDay(typeof payload.timestamp === 'string' ? payload.timestamp : messageTimestamp);
+
+  await Promise.all([
+    updateRollup(bucket, 'video', payload.videoId, day, seconds, applyWatchTime),
+    channelId ? updateRollup(bucket, 'channel', channelId, day, seconds, applyWatchTime) : Promise.resolve(),
   ]);
   return true;
 }

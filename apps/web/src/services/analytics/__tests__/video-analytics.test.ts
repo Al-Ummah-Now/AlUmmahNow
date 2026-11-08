@@ -1128,4 +1128,52 @@ describe('VideoAnalytics', () => {
       expect(body.events).toEqual([{ videoId: 'video-1', eventType: 'ready', timestamp: expect.any(String) }]);
     });
   });
+
+describe('VideoAnalytics watch time (#235)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockHasConsent.mockReturnValue(true);
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+    jest.useFakeTimers();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  const sentEvents = () =>
+    (global.fetch as jest.Mock).mock.calls.flatMap(([, init]) => (JSON.parse(init.body) as { events: AnalyticsEvent[] }).events);
+
+  function playFor(analytics: VideoAnalytics, seconds: number) {
+    for (let i = 0; i <= seconds * 4; i++) analytics.trackPlayback(i * 0.25, 1_000_000 + i * 250);
+  }
+
+  it('reports played seconds as a watch_time event with the next flush', async () => {
+    const analytics = new VideoAnalytics('v1');
+    playFor(analytics, 25);
+    await jest.advanceTimersByTimeAsync(30000);
+    const watch = sentEvents().filter((e) => e.eventType === VideoEventType.WATCH_TIME);
+    expect(watch).toHaveLength(1);
+    expect(watch[0]).toMatchObject({ videoId: 'v1', sessionId: analytics.getSessionId(), data: { seconds: 25 } });
+    analytics.destroy();
+  });
+
+  it('a seek breaks the run, so the jump is not counted', async () => {
+    const analytics = new VideoAnalytics('v1');
+    analytics.trackPlayback(0, 0);
+    analytics.trackPlayback(0.25, 250);
+    analytics.trackSeek(0.25, 300);
+    analytics.trackPlayback(300, 500);
+    analytics.trackPlayback(300.25, 750);
+    await jest.advanceTimersByTimeAsync(30000);
+    expect(sentEvents().filter((e) => e.eventType === VideoEventType.WATCH_TIME)).toHaveLength(0);
+    analytics.destroy();
+  });
+
+  it('sends no watch time without analytics consent', async () => {
+    mockHasConsent.mockReturnValue(false);
+    const analytics = new VideoAnalytics('v1');
+    playFor(analytics, 25);
+    await jest.advanceTimersByTimeAsync(30000);
+    expect(sentEvents().filter((e) => e.eventType === VideoEventType.WATCH_TIME)).toHaveLength(0);
+    analytics.destroy();
+  });
+});
 });
