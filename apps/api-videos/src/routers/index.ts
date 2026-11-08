@@ -17,6 +17,7 @@ import libraryRouter from './library.router';
 import notificationsRouter from './notifications.router';
 import searchRouter from './search.router';
 import appConfigRouter, { appConfigAdminRouter } from './app-config.router';
+import { telemetryRouter } from './telemetry.router';
 import { continueWatchingRouter, watchStateRouter } from './watch-state.router';
 import { devicesRouter } from './devices.router';
 
@@ -96,6 +97,8 @@ export function registerAllRouters(openapi: any) {
   // App config (Epic 9.3) - API versions and minimum supported app version
   openapi.route('/api/app-config', appConfigRouter);
   openapi.route('/internal/app-config', appConfigAdminRouter);
+  // Client telemetry (Epic 9.8)
+  openapi.route('/api/telemetry', telemetryRouter);
   openapi.route('/api/watch-state', watchStateRouter);
   openapi.route('/api/continue-watching', continueWatchingRouter);
   // Push device registration (Epic 9.4)

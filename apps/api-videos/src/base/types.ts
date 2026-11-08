@@ -44,6 +44,10 @@ export interface AppBindings {
   RATE_LIMIT_KV: KVNamespace;
   /** Workers rate limiting: watch-time reports per playback session (#235). Optional: unlimited without it. */
   WATCH_TIME_LIMITER?: RateLimit;
+  /** Client telemetry batches per install id (Epic 9.8) */
+  TELEMETRY_LIMITER?: RateLimit;
+  /** Client telemetry dataset (Epic 9.8) */
+  CLIENT_TELEMETRY?: AnalyticsEngineDataset;
   TUS_SESSIONS: KVNamespace;
   /** Remote config: app version policies and feature flags (Epic 9.3 / 9.5). Optional: defaults without it. */
   APP_CONFIG?: KVNamespace;
