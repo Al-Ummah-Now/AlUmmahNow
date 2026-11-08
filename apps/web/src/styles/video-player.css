@@ -2186,3 +2186,41 @@
     transform: none;
   }
 }
+
+/* Touch targets (Story 1.5 AC 1, 2): at least 44x44 on touch devices. The hit
+   area grows, the production look of the controls does not. */
+@media (pointer: coarse) {
+  .video-js {
+    --vp-touch-target: 44px;
+  }
+
+  .video-js .vjs-control-bar button {
+    position: relative;
+  }
+
+  .video-js .vjs-control-bar button::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--vp-touch-target);
+    height: var(--vp-touch-target);
+    transform: translate(-50%, -50%);
+  }
+
+  .video-js .vjs-progress-control {
+    min-height: var(--vp-touch-target);
+  }
+
+  .video-js .vjs-volume-panel .vjs-volume-control {
+    min-height: var(--vp-touch-target);
+  }
+}
+
+/* Phones draw 32px buttons with a 4px bar gap: 4px margins put neighbouring
+   centres 44px apart, so the hit areas do not overlap. */
+@media (pointer: coarse) and (max-width: 640px) {
+  .video-js .vjs-control-bar button {
+    margin: 0 0.25rem;
+  }
+}

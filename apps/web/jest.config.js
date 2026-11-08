@@ -60,7 +60,6 @@ const customJestConfig = {
     '<rootDir>/src/services/api/__tests__/engagement.service.xss.test.ts',
     '<rootDir>/src/components/__tests__/SubscribeButton.test.tsx',
     '<rootDir>/src/components/__tests__/SearchFilters.test.tsx',
-    '<rootDir>/src/lib/touch/__tests__/touch-feedback.test.ts',
     '<rootDir>/src/app/\\[locale\\]/channels/\\[id\\]/__tests__/routing.test.tsx',
   ],
   // Build output contains copies of workspace packages; keep them out of the
