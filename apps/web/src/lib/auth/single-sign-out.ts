@@ -19,6 +19,16 @@ export function startSingleSignOut(issuer: string, returnTo: string): string {
 }
 
 /**
+ * Single sign-out that lands back on this app's home page in `locale`.
+ * `host` is the request's Host header; only en and ar exist, anything else
+ * (the locale comes from the client) becomes en.
+ */
+export function singleSignOutToHome(issuer: string, host: string, locale: string): string {
+  const protocol = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) ? "http" : "https";
+  return startSingleSignOut(issuer, `${protocol}://${host}/${locale === "ar" ? "ar" : "en"}`);
+}
+
+/**
  * Where the front-channel endpoint goes next: `next` when it is the auth
  * server's /logout (never anywhere else: no open redirect), otherwise it
  * starts single sign-out itself.
