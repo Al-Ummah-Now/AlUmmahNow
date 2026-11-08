@@ -389,7 +389,7 @@ pnpm websocket:deploy           # Deploy WebSocket server to production
 pnpm admin:deploy               # Deploy admin API to production
 pnpm admin:deploy:qa            # Deploy admin API to QA
 pnpm admin-web:deploy:qa        # Deploy admin web to QA
-# Deploy admin-web to production: cd apps/admin-web && pnpm deploy
+pnpm admin-web:deploy:production # Deploy admin web to production
 pnpm deploy:all                 # Deploy all 6 CI-managed apps to production
 pnpm deploy:qa                  # Deploy all 6 CI-managed apps to QA
 ```
@@ -511,11 +511,12 @@ cd apps/processor && pnpm lint:fix
 
 ### GitHub Actions Workflow (`.github/workflows/deploy.yml`)
 
-**Trigger**: Push to `main` or `develop`, or pull requests to either branch
+**Trigger**: Push to `main`, or pull requests into `main` or `integrate/**`
 
 **Pipeline Stages**:
 
-1. **test** - Type check + lint + tests (all packages, 5 min)
+1. **test** - Type check + lint + tests (all packages). A failing test fails the PR.
+   **release-checks** - Release gates, see below (runs in parallel with `test`).
 2. **build-shared-packages** - Build `@al-ummah/shared-types` + `@al-ummah/logger` (2 min)
 3. **Build & Validate** - 6 parallel jobs (all depend on build-shared-packages):
    - `build-web`: Build Next.js user app (up to 120 min)
@@ -541,17 +542,30 @@ Note: **scheduler** and **log-service** have no CI validation or deployment jobs
 - Auto-cleanup when PR closes
 - **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
-**QA Deployment** (`develop` branch):
+**QA Deployment** (`deploy-qa` job): no longer triggered; it ran on pushes to `develop`, which CI no longer builds. QA deploys move to the release pipeline (`docs/release-pipeline/`).
 - All 6 apps deployed in a single `deploy-qa` job after validation
 - QA URLs: `qa.alummahnow.net`, `videos.qa.api.alummahnow.net`, `ws.qa.alummahnow.net`, `admin.qa.alummahnow.net`, `admin.qa.api.alummahnow.net`
 - Web and admin-web use `wrangler.qa.jsonc`; others use per-app `wrangler.qa.jsonc`
 
-**Production Deployment** (`main` branch):
-- All 6 apps deployed in a single `deploy-production` job after validation
+**Production Deployment** (`deploy-production` job, **manual**: Actions → Deploy → Run workflow on `main`):
+- Does not run on merge. It never ran on push from Jan 2026 (validate jobs failed), so production has been deployed by hand; the release workflow (phase 7 of `docs/release-pipeline/PLAN.md`) replaces it with stage-then-promote
+- All 6 apps deployed in a single job after validation; check #208 (processor `REPORTS_DB` placeholder) before running it
 - Web uses `wrangler.production.jsonc`; admin-web uses `wrangler.production.jsonc`; other apps use default wrangler config
 
 **Required Secrets**:
 - `CLOUDFLARE_API_TOKEN` - For all deployments
+
+### Release gates
+
+Required checks on every PR (`deploy.yml` jobs `test` and `release-checks`). Scripts live in `scripts/release/` and run with plain Node 22 (no install needed):
+
+| Command | Fails when | How to fix |
+|---|---|---|
+| `pnpm test` | any unit test fails | Fix the test or code. Known-broken tests are quarantined with `.skip` and a `// Quarantined: ... #<issue>` comment (web: #206, log-service: #207); never add `continue-on-error`. |
+| `pnpm check:config` | a production wrangler config (`apps/web` and `apps/admin-web`: `wrangler.production.jsonc`; other workers: `wrangler.jsonc`) has the wrong worker name or vars (e.g. web `OPENAUTH_ISSUER` must be `https://auth.alummahnow.net`), loses a required binding, contains localhost, a QA/stage host, a placeholder id or a test-only name; or a workflow / package script runs `wrangler deploy` for web or admin-web without `--config` (their top-level `wrangler.jsonc` is the dev config) | Fix the config or add `--config wrangler.<env>.jsonc`. If a production value changes on purpose, update `scripts/release/apps.ts` in the same PR. A known problem that can't be fixed yet goes in that app's `accepted` list with its issue; the check fails once it is fixed, so the entry gets removed. |
+| `pnpm check:migrations <base-sha>` | a file under `apps/*/migrations*/` (any depth) that exists on the base branch was modified, renamed or deleted, or a new migration sorts before the latest one in its dir | Never edit an applied migration; add a new, higher-numbered one. |
+| `pnpm check:schema` | a D1 migrations dir has no snapshot, or its snapshot (`<dir>.schema.snapshot.sql`, next to the dir) no longer matches the schema the migrations produce | Run `pnpm schema:snapshot` and commit the snapshot with the migration. Never edit a snapshot by hand. |
+| `pnpm test:scripts` | the release scripts' own tests fail | Fix the script or its test in `scripts/release/__tests__/`. |
 
 ## Development Workflow
 
@@ -799,8 +813,7 @@ pnpm api:deploy
 pnpm processor:deploy
 pnpm websocket:deploy
 pnpm admin:deploy
-# Admin web production deploy (no root alias):
-cd apps/admin-web && pnpm deploy
+pnpm admin-web:deploy:production
 
 # Or push to main branch → GitHub Actions handles all 6 apps automatically
 git push origin main
