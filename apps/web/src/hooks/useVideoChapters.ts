@@ -8,7 +8,7 @@ import type { VideoChapter, VideoChapterData } from '@al-ummah/shared-types';
 import type { Player } from 'video.js';
 import { logger } from '@/lib/logger-client';
 import { getApiUrl } from '@/lib/runtime-config';
-import { normalizeChapters, findChapterAt } from '@/lib/video/chapters';
+import { normalizeChapters, findChapterAt, adjacentChapter } from '@/lib/video/chapters';
 
 
 interface UseVideoChaptersOptions {
@@ -149,24 +149,14 @@ export function useVideoChapters({
     }
   }, [player]);
 
-  const nextChapter = useCallback(() => {
-    if (currentChapterIndex === -1 || currentChapterIndex >= chapters.length - 1) {
-      return;
-    }
-    seekToChapter(chapters[currentChapterIndex + 1]);
-  }, [currentChapterIndex, chapters, seekToChapter]);
+  const goToAdjacent = useCallback((direction: 'next' | 'previous') => {
+    if (!player) return;
+    const target = adjacentChapter(chapters, player.currentTime() ?? 0, direction);
+    if (target) seekToChapter(target);
+  }, [player, chapters, seekToChapter]);
 
-  const previousChapter = useCallback(() => {
-    if (currentChapterIndex === -1 || currentChapterIndex <= 0) {
-      return;
-    }
-    // More than 3 seconds into the chapter restarts it; otherwise go back one
-    if (player && player.currentTime() - chapters[currentChapterIndex].startTime > 3) {
-      seekToChapter(chapters[currentChapterIndex]);
-    } else {
-      seekToChapter(chapters[currentChapterIndex - 1]);
-    }
-  }, [currentChapterIndex, chapters, seekToChapter, player]);
+  const nextChapter = useCallback(() => goToAdjacent('next'), [goToAdjacent]);
+  const previousChapter = useCallback(() => goToAdjacent('previous'), [goToAdjacent]);
 
   return {
     chapters,
