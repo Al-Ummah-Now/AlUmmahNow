@@ -19,7 +19,7 @@ import Link from "next/link";
 type UploadMode = 'single' | 'batch';
 
 const UploadPage: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const params = useParams();
   const locale = params.locale as string;
   const router = useRouter();
@@ -524,7 +524,12 @@ const UploadPage: React.FC = () => {
             <ul className="space-y-2 text-xs md:text-sm text-gray-600 dark:text-gray-400">
               <li className="flex items-start">
                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>
-                <span>{t.upload.guidelineIslamicValues || 'Ensure your content aligns with Islamic values and community guidelines'}</span>
+                <span>
+                  {t.upload.guidelineIslamicValues || 'Ensure your content aligns with Islamic values and community guidelines'}{' '}
+                  <Link href={`/${lang}/community-guidelines`} className="text-blue-700 underline dark:text-blue-400" data-testid="upload-guidelines-link">
+                    {t.communityGuidelines.navLabel}
+                  </Link>
+                </span>
               </li>
               <li className="flex items-start">
                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>

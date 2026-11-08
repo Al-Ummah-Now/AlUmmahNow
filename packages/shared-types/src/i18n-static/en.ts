@@ -8,6 +8,7 @@
 
 import type { AppTranslations } from '../i18n';
 import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from '../i18n-library';
+import { COMMUNITY_GUIDELINES_EN } from '../i18n-community-guidelines';
 
 export const EN_TRANSLATIONS: AppTranslations = {
   imageCrop: {
@@ -24,6 +25,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     loadFailed: 'This image could not be opened. Try a JPEG or PNG file.',
   },
   library: LIBRARY_EN,
+  communityGuidelines: COMMUNITY_GUIDELINES_EN,
   notificationCenter: NOTIFICATION_CENTER_EN,
   common: {
     appName: 'Al Ummah Now',
