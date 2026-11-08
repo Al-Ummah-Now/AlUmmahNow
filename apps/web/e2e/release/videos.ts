@@ -15,6 +15,7 @@ export interface PublicVideo {
   isLive?: boolean;
   availableResolutions?: string[];
   playUrl?: string;
+  channelId?: string;
 }
 
 /**
