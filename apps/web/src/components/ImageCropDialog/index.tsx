@@ -14,6 +14,7 @@ import {
   clampZoom,
   coverScale,
   sourceRect,
+  fitAspect,
   type CropKind,
   type Point,
   type Size,
@@ -165,7 +166,7 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
     if (!img || !natural || !file || !measured) return;
     setBusy(true);
     try {
-      const { sx, sy, sw, sh } = sourceRect(natural, viewport, scale, offset);
+      const { sx, sy, sw, sh } = fitAspect(sourceRect(natural, viewport, scale, offset), spec.output.width / spec.output.height);
       const canvas = document.createElement('canvas');
       canvas.width = spec.output.width;
       canvas.height = spec.output.height;

@@ -68,6 +68,26 @@ export function sourceRect(image: Size, viewport: Size, scale: number, offset: P
   };
 }
 
+export type SourceRect = ReturnType<typeof sourceRect>;
+
+/**
+ * Trim a source rect (around its centre) to the output's aspect ratio. The
+ * frame is measured in whole CSS pixels and is only as square as the browser
+ * makes `aspect-ratio`; drawing a rect that is even slightly off onto the fixed
+ * 800x800 avatar canvas saved a squeezed avatar.
+ */
+export function fitAspect(rect: SourceRect, aspect: number): SourceRect {
+  if (!rect.sw || !rect.sh || !aspect) return rect;
+  const current = rect.sw / rect.sh;
+  if (Math.abs(current - aspect) < 1e-9) return rect;
+  if (current > aspect) {
+    const sw = rect.sh * aspect;
+    return { ...rect, sx: noNegZero(rect.sx + (rect.sw - sw) / 2), sw };
+  }
+  const sh = rect.sw / aspect;
+  return { ...rect, sy: noNegZero(rect.sy + (rect.sh - sh) / 2), sh };
+}
+
 /** Avoid -0 (from negating/clamping 0) leaking into offsets and source rects. */
 function noNegZero(n: number): number {
   return n === 0 ? 0 : n;

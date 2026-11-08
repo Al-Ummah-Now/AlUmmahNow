@@ -32,13 +32,13 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                     isConnected ? 'border-green-500' : 'border-red-500'
                 } animate-pulse`} />
             )}
-            <div className="w-10 h-10 rounded-full overflow-hidden relative">
+            <div className="w-10 h-10 shrink-0 aspect-square rounded-full overflow-hidden relative">
                 <Image
                     src={avatarUrl || "/avatar.png"}
                     alt={alt}
-                    objectFit="cover"
                     fill
-                    className="bg-gray-500"
+                    sizes="40px"
+                    className="bg-gray-500 object-cover"
                 />
             </div>
         </div>

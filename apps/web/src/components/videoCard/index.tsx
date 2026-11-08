@@ -31,7 +31,7 @@ const VideoCard: React.FC<VideoObject> = (video) => {
                     <h3 className="text-lg truncate font-[Tahoma]">
                         {removeUnwantedChars(title)}
                     </h3>
-                    <p className="text-sm truncate">{video.channel}</p>
+                    <p className="text-sm truncate">{video.channelName || video.channel}</p>
                     <p className="text-sm">
                         {video.views} {t.video.videoViews.toLowerCase()} • {new Date(video.dateCreated).toLocaleDateString()}
                     </p>
