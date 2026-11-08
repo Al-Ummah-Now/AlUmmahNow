@@ -20045,6 +20045,192 @@
         }
       }
     },
+    "/api/v1/videos/bulk-update": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Edit metadata of multiple videos",
+        "operationId": "post_VideoBulkUpdate",
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Channel ID"
+            },
+            "required": false,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "videoIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
+                  "changes": {
+                    "type": "object",
+                    "properties": {
+                      "isPublic": {
+                        "type": "boolean"
+                      },
+                      "category": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "enum": [
+                          "quran_recitation",
+                          "quran_tafsir",
+                          "hadith_studies",
+                          "islamic_history",
+                          "fiqh",
+                          "aqeedah",
+                          "dawah",
+                          "khutbah",
+                          "islamic_lectures",
+                          "islamic_nasheed",
+                          "islamic_kids",
+                          "islamic_news",
+                          "hajj_umrah",
+                          "ramadan",
+                          "islamic_lifestyle"
+                        ]
+                      },
+                      "addTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 50
+                        },
+                        "maxItems": 30
+                      },
+                      "removeTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 50
+                        },
+                        "maxItems": 30
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "videoIds",
+                  "changes"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-video results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "videoId": {
+                            "type": "string"
+                          },
+                          "success": {
+                            "type": "boolean"
+                          },
+                          "changed": {
+                            "type": "boolean"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "videoId",
+                          "success"
+                        ]
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "succeeded": {
+                          "type": "number"
+                        },
+                        "failed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "succeeded",
+                        "failed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "results",
+                    "summary"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No change requested or invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/scheduled": {
       "get": {
         "tags": [
