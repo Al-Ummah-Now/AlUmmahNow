@@ -4574,6 +4574,9 @@
                           "channelCoverUrl": {
                             "type": "string"
                           },
+                          "channelIsVerified": {
+                            "type": "boolean"
+                          },
                           "dateCreated": {
                             "type": "string",
                             "format": "date-time"
@@ -5238,6 +5241,9 @@
                           },
                           "channelCoverUrl": {
                             "type": "string"
+                          },
+                          "channelIsVerified": {
+                            "type": "boolean"
                           },
                           "dateCreated": {
                             "type": "string",
@@ -6529,6 +6535,9 @@
                           },
                           "channelCoverUrl": {
                             "type": "string"
+                          },
+                          "channelIsVerified": {
+                            "type": "boolean"
                           },
                           "dateCreated": {
                             "type": "string",
@@ -19111,6 +19120,9 @@
                           "channelCoverUrl": {
                             "type": "string"
                           },
+                          "channelIsVerified": {
+                            "type": "boolean"
+                          },
                           "dateCreated": {
                             "type": "string",
                             "format": "date-time"
@@ -19563,6 +19575,9 @@
                             },
                             "channelCoverUrl": {
                               "type": "string"
+                            },
+                            "channelIsVerified": {
+                              "type": "boolean"
                             },
                             "dateCreated": {
                               "type": "string",
@@ -20485,6 +20500,9 @@
                           },
                           "channelCoverUrl": {
                             "type": "string"
+                          },
+                          "channelIsVerified": {
+                            "type": "boolean"
                           },
                           "dateCreated": {
                             "type": "string",
@@ -23564,6 +23582,9 @@
                     "channelCoverUrl": {
                       "type": "string"
                     },
+                    "channelIsVerified": {
+                      "type": "boolean"
+                    },
                     "dateCreated": {
                       "type": "string",
                       "format": "date-time"
@@ -24055,6 +24076,9 @@
                             },
                             "channelCoverUrl": {
                               "type": "string"
+                            },
+                            "channelIsVerified": {
+                              "type": "boolean"
                             },
                             "dateCreated": {
                               "type": "string",
