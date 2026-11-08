@@ -137,6 +137,41 @@ pnpm lint
 - 🚦 Rate limiting (100 messages/minute per connection)
 - 📊 Server statistics and monitoring
 
+## 🔑 Secrets per app
+
+Names and purposes only. Values live in Cloudflare Secrets Store (`default_secrets_store`) and GitHub secrets, never in git.
+The source of truth is [`scripts/release/secrets-manifest.ts`](scripts/release/secrets-manifest.ts). Update it in the same PR as any code that reads a new secret.
+
+| App | Worker (prod / qa) | Secret binding → Secrets Store name (prod / qa) | Purpose |
+|---|---|---|---|
+| api-videos | `videos` / `videos-qa` | `bunny-stream-key` → `bunny-stream-key` / `bunny-stream-key-qa` | Bunny Stream API key (create, upload, update videos) |
+| | | `bunny_stream_library_id` → `bunny_stream_library_id` / `bunny-stream-library-id-qa` | Bunny Stream library id |
+| | | `BUNNY_TOKEN_KEY` → `bunny-stream-token-key` / `bunny-stream-token-key-qa` | Signs Bunny CDN playback and thumbnail URLs (`BUNNY_SIGN_URLS=true`) |
+| | | `image_storage_key` → `al-ummah-now-images-key` | Bunny Storage key for thumbnails and avatars |
+| | | `INTERNAL_API_KEY` → `internal-api-key` / `internal-api-key-qa` | `X-API-Key` for `/internal/*` and calls to other Workers |
+| admin-api | `al-ummah-admin-api` / `-qa` | `INTERNAL_API_KEY` | as above |
+| websocket-server | `al-ummah-now-comms` / `-qa` | `INTERNAL_API_KEY` | Authenticates broadcast calls from api-videos, processor and scheduler |
+| processor | `al-ummah-now-processor` / `-qa` | `INTERNAL_API_KEY` | as above |
+| scheduler | `al-ummah-scheduler` / `-qa` | `INTERNAL_API_KEY` | Scheduled-publish broadcasts. Needs wrangler 4: wrangler 3 silently drops `secrets_store_secrets` |
+| web, admin-web | `al-ummah-now-production`, `al-ummah-admin-web` / `al-ummah-web-qa`, `al-ummah-admin-web-qa` | none | |
+
+**Must never be set:** `NEXT_PUBLIC_BUNNY_API_KEY` (and any other `NEXT_PUBLIC_*` secret). Next inlines `NEXT_PUBLIC_*` into the browser bundle.
+
+**OAuth client ids** (`ClientId` var) must exist, enabled, in that env's auth D1 (`oauth_clients` in AlUmmahNowAuth):
+
+| App | prod | qa | Notes |
+|---|---|---|---|
+| web | `f0de3c30-…` Web | `e0de3c30-…` Web | Starts logins, so required |
+| admin-web | `a24e39de-…` Admin Web | `b24e39de-…` Admin Web | Starts logins, so required |
+| api-videos | `b1770235-…` API Videos | `c1770235-…` API Videos | Verification only; checked when set |
+| websocket-server | `adea61f1-…` WebSocket Server | `bdea61f1-…` WebSocket Server | Verification only; checked when set |
+
+No app in this repo uses an OAuth client *secret*. The M2M clients in auth D1 (API Videos, Admin API, Admin Web, WebSocket Server) have hashed secrets that no Worker consumes yet. If one starts using `client_credentials`, rotate its secret with `scripts/release/rotate-client-secret.ts` in AlUmmahNowAuth and add it to the manifest.
+
+GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (deploys, cleanup, seed), `RESEND_API_KEY` (E2E email), `QA_SEED_PASSWORD` (QA seed and admin E2E), `CLAUDE_CODE_OAUTH_TOKEN`.
+
+**Check:** `pnpm check:secrets [--env production|qa]` reads what is *deployed* and fails on any missing secret, any Secrets Store binding to a deleted secret, or any client id missing from that env's auth D1. It runs daily, on PRs that touch wrangler configs, and as a reusable workflow (`.github/workflows/secrets-check.yml`) for the release pipeline's pre-promote step.
+
 ## 🚢 Deployment
 
 ### Environments
