@@ -71,7 +71,8 @@ export interface R2Bucket {
 // D1 types are imported from @al-ummah/shared-types above
 
 export interface QueueEnvironment {
-  MESSAGE_QUEUE: {
+  /** Producer to the processor's own queue (PushDispatch, Epic 9.4). Optional: push is skipped when unbound. */
+  MESSAGE_QUEUE?: {
     send: (message: AlUmmahMessage) => Promise<void>;
   };
   DLQ?: { // Optional - might not be configured in all environments

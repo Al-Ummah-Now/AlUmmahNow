@@ -48,6 +48,8 @@
 
 	// Queue configuration
 	"queues": {
+		// Epic 9.4: the processor enqueues PushDispatch messages to its own queue
+		"producers": [{ "queue": "al-ummah-now-videos", "binding": "MESSAGE_QUEUE" }],
 		"consumers": [
 			{
 				"queue": "al-ummah-now-videos",
@@ -125,6 +127,7 @@
 				}
 			],
 			"queues": {
+				"producers": [{ "queue": "al-ummah-now-videos-stage", "binding": "MESSAGE_QUEUE" }],
 				"consumers": [
 					{
 						"queue": "al-ummah-now-videos-stage",

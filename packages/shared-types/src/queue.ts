@@ -111,6 +111,8 @@ export enum MessageType {
   NotificationCreate = 200,
   // Fan a notification out to a channel's subscribers (payload: NotificationFanoutPayload).
   NotificationFanout = 201,
+  // Deliver stored notifications to the recipients' push devices (payload: PushDispatchPayload, Epic 9.4).
+  PushDispatch = 202,
 
   // Search index sync (Story 29.9). Payload: SearchIndexSyncPayload ({ entity, id, object? }).
   // The processor projects the object and updates the D1 search index (no object = deleted).

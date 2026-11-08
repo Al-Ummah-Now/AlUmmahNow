@@ -16,7 +16,9 @@ import {
   upsertChannelSubscriber,
 } from './lib/notifications-store';
 import { eraseUserModerationData } from './moderation/store';
-import type { NotificationCreatePayload, NotificationFanoutPayload } from '@al-ummah/shared-types';
+import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload } from '@al-ummah/shared-types';
+import { dispatchPush, enqueuePush } from './push/dispatch';
+import { resolvePushProviders, type PushProviders } from './push/provider';
 
 /** Tombstone replacing a user id after GDPR erasure (matches api-videos lib/privacy/user-data.ts). */
 export const DELETED_USER_ID = 'deleted-user';
@@ -26,8 +28,12 @@ export const DELETED_USER_ID = 'deleted-user';
 export class MessageProcessor {
   private logger: Logger;
 
-  constructor(logger: Logger) {
+  /** Push providers per service; injectable for tests. */
+  private readonly pushProviders: PushProviders;
+
+  constructor(logger: Logger, pushProviders: PushProviders = resolvePushProviders()) {
     this.logger = logger;
+    this.pushProviders = pushProviders;
   }
 
   async processMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<ProcessingResult> {
@@ -106,6 +112,9 @@ export class MessageProcessor {
         break;
       case MessageType.NotificationFanout:
         await this.processNotificationFanout(message, env);
+        break;
+      case MessageType.PushDispatch:
+        await this.processPushDispatch(message, env);
         break;
 
       // Video-related messages
@@ -470,6 +479,9 @@ export class MessageProcessor {
     if (stored && !payload.realtimeSent) {
       await pushStoredNotifications(env, [stored], payload);
     }
+    if (stored) {
+      await enqueuePush(env, [stored], payload);
+    }
   }
 
   /** Fan a new-video / live-started notification out to the channel's subscribers. */
@@ -483,11 +495,13 @@ export class MessageProcessor {
       return;
     }
     const rows = await fanoutNotification(env.NOTIFICATIONS_DB, payload);
-    const pushed = await pushStoredNotifications(env, rows, {
-      notificationKey: payload.kind === 'live_started' ? 'liveStarted' : 'newVideo',
+    const data = {
+      notificationKey: payload.kind === 'live_started' ? ('liveStarted' as const) : ('newVideo' as const),
       params: payload.params,
       actionUrl: payload.actionUrl,
-    });
+    };
+    const pushed = await pushStoredNotifications(env, rows, data);
+    await enqueuePush(env, rows, data);
     this.logger.info('Notification fan-out finished', {
       kind: payload.kind,
       channelId: payload.channelId,
@@ -495,6 +509,20 @@ export class MessageProcessor {
       recipients: rows.length,
       pushed,
     });
+  }
+
+  /** Deliver stored notifications to the recipients' push devices (Epic 9.4). */
+  private async processPushDispatch(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as unknown as PushDispatchPayload;
+    if (!Array.isArray(payload.recipients) || !isNotificationKey(payload.notificationKey)) {
+      throw new Error('Push dispatch message missing required fields: recipients, notificationKey');
+    }
+    if (!env.NOTIFICATIONS_DB) {
+      this.logger.warn('NOTIFICATIONS_DB not bound; push skipped', { key: payload.notificationKey });
+      return;
+    }
+    const summary = await dispatchPush(env.NOTIFICATIONS_DB, payload, this.pushProviders);
+    this.logger.info('Push dispatch finished', { key: payload.notificationKey, recipients: payload.recipients.length, ...summary });
   }
 
   private async processLiveStreamMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
