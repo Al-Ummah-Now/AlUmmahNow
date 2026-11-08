@@ -11,7 +11,8 @@
     "deploy:production": "opennextjs-cloudflare build && wrangler deploy --config wrangler.production.jsonc",
     "deploy:qa": "opennextjs-cloudflare build && CI=true wrangler deploy --config wrangler.qa.jsonc",
     "lint": "eslint src",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@al-ummah/logger": "workspace:*",

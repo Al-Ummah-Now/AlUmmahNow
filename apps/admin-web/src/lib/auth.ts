@@ -1,13 +1,20 @@
-'use server';
-
+/**
+ * Server-only session helpers.
+ *
+ * This module deliberately has no 'use server' directive: that would expose
+ * every export (including setAdminSession) as a client-callable server action.
+ * Server actions that need auth live in src/app/actions.ts.
+ */
+import { cache } from 'react';
 import { cookies as getCookies } from 'next/headers';
 import { createClient } from '@al-ummah-now/openauth/client';
 import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
-import type { SystemRole } from './roles';
+import { highestAdminRole, hasAdminAccess, type SystemRole } from './roles';
+import { logger } from './logger';
 
 // Session configuration
-const SESSION_COOKIE_NAME = 'admin_session';
+export const SESSION_COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
 
 export interface AdminUser {
@@ -23,74 +30,109 @@ export interface AdminSession {
   refreshToken: string;
 }
 
-export async function getAuthClient() {
-  return createClient({
-    clientID: process.env.ClientId!,
-    issuer: process.env.Issuer!,
-  });
-}
+type AuthClient = ReturnType<typeof createClient>;
+let authClient: AuthClient | null = null;
 
 /**
- * Get current admin session from cookies
+ * The client is cached per isolate so its JWKS cache survives across
+ * requests instead of re-fetching the auth server keys on every page view.
  */
-export async function getAdminSession(): Promise<AdminSession | null> {
+export async function getAuthClient(): Promise<AuthClient> {
+  if (!authClient) {
+    authClient = createClient({
+      clientID: process.env.ClientId!,
+      issuer: process.env.Issuer!,
+    });
+  }
+  return authClient;
+}
+
+function parseSessionCookie(value: string): { accessToken: string; refreshToken: string } | null {
   try {
-    const cookieStore = await getCookies();
-    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
-
-    if (!sessionCookie?.value) {
-      // Try legacy cookies
-      const accessToken = cookieStore.get('access_token');
-      const refreshToken = cookieStore.get('refresh_token');
-
-      if (!accessToken?.value || !refreshToken?.value) {
-        return null;
-      }
-
-      // Verify legacy tokens
-      const client = await getAuthClient();
-      const verified = await client.verify(subjects, accessToken.value, {
-        refresh: refreshToken.value,
-      });
-
-      if (verified.err || !verified.subject) {
-        return null;
-      }
-
-      const userInfo = verified.subject.properties;
-
-      // Extract user roles and determine highest priority role
-      const userRoles = userInfo.roles || [];
-      const role = userRoles.includes('super_admin')
-        ? 'super_admin'
-        : userRoles.includes('admin')
-        ? 'admin'
-        : userRoles.includes('moderator')
-        ? 'moderator'
-        : undefined;
-
-      // Create session from legacy cookies
-      const session: AdminSession = {
-        user: {
-          id: userInfo.id,
-          email: userInfo.email,
-          role,
-        },
-        accessToken: accessToken.value,
-        refreshToken: refreshToken.value,
-      };
-
-      // Migrate to new session cookie
-      await setAdminSession(session);
-
-      return session;
+    const parsed = JSON.parse(value) as Partial<AdminSession>;
+    if (typeof parsed?.accessToken !== 'string' || typeof parsed?.refreshToken !== 'string') {
+      return null;
     }
-
-    return JSON.parse(sessionCookie.value) as AdminSession;
+    return { accessToken: parsed.accessToken, refreshToken: parsed.refreshToken };
   } catch {
     return null;
   }
 }
+
+/**
+ * Resolve the current admin session.
+ *
+ * The cookie is only a token carrier: the access token is verified against
+ * the auth server's keys (refreshing it when expired) and the user identity
+ * and role are taken from the verified token, never from the cookie JSON.
+ * Memoised per request so layout, page and API helpers share one verification.
+ */
+export const getAdminSession = cache(async (): Promise<AdminSession | null> => {
+  try {
+    const cookieStore = await getCookies();
+    const sessionValue = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+
+    let tokens: { accessToken: string; refreshToken: string } | null = null;
+    let fromLegacyCookies = false;
+
+    if (sessionValue) {
+      tokens = parseSessionCookie(sessionValue);
+    } else {
+      const accessToken = cookieStore.get('access_token')?.value;
+      const refreshToken = cookieStore.get('refresh_token')?.value;
+      if (accessToken && refreshToken) {
+        tokens = { accessToken, refreshToken };
+        fromLegacyCookies = true;
+      }
+    }
+
+    if (!tokens) {
+      return null;
+    }
+
+    const client = await getAuthClient();
+    const verified = await client.verify(subjects, tokens.accessToken, {
+      refresh: tokens.refreshToken,
+    });
+
+    if (verified.err || !verified.subject) {
+      logger.warn('[auth] Session token verification failed', {
+        name: verified.err?.name,
+        message: verified.err?.message,
+      });
+      return null;
+    }
+
+    const userInfo = verified.subject.properties;
+    const session: AdminSession = {
+      user: {
+        id: userInfo.id,
+        email: userInfo.email,
+        role: highestAdminRole(userInfo.roles),
+      },
+      accessToken: verified.tokens?.access ?? tokens.accessToken,
+      refreshToken: verified.tokens?.refresh ?? tokens.refreshToken,
+    };
+
+    if (verified.tokens || fromLegacyCookies) {
+      // Cookies can only be written from route handlers and server actions;
+      // during a server component render the refreshed tokens are still used
+      // for this request and persisted on the next writable request.
+      try {
+        await setAdminSession(session);
+      } catch {
+        logger.debug('[auth] Refreshed session not persisted (read-only cookie context)');
+      }
+    }
+
+    return session;
+  } catch (error) {
+    logger.error('[auth] Failed to resolve admin session', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+});
 
 /**
  * Set admin session in cookies
@@ -113,26 +155,13 @@ export async function setAdminSession(session: AdminSession | null): Promise<voi
 }
 
 /**
- * Set tokens from OAuth callback
+ * Clear every cookie that can carry admin credentials.
  */
-export async function setTokens(access: string, refresh: string): Promise<void> {
+export async function clearAdminSession(): Promise<void> {
   const cookieStore = await getCookies();
-
-  cookieStore.set('access_token', access, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: SESSION_MAX_AGE,
-  });
-
-  cookieStore.set('refresh_token', refresh, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: SESSION_MAX_AGE,
-  });
+  cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete('access_token');
+  cookieStore.delete('refresh_token');
 }
 
 /**
@@ -144,20 +173,7 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Require authentication - redirect to login if not authenticated
- */
-export async function requireAuth(): Promise<AdminSession> {
-  const session = await getAdminSession();
-
-  if (!session) {
-    redirect('/login');
-  }
-
-  return session;
-}
-
-/**
- * Require admin role - redirect to access-denied if not admin/moderator
+ * Require admin role - redirect to login / access-denied if not authorized
  */
 export async function requireAdminRole(): Promise<AdminSession> {
   const session = await getAdminSession();
@@ -166,42 +182,9 @@ export async function requireAdminRole(): Promise<AdminSession> {
     redirect('/login');
   }
 
-  // Import hasAdminAccess here to avoid circular dependency
-  const { hasAdminAccess } = await import('./roles');
-
   if (!hasAdminAccess(session.user.role)) {
     redirect('/access-denied');
   }
 
   return session;
-}
-
-/**
- * Login - redirect to OAuth provider
- */
-export async function login(): Promise<void> {
-  const session = await getAdminSession();
-  if (session) {
-    redirect('/dashboard');
-  }
-
-  const client = await getAuthClient();
-  const { url } = await client.authorize(
-    `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3091'}/api/callback`,
-    'code',
-  );
-  redirect(url);
-}
-
-/**
- * Logout - clear session and redirect
- */
-export async function logout(): Promise<void> {
-  const cookieStore = await getCookies();
-
-  cookieStore.delete(SESSION_COOKIE_NAME);
-  cookieStore.delete('access_token');
-  cookieStore.delete('refresh_token');
-
-  redirect('/login');
 }

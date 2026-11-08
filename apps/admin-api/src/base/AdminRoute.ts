@@ -2,6 +2,7 @@ import { OpenAPIRoute } from 'chanfana';
 import { HTTPException } from 'hono/http-exception';
 import { AppContext, AuthContext } from './types';
 import { logger } from '../lib/logger';
+import { hasAdminRole, hasModeratorRole } from '../lib/roles';
 
 /**
  * Base class for API endpoints that REQUIRE admin/moderator authentication.
@@ -104,8 +105,8 @@ export abstract class AdminRoute extends OpenAPIRoute {
       }
 
       const roles = auth.roles || [];
-      const isAdmin = roles.includes('admin');
-      const isModerator = roles.includes('moderator');
+      const isAdmin = hasAdminRole(roles);
+      const isModerator = hasModeratorRole(roles);
 
       logger.info('[AdminRoute] Role check result', {
         userId,
@@ -116,7 +117,7 @@ export abstract class AdminRoute extends OpenAPIRoute {
         result: isAdmin || isModerator
       });
 
-      return isAdmin || isModerator;
+      return isModerator;
     } catch (error) {
       logger.error('Error checking admin role:', error);
       return false;
@@ -154,14 +155,13 @@ export abstract class AdminRoute extends OpenAPIRoute {
    * Check if user is an admin (not just moderator)
    */
   protected isAdmin(c: AppContext): boolean {
-    return this.getRoles(c).includes('admin');
+    return hasAdminRole(this.getRoles(c));
   }
 
   /**
    * Check if user is a moderator (includes admins)
    */
   protected isModerator(c: AppContext): boolean {
-    const roles = this.getRoles(c);
-    return roles.includes('admin') || roles.includes('moderator');
+    return hasModeratorRole(this.getRoles(c));
   }
 }

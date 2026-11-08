@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { getAdminSession, logout } from '@/lib/auth';
+import { getAdminSession } from '@/lib/auth';
+import { logout } from '@/app/actions';
 
 export default async function AccessDeniedPage() {
   const session = await getAdminSession();

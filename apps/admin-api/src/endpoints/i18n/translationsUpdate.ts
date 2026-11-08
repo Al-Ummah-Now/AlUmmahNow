@@ -247,7 +247,8 @@ export class UpdateTranslationsEndpoint extends AdminRoute {
       // Broadcast translation update via WebSocket
       try {
         const websocketUrl = c.env.WEBSOCKET_URL;
-        const internalApiKey = c.env.INTERNAL_API_KEY;
+        const keyBinding = c.env.INTERNAL_API_KEY;
+        const internalApiKey = typeof keyBinding === 'string' ? keyBinding : await keyBinding?.get();
 
         if (websocketUrl && internalApiKey) {
           const broadcastResponse = await fetch(`${websocketUrl}/broadcast`, {
