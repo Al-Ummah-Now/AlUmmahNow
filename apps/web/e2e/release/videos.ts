@@ -17,6 +17,15 @@ export interface PublicVideo {
   playUrl?: string;
 }
 
+/**
+ * Shortest video the watch-history specs may use. Watch history is never saved
+ * for videos under 30s (WatchHistoryService.shouldSaveProgress, MIN_DURATION),
+ * so a shorter pick looks exactly like a broken save: on stage the first
+ * playable video was a 20s clip and all history specs failed with no POST.
+ * The margin keeps 15s of play and a seek to 30% clear of the 90% "completed" mark.
+ */
+export const HISTORY_MIN_SECONDS = 40;
+
 export const NO_PLAYABLE_VIDEO = 'no public, encoded video in this environment (seed one; see CLAUDE.md "Release regressions")';
 
 /** A public, encoded, non-live video of at least `minSeconds`, or null when the env has none. */

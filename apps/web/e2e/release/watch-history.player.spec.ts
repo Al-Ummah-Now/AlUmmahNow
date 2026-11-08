@@ -6,7 +6,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, pause, playFor, watchUrl } from './videos';
+import { findPlayableVideo, HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 
 interface HistoryEntry {
@@ -16,7 +16,7 @@ interface HistoryEntry {
 
 test.describe('Release: watch history', () => {
   test('a signed-in watch is listed in the user\'s history', async ({ page }) => {
-    const video = await findPlayableVideo();
+    const video = await findPlayableVideo(HISTORY_MIN_SECONDS);
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     const user = await signUpOnWeb(page, 'rel-history');
