@@ -70,7 +70,7 @@ cat /home/meywd/AlUmmahNow/apps/api-videos/.dev.vars | grep -E "(image_storage_k
 
 Expected output:
 ```
-image_storage_key=2c4f445b-1f40-43cc-8d6a82c1cbe2-9c70-4489
+image_storage_key=<your-bunny-storage-zone-password>
 ```
 
 **Solution 3**: Manually specify .dev.vars file
