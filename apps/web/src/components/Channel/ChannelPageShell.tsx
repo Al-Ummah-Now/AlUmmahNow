@@ -1,8 +1,6 @@
 import type { Channel } from '@al-ummah/shared-types';
-import { ChannelHeader as ChannelHeaderLTR } from '@/components/Channel/ChannelHeader';
-import { ChannelHeader as ChannelHeaderRTL } from '@/components/Channel/rtl/ChannelHeader';
+import { ChannelHeader } from '@/components/Channel/ChannelHeader';
 import { ChannelTabBar } from '@/components/ChannelTabs';
-import { getTextDirection } from '@/lib/i18n/utils';
 
 interface ChannelPageShellProps {
   channel: Channel;
@@ -17,9 +15,6 @@ interface ChannelPageShellProps {
  * avatar, name, @handle, subscribe or owner actions), tab bar and content.
  */
 export function ChannelPageShell({ channel, locale, isOwner, children }: ChannelPageShellProps) {
-  const isRTL = getTextDirection(locale) === 'rtl';
-  const ChannelHeader = isRTL ? ChannelHeaderRTL : ChannelHeaderLTR;
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Channel Header (banner, avatar, name, subscribe / owner actions) */}

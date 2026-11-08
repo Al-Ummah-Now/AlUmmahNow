@@ -46,7 +46,6 @@ import {
   reorderChannelSections,
 } from '@/lib/api/channel-sections';
 import { logger } from '@/lib/logger-client';
-import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { getChannelById } from '@/lib/api/channels';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -60,7 +59,6 @@ export default function ChannelSectionsManagement() {
   const s = t.channelManage.sections;
 
   const [sections, setSections] = useState<ChannelSection[]>([]);
-  const [channelName, setChannelName] = useState<string>('');
   const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -100,10 +98,6 @@ export default function ChannelSectionsManagement() {
           sectionsCount: sectionList?.length || 0,
           hasChannel: !!channel,
         });
-
-        if (channel) {
-          setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
-        }
 
         if (sectionList) {
           setSections([...sectionList].sort((a, b) => a.position - b.position));
@@ -271,18 +265,12 @@ export default function ChannelSectionsManagement() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4 md:space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
-      <ChannelSettingsBreadcrumb
-        channelId={channelId}
-        channelName={channelName}
-        locale={locale}
-        currentPage="sections"
-      />
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">
             {s.title}
-          </h1>
+          </h2>
           <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
             {s.description.replace('{max}', String(MAX_SECTIONS))}
           </p>

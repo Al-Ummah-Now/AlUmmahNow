@@ -264,3 +264,53 @@
   border-radius: 0.5rem;
   text-decoration: underline;
 }
+
+/*
+  In-place editing on settings pages (inline fields, banner/avatar pickers,
+  unsaved-changes bar). Colours come from the Fanous tokens, which follow the
+  theme through data-fanous-theme on <html>.
+*/
+:root {
+  --inline-edit-ring: var(--fanous-color-accent);
+  --inline-edit-glow: color-mix(in srgb, var(--fanous-color-focus-glow) 24%, transparent);
+  --inline-edit-hint: color-mix(in srgb, var(--fanous-color-accent) 32%, transparent);
+  --inline-edit-error: var(--fanous-color-error-text);
+  --inline-edit-success: var(--fanous-color-success-text);
+}
+
+.inline-edit-target {
+  border-radius: 0.5rem;
+  outline: 1px dashed transparent;
+  outline-offset: 4px;
+}
+
+[data-edit-mode='on'] .inline-edit-target {
+  outline-color: var(--inline-edit-hint);
+}
+
+[data-edit-mode='on'] .inline-edit-target:hover,
+.inline-edit-target[data-editing='true'] {
+  outline-style: solid;
+  outline-color: var(--inline-edit-ring);
+  box-shadow: 0 0 0 6px var(--inline-edit-glow);
+}
+
+.inline-edit-target[data-invalid='true'] {
+  outline-style: solid;
+  outline-color: var(--inline-edit-error);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .inline-edit-target {
+    transition: outline-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .unsaved-bar-enter {
+    animation: unsaved-bar-rise 0.22s ease-out;
+  }
+}
+
+@keyframes unsaved-bar-rise {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

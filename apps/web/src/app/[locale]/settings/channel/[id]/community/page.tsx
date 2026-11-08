@@ -15,8 +15,6 @@ import {
 } from '@/lib/api/community-posts';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
-import { getChannelById } from '@/lib/api/channels';
 import { logger } from '@/lib/logger-client';
 
 interface CommunityManagementPageProps {
@@ -33,26 +31,9 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
 
   const [activeTab, setActiveTab] = useState<PostStatus>(PostStatus.PUBLISHED);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
-  const [channelName, setChannelName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<PostType | 'all'>('all');
-
-  // Fetch channel name
-  useEffect(() => {
-    const fetchChannel = async () => {
-      try {
-        const channel = await getChannelById(id);
-        if (channel) {
-          setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
-        }
-      } catch (error) {
-        logger.error('Failed to load channel', { error, channelId: id });
-      }
-    };
-
-    fetchChannel();
-  }, [id, locale]);
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -114,7 +95,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="
         border-b
         bg-card
@@ -127,18 +108,11 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
           px-4 py-3
           md:px-6 md:py-4
         ">
-          <ChannelSettingsBreadcrumb
-            channelId={id}
-            channelName={channelName}
-            locale={locale}
-            currentPage="community"
-            className="mb-4"
-          />
 
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-lg md:text-2xl font-bold">
+            <h2 className="text-lg md:text-2xl font-bold">
               {t.community.managePosts}
-            </h1>
+            </h2>
             <Button onClick={() => router.push(`/${locale}/settings/channel/${id}/community/new`)}>
               <Plus className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
               {t.community.newPost}

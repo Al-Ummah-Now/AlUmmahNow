@@ -9,17 +9,14 @@ import { getChannelTabConfig, updateChannelTabConfig, verifyChannelOwnership } f
 import { getChannelById } from '@/lib/api/channels';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
-import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 
 export default function ChannelTabsSettingsPage() {
   const params = useParams();
   const router = useRouter();
   const { t } = useLanguage();
   const channelId = params.id as string;
-  const locale = (params.locale as string) || 'en';
 
   const [config, setConfig] = useState<ChannelTabConfig | null>(null);
-  const [channelName, setChannelName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
@@ -42,8 +39,6 @@ export default function ChannelTabsSettingsPage() {
           setLoading(false);
           return;
         }
-
-        setChannelName(channel.name || '');
 
         // Verify ownership (P1 fix)
         const isChannelOwner = await verifyChannelOwnership(channelId);
@@ -184,19 +179,12 @@ export default function ChannelTabsSettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
-      {/* Breadcrumb */}
-      <ChannelSettingsBreadcrumb
-        channelId={channelId}
-        channelName={channelName}
-        locale={locale}
-        currentPage="tabs"
-      />
 
       {/* Header */}
       <div>
-        <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.channel.tabs.manage_tabs}
-        </h1>
+        </h2>
         <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
           {t.channel.tabs.manage_tabs_description}
         </p>

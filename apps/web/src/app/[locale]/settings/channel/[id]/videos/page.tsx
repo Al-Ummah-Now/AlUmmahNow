@@ -8,10 +8,8 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
 import { listVideos, deleteVideo } from '@/lib/api/videos';
 import { isChannelOwner } from '@/lib/channel-utils';
-import { getChannelById } from '@/lib/api/channels';
 import Image from 'next/image';
 import Link from 'next/link';
-import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
@@ -31,7 +29,6 @@ export default function ChannelVideosPage() {
 
   const [videos, setVideos] = useState<VideoObject[]>([]);
   const [filteredVideos, setFilteredVideos] = useState<VideoObject[]>([]);
-  const [channelName, setChannelName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,14 +78,7 @@ export default function ChannelVideosPage() {
           return all;
         };
 
-        const [allVideos, channel] = await Promise.all([
-          loadAllVideos(),
-          getChannelById(channelId)
-        ]);
-
-        if (channel) {
-          setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
-        }
+        const allVideos = await loadAllVideos();
 
         logger.info('Channel videos loaded', { channelId, count: allVideos.length });
         setVideos(allVideos);
@@ -221,21 +211,13 @@ export default function ChannelVideosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+    <div className="p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Breadcrumb */}
-        <ChannelSettingsBreadcrumb
-          channelId={channelId}
-          channelName={channelName}
-          locale={locale}
-          currentPage="videos"
-          className="mb-6"
-        />
 
         {/* Header */}
         <div className="mb-8">
           <div className="mb-4">
-            <h1 className="text-3xl font-bold dark:text-white">{t.video.videoManagement}</h1>
+            <h2 className="text-3xl font-bold dark:text-white">{t.video.videoManagement}</h2>
           </div>
 
           {/* Search and Filters */}
