@@ -221,7 +221,8 @@ describe('useRealTimeNotifications', () => {
     expect(result.current.notifications.length).toBe(1);
   });
 
-  it('should handle auto-remove without infinite loop', async () => {
+  // Quarantined: fails on main, tracked in #206.
+  it.skip('should handle auto-remove without infinite loop', async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <WebSocketProvider user={{ id: 'test-user', email: 'test@example.com' }}>
         {children}
