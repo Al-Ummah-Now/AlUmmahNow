@@ -21,7 +21,6 @@
   },
   "upload_source_maps": true,
   "vars": {
-    "ClientId": "e0de3c30-0304-4ac4-86d6-1e185dec0439",
     "Issuer": "https://auth.qa.alummahnow.net",
     "OPENAUTH_ISSUER": "https://auth.qa.alummahnow.net",
     "NEXTJS_ENV": "qa",
