@@ -138,7 +138,9 @@ describe('LiveStreamCard Component', () => {
       expect(placeholder).toBeInTheDocument();
     });
 
-    it('handles image load error gracefully', () => {
+    // Quarantined: fails on main, tracked in #206. Its assertion runs in a
+    // setTimeout after the test ends and fails whichever test is running then.
+    it.skip('handles image load error gracefully', () => {
       const stream = createMockLiveStream({
         thumbnailUrl: 'https://invalid-image-url.com/image.jpg',
       });
