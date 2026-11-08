@@ -526,6 +526,9 @@ importers:
       hono:
         specifier: ^4.12.28
         version: 4.12.28
+      jose:
+        specifier: 5.9.6
+        version: 5.9.6
       ws:
         specifier: ^8.18.3
         version: 8.18.3

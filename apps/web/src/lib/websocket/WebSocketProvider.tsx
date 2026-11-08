@@ -5,7 +5,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { WebSocketConnectionState, WebSocketConfig, WebSocketEventType } from '@/interfaces/websocket';
 import { User } from '@/interfaces';
-import { fetchClientAuthToken } from '@/lib/auth/client-token';
+import { getRealtimeAccessToken } from '@/lib/actions/realtime';
 
 interface WebSocketContextType {
   wsManager: WebSocketManager | null;
@@ -59,6 +59,9 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
     if (user?.id) {
       defaultConfig.userId = user.id;
+      // The server verifies this OpenAuth access token and derives the user from it;
+      // the manager fetches a fresh one on every (re)connect (#228).
+      defaultConfig.getAuthToken = getRealtimeAccessToken;
     }
     let cancelled = false;
     const manager = new WebSocketManager(defaultConfig);
@@ -73,14 +76,9 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
       setIsConnected(state.status === 'connected');
     });
 
-    // Auto-connect for both authenticated and anonymous users.
-    // Authenticated users get their access token from the same-origin token
-    // endpoint (cookies are httpOnly) and authenticate via the first message.
+    // Auto-connect for both authenticated and anonymous users. Authenticated
+    // users send their access token (from getAuthToken) in the first message.
     void (async () => {
-      if (user?.id) {
-        const token = await fetchClientAuthToken();
-        if (token) manager.setAuthToken(token);
-      }
       if (cancelled) return;
       manager.connect(user?.id).catch((error) => {
         logger.error("Failed to connect to WebSocket:", error);

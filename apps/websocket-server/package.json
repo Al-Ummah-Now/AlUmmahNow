@@ -11,13 +11,15 @@
     "cf-typegen": "wrangler types",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .wrangler",
-    "verify": "node verify.js"
+    "verify": "node verify.js",
+    "test": "tsx --import ./test/register-cf-stub.mjs --test test/*.test.ts"
   },
   "dependencies": {
+    "@al-ummah-now/openauth": "1.0.15",
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
-    "@al-ummah-now/openauth": "1.0.15",
     "hono": "^4.12.28",
+    "jose": "5.9.6",
     "ws": "^8.18.3",
     "zod": "^3.25.76"
   },
