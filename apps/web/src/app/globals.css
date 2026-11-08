@@ -284,6 +284,13 @@
   outline-offset: 4px;
 }
 
+/* Fields scrolled into view (focus, validation) stay clear of the sticky
+   unsaved-changes bar at the bottom and the header at the top */
+.inline-edit-target,
+.inline-edit-target :is(input, textarea, select) {
+  scroll-margin-block: 5rem 9rem;
+}
+
 [data-edit-mode='on'] .inline-edit-target {
   outline-color: var(--inline-edit-hint);
 }
