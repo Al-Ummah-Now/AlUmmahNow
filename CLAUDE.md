@@ -582,7 +582,8 @@ Never production: the specs create accounts, channels and videos. Each spec
 registers its own user with an `@e2e.alummahnow.net` address (the auth
 server's code sink stores its verification code instead of emailing it; QA and
 stage only) and creates the data it needs; there are no seeded users and no
-global setup.
+global setup. Passwords are random per run, so the accounts left behind
+(including promoted admins) cannot be signed into later.
 
 | Spec | Covers |
 |---|---|
@@ -592,7 +593,7 @@ global setup.
 | `admin-signin.spec.ts` | admin-web refuses a user without an admin role (`/access-denied`); a user promoted with the auth server's `/test/promote` (`TEST_PROMOTE_SECRET`) reaches `/dashboard`. The admin case skips when the secret is missing |
 | `player.spec.ts` | an anonymous watch page really plays (media `currentTime` advances), en and ar |
 | `watch-history.player.spec.ts` | a signed-in watch reaches `GET /api/watch-history` and the `/history` page (#234) |
-| `uploads.spec.ts` | profile and channel avatar uploads store a served image (#229); a video uploaded on `/upload` (TUS through the api-videos proxy) is listed in the owner's search and dashboard, then deleted. Encoding is not awaited |
+| `uploads.spec.ts` | profile and channel avatar uploads store a served image (#229); a channel created in the account menu, then a video uploaded on `/upload` (TUS through the api-videos proxy), is listed in the owner's search and dashboard, then deleted. Encoding is not awaited |
 
 Playback specs (`*player.spec.ts`) run in the `player` project on branded
 Chrome (`channel: 'chrome'`): Playwright's bundled Chromium cannot decode the

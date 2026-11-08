@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+
 /**
  * Where the release regressions run. E2E_ENV=qa on PRs, E2E_ENV=stage in the
  * release workflow. Never production: these specs create accounts and data.
@@ -48,4 +50,10 @@ export function sinkEmail(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@e2e.alummahnow.net`;
 }
 
-export const TEST_PASSWORD = 'Release-Test-Pass-1!';
+/**
+ * Random per worker process: every user is created and used inside one test,
+ * so nothing needs it later, and the accounts left behind on QA/stage
+ * (including promoted admins; the auth server has no demote route) cannot be
+ * signed into with a password from the repo.
+ */
+export const TEST_PASSWORD = `Rel-${randomBytes(12).toString('base64url')}-1!`;

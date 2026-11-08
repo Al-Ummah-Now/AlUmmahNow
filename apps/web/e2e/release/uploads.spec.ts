@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
-import { apiFetch, createProfile, signInAgain, signUpOnWeb, type WebUser } from './web-session';
+import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 
 const FIXTURES = path.join(__dirname, '..', 'test-fixtures');
 const IMAGE = path.join(FIXTURES, 'e2e-thumbnail.jpg');
@@ -64,11 +64,36 @@ test.describe('Release: uploads', () => {
   });
 
   test('a video uploaded on the upload page is listed as the user\'s video', async ({ page }) => {
-    const first = await signUpOnWeb(page, 'rel-upload');
-    await createProfile(first);
-    const channelId = await createChannel(first, `Release E2E uploads ${Date.now().toString(36)}`);
-    // The web session caches the user's channels at sign-in
-    const user = await signInAgain(page, first.email);
+    const user = await signUpOnWeb(page, 'rel-upload');
+    await createProfile(user);
+    // Create the channel the way users do (account menu), which also refreshes
+    // the web session's channels; a channel created only through the API is
+    // not in the session until its channel list is reloaded
+    const channelName = `Release E2E uploads ${Date.now().toString(36)}`;
+    // Consent already answered (analytics, experiments, performance all off),
+    // so the banner does not cover the account menu
+    await page.context().addCookies([
+      { name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' },
+    ]);
+    await page.goto(`${target().web}/en`);
+    await page.getByTestId('nav-menu-trigger').click();
+    await page.getByTestId('nav-create-channel').click();
+    const nameInput = page.locator('[role="menu"] input[type="text"]').first();
+    await nameInput.fill(channelName);
+    await nameInput.press('Enter');
+    // The form closes once the channel exists and the session's channels are
+    // reloaded; navigating before that loses the reload
+    await expect(nameInput).toBeHidden({ timeout: 30000 });
+
+    let channelId = '';
+    await expect
+      .poll(async () => {
+        const res = await apiFetch(user, '/api/channels?limit=100');
+        const body = (await res.json().catch(() => ({}))) as { data?: Array<{ id: string; name: string }> };
+        channelId = body.data?.find((c) => c.name === channelName)?.id ?? '';
+        return channelId;
+      }, { message: 'the channel created in the account menu is not in GET /api/channels', timeout: 30000 })
+      .not.toBe('');
 
     await page.goto(`${target().web}/en/upload`);
     await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
