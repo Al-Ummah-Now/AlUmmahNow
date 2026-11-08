@@ -112,7 +112,12 @@ export const APPS: AppRule[] = [
 		production: {
 			env: null,
 			name: 'al-ummah-now-comms',
-			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net' },
+			vars: {
+				ENVIRONMENT: 'production',
+				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
+				// Without Issuer the server cannot verify token signatures and refuses all tokens.
+				Issuer: AUTH_ISSUER,
+			},
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'durable_objects', name: 'WEBSOCKET_DO' },

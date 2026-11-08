@@ -51,7 +51,8 @@
 	 */
 	"vars": {
 		"ENVIRONMENT": "production",
-		"WEBSOCKET_URL": "https://realtime.alummahnow.net"
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
+		"Issuer": "https://auth.alummahnow.net"
 	},
 	/**
 	 * Secrets Store

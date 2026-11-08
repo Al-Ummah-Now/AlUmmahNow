@@ -5,6 +5,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { WebSocketConnectionState, WebSocketConfig, WebSocketEventType } from '@/interfaces/websocket';
 import { User } from '@/interfaces';
+import { getRealtimeAccessToken } from '@/lib/actions/realtime';
 
 interface WebSocketContextType {
   wsManager: WebSocketManager | null;
@@ -50,8 +51,8 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
     if (user?.id) {
       defaultConfig.userId = user.id;
-      // In production, you would get this from your auth token
-      // defaultConfig.authToken = getAuthToken();
+      // The server verifies this OpenAuth access token and derives the user from it.
+      defaultConfig.getAuthToken = getRealtimeAccessToken;
     }
 
     wsManagerRef.current = new WebSocketManager(defaultConfig);

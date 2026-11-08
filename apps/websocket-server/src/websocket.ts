@@ -4,7 +4,7 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { validateJWT, validateJWTBasic, AuthPayload } from './auth';
+import { authenticateToken, canPublish, canSubscribe } from './auth';
 import { ChannelManager } from './channels';
 import { PresenceManager } from './presence';
 import { ClientMessageSchema, ServerMessage, RateLimitInfo } from './messages';
@@ -60,8 +60,9 @@ export class WebSocketDurableObject extends DurableObject {
     }
 
     // Parse URL for authentication parameters
+    // Only `token` is read. A `userId` query param is deliberately ignored: the
+    // connection's identity comes solely from a verified token.
     const token = url.searchParams.get('token');
-    const userId = url.searchParams.get('userId');
 
     // Create WebSocket pair
     const pair = new WebSocketPair();
@@ -77,7 +78,7 @@ export class WebSocketDurableObject extends DurableObject {
     const connection: WebSocketConnection = {
       webSocket: server,
       sessionId,
-      userId: userId || undefined,
+      userId: undefined,
       authenticated: false,
       connectedAt: Date.now(),
     };
@@ -247,22 +248,24 @@ export class WebSocketDurableObject extends DurableObject {
     }
 
     try {
-      // Validate JWT token
-      let authPayload: AuthPayload | null = null;
-
-      // Try full validation first (requires env vars to be set)
-      const env = this.env as Env;
-      if ('Issuer' in env && 'ClientId' in env && env.Issuer && env.ClientId) {
-        authPayload = await validateJWT(token, env);
-      } else {
-        // Fallback to basic validation for development
-        authPayload = await validateJWTBasic(token);
-      }
+      // Signature, issuer, expiry and client are checked in authenticateToken;
+      // unsigned tokens are only accepted when ENVIRONMENT=development.
+      const authPayload = await authenticateToken(token, this.env as Env);
 
       if (!authPayload) {
         this.sendMessage(ws, {
           type: 'error',
           error: 'Invalid or expired token',
+          code: 'AUTH_FAILED',
+        });
+        return;
+      }
+
+      // A connection cannot switch to a different user; re-auth is only a token refresh.
+      if (connection.authenticated && connection.userId !== authPayload.sub) {
+        this.sendMessage(ws, {
+          type: 'error',
+          error: 'Connection is already authenticated as another user',
           code: 'AUTH_FAILED',
         });
         return;
@@ -314,6 +317,16 @@ export class WebSocketDurableObject extends DurableObject {
         type: 'error',
         error: 'Authentication required',
         code: 'AUTH_REQUIRED',
+      });
+      return;
+    }
+
+    // user:<id> channels carry private notifications; only that user may join.
+    if (!connection.userId || !canSubscribe(connection.userId, channel)) {
+      this.sendMessage(ws, {
+        type: 'error',
+        error: 'Not allowed to subscribe to this channel',
+        code: 'FORBIDDEN',
       });
       return;
     }
@@ -370,6 +383,16 @@ export class WebSocketDurableObject extends DurableObject {
         type: 'error',
         error: 'Authentication required',
         code: 'AUTH_REQUIRED',
+      });
+      return;
+    }
+
+    // Clients may not post into user:<id> channels; those are fed by /broadcast only.
+    if (!canPublish(channel)) {
+      this.sendMessage(ws, {
+        type: 'error',
+        error: 'Not allowed to publish to this channel',
+        code: 'FORBIDDEN',
       });
       return;
     }

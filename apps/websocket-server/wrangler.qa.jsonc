@@ -29,7 +29,8 @@
   ],
   "vars": {
     "ENVIRONMENT": "qa",
-    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net"
+    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
+    "Issuer": "https://auth.qa.alummahnow.net"
   },
   "secrets_store_secrets": [
     {
