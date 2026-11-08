@@ -27,15 +27,23 @@ interface SettingsTabNavProps {
 export function SettingsTabNav({ items, current, testId = 'settings-tab-nav' }: SettingsTabNavProps) {
   const { t, dir } = useLanguage();
   const activeRef = useRef<HTMLAnchorElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
+  // Bring the current tab into view sideways only (never scroll the page)
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const list = listRef.current;
+    const el = activeRef.current;
+    if (!list || !el || list.scrollWidth <= list.clientWidth) return;
+    const box = el.getBoundingClientRect();
+    const frame = list.getBoundingClientRect();
+    if (box.left < frame.left) list.scrollLeft -= frame.left - box.left + 16;
+    else if (box.right > frame.right) list.scrollLeft += box.right - frame.right + 16;
   }, [current]);
 
   return (
     <nav aria-label={t.inlineEdit.settingsSections} className="relative bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700" data-testid={testId}>
       <div className="max-w-6xl mx-auto px-2 sm:px-5">
-        <ul className="flex overflow-x-auto scrollbar-hide" dir={dir}>
+        <ul ref={listRef} className="flex overflow-x-auto scrollbar-hide" dir={dir}>
           {items.map((item) => {
             const active = item.key === current;
             return (
