@@ -15,6 +15,15 @@ public struct FanousColors: Sendable {
     public let errorText: Color
     public let primary: Color
     public let onPrimary: Color
+    public let primaryHover: Color
+    public let onPrimaryHover: Color
+    public let primaryPressed: Color
+    public let onPrimaryPressed: Color
+    public let primaryDisabled: Color
+    public let onPrimaryDisabled: Color
+    public let primaryEdge: Color
+    public let primarySheen: Color
+    public let motif: Color
     public let secondary: Color
     public let onSecondary: Color
     public let verifiedFill: Color
@@ -69,8 +78,17 @@ public enum Fanous {
         link: Color(.sRGB, red: 1, green: 0.7686, blue: 0.4196, opacity: 1),
         successText: Color(.sRGB, red: 0.2902, green: 0.8706, blue: 0.502, opacity: 1),
         errorText: Color(.sRGB, red: 1, green: 0.6118, blue: 0.5804, opacity: 1),
-        primary: Color(.sRGB, red: 1, green: 0.6275, blue: 0.2157, opacity: 1),
-        onPrimary: Color(.sRGB, red: 0.0353, green: 0.1882, blue: 0.2549, opacity: 1),
+        primary: Color(.sRGB, red: 0.9098, green: 0.7059, blue: 0.4667, opacity: 1),
+        onPrimary: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
+        primaryHover: Color(.sRGB, red: 0.9608, green: 0.8118, blue: 0.5725, opacity: 1),
+        onPrimaryHover: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
+        primaryPressed: Color(.sRGB, red: 0.8118, green: 0.5961, blue: 0.3647, opacity: 1),
+        onPrimaryPressed: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
+        primaryDisabled: Color(.sRGB, red: 0.0745, green: 0.2902, blue: 0.3843, opacity: 1),
+        onPrimaryDisabled: Color(.sRGB, red: 0.6588, green: 0.7294, blue: 0.7647, opacity: 1),
+        primaryEdge: Color(.sRGB, red: 0.9608, green: 0.8118, blue: 0.5725, opacity: 1),
+        primarySheen: Color(.sRGB, red: 0.9725, green: 0.9098, blue: 0.7451, opacity: 1),
+        motif: Color(.sRGB, red: 0.1647, green: 0.4118, blue: 0.4588, opacity: 1),
         secondary: Color(.sRGB, red: 0.5569, green: 0.4235, blue: 0.3255, opacity: 1),
         onSecondary: Color(.sRGB, red: 1, green: 1, blue: 1, opacity: 1),
         verifiedFill: Color(.sRGB, red: 0.0863, green: 0.3961, blue: 0.2039, opacity: 1),
@@ -80,7 +98,7 @@ public enum Fanous {
         live: Color(.sRGB, red: 1, green: 0.7686, blue: 0.4196, opacity: 1),
         onLive: Color(.sRGB, red: 0.0353, green: 0.1882, blue: 0.2549, opacity: 1),
         accent: Color(.sRGB, red: 1, green: 0.6275, blue: 0.2157, opacity: 1),
-        focusRing: Color(.sRGB, red: 1, green: 0.6275, blue: 0.2157, opacity: 1),
+        focusRing: Color(.sRGB, red: 0.9608, green: 0.8118, blue: 0.5725, opacity: 1),
         focusGlow: Color(.sRGB, red: 1, green: 0.7686, blue: 0.4196, opacity: 1),
         verifiedIcon: Color(.sRGB, red: 0.2902, green: 0.8706, blue: 0.502, opacity: 1),
         outline: Color(.sRGB, red: 0.498, green: 0.6039, blue: 0.6549, opacity: 1),
@@ -99,8 +117,17 @@ public enum Fanous {
         link: Color(.sRGB, red: 0.6039, green: 0.3098, blue: 0, opacity: 1),
         successText: Color(.sRGB, red: 0.0863, green: 0.3961, blue: 0.2039, opacity: 1),
         errorText: Color(.sRGB, red: 0.6902, green: 0, blue: 0.1255, opacity: 1),
-        primary: Color(.sRGB, red: 1, green: 0.6275, blue: 0.2157, opacity: 1),
-        onPrimary: Color(.sRGB, red: 0.0353, green: 0.1882, blue: 0.2549, opacity: 1),
+        primary: Color(.sRGB, red: 0.9098, green: 0.7059, blue: 0.4667, opacity: 1),
+        onPrimary: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
+        primaryHover: Color(.sRGB, red: 0.9608, green: 0.8118, blue: 0.5725, opacity: 1),
+        onPrimaryHover: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
+        primaryPressed: Color(.sRGB, red: 0.8118, green: 0.5961, blue: 0.3647, opacity: 1),
+        onPrimaryPressed: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
+        primaryDisabled: Color(.sRGB, red: 0.9373, green: 0.902, blue: 0.8392, opacity: 1),
+        onPrimaryDisabled: Color(.sRGB, red: 0.3725, green: 0.3412, blue: 0.302, opacity: 1),
+        primaryEdge: Color(.sRGB, red: 0.5765, green: 0.3804, blue: 0.1647, opacity: 1),
+        primarySheen: Color(.sRGB, red: 0.9725, green: 0.9098, blue: 0.7451, opacity: 1),
+        motif: Color(.sRGB, red: 0.8118, green: 0.5961, blue: 0.3647, opacity: 1),
         secondary: Color(.sRGB, red: 0.5569, green: 0.4235, blue: 0.3255, opacity: 1),
         onSecondary: Color(.sRGB, red: 1, green: 1, blue: 1, opacity: 1),
         verifiedFill: Color(.sRGB, red: 0.0863, green: 0.3961, blue: 0.2039, opacity: 1),
@@ -110,7 +137,7 @@ public enum Fanous {
         live: Color(.sRGB, red: 1, green: 0.7686, blue: 0.4196, opacity: 1),
         onLive: Color(.sRGB, red: 0.0353, green: 0.1882, blue: 0.2549, opacity: 1),
         accent: Color(.sRGB, red: 0.6588, green: 0.3373, blue: 0, opacity: 1),
-        focusRing: Color(.sRGB, red: 0.6588, green: 0.3373, blue: 0, opacity: 1),
+        focusRing: Color(.sRGB, red: 0.5765, green: 0.3804, blue: 0.1647, opacity: 1),
         focusGlow: Color(.sRGB, red: 0.6588, green: 0.3373, blue: 0, opacity: 1),
         verifiedIcon: Color(.sRGB, red: 0.0863, green: 0.3961, blue: 0.2039, opacity: 1),
         outline: Color(.sRGB, red: 0.549, green: 0.498, blue: 0.4392, opacity: 1),

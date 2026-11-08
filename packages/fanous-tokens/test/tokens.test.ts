@@ -66,6 +66,16 @@ test('brand primitives match the spec', () => {
   });
 });
 
+test('the primary action is the sampled lantern gold in both themes, with dark text', () => {
+  for (const colors of [model.themes.dark, model.themes.light]) {
+    const hex = (name: string) => colors.find((c) => c.name === name)!.hex;
+    assert.equal(hex('primary'), '#e8b477');
+    assert.equal(hex('primaryHover'), '#f5cf92');
+    assert.equal(hex('primaryPressed'), '#cf985d');
+    for (const on of ['onPrimary', 'onPrimaryHover', 'onPrimaryPressed']) assert.equal(hex(on), '#09151e');
+  }
+});
+
 test('both themes define the same colour names', () => {
   assert.deepEqual(model.themes.light.map((c) => c.name), model.themes.dark.map((c) => c.name));
 });
