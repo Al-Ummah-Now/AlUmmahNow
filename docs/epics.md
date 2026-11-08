@@ -70,7 +70,10 @@ This epic breakdown transforms comprehensive PRD requirements into bite-sized, i
 **GitHub Issues Covered:** #38
 
 ### **Epics 9–24: Native Apps (viewer + Studio on all platforms)**
-See [`docs/native-apps/EPICS.md`](native-apps/EPICS.md): product family, Fanous design system, architecture, 16 epics, roadmap and open decisions.
+See [`docs/native-apps/EPICS.md`](native-apps/EPICS.md): product family, Fanous design system, architecture, 16 epics, roadmap and open decisions. **Native on every platform** (decided 2026-11-08): Swift (iOS, iPadOS, tvOS, macOS), Kotlin (Android, Android TV, Fire TV), C# (Windows WinUI 3, Linux GTK 4, Tizen), a shared Rust core (`aun-core`), and webOS as a web app.
+
+### **Epic 30: Studio media engine (`aun-media`, Rust)**
+Encoding, transcription and the edit model behind Studio desktop (encoding, transcription, batch upload, video editing) and Studio mobile (editing, live streaming). See [`docs/native-apps/EPICS.md`](native-apps/EPICS.md#epic-30-studio-media-engine-aun-media-rust).
 
 ### **Epics 25–27: Sharing & embeds, embedded discussions, plans & entitlements**
 See [`docs/specs/EMBEDS-COMMENTS-TIERS.md`](specs/EMBEDS-COMMENTS-TIERS.md): embeddable player + JS API, "Ummah Comments" widget for external sites, and the tier/entitlement framework every feature must declare.
