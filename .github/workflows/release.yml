@@ -2,7 +2,7 @@ name: Release
 
 # Stage-then-promote for the seven workers (docs/release-pipeline/SPEC.md §7):
 #   build once → stage (migrate, deploy the candidates through the same 0% → 100%
-#   promote, smoke, release E2E) → production (still the head of main?, migrate,
+#   promote, smoke, seed) → stage E2E (release-e2e.yml) → production (still the head of main?, migrate,
 #   candidates at 0%, pre-traffic smoke through the version override, 100%, smoke,
 #   auto-rollback) → rollback dry run (resolves each worker's target, moves nothing).
 # Nothing reaches production traffic without passing on stage first.
@@ -96,7 +96,7 @@ jobs:
           retention-days: 30
 
   stage:
-    name: Stage (migrate, deploy, smoke, E2E)
+    name: Stage (migrate, deploy, smoke, seed)
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -155,29 +155,50 @@ jobs:
             { echo '### Stage release'; echo '```json'; cat release-result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Install Chromium
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+      # Idempotent stage data for the release E2E (accounts, channels, encoded
+      # videos, playlists): everything already there is found and skipped. Stage
+      # accounts register through the auth E2E code sink (apps/web/e2e/seed).
+      - name: Install Chromium and ffmpeg (stage seed)
+        run: |
+          (cd apps/web && pnpm exec playwright install --with-deps chromium)
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
 
-      - name: Release E2E on stage
+      - name: Seed stage (idempotent)
         working-directory: apps/web
+        run: npx tsx e2e/seed/seed-qa.ts
         env:
-          E2E_ENV: stage
+          CI: true
+          SEED_MODE: apply
+          SEED_MEDIA_DIR: ${{ runner.temp }}/seed-stage-media
+          QA_SEED_PASSWORD: ${{ secrets.STAGE_SEED_PASSWORD }}
+          SEED_EMAIL_DOMAIN: e2e.alummahnow.net
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_STAGE }}
-        run: pnpm exec playwright test -c playwright.release.config.ts
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          OPENAUTH_URL: https://auth.stage.alummahnow.net
+          WEB_APP_URL: https://videos.stage.alummahnow.net
+          API_URL: https://videos.api.stage.alummahnow.net
+          OPENAUTH_CLIENT_ID: f0de3c30-0304-4ac4-86d6-1e185dec0439
+          D1_DATABASE_NAME: al-ummah-now-d1-stage
+          D1_DATABASE_ID: c7886ef6-c70b-4b7f-a65b-3df9f9aba9e2
 
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: stage-e2e-report
-          path: |
-            apps/web/release-report/
-            apps/web/test-results/
-          retention-days: 14
+  # Release regressions against the stage candidates (now serving stage traffic):
+  # sign-up/sign-in on web, profile and admin, callback errors, playback, watch
+  # history and uploads. Same suite as every PR runs against QA.
+  stage-e2e:
+    name: Stage E2E
+    needs: stage
+    uses: ./.github/workflows/release-e2e.yml
+    with:
+      env: stage
+    secrets:
+      E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_STAGE }}
+      TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_STAGE }}
 
   production:
     name: Production (migrate, 0% smoke, promote)
-    needs: stage
+    needs: stage-e2e
     if: inputs.production
     runs-on: ubuntu-24.04
     timeout-minutes: 30
