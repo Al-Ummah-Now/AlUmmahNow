@@ -9,6 +9,10 @@ import { logger } from "../../lib/logger";
 import { isInternalRecord } from "../../lib/visibility";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { INDEX_CURSOR_PREFIX, channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
+
+/** Seconds the anonymous first page of the general feed is reused. */
+const LIST_FIRST_PAGE_TTL = 30;
 
 type VideoSort = "date" | "views" | "title" | "likes";
 type VideoFilter = "all" | "public" | "private" | "live";
@@ -87,6 +91,16 @@ export class VideosList extends OptionalAuthRoute {
 
 		// Use channelId from query parameter if provided, otherwise from headers
 		const filterChannelId = queryChannelId || channelId;
+
+		// The anonymous first page is the same for every visitor and costs an R2
+		// read per video, so it is reused briefly. Pages and channel views are not.
+		const firstPageCacheUrl = !userId && !filterChannelId && !cursor
+			? edgeCacheUrl(c.req.url, `videos/v1/first-page/${limit}/${sort}/${filter}/${category || "_"}`)
+			: null;
+		if (firstPageCacheUrl) {
+			const cached = await readEdgeCache<PaginationResponse<Record<string, unknown>>>(firstPageCacheUrl);
+			if (cached) return cached;
+		}
 
 		// Implement your own object list here
 		const bucket = c.env.videos;
@@ -238,6 +252,8 @@ export class VideosList extends OptionalAuthRoute {
 			limit,
 			data: filteredVideos.map(transformToView),
 		};
+
+		if (firstPageCacheUrl) writeEdgeCache(firstPageCacheUrl, response, LIST_FIRST_PAGE_TTL, waitUntilOf(c as never));
 
 		return response;
 	}
