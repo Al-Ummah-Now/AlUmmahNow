@@ -2,7 +2,8 @@ name: Release
 
 # Stage-then-promote for the seven workers (docs/release-pipeline/SPEC.md §7):
 #   build once → stage (migrate, deploy the candidates through the same 0% → 100%
-#   promote, smoke, seed) → stage E2E (release-e2e.yml) → production (tag still on main?, migrate,
+#   promote, smoke, seed) → stage E2E (release-e2e.yml) + live secrets check of stage
+#   and production (secrets-check.yml) → production (tag still on main?, migrate,
 #   candidates at 0%, pre-traffic smoke through the version override, 100%, smoke,
 #   auto-rollback) → rollback dry run (resolves each worker's target, moves nothing).
 # Nothing reaches production traffic without passing on stage first.
@@ -254,9 +255,32 @@ jobs:
       E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_STAGE }}
       TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_STAGE }}
 
+  # Live secrets check (scripts/release/check-secrets.ts, manifest in
+  # secrets-manifest.ts): every worker has its required secrets, no binding points
+  # at a deleted Secrets Store secret, no test-only secret in production, and every
+  # ClientId is enabled in that env's auth D1. Prints names only, never values.
+  # Stage is checked after its deploy (a new stage worker is created by it);
+  # production before the promote. Both gate the production job.
+  secrets-stage:
+    name: Secrets (stage)
+    needs: stage
+    uses: ./.github/workflows/secrets-check.yml
+    with:
+      env: stage
+    secrets: inherit
+
+  secrets-production:
+    name: Secrets (production)
+    needs: resolve
+    if: needs.resolve.outputs.production == 'true'
+    uses: ./.github/workflows/secrets-check.yml
+    with:
+      env: production
+    secrets: inherit
+
   production:
     name: Production (migrate, 0% smoke, promote)
-    needs: [resolve, stage-e2e]
+    needs: [resolve, stage-e2e, secrets-stage, secrets-production]
     if: needs.resolve.outputs.production == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45

@@ -4,8 +4,11 @@
  * Names and purposes only: never put a value here.
  *
  * When code starts reading a new secret, add it here in the same PR.
- * Stage entries get added when the apps join the stage env.
+ * Production and stage worker names come from apps.ts (checked by check:config);
+ * QA names are listed here.
  */
+import { APPS } from './apps.ts';
+
 export type EnvName = 'production' | 'qa' | 'stage';
 
 /** Auth D1 (oauth_clients, in AlUmmahNowAuth) for each env. */
@@ -53,24 +56,24 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 const CLIENT_REQUIRED = [{ name: 'ClientId', required: true }];
 const CLIENT_OPTIONAL = [{ name: 'ClientId', required: false }];
 
-type Make = Omit<WorkerSecrets, 'env' | 'worker'>;
-function both(prod: string, qa: string, spec: Make): WorkerSecrets[] {
+type Make = Omit<WorkerSecrets, 'env' | 'worker' | 'app'>;
+/** The app's worker in production, stage (names from apps.ts) and QA. */
+function envs(app: string, qa: string, spec: Make): WorkerSecrets[] {
+	const rule = APPS.find((a) => a.app === app);
+	if (!rule?.production || !rule.stage) throw new Error(`secrets-manifest: ${app} has no production/stage rule in apps.ts`);
 	return [
-		{ ...spec, env: 'production', worker: prod },
-		{ ...spec, env: 'qa', worker: qa },
+		{ ...spec, app, env: 'production', worker: rule.production.name },
+		{ ...spec, app, env: 'qa', worker: qa },
+		{ ...spec, app, env: 'stage', worker: rule.stage.name },
 	];
 }
 
 export const SECRETS_MANIFEST: WorkerSecrets[] = [
-	...both('al-ummah-now-production', 'al-ummah-web-qa', { app: 'web', clientIdVars: CLIENT_REQUIRED }),
-	...both('al-ummah-admin-web', 'al-ummah-admin-web-qa', { app: 'admin-web', clientIdVars: CLIENT_REQUIRED }),
-	...both('videos', 'videos-qa', { app: 'api-videos', required: API_VIDEOS_SECRETS, clientIdVars: CLIENT_OPTIONAL }),
-	...both('al-ummah-admin-api', 'al-ummah-admin-api-qa', { app: 'admin-api', required: [INTERNAL_API_KEY], clientIdVars: CLIENT_OPTIONAL }),
-	...both('al-ummah-now-comms', 'al-ummah-now-comms-qa', {
-		app: 'websocket-server',
-		required: [INTERNAL_API_KEY],
-		clientIdVars: CLIENT_OPTIONAL,
-	}),
-	...both('al-ummah-now-processor', 'al-ummah-now-processor-qa', { app: 'processor', required: [INTERNAL_API_KEY] }),
-	...both('al-ummah-scheduler', 'al-ummah-scheduler-qa', { app: 'scheduler', required: [INTERNAL_API_KEY] }),
+	...envs('web', 'al-ummah-web-qa', { clientIdVars: CLIENT_REQUIRED }),
+	...envs('admin-web', 'al-ummah-admin-web-qa', { clientIdVars: CLIENT_REQUIRED }),
+	...envs('api-videos', 'videos-qa', { required: API_VIDEOS_SECRETS, clientIdVars: CLIENT_OPTIONAL }),
+	...envs('admin-api', 'al-ummah-admin-api-qa', { required: [INTERNAL_API_KEY], clientIdVars: CLIENT_OPTIONAL }),
+	...envs('websocket-server', 'al-ummah-now-comms-qa', { required: [INTERNAL_API_KEY], clientIdVars: CLIENT_OPTIONAL }),
+	...envs('processor', 'al-ummah-now-processor-qa', { required: [INTERNAL_API_KEY] }),
+	...envs('scheduler', 'al-ummah-scheduler-qa', { required: [INTERNAL_API_KEY] }),
 ];

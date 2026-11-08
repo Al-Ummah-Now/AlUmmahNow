@@ -565,7 +565,7 @@ Note: **scheduler** and **log-service** have no CI validation or deployment jobs
 - Web and admin-web use `wrangler.qa.jsonc`; others use per-app `wrangler.qa.jsonc`
 
 **Production Deployment** (`.github/workflows/release.yml`, triggered by pushing a `v*` tag on `main`; see [Deploy Rules](#deploy-rules)):
-- build once → stage (migrate, deploy, smoke, seed) → release E2E on stage → production (migrate, candidates at 0%, smoke through the version override, 100%, smoke, auto-rollback) → rollback dry run
+- build once → stage (migrate, deploy, smoke, seed) → release E2E on stage + live secrets check of stage and production (`secrets-check.yml`, `pnpm check:secrets`; names only, never values; manifest `scripts/release/secrets-manifest.ts`) → production (migrate, candidates at 0%, smoke through the version override, 100%, smoke, auto-rollback) → rollback dry run
 - The production job checks that the tagged commit is on `main`. Later merges to `main` do not affect a running release, because the release deploys the tag.
 - Rollback: `.github/workflows/rollback.yml` (start with `dry_run`) or `pnpm release:rollback --env production`. Code only; D1 migrations are expand-only.
 - `deploy.yml`'s old `deploy-production` job is superseded by the release workflow and is not used.

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { checkWorker, type Deps } from '../check-secrets.ts';
 import type { WorkerBinding } from '../cf-api.ts';
 import { SECRETS_MANIFEST, type WorkerSecrets } from '../secrets-manifest.ts';
+import { APPS } from '../apps.ts';
 
 function deps(bindings: WorkerBinding[] | null, opts: { store?: { name: string; status?: string }[]; clients?: Record<string, boolean> } = {}): Deps {
 	return {
@@ -58,11 +59,39 @@ describe('checkWorker', () => {
 	});
 });
 
+describe('findings never carry a secret value', () => {
+	it('reports a secret by name and binding type only', async () => {
+		const value = 'super-secret-value-do-not-print';
+		const fs = await checkWorker(
+			{ ...videos, clientIdVars: [] },
+			deps([{ type: 'secret_text', name: 'INTERNAL_API_KEY', text: value }])
+		);
+		assert.deepEqual(failures(fs), []);
+		assert.ok(!JSON.stringify(fs).includes(value), 'a finding contains the secret value');
+	});
+
+	it('does not echo a non-secret binding that shadows a required secret', async () => {
+		const value = 'pasted-as-plain-var';
+		const fs = await checkWorker({ ...videos, clientIdVars: [] }, deps([{ type: 'plain_text', name: 'INTERNAL_API_KEY', text: value }]));
+		assert.deepEqual(failures(fs), ['secret INTERNAL_API_KEY']);
+		assert.ok(!JSON.stringify(fs).includes(value), 'a finding contains the plain var value');
+	});
+});
+
 describe('secrets manifest', () => {
-	it('covers every deployable app in prod and qa', () => {
+	it('covers every deployable app in production, qa and stage', () => {
 		const apps = new Set(SECRETS_MANIFEST.map((e) => `${e.app}:${e.env}`));
 		for (const app of ['web', 'admin-web', 'api-videos', 'admin-api', 'websocket-server', 'processor', 'scheduler']) {
-			assert.ok(apps.has(`${app}:production`) && apps.has(`${app}:qa`), app);
+			for (const env of ['production', 'qa', 'stage']) assert.ok(apps.has(`${app}:${env}`), `${app}:${env}`);
+		}
+	});
+
+	it('uses the production and stage worker names from apps.ts', () => {
+		for (const rule of APPS) {
+			for (const env of ['production', 'stage'] as const) {
+				const entry = SECRETS_MANIFEST.find((e) => e.app === rule.app && e.env === env);
+				assert.equal(entry?.worker, rule[env]?.name, `${rule.app} ${env}`);
+			}
 		}
 	});
 });
