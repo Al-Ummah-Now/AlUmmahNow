@@ -1,6 +1,7 @@
 'use server';
 
 import { VideoObject, VideoInfo } from "@/interfaces";
+import { mergeRelated, RELATED_LIMIT, toVideoInfo } from "@/lib/video/related";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import {
   ApiResponse,
@@ -1046,6 +1047,20 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
         logger.error('[fetchVideoById] Error:', error);
         return undefined;
     }
+}
+
+/**
+ * Related videos for the watch page (Epic 7.3): recommendations for `videoId`,
+ * topped up from the general feed, without the current video.
+ */
+export async function fetchRelatedVideos(videoId: string): Promise<VideoInfo[]> {
+    const [recommended, feed] = await Promise.all([
+        getRecommendedVideos({ videoId, limit: RELATED_LIMIT }),
+        fetchVideos(null),
+    ]);
+    const related = mergeRelated(videoId, recommended.map(v => toVideoInfo(v as never)), feed || []);
+    logger.info('[fetchRelatedVideos] Related shelf', { videoId, recommended: recommended.length, total: related.length });
+    return related;
 }
 
 export async function fetchVideos(cursor: string | null = null): Promise<VideoInfo[] | undefined> {
