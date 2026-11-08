@@ -118,10 +118,15 @@ export function useWatchProgress(
         if (result.success) {
           debugLog('Progress saved to API:', progress.currentTime, '/', progress.duration);
         } else {
-          debugLog('Failed to save to API, falling back to localStorage:', result.error);
+          // Visible in production: a failing API save otherwise looks like a
+          // working player while the account history stays empty.
+          logger.warn('[useWatchProgress] watch-history save failed, kept on device:', result.error);
           await WatchHistoryService.saveLocal(progress);
         }
       } else {
+        if (userId) {
+          logger.warn('[useWatchProgress] signed in but no access token; watch progress kept on device');
+        }
         await WatchHistoryService.saveLocal(progress);
         debugLog('Progress saved to localStorage:', progress.currentTime, '/', progress.duration);
       }
@@ -130,14 +135,14 @@ export function useWatchProgress(
         setSavedProgress(progress);
       }
     } catch (error) {
-      debugLog('Error saving progress:', error);
+      logger.warn('[useWatchProgress] watch-history save threw, kept on device:', error);
       // Save to localStorage as fallback
       await WatchHistoryService.saveLocal(progress);
       if (isMountedRef.current) {
         setSavedProgress(progress);
       }
     }
-  }, [resolveAuthToken, debugLog]);
+  }, [resolveAuthToken, debugLog, userId]);
 
   /**
    * Save watch progress to API or localStorage with mutex protection
@@ -291,15 +296,15 @@ export function useWatchProgress(
   useEffect(() => {
     if (!player) return;
 
-    let timeUpdateInterval: ReturnType<typeof setInterval> | undefined;
-
-    const handleReady = () => {
-      debugLog('Player ready, starting progress tracking');
-
-      timeUpdateInterval = setInterval(() => {
-        void saveProgress(false);
-      }, saveInterval);
-    };
+    // Start the periodic save as soon as the player is attached. The player
+    // usually reaches the hook after video.js 'ready' already fired while the
+    // media is still loading (readyState 0); waiting with one('ready') then
+    // never started the interval, and a watch that was never paused was never
+    // saved. saveProgress itself skips until the media has metadata.
+    debugLog('Player attached, starting progress tracking');
+    const timeUpdateInterval = setInterval(() => {
+      void saveProgress(false);
+    }, saveInterval);
 
     const handlePause = () => {
       debugLog('Player paused, saving progress');
@@ -316,29 +321,13 @@ export function useWatchProgress(
       void saveProgress(true);
     };
 
-    // Check if player is already ready, with safety check for disposed tech
-    try {
-      if (player.readyState() >= 1) {
-        handleReady();
-      } else {
-        player.one('ready', handleReady);
-      }
-    } catch (error) {
-      // Player tech not available, wait for ready event
-      debugLog('Player tech not available, waiting for ready event:', error);
-      player.one('ready', handleReady);
-    }
-
     player.on('pause', handlePause);
     player.on('ended', handleEnded);
     player.on('seeked', handleSeeked);
 
     return () => {
-      if (timeUpdateInterval) {
-        clearInterval(timeUpdateInterval);
-      }
+      clearInterval(timeUpdateInterval);
 
-      player.off('ready', handleReady);
       player.off('pause', handlePause);
       player.off('ended', handleEnded);
       player.off('seeked', handleSeeked);
