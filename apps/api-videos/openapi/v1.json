@@ -17454,7 +17454,7 @@
           "Search"
         ],
         "summary": "Recommended videos",
-        "description": "🔓 Authentication optional. Recommends public videos related to `videoId` (same category, channel, tags). When signed in, the viewer's recent watch history also seeds the profile and `excludeWatched=true` removes videos already watched.",
+        "description": "🔓 Authentication optional. Recommends public videos related to `videoId` (same category, channel, tags). When signed in, the viewer's recent watch history also seeds the profile and `excludeWatched=true` ranks videos already watched last, listing them only to fill the limit.",
         "operationId": "get_RecommendationsGet",
         "parameters": [
           {
