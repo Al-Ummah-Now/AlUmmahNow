@@ -217,10 +217,12 @@ export class Logger {
    * @param message - Log message
    * @param data - Optional data to include (will be JSON stringified)
    */
+  // Console output keeps the format string constant ('%s'): a message that carries user input
+  // (ids, URLs) must never be read as a printf-style format (CodeQL js/tainted-format-string).
   debug(message: string, data?: unknown): void {
     if (this.shouldLog('debug')) {
       if (this.consoleLogging) {
-        console.log(`[DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : '');
+        console.log('[DEBUG] %s', message, data ? JSON.stringify(data, null, 2) : '');
       }
       this.writeLog('debug', message, data);
     }
@@ -234,7 +236,7 @@ export class Logger {
   info(message: string, data?: unknown): void {
     if (this.shouldLog('info')) {
       if (this.consoleLogging) {
-        console.log(`[INFO] ${message}`, data ? JSON.stringify(data, null, 2) : '');
+        console.log('[INFO] %s', message, data ? JSON.stringify(data, null, 2) : '');
       }
       this.writeLog('info', message, data);
     }
@@ -248,7 +250,7 @@ export class Logger {
   warn(message: string, data?: unknown): void {
     if (this.shouldLog('warn')) {
       if (this.consoleLogging) {
-        console.warn(`[WARN] ${message}`, data ? JSON.stringify(data, null, 2) : '');
+        console.warn('[WARN] %s', message, data ? JSON.stringify(data, null, 2) : '');
       }
       this.writeLog('warn', message, data);
     }
@@ -262,7 +264,7 @@ export class Logger {
   error(message: string, error?: unknown): void {
     if (this.shouldLog('error')) {
       if (this.consoleLogging) {
-        console.error(`[ERROR] ${message}`, error);
+        console.error('[ERROR] %s', message, error);
       }
       this.writeLog('error', message, error);
     }

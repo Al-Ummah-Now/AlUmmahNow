@@ -13,6 +13,7 @@ interface AdminNavProps {
 const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/dashboard', label: 'nav.dashboard' },
   { href: '/moderation', label: 'nav.moderation' },
+  { href: '/moderation/ai', label: 'nav.aiModeration' },
   { href: '/translations', label: 'nav.translations' },
   { href: '/indices', label: 'nav.indices' },
 ];
@@ -21,7 +22,11 @@ export function AdminNav({ userEmail }: AdminNavProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
 
-  const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
+  // Most specific match wins, so /moderation/ai does not also highlight /moderation
+  const activeHref = NAV_ITEMS.map((i) => i.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  const isActive = (path: string) => path === activeHref;
 
   return (
     <header className="bg-surface border-b border-border">
