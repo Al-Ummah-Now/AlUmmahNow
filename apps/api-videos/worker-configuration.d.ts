@@ -4,6 +4,7 @@
 interface __BaseEnv_Env {
 	RATE_LIMIT_KV: KVNamespace;
 	TUS_SESSIONS: KVNamespace;
+	TOKEN_REVOCATIONS?: KVNamespace;
 	videos: R2Bucket;
 	profiles: R2Bucket;
 	channels: R2Bucket;
@@ -50,6 +51,7 @@ declare namespace Cloudflare {
 	interface StageEnv {
 		RATE_LIMIT_KV: KVNamespace;
 		TUS_SESSIONS: KVNamespace;
+		TOKEN_REVOCATIONS?: KVNamespace;
 		videos: R2Bucket;
 		profiles: R2Bucket;
 		channels: R2Bucket;

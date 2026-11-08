@@ -3,6 +3,7 @@ import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
 import { normalizeRoles, hasAdminRole, hasModeratorRole } from '../lib/roles';
+import { decodeVerifiedClaims, isTokenRevoked } from '../lib/token-revocation';
 
 interface AuthPayload {
   sub: string;
@@ -211,14 +212,22 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
 
     if ('subject' in result && result.subject) {
       const openAuthPayload = result.subject.properties as { id?: string; email?: string; roles?: string[] };
-      const now = Math.floor(Date.now() / 1000);
+      // The token's own times (signature already verified above)
+      const claims = decodeVerifiedClaims(token);
+      const userId = openAuthPayload.id || '';
+
+      // Signed out everywhere / account deleted / suspended since this sign-in (#437)
+      if (await isTokenRevoked(env.TOKEN_REVOCATIONS, { userId, authTime: claims.auth_time, iat: claims.iat })) {
+        logger.debug('Rejected a revoked token', { userId });
+        return null;
+      }
 
       const payload: AuthPayload = {
-        sub: openAuthPayload.id || '',
+        sub: userId,
         email: openAuthPayload.email || '',
         roles: openAuthPayload.roles || [],
-        exp: now + 3600,
-        iat: now,
+        exp: claims.exp ?? 0,
+        iat: claims.iat ?? 0,
         aud: authConfig.JWT.AUDIENCE,
         iss: authConfig.JWT.ISSUER,
       };

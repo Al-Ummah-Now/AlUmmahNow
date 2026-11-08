@@ -302,8 +302,20 @@ export class WebSocketManager {
       return;
     }
 
+    // The socket's token expired (#437): authenticate again with a fresh one
+    // (getAuthToken refreshes); private channels come back via resubscribeAll
+    // The server puts `code` at the top level of error frames
+    const errorCode = message.type === 'error'
+      ? ((message as { code?: string }).code ?? (message.data as { code?: string } | undefined)?.code)
+      : undefined;
+    if (errorCode === 'AUTH_EXPIRED') {
+      this.authenticated = false;
+      void this.authenticate();
+      return;
+    }
+
     // Handle auth error
-    if (message.type === 'error' && (message.data as { code?: string })?.code?.startsWith('AUTH')) {
+    if (errorCode?.startsWith('AUTH')) {
       logger.error('🔐 Authentication failed:', message.data);
       return;
     }

@@ -26,6 +26,8 @@
 	],
 
 	// R2 buckets for content access (read/update for moderation)
+	// Token revocation list written by the auth worker (#437)
+	"kv_namespaces": [{ "binding": "TOKEN_REVOCATIONS", "id": "2afbb5f5d5414c9ea1a7d54013cfe724", "preview_id": "e6e662fc9cd9420797ddfa8060eb6956" }],
 	"r2_buckets": [
 		{
 			"binding": "videos",
@@ -117,7 +119,9 @@
 					"migrations_dir": "migrations"
 				}
 			],
-			"r2_buckets": [
+			// Token revocation list written by the auth worker (#437)
+	"kv_namespaces": [{ "binding": "TOKEN_REVOCATIONS", "id": "0831520b71144a6e848ed62918602c13" }],
+	"r2_buckets": [
 				{
 					"binding": "videos",
 					"bucket_name": "videos-stage"

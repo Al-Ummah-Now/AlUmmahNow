@@ -25,6 +25,8 @@
     }
   ],
   "kv_namespaces": [
+			// Token revocation list written by the auth worker (#437)
+			{ "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" },
     {
       "binding": "PRESENCE_KV",
       "id": "2cf049fac822401fab2ef3fcb0675c8a"

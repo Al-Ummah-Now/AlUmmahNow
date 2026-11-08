@@ -3,6 +3,7 @@ import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
 import { isUserScopedRoute } from '../lib/reactions';
+import { decodeVerifiedClaims, isTokenRevoked } from '../lib/token-revocation';
 
 // Type for the decoded JWT payload from OpenAuth
 interface AuthPayload {
@@ -101,14 +102,21 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     if ('subject' in result && result.subject) {
       // Successfully validated - convert OpenAuth payload to our AuthPayload format
       const openAuthPayload = result.subject.properties;
-      const now = Math.floor(Date.now() / 1000);
-      
-      // Use dynamic auth config for validation
+      // The token's own times (signature already verified above)
+      const claims = decodeVerifiedClaims(token);
+      const userId = openAuthPayload.id || '';
+
+      // Signed out everywhere / account deleted / suspended since this sign-in (#437)
+      if (await isTokenRevoked(env.TOKEN_REVOCATIONS, { userId, authTime: claims.auth_time, iat: claims.iat })) {
+        logger.debug('Rejected a revoked token', { userId });
+        return null;
+      }
+
       const payload: AuthPayload = {
-        sub: openAuthPayload.id || '',
+        sub: userId,
         email: openAuthPayload.email || '',
-        exp: now + 3600, // Default 1 hour from now
-        iat: now,
+        exp: claims.exp ?? 0,
+        iat: claims.iat ?? 0,
         aud: authConfig.JWT.AUDIENCE,  // ✅ Now using dynamic config
         iss: authConfig.JWT.ISSUER,    // ✅ Now using dynamic config
         roles: Array.isArray(openAuthPayload.roles) ? openAuthPayload.roles.map(String) : [],

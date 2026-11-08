@@ -13,6 +13,7 @@
 
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import { logger } from './lib/logger';
+import { isTokenRevoked } from './token-revocation';
 
 /** Identity established for a connection. */
 export interface AuthPayload {
@@ -35,6 +36,8 @@ export interface AuthEnv {
    */
   ALLOWED_CLIENT_IDS?: string;
   ENVIRONMENT?: string;
+  /** Token revocation list written by the auth worker (#437). */
+  TOKEN_REVOCATIONS?: KVNamespace;
 }
 
 export interface AuthDeps {
@@ -101,7 +104,7 @@ export async function authenticateToken(
   deps: AuthDeps = {},
 ): Promise<AuthPayload | null> {
   if (env.Issuer) {
-    return verifySignedToken(token, env.Issuer, allowedClientIds(env), deps);
+    return verifySignedToken(token, env.Issuer, allowedClientIds(env), deps, env.TOKEN_REVOCATIONS);
   }
   if (isDevelopment(env)) {
     return decodeUnverifiedToken(token, deps.now);
@@ -115,6 +118,7 @@ async function verifySignedToken(
   issuer: string,
   allowed: string[],
   deps: AuthDeps,
+  revocations?: KVNamespace,
 ): Promise<AuthPayload | null> {
   try {
     const { payload } = await jwtVerify<OpenAuthAccessClaims>(token, deps.getKey ?? remoteJwks(issuer), {
@@ -135,6 +139,12 @@ async function verifySignedToken(
     }
     if (!audienceAllowed(payload.aud, allowed)) {
       logger.warn('WebSocket token rejected: client not allowed', { aud: payload.aud });
+      return null;
+    }
+    // Signed out everywhere / account deleted / suspended since this sign-in
+    const authTime = typeof payload.auth_time === 'number' ? payload.auth_time : undefined;
+    if (await isTokenRevoked(revocations, { userId, authTime, iat: payload.iat }, deps.now !== undefined ? deps.now * 1000 : undefined)) {
+      logger.warn('WebSocket token rejected: sign-in revoked');
       return null;
     }
 

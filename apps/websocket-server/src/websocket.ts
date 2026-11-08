@@ -15,6 +15,8 @@ interface WebSocketConnection {
   sessionId: string;
   userId?: string;
   authenticated: boolean;
+  /** Unix seconds when the token the socket authenticated with expires (#437). */
+  authExpiresAt?: number;
   connectedAt: number;
 }
 
@@ -159,6 +161,9 @@ export class WebSocketDurableObject extends DurableObject {
       
       const clientMessage = validationResult.data;
 
+      // A socket stays signed in only as long as its token (#437)
+      if (clientMessage.type !== 'authenticate') this.expireAuthIfNeeded(ws);
+
       // Handle different message types
       switch (clientMessage.type) {
         case 'authenticate':
@@ -239,6 +244,31 @@ export class WebSocketDurableObject extends DurableObject {
   }
 
   /**
+   * Once the token a socket authenticated with has expired, the socket drops
+   * its private channels and is told to authenticate again (the client sends a
+   * fresh token on AUTH_EXPIRED). Signing out everywhere therefore reaches open
+   * sockets within one access-token lifetime: the fresh token is checked
+   * against the revocation list.
+   */
+  private expireAuthIfNeeded(ws: WebSocket, nowSeconds = Math.floor(Date.now() / 1000)): boolean {
+    const connection = this.connections.get(ws);
+    if (!connection?.authenticated || connection.authExpiresAt === undefined || nowSeconds < connection.authExpiresAt) {
+      return false;
+    }
+    const session = this.channelManager.getSession(connection.sessionId);
+    for (const channel of [...(session?.channels ?? [])]) {
+      if (!canSubscribeAnonymously(channel)) this.channelManager.unsubscribe(connection.sessionId, channel);
+    }
+    connection.authenticated = false;
+    this.sendMessage(ws, {
+      type: 'error',
+      error: 'Token expired; authenticate again',
+      code: 'AUTH_EXPIRED',
+    });
+    return true;
+  }
+
+  /**
    * Handle authentication
    */
   private async handleAuthentication(ws: WebSocket, token: string): Promise<void> {
@@ -274,9 +304,12 @@ export class WebSocketDurableObject extends DurableObject {
       // Update connection
       connection.authenticated = true;
       connection.userId = authPayload.sub;
+      connection.authExpiresAt = authPayload.exp;
 
-      // Add session to channel manager
-      this.channelManager.addSession(connection.sessionId, authPayload.sub);
+      // Add session to channel manager (a re-auth keeps the session and its channels)
+      const existingSession = this.channelManager.getSession(connection.sessionId);
+      if (existingSession) existingSession.userId = authPayload.sub;
+      else this.channelManager.addSession(connection.sessionId, authPayload.sub);
 
       // Update presence
       await this.presenceManager.setOnline(authPayload.sub, connection.sessionId);

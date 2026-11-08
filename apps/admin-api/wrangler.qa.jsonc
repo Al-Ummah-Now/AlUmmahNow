@@ -14,7 +14,9 @@
     }
   ],
 
-  "r2_buckets": [
+  // Token revocation list written by the auth worker (#437)
+	"kv_namespaces": [{ "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" }],
+	"r2_buckets": [
     {
       "binding": "videos",
       "bucket_name": "videos-qa"
