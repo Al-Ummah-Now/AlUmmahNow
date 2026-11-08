@@ -68,7 +68,10 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
       'Fullscreen': 'ملء الشاشة',
       'Exit Fullscreen': 'الخروج من ملء الشاشة',
       'Captions': 'إظهار التسميات التوضيحية',
-      'Subtitles': 'إظهار الترجمة'
+      'Subtitles': 'إظهار الترجمة',
+      // videojs-hls-quality-selector localizes these; the Arabic pack has neither
+      'Auto': 'تلقائي',
+      'Quality': 'الجودة'
     }
   }
 };
