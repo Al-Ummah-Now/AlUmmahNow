@@ -978,6 +978,14 @@ export interface AppTranslations {
       videoLoadError: string;
       retry: string;
       retentionComingSoon: string;
+      exportCsv: string;
+      exportCsvHint: string;
+      csvDate: string;
+      csvShares: string;
+      csvWatchTimeHours: string;
+      csvVideo: string;
+      csvVideoId: string;
+      csvPublished: string;
     };
   };
 
