@@ -611,6 +611,7 @@ global setup. Passwords are random per run, so the accounts left behind
 | `callback-errors.spec.ts` | `/api/callback` and `/api/callback/multi-account` land on the localized error page, never raw JSON (`{}`) |
 | `profile-signin.spec.ts` | the auth server's profile app (`profile.auth.*`) sign-up and sign-in |
 | `admin-signin.spec.ts` | admin-web refuses a user without an admin role (`/access-denied`); a user promoted with the auth server's `/test/promote` (`TEST_PROMOTE_SECRET`) reaches `/dashboard`. The admin case skips when the secret is missing |
+| `single-sign-out.spec.ts` | the videos header's "Sign out" (#291) and admin-web's "Log out" (#295) go through the auth server's `/logout`: after a reload the site is still signed out, the profile app is signed out, and the next sign-in shows the password form (no silent SSO) |
 | `player.spec.ts` | an anonymous watch page really plays (media `currentTime` advances), en and ar |
 | `watch-history.player.spec.ts` | a signed-in watch reaches `GET /api/watch-history` and the `/history` page (#234) |
 | `uploads.spec.ts` | profile and channel avatar uploads store a served image (#229); a channel created in the account menu, then a video uploaded on `/upload` (TUS through the api-videos proxy), is listed in the owner's search and dashboard, then deleted. Encoding is not awaited |
