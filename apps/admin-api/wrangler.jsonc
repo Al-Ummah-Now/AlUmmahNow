@@ -67,6 +67,8 @@
 	],
 
 	// Queue for notifications
+	// Shared with api-videos: lets plan changes invalidate the 60 s entitlements cache (Epic 27)
+	"kv_namespaces": [{ "binding": "RATE_LIMIT_KV", "id": "4771816fd0cc469383de67257280c516" }],
 	"queues": {
 		"producers": [
 			{
@@ -143,6 +145,7 @@
 					"bucket_name": "community-posts-stage"
 				}
 			],
+			"kv_namespaces": [{ "binding": "RATE_LIMIT_KV", "id": "2c80e4bba64943a29e4bf091374a1362" }],
 			"queues": {
 				"producers": [
 					{
