@@ -37,11 +37,13 @@ Every message uses the `QueueMessage` envelope `{ id, type: MessageType, payload
 
 ### Now
 
-- **Player:** `useWatchProgress` saves every 10 s, and also on pause, seek, end and unmount. Videos shorter than 30 s are skipped. For a signed-in user it gets the token from `/api/auth/token`, so it no longer needs the prop. It falls back to device storage when there is no token.
+- **Player:** `useWatchProgress` saves every 10 s, and also on pause, seek, end and unmount. (Fixed in #265: the 10 s interval never started when the player reached the hook before the media had metadata, because the hook waited on `one('ready')`, an event that had already fired. Pause/seek/ended still saved.) API save failures are now logged with `logger.warn` before falling back to device storage. Videos shorter than 30 s are skipped. For a signed-in user it gets the token from `/api/auth/token`, so it no longer needs the prop. It falls back to device storage when there is no token.
 - **API:** `POST /api/watch-history` creates the entry and `POST /:id/progress` updates it. The web client tries progress first and records on a 404. Entries are stored in R2 `watch_history` as `${userId}:${videoId}`.
 - **Pause:** `GET`/`PUT /api/watch-history/settings` read and set `{ paused }`, stored as `watchHistoryPaused` on the profile. While paused, record and progress return `200 { paused: true }`, and nothing is stored or queued.
 - **UI:** `/[locale]/history` lists entries newest first, with "load more", remove one, clear all, and the new pause/resume toggle with a notice while paused.
 - **Retention:** entries are deleted 548 days after the last watch (`lib/privacy/retention.ts`). History is included in GDPR export and erasure.
+
+**Measuring the store:** `wrangler r2 bucket info watch-history` reports `object_count` from R2 metrics, which lag behind writes (it showed 0 while entries existed). List the objects instead, e.g. `GET /client/v4/accounts/<acct>/r2/buckets/watch-history/objects`, or call `GET /api/watch-history` as the user. History lives only in R2 (`watch-history`, `watch-history-qa`, `watch-history-stage`), not D1.
 
 ### Remaining gaps (viewer UI)
 

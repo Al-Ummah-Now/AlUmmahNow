@@ -175,7 +175,9 @@ export default function CustomVideoPlayer({
   // Falls back to localStorage for unauthenticated users
   const { savedProgress } = useWatchProgress(
     videoId,
-    playerRef.current as ExtendedPlayer | null,
+    // Keyed on playerReady (state) so the hook receives the player on the
+    // re-render after video.js 'ready' rather than a ref read at first render.
+    (playerReady ? playerRef.current : null) as ExtendedPlayer | null,
     userId,
     authToken,
     {
