@@ -73,6 +73,8 @@ import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
 import { useWatchProgress } from '@/hooks/useWatchProgress';
+import { ResumePrompt } from './ResumePrompt';
+import { resumePosition } from '@/lib/video/resume';
 import '@/styles/video-player.css';
 import '@/styles/keyboard-feedback.css';
 import type { Player } from 'video.js';
@@ -95,6 +97,8 @@ export interface CustomVideoPlayerProps {
   isLive?: boolean;
   className?: string;
   ariaLabel?: string;
+  /** Video title, shown in the resume prompt */
+  title?: string;
   lang?: 'en' | 'ar';
   onError?: (error: VideoError) => void;
   onSourceChange?: (source: VideoSource) => void;
@@ -120,6 +124,7 @@ export default function CustomVideoPlayer({
   isLive = false,
   className = '',
   ariaLabel,
+  title,
   lang = 'en',
   onError,
   onSourceChange,
@@ -173,7 +178,7 @@ export default function CustomVideoPlayer({
   // Issue #57: Watch progress tracking integration
   // Automatically saves watch progress every 10 seconds and on pause/seek/end events
   // Falls back to localStorage for unauthenticated users
-  const { savedProgress } = useWatchProgress(
+  const { savedProgress, loadedProgress } = useWatchProgress(
     videoId,
     // Keyed on playerReady (state) so the hook receives the player on the
     // re-render after video.js 'ready' rather than a ref read at first render.
@@ -185,7 +190,29 @@ export default function CustomVideoPlayer({
     }
   );
 
-  // Log saved progress for debugging (will be used in Issue #58 for resume UI)
+  // #242: offer to resume from the position stored before this watch (API for
+  // signed-in users, device storage otherwise). Decided once per video, so the
+  // saves of the current watch never bring the prompt back.
+  const [resumeAt, setResumeAt] = useState<number | null>(null);
+  const resumeDecidedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!playerReady || !loadedProgress || loadedProgress.videoId !== videoId) return;
+    if (resumeDecidedForRef.current === videoId) return;
+    resumeDecidedForRef.current = videoId;
+    setResumeAt(resumePosition(loadedProgress, isLive));
+  }, [playerReady, loadedProgress, videoId, isLive]);
+
+  const handleResume = useCallback(() => {
+    if (resumeAt !== null) playerRef.current?.currentTime(resumeAt);
+    setResumeAt(null);
+  }, [resumeAt]);
+  const handleStartOver = useCallback(() => {
+    playerRef.current?.currentTime(0);
+    setResumeAt(null);
+  }, []);
+  const handleResumeDismiss = useCallback(() => setResumeAt(null), []);
+
+  // Log saved progress for debugging
   useEffect(() => {
     if (savedProgress && process.env.NODE_ENV === 'development') {
       logger.debug('[CustomVideoPlayer] Saved watch progress:', savedProgress);
@@ -846,6 +873,19 @@ export default function CustomVideoPlayer({
           />
         )}
       </div>
+
+      {resumeAt !== null && loadedProgress && (
+        <ResumePrompt
+          videoTitle={title ?? ''}
+          savedTime={resumeAt}
+          duration={loadedProgress.duration}
+          thumbnailUrl={poster}
+          onResume={handleResume}
+          onStartFromBeginning={handleStartOver}
+          onDismiss={handleResumeDismiss}
+          lang={lang}
+        />
+      )}
 
       <KeyboardHelpModal
         isOpen={isKeyboardHelpOpen}

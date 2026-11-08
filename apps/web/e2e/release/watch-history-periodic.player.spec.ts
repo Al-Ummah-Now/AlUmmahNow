@@ -49,4 +49,35 @@ test.describe('Release: periodic watch progress', () => {
     expect(entry, 'the playing video is not in /api/watch-history').toBeTruthy();
     expect(entry!.progress ?? 0).toBeGreaterThan(5);
   });
+
+  test('a signed-in watch offers to resume from the saved position (#242)', async ({ page }) => {
+    const video = await findPlayableVideo(20);
+    test.skip(!video, NO_PLAYABLE_VIDEO);
+
+    const user = await signUpOnWeb(page, 'rel-resume');
+    await createProfile(user);
+
+    await page.goto(watchUrl(video!.id));
+    await playFor(page, 2);
+    // Seek to 30% (inside the 5-95% resume window for any length); 'seeked' saves
+    const target = await page.evaluate(() => {
+      const v = document.querySelector<HTMLVideoElement>('.video-js video')!;
+      v.currentTime = Math.floor(v.duration * 0.3);
+      return v.currentTime;
+    });
+    await expect
+      .poll(async () => {
+        const res = await apiFetch(user, `/api/watch-history/${video!.id}/progress`);
+        return res.ok ? ((await res.json()) as { progress?: number }).progress ?? 0 : 0;
+      }, { message: 'the seek position was never saved', timeout: 30000 })
+      .toBeGreaterThan(target - 5);
+
+    await page.reload();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible({ timeout: 45000 });
+    await dialog.getByRole('button', { name: /Resume from/ }).click();
+    await expect
+      .poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0))
+      .toBeGreaterThan(target - 5);
+  });
 });
