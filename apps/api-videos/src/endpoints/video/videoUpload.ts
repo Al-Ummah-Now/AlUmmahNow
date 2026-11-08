@@ -206,7 +206,7 @@ export class VideoUpload extends AuthenticatedRoute {
                 if (bunnyKey) {
                     const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
                     const libraryId = parseInt(libraryIdStr);
-                    const bunnyStream = new stream(bunnyKey);
+                    const bunnyStream = new stream(bunnyKey).forEnv(c.env);
 
                     // Create video in Bunny Stream
                     const bunnyVideo = await bunnyStream.createVideo(libraryId, {

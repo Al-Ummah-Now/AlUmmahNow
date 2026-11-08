@@ -204,6 +204,8 @@
 		// Existing videos live on legacy library 400189 with CDN token auth on:
 		// sign its URLs (playUrl, thumbnails) in API responses
 		"BUNNY_SIGN_URLS": "true",
+		// Name prefix for Bunny videos/collections this env creates (stage: "[stage] "; none in production)
+		"BUNNY_NAME_PREFIX": "",
 		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
@@ -366,6 +368,8 @@
 				"Audience": "https://videos.api.stage.alummahnow.net",
 				"bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
 				"BUNNY_SIGN_URLS": "true",
+				// Stage shares the QA Bunny library: tag what stage creates there for cleanup
+				"BUNNY_NAME_PREFIX": "[stage] ",
 				"BUNNY_SIGN_HOSTNAME": "vz-cb79844a-c5d.b-cdn.net",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
 				"CORS_ORIGINS": "https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net"

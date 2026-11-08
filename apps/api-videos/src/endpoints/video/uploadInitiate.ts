@@ -146,7 +146,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				}, 500);
 			}
 
-			const bunnyStream = new stream(bunnyKey);
+			const bunnyStream = new stream(bunnyKey).forEnv(c.env);
 
 			// Fetch channel and ensure it has a Bunny.net collection
 			let collectionId: string | undefined;
