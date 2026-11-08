@@ -247,4 +247,34 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     autoResumeMessage: 'سيتم الاستئناف تلقائياً خلال',
     dismissHint: 'اضغط ESC أو انقر خارج الإطار للإلغاء',
   },
+
+  pluralization: {
+    videos: {
+      zero: 'لا توجد مقاطع فيديو',
+      one: 'مقطع فيديو واحد',
+      two: 'مقطعا فيديو',
+      few: '{{count}} مقاطع فيديو',
+      many: '{{count}} مقطع فيديو',
+      other: '{{count}} مقطع فيديو',
+    },
+    comments: {
+      zero: 'لا توجد تعليقات',
+      one: 'تعليق واحد',
+      two: 'تعليقان',
+      few: '{{count}} تعليقات',
+      many: '{{count}} تعليقًا',
+      other: '{{count}} تعليق',
+    },
+    views: {
+      zero: 'لا توجد مشاهدات',
+      one: 'مشاهدة واحدة',
+      two: 'مشاهدتان',
+      few: '{{count}} مشاهدات',
+      many: '{{count}} مشاهدة',
+      other: '{{count}} مشاهدة',
+    },
+    hours: { one: 'ساعة واحدة', two: 'ساعتان', few: '{{count}} ساعات', many: '{{count}} ساعة', other: '{{count}} ساعة' },
+    minutes: { one: 'دقيقة واحدة', two: 'دقيقتان', few: '{{count}} دقائق', many: '{{count}} دقيقة', other: '{{count}} دقيقة' },
+    seconds: { one: 'ثانية واحدة', two: 'ثانيتان', few: '{{count}} ثوانٍ', many: '{{count}} ثانية', other: '{{count}} ثانية' },
+  },
 };

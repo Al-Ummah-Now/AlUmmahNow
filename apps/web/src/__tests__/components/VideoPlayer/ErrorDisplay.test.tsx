@@ -124,6 +124,22 @@ describe('ErrorDisplay', () => {
     });
   });
 
+  describe('regional locale', () => {
+    const timestamp = Date.UTC(2026, 0, 15, 15, 30);
+
+    it.each([
+      ['en-GB', 'en', 'en-GB'],
+      [undefined, 'en', 'en-US'],
+      [undefined, 'ar', 'ar-SA'],
+    ] as const)('formats the time with locale %s and lang %s', (locale, lang, expected) => {
+      const { container } = render(
+        <ErrorDisplay error={{ ...mockError, timestamp }} lang={lang} showDetails locale={locale} />
+      );
+      fireEvent.click(container.querySelector('[aria-expanded]') as HTMLElement);
+      expect(container.textContent).toContain(new Date(timestamp).toLocaleString(expected));
+    });
+  });
+
   describe('RTL support', () => {
     it('should apply RTL direction for Arabic', () => {
       const { container } = render(<ErrorDisplay error={mockError} lang="ar" />);

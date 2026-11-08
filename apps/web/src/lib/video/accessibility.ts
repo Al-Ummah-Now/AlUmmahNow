@@ -28,6 +28,7 @@
  */
 
 import type { ExtendedPlayer } from './videojs';
+import { plural } from './i18n/utils/plural';
 import { logger } from '@/lib/logger-client';
 import { getTranslations } from './i18n';
 
@@ -423,16 +424,9 @@ export function formatTimeForScreenReader(seconds: number, lang: 'en' | 'ar' = '
   const secs = Math.floor(seconds % 60);
 
   const parts: string[] = [];
-
-  if (lang === 'ar') {
-    if (hours > 0) parts.push(`${hours} ساعة`);
-    if (minutes > 0) parts.push(`${minutes} دقيقة`);
-    if (secs > 0 || parts.length === 0) parts.push(`${secs} ثانية`);
-  } else {
-    if (hours > 0) parts.push(`${hours} hour${hours > 1 ? 's' : ''}`);
-    if (minutes > 0) parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`);
-    if (secs > 0 || parts.length === 0) parts.push(`${secs} second${secs !== 1 ? 's' : ''}`);
-  }
+  if (hours > 0) parts.push(plural(lang, 'hours', hours));
+  if (minutes > 0) parts.push(plural(lang, 'minutes', minutes));
+  if (secs > 0 || parts.length === 0) parts.push(plural(lang, 'seconds', secs));
 
   return parts.join(lang === 'ar' ? ' و ' : ' ');
 }

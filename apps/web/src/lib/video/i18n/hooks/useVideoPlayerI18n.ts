@@ -6,10 +6,11 @@
 
 'use client';
 
-import { useMemo } from 'react';
-import type { SupportedLanguage, UseVideoPlayerI18nResult } from '../types';
+import { useCallback, useMemo } from 'react';
+import type { PluralKey, SupportedLanguage, UseVideoPlayerI18nResult } from '../types';
 import { getTranslations } from '../utils/getTranslations';
 import { isRTL, getDirection } from '../utils/isRTL';
+import { plural as pluralFor } from '../utils/plural';
 
 /**
  * Hook for accessing video player translations
@@ -43,10 +44,13 @@ export function useVideoPlayerI18n(
 
   const direction = useMemo(() => getDirection(lang), [lang]);
 
+  const plural = useCallback((key: PluralKey, count: number) => pluralFor(lang, key, count), [lang]);
+
   return {
     t: translations,
     lang,
     isRTL: isRTLLanguage,
     dir: direction,
+    plural,
   };
 }

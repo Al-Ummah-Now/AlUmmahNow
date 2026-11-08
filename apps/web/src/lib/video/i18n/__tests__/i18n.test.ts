@@ -133,6 +133,9 @@ describe('Video Player i18n', () => {
           const val2 = (obj2 as Record<string, unknown>)[key];
           const newPath = path ? `${path}.${key}` : key;
 
+          // Each language has its own plural forms; only the table names must match
+          if (path === 'pluralization') return;
+
           if (typeof val1 === 'object' && val1 !== null) {
             compareObjects(val1, val2, newPath);
           }

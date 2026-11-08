@@ -29,6 +29,8 @@ export type {
   SupportedLanguage,
   VideoPlayerTranslations,
   UseVideoPlayerI18nResult,
+  PluralKey,
+  PluralForms,
 } from './types';
 
 export { useVideoPlayerI18n } from './hooks';
@@ -36,6 +38,8 @@ export { useVideoPlayerI18n } from './hooks';
 export {
   getTranslations,
   isLanguageSupported,
+  isValidLanguage,
+  plural,
   getSupportedLanguages,
   isRTL,
   getDirection,
