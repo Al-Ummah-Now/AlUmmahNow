@@ -69,6 +69,18 @@ This epic breakdown transforms comprehensive PRD requirements into bite-sized, i
 **Estimated Effort:** 1.5 weeks
 **GitHub Issues Covered:** #38
 
+### **Epics 9–24: Native Apps (viewer + Studio on all platforms)**
+See [`docs/native-apps/EPICS.md`](native-apps/EPICS.md): product family, Fanous design system, architecture, 16 epics, roadmap and open decisions.
+
+### **Epics 25–27: Sharing & embeds, embedded discussions, plans & entitlements**
+See [`docs/specs/EMBEDS-COMMENTS-TIERS.md`](specs/EMBEDS-COMMENTS-TIERS.md): embeddable player + JS API, "Ummah Comments" widget for external sites, and the tier/entitlement framework every feature must declare.
+
+### **Epic 28: AI-assisted moderation & flagging (Cloudflare Workers AI)**
+See [`docs/specs/AI-MODERATION.md`](specs/AI-MODERATION.md).
+
+### **Epic 29: Core web experience completion (P0)**
+Channels, posting, commenting, profiles, reactions, subscriptions, search, home/explore/library/notifications. See [`docs/specs/CORE-WEB-EXPERIENCE.md`](specs/CORE-WEB-EXPERIENCE.md).
+
 ---
 
 ## GitHub Issues Coverage Analysis
