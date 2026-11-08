@@ -6,6 +6,7 @@ import { SessionManager } from "@/lib/auth/session-manager";
 import { logger } from '@/lib/logger-server';
 import { isLocaleSupported } from '@/lib/i18n/utils';
 import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
+import { exchangeRedirectUri } from '@/lib/auth/redirect-uri';
 
 
 // Discriminated union type for clearer type safety
@@ -19,8 +20,8 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
 
   const client = await getClient();
 
-  // Use the multi-account callback URL
-  const exchanged = await client.exchange(code!, `${url.origin}/api/callback/multi-account`);
+  // Must be the exact redirect_uri sent to authorize (addUserAccount adds ?locale=)
+  const exchanged = await client.exchange(code!, exchangeRedirectUri(url));
   logger.info("[Multi-Account Callback] exchanged:", exchanged);
 
   if (exchanged.err == false) {
@@ -95,9 +96,19 @@ export async function GET(req: NextRequest) {
   const localeParam = url.searchParams.get("locale");
   const locale = localeParam && isLocaleSupported(localeParam) ? localeParam : DEFAULT_LOCALE;
 
+  // Cancelled or failed at the auth server: nothing to exchange
+  const authError = url.searchParams.get("error");
+  if (authError || !code) {
+    logger.warn("[Multi-Account Callback] Returned without a code", {
+      error: authError,
+      description: url.searchParams.get("error_description"),
+    });
+    return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
+  }
+
   const result = await validate(code, url);
 
-  logger.info("[Multi-Account Callback] result:", result);
+  logger.info("[Multi-Account Callback] result:", { success: result.success });
 
   if (result.success) {
     // For multi-account callback, redirect to profile page where user can see all their accounts
@@ -107,6 +118,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${url.origin}/${locale}/profile?session_updated=true`);
   }
 
-  logger.error("[Multi-Account Callback] Authentication failed:", result.error);
-  return NextResponse.json(result.error, { status: 400 });
+  // Error objects serialize to {}, so never answer with the raw error
+  logger.error("[Multi-Account Callback] Authentication failed", {
+    error: result.error instanceof Error ? result.error.message : String(result.error),
+  });
+  return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
 }

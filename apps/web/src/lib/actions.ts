@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
+import { authorizeRedirectUri, originFromHost, CALLBACK_PATH } from "./auth/redirect-uri"
 
 export async function getClient() {
   const client = createClient({
@@ -128,10 +129,8 @@ export async function login(locale: string = 'en') {
 
   // Redirect to OAuth login with locale in callback URL
   const headers = await getHeaders()
-  const host = headers.get("host")
-  const protocol = host?.includes("localhost") ? "http" : "https"
   const { url } = await client.authorize(
-    `${protocol}://${host}/api/callback?locale=${locale}`,
+    authorizeRedirectUri(originFromHost(headers.get("host")), CALLBACK_PATH, locale),
     "code",
   )
   redirect(url)

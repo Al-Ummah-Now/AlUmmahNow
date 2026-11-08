@@ -17,6 +17,7 @@ import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 import { subjects } from '../auth';
 import { shouldRedirectToProfileCreation } from '../profile-helpers';
 import { logger } from '@/lib/logger-server';
+import { authorizeRedirectUri, originFromHost, MULTI_ACCOUNT_CALLBACK_PATH } from '../auth/redirect-uri';
 
 /**
  * Get OpenAuth client
@@ -33,12 +34,9 @@ async function getAuthClient() {
  */
 export async function addUserAccount(locale: string = 'en'): Promise<void> {
   const headers = await getHeaders();
-  const host = headers.get("host");
-  const protocol = host?.includes("localhost") ? "http" : "https";
-
   const client = await getAuthClient();
   const { url } = await client.authorize(
-    `${protocol}://${host}/api/callback/multi-account?locale=${locale}`,
+    authorizeRedirectUri(originFromHost(headers.get("host")), MULTI_ACCOUNT_CALLBACK_PATH, locale),
     "code"
   );
 
@@ -48,16 +46,14 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
 /**
  * Complete the OAuth flow for adding a new account
  */
-export async function completeAddAccount(code: string): Promise<void> {
+export async function completeAddAccount(code: string, locale?: string): Promise<void> {
   try {
     const headers = await getHeaders();
-    const host = headers.get("host");
-    const protocol = host?.includes("localhost") ? "http" : "https";
-
     const client = await getAuthClient();
+    // Same redirect_uri addUserAccount() authorized with, locale included
     const exchanged = await client.exchange(
       code,
-      `${protocol}://${host}/api/callback/multi-account`
+      authorizeRedirectUri(originFromHost(headers.get("host")), MULTI_ACCOUNT_CALLBACK_PATH, locale)
     );
 
     if (exchanged.err || !exchanged.tokens) {

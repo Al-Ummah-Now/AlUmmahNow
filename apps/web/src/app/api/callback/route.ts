@@ -7,6 +7,7 @@ import { User } from "@/interfaces";
 import { logger } from '@/lib/logger-server';
 import { isLocaleSupported } from '@/lib/i18n/utils';
 import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
+import { exchangeRedirectUri } from '@/lib/auth/redirect-uri';
 
 
 // Discriminated union type for clearer type safety
@@ -20,11 +21,8 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
 
   const client = await getClient();
 
-  // Must be the exact redirect_uri sent to authorize (login() adds ?locale=);
-  // the issuer rejects the code when they differ
-  const locale = url.searchParams.get("locale");
-  const redirectUri = `${url.origin}/api/callback${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`;
-  const exchanged = await client.exchange(code!, redirectUri);
+  // Must be the exact redirect_uri sent to authorize; the issuer rejects the code otherwise
+  const exchanged = await client.exchange(code!, exchangeRedirectUri(url));
   logger.debug("[exchanged]", exchanged)
   if (exchanged.err == false) {
     // Extract user info from the access token
