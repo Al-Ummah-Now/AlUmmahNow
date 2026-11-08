@@ -83,6 +83,51 @@ describe('video player chrome (transparent bar, haloed controls; both themes)', 
     expect(contrastRatio(selectedFg, selectedBg)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
   });
 
+  describe('bottom scrim (worst case: smallest scrim over a pure-white frame, no halo)', () => {
+    const scrim = token(playerCss, VJS_BLOCK, '--vp-scrim');
+    const minHeightRem = Number(token(playerCss, VJS_BLOCK, '--vp-scrim-height').match(/([\d.]+)rem/)![1]);
+    // linear-gradient(to top, <color> [stop%], ...): alpha stops from the bottom up
+    const stops = Array.from(scrim.matchAll(/rgba\(0, 0, 0, ([\d.]+)\)(?:\s+([\d.]+)%)?/g)).map((m, i, all) => ({
+      alpha: Number(m[1]),
+      at: m[2] !== undefined ? Number(m[2]) / 100 : i / (all.length - 1),
+    }));
+    /** Scrim colour over a white frame at `rem` above the bottom of the player */
+    const scrimOverWhiteAt = (rem: number) => {
+      const f = rem / minHeightRem;
+      const upper = stops.findIndex((s) => s.at >= f);
+      const a = stops[upper - 1];
+      const b = stops[upper];
+      const alpha = a.alpha + ((b.alpha - a.alpha) * (f - a.at)) / (b.at - a.at);
+      return rgb(composite(`rgba(0, 0, 0, ${alpha})`, '#ffffff'));
+    };
+    // Control bar: 4rem tall, controls centred at 2rem; 36px icons, ~14px text
+    const BAR_CENTRE_REM = 2;
+
+    it('is taller than the 4rem control bar', () => {
+      expect(minHeightRem).toBeGreaterThan(4);
+    });
+
+    it('time and quality text are >= 4.5:1 over the whole glyph height', () => {
+      for (const rem of [BAR_CENTRE_REM - 0.4375, BAR_CENTRE_REM, BAR_CENTRE_REM + 0.4375]) {
+        expect(contrastRatio(fg, scrimOverWhiteAt(rem))).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      }
+    });
+
+    it('icons are >= 3:1 over their whole 36px box', () => {
+      for (const rem of [BAR_CENTRE_REM - 1.125, BAR_CENTRE_REM, BAR_CENTRE_REM + 1.125]) {
+        expect(contrastRatio(fg, scrimOverWhiteAt(rem))).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
+      }
+    });
+  });
+
+  it('menu text is >= 4.5:1 on the translucent menu surface, even over a white frame', () => {
+    const menuBg = token(playerCss, VJS_BLOCK, '--vp-menu-bg');
+    for (const frame of frames) {
+      expect(contrastRatio(fg, rgb(composite(menuBg, frame)))).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      expect(contrastRatio(fgMuted, rgb(composite(menuBg, frame)))).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+    }
+  });
+
   it('no longer uses the invalid oklch(var(--token)) form that dropped the declarations', () => {
     expect(playerCss).not.toMatch(/oklch\(var\(/);
   });

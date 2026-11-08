@@ -65,9 +65,17 @@
     slider tracks (--vp-track) carry a 1px --vp-outline ring: track vs ring is
     >= 3:1 over both a pure-white and a pure-black frame (non-text contrast)
   Menus use a solid dark surface (white text on #111827 = 17.7:1).
+
+  Legibility over busy or bright frames comes from a bottom scrim
+  (.video-js::after, --vp-scrim): a gradient over the bottom ~30% of the
+  player, taller than the bar itself, that fades in and out with the
+  controls. It replaces the solid bar the owner did not want; the bar stays
+  transparent on top of it.
 */
 .video-js {
-  --vp-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0));
+  --vp-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0));
+  --vp-scrim-height: max(30%, 8rem); /* always taller than the 4rem bar */
+  --vp-menu-bg: rgba(17, 24, 39, 0.92); /* --vp-surface at 92% */
   --vp-halo-color: rgba(0, 0, 0, 0.9);
   --vp-halo: 0 0 2px var(--vp-halo-color), 0 0 4px rgba(0, 0, 0, 0.6);
   --vp-outline: rgba(0, 0, 0, 0.6);
@@ -139,9 +147,9 @@
 /* Control bar styling - WCAG 2.1 AA compliant contrast */
 /* V3 Design: 64px height with vertically centered controls */
 .video-js .vjs-control-bar {
-  /* Transparent bar as in production, with a scrim that fades out towards
-     the top; contrast for the white controls comes from --vp-halo */
-  background: var(--vp-scrim);
+  /* Transparent bar as in production. The player's bottom scrim
+     (.video-js::after) sits behind it; --vp-halo outlines each glyph. */
+  background: transparent;
   color: var(--vp-fg);
   backdrop-filter: blur(var(--video-blur-amount));
   -webkit-backdrop-filter: blur(var(--video-blur-amount));
@@ -157,6 +165,53 @@
   right: 0 !important;
   z-index: 10 !important; /* Low z-index to stay below modals/popups */
   overflow: visible !important; /* Allow quality menu to extend outside control bar */
+}
+
+/* Bottom scrim behind the controls. It shows and hides with the control bar
+   (Video.js fades the bar out when the user goes inactive while playing) and
+   stays while a popup menu is open. */
+.video-js::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--vp-scrim-height);
+  background: var(--vp-scrim);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.video-js.vjs-has-started.vjs-user-inactive.vjs-playing:not(.vjs-menu-open)::after {
+  opacity: 0;
+  transition: opacity 1s ease; /* same fade-out as the control bar */
+}
+
+.video-js.vjs-controls-disabled::after,
+.video-js.vjs-using-native-controls::after,
+.video-js.vjs-error::after {
+  display: none;
+}
+
+/* The scrim is painted after the tech; keep the big play button and
+   captions above it (the control bar is z-index 10) */
+.video-js .vjs-big-play-button,
+.video-js .vjs-text-track-display {
+  z-index: 2;
+}
+
+/* A popup menu is open: the controls never fade out from under it */
+.video-js.vjs-menu-open .vjs-control-bar {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Popup menus open on click/tap only (menu-interaction.ts stops Video.js's
+   hover handler). This keeps a stray .vjs-hover from showing a menu. */
+.video-js.vjs-workinghover .vjs-menu-button-popup.vjs-hover .vjs-menu:not(.vjs-lock-showing) {
+  display: none !important;
 }
 
 /* Consolidated focus indicators for control buttons (Story 1.4 AC 5) */
@@ -307,7 +362,8 @@
   z-index: 9999 !important;
 
   /* Visual styling - dark surface in both themes; Video.js menu text is white */
-  background: var(--vp-surface) !important;
+  background: var(--vp-menu-bg) !important;
+  padding: 0.25rem 0 !important;
   border: 1px solid var(--vp-surface-border) !important;
   border-radius: 0.5rem !important;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
@@ -335,6 +391,7 @@
   max-height: none !important;
   overflow: visible !important;
   position: static !important; /* Normal flow to give parent height */
+  background: transparent !important; /* the menu box carries --vp-menu-bg */
 }
 
 /* RTL support for quality selector menu */
@@ -2067,6 +2124,7 @@
   justify-content: center;
   font-size: 0.9375rem;
   text-transform: none;
+  padding: 0.5rem 1rem;
 }
 
 .video-js .vjs-menu li.vjs-menu-item:hover,

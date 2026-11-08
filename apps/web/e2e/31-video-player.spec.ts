@@ -166,7 +166,7 @@ test.describe('player controls', () => {
     }).toBeLessThan(30);
   });
 
-  test('PLAYER-013 quality menu lists the renditions and selects one (hidden when the browser exposes none)', async ({ page, request, browserName }, testInfo) => {
+  test('PLAYER-013 quality menu opens on click only, lists the renditions and selects one (hidden when the browser exposes none)', async ({ page, request, browserName }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
     const video = await qaLecture(request, 1);
     await openPlayable(page, video);
@@ -178,7 +178,57 @@ test.describe('player controls', () => {
       return;
     }
     const button = page.locator('.video-js .vjs-quality-selector .vjs-menu-button');
+    const menu = page.locator('.video-js .vjs-quality-selector .vjs-menu');
+    const tech = page.locator('.video-js .vjs-tech');
     await expect(button).toBeVisible();
+    await expect(button).toHaveAttribute('aria-haspopup', /true|menu/);
+
+    // Hover never opens the menu (it closed again on the way up over the video)
+    await button.hover();
+    await page.waitForTimeout(400);
+    await expect(menu).toBeHidden();
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+
+    // A click opens it, and it stays open while the pointer moves over the video
+    await button.click();
+    await expect(menu).toBeVisible();
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.video-js')).toHaveClass(/vjs-menu-open/);
+    const box = (await tech.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3, { steps: 5 });
+    await page.mouse.move(box.x + 20, box.y + 20, { steps: 5 });
+    await page.waitForTimeout(2500); // past the 2s inactivity timeout
+    await expect(menu).toBeVisible();
+    await expect(page.locator('.video-js .vjs-control-bar')).toHaveCSS('opacity', '1');
+    // The bottom scrim behind the controls is drawn and stays while the menu is open
+    const scrim = await page.evaluate(() => {
+      const el = document.querySelector('.video-js')!;
+      const style = getComputedStyle(el, '::after');
+      return { image: style.backgroundImage, opacity: style.opacity, height: parseFloat(style.height), player: el.getBoundingClientRect().height };
+    });
+    expect(scrim.image).toContain('linear-gradient');
+    expect(scrim.opacity).toBe('1');
+    expect(scrim.height).toBeGreaterThan(64);
+    expect(scrim.height).toBeGreaterThanOrEqual(scrim.player * 0.29);
+
+    // A second click on the button closes it; Escape closes it and returns focus
+    await button.click();
+    await expect(menu).toBeHidden();
+    await button.click();
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(button).toBeFocused();
+
+    // A click on the video only dismisses the menu (playback state is unchanged)
+    await button.click();
+    await expect(menu).toBeVisible();
+    const pausedBefore = (await mediaState(page)).paused;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 3);
+    await expect(menu).toBeHidden();
+    expect((await mediaState(page)).paused).toBe(pausedBefore);
+
+    await keepControlsVisible(page);
     await button.click();
     const items = page.locator('.video-js .vjs-quality-selector .vjs-menu-item');
     await expect(items.filter({ hasText: /auto/i })).toHaveCount(1);
@@ -187,7 +237,8 @@ test.describe('player controls', () => {
     // Regression: the list existed in the DOM but was clipped to nothing (the
     // menu box kept Video.js's height: 0 and the control bar paint-contained
     // it), so the menu "did not open". Assert the item is really painted on top.
-    const rendition = items.filter({ hasText: /\d+p/ }).last();
+    // The lowest rendition (240p on the QA/prod ladders)
+    const rendition = items.filter({ hasText: /\d+p/ }).first();
     await expect.poll(() => rendition.evaluate((li) => {
       const menu = li.closest('.vjs-menu')!.getBoundingClientRect();
       const r = li.getBoundingClientRect();
@@ -197,8 +248,12 @@ test.describe('player controls', () => {
 
     const label = (await rendition.innerText()).trim();
     const height = Number(label.match(/(\d+)p/)![1]);
+    await expect(rendition).toHaveAttribute('role', 'menuitemradio');
     await rendition.click();
     await expect(rendition).toHaveAttribute('aria-checked', 'true');
+    // Choosing a rendition closes the menu
+    await expect(menu).toBeHidden();
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('.video-js .vjs-quality-selector')).toContainText(label.replace(/\s.*$/, ''));
     // Switching really restricts playback to that rendition
     await expect.poll(() => page.evaluate((h) => {
