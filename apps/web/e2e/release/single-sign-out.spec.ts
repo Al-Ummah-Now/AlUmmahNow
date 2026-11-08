@@ -10,7 +10,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { sinkEmail, target } from './targets';
-import { completeRegistration, createProfile, expectNoErrorHop, recordNavigations, signUpOnWeb } from './web-session';
+import { completeRegistration, createProfile, expectNoErrorHop, signUpOnWeb } from './web-session';
 
 /** The web app's same-origin token endpoint: 200 with a token only while signed in. */
 async function webSignedIn(page: Page): Promise<boolean> {
@@ -38,6 +38,29 @@ async function clickHeaderSignOut(page: Page): Promise<void> {
     await expect(signOut).toBeVisible({ timeout: 3000 });
   }).toPass({ timeout: 30000 });
   await signOut.click();
+}
+
+/**
+ * Starts a sign-out and waits for the whole front-channel chain: the browser
+ * leaves through the auth server's /logout and the chain's last redirect lands
+ * on `home`. Redirect hops never commit a page (no framenavigated), so they are
+ * recorded as navigation requests.
+ */
+async function signOutThroughAuthServer(page: Page, home: string, start: () => Promise<void>): Promise<string[]> {
+  const hops: string[] = [];
+  page.on('request', (r) => {
+    if (r.isNavigationRequest() && r.frame() === page.mainFrame()) hops.push(r.url());
+  });
+  const back = page.waitForRequest(
+    (r) => r.isNavigationRequest() && r.url() === home && (r.redirectedFrom()?.url().startsWith(`${target().auth}/logout`) ?? false),
+    { timeout: 45000 },
+  );
+  await start();
+  await back;
+  await page.waitForLoadState('load');
+  expect(hops.some((u) => u.startsWith(`${target().auth}/logout`)), `sign-out never reached the auth server: ${hops.join(' → ')}`).toBe(true);
+  expectNoErrorHop(hops);
+  return hops;
 }
 
 /** Profile app sign-in; with a shared sign-in it completes without a form. */
@@ -83,14 +106,7 @@ test.describe('Release: single sign-out', () => {
     // Header → account menu → Sign out of <account>
     await page.goto(`${target().web}/en`);
     expect(await webSignedIn(page)).toBe(true);
-    const navigations = recordNavigations(page);
-    await clickHeaderSignOut(page);
-    await page.waitForURL((u) => u.origin === target().web && u.pathname === '/en', { timeout: 30000 });
-    expect(
-      navigations.some((u) => u.startsWith(`${target().auth}/logout`)),
-      `sign-out never reached the auth server: ${navigations.join(' → ')}`,
-    ).toBe(true);
-    expectNoErrorHop(navigations);
+    await signOutThroughAuthServer(page, `${target().web}/en`, () => clickHeaderSignOut(page));
 
     // Reload: still signed out
     await page.reload();
@@ -118,14 +134,9 @@ test.describe('Release: single sign-out', () => {
     expect(await webSignedIn(page)).toBe(true);
 
     await page.goto(`${target().adminWeb}/access-denied`);
-    const navigations = recordNavigations(page);
-    await page.locator('form[action="/api/logout"] button[type="submit"]').click();
-    await page.waitForURL((u) => u.origin === target().adminWeb && u.pathname === '/', { timeout: 30000 });
-    expect(
-      navigations.some((u) => u.startsWith(`${target().auth}/logout`)),
-      `log out never reached the auth server: ${navigations.join(' → ')}`,
-    ).toBe(true);
-    expectNoErrorHop(navigations);
+    await signOutThroughAuthServer(page, `${target().adminWeb}/`, () =>
+      page.locator('form[action="/api/logout"] button[type="submit"]').click(),
+    );
 
     // Videos and profile are signed out
     expect(await webSignedIn(page)).toBe(false);
