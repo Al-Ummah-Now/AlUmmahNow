@@ -12,15 +12,16 @@
 set -euo pipefail
 ENVNAME=${1:-qa}
 case $ENVNAME in
-  qa)   ISS=https://auth.qa.alummahnow.net; API=https://videos.api.qa.alummahnow.net ;;
-  prod) ISS=https://auth.alummahnow.net;    API=https://videos.api.alummahnow.net ;;
+  # Viewer (desktop) client: loopback redirect; ids differ per environment (migration 0013)
+  qa)   ISS=https://auth.qa.alummahnow.net; API=https://videos.api.qa.alummahnow.net; CID=ce7de8a4-59dd-4682-ab4d-105399105294 ;;
+  prod) ISS=https://auth.alummahnow.net;    API=https://videos.api.alummahnow.net;    CID=f97abe68-ef61-41b6-bf08-d86650cc7cb3 ;;
   *) echo "usage: $0 qa|prod"; exit 2 ;;
 esac
 : ${RESEND_KEY_FILE:?set RESEND_KEY_FILE}
-CID=f97abe68-ef61-41b6-bf08-d86650cc7cb3          # Viewer (desktop), loopback redirect
 RED=http://127.0.0.1:53682/auth/callback
 BOUND_S=${BOUND_S:-180}
-W=$(mktemp -d); chmod 700 $W; trap 'rm -rf $W' EXIT
+# WORKDIR keeps the throwaway credentials (mode 700) so a failed run can be cleaned up
+W=${WORKDIR:-$(mktemp -d)}; mkdir -p $W; chmod 700 $W
 fail=0
 enc() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$1"; }
 field() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' "$1" "$2"; }
@@ -32,12 +33,15 @@ start_flow() {
   local ver=$(openssl rand -hex 32); print -rn -- $ver > $d.ver
   local ch=$(printf %s "$ver" | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '=\n')
   curl -s -c $d.jar -b $d.jar -D $d.h -o /dev/null "$ISS/authorize?client_id=$CID&redirect_uri=$(enc $RED)&response_type=code&state=s1&code_challenge=$ch&code_challenge_method=S256&provider=password"
-  local loc=$(grep -i '^location' $d.h | awk '{print $2}' | tr -d '\r'); loc=${loc#*auth_flow=}; print -rn -- ${loc%%&*} > $d.flow
+  local loc=$(grep -i '^location' $d.h | awk '{print $2}' | tr -d '\r')
+  [[ $loc == *auth_flow=* ]] || { echo "  FAIL /authorize: $(head -1 $d.h | tr -d '\r')"; exit 1; }
+  loc=${loc#*auth_flow=}; print -rn -- ${loc%%&*} > $d.flow
 }
 # exchange the code in the Location of $W/$1.h into $W/$1.tok
 finish_flow() {
   local d=$W/$1
   local cb=$(grep -i '^location' $d.h | awk '{print $2}' | tr -d '\r')
+  [[ $cb == *code=* ]] || { echo "  FAIL no authorization code ($(head -1 $d.h | tr -d '\r'))"; exit 1; }
   local code=$(python3 -c 'import sys,urllib.parse as u;print(u.parse_qs(u.urlparse(sys.argv[1]).query)["code"][0])' "$cb")
   curl -s -X POST "$ISS/token" --data-urlencode grant_type=authorization_code --data-urlencode "code=$code" \
     --data-urlencode "redirect_uri=$RED" --data-urlencode "client_id=$CID" --data-urlencode "code_verifier=$(cat $d.ver)" > $d.tok
@@ -74,9 +78,9 @@ signin() {
     --data-urlencode "email=$(cat $d.email)" --data-urlencode password@$d.pw
   finish_flow $1
 }
-refresh_status() {  # refresh with the refresh token in file $2 (json); write new tokens to $3
-  curl -s -o $3 -w '%{http_code}' -X POST "$ISS/token" --data-urlencode grant_type=refresh_token \
-    --data-urlencode "refresh_token=$(field $2 refresh_token)" --data-urlencode "client_id=$CID"
+refresh_status() {  # refresh with the refresh token in file $1 (json); write the response to $2
+  curl -s -o $2 -w '%{http_code}' -X POST "$ISS/token" --data-urlencode grant_type=refresh_token \
+    --data-urlencode "refresh_token=$(field $1 refresh_token)" --data-urlencode "client_id=$CID"
 }
 api_status() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(field $1 access_token)" "$API/api/watch-history"; }
 wait_rejected() {  # poll api-videos with the access token in $2 until 401
