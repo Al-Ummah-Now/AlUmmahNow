@@ -115,7 +115,7 @@ describe('Logger', () => {
 
       logger.info('Test message');
 
-      expect(consoleLogMock).toHaveBeenCalledWith('[INFO] Test message', '');
+      expect(consoleLogMock).toHaveBeenCalledWith('[INFO] %s', 'Test message', '');
     });
 
     it('should not log to console when disabled', () => {
@@ -133,7 +133,7 @@ describe('Logger', () => {
       logger.info('Test message', testData);
 
       expect(consoleLogMock).toHaveBeenCalledWith(
-        '[INFO] Test message',
+        '[INFO] %s', 'Test message',
         JSON.stringify(testData, null, 2)
       );
     });
@@ -151,7 +151,7 @@ describe('Logger', () => {
       logger.debug('Debug message', { test: true });
 
       expect(consoleLogMock).toHaveBeenCalledWith(
-        '[DEBUG] Debug message',
+        '[DEBUG] %s', 'Debug message',
         JSON.stringify({ test: true }, null, 2)
       );
     });
@@ -160,7 +160,7 @@ describe('Logger', () => {
       logger.info('Info message', { test: true });
 
       expect(consoleLogMock).toHaveBeenCalledWith(
-        '[INFO] Info message',
+        '[INFO] %s', 'Info message',
         JSON.stringify({ test: true }, null, 2)
       );
     });
@@ -169,7 +169,7 @@ describe('Logger', () => {
       logger.warn('Warn message', { test: true });
 
       expect(consoleWarnMock).toHaveBeenCalledWith(
-        '[WARN] Warn message',
+        '[WARN] %s', 'Warn message',
         JSON.stringify({ test: true }, null, 2)
       );
     });
@@ -178,13 +178,13 @@ describe('Logger', () => {
       const error = new Error('Test error');
       logger.error('Error message', error);
 
-      expect(consoleErrorMock).toHaveBeenCalledWith('[ERROR] Error message', error);
+      expect(consoleErrorMock).toHaveBeenCalledWith('[ERROR] %s', 'Error message', error);
     });
 
     it('should handle logging without data', () => {
       logger.info('Simple message');
 
-      expect(consoleLogMock).toHaveBeenCalledWith('[INFO] Simple message', '');
+      expect(consoleLogMock).toHaveBeenCalledWith('[INFO] %s', 'Simple message', '');
     });
   });
 
