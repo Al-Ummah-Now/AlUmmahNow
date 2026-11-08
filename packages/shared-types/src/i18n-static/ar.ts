@@ -371,6 +371,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
     videoComments: 'التعليقات',
     videoShares: 'المشاركات',
     relatedVideos: 'فيديوهات ذات صلة',
+    relatedEmpty: 'تعذّر تحميل الفيديوهات ذات الصلة حاليًا.',
+    relatedEmptyRetry: 'حاول مرة أخرى',
     watchLater: 'مشاهدة لاحقاً',
     addToPlaylist: 'أضف إلى قائمة التشغيل',
     noVideoSelected: 'لم يتم اختيار فيديو',

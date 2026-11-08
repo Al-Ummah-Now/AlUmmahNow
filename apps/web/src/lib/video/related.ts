@@ -2,12 +2,17 @@
  * Watch page "related" shelf (Epic 7.3): videos similar to the one playing,
  * from GET /api/recommendations?videoId= (same category/tags/channel, seeded
  * by watch history when signed in), topped up from the general feed when the
- * API returns too few.
+ * API returns too few. When every source comes back empty it retries once,
+ * then falls through the last-resort sources.
  */
 import type { VideoInfo, VideoObject } from '@/interfaces';
 
 /** Videos the shelf aims to show. */
 export const RELATED_LIMIT = 15;
+/** Wait before the single retry of an empty shelf. */
+export const RELATED_RETRY_DELAY_MS = 500;
+/** sessionStorage key of the most recent non-empty shelf. */
+export const LAST_GOOD_SHELF_KEY = 'related:last-good-shelf';
 
 type ApiVideo = Partial<VideoObject> & {
   id: string;
@@ -62,22 +67,83 @@ export function mergeRelated(
   return out;
 }
 
+type RelatedSource = () => Promise<VideoInfo[] | undefined>;
+
+/** A source that fails counts as empty. */
+async function read(source: RelatedSource): Promise<VideoInfo[]> {
+  try {
+    return (await source()) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 /**
- * Build the shelf: recommendations alone when they fill it, otherwise topped
- * up from the feed, which is only requested in that case. A source that fails
- * counts as empty, so the feed still fills the shelf if recommendations fail.
+ * Recommendations alone when they fill the shelf, otherwise topped up from the
+ * feed, which is only requested in that case.
+ */
+async function buildShelf(
+  currentVideoId: string,
+  sources: { recommended: RelatedSource; feed: RelatedSource },
+  limit: number,
+): Promise<VideoInfo[]> {
+  const recommended = await read(sources.recommended);
+  const shelf = mergeRelated(currentVideoId, recommended, [], limit);
+  if (shelf.length >= limit) return shelf;
+  return mergeRelated(currentVideoId, recommended, await read(sources.feed), limit);
+}
+
+/**
+ * Build the shelf, retrying once when it comes back empty. The API helpers
+ * report failures as empty results, so an empty shelf is the retry signal.
+ * `lastResort` sources are tried in order only after that retry.
  */
 export async function loadRelated(
   currentVideoId: string,
   sources: {
-    recommended: () => Promise<VideoInfo[]>;
-    feed: () => Promise<VideoInfo[] | undefined>;
+    recommended: RelatedSource;
+    feed: RelatedSource;
+    lastResort?: RelatedSource[];
   },
   limit: number = RELATED_LIMIT,
+  retryDelayMs: number = RELATED_RETRY_DELAY_MS,
 ): Promise<VideoInfo[]> {
-  const recommended = await sources.recommended().catch(() => [] as VideoInfo[]);
-  const shelf = mergeRelated(currentVideoId, recommended, [], limit);
-  if (shelf.length >= limit) return shelf;
-  const feed = await sources.feed().catch(() => undefined);
-  return mergeRelated(currentVideoId, recommended, feed ?? [], limit);
+  let shelf = await buildShelf(currentVideoId, sources, limit);
+  if (shelf.length > 0) return shelf;
+
+  await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  shelf = await buildShelf(currentVideoId, sources, limit);
+
+  for (const source of sources.lastResort ?? []) {
+    if (shelf.length > 0) break;
+    shelf = mergeRelated(currentVideoId, await read(source), [], limit);
+  }
+  return shelf;
+}
+
+/** Remember a shelf for when every source is down. Storage may be unavailable. */
+export function saveLastGoodShelf(shelf: VideoInfo[]): void {
+  if (shelf.length === 0) return;
+  try {
+    sessionStorage.setItem(LAST_GOOD_SHELF_KEY, JSON.stringify(shelf));
+  } catch {
+    // Private mode, quota or server render: the shelf just isn't remembered.
+  }
+}
+
+/** The remembered shelf with its dates restored; empty when there is none. */
+export function readLastGoodShelf(): VideoInfo[] {
+  try {
+    const parsed: unknown = JSON.parse(sessionStorage.getItem(LAST_GOOD_SHELF_KEY) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as VideoInfo[])
+      .filter((video) => typeof video?.id === 'string')
+      .map((video) => ({
+        ...video,
+        dateCreated: new Date(video.dateCreated),
+        dateModified: new Date(video.dateModified),
+      }));
+  } catch {
+    return [];
+  }
 }

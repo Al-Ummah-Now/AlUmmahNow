@@ -183,7 +183,7 @@ describe('recommendations while watch history is paused (#242)', () => {
 
 	it('uses history to seed and exclude when not paused', async () => {
 		const app = buildApp(recRoutes, { userId: 'me' });
-		const res = await app.request('/api/recommendations?excludeWatched=true', {}, recEnv(false));
+		const res = await app.request('/api/recommendations?excludeWatched=true&limit=1', {}, recEnv(false));
 		assert.equal(res.status, 200, await res.clone().text());
 		const body = (await res.json()) as { basedOn: string[]; data: { id: string }[] };
 		assert.ok(body.basedOn.includes('history'), JSON.stringify(body.basedOn));

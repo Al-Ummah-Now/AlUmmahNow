@@ -41,6 +41,8 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
   const [state, setState] = useState<VideoState>({ status: 'loading' });
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(true);
+  const [relatedAttempt, setRelatedAttempt] = useState(0);
+  const retryRelated = useCallback(() => setRelatedAttempt((attempt) => attempt + 1), []);
   const { user } = useAuth();
   const { t, lang, isRTL } = useLanguage();
   // ?t=754 / ?t=12m34s starts the video there (share links "at current time")
@@ -62,8 +64,8 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
   const related = relatedVideos.filter((video) => video.id !== videoId);
   const renderRelated = (keyPrefix: string) =>
     isRTL
-      ? <RelatedVideosSectionRTL relatedVideos={related} loading={relatedLoading} />
-      : <RelatedVideosSection relatedVideos={related} keyPrefix={keyPrefix} loading={relatedLoading} />;
+      ? <RelatedVideosSectionRTL relatedVideos={related} loading={relatedLoading} onRetry={retryRelated} />
+      : <RelatedVideosSection relatedVideos={related} keyPrefix={keyPrefix} loading={relatedLoading} onRetry={retryRelated} />;
 
   useEffect(() => {
     let cancelled = false;
@@ -80,7 +82,8 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
 
   useEffect(() => {
     // Started alongside the video details. The shelf is related to the video,
-    // so it is not requested again when the auth state settles.
+    // so it is not requested again when the auth state settles, only when the
+    // viewer asks to retry an empty shelf.
     let cancelled = false;
     setRelatedVideos([]);
     setRelatedLoading(true);
@@ -97,7 +100,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [videoId]);
+  }, [videoId, relatedAttempt]);
 
   if (state.status === 'notFound') {
     return (

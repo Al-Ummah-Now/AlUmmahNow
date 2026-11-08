@@ -171,6 +171,17 @@ export class TrendingGet extends OptionalAuthRoute {
 /** Seconds a recommendations result is reused (a viewer's own entry is shorter-lived). */
 const ANONYMOUS_RECOMMENDATIONS_TTL = 120;
 const PERSONAL_RECOMMENDATIONS_TTL = 60;
+/**
+ * Seconds a short result is reused. A short result may be a passing failure, so
+ * it must not be pinned, but a small catalogue is short on every request and
+ * still needs some caching. An empty result is never cached.
+ */
+const SHORT_RECOMMENDATIONS_TTL = 10;
+
+function anonymousRecommendationsCacheControl(count: number, limit: number): string {
+  if (count === 0) return "no-store";
+  return `public, max-age=${count >= limit ? ANONYMOUS_RECOMMENDATIONS_TTL : SHORT_RECOMMENDATIONS_TTL}`;
+}
 
 interface RecommendationsBody {
   success: true;
@@ -188,7 +199,7 @@ export class RecommendationsGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Recommended videos",
-    description: "🔓 Authentication optional. Recommends public videos related to `videoId` (same category, channel, tags). When signed in, the viewer's recent watch history also seeds the profile and `excludeWatched=true` removes videos already watched.",
+    description: "🔓 Authentication optional. Recommends public videos related to `videoId` (same category, channel, tags). When signed in, the viewer's recent watch history also seeds the profile and `excludeWatched=true` ranks videos already watched last, listing them only to fill the limit.",
     request: {
       query: z.object({
         videoId: Str({ description: "Seed video id" }).optional(),
@@ -235,6 +246,7 @@ export class RecommendationsGet extends OptionalAuthRoute {
       const cached = await readEdgeCache<RecommendationsBody>(cacheUrl);
       if (cached) {
         c.header("X-Recommendations-Cache", "HIT");
+        if (!userId) c.header("Cache-Control", anonymousRecommendationsCacheControl(cached.data.length, limit));
         return c.json(cached);
       }
 
@@ -263,10 +275,25 @@ export class RecommendationsGet extends OptionalAuthRoute {
         now: Date.now(),
       });
       const winners = await hydrateRanked(c.env.videos, ranked, limit);
+      if (excludeWatched && winners.length < limit) {
+        // Not enough unwatched videos: fill the shelf with watched ones, after them.
+        const missing = limit - winners.length;
+        const backfill = rankRecommendations(pool.candidates, {
+          seeds: pool.seeds,
+          exclude: new Set([...(query.videoId ? [query.videoId] : []), ...winners.map(w => w.video.id)]),
+          limit: hydrationCount(missing),
+          now: Date.now(),
+        });
+        winners.push(...await hydrateRanked(c.env.videos, backfill, missing));
+      }
       const channels = await loadChannelMap(c.env.channels, winners.map(r => r.video.channelId || ""));
       const data = winners.map(({ video, score }) => ({ ...toVideoResponse(video, channels), recommendationScore: score }));
       const body: RecommendationsBody = { success: true, data, videos: data, basedOn };
-      writeEdgeCache(cacheUrl, body, userId ? PERSONAL_RECOMMENDATIONS_TTL : ANONYMOUS_RECOMMENDATIONS_TTL, waitUntilOf(c as never));
+      if (data.length > 0) {
+        const fullTtl = userId ? PERSONAL_RECOMMENDATIONS_TTL : ANONYMOUS_RECOMMENDATIONS_TTL;
+        writeEdgeCache(cacheUrl, body, data.length >= limit ? fullTtl : SHORT_RECOMMENDATIONS_TTL, waitUntilOf(c as never));
+      }
+      if (!userId) c.header("Cache-Control", anonymousRecommendationsCacheControl(data.length, limit));
       logger.info("[Recommendations] Served recommendations", { videoId: query.videoId, userId, count: data.length, basedOn, source: pool.source });
       c.header("X-Recommendations-Cache", "MISS");
       return c.json(body);
