@@ -1,4 +1,4 @@
-import { singleSignOutNext, startSingleSignOut } from "../single-sign-out"
+import { singleSignOutNext, singleSignOutToHome, startSingleSignOut } from "../single-sign-out"
 
 const ISSUER = "https://auth.alummahnow.net"
 const APP = "https://videos.alummahnow.net"
@@ -8,6 +8,21 @@ describe("single sign-out", () => {
     const url = new URL(startSingleSignOut(ISSUER, `${APP}/ar`))
     expect(url.origin + url.pathname).toBe(`${ISSUER}/logout`)
     expect(url.searchParams.get("return")).toBe(`${APP}/ar`)
+  })
+
+  it("returns to the app's home page in the given locale", () => {
+    const ar = new URL(singleSignOutToHome(ISSUER, "videos.alummahnow.net", "ar"))
+    expect(ar.origin + ar.pathname).toBe(`${ISSUER}/logout`)
+    expect(ar.searchParams.get("return")).toBe(`${APP}/ar`)
+    expect(new URL(singleSignOutToHome(ISSUER, "videos.alummahnow.net", "en")).searchParams.get("return")).toBe(`${APP}/en`)
+  })
+
+  it("accepts only en and ar, and uses http only on localhost", () => {
+    for (const locale of ["fr", "", "../evil", "ar/../x"]) {
+      expect(new URL(singleSignOutToHome(ISSUER, "videos.alummahnow.net", locale)).searchParams.get("return")).toBe(`${APP}/en`)
+    }
+    expect(new URL(singleSignOutToHome(ISSUER, "localhost:3001", "en")).searchParams.get("return")).toBe("http://localhost:3001/en")
+    expect(new URL(singleSignOutToHome(ISSUER, "localhost.evil.example", "en")).searchParams.get("return")).toBe("https://localhost.evil.example/en")
   })
 
   it("follows next back to the auth server's /logout", () => {

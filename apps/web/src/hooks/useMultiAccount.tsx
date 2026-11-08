@@ -79,6 +79,11 @@ interface MultiAccountContextValue {
 // Context
 const MultiAccountContext = createContext<MultiAccountContextValue | null>(null);
 
+/** The page's locale: the first path segment (/ar/...), en otherwise. */
+function currentLocale(): 'en' | 'ar' {
+  return window.location.pathname.split('/')[1] === 'ar' ? 'ar' : 'en';
+}
+
 /**
  * Provider component for multi-account context
  */
@@ -381,50 +386,30 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [signedInUserId, reloadChannels]);
 
-  // Logout current account
+  // Logout current account. The last account out also ends the shared
+  // sign-in on the auth server (single sign-out, #291): the browser leaves for
+  // the auth server's /logout chain and comes back to the home page signed out.
   const logout = useCallback(async () => {
     try {
       setError(null);
-
-      // Check if this is the last account BEFORE logging out
-      const isLastAccount = accounts.length <= 1;
-      logger.info('[MultiAccountProvider] Logging out, is last account:', isLastAccount);
-
-      try {
-        await logoutCurrentAccount();
-      } catch (serverError) {
-        // Next.js redirect errors are expected - they indicate successful server-side redirect
-        const isRedirectError = serverError instanceof Error &&
-          (serverError.message === 'NEXT_REDIRECT' ||
-           ('digest' in serverError && typeof serverError.digest === 'string' && serverError.digest.startsWith('NEXT_REDIRECT')));
-
-        if (!isRedirectError) {
-          throw serverError;
-        }
-        logger.info('[MultiAccountProvider] Server redirect detected (expected behavior)');
-      }
-
-      // Clear local state immediately
+      const { signOutUrl } = await logoutCurrentAccount(currentLocale());
       setUser(null);
       setAccounts([]);
 
-      // If this was the last account, force navigation to home
-      if (isLastAccount) {
-        logger.info('[MultiAccountProvider] Last account logged out, navigating to home');
-        const locale = window.location.pathname.includes('/ar') ? 'ar' : 'en';
-        router.push(`/${locale}`);
-      } else {
-        // Reload session data to get updated accounts list
-        await loadSessionData();
-        router.refresh();
+      if (signOutUrl) {
+        logger.info('[MultiAccountProvider] Last account logged out, starting single sign-out');
+        window.location.assign(signOutUrl);
+        return;
       }
+      await loadSessionData();
+      router.refresh();
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to logout:', err);
       setError(t.errors.genericError);
     }
-  }, [accounts, loadSessionData, router, t]);
+  }, [loadSessionData, router, t]);
 
-  // Logout all accounts
+  // Logout all accounts (and the shared sign-in)
   const logoutAll = useCallback(async (skipConfirmation = false) => {
     try {
       setError(null);
@@ -436,33 +421,16 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      try {
-        await logoutAllAccounts();
-      } catch (serverError) {
-        // Next.js redirect errors are expected - they indicate successful server-side redirect
-        const isRedirectError = serverError instanceof Error &&
-          (serverError.message === 'NEXT_REDIRECT' ||
-           ('digest' in serverError && typeof serverError.digest === 'string' && serverError.digest.startsWith('NEXT_REDIRECT')));
-
-        if (!isRedirectError) {
-          throw serverError;
-        }
-        logger.info('[MultiAccountProvider] Server redirect detected (expected behavior)');
-      }
-
-      // Clear local state immediately
+      const { signOutUrl } = await logoutAllAccounts(currentLocale());
       setUser(null);
       setAccounts([]);
-
-      // Force navigation to home
-      logger.info('[MultiAccountProvider] All accounts logged out, navigating to home');
-      const locale = window.location.pathname.includes('/ar') ? 'ar' : 'en';
-      router.push(`/${locale}`);
+      logger.info('[MultiAccountProvider] All accounts logged out, starting single sign-out');
+      if (signOutUrl) window.location.assign(signOutUrl);
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to logout all:', err);
       setError(t.errors.genericError);
     }
-  }, [router, t]);
+  }, [t]);
 
   // Refresh session data
   const refresh = useCallback(async () => {

@@ -3,7 +3,7 @@
  *
  * This module deliberately has no 'use server' directive: that would expose
  * every export (including setAdminSession) as a client-callable server action.
- * Server actions that need auth live in src/app/actions.ts.
+ * Server actions that need auth belong in a separate 'use server' module.
  */
 import { cache } from 'react';
 import { cookies as getCookies } from 'next/headers';
