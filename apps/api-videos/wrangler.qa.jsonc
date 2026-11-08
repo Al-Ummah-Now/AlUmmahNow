@@ -142,6 +142,8 @@
     }
   ],
   "vars": {
+    // Upload-session limits enforced on QA with roomy numbers, so limiter bugs show here (#290)
+    "UPLOAD_RATE_LIMIT": "relaxed",
     "ZONE": "al-ummah-now-images",
     "ClientId": "c1770235-e4b6-42f3-9eb4-3c03ca111b02",
     "Issuer": "https://auth.qa.alummahnow.net",

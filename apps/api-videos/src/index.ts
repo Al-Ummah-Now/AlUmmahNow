@@ -5,7 +5,7 @@ import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
 import { loggingMiddleware } from "./middleware/logging";
 import { errorHandler } from "./middleware/error-handler";
-import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { rateLimitMiddleware, UPLOAD_SESSION_PATHS, uploadSessionLimitMiddleware } from "./middleware/rate-limit";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
@@ -138,12 +138,12 @@ app.use('/api/*', bunnySigningMiddleware);
 // RATE LIMITING
 // ==========================================
 
-// SECURITY: Apply rate limiting to video upload endpoints
-app.use('/api/videos/upload', rateLimitMiddleware('video_upload'));
-app.use('/api/videos/upload/initiate', rateLimitMiddleware('video_upload'));
-app.use('/api/videos/upload/batch/initiate', rateLimitMiddleware('video_upload'));
-app.use('/api/videos/upload/complete', rateLimitMiddleware('video_upload'));
-app.use('/api/videos/upload/resume/:videoId', rateLimitMiddleware('video_upload'));
+// SECURITY: Limit new video upload SESSIONS, once per video (#290). The calls
+// that continue an initiated upload (TUS POST/HEAD/PATCH/DELETE, complete,
+// resume) are not counted: they need that upload's session, owned by the same
+// user. Rejected initiations are refused before any video record is created.
+const uploadSessionLimit = uploadSessionLimitMiddleware();
+for (const path of UPLOAD_SESSION_PATHS) app.use(path, uploadSessionLimit);
 
 // SECURITY: Apply rate limiting to community media uploads
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
@@ -154,11 +154,10 @@ app.use('/api/videos/:id/thumbnail', rateLimitMiddleware('image_upload'));
 // TUS PROXY
 // ==========================================
 
-// TUS Proxy: Apply authentication and rate limiting
+// TUS Proxy: authentication only. Every TUS request needs a session from an
+// (already rate-limited) initiate, and the proxy checks it belongs to this user.
 app.use('/api/videos/tus', authMiddleware); // Require authentication for all TUS operations
 app.use('/api/videos/tus/*', authMiddleware);
-app.use('/api/videos/tus', rateLimitMiddleware('video_upload')); // Apply rate limiting
-app.use('/api/videos/tus/*', rateLimitMiddleware('video_upload'));
 
 // Mount the TUS proxy router
 const tusRouter = createTusRouter();
