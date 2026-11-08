@@ -2,6 +2,7 @@ import videojs, { type Player, type PlayerOptions } from 'video.js';
 import '@videojs/http-streaming';
 import 'videojs-contrib-quality-levels';
 import 'videojs-hls-quality-selector';
+import { setupClickOnlyMenus } from '@/lib/video/menu-interaction';
 import { logger } from '@/lib/logger-server';
 
 
@@ -100,6 +101,8 @@ export function createVideoPlayer(
       } else {
         logger.warn('HLS quality selector plugin not available');
       }
+      // Quality, captions and speed menus open on click/tap only, never on hover
+      if (player) setupClickOnlyMenus(player as unknown as Parameters<typeof setupClickOnlyMenus>[0]);
     });
 
     return player;
