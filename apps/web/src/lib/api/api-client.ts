@@ -17,8 +17,6 @@ import {
   logApiAuth
 } from "./logger";
 
-const baseUrl = getApiUrl();
-
 export interface ApiRequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url: string;
@@ -162,7 +160,7 @@ export async function apiRequestServer<T>(
  * Helper to build full API URL
  */
 export function buildApiUrl(path: string): string {
-  return `${baseUrl}${path}`;
+  return `${getApiUrl()}${path}`;
 }
 
 /**
