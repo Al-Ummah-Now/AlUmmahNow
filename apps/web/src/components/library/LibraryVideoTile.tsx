@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import VideoThumbnail from '@/components/VideoThumbnail';
+import VideoThumbnail, { THUMBNAIL_16_9 } from '@/components/VideoThumbnail';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { removeUnwantedChars } from '@/lib/utility';
@@ -45,7 +45,7 @@ export function LibraryVideoTile({ video, subtitle, testId = 'library-video' }: 
       className="group block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
     >
       <div className="relative overflow-hidden rounded-lg">
-        <VideoThumbnail src={video.thumbnailUrl} alt={title} className="aspect-video w-full" />
+        <VideoThumbnail src={video.thumbnailUrl} alt={title} style={THUMBNAIL_16_9} />
         {duration && (
           <span className="absolute bottom-1 end-1 rounded bg-black/80 px-1.5 py-0.5 text-xs text-white" dir="ltr">
             {duration}

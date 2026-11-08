@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { resolveUrl } from "@/lib/utility";
 
@@ -9,8 +9,17 @@ export interface VideoThumbnailProps {
   alt: string;
   sizes?: string;
   className?: string;
+  /** Inline style of the wrapper, e.g. THUMBNAIL_16_9 */
+  style?: CSSProperties;
   children?: React.ReactNode;
 }
+
+/**
+ * 16:9 thumbnail box. Inline because the @tailwindcss/aspect-ratio plugin
+ * replaces the theme's aspect scale: `aspect-video` produces no CSS at all, and
+ * with `fill` images the wrapper then collapses to height 0.
+ */
+export const THUMBNAIL_16_9 = { aspectRatio: "16 / 9" } as const;
 
 /**
  * Video/playlist thumbnail with a neutral placeholder.
@@ -24,6 +33,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   alt,
   sizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
   className = "",
+  style,
   children,
 }) => {
   const [failed, setFailed] = useState(false);
@@ -36,7 +46,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   const showImage = Boolean(src) && !failed;
 
   return (
-    <div className={`relative w-full overflow-hidden bg-gray-200 dark:bg-black ${className}`}>
+    <div className={`relative w-full overflow-hidden bg-gray-200 dark:bg-black ${className}`} style={style}>
       {showImage ? (
         <Image
           src={resolveUrl(src as string)}
