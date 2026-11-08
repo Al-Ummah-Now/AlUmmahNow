@@ -56,7 +56,7 @@ export default function SettingsPage() {
       title: t.settings?.profileSettings || 'Profile Settings',
       description: t.settings?.profileSettingsDesc || 'Update your profile information and preferences',
       icon: User,
-      href: `/${lang}/profile`,
+      href: `/${lang}/profile/edit`,
       available: true,
     },
     {
@@ -69,96 +69,69 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Settings className="h-8 w-8 text-[#ffa037]" />
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {t.header?.settings || 'Settings'}
-            </h1>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="container mx-auto max-w-4xl px-4 py-6 md:py-8">
+        <div className="mb-6">
+          <h1 className="flex items-center gap-3 text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
+            <Settings className="h-7 w-7 text-[var(--inline-edit-ring)]" aria-hidden="true" />
+            {t.header?.settings || 'Settings'}
+          </h1>
+          <p className="mt-1 text-gray-600 dark:text-gray-400">
             {t.settings?.settingsDescription || 'Manage your account, channels, and preferences'}
           </p>
         </div>
 
-        {/* Settings Sections */}
-        <div className="space-y-4">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-px rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 bg-gray-200 dark:bg-gray-800">
           {settingsSections.map((section) => {
             const Icon = section.icon;
-
-            if (!section.available) {
-              return (
-                <div
-                  key={section.title}
-                  data-testid="settings-section"
-                  data-available="false"
-                  className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 opacity-50"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                      <Icon className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <div className="flex-1">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                        {section.title}
-                      </h2>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {section.description}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        {t.settings?.notAvailable || 'Not available - requires an active channel'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-
+            const body = (
+              <>
+                <Icon className={`h-5 w-5 shrink-0 ${section.available ? 'text-[var(--inline-edit-ring)]' : 'text-gray-400'}`} aria-hidden="true" />
+                <span className="flex-1 min-w-0">
+                  <span className="block font-semibold text-gray-900 dark:text-gray-100">{section.title}</span>
+                  <span className="block text-sm text-gray-600 dark:text-gray-400 mt-0.5">{section.description}</span>
+                  {!section.available && (
+                    <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {t.settings?.notAvailable || 'Not available - requires an active channel'}
+                    </span>
+                  )}
+                </span>
+                {section.available && <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 rtl:rotate-180 group-hover:text-[var(--inline-edit-ring)]" aria-hidden="true" />}
+              </>
+            );
             return (
-              <Link
-                key={section.title}
-                href={section.href!}
-                data-testid="settings-section"
-                data-available="true"
-                className="block bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-[#ffa037] dark:hover:border-[#ffa037] transition-all hover:shadow-lg group"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-gradient-to-br from-[#ffa037] to-[#ff8c00] rounded-lg group-hover:scale-110 transition-transform">
-                    <Icon className="h-6 w-6 text-white" />
+              <li key={section.title} className="bg-white dark:bg-gray-900">
+                {section.available ? (
+                  <Link
+                    href={section.href!}
+                    data-testid="settings-section"
+                    data-available="true"
+                    className="group flex items-center gap-4 p-4 md:p-5 min-h-20 hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                  >
+                    {body}
+                  </Link>
+                ) : (
+                  <div data-testid="settings-section" data-available="false" className="flex items-center gap-4 p-4 md:p-5 min-h-20 opacity-60">
+                    {body}
                   </div>
-                  <div className="flex-1">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 group-hover:text-[#ffa037] transition-colors">
-                      {section.title}
-                    </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {section.description}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[#ffa037] group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1 transition-all" />
-                </div>
-              </Link>
+                )}
+              </li>
             );
           })}
-        </div>
+        </ul>
 
         {/* Notification categories (Story 29.10) */}
-        <NotificationSettingsPanel />
+        <div id="notifications">
+          <NotificationSettingsPanel />
+        </div>
 
-        {/* Quick Actions */}
-        <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
-          <div className="flex items-start gap-3">
-            <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                {t.settings?.needHelp || 'Need Help?'}
-              </h3>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                {t.settings?.needHelpDesc || 'Visit our documentation or contact support for assistance with your settings.'}
-              </p>
-            </div>
+        <div className="mt-8 flex items-start gap-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
+          <FileText className="h-5 w-5 mt-0.5 text-gray-500" aria-hidden="true" />
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">{t.settings?.needHelp || 'Need Help?'}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t.settings?.needHelpDesc || 'Visit our documentation or contact support for assistance with your settings.'}
+            </p>
           </div>
         </div>
       </div>

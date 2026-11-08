@@ -42,7 +42,7 @@ test.describe('Settings - channel owner', () => {
     await expect(sections.filter({ hasText: 'Upload Defaults' })).toHaveAttribute('href', '/en/settings/upload-defaults');
     // Was always "Not available" because it read the channel off the auth user
     await expect(sections.filter({ hasText: 'Channel Settings' })).toHaveAttribute('href', `/en/settings/channel/${channels[0].id}`);
-    await expect(sections.filter({ hasText: 'Profile Settings' })).toHaveAttribute('href', '/en/profile');
+    await expect(sections.filter({ hasText: 'Profile Settings' })).toHaveAttribute('href', '/en/profile/edit');
     await expect(sections.filter({ hasText: 'Privacy & data' })).toHaveAttribute('href', '/en/settings/privacy');
   });
 

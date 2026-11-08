@@ -7,6 +7,8 @@ import { ChannelManagementSection } from '@/components/channelManagement';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useCurrentChannel } from '@/hooks/useMultiAccount';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
+import { ProfileHeader } from '@/components/profile/ProfileHeader';
+import { Pencil } from 'lucide-react';
 import type { Profile } from '@/interfaces';
 import type { Channel } from '@al-ummah/shared-types';
 
@@ -19,7 +21,7 @@ interface ProfilePageClientProps {
 const ProfilePageClient = ({ initialProfile, initialChannels }: ProfilePageClientProps) => {
   const params = useParams();
   const locale = params.locale as string;
-  const { t, isRTL } = useLanguage();
+  const { t } = useLanguage();
   const auth = useAuth();
   const router = useRouter();
   const { profile, isLoading, error } = useProfile(auth?.user || null, initialProfile);
@@ -79,53 +81,23 @@ const ProfilePageClient = ({ initialProfile, initialChannels }: ProfilePageClien
           </div>
         ) : (
           <>
-            {/* Name Section */}
-            <section id="name" className="section mb-8">
-              <div className="relative">
-                {/* Cover Photo */}
-                <div
-                  className="cover-photo h-48 bg-gray-300 dark:bg-gray-600 rounded-md overflow-hidden relative"
-                  style={{
-                    backgroundImage: profile?.coverUrl ? `url(${profile.coverUrl})` : 'none',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                  }}
+            {/* Name Section: the same header the profile editor edits in place */}
+            <ProfileHeader
+              className="mb-8"
+              heading={displayHeading}
+              coverUrl={profile?.coverUrl}
+              avatarUrl={profile?.avatarUrl}
+              action={
+                <button
+                  data-testid="profile-edit-button"
+                  onClick={() => router.push(`/${locale}/profile/edit`)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg"
                 >
-                  {/* Edit Button - Always visible */}
-                  <button
-                    data-testid="profile-edit-button"
-                    onClick={() => router.push(`/${locale}/profile/edit`)}
-                    className={`absolute top-4 ${isRTL ? 'left-4' : 'right-4'} inline-flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-lg`}
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                      />
-                    </svg>
-                    {t.common.edit}
-                  </button>
-                </div>
-
-                {/* Profile Photo */}
-                <div
-                  className={`profile-photo w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-600 border-4 border-white dark:border-gray-800 absolute bottom-[-24px] ${isRTL ? 'right-4' : 'left-4'} overflow-hidden`}
-                  style={{
-                    backgroundImage: profile?.avatarUrl ? `url(${profile.avatarUrl})` : `url(/avatar.png)`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                  }}
-                />
-              </div>
-              <h1 data-testid="profile-heading" className="text-3xl font-bold text-gray-800 dark:text-white mt-12">{displayHeading}</h1>
-            </section>
+                  <Pencil className="w-4 h-4" aria-hidden="true" />
+                  {t.common.edit}
+                </button>
+              }
+            />
 
             {/* Channel Management Section */}
             <ChannelManagementSection initialChannels={initialChannels} />
