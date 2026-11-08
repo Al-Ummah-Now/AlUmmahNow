@@ -70,8 +70,10 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
       setIsCheckingProfile(true);
     }
 
-    // Only check once per user session
-    if (hasChecked && user?.id === lastCheckedUserId) {
+    // Check once per user, but re-check after leaving the create page while the
+    // last answer was "no profile": the profile was probably just created, and a
+    // stale false would leave the user on "Redirecting to profile creation..."
+    if (hasChecked && user?.id === lastCheckedUserId && !(profileExists === false && !isProfileCreatePage)) {
       logger.debug('[ProfileGuard] Already checked for this user, skipping');
       return;
     }
@@ -115,7 +117,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
     };
 
     checkProfile();
-  }, [user, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, router]);
+  }, [user, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, profileExists, router]);
 
   const content = (() => {
     if (shouldSkipCheck) {
