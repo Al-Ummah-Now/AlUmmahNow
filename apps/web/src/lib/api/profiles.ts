@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger-server';
 
 /**
  * Get the current authenticated user's profile
- * GET /api/profiles/{id}
+ * GET /api/profile
  * Server action that properly handles HttpOnly cookies
  * Uses authenticated user ID automatically
  */
@@ -35,7 +35,7 @@ export async function getProfileCurrent(): Promise<Profile | null> {
   const result = await apiRequestServer<unknown>(
     {
       method: 'GET',
-      url: buildApiUrl(`/api/profiles/${authContext.userId}`),
+      url: buildApiUrl('/api/profile'),
       functionName: fnName
     },
     getServerAuthContext,
@@ -113,7 +113,8 @@ export async function getProfileById(userId: string): Promise<Profile | null> {
   const result = await apiRequestServer<unknown>(
     {
       method: 'GET',
-      url: buildApiUrl(`/api/profiles/${userId}`),
+      // Account details come only from the authenticated self route
+      url: buildApiUrl(userId === authContext.userId ? '/api/profile' : `/api/profiles/${userId}`),
       functionName: fnName
     },
     getServerAuthContext,

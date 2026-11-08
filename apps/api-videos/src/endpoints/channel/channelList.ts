@@ -1,8 +1,8 @@
 import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
-import { ChannelView } from "../../lib/model/view";
-import { transformChannelsToView } from "../../lib/transformations";
+import { PublicChannelView } from "../../lib/model/view";
+import { toPublicChannel } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { OptionalAuthRoute, AppContext } from "../../base";
@@ -35,7 +35,7 @@ export class ChannelsList extends OptionalAuthRoute {
 				description: "Returns a list of Channels",
 				content: {
 					"application/json": {
-						schema: PaginationResponse.extend({ data: z.array(ChannelView) }),
+						schema: PaginationResponse.extend({ data: z.array(PublicChannelView) }),
 					},
 				},
 			},
@@ -118,7 +118,7 @@ export class ChannelsList extends OptionalAuthRoute {
 		}
 
 		// Transform business channels to view models
-		const channelViews = transformChannelsToView(filteredChannels);
+		const channelViews = filteredChannels.map(toPublicChannel);
 
 		let response: PaginationResponse<any>;
 		if (!filteredChannels || filteredChannels.length === 0) {

@@ -5,6 +5,7 @@ import { fromHono } from 'chanfana';
 import { ChannelsList } from '../endpoints/channel/channelList';
 import { ChannelCreate } from '../endpoints/channel/channelCreate';
 import { ChannelFetch } from '../endpoints/channel/channelFetch';
+import { ChannelOwnerFetch } from '../endpoints/channel/channelOwnerFetch';
 import { ChannelUpdate } from '../endpoints/channel/channelUpdate';
 import { ChannelDelete } from '../endpoints/channel/channelDelete';
 import { ChannelAbout, ChannelByHandleFetch, ChannelHandleAvailability } from '../endpoints/channel/channelHandle';
@@ -59,6 +60,9 @@ channelRouter.get('/by-handle/:handle', ChannelByHandleFetch);
 
 // Get channel by ID (public)
 channelRouter.get('/:id', ChannelFetch);
+
+// Channel with private fields (owner or admin)
+channelRouter.get('/:id/owner', ChannelOwnerFetch);
 
 // About tab data with totals (public)
 channelRouter.get('/:id/about', ChannelAbout);

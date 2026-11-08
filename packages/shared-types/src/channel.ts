@@ -7,7 +7,8 @@ import { Timestamps, SoftDelete, Moderation } from './common';
 export interface Channel extends Timestamps, SoftDelete, Moderation {
   id: string;
   userId: string;
-  email: string;
+  /** Owner account email: only on authenticated owner/admin responses */
+  email?: string;
   name: string;
   nameLocalized?: Record<string, string>; // Multi-language names
   description?: string;

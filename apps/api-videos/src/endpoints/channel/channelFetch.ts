@@ -1,8 +1,8 @@
 import { Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
-import { ChannelView } from "../../lib/model/view";
-import { transformChannelToView } from "../../lib/transformations";
+import { PublicChannelView } from "../../lib/model/view";
+import { toPublicChannel } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { OptionalAuthRoute, AppContext } from "../../base";
@@ -26,7 +26,7 @@ export class ChannelFetch extends OptionalAuthRoute {
 				description: "Returns a single Channel if found",
 				content: {
 					"application/json": {
-						schema: ChannelView,
+						schema: PublicChannelView,
 					},
 				},
 			},
@@ -119,7 +119,7 @@ export class ChannelFetch extends OptionalAuthRoute {
 			}
 
 			// Transform to view model for response
-			const channelView = transformChannelToView(channel);
+			const channelView = toPublicChannel(channel);
 
 			// Uploads don't append to channel.videos, so count from the ownership
 			// index (public, published videos; same rule as /about). Index

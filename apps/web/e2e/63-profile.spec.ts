@@ -27,7 +27,9 @@ function authHeaders() {
 }
 
 async function getProfile(): Promise<ApiProfile> {
-  const res = await fetch(`${API_URL}/api/profiles/${readAccount('none').userId}`, { headers: authHeaders() });
+  let res = await fetch(`${API_URL}/api/profile`, { headers: authHeaders() });
+  // PR runs hit the already-deployed QA, which gets this route only after merge.
+  if (res.status === 404) res = await fetch(`${API_URL}/api/profiles/${readAccount('none').userId}`, { headers: authHeaders() });
   expect(res.ok).toBe(true);
   const body = (await res.json()) as ApiProfile & { result?: { profile?: ApiProfile }; profile?: ApiProfile };
   const profile = body.result?.profile ?? body.profile ?? (body.id ? body : undefined);

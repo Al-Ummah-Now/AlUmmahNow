@@ -100,6 +100,18 @@ export async function getChannelById(
 }
 
 /**
+ * Get a channel with its private fields (owner or admin)
+ * GET /api/channels/{id}/owner
+ */
+export async function getChannelForOwner(id: string): Promise<Channel | null> {
+  return apiRequestServer<Channel>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${encodeURIComponent(id)}/owner`),
+    functionName: 'getChannelForOwner'
+  }, getServerAuthContext, true);
+}
+
+/**
  * Create a new channel
  * POST /api/channels
  */

@@ -33,7 +33,6 @@ export function toSessionChannel(channel: Channel): Channel {
   return {
     id: channel.id,
     userId: channel.userId,
-    email: channel.email,
     name: channel.name,
     nameLocalized: channel.nameLocalized,
     avatarUrl: channel.avatarUrl,
@@ -698,7 +697,7 @@ export class SessionManager {
       const profile = await apiRequestServer<unknown>(
         {
           method: 'GET',
-          url: buildApiUrl(`/api/profiles/${userId}`),
+          url: buildApiUrl('/api/profile'),
           functionName: 'SessionManager.loadUserProfile'
         },
         async () => ({

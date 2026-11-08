@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getChannelById } from '@/lib/api/channels';
+import { getChannelForOwner } from '@/lib/api/channels';
 import { uploadFileDirect } from '@/lib/api/direct-upload';
 import ImageCropDialog from '@/components/ImageCropDialog';
 import { updateChannelProfile } from '@/lib/api/channel-profile';
@@ -68,7 +68,7 @@ function ChannelEditPage() {
     const fetchChannel = async () => {
       setIsLoading(true);
       try {
-        const channelData = await getChannelById(channelId);
+        const channelData = await getChannelForOwner(channelId);
 
         if (channelData && initializedFor.current !== channelId) {
           initializedFor.current = channelId;
