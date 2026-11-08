@@ -96,11 +96,10 @@
 /* Control bar styling - WCAG 2.1 AA compliant contrast */
 /* V3 Design: 64px height with vertically centered controls */
 .video-js .vjs-control-bar {
-  background: linear-gradient(
-    to top,
-    oklch(var(--background) / 0.98),
-    oklch(var(--background) / 0.75)
-  );
+  /* Transparent bar (the production look). Legibility comes from the
+     player's bottom scrim (.video-js::after, see the end of this file) and
+     the text-shadow on icons and text. */
+  background: transparent;
   backdrop-filter: blur(var(--video-blur-amount));
   -webkit-backdrop-filter: blur(var(--video-blur-amount));
   padding: 0 1.25rem; /* Horizontal padding only, vertical centering handled by height */
@@ -155,14 +154,6 @@
 /* RTL big play button support */
 [dir="rtl"] .video-js .vjs-big-play-button::before {
   transform: scaleX(-1);
-}
-
-.dark .video-js .vjs-control-bar {
-  background: linear-gradient(
-    to top,
-    oklch(var(--card) / 0.98), /* Increased from 0.9 for better contrast in dark mode */
-    oklch(var(--card) / 0.75) /* Increased from 0.4 to meet 4.5:1 ratio in dark mode */
-  );
 }
 
 /* Enhanced control button sizing and spacing */
@@ -261,9 +252,10 @@
   /* Ensure menu appears above everything */
   z-index: 9999 !important;
 
-  /* Visual styling */
-  background: oklch(var(--card)) !important;
-  border: 1px solid oklch(var(--border)) !important;
+  /* Visual styling - solid dark surface in both themes (white menu text) */
+  background: var(--vp-menu-bg) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  padding: 0.25rem 0 !important;
   border-radius: 0.5rem !important;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
               0 4px 6px -4px rgba(0, 0, 0, 0.2) !important;
@@ -290,6 +282,7 @@
   max-height: none !important;
   overflow: visible !important;
   position: static !important; /* Normal flow to give parent height */
+  background: transparent !important; /* the menu box carries --vp-menu-bg */
 }
 
 /* RTL support for quality selector menu */
@@ -1993,4 +1986,85 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* ========================================
+   Control-bar legibility and click-only popup menus
+   ======================================== */
+
+/*
+  A bottom scrim behind the controls keeps them readable over any frame
+  without a solid bar: a gradient over the bottom 30% of the player (at
+  least 8rem, always taller than the 4rem bar). Worst case (8rem scrim over a
+  pure-white frame, no text-shadow): 14px time/quality text >= 4.5:1, icons
+  >= 3:1. Menus: white text on --vp-menu-bg over a white frame ~12:1.
+*/
+.video-js {
+  --vp-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0));
+  --vp-scrim-height: max(30%, 8rem); /* always taller than the 4rem bar */
+  --vp-menu-bg: rgba(17, 24, 39, 0.92); /* #111827 at 92% */
+}
+
+/* Shows and hides with the control bar (Video.js fades the bar out when the
+   user goes inactive while playing) and stays while a popup menu is open. */
+.video-js::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--vp-scrim-height);
+  background: var(--vp-scrim);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.video-js.vjs-has-started.vjs-user-inactive.vjs-playing:not(.vjs-menu-open)::after {
+  opacity: 0;
+  transition: opacity 1s ease; /* same fade-out as the control bar */
+}
+
+.video-js.vjs-controls-disabled::after,
+.video-js.vjs-using-native-controls::after,
+.video-js.vjs-error::after {
+  display: none;
+}
+
+/* The scrim is painted after the tech; keep the big play button and
+   captions above it (the control bar is z-index 10) */
+.video-js .vjs-big-play-button,
+.video-js .vjs-text-track-display {
+  z-index: 2;
+}
+
+/* A popup menu is open: the controls never fade out from under it */
+.video-js.vjs-menu-open .vjs-control-bar {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Popup menus open on click/tap only (menu-interaction.ts stops Video.js's
+   hover handler). This keeps a stray .vjs-hover from showing a menu. */
+.video-js.vjs-workinghover .vjs-menu-button-popup.vjs-hover .vjs-menu:not(.vjs-lock-showing) {
+  display: none !important;
+}
+
+.video-js .vjs-menu li.vjs-menu-item {
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  text-transform: none;
+}
+
+.video-js .vjs-menu li.vjs-menu-item:hover,
+.video-js .vjs-menu li.vjs-menu-item:focus {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.video-js .vjs-menu li.vjs-selected,
+.video-js .vjs-menu li.vjs-selected:hover,
+.video-js .vjs-menu li.vjs-selected:focus {
+  background-color: #ffffff;
+  color: #111827;
 }
