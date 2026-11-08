@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { AppContext } from "../../base/types";
 import BunnyStorageClient from "../../lib/bunny/storage";
 import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile } from '../../lib/types';
@@ -9,7 +10,7 @@ import { logger } from '../../lib/logger';
 
 const app = new Hono();
 
-const handleCoverUpdate = async (c) => {
+const handleCoverUpdate = async (c: AppContext) => {
     try {
         // Get user ID from auth - profile ID is always the user ID
         const auth = c.get('auth');
@@ -29,7 +30,7 @@ const handleCoverUpdate = async (c) => {
         if(file.size > 5 * 1024 * 1024) {
             return c.json({ success: false, error: "File size exceeds 5MB" }, 400);
         }
-        if(!["image/jpeg", "image/png"].includes(file.type)) {  
+        if(!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {  
             return c.json({ success: false, error: "Invalid file type" }, 400);
         }
 
@@ -49,27 +50,14 @@ const handleCoverUpdate = async (c) => {
         const path = `/${photoId}_cover.${file.type.split("/")[1]}`;
 
         // Get Bunny.net storage key and zone from environment
-        const key = await requireSecret(c.c.env.image_storage_key, 'image_storage_key');
+        const key = await requireSecret(c.env.image_storage_key, 'image_storage_key');
         const zone = requireEnvVar(c.env, 'ZONE');
 
         const bunnyStorageClient = new BunnyStorageClient(zone, key);
-        const stream: ReadableStream = new ReadableStream({
-            start(controller) {
-                const reader = file.stream().getReader();
-                function push() {
-                    reader.read().then(({ done, value }) => {
-                        if (done) {
-                            controller.close();
-                            return;
-                        }
-                        controller.enqueue(value);
-                        push();
-                    });
-                }
-                push();
-            }
-        });
-        await bunnyStorageClient.putFile(path, stream);
+        const uploaded = await bunnyStorageClient.putFile(path, file.stream());
+        if (!uploaded) {
+            throw new Error(`Image storage rejected the upload for ${path}`);
+        }
 
         //Update the profile's cover URL
         profile.coverUrl = `https://images.alummahnow.net${path}`;
