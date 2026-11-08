@@ -5,6 +5,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import { ResponseError } from "../../lib/types";
 import { logger } from "../../lib/logger";
 import R2Repository from "../../lib/r2Repo";
+import Queue, { MessageType } from "../../lib/queue";
 import { applyVerification, MAX_VERIFICATION_NOTE, type VerificationLogRow } from "../../lib/channelVerification";
 
 const VerificationState = z.object({
@@ -122,6 +123,9 @@ export class ChannelVerificationPut extends AdminRoute {
         'INSERT INTO channel_verification_log (id, channel_id, verified, note, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       ).bind(result.log.id, channelId, result.log.verified, result.log.note, result.log.actor_id, result.log.created_at).run();
       await repository.putObject(channelId, result.channel as ChannelRecord);
+      // admin-api writes R2 directly, so tell the processor to refresh the
+      // channel's search row (search "verified" filter and badge).
+      await new Queue(c.env.queue).send(MessageType.SearchIndexSync, { entity: 'channel', id: channelId, object: result.channel });
       logger.info('[ChannelVerification] Verification changed', { channelId, verified: body.verified, actorId });
     }
 
