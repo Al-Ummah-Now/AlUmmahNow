@@ -51,7 +51,8 @@ export async function expectSignedIn(page: Page, locale: Locale): Promise<void> 
 
 /** On the auth server's register form: email + password → code from the sink. */
 export async function completeRegistration(page: Page, email: string): Promise<void> {
-  await page.click('a:has-text("Register")');
+  // By href: the link text is Arabic when the auth pages follow the site language (#293).
+  await page.click('a[href*="register"]');
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', TEST_PASSWORD);
   await page.fill('input[name="repeat"]', TEST_PASSWORD);
