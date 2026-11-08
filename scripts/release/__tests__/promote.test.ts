@@ -75,6 +75,7 @@ const deps = (run: PromoteDeps['run'], smoke: PromoteDeps['smoke'] = async () =>
 	run,
 	smoke,
 	waitForVersions: async () => {},
+	waitForHosts: async () => {},
 	log: () => {},
 });
 
@@ -140,6 +141,15 @@ describe('promote', () => {
 		assert.deepEqual(calls.find((c) => c.worker === 'api-videos' && c.args[0] === 'deploy')!.args.slice(0, 7), [
 			'deploy', '-c', 'wrangler.jsonc', '--env', 'stage', '--no-bundle', resolve(ROOT, 'dist/api-videos/index.js'),
 		]);
+	});
+
+	it('waits for the custom domains before smoking only when a worker was bootstrapped', async () => {
+		const waited: string[] = [];
+		const withWait = (run: PromoteDeps['run']) => ({ ...deps(run), waitForHosts: async (e: string) => void waited.push(e) });
+		await promote(twoApps('stage'), 'stage', 'r', withWait(fakeRun({ 'api-videos': V(1), web: V(2) }).run));
+		assert.deepEqual(waited, []);
+		await promote(twoApps('stage'), 'stage', 'r', withWait(fakeRun({ 'api-videos': null, web: V(2) }).run));
+		assert.deepEqual(waited, ['stage']);
 	});
 
 	it('never bootstraps a production worker', async () => {

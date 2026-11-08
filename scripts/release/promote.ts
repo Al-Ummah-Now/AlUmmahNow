@@ -108,6 +108,8 @@ export interface PromoteDeps {
 	smoke: (env: SmokeEnv, overrides?: Record<string, string>) => Promise<CheckResult[]>;
 	/** Resolves when every versioned /health reports its candidate (through the override, if set) */
 	waitForVersions: (env: ReleaseEnv, wanted: Record<string, string>, override: boolean) => Promise<void>;
+	/** Resolves when every host of the env answers over HTTPS (new custom domains need minutes for DNS + a certificate) */
+	waitForHosts: (env: ReleaseEnv) => Promise<void>;
 	log: (line: string) => void;
 }
 
@@ -151,6 +153,10 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 		log(`${a.worker}: uploaded ${candidate} (serving ${previous})`);
 	}
 	const promoted = released.map((r, i) => ({ r, a: apps[i] })).filter(({ r }) => r.previous !== null);
+	if (released.some((r) => r.previous === null)) {
+		log('Bootstrapped workers: waiting for their custom domains to answer');
+		await deps.waitForHosts(env);
+	}
 
 	// Every worker is attempted even if one rollback fails; the failures are reported together
 	const rollback = (reason: string) => {
@@ -203,6 +209,21 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 }
 
 /** Polls each versioned /health until it answers with the wanted version (deployments take a few seconds to propagate). */
+export async function waitForHosts(env: ReleaseEnv, timeoutMs = 20 * 60_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	for (const host of Object.values(HOSTS[env])) {
+		for (;;) {
+			try {
+				await fetch(host, { redirect: 'manual', signal: AbortSignal.timeout(10_000) });
+				break; // any HTTP answer: DNS and TLS are up
+			} catch (error) {
+				if (Date.now() > deadline) throw new Error(`${host} still unreachable after ${timeoutMs / 60_000} min: ${(error as Error).message}`);
+				await new Promise((r) => setTimeout(r, 15_000));
+			}
+		}
+	}
+}
+
 export async function waitForVersions(env: ReleaseEnv, wanted: Record<string, string>, override: boolean, timeoutMs = 120_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	for (const [app, version] of Object.entries(wanted)) {
@@ -244,6 +265,7 @@ if (isMain) {
 			run: runWrangler,
 			smoke: (e, overrides) => runSmoke({ env: e, overrides }),
 			waitForVersions,
+			waitForHosts,
 			log,
 		});
 		writeResult({ env, status: 'promoted', released });
