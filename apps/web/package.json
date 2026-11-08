@@ -97,7 +97,7 @@
     "deploy:qa": "opennextjs-cloudflare build && CI=true wrangler deploy --config wrangler.qa.jsonc",
     "deploy:preview": "opennextjs-cloudflare build && wrangler deploy --config wrangler.preview.jsonc",
     "preview": "opennextjs-cloudflare build && wrangler dev",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv --env-file .dev.vars.example --strict-vars=false cloudflare-env.d.ts",
     "logs": "wrangler tail",
     "logs:staging": "wrangler tail --config wrangler.staging.jsonc",
     "logs:production": "wrangler tail --config wrangler.production.jsonc",

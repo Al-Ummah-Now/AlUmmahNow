@@ -25,11 +25,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Local env files
-.env
-.env*.local
-.env.production
-.env.development
+# Local env files (dotenv + wrangler): never commit real values. Commit a *.example
+# with placeholders instead (enforced by scripts/check-committed-secrets.mjs).
+.env*
+.dev.vars*
+!*.example
 
 # Vercel
 .vercel
@@ -42,7 +42,8 @@ yarn-error.log*
 
 # Wrangler
 .wrangler/
-.dev.vars
+# Generated locally by apps/web `cf-typegen`
+cloudflare-env.d.ts
 
 # IDEs and tools
 .vscode/
