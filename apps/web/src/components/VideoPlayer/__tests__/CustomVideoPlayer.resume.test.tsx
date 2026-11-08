@@ -149,30 +149,30 @@ describe('CustomVideoPlayer resume prompt (#242)', () => {
 
   it('offers the saved position and seeks there on resume', async () => {
     renderWith(progress(125));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog', { name: 'Continue watching?' });
     expect(dialog).toHaveTextContent('A lecture');
     expect(dialog).toHaveTextContent('2:05');
     fireEvent.click(screen.getByRole('button', { name: /2:05/ }));
     expect(mockPlayer.currentTime).toHaveBeenCalledWith(125);
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Continue watching?' })).not.toBeInTheDocument());
   });
 
   it('starts from the beginning when asked', async () => {
     renderWith(progress(300));
-    await screen.findByRole('dialog');
+    await screen.findByRole('dialog', { name: 'Continue watching?' });
     fireEvent.click(screen.getByRole('button', { name: /start over|beginning/i }));
     expect(mockPlayer.currentTime).toHaveBeenCalledWith(0);
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Continue watching?' })).not.toBeInTheDocument());
   });
 
   it('does not reappear when the current watch saves new progress', async () => {
     const { rerender } = renderWith(progress(300));
-    await screen.findByRole('dialog');
+    await screen.findByRole('dialog', { name: 'Continue watching?' });
     fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Continue watching?' })).not.toBeInTheDocument());
     mockUseWatchProgress.mockReturnValue({ savedProgress: progress(310), loadedProgress: progress(300), saveProgress: jest.fn(), clearProgress: jest.fn() });
     rerender(<CustomVideoPlayer videoId="v1" title="A lecture" enableWebSocket={false} sources={[{ src: 'https://example.com/video.m3u8', type: 'application/x-mpegURL' }]} />);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Continue watching?' })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -184,6 +184,6 @@ describe('CustomVideoPlayer resume prompt (#242)', () => {
   ])('is not shown when %s', async (_label, loaded, isLive) => {
     renderWith(loaded, isLive);
     await screen.findByText(/ready/i, { selector: '[role="status"]' }).catch(() => undefined);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Continue watching?' })).not.toBeInTheDocument();
   });
 });

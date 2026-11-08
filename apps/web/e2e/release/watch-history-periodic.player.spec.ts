@@ -12,6 +12,9 @@ import { test, expect } from '@playwright/test';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, playFor, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 
+/** ResumePrompt's heading (lib/video/i18n translations, resume.title, en). */
+const RESUME_TITLE = 'Continue watching?';
+
 interface HistoryEntry {
   videoId: string;
   progress?: number;
@@ -73,7 +76,11 @@ test.describe('Release: periodic watch progress', () => {
       .toBeGreaterThan(target - 5);
 
     await page.reload();
-    const dialog = page.getByRole('dialog');
+    // The consent banner (also a dialog) can cover the prompt's buttons
+    const reject = page.getByRole('button', { name: 'Reject all' });
+    if (await reject.isVisible().catch(() => false)) await reject.click();
+    // By name: the consent banner is a dialog too
+    const dialog = page.getByRole('dialog', { name: RESUME_TITLE });
     await expect(dialog).toBeVisible({ timeout: 45000 });
     await dialog.getByRole('button', { name: /Resume from/ }).click();
     await expect
