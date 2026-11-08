@@ -31,6 +31,7 @@ export const APPS: AppRule[] = [
 			env: null,
 			name: 'al-ummah-now-production',
 			vars: {
+				ClientId: 'f0de3c30-0304-4ac4-86d6-1e185dec0439',
 				Issuer: AUTH_ISSUER,
 				OPENAUTH_ISSUER: AUTH_ISSUER,
 				NEXTJS_ENV: 'production',
