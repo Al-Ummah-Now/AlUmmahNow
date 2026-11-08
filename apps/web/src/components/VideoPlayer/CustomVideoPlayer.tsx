@@ -461,7 +461,7 @@ export default function CustomVideoPlayer({
         quartilesFiredRef.current.clear();
 
         // Phase 2.5: Initialize volume controls
-        volumeControlsCleanupRef.current = initializeVolumeControls(player);
+        volumeControlsCleanupRef.current = initializeVolumeControls(player, lang);
         // Muted start wins over the remembered volume (browsers only autoplay muted)
         if (muted) (player as ExtendedPlayer).muted(true);
 
