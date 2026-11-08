@@ -92,7 +92,6 @@
     "test:e2e:report": "playwright show-report",
     "clean": "rm -rf .next .open-next node_modules",
     "check": "opennextjs-cloudflare build && tsc && wrangler deploy --dry-run",
-    "deploy": "opennextjs-cloudflare build && wrangler deploy",
     "deploy:staging": "opennextjs-cloudflare build && wrangler deploy --config wrangler.staging.jsonc",
     "deploy:production": "opennextjs-cloudflare build && wrangler deploy --config wrangler.production.jsonc",
     "deploy:qa": "opennextjs-cloudflare build && CI=true wrangler deploy --config wrangler.qa.jsonc",

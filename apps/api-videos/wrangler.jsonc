@@ -128,7 +128,7 @@
 			// and replace this id with the one `npx wrangler d1 create al-ummah-now-notifications` returns.
 			"binding": "NOTIFICATIONS_DB",
 			"database_name": "al-ummah-now-notifications",
-			"database_id": "00000000-0000-0000-0000-000000000000"
+			"database_id": "2479ad9b-76f6-41e6-ac77-69e46faa5e69"
 		},
 		{
 			// Search index (Epic 29, Story 29.9). Schema: migrations/search
@@ -139,7 +139,7 @@
 			// and run scripts/search-backfill.sh against production.
 			"binding": "SEARCH_DB",
 			"database_name": "al-ummah-now-search",
-			"database_id": "00000000-0000-0000-0000-000000000001",
+			"database_id": "41064871-cf1f-46e9-b102-7b913240ad89",
 			"migrations_dir": "migrations/search"
 		}
 	],

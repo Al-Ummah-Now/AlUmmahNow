@@ -19,7 +19,7 @@
 			// `npx wrangler d1 migrations apply al-ummah-now-notifications --remote`.
 			"binding": "NOTIFICATIONS_DB",
 			"database_name": "al-ummah-now-notifications",
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			"database_id": "2479ad9b-76f6-41e6-ac77-69e46faa5e69",
 			"migrations_dir": "migrations-notifications"
 		},
 		{
@@ -27,7 +27,7 @@
 			// PRODUCTION DATABASE NOT CREATED YET: use the id of al-ummah-now-search (see apps/api-videos/wrangler.jsonc).
 			"binding": "SEARCH_DB",
 			"database_name": "al-ummah-now-search",
-			"database_id": "00000000-0000-0000-0000-000000000001"
+			"database_id": "41064871-cf1f-46e9-b102-7b913240ad89"
 		}
 	],
 

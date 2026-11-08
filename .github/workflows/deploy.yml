@@ -2,9 +2,10 @@ name: Deploy Al Ummah Now Monorepo
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main, 'integrate/**']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -43,8 +44,39 @@ jobs:
 
       - name: Run tests (all packages)
         run: pnpm test
-        continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: 10
+
+  # Release gates (docs/deployment-guide.md, "Release gates"). Plain Node scripts
+  # with no dependencies, so no install step.
+  release-checks:
+    name: Release checks (config, migrations, schema)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Release script tests
+        run: pnpm test:scripts
+
+      - name: Wrangler config check
+        run: pnpm check:config
+
+      - name: Migrations are append-only
+        run: pnpm check:migrations "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+
+      - name: D1 schema snapshots are current
+        run: pnpm check:schema
 
   # Build shared packages first (dependency for other apps)
   build-shared-packages:
@@ -853,7 +885,7 @@ jobs:
       - name: Deploy Admin Web Preview to Cloudflare Workers
         run: |
           cd apps/admin-web
-          pnpm wrangler deploy \
+          pnpm wrangler deploy --config wrangler.qa.jsonc \
             --name ${{ steps.preview-name.outputs.name }} \
             --compatibility-date $(date +%Y-%m-%d)
         env:
@@ -1124,7 +1156,12 @@ jobs:
   deploy-production:
     needs: [build-web, build-admin-web, validate-api, validate-processor, validate-websocket, validate-admin-api]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # Manual only until the release workflow (docs/release-pipeline/PLAN.md, phase 7)
+    # replaces this job. Since Jan 2026 the validate jobs failed on main, so this job
+    # never ran on push and production has been deployed by hand; now that they pass,
+    # a merge must not suddenly deploy all six apps from main (#208: processor's
+    # REPORTS_DB is still a placeholder).
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     environment: production
     steps:
       - uses: actions/checkout@v4
