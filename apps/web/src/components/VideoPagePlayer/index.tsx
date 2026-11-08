@@ -59,6 +59,7 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             lang="en"
             className="w-full"
             ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
+            title={removeUnwantedChars(title)}
           />
         </div>
       </div>

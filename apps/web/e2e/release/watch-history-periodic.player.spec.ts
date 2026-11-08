@@ -12,6 +12,9 @@ import { test, expect } from '@playwright/test';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, playFor, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 
+/** ResumePrompt's heading (lib/video/i18n translations, resume.title, en). */
+const RESUME_TITLE = 'Continue watching?';
+
 interface HistoryEntry {
   videoId: string;
   progress?: number;
@@ -48,5 +51,40 @@ test.describe('Release: periodic watch progress', () => {
     const entry = (body.entries ?? []).find((e) => e.videoId === video!.id);
     expect(entry, 'the playing video is not in /api/watch-history').toBeTruthy();
     expect(entry!.progress ?? 0).toBeGreaterThan(5);
+  });
+
+  test('a signed-in watch offers to resume from the saved position (#242)', async ({ page }) => {
+    const video = await findPlayableVideo(20);
+    test.skip(!video, NO_PLAYABLE_VIDEO);
+
+    const user = await signUpOnWeb(page, 'rel-resume');
+    await createProfile(user);
+
+    await page.goto(watchUrl(video!.id));
+    await playFor(page, 2);
+    // Seek to 30% (inside the 5-95% resume window for any length); 'seeked' saves
+    const target = await page.evaluate(() => {
+      const v = document.querySelector<HTMLVideoElement>('.video-js video')!;
+      v.currentTime = Math.floor(v.duration * 0.3);
+      return v.currentTime;
+    });
+    await expect
+      .poll(async () => {
+        const res = await apiFetch(user, `/api/watch-history/${video!.id}/progress`);
+        return res.ok ? ((await res.json()) as { progress?: number }).progress ?? 0 : 0;
+      }, { message: 'the seek position was never saved', timeout: 30000 })
+      .toBeGreaterThan(target - 5);
+
+    await page.reload();
+    // The consent banner (also a dialog) can cover the prompt's buttons
+    const reject = page.getByRole('button', { name: 'Reject all' });
+    if (await reject.isVisible().catch(() => false)) await reject.click();
+    // By name: the consent banner is a dialog too
+    const dialog = page.getByRole('dialog', { name: RESUME_TITLE });
+    await expect(dialog).toBeVisible({ timeout: 45000 });
+    await dialog.getByRole('button', { name: /Resume from/ }).click();
+    await expect
+      .poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0))
+      .toBeGreaterThan(target - 5);
   });
 });

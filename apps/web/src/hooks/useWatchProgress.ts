@@ -71,6 +71,9 @@ export function useWatchProgress(
   } = options;
 
   const [savedProgress, setSavedProgress] = useState<WatchProgress | null>(null);
+  // What was stored before this playback started (resume prompt). Unlike
+  // savedProgress it is not overwritten by the saves of the current watch.
+  const [loadedProgress, setLoadedProgress] = useState<WatchProgress | null>(null);
   const lastSaveTimeRef = useRef<number>(0);
   const lastSavedPositionRef = useRef<number>(0);
   const isMountedRef = useRef(true);
@@ -264,6 +267,7 @@ export function useWatchProgress(
 
     const loadProgress = async () => {
       if (!videoId) return;
+      setLoadedProgress(null);
 
       let progress: WatchProgress | null = null;
 
@@ -280,6 +284,7 @@ export function useWatchProgress(
 
       if (mounted && progress) {
         setSavedProgress(progress);
+        setLoadedProgress(progress);
       }
     };
 
@@ -351,6 +356,7 @@ export function useWatchProgress(
 
   return {
     savedProgress,
+    loadedProgress,
     saveProgress: (force = true) => saveProgress(force),
     clearProgress,
   };
