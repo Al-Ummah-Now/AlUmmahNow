@@ -79,6 +79,10 @@ const VIDEOJS_ERROR_MAPPING: Record<number, VideoErrorType> = {
   4: VideoErrorType.FORMAT_ERROR, // MEDIA_ERR_SRC_NOT_SUPPORTED
 };
 
+/** How long after a network error a "source not supported" error is treated as its result. */
+const NETWORK_ERROR_FOLLOW_WINDOW_MS = 30000;
+const REQUEST_FAILURE_MESSAGE = /request error|failed to fetch|network/i;
+
 /**
  * VideoErrorHandler class
  *
@@ -90,6 +94,7 @@ export class VideoErrorHandler {
   private retryCount: number = 0;
   private errorReporters: ErrorReporter[] = [];
   private lastError: VideoError | null = null;
+  private lastNetworkErrorAt: number | null = null;
 
   constructor(retryConfig: Partial<RetryConfig> = {}) {
     this.retryConfig = {
@@ -344,13 +349,32 @@ export class VideoErrorHandler {
   }
 
   /**
+   * Video.js reports code 4 ("source not supported") after a failed HLS request,
+   * so a CDN outage would read as a browser format problem (#298). A code 4 that
+   * names a request failure, or closely follows a network error, is network.
+   */
+  private resolveVideoJsType(error: { code: number; message: string }, timestamp: number): VideoErrorType {
+    const mapped = VIDEOJS_ERROR_MAPPING[error.code] || VideoErrorType.UNKNOWN_ERROR;
+    if (mapped === VideoErrorType.NETWORK_ERROR) {
+      this.lastNetworkErrorAt = timestamp;
+      return mapped;
+    }
+    if (mapped !== VideoErrorType.FORMAT_ERROR) return mapped;
+    const followsNetworkError =
+      this.lastNetworkErrorAt !== null && timestamp - this.lastNetworkErrorAt <= NETWORK_ERROR_FOLLOW_WINDOW_MS;
+    return followsNetworkError || REQUEST_FAILURE_MESSAGE.test(error.message || '')
+      ? VideoErrorType.NETWORK_ERROR
+      : mapped;
+  }
+
+  /**
    * Categorize Video.js error
    */
   private categorizeVideoJsError(
     error: { code: number; message: string },
     timestamp: number
   ): VideoError {
-    const type = VIDEOJS_ERROR_MAPPING[error.code] || VideoErrorType.UNKNOWN_ERROR;
+    const type = this.resolveVideoJsType(error, timestamp);
     const retryable = type === VideoErrorType.NETWORK_ERROR || type === VideoErrorType.TIMEOUT_ERROR;
     const fallbackAvailable = type === VideoErrorType.HLS_ERROR || type === VideoErrorType.FORMAT_ERROR;
 
@@ -369,7 +393,7 @@ export class VideoErrorHandler {
    * Categorize native media error
    */
   private categorizeMediaError(error: MediaError, timestamp: number): VideoError {
-    const type = VIDEOJS_ERROR_MAPPING[error.code] || VideoErrorType.UNKNOWN_ERROR;
+    const type = this.resolveVideoJsType(error, timestamp);
     const retryable = error.code === MediaError.MEDIA_ERR_NETWORK;
     const fallbackAvailable = error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED;
 

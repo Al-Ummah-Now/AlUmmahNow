@@ -93,6 +93,33 @@ describe('VideoErrorHandler', () => {
     });
   });
 
+  describe('source errors caused by the network (#298)', () => {
+    const unsupported = { code: 4, message: 'No compatible source was found for this media.' };
+
+    it('reports code 4 right after a network error as a retryable network error', () => {
+      errorHandler.categorizeError({ code: 2, message: 'HLS playlist request error at URL: https://cdn/x.m3u8' });
+      const result = errorHandler.categorizeError(unsupported);
+      expect(result.type).toBe(VideoErrorType.NETWORK_ERROR);
+      expect(result.retryable).toBe(true);
+      expect(result.fallbackAvailable).toBe(false);
+    });
+
+    it('reports code 4 naming a failed request as a network error', () => {
+      const result = errorHandler.categorizeError({ code: 4, message: 'HLS playlist request error at URL: https://cdn/x.m3u8' });
+      expect(result.type).toBe(VideoErrorType.NETWORK_ERROR);
+    });
+
+    it('keeps a real format error, including long after an old network error', () => {
+      expect(errorHandler.categorizeError(unsupported).type).toBe(VideoErrorType.FORMAT_ERROR);
+      const now = jest.spyOn(Date, 'now');
+      now.mockReturnValue(1000);
+      errorHandler.categorizeError({ code: 2, message: 'offline' });
+      now.mockReturnValue(1000 + 31000);
+      expect(errorHandler.categorizeError(unsupported).type).toBe(VideoErrorType.FORMAT_ERROR);
+      now.mockRestore();
+    });
+  });
+
   describe('handleWithRetry', () => {
     it('should retry on retryable errors', async () => {
       const retryCallback = jest.fn().mockResolvedValue(undefined);
