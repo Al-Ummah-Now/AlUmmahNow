@@ -34,7 +34,7 @@ import { parseEmbedLang } from '@/lib/embed/params';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { handleRewritePath } from '@/lib/channel-url';
 import { refreshSessionCookie } from '@/lib/auth/middleware-refresh';
-import { SESSION_COOKIE_NAME, sessionCookieOptions } from '@/lib/auth/session-cookie';
+import { presentSessionCookieNames, writeSessionValue } from '@/lib/auth/session-cookie';
 
 /**
  * Build the CSP for this request. In production a fresh nonce is generated per
@@ -105,10 +105,12 @@ function getLanguagePreferenceFromCookie(request: NextRequest): string | null {
  * render uses the new token, and on the response so the browser keeps it.
  */
 export async function middleware(request: NextRequest) {
+  // The browser's session cookies, before the refresh rewrites the request's
+  const browserSessionCookies = presentSessionCookieNames(request.cookies);
   const refreshedSession = await refreshSessionCookie(request);
   const response = routeRequest(request);
   if (refreshedSession) {
-    response.cookies.set(SESSION_COOKIE_NAME, refreshedSession, sessionCookieOptions());
+    writeSessionValue(response.cookies, refreshedSession, browserSessionCookies);
   }
   return response;
 }

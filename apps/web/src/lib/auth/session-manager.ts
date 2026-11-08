@@ -14,7 +14,15 @@ import type { Channel, User } from '@al-ummah/shared-types';
 import { getOpenAuthClient } from "./openauth-client";
 import { subjects } from '../auth';
 import { logger } from '@/lib/logger-server';
-import { SESSION_COOKIE_NAME, sessionCookieOptions } from './session-cookie';
+import {
+  SESSION_COOKIE_NAME,
+  deleteSessionCookies,
+  presentSessionCookieNames,
+  readSessionValue,
+  sessionCookieOptions,
+  splitSessionValue,
+  writeSessionValue,
+} from './session-cookie';
 import {
   applyKnownRotations,
   computeExpiresAt,
@@ -29,8 +37,10 @@ import { revokeTokensOnSignOut } from './revoke-on-sign-out';
 
 // Session configuration
 const MAX_ACCOUNTS = 10; // Maximum number of accounts per browser
-const COOKIE_SIZE_WARNING_THRESHOLD = 3072; // 3KB (75% of 4KB limit)
-const COOKIE_SIZE_MAX = 4096; // 4KB browser limit
+const COOKIE_SIZE_WARNING_THRESHOLD = 3072; // 3KB: more than one account's worth
+const COOKIE_SIZE_MAX = 4096; // 4KB: one cookie; bigger sessions are split into chunks
+/** Chunks the session may take (10 accounts take about 4) */
+const MAX_SESSION_CHUNKS = 12;
 
 /**
  * Reduces an API channel record to the fields the UI reads from the session.
@@ -140,15 +150,15 @@ export class SessionManager {
   private static async getSessionData(): Promise<SessionData | null> {
     try {
       const cookieStore = await cookies();
-      const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+      const sessionValue = readSessionValue(cookieStore);
 
-      if (!sessionCookie?.value) {
+      if (!sessionValue) {
         // Try to migrate from legacy cookies
         return await this.migrateFromLegacy();
       }
 
-      // Parse JSON from cookie
-      const sessionData = JSON.parse(sessionCookie.value) as SessionData;
+      // Parse JSON from the cookie (and its chunks)
+      const sessionData = JSON.parse(sessionValue) as SessionData;
       // Another request in this isolate may have rotated a refresh token this
       // cookie still holds; use the newer pair (persisted on the next write)
       applyKnownRotations(sessionData);
@@ -164,15 +174,18 @@ export class SessionManager {
    */
   private static async setSessionData(data: SessionData | null): Promise<void> {
     const cookieStore = await cookies();
+    const present = presentSessionCookieNames(cookieStore);
 
     if (!data) {
-      cookieStore.delete(SESSION_COOKIE_NAME);
+      deleteSessionCookies(cookieStore, present);
       return;
     }
 
+    const current = readSessionValue(cookieStore);
+
     // Never write an older token pair over a newer one: the cookie may have
     // been rewritten (e.g. by a token refresh) since `data` was read
-    mergeSessionTokens(this.parseSessionCookie(cookieStore.get(SESSION_COOKIE_NAME)?.value), data);
+    mergeSessionTokens(this.parseSessionCookie(current), data);
     applyKnownRotations(data);
 
     // Serialize to JSON
@@ -181,14 +194,17 @@ export class SessionManager {
     // Nothing changed (e.g. the periodic channel refresh): skip the write. A
     // cookie set in a Server Action makes Next re-render the whole route, which
     // refetched the page's data and churned the DOM under the user's taps.
-    if (cookieStore.get(SESSION_COOKIE_NAME)?.value === jsonValue) {
+    if (current === jsonValue) {
       return;
     }
 
     // Check cookie size
     this.checkCookieSize(jsonValue, data);
 
-    cookieStore.set(SESSION_COOKIE_NAME, jsonValue, sessionCookieOptions());
+    // Split across al_ummah_session(.N) cookies: one cookie holds about one
+    // account, and browsers silently drop a cookie over 4 KB (the switcher
+    // then showed one of two signed-in accounts)
+    writeSessionValue(cookieStore, jsonValue, present);
   }
 
   private static parseSessionCookie(value: string | undefined): SessionData | null {
@@ -203,7 +219,7 @@ export class SessionManager {
   /** The session cookie as it is now in this request (no legacy migration). */
   private static async readStoredSession(): Promise<SessionData | null> {
     const cookieStore = await cookies();
-    return this.parseSessionCookie(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+    return this.parseSessionCookie(readSessionValue(cookieStore));
   }
 
   /**
@@ -243,33 +259,19 @@ export class SessionManager {
    * Check cookie size and warn if approaching limits
    */
   private static checkCookieSize(jsonValue: string, data: SessionData): void {
-    const sizeInBytes = new Blob([jsonValue]).size;
+    // What the browser stores: the URL-encoded value (JSON grows ~1.3x)
+    const sizeInBytes = encodeURIComponent(jsonValue).length;
     const sizeInKB = (sizeInBytes / 1024).toFixed(2);
     const accountCount = Object.keys(data.accounts).length;
+    const chunks = splitSessionValue(jsonValue).length;
 
-    // Calculate usage percentage
-    const usagePercent = ((sizeInBytes / COOKIE_SIZE_MAX) * 100).toFixed(1);
+    logger.debug(`[SessionManager] Session size: ${sizeInKB} KB in ${chunks} cookie(s) | Accounts: ${accountCount}`);
 
-    // Always log size for monitoring
-    logger.debug(`[SessionManager] Cookie size: ${sizeInKB} KB (${usagePercent}% of 4KB limit) | Accounts: ${accountCount}`);
-
-    // Warn if approaching limit
-    if (sizeInBytes >= COOKIE_SIZE_WARNING_THRESHOLD) {
-      logger.warn(
-        `[SessionManager] ⚠️  Cookie size warning: ${sizeInKB} KB / 4 KB (${usagePercent}%)\nConsider reducing data or implementing server-side session storage.`,
-        { accountCount }
-      );
-    }
-
-    // Error if exceeding limit
-    if (sizeInBytes >= COOKIE_SIZE_MAX) {
+    if (chunks > MAX_SESSION_CHUNKS) {
       const breakdown = this.getCookieSizeBreakdown(data);
-      logger.error(
-        `[SessionManager] 🚨 Cookie size EXCEEDED: ${sizeInKB} KB / 4 KB\nBrowser may reject this cookie!`,
-        { breakdown }
-      );
+      logger.error(`[SessionManager] Session too large: ${sizeInKB} KB in ${chunks} cookies`, { breakdown });
       throw new Error(
-        `Session cookie size (${sizeInKB} KB) exceeds browser limit (4 KB). ` +
+        `Session (${sizeInKB} KB) needs ${chunks} cookies, more than ${MAX_SESSION_CHUNKS}. ` +
         `Remove accounts or reduce data. Current accounts: ${accountCount}`
       );
     }
@@ -313,7 +315,7 @@ export class SessionManager {
     if (!sessionData) return null;
 
     const jsonValue = JSON.stringify(sessionData);
-    const sizeBytes = new Blob([jsonValue]).size;
+    const sizeBytes = encodeURIComponent(jsonValue).length;
     const sizeKB = (sizeBytes / 1024).toFixed(2);
     const usagePercent = ((sizeBytes / COOKIE_SIZE_MAX) * 100).toFixed(1);
     const accountCount = Object.keys(sessionData.accounts).length;
