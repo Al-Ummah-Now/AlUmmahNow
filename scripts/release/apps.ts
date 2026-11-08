@@ -118,10 +118,12 @@ export const APPS: AppRule[] = [
 				INTERNAL_API_KEY,
 				{ kind: 'd1_databases', name: 'REPORTS_DB' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-videos' },
+				{ kind: 'queue_consumer', name: 'al-ummah-now-moderation' },
+				{ kind: 'ai', name: 'AI' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }] }),
+		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'ai', name: 'AI' }] }),
 	},
 	{
 		app: 'websocket-server',

@@ -120,8 +120,9 @@ score (28.2) exists, the engine treats every author as *not* low trust, so `char
 
 - **Kill switch:** two levels, both must allow. `AI_MODERATION_ENABLED` env var in the processor's
   wrangler config (`"false"` stops all AI calls at the next deploy), and `moderation_config.enabled`
-  in D1, which an Admin flips in admin-web and which takes effect on the next message. Off means
-  the processor writes a `skipped` signal and makes no AI call. The content is unaffected.
+  in D1, which an Admin flips in admin-web and which takes effect on the next message. **No D1 row
+  means off**, so a newly deployed environment (stage, production) makes no AI call until an Admin
+  turns it on. Off means no AI call and no row (keeps D1 quiet); the content is unaffected.
 - **Daily budget cap:** `AI_MODERATION_DAILY_NEURON_CAP` (env default) overridable by
   `moderation_config.daily_neuron_cap`. Before each message the processor sums today's (UTC)
   neurons in `ai_usage_daily`; at or above the cap it skips with reason `budget` and logs a warning

@@ -17,13 +17,15 @@ interface SqliteDatabase {
 }
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'migrations-notifications');
+/** Reports DB (moderation tables) is migrated from admin-api. */
+export const REPORTS_MIGRATIONS_DIR = join(__dirname, '..', '..', '..', 'admin-api', 'migrations');
 
-export function createSqliteD1(): D1Database & { raw: SqliteDatabase } {
+export function createSqliteD1(migrationsDir: string = MIGRATIONS_DIR): D1Database & { raw: SqliteDatabase } {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: new (path: string) => SqliteDatabase };
   const raw = new DatabaseSync(':memory:');
-  for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
-    raw.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
+  for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) {
+    raw.exec(readFileSync(join(migrationsDir, file), 'utf8'));
   }
 
   const prepare = (sql: string): D1PreparedStatement => {

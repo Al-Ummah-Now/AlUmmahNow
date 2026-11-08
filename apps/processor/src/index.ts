@@ -2,15 +2,49 @@ import { AlUmmahMessage, QueueEnvironment } from './types';
 import { MessageProcessor } from './messageProcessor';
 import { createLogger } from '@al-ummah/logger';
 import { purgeExpiredNotifications } from './lib/notifications-store';
+import { handleModerationScan, isScanPayload } from './moderation/consumer';
 
 interface QueueMessage<T> {
   body: T;
   ack: () => void;
   retry: () => void;
+  /** Delivery attempt, starting at 1 (Cloudflare Queues). */
+  attempts?: number;
 }
 
 interface MessageBatch<T> {
+  /** Name of the queue the batch came from. */
+  queue?: string;
   messages: QueueMessage<T>[];
+}
+
+/** Matches max_retries of the moderation consumer in the wrangler configs. */
+export const MODERATION_MAX_RETRIES = 3;
+
+/** Moderation queue (Epic 28): one AI scan per message; see src/moderation/consumer.ts. */
+export async function processModerationBatch(
+  batch: MessageBatch<AlUmmahMessage>,
+  env: QueueEnvironment,
+  logger: ReturnType<typeof createLogger>
+): Promise<void> {
+  for (const message of batch.messages) {
+    const payload = message.body?.payload;
+    if (!isScanPayload(payload)) {
+      logger.warn('[Moderation] Invalid scan message dropped', { id: message.body?.id });
+      message.ack();
+      continue;
+    }
+    try {
+      const lastAttempt = (message.attempts ?? 1) > MODERATION_MAX_RETRIES;
+      const outcome = await handleModerationScan(payload, env, logger, { lastAttempt });
+      if (outcome.status === 'retry') message.retry();
+      else message.ack();
+    } catch (error) {
+      // D1 or config failure: let the queue retry (then DLQ). Content is never touched.
+      logger.error('[Moderation] Scan failed', { id: message.body?.id, error: error instanceof Error ? error.message : String(error) });
+      message.retry();
+    }
+  }
 }
 
 // Health check helper functions
@@ -87,6 +121,11 @@ export default {
       logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
       forceHttpLogging: true,
     });
+    if (batch.queue?.includes('moderation')) {
+      await processModerationBatch(batch, env, logger);
+      return;
+    }
+
     const processor = new MessageProcessor(logger);
 
     logger.info(`Processing batch of ${batch.messages.length} messages`);
