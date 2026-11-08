@@ -1,6 +1,8 @@
 import { Str, Int } from "chanfana";
 import { z } from "zod";
 import { Channel, Profile, ResponseError } from "../../lib/types";
+import { PublicChannelView } from "../../lib/model/view";
+import { toPublicChannel } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -8,7 +10,7 @@ import { AuthenticatedRoute, AppContext } from "../../base";
 // Response schema for subscription list
 const SubscriptionsListResponse = z.object({
 	success: z.boolean(),
-	data: z.array(Channel),
+	data: z.array(PublicChannelView),
 	total: z.number(),
 	page: z.number(),
 	pageSize: z.number(),
@@ -102,7 +104,7 @@ export class SubscriptionsList extends AuthenticatedRoute {
 
 			return c.json({
 				success: true,
-				data: channels,
+				data: channels.map(toPublicChannel),
 				total,
 				page,
 				pageSize,

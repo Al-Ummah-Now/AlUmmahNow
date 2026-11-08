@@ -153,7 +153,47 @@ export const ProfileView = z.object({
     })).optional(),
 });
 
-// Channel view with computed counts and stats
+// Fields returned for a profile to anyone (see lib/public-views.ts)
+export const PublicProfileView = z.object({
+    id: Str(),
+    userName: Str().optional(),
+    displayName: Str().optional(),
+    displayNameLocalized: z.record(z.string()).optional(),
+    bio: Str().optional(),
+    bioLocalized: z.record(z.string()).optional(),
+    avatarUrl: Str().optional(),
+    coverUrl: Str().optional(),
+    dateCreated: DateTime(),
+    dateModified: DateTime(),
+    channelsCount: z.number(),
+});
+
+// Fields returned for a channel to anyone (see lib/public-views.ts)
+export const PublicChannelView = z.object({
+    id: Str(),
+    userId: Str(),
+    name: Str(),
+    nameLocalized: z.record(z.string()).optional(),
+    description: Str().optional(),
+    descriptionLocalized: z.record(z.string()).optional(),
+    isMain: z.boolean(),
+    isPrivate: z.boolean().optional(),
+    isVerified: z.boolean().optional(),
+    avatarUrl: Str().optional(),
+    coverUrl: Str().optional(),
+    handle: Str().optional().describe("Unique @handle (display casing)"),
+    links: z.array(z.object({ title: Str(), url: Str() })).optional(),
+    location: Str().optional(),
+    dateCreated: DateTime(),
+    dateModified: DateTime(),
+    playlistsCount: z.number(),
+    videosCount: z.number(),
+    subscribersCount: z.number(),
+    subscriptionsCount: z.number(),
+    likesCount: z.number(),
+});
+
+// Channel view with computed counts and stats (owner/admin routes only)
 export const ChannelView = z.object({
     id: Str(),
     userId: Str(),

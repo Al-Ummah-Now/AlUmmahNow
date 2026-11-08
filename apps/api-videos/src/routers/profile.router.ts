@@ -6,6 +6,7 @@ import { authMiddleware } from '../middleware/auth';
 import { ProfileCreate } from '../endpoints/profile/profileCreate';
 import { ProfileDelete } from '../endpoints/profile/profileDelete';
 import { ProfileFetch } from '../endpoints/profile/profileFetch';
+import { ProfileCurrentFetch } from '../endpoints/profile/profileCurrentFetch';
 import { ProfilesList } from '../endpoints/profile/profileList';
 import { ProfileUpdate } from '../endpoints/profile/profileUpdate';
 import { WatchHistoryAdd } from '../endpoints/profile/watchHistoryAdd';
@@ -42,6 +43,9 @@ profileRouter.get('/profiles/:id', ProfileFetch);
 
 // Auth required: Create new profile
 profileRouter.post('/profiles', ProfileCreate);
+
+// Auth required: Get current user's profile (includes account details)
+profileRouter.get('/profile', ProfileCurrentFetch);
 
 // Auth required: Update current user's profile
 profileRouter.put('/profile', ProfileUpdate);

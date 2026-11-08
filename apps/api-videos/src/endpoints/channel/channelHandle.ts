@@ -10,8 +10,8 @@
 import { Bool, Num, Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
-import { ChannelView } from "../../lib/model/view";
-import { transformChannelToView } from "../../lib/transformations";
+import { PublicChannelView } from "../../lib/model/view";
+import { toPublicChannel } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, PublicRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
@@ -77,7 +77,7 @@ export class ChannelByHandleFetch extends OptionalAuthRoute {
 			params: z.object({ handle: Str({ description: "Handle, with or without a leading @ (case-insensitive)" }) }),
 		},
 		responses: {
-			"200": { description: "The channel", content: { "application/json": { schema: ChannelView } } },
+			"200": { description: "The channel", content: { "application/json": { schema: PublicChannelView } } },
 			"404": { description: "No channel has this handle", content: { "application/json": { schema: ResponseError } } },
 		},
 	};
@@ -94,7 +94,7 @@ export class ChannelByHandleFetch extends OptionalAuthRoute {
 			logger.debug('[ChannelByHandle] Not found', { handle, channelId });
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
-		return transformChannelToView(channel);
+		return toPublicChannel(channel);
 	}
 }
 

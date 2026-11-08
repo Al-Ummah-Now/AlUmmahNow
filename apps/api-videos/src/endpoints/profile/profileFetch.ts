@@ -1,8 +1,8 @@
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
-import { ProfileView } from "../../lib/model/view";
-import { transformProfileToView } from "../../lib/transformations";
+import { PublicProfileView } from "../../lib/model/view";
+import { toPublicProfile } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { OptionalAuthRoute, AppContext } from "../../base";
@@ -24,7 +24,7 @@ export class ProfileFetch extends OptionalAuthRoute {
 						schema: z.object({
 							success: Bool(),
 							result: z.object({
-								profile: ProfileView,
+								profile: PublicProfileView,
 							}),
 						}),
 					},
@@ -93,7 +93,7 @@ export class ProfileFetch extends OptionalAuthRoute {
 			});
 
 			// Transform to view model for response
-			const profileView = transformProfileToView(profile);
+			const profileView = toPublicProfile(profile);
 
 			return {
 				success: true,

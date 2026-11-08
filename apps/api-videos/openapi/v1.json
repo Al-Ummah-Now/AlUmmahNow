@@ -1602,17 +1602,31 @@
                           "userId": {
                             "type": "string"
                           },
-                          "email": {
-                            "type": "string",
-                            "format": "email"
-                          },
                           "name": {
                             "type": "string"
+                          },
+                          "nameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "isMain": {
                             "type": "boolean"
                           },
                           "isPrivate": {
+                            "type": "boolean"
+                          },
+                          "isVerified": {
                             "type": "boolean"
                           },
                           "avatarUrl": {
@@ -1643,9 +1657,6 @@
                               ]
                             }
                           },
-                          "contactEmail": {
-                            "type": "string"
-                          },
                           "location": {
                             "type": "string"
                           },
@@ -1671,39 +1682,11 @@
                           },
                           "likesCount": {
                             "type": "number"
-                          },
-                          "isDeleted": {
-                            "type": "boolean"
-                          },
-                          "deletedAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "markedForDeletion": {
-                            "type": "boolean"
-                          },
-                          "markedForDeletionAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "isHidden": {
-                            "type": "boolean"
-                          },
-                          "hiddenAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "hiddenByUserId": {
-                            "type": "string"
-                          },
-                          "hiddenReason": {
-                            "type": "string"
                           }
                         },
                         "required": [
                           "id",
                           "userId",
-                          "email",
                           "name",
                           "isMain",
                           "dateCreated",
@@ -2067,17 +2050,31 @@
                     "userId": {
                       "type": "string"
                     },
-                    "email": {
-                      "type": "string",
-                      "format": "email"
-                    },
                     "name": {
                       "type": "string"
+                    },
+                    "nameLocalized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "descriptionLocalized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     },
                     "isMain": {
                       "type": "boolean"
                     },
                     "isPrivate": {
+                      "type": "boolean"
+                    },
+                    "isVerified": {
                       "type": "boolean"
                     },
                     "avatarUrl": {
@@ -2108,9 +2105,6 @@
                         ]
                       }
                     },
-                    "contactEmail": {
-                      "type": "string"
-                    },
                     "location": {
                       "type": "string"
                     },
@@ -2136,39 +2130,11 @@
                     },
                     "likesCount": {
                       "type": "number"
-                    },
-                    "isDeleted": {
-                      "type": "boolean"
-                    },
-                    "deletedAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "markedForDeletion": {
-                      "type": "boolean"
-                    },
-                    "markedForDeletionAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "isHidden": {
-                      "type": "boolean"
-                    },
-                    "hiddenAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "hiddenByUserId": {
-                      "type": "string"
-                    },
-                    "hiddenReason": {
-                      "type": "string"
                     }
                   },
                   "required": [
                     "id",
                     "userId",
-                    "email",
                     "name",
                     "isMain",
                     "dateCreated",
@@ -3557,17 +3523,31 @@
                     "userId": {
                       "type": "string"
                     },
-                    "email": {
-                      "type": "string",
-                      "format": "email"
-                    },
                     "name": {
                       "type": "string"
+                    },
+                    "nameLocalized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "descriptionLocalized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     },
                     "isMain": {
                       "type": "boolean"
                     },
                     "isPrivate": {
+                      "type": "boolean"
+                    },
+                    "isVerified": {
                       "type": "boolean"
                     },
                     "avatarUrl": {
@@ -3598,9 +3578,6 @@
                         ]
                       }
                     },
-                    "contactEmail": {
-                      "type": "string"
-                    },
                     "location": {
                       "type": "string"
                     },
@@ -3626,39 +3603,11 @@
                     },
                     "likesCount": {
                       "type": "number"
-                    },
-                    "isDeleted": {
-                      "type": "boolean"
-                    },
-                    "deletedAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "markedForDeletion": {
-                      "type": "boolean"
-                    },
-                    "markedForDeletionAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "isHidden": {
-                      "type": "boolean"
-                    },
-                    "hiddenAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "hiddenByUserId": {
-                      "type": "string"
-                    },
-                    "hiddenReason": {
-                      "type": "string"
                     }
                   },
                   "required": [
                     "id",
                     "userId",
-                    "email",
                     "name",
                     "isMain",
                     "dateCreated",
@@ -4858,6 +4807,238 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{id}/owner": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Get a channel with its private fields (owner or admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "get_ChannelOwnerFetch",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "isMain": {
+                      "type": "boolean"
+                    },
+                    "isPrivate": {
+                      "type": "boolean"
+                    },
+                    "avatarUrl": {
+                      "type": "string"
+                    },
+                    "coverUrl": {
+                      "type": "string"
+                    },
+                    "handle": {
+                      "type": "string",
+                      "description": "Unique @handle (display casing)"
+                    },
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "title",
+                          "url"
+                        ]
+                      }
+                    },
+                    "contactEmail": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "dateCreated": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "dateModified": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "playlistsCount": {
+                      "type": "number"
+                    },
+                    "videosCount": {
+                      "type": "number"
+                    },
+                    "subscribersCount": {
+                      "type": "number"
+                    },
+                    "subscriptionsCount": {
+                      "type": "number"
+                    },
+                    "likesCount": {
+                      "type": "number"
+                    },
+                    "isDeleted": {
+                      "type": "boolean"
+                    },
+                    "deletedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "markedForDeletion": {
+                      "type": "boolean"
+                    },
+                    "markedForDeletionAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "isHidden": {
+                      "type": "boolean"
+                    },
+                    "hiddenAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "hiddenByUserId": {
+                      "type": "string"
+                    },
+                    "hiddenReason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "userId",
+                    "email",
+                    "name",
+                    "isMain",
+                    "dateCreated",
+                    "dateModified",
+                    "playlistsCount",
+                    "videosCount",
+                    "subscribersCount",
+                    "subscriptionsCount",
+                    "likesCount"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the channel owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -15060,6 +15241,205 @@
       }
     },
     "/api/v1/profile": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Get the current user's profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "get_ProfileCurrentFetch",
+        "responses": {
+          "200": {
+            "description": "The current user's profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "profile": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string",
+                              "format": "email"
+                            },
+                            "userName": {
+                              "type": "string"
+                            },
+                            "firstName": {
+                              "type": "string"
+                            },
+                            "firstNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Multi-language first names"
+                            },
+                            "lastName": {
+                              "type": "string"
+                            },
+                            "lastNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Multi-language last names"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            },
+                            "displayNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Multi-language display names"
+                            },
+                            "bio": {
+                              "type": "string"
+                            },
+                            "bioLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Multi-language bios"
+                            },
+                            "avatarUrl": {
+                              "type": "string"
+                            },
+                            "coverUrl": {
+                              "type": "string"
+                            },
+                            "timezone": {
+                              "type": "string",
+                              "description": "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"
+                            },
+                            "dateCreated": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "dateModified": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "channelsCount": {
+                              "type": "number"
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isMain": {
+                                    "type": "boolean"
+                                  },
+                                  "avatarUrl": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "isMain"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "email",
+                            "dateCreated",
+                            "dateModified",
+                            "channelsCount"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "profile"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Profile not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": [
           "Profiles"
@@ -15459,10 +15839,6 @@
                           "userId": {
                             "type": "string"
                           },
-                          "email": {
-                            "type": "string",
-                            "format": "email"
-                          },
                           "name": {
                             "type": "string"
                           },
@@ -15487,6 +15863,9 @@
                           "isPrivate": {
                             "type": "boolean"
                           },
+                          "isVerified": {
+                            "type": "boolean"
+                          },
                           "avatarUrl": {
                             "type": "string"
                           },
@@ -15494,7 +15873,8 @@
                             "type": "string"
                           },
                           "handle": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Unique @handle (display casing)"
                           },
                           "links": {
                             "type": "array",
@@ -15514,9 +15894,6 @@
                               ]
                             }
                           },
-                          "contactEmail": {
-                            "type": "string"
-                          },
                           "location": {
                             "type": "string"
                           },
@@ -15528,151 +15905,34 @@
                             "type": "string",
                             "format": "date-time"
                           },
-                          "playlists": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            },
-                            "default": []
+                          "playlistsCount": {
+                            "type": "number"
                           },
-                          "videos": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            },
-                            "default": []
+                          "videosCount": {
+                            "type": "number"
                           },
-                          "subscribers": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "userId": {
-                                  "type": "string"
-                                },
-                                "channelId": {
-                                  "type": "string"
-                                },
-                                "entityId": {
-                                  "type": "string"
-                                },
-                                "dateCreated": {
-                                  "type": "string",
-                                  "format": "date-time"
-                                }
-                              },
-                              "required": [
-                                "id",
-                                "userId",
-                                "channelId",
-                                "entityId",
-                                "dateCreated"
-                              ]
-                            },
-                            "default": []
+                          "subscribersCount": {
+                            "type": "number"
                           },
-                          "subscriptions": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "userId": {
-                                  "type": "string"
-                                },
-                                "channelId": {
-                                  "type": "string"
-                                },
-                                "entityId": {
-                                  "type": "string"
-                                },
-                                "dateCreated": {
-                                  "type": "string",
-                                  "format": "date-time"
-                                }
-                              },
-                              "required": [
-                                "id",
-                                "userId",
-                                "channelId",
-                                "entityId",
-                                "dateCreated"
-                              ]
-                            },
-                            "default": []
+                          "subscriptionsCount": {
+                            "type": "number"
                           },
-                          "likes": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "userId": {
-                                  "type": "string"
-                                },
-                                "channelId": {
-                                  "type": "string"
-                                },
-                                "entityId": {
-                                  "type": "string"
-                                },
-                                "dateCreated": {
-                                  "type": "string",
-                                  "format": "date-time"
-                                }
-                              },
-                              "required": [
-                                "id",
-                                "userId",
-                                "channelId",
-                                "entityId",
-                                "dateCreated"
-                              ]
-                            },
-                            "default": []
-                          },
-                          "isDeleted": {
-                            "type": "boolean"
-                          },
-                          "deletedAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "markedForDeletion": {
-                            "type": "boolean"
-                          },
-                          "markedForDeletionAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "isHidden": {
-                            "type": "boolean"
-                          },
-                          "hiddenAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "hiddenByUserId": {
-                            "type": "string"
-                          },
-                          "hiddenReason": {
-                            "type": "string"
+                          "likesCount": {
+                            "type": "number"
                           }
                         },
                         "required": [
                           "id",
                           "userId",
-                          "email",
                           "name",
+                          "isMain",
                           "dateCreated",
-                          "dateModified"
+                          "dateModified",
+                          "playlistsCount",
+                          "videosCount",
+                          "subscribersCount",
+                          "subscriptionsCount",
+                          "likesCount"
                         ]
                       }
                     },
@@ -15894,32 +16154,8 @@
                               "id": {
                                 "type": "string"
                               },
-                              "email": {
-                                "type": "string",
-                                "format": "email"
-                              },
                               "userName": {
                                 "type": "string"
-                              },
-                              "firstName": {
-                                "type": "string"
-                              },
-                              "firstNameLocalized": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "type": "string"
-                                },
-                                "description": "Multi-language first names"
-                              },
-                              "lastName": {
-                                "type": "string"
-                              },
-                              "lastNameLocalized": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "type": "string"
-                                },
-                                "description": "Multi-language last names"
                               },
                               "displayName": {
                                 "type": "string"
@@ -15928,8 +16164,7 @@
                                 "type": "object",
                                 "additionalProperties": {
                                   "type": "string"
-                                },
-                                "description": "Multi-language display names"
+                                }
                               },
                               "bio": {
                                 "type": "string"
@@ -15938,18 +16173,13 @@
                                 "type": "object",
                                 "additionalProperties": {
                                   "type": "string"
-                                },
-                                "description": "Multi-language bios"
+                                }
                               },
                               "avatarUrl": {
                                 "type": "string"
                               },
                               "coverUrl": {
                                 "type": "string"
-                              },
-                              "timezone": {
-                                "type": "string",
-                                "description": "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"
                               },
                               "dateCreated": {
                                 "type": "string",
@@ -15961,36 +16191,10 @@
                               },
                               "channelsCount": {
                                 "type": "number"
-                              },
-                              "channels": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "name": {
-                                      "type": "string"
-                                    },
-                                    "isMain": {
-                                      "type": "boolean"
-                                    },
-                                    "avatarUrl": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "id",
-                                    "name",
-                                    "isMain"
-                                  ]
-                                }
                               }
                             },
                             "required": [
                               "id",
-                              "email",
                               "dateCreated",
                               "dateModified",
                               "channelsCount"
@@ -16806,32 +17010,8 @@
                             "id": {
                               "type": "string"
                             },
-                            "email": {
-                              "type": "string",
-                              "format": "email"
-                            },
                             "userName": {
                               "type": "string"
-                            },
-                            "firstName": {
-                              "type": "string"
-                            },
-                            "firstNameLocalized": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "type": "string"
-                              },
-                              "description": "Multi-language first names"
-                            },
-                            "lastName": {
-                              "type": "string"
-                            },
-                            "lastNameLocalized": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "type": "string"
-                              },
-                              "description": "Multi-language last names"
                             },
                             "displayName": {
                               "type": "string"
@@ -16840,8 +17020,7 @@
                               "type": "object",
                               "additionalProperties": {
                                 "type": "string"
-                              },
-                              "description": "Multi-language display names"
+                              }
                             },
                             "bio": {
                               "type": "string"
@@ -16850,18 +17029,13 @@
                               "type": "object",
                               "additionalProperties": {
                                 "type": "string"
-                              },
-                              "description": "Multi-language bios"
+                              }
                             },
                             "avatarUrl": {
                               "type": "string"
                             },
                             "coverUrl": {
                               "type": "string"
-                            },
-                            "timezone": {
-                              "type": "string",
-                              "description": "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"
                             },
                             "dateCreated": {
                               "type": "string",
@@ -16873,36 +17047,10 @@
                             },
                             "channelsCount": {
                               "type": "number"
-                            },
-                            "channels": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  },
-                                  "isMain": {
-                                    "type": "boolean"
-                                  },
-                                  "avatarUrl": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "name",
-                                  "isMain"
-                                ]
-                              }
                             }
                           },
                           "required": [
                             "id",
-                            "email",
                             "dateCreated",
                             "dateModified",
                             "channelsCount"

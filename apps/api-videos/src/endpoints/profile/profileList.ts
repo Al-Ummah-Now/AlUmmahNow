@@ -1,8 +1,8 @@
 import { Bool, Num } from "chanfana";
 import { string, z } from "zod";
 import { Profile as BusinessProfile, PaginationResponse, ResponseError } from "../../lib/types";
-import { ProfileView } from "../../lib/model/view";
-import { transformProfileToView } from "../../lib/transformations";
+import { PublicProfileView } from "../../lib/model/view";
+import { toPublicProfile } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import { PublicRoute, AppContext } from "../../base";
 
@@ -29,7 +29,7 @@ export class ProfilesList extends PublicRoute {
 						schema: z.object({
 							success: Bool(),
 							result: z.object({
-								profiles: z.array(ProfileView),
+								profiles: z.array(PublicProfileView),
 								pagination: z.object({
 									limit: z.number(),
 									cursor: z.string().optional(),
@@ -73,7 +73,7 @@ export class ProfilesList extends PublicRoute {
 		const profiles = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
 		
 		// Transform profiles to view models
-		const profileViews = (profiles.items || []).map(profile => transformProfileToView(profile));
+		const profileViews = (profiles.items || []).map(profile => toPublicProfile(profile));
 
 		return {
 			success: true,
