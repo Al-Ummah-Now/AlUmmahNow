@@ -11,6 +11,7 @@ interface AuthPayload {
   exp: number; // Expiration
   aud?: string; // Audience
   iss?: string; // Issuer
+  roles?: string[]; // RBAC role names from the auth server (e.g. "Super Admin")
 }
 
 // Type for the auth context that will be available in handlers
@@ -109,6 +110,7 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
         iat: now,
         aud: authConfig.JWT.AUDIENCE,  // ✅ Now using dynamic config
         iss: authConfig.JWT.ISSUER,    // ✅ Now using dynamic config
+        roles: Array.isArray(openAuthPayload.roles) ? openAuthPayload.roles.map(String) : [],
       };
 
       // Additional validation with environment config

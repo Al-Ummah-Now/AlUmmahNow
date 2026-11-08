@@ -89,12 +89,12 @@ export class MemoryQueue {
  */
 export function buildApp(
 	register: (router: any) => void,
-	auth?: { userId: string } | null,
+	auth?: { userId: string; roles?: string[] } | null,
 ) {
 	const app = new Hono();
 	app.use('*', async (c, next) => {
 		if (auth) {
-			c.set('auth' as never, { userId: auth.userId, email: `${auth.userId}@test.local`, payload: {} } as never);
+			c.set('auth' as never, { userId: auth.userId, email: `${auth.userId}@test.local`, payload: auth.roles ? { roles: auth.roles } : {} } as never);
 			c.set('userId' as never, auth.userId as never);
 		}
 		await next();
