@@ -18,7 +18,6 @@ import { VideoThumbnailUpload } from '../endpoints/video/videoThumbnailUpload';
 // Video upload endpoints
 import { VideoUpload } from '../endpoints/video/videoUpload';
 import { UploadInitiateEndpoint } from '../endpoints/video/uploadInitiate';
-import { UploadStreamEndpoint } from '../endpoints/video/uploadStream';
 import { UploadCompleteEndpoint } from '../endpoints/video/uploadComplete';
 import { UploadResumeEndpoint } from '../endpoints/video/uploadResume';
 import { UploadBatchInitiateEndpoint } from '../endpoints/video/uploadBatchInitiate';
@@ -110,9 +109,6 @@ videoRouter.post('/upload', VideoUpload);
 
 // Initiate upload (authenticated)
 videoRouter.post('/upload/initiate', UploadInitiateEndpoint);
-
-// Stream upload (authenticated)
-videoRouter.post('/upload/stream', UploadStreamEndpoint);
 
 // Complete upload (authenticated)
 videoRouter.post('/upload/complete', UploadCompleteEndpoint);

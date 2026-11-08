@@ -107,7 +107,6 @@ export const UPLOAD_SESSION_PATHS = [
   '/api/videos/upload',
   '/api/videos/upload/initiate',
   '/api/videos/upload/batch/initiate',
-  '/api/videos/upload/stream',
 ] as const;
 
 /**
