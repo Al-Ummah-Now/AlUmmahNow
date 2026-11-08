@@ -270,7 +270,14 @@
   min-width: 8rem !important; /* 128px minimum width */
   max-width: 12rem !important; /* Maximum width */
 
-  /* Constrain menu height and enable scrolling */
+  /* Constrain menu height and enable scrolling.
+     Video.js styles this box as `height: 0; margin-bottom: 1.5em` and hangs an
+     absolutely positioned list above it. The list is static here (so the box
+     scrolls), which means the box must size to its content: with Video.js's
+     height: 0 still applied, overflow clipped the whole list and the quality
+     menu "did not open". */
+  height: auto !important;
+  margin-bottom: 0 !important;
   max-height: 20rem !important; /* 320px maximum */
   overflow-y: auto !important; /* Scroll if content exceeds max-height */
   overflow-x: hidden !important;
@@ -719,9 +726,11 @@
   transform: translateZ(0); /* Force hardware acceleration */
 }
 
-/* Reduce repaints with containment */
+/* Reduce repaints with containment. No paint containment on the control bar:
+   it clips descendants to the 64px bar, and the quality/captions menus open
+   above it (paint containment hid the quality menu entirely). */
 .video-js .vjs-control-bar {
-  contain: layout style paint;
+  contain: layout style;
 }
 
 .video-js .vjs-progress-holder {
