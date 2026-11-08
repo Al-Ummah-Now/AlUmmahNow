@@ -25,6 +25,8 @@ export interface ApiRequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   functionName: string;
+  /** Abort the request (and resolve null) after this many milliseconds */
+  timeoutMs?: number;
 }
 
 export interface AuthContext {
@@ -41,7 +43,7 @@ export async function apiRequest<T>(
   options: ApiRequestOptions,
   authContext?: AuthContext
 ): Promise<T | null> {
-  const { method, url, body, headers = {}, functionName } = options;
+  const { method, url, body, headers = {}, functionName, timeoutMs } = options;
 
   logApiStart({ functionName, method, url });
 
@@ -82,7 +84,8 @@ export async function apiRequest<T>(
     // Make request
     const fetchOptions: RequestInit = {
       method,
-      headers: requestHeaders
+      headers: requestHeaders,
+      ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     };
 
     if (body) {

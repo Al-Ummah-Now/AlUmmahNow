@@ -15,6 +15,7 @@ import { ChannelVideosList } from '../src/endpoints/channel/channelVideosList';
 import { ChannelAbout } from '../src/endpoints/channel/channelHandle';
 import { VideoSearch } from '../src/endpoints/video/videoSearch';
 import { OwnershipBackfillPost } from '../src/endpoints/search/searchBackfill';
+import { AnalyticsChannelGet, AnalyticsSummaryGet } from '../src/endpoints/analytics/analyticsOwner';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
@@ -308,5 +309,22 @@ describe('endpoints served from the ownership index', () => {
 			assert.deepEqual(after, before, query);
 		}
 		assert.ok(indexed.videos.calls < 60, `index path read ${indexed.videos.calls} video objects`);
+	});
+
+	it('GET /api/analytics/summary and /channels/:id read only the owner’s objects and return the same totals', async () => {
+		const { scan, indexed } = await pair();
+		const app = buildApp(r => {
+			r.get('/api/analytics/summary', AnalyticsSummaryGet);
+			r.get('/api/analytics/channels/:channelId', AnalyticsChannelGet);
+		}, { userId: 'owner' });
+		for (const path of ['/api/analytics/summary', '/api/analytics/summary?channelId=mine1', '/api/analytics/channels/mine1']) {
+			const before = await (await app.request(path, {}, scan)).json() as any;
+			const after = await (await app.request(path, {}, indexed)).json() as any;
+			assert.deepEqual(after, before, path);
+			assert.equal(after.totalVideos, 7, `${path}: hidden, private, scheduled and processing videos count for the owner`);
+		}
+		assert.ok(scan.videos.calls > 300, `scan read ${scan.videos.calls} video objects`);
+		assert.equal(indexed.videos.calls, 3 * 7, 'one GET per owned video per request; no list');
+		assert.equal(indexed.channels.calls, 3 * 2, 'one GET per owned channel per request; no list');
 	});
 });

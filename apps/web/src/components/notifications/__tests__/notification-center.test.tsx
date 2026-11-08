@@ -176,4 +176,20 @@ describe('ChannelBellMenu', () => {
     expect(NotificationsService.setChannelBell).toHaveBeenCalledWith('c1', 'none');
     await waitFor(() => expect(screen.getByTestId('channel-bell')).toHaveAttribute('data-bell', 'none'));
   });
+
+  it('keeps the picked level when the initial load resolves after it', async () => {
+    const { NotificationsService } = jest.requireMock('@/services/api/notifications');
+    let resolveLoad: (value: unknown) => void = () => undefined;
+    NotificationsService.channelBell.mockImplementationOnce(() => new Promise((resolve) => { resolveLoad = resolve; }));
+    const { ChannelBellMenu } = await import('../ChannelBellMenu');
+    render(<ChannelBellMenu channelId="c1" />);
+    fireEvent.click(screen.getByTestId('channel-bell-button'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('channel-bell-option-all'));
+    });
+    await act(async () => {
+      resolveLoad({ channelId: 'c1', bell: 'highlights', subscribed: true });
+    });
+    expect(screen.getByTestId('channel-bell')).toHaveAttribute('data-bell', 'all');
+  });
 });

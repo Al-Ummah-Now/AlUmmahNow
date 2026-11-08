@@ -75,14 +75,15 @@ test.describe('Library (signed in)', () => {
     await expect(toggle).toHaveAttribute('data-saved', 'false');
     await toggle.click();
     await expect(toggle).toHaveAttribute('data-saved', 'true');
-    expect(await watchLaterIds(request)).toContain(video.id);
+    // The toggle and the list update optimistically; the API call settles after.
+    await expect.poll(() => watchLaterIds(request)).toContain(video.id);
 
     await page.goto('/en/library/watch-later');
     const item = page.locator(`[data-testid="library-list-item"][data-video-id="${video.id}"]`);
     await expect(item).toBeVisible();
     await item.getByTestId('watch-later-remove').click();
     await expect(item).toHaveCount(0);
-    expect(await watchLaterIds(request)).not.toContain(video.id);
+    await expect.poll(() => watchLaterIds(request)).not.toContain(video.id);
   });
 
   test('saves from a video card overflow menu with the keyboard', async ({ page, request }, testInfo) => {

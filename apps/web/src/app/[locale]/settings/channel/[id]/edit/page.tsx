@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getChannelById } from '@/lib/api/channels';
@@ -31,7 +31,6 @@ interface ChannelData {
 
 function ChannelEditPage() {
   const { t } = useLanguage();
-  const router = useRouter();
   const params = useParams();
   const locale = params.locale as string;
   const channelId = params.id as string;
@@ -145,7 +144,11 @@ function ChannelEditPage() {
       }
 
       await reloadChannels();
-      router.push(channelPath(locale, { id: channelId, handle: result.channel.handle }));
+      // A full page load rather than router.push: the session refresh above
+      // queues more Server Actions (navigation profile reloads), and the App
+      // Router can apply one that resolves after a client-side push on top of
+      // the old route, which put the owner back on this form.
+      window.location.assign(channelPath(locale, { id: channelId, handle: result.channel.handle }));
     } catch (error) {
       logger.error('Error updating channel', { error, channelId });
       setError(t.channel.saveFailed);

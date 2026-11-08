@@ -103,6 +103,23 @@ export function ownedChannelIds(env: OwnershipEnv, userId: string): Promise<stri
   });
 }
 
+/**
+ * Ids of the user's not-deleted channels, or of their not-deleted videos in
+ * `channelIds` (or in no channel), moderation-hidden ones included: owner-only
+ * views such as analytics still count them.
+ */
+export function ownerContentIds(env: OwnershipEnv, kind: OwnershipKind, userId: string, channelIds?: string[]): Promise<string[] | null> {
+  return whenComplete(env, kind, async db => {
+    const channelFilter = kind === 'video' && channelIds
+      ? ` AND (channel_id IS NULL${channelIds.length ? ` OR channel_id IN (${channelIds.map(() => '?').join(', ')})` : ''})`
+      : '';
+    const { results } = await db.prepare(
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND owner_id = ? AND is_deleted = 0${channelFilter} ORDER BY id`,
+    ).bind(kind, userId, ...(channelFilter ? channelIds ?? [] : [])).all<{ id: string }>();
+    return (results ?? []).map(r => r.id);
+  });
+}
+
 export type ChannelVideoSort = 'latest' | 'popular' | 'oldest';
 
 const CHANNEL_VIDEO_ORDER: Record<ChannelVideoSort, string> = {
