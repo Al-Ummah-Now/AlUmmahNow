@@ -15,6 +15,7 @@ import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 import R2Repository from '../../lib/r2Repo';
 import { getChannelObject } from './post-comment-helpers';
+import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
 
 // Sanitization configuration for community posts
 // Allows basic formatting while preventing XSS attacks
@@ -225,6 +226,8 @@ export class CreateCommunityPost extends AuthenticatedRoute {
           timestamp: post.createdAt
         });
       }
+
+      scanInBackground(c, { surface: 'community_post', event: 'create', subjectId: post.id, authorId: userId, channelId, text: communityPostScanText(post) });
 
       return c.json({ success: true, post });
     } catch (error) {

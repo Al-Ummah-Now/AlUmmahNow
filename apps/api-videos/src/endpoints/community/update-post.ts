@@ -9,6 +9,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateUpdatePost } from '../../validation/community-posts';
 import { logger } from '../../lib/logger';
 import Queue, { MessageType } from '../../lib/queue';
+import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
 
 const updatePostSchema = z.object({
   content: z.string().max(5000).optional(),
@@ -158,6 +159,10 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         updatedFields: Object.keys(body).filter(k => body[k] !== undefined),
         timestamp: post.updatedAt,
       });
+
+      if (body.content !== undefined) {
+        scanInBackground(c, { surface: 'community_post', event: 'edit', subjectId: postId, authorId: userId, channelId: postChannelId, text: communityPostScanText(post) });
+      }
 
       return c.json({ success: true, post });
     } catch (error) {

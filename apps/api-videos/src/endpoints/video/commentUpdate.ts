@@ -6,6 +6,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { MAX_COMMENT_LENGTH, StoredComment, findStoredComment, normalizeCommentText } from "../../lib/comments";
 import { broadcastInBackground } from "../../lib/websocket-notify";
+import { scanInBackground } from '../../lib/moderation-scan';
 
 
 export class CommentUpdate extends AuthenticatedRoute {
@@ -143,6 +144,10 @@ export class CommentUpdate extends AuthenticatedRoute {
 
 		// Save updated video
 		await repository.putObject(video.id, video);
+
+		if (changed) {
+			scanInBackground(c, { surface: 'video_comment', event: 'edit', subjectId: cid, parentId: id, authorId: userId, channelId, text });
+		}
 
 		if (updatedComment.status !== 'held') {
 			broadcastInBackground(c, `video:${id}`, 'comment_updated', {

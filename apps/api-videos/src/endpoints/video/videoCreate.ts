@@ -10,6 +10,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 
 export class VideoCreate extends AuthenticatedRoute {
 	schema = {
@@ -147,6 +148,8 @@ export class VideoCreate extends AuthenticatedRoute {
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});
+
+		scanInBackground(c, { surface: 'video_metadata', event: 'create', subjectId: video.id, authorId: effectiveUserId, channelId, text: videoScanText(video) });
 
 		// Transform to view model for response
 		const videoView = transformVideoToView(video);

@@ -53,6 +53,11 @@ export class CommentApprove extends AuthenticatedRoute {
 			return c.json({ success: false, error: "Comment not found" }, 404);
 		}
 
+		// A comment held by platform moderation is released by a moderator, not the video owner
+		if (found.comment.heldBy === 'moderation') {
+			return c.json({ success: false, error: "held_by_moderation" }, 403);
+		}
+
 		if (found.comment.status === 'held') {
 			found.comment.status = 'published';
 			await repository.putObject(video.id, video);

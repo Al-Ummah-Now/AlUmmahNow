@@ -17,6 +17,7 @@ import {
 } from "../../lib/comments";
 import { toCommentListItems } from "../../lib/commentAuthors";
 import { CommentListItemSchema } from "./commentList";
+import { scanInBackground } from '../../lib/moderation-scan';
 
 
 export class CommentCreate extends AuthenticatedRoute {
@@ -163,6 +164,8 @@ export class CommentCreate extends AuthenticatedRoute {
 			held,
 			timestamp: now,
 		});
+
+		scanInBackground(c, { surface: 'video_comment', event: 'create', subjectId: comment.id, parentId: id, authorId: userId, channelId, text });
 
 		const [item] = await toCommentListItems(c.env, [comment], channelId, { userId, isVideoOwner }, { videoId: id });
 

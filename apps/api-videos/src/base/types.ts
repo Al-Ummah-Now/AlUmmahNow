@@ -48,6 +48,8 @@ export interface AppBindings {
 
   // Queues
   queue: Queue;
+  /** AI moderation queue (Epic 28). Optional: scans are skipped when unbound. */
+  MODERATION_QUEUE?: Queue;
 
   // Secrets (accessed via .text() method)
   image_storage_key: { text(): Promise<string> };

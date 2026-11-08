@@ -30,6 +30,8 @@ export interface StoredComment {
 	parentCommentId?: string;
 	/** 'held' while awaiting the video owner's review (comment settings = held) */
 	status?: CommentStatus;
+	/** 'moderation' when a moderator held it (Epic 28); the video owner cannot approve those */
+	heldBy?: 'moderation';
 }
 
 export type CommentStatus = 'published' | 'held';
