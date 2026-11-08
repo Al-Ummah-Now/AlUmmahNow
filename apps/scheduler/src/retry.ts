@@ -3,6 +3,7 @@ import type { Env, FailedVideo } from './types';
 import { markAsFailed } from './publisher';
 import { sendFailureNotification } from './notifier';
 import { logger } from './lib/logger';
+import { logEvent } from './monitoring';
 
 /**
  * Schedule retries for failed video publishes
@@ -46,8 +47,8 @@ export async function scheduleRetries(
       // Save to scheduled bucket with new time
       await rescheduleVideo(env.SCHEDULED_VIDEOS, updatedMetadata, retryTime);
 
-      // Log retry event to queue
-      await env.QUEUE.send({
+      // Log the retry (not sent to the queue: the processor rejects these objects)
+      logEvent({
         type: 'SCHEDULED_PUBLISH_RETRY',
         videoId: video.videoId,
         scheduledTime: video.scheduledPublishDate,

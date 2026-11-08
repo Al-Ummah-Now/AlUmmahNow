@@ -7,7 +7,6 @@ import {
 	ResponseError
 } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -228,17 +227,8 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 			}, 409); // 409 Conflict
 		}
 
-		// Send queue message for analytics
-		const queue = new Queue(c.env.queue);
-		await queue.send(MessageType.ChannelTabUpdate, {
-			channelId: id,
-			userId,
-			changes: {
-				defaultTab: tabsUpdateInput.defaultTab,
-				tabUpdates: tabsUpdateInput.tabs?.length || 0,
-			},
-			timestamp: new Date().toISOString(),
-		});
+		// No queue message: tabs are frontend-only and the processor has no tab handler
+		// (every ChannelTabUpdate used to be retried and dead-lettered).
 
 		return {
 			success: true,

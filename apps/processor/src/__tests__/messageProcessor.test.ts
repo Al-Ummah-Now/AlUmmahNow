@@ -64,6 +64,51 @@ describe('MessageProcessor', () => {
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalled();
     });
 
+    // QA DLQ root cause: ChannelTabUpdate fell through to `Unknown message type`,
+    // was retried 3 times and dead-lettered, one DLQ write per tab save.
+    it.each([
+      MessageType.ChannelTabCreate,
+      MessageType.ChannelTabUpdate,
+      MessageType.ChannelTabDelete,
+      MessageType.ChannelTabReorder,
+      MessageType.ChannelTabSwitch,
+    ])('acknowledges channel tab event %s instead of failing it', async (type) => {
+      const result = await processor.processMessage(
+        { id: `tab-${type}`, type, timestamp: Date.now(), payload: { channelId: 'c1', userId: 'u1', tabs: [] } },
+        mockEnv
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it('does not retry a message type the processor does not handle', async () => {
+      const result = await processor.processMessage(
+        { id: 'unknown-1', type: 9999 as MessageType, timestamp: Date.now(), payload: { x: 1 } },
+        mockEnv
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Unknown message type: 9999');
+      expect(result.shouldRetry).toBe(false);
+    });
+
+    it('accepts anonymous channel and profile views', async () => {
+      const channel = await processor.processMessage(
+        { id: 'cv-1', type: MessageType.ChannelView, timestamp: Date.now(), payload: { channelId: 'c1' } },
+        mockEnv
+      );
+      const profile = await processor.processMessage(
+        { id: 'pv-1', type: MessageType.ProfileView, timestamp: Date.now(), payload: { profileId: 'p1' } },
+        mockEnv
+      );
+      expect(channel.success).toBe(true);
+      expect(profile.success).toBe(true);
+      // Other channel events still need an actor.
+      const update = await processor.processMessage(
+        { id: 'cu-1', type: MessageType.ChannelUpdate, timestamp: Date.now(), payload: { channelId: 'c1' } },
+        mockEnv
+      );
+      expect(update.success).toBe(false);
+    });
+
     it('should process a valid subscription message', async () => {
       const message: AlUmmahMessage = {
         id: 'test-3',

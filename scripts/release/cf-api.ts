@@ -30,8 +30,13 @@ export interface CfClient {
 	request<T>(method: string, path: string, body?: unknown): Promise<T>;
 }
 
+/** CLOUDFLARE_API_TOKEN, or locally the `wrangler login` OAuth token. */
+export function cfToken(env: NodeJS.ProcessEnv = process.env): string | undefined {
+	return env.CLOUDFLARE_API_TOKEN || wranglerOAuthToken();
+}
+
 export function createCfClient(env: NodeJS.ProcessEnv = process.env): CfClient {
-	const token = env.CLOUDFLARE_API_TOKEN || wranglerOAuthToken();
+	const token = cfToken(env);
 	if (!token) throw new Error('No Cloudflare credentials: set CLOUDFLARE_API_TOKEN or run `wrangler login`');
 	const accountId = env.CLOUDFLARE_ACCOUNT_ID || DEFAULT_ACCOUNT_ID;
 

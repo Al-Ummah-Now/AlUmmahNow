@@ -246,14 +246,17 @@ export class MessageProcessor {
         await handleSearchIndexSync(message, env, this.logger);
         break;
 
-      // Channel tab events - REMOVED: tabs are frontend-only, no backend processing
-      // case MessageType.ChannelTabCreate:
-      // case MessageType.ChannelTabUpdate:
-      // case MessageType.ChannelTabDelete:
-      // case MessageType.ChannelTabReorder:
-      // case MessageType.ChannelTabSwitch:
-      //   await handleChannelTabEvent(message, env, this.logger);
-      //   break;
+      // Channel tab events: tabs are frontend-only, there is no backend processing.
+      // The message is already archived by saveMessageToR2; acknowledge it. These
+      // used to fall through to `Unknown message type`, which was retried and
+      // dead-lettered every ChannelTabUpdate (the QA DLQ traffic).
+      case MessageType.ChannelTabCreate:
+      case MessageType.ChannelTabUpdate:
+      case MessageType.ChannelTabDelete:
+      case MessageType.ChannelTabReorder:
+      case MessageType.ChannelTabSwitch:
+        this.logger.debug(`Channel tab event acknowledged: ${MessageType[message.type]}`);
+        break;
 
       default:
         throw new Error(`Unknown message type: ${message.type}`);
@@ -265,7 +268,8 @@ export class MessageProcessor {
 
     const { userId } = message.payload as { userId: string; profileData?: unknown };
     
-    if (!userId) {
+    // Views can be anonymous (signed-out viewers); every other profile event has an actor.
+    if (!userId && message.type !== MessageType.ProfileView) {
       throw new Error('Profile message missing required field: userId');
     }
 
@@ -281,7 +285,7 @@ export class MessageProcessor {
         this.logger.info(`Profile deleted for user ${userId}`);
         break;
       case MessageType.ProfileView:
-        this.logger.info(`Profile viewed for user ${userId}`);
+        this.logger.info(`Profile viewed by ${userId || 'anonymous'}`);
         break;
     }
   }
@@ -291,7 +295,8 @@ export class MessageProcessor {
 
     const { channelId, userId } = message.payload as { channelId: string; userId: string };
     
-    if (!channelId || !userId) {
+    // Views can be anonymous (signed-out viewers); every other channel event has an actor.
+    if (!channelId || (!userId && message.type !== MessageType.ChannelView)) {
       throw new Error('Channel message missing required fields: channelId, userId');
     }
 
@@ -307,7 +312,7 @@ export class MessageProcessor {
         this.logger.info(`Channel ${channelId} deleted by user ${userId}`);
         break;
       case MessageType.ChannelView:
-        this.logger.info(`Channel ${channelId} viewed by user ${userId}`);
+        this.logger.info(`Channel ${channelId} viewed by ${userId || 'anonymous'}`);
         break;
     }
   }
@@ -868,6 +873,11 @@ export class MessageProcessor {
     }
 
     if (error instanceof Error && error.message.includes('Invalid message structure')) {
+      return false;
+    }
+
+    // A type this processor does not handle will not start working on a retry.
+    if (error instanceof Error && error.message.startsWith('Unknown message type')) {
       return false;
     }
 

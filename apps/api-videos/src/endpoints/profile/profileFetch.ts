@@ -4,7 +4,6 @@ import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { PublicProfileView } from "../../lib/model/view";
 import { toPublicProfile } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
 import { OptionalAuthRoute, AppContext } from "../../base";
 
 export class ProfileFetch extends OptionalAuthRoute {
@@ -65,9 +64,6 @@ export class ProfileFetch extends OptionalAuthRoute {
 			// Retrieve the validated id
 			const { id } = request.params;
 
-			// Get user from auth context (optional for GET endpoints)
-			const userId = this.getUserId(c);
-
 			// Get profile from storage
 			const bucket = c.env.profiles;
 			type ProfileType = z.infer<typeof BusinessProfile>;
@@ -84,13 +80,7 @@ export class ProfileFetch extends OptionalAuthRoute {
 				);
 			}
 
-			// Send queue message for profile view analytics
-			const queue = new Queue(c.env.queue);
-			await queue.send(MessageType.ProfileView, {
-				profileId: id,
-				userId: userId,
-				timestamp: new Date().toISOString(),
-			});
+			// No queue message per profile read: the processor only logged it.
 
 			// Transform to view model for response
 			const profileView = toPublicProfile(profile);

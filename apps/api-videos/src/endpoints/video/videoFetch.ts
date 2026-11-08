@@ -4,7 +4,6 @@ import { Video as BusinessVideo, Channel as BusinessChannel, ResponseError } fro
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from '../../base';
 
@@ -63,7 +62,6 @@ export class VideoFetch extends OptionalAuthRoute {
 		// Retrieve the validated slug
 		const { id } = request.params;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
 
 		// Implement your own object fetch here
 		const bucket = c.env.videos;
@@ -152,14 +150,8 @@ export class VideoFetch extends OptionalAuthRoute {
 		// Transform to view model for response with channel data
 		const videoView = transformVideoToView(video, channel);
 
-		// Send queue message for video view analytics
-		const queue = new Queue(c.env.queue);
-		await queue.send(MessageType.VideoView, {
-			videoId: video.id,
-			userId,
-			channelId,
-			timestamp: new Date().toISOString(),
-		});
+		// No queue message: a fetch is not a view (POST /videos/:id/view records views),
+		// and per-read messages only cost queue operations and processor invocations.
 
 		return videoView;
 	}

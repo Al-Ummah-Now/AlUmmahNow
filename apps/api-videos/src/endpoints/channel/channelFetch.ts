@@ -4,7 +4,6 @@ import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { PublicChannelView } from "../../lib/model/view";
 import { toPublicChannel } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { channelTotalsFromIndex } from "../../lib/search/ownership";
 import { logger } from "../../lib/logger";
@@ -65,7 +64,6 @@ export class ChannelFetch extends OptionalAuthRoute {
 			// Retrieve the validated id
 			const { id } = request.params;
 			const userId = this.getUserId(c);
-			const { channelId } = request.headers;
 
 			// Implement your own object fetch here
 			const bucket = c.env.channels;
@@ -130,14 +128,8 @@ export class ChannelFetch extends OptionalAuthRoute {
 			});
 			if (totals) channelView.videosCount = totals.videosCount;
 
-			// Send queue message for channel view analytics
-			const queue = new Queue(c.env.queue);
-			await queue.send(MessageType.ChannelView, {
-				channelId: channel.id,
-				userId,
-				requestChannelId: channelId,
-				timestamp: new Date().toISOString(),
-			});
+			// No queue message per channel read: the processor only logged it (and
+			// rejected anonymous ones), at the cost of queue operations per page load.
 
 			return channelView;
 		} catch (error) {
