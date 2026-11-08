@@ -3,3 +3,8 @@
 # cached forever; without this the assets are served with max-age=0.
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
+
+# Embedded discussions widget (docs/embeds/README.md §7): loaded by other sites
+/embed/widget.js
+  Cache-Control: public,max-age=3600
+  Access-Control-Allow-Origin: *

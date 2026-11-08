@@ -215,7 +215,7 @@
 		"BUNNY_NAME_PREFIX": "",
 		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
-		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
+		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net,https://cms.alummahnow.net"
 	},
 	/**
 	 * Note: Use secrets to store sensitive data.
@@ -385,7 +385,7 @@
 				"BUNNY_NAME_PREFIX": "[stage] ",
 				"BUNNY_SIGN_HOSTNAME": "vz-cb79844a-c5d.b-cdn.net",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
-				"CORS_ORIGINS": "https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net"
+				"CORS_ORIGINS": "https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net"
 			}
 		}
 	}

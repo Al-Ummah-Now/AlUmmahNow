@@ -29,6 +29,11 @@ export interface CspOptions {
   isDevelopment: boolean;
   nonce?: string;
   env?: CspEnv;
+  /**
+   * Who may frame the page. Default 'none' (every app page). Embed frames
+   * (/embed/*) pass '*' so any site can embed public videos (docs/embeds).
+   */
+  frameAncestors?: "'none'" | '*';
 }
 
 function origin(url: string | undefined): string {
@@ -58,7 +63,7 @@ export function generateNonce(): string {
   return btoa(binary);
 }
 
-export function buildContentSecurityPolicy({ isDevelopment, nonce, env = {} }: CspOptions): string {
+export function buildContentSecurityPolicy({ isDevelopment, nonce, env = {}, frameAncestors = "'none'" }: CspOptions): string {
   const apiOrigin = origin(env.apiUrl);
   const authOrigin = origin(env.authUrl);
   const bunny = env.bunnyPullZone ? `https://${env.bunnyPullZone.replace(/^https?:\/\//, '')}` : '';
@@ -96,7 +101,7 @@ export function buildContentSecurityPolicy({ isDevelopment, nonce, env = {} }: C
     "object-src 'none'",
     "base-uri 'self'",
     `form-action 'self'${authOrigin ? ` ${authOrigin}` : ''}`,
-    "frame-ancestors 'none'",
+    `frame-ancestors ${frameAncestors}`,
     `report-uri ${CSP_REPORT_PATH}`,
   ];
 
@@ -115,6 +120,16 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
   'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
 };
+
+/**
+ * Headers for embed frames (/embed/*): the same set minus X-Frame-Options,
+ * which has no "allow any origin" value and would override frame-ancestors in
+ * old browsers. Autoplay, fullscreen and PiP are delegated by the embedding
+ * iframe's `allow` attribute; this page must not deny them.
+ */
+export const EMBED_SECURITY_HEADERS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(SECURITY_HEADERS).filter(([header]) => header !== 'X-Frame-Options'),
+);
 
 /**
  * Serialize a value for embedding inside an inline <script>. Escapes characters

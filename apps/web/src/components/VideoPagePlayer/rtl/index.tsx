@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo } from "react";
+import type { Player } from "video.js";
 import Image from "next/image";
 import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
@@ -9,7 +10,15 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
 
-const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
+interface WatchPlayerProps {
+  options: PlayerOptions;
+  /** Start position in seconds (?t= on the watch page) */
+  startTime?: number;
+  /** Gives the watch page the Video.js player (share "start at current time") */
+  onPlayerReady?: (player: Player) => void;
+}
+
+const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerReady }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
 
@@ -58,6 +67,8 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             className="w-full"
             ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
             title={removeUnwantedChars(title)}
+            startTime={startTime}
+            onPlayerReady={onPlayerReady}
           />
         </div>
       </div>

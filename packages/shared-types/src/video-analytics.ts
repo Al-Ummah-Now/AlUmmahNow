@@ -64,6 +64,17 @@ export interface AnalyticsConfig {
   enableDebugLogging?: boolean;
   retryAttempts?: number;
   retryDelay?: number;
+  /** Where the player runs; sent with every batch (docs/embeds §6) */
+  context?: AnalyticsContext;
+}
+
+/**
+ * Playback surface of a batch. `embed` = the iframe player on another page;
+ * `embedOrigin` is that page's origin (never its path). Absent = watch page.
+ */
+export interface AnalyticsContext {
+  source: 'watch' | 'embed';
+  embedOrigin?: string | null;
 }
 
 /**
@@ -71,6 +82,7 @@ export interface AnalyticsConfig {
  */
 export interface AnalyticsBatch {
   events: AnalyticsEvent[];
+  context?: AnalyticsContext;
   batchId?: string;
   sentAt?: string;
 }

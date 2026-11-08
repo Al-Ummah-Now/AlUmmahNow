@@ -40,15 +40,15 @@ documents (absent = no breakdown recorded). Old documents keep working; a unit t
 
 ## Deferred (GitHub issues, label `queue`)
 
-- `embed.alummahnow.net` host (E1).
-- Live embeds `/embed/live/{id}`; embed params `captions`, `chapters`, `speed`, `theme`, `color`, `branding`,
-  `related`, `controls=0`, `comments=1`; end screen (25.7).
-- `@alummahnow/embed` npm/CDN wrapper with types (25.5).
-- Creator embed controls in Studio: embedding on/off, domain allowlists, signed embed tokens, private embeds (25.6).
-- Studio embed analytics by domain/page (25.8) on top of the new rollup maps; per-Site metering (25.9).
-- Short links, QR code, chapter links, sharing playlists/channels/posts (25.1); JSON-LD `VideoObject` (25.2).
-- Signed-in embeds (popup sign-in).
-- Epic 26 beyond read-only: Sites and verification, site keys, posting with a registered public OAuth client
-  (AlUmmahNowAuth migration), page threads and `site` scope, moderation, anti-abuse, SEO snapshot, export,
-  webhooks, Studio surfaces, live updates.
-- Epic 27 plans & entitlements framework.
+| Issue | Scope |
+|---|---|
+| #253 | `embed.alummahnow.net` host (E1) |
+| #254 | Live embeds `/embed/live/{id}` |
+| #255 | Remaining params (`captions`, `chapters`, `speed`, `theme`, `color`, `branding`, `related`, `controls=0`, `comments=1`) and the end screen (25.7) |
+| #256 | `@alummahnow/embed` npm/CDN wrapper with types (25.5) |
+| #257 | Creator embed controls: allow/deny, domain allowlists, signed embed tokens, private embeds (25.6) |
+| #258 | Embed analytics in the API and Studio (25.8), on top of the new rollup maps; related #237 |
+| #259 | Short links, QR, chapter links, sharing playlists/channels/live/posts, JSON-LD (25.1, 25.2) |
+| #260 | Signed-in embeds (popup sign-in) |
+| #261 | Epic 26 beyond read-only: Sites, posting (auth client registration by migration), moderation, anti-abuse, SEO, export, Studio |
+| #262 | Epic 27 plans & entitlements framework |

@@ -107,8 +107,8 @@ GET {host}/oembed?url={url}&maxwidth={px}&maxheight={px}&format=json
 
 - `url` (required) accepts: `{host}/{en|ar}/video/{id}`, `{host}/{en|ar}/video?vid={id}`, `{host}/embed/v/{id}`,
   `{host}/{en|ar}/playlist/{id}`, `{host}/embed/p/{id}`, with or without a query string (`?t=` / `?start=` is
-  carried into the embed). Production also accepts the same URLs on any `*.alummahnow.net` videos host of the
-  same environment only.
+  carried into the embed). Only URLs on the same host as the endpoint are recognised (QA oEmbed answers for QA URLs,
+  production for production URLs).
 - `maxwidth` / `maxheight` (optional): the returned size is the largest 16:9 size that fits, at most 1280×720,
   default 640×360 (minimum 200×113).
 - `format`: only `json`. `format=xml` answers **501**.
@@ -162,6 +162,8 @@ site defaults.
 ## 4. Sharing links
 
 - Watch page: `{host}/{en|ar}/video/{id}`; `?t=754` starts at 754 s (`t` takes the same forms as `start`).
+- Channel pages (no embed): `{host}/{en|ar}/@{handle}` (canonical); `{host}/{en|ar}/channels/{channelId}` for
+  channels without a handle.
 - The watch page has a **Share** button: copy link, "start at" the current time, copy embed code (sizes above plus
   responsive), and WhatsApp / Telegram / X / Facebook / email, plus the device share sheet where supported.
 

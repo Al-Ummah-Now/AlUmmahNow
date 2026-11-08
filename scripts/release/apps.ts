@@ -91,7 +91,7 @@ export const APPS: AppRule[] = [
 				// The API's own base URL (subtitle links are built from it); not a JWT audience check
 				Audience: 'https://videos.api.alummahnow.net',
 				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
-				CORS_ORIGINS: 'https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net',
+				CORS_ORIGINS: 'https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net,https://cms.alummahnow.net',
 			},
 			requiredBindings: [
 				INTERNAL_API_KEY,
@@ -103,7 +103,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'd1_databases', name: 'SEARCH_DB' }] }),
+		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'd1_databases', name: 'SEARCH_DB' }] }),
 	},
 	{
 		app: 'processor',

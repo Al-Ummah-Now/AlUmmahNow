@@ -11,11 +11,14 @@ import { logger } from '@/lib/logger-client';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { watchTimeReports, type WatchTimeEvent } from '@/lib/video/watch-time';
+import { viewContextFromBatch } from '@/lib/embed/view-context';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const events = body.events || [];
+    // Embed frames tag their views (docs/embeds §6); anything invalid counts as a watch-page view
+    const viewContext = viewContextFromBatch(body.context);
 
     // Log analytics event in development with detailed error information
     if (process.env.NODE_ENV === 'development') {
@@ -61,8 +64,9 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({
               watchTime: 0, // Initial view, no watch time yet
-              referrer: 'direct',
+              referrer: viewContext.source === 'embed' ? 'embed' : 'direct',
               deviceType: 'desktop',
+              ...viewContext,
             }),
           });
 

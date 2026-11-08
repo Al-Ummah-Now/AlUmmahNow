@@ -80,6 +80,7 @@ import '@/styles/keyboard-feedback.css';
 import type { Player } from 'video.js';
 import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
 import type { PlayerTextTrack } from '@/lib/video/subtitle-tracks';
+import type { AnalyticsContext } from '@al-ummah/shared-types';
 
 export interface CustomVideoPlayerProps {
   videoId: string;
@@ -106,6 +107,12 @@ export interface CustomVideoPlayerProps {
   textTracks?: PlayerTextTrack[];
   /** Called once the Video.js player is ready (e.g. for chapter integration) */
   onPlayerReady?: (player: Player) => void;
+  /** Start position in seconds (watch page ?t=, embed start=) */
+  startTime?: number;
+  /** Start muted, overriding the remembered volume (embed autoplay must be muted) */
+  muted?: boolean;
+  /** Playback surface sent with analytics batches (embeds tag source/origin) */
+  analyticsContext?: AnalyticsContext;
 }
 
 /**
@@ -130,6 +137,9 @@ export default function CustomVideoPlayer({
   onSourceChange,
   textTracks,
   onPlayerReady,
+  startTime,
+  muted,
+  analyticsContext,
 }: CustomVideoPlayerProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
   const playerRef = useRef<Player | null>(null);
@@ -420,7 +430,9 @@ export default function CustomVideoPlayer({
 
       // Initialize analytics (Phase 1.5)
       if (enableAnalytics) {
-        analyticsRef.current = new VideoAnalytics(videoId, userId);
+        analyticsRef.current = (analyticsContext
+          ? new VideoAnalytics(videoId, userId, { context: analyticsContext })
+          : new VideoAnalytics(videoId, userId));
       }
 
       // Initialize Video.js player with the DOM element
@@ -450,6 +462,20 @@ export default function CustomVideoPlayer({
 
         // Phase 2.5: Initialize volume controls
         volumeControlsCleanupRef.current = initializeVolumeControls(player);
+        // Muted start wins over the remembered volume (browsers only autoplay muted)
+        if (muted) (player as ExtendedPlayer).muted(true);
+
+        // Start position: applied once the duration is known (seeking earlier is ignored)
+        if (startTime && startTime > 0) {
+          const seekToStart = () => {
+            const duration = player.duration();
+            if (!duration || !Number.isFinite(duration) || startTime < duration) {
+              player.currentTime(startTime);
+            }
+          };
+          if ((player as ExtendedPlayer).readyState?.() >= 1) seekToStart();
+          else player.one('loadedmetadata', seekToStart);
+        }
 
         // Phase 2.6: Setup fullscreen and PiP
         setupFullscreenPiP(player as ExtendedPlayer);
@@ -721,13 +747,17 @@ export default function CustomVideoPlayer({
       if (analyticsRef.current) {
         analyticsRef.current.destroy();
         if (enableAnalytics) {
-          analyticsRef.current = new VideoAnalytics(videoId, userId);
+          analyticsRef.current = (analyticsContext
+          ? new VideoAnalytics(videoId, userId, { context: analyticsContext })
+          : new VideoAnalytics(videoId, userId));
         }
       }
 
       // Load the new video
       player.load();
     }
+  // analyticsContext is fixed for the life of an embed frame
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, sources, poster, enableAnalytics, userId]);
 
   /**
