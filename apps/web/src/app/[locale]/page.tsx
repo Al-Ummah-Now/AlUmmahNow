@@ -10,6 +10,7 @@ import { fetchVideosWithPagination } from "@/lib/api/videos";
 import { getNextVideosCursor } from "./videos/VideosPageClient";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
+import { ContinueWatchingShelf } from "@/components/history/ContinueWatchingShelf";
 
 const VideosPage: React.FC = () => {
   const { t, isRTL } = useLanguage();
@@ -79,6 +80,7 @@ const VideosPage: React.FC = () => {
           }`}
           style={{ direction: isRTL ? "rtl" : "ltr" }}
         >
+<ContinueWatchingShelf />
 <h1 className="text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
             // Card-sized placeholders reserve the grid's space so the cards

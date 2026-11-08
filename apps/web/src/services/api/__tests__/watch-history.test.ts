@@ -64,6 +64,12 @@ describe('WatchHistoryService', () => {
     expect(progress).toEqual({ videoId: 'v1', currentTime: 30, duration: 60, completed: false, timestamp: '2026-01-02T00:00:00Z' });
   });
 
+  it('filters the list by completion (Continue watching)', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { entries: [], total: 0, hasMore: false }));
+    await WatchHistoryService.list({ limit: 10, completed: false });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/api/watch-history?sort=newest&limit=10&completed=false');
+  });
+
   it('lists, removes and clears history with client auth headers', async () => {
     fetchMock
       .mockResolvedValueOnce(mockResponse(200, { entries: [], total: 0, hasMore: false }))

@@ -5,6 +5,7 @@ import { RecordWatchHistory } from '../src/endpoints/watch-history/record';
 import { UpdateWatchProgress } from '../src/endpoints/watch-history/update-progress';
 import { ListWatchHistory } from '../src/endpoints/watch-history/list';
 import { GetWatchHistorySettings, UpdateWatchHistorySettings } from '../src/endpoints/watch-history/settings';
+import { RecommendationsGet } from '../src/endpoints/discovery/discovery';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 
 /**
@@ -123,5 +124,41 @@ describe('pause watch history', () => {
 		assert.equal(profile.displayName, 'Me');
 		assert.deepEqual(profile.channels, ['c1']);
 		assert.equal(profile.watchHistoryPaused, true);
+	});
+});
+
+describe('recommendations while watch history is paused (#242)', () => {
+	function recRoutes(r: any) {
+		r.get('/api/recommendations', RecommendationsGet);
+	}
+	function recEnv(paused: boolean) {
+		const videos = {
+			v1: videoFixture({ id: 'v1', title: 'Fiqh lesson one', category: 'education', tags: ['fiqh'], uploadStatus: 'ready', availableResolutions: ['720p'] }),
+			v2: videoFixture({ id: 'v2', title: 'Fiqh lesson two', category: 'education', tags: ['fiqh'], uploadStatus: 'ready', availableResolutions: ['720p'] }),
+		};
+		return {
+			videos: new MemoryBucket(videos),
+			watch_history: new MemoryBucket({ 'me:v1': { userId: 'me', videoId: 'v1', lastWatchedAt: '2026-11-01T00:00:00.000Z' } }),
+			profiles: new MemoryBucket(paused ? { me: { id: 'me', watchHistoryPaused: true } } : {}),
+			channels: new MemoryBucket(),
+		};
+	}
+
+	it('uses history to seed and exclude when not paused', async () => {
+		const app = buildApp(recRoutes, { userId: 'me' });
+		const res = await app.request('/api/recommendations?excludeWatched=true', {}, recEnv(false));
+		assert.equal(res.status, 200, await res.clone().text());
+		const body = (await res.json()) as { basedOn: string[]; data: { id: string }[] };
+		assert.ok(body.basedOn.includes('history'), JSON.stringify(body.basedOn));
+		assert.ok(!body.data.some((v) => v.id === 'v1'), 'a watched video was recommended');
+	});
+
+	it('ignores history while paused', async () => {
+		const app = buildApp(recRoutes, { userId: 'me' });
+		const res = await app.request('/api/recommendations?excludeWatched=true', {}, recEnv(true));
+		assert.equal(res.status, 200, await res.clone().text());
+		const body = (await res.json()) as { basedOn: string[]; data: { id: string }[] };
+		assert.ok(!body.basedOn.includes('history'), JSON.stringify(body.basedOn));
+		assert.ok(body.data.some((v) => v.id === 'v1'), 'history still filtered the results while paused');
 	});
 });
