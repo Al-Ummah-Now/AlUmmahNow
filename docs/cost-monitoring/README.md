@@ -32,7 +32,7 @@ The tail worker's count matches `auth-qa` exactly because every `auth-qa` invoca
 | Asset | What it is | State |
 | --- | --- | --- |
 | **Hamza-Labs-Core/CloudFlareCostMonitor** (private) | Turborepo. `apps/api`: Hono worker with D1, KV, a sync queue and a 15-minute cron. GraphQL collectors for Workers, R2, KV, D1, Durable Objects (DO), Queues, Stream, Images, Vectorize and more (`services/cloudflare/metrics.ts`, about 2.3k lines). `apps/web`: React Router and Recharts dashboard. `packages/pricing` (`@cfcost/pricing`): pricing rules, calculator, free-tier and month-end projection, zero dependencies, with a standalone ESM bundle. | QA only (`cfcost-api-qa`, `cfcost-web-qa`). The production config still has placeholder ids. It is **multi-tenant** (email/password users, one encrypted CF token per user account, its own JWT). Last commit `baf6de0` (Nov 6 2026) extracted the pricing package. |
-| **cfctl**, the "Cloudflare CLI" | Zero-dependency Node CLI covering the whole Cloudflare OpenAPI spec (3,526 operations), with an agent contract (JSON output, exit codes, `--dry-run`, `CFCTL_READ_ONLY`). GraphQL calls without `mutation` count as reads. `@cfcost/pricing` names it as a consumer (`cfctl costs`). | **Not on GitHub.** It exists only as a local git repo at `~/Code/Cloudflare cli` (one commit, `2ecaa6b`, "Initial commit: cfctl v0.1.0", no remote). This is why the org listing didn't show it. Its local tree has no `costs` command yet. See open question Q1. |
+| **[Hamza-Labs-Core/cfctl](https://github.com/Hamza-Labs-Core/cfctl)** (internal), the "Cloudflare CLI" | Zero-dependency Node ≥ 20 CLI, v0.1.0, about 1.1k lines in `src/`. It covers the whole Cloudflare OpenAPI spec: 3,526 operations compiled into `catalog/operations.json` (spec 4.0.0, generated 2026-09-18) and refreshed with `cfctl ops update`. It has shortcuts for Workers, D1, R2, KV, Queues, Pages, DO, DNS and more, and `cfctl status` lists the whole account's resources in one call. Its agent contract: JSON output and errors, stable exit codes, `--dry-run`, and `CFCTL_READ_ONLY`. A safety classifier in `src/safety.js` treats GraphQL without `mutation`, read-only D1 SQL and a short list of known read POSTs as reads, and everything else as a write. Tests run the real binary against a local mock API (`test/cli.test.js`, `test/safety.test.js`). | `main` at `2ecaa6b` ("Initial commit: cfctl v0.1.0"). `@cfcost/pricing`'s README says a `cfctl costs` command consumes its bundle, but cfctl has **no `costs` command** yet. How we use it: §1.4. |
 
 ### Options
 
@@ -71,6 +71,38 @@ Why: the hard, reusable part of CloudFlareCostMonitor is the pricing model and t
 
 Send pricing fixes back to CloudFlareCostMonitor as PRs, so cfcost, cfctl and this admin price usage the same way. Nothing in AlUmmahNow waits on those PRs.
 
+### 1.4 Where cfctl fits
+
+cfctl is a **CLI for people and agents**. It doesn't run inside the collector. `src/config.js`, `src/catalog.js` and `src/execute.js` use `node:fs`, `node:os`, `homedir()` and stdin, and the catalog is a 3.2 MB JSON file loaded at startup. None of that belongs in a Worker that runs every hour. We use it in three places:
+
+1. **As the reference for the collector's HTTP client.** `src/client.js` (about 100 lines) is already close to runtime-neutral:
+   - plain `fetch`
+   - retries on 429/5xx (5xx only for GET), honouring `Retry-After`
+   - exponential backoff with jitter
+   - both pagination schemes (`page`/`total_pages` and `cursor`)
+   - a typed `ApiError`
+
+   The collector's `apps/cost-monitor/src/cf/client.ts` copies it with the same behaviour. Two changes: no `process.stderr` (use the repo `logger`), and also retry POST to `/graphql` on 5xx (GraphQL reads are idempotent). Phase 4 offers upstream a runtime-neutral `cfctl/client` export (with a logger hook), so both can share one file the way pricing is shared (§1.1).
+2. **As the ops and Phase 0 tool**, run from a laptop with the read token and `CFCTL_READ_ONLY=1`:
+   - `cfctl status` is the inventory snapshot used to fill and check the attribution manifest (§3). It lists workers, D1, R2, KV, queues, Pages, DO namespaces, Hyperdrive, Vectorize, Workflows, Containers and zones, and reports `"no permission"` for each product the token can't read, which also tests the token's scope (§2.5).
+   - `cfctl api POST /graphql --body @q.json` runs and saves the GraphQL fixtures (§9).
+   - `cfctl call billable-usage-get-v1-account-usage from=… to=…` tests reconciliation (§2.2).
+   - `cfctl call telemetry.query --body @q.json` tests Workers Logs counts (§2.1).
+
+   The runbook (`docs/cost-monitoring/RUNBOOK.md`) uses cfctl for spike investigation, for example `cfctl workers get <script>` to see a script's tail consumers and observability settings.
+3. **As the catalog.** The catalog lists API operations, not account resources. Even so, it is how we found the endpoints this spec relies on, and it keeps them findable as Cloudflare adds products:
+   - `billable-usage-get-v1-account-usage` (`GET /accounts/{id}/billable-usage?from&to`, alpha), `billable-usage-get-v1-account-usage-info`, and `billable-usage-v2-*` (`/accounts/{id}/billable/usage`, FOCUS v1.3 format, "alpha, restricted")
+   - `usage-analytics-get-account-billing-usage` (`GET /accounts/{id}/billing/usage?metrics&since&until&time_delta`)
+   - `telemetry.query`, `telemetry.keys.list` and `telemetry.values.list` (`/workers/observability/telemetry/*`)
+   - an inventory list operation for each billable product (`cfctl ops search <product> list`)
+
+   A weekly check (`scripts/cost/catalog-coverage.ts`, Phase 4) compares the catalog's billable-product tags with the products the collector covers and opens an issue when Cloudflare adds a product we don't price.
+
+**Gaps to send upstream to cfctl** (none of them block us):
+- `telemetry.query`, `telemetry.keys.list` and `telemetry.values.list` are POSTs that only read, but they aren't in `POST_READS` in `src/safety.js`. So `CFCTL_READ_ONLY=1` **blocks** them, and without read-only they need `--yes`. Add them, plus `GET /billable-usage` (already a read because it's a GET). `/billable/usage` POST is already listed.
+- The GraphQL endpoint (`/graphql`) isn't in the OpenAPI catalog, so it's reachable only through `cfctl api`. A `cfctl graphql <file> --var k=v` shortcut would help.
+- The `cfctl costs` command named in `@cfcost/pricing`'s README doesn't exist. Either add it (usage from `billable-usage` or GraphQL, priced with the bundle), or correct that README.
+
 ---
 
 ## 2. Data sources and permissions
@@ -108,7 +140,7 @@ All queries are account-scoped (`viewer { accounts(filter: {accountTag}) { … }
 | Product | Dataset | Group by | Sums we keep |
 | --- | --- | --- | --- |
 | Workers | `workersInvocationsAdaptive` | `scriptName`, `datetimeHour`, `status` | `requests`, `errors`, `subrequests`, `cpuTimeUs` (or CPU quantiles × requests if the sum isn't exposed), `wallTime` |
-| Workers Logs | *Not in GraphQL as far as we know.* Use the **Workers Observability telemetry query API** (`POST /accounts/{id}/workers/observability/telemetry/query`, count grouped by `$metadata.service`) | service, hour | `events` |
+| Workers Logs | *Not in GraphQL as far as we know.* Use the **Workers Observability telemetry query API**: `POST /accounts/{id}/workers/observability/telemetry/query` (cfctl catalog id `telemetry.query`), counting events grouped by `$metadata.service`. `telemetry.keys.list` and `telemetry.values.list` find the field names. | service, hour | `events` |
 | R2 | `r2OperationsAdaptiveGroups`, `r2StorageAdaptiveGroups` | `bucketName`, `actionType` (mapped to Class A or B), hour | ops, `payloadSize`, `objectCount` (max per day) |
 | D1 | `d1AnalyticsAdaptiveGroups`, `d1StorageAdaptiveGroups` | `databaseId`, hour | `rowsRead`, `rowsWritten`, `readQueries`, `writeQueries`, storage bytes |
 | KV | `kvOperationsAdaptiveGroups`, `kvStorageAdaptiveGroups` | `namespaceId`, `actionType`, hour | reads, writes, deletes, lists, storage bytes |
@@ -125,7 +157,12 @@ If the telemetry API can't count events per script, use this fallback for Worker
 ### 2.2 Billing (Cloudflare)
 
 - **Primary number = our estimate** (usage × vendored pricing). It's available hourly, per resource.
-- **Reconciliation:** Phase 0 checks whether the account's billable usage (the dashboard page that showed 62.33M) is readable with an API token. If it is, the collector reads it daily and the dashboard shows "estimate vs billed". If it isn't, a Super Admin uploads the monthly invoice or usage CSV in the admin (Phase 4), and the dashboard shows the drift for that month.
+- **Reconciliation:** the OpenAPI spec (cfctl catalog) has three candidate endpoints. Phase 0 tries them in this order with the read token, using `cfctl call …`:
+  1. `GET /accounts/{id}/billable-usage?from&to` (`billable-usage-get-v1-account-usage`, *alpha*). It returns billable usage for a period, the current billing period when called without parameters. `/billable-usage/info` returns coverage and subscription metadata, which tells us the billing anchor day (§4.4).
+  2. `GET /accounts/{id}/billing/usage?metrics&since&until&time_delta` (`usage-analytics-get-account-billing-usage`): a time series per billable metric, Workers and KV included.
+  3. `GET|POST /accounts/{id}/billable/usage` (v2, FOCUS v1.3 cost and usage records, *alpha, restricted*). It may not be enabled for our account.
+
+  If one works, the collector reads it **daily** and the dashboard shows "estimate vs billed" per product. Whichever works becomes the source of truth for MTD, and our hourly estimate fills in the hours since the last daily read. If none works with an API token, a Super Admin uploads the monthly invoice or usage CSV in the admin (Phase 4), and the dashboard shows the drift for that month. Each endpoint's required permission (Billing Read?) is recorded in Phase 0 (Q11).
 - The **0.67M gap** between 62.33M − 20M = 42.33M and "43M billable" has to be explained in Phase 0 (rounding up to whole millions, or a different snapshot time). The golden test (§9) must reproduce the billed figure.
 - **Safety net now, without code:** in Phase 0, turn on Cloudflare's own *Usage Based Billing* notifications for the products that support them, starting with Workers.
 
@@ -440,7 +477,8 @@ admin-api binds the same D1 (`COSTS_DB`):
 | --- | --- |
 | **Pricing (unit, vitest)** | Ported upstream cases, plus golden cases for each product we use: Workers requests and CPU over the included amount; **Workers Logs 62.33M → the billed $25.80** (and explaining the 42.33M vs 43M gap); R2 Class A/B and storage; D1 rows; KV; Queues; DO GB-s; allowance edges (exactly at the included amount, one unit over); month boundaries and leap February. |
 | **Attribution (unit)** | Every worker and resource name in the inventory table resolves to the expected app/env. Every `apps.ts` entry is mapped. Suffix edge cases (`videos-staging`, `al-ummah-now-staging`, `-pr-123`). auth-tail proportional split. |
-| **GraphQL fixtures** | Sanitized live responses saved in Phase 0 under `apps/cost-monitor/test/fixtures/graphql/*.json`, one per dataset, including an error response, an empty response and partial data. Normalizers turn them into `usage_hourly` rows that match snapshots. A drift guard: the collector records the `errors` from each query in `collector_runs`, and the dashboard shows "dataset degraded". |
+| **CF client (unit)** | Ported from cfctl together with its test approach: a local mock of the Cloudflare API (as in cfctl's `test/cli.test.js`). Checks page and cursor pagination, 429 with `Retry-After`, 5xx retry limits, a 403 mapped to a `token` alert, and `success: false` envelopes. |
+| **GraphQL fixtures** | Sanitized live responses (captured with `cfctl api POST /graphql`) saved in Phase 0 under `apps/cost-monitor/test/fixtures/graphql/*.json`, one per dataset, including an error response, an empty response and partial data. Normalizers turn them into `usage_hourly` rows that match snapshots. A drift guard: the collector records the `errors` from each query in `collector_runs`, and the dashboard shows "dataset degraded". |
 | **Alert engine (unit)** | Synthetic series: flat, diurnal, single spike, sustained spike, slow ramp (no spike alert, but budget.projected fires). **Replay of the backfilled Nov 1–8 data fires `spike` for `al-ummah-web-qa`, `al-ummah-now-auth-qa` and `al-ummah-now-auth-tail` within 2 collection hours of onset.** Dedupe: 48 hourly evaluations of a firing alert send ≤ 3 notifications. Quiet hours hold a warn and pass a critical. |
 | **admin-api (integration)** | Miniflare D1 with seeded rows: role matrix (super_admin, admin, moderator, user, none) → 200 or 403 per route; settings writes create audit rows; admin-api has no route that writes usage tables. |
 | **admin-web E2E (Playwright, `apps/admin-web/e2e`)** | Against QA with the seeded costs DB: an admin sees Overview tiles and the apps matrix; a moderator gets access-denied and the nav item is hidden; a Super Admin edits a budget and sees it in audit; the Arabic locale renders `dir="rtl"`, with a reversed chart axis and translated labels (screenshot); spike drilldown loads top paths. Seeding uses the existing QA seed scripts (`apps/web/e2e/seed`), extended. |
@@ -456,16 +494,19 @@ Every phase is blocked until the owner approves this spec. Phase 0 can start as 
 
 - Create token `al-ummah-cost-monitor-read` (§2.5) and store it in the Secrets Store.
 - Turn on Cloudflare's Usage Based Billing notifications (Workers and anything else offered) to the owner's email.
-- Using cfctl (`CFCTL_READ_ONLY=1 cfctl call …/graphql`), run every query in §2.1. Record the exact field names, each dataset's retention and query-window limits, and save sanitized fixtures.
-- Prove a way to count Workers Logs per script (telemetry API), or document the fallback estimate.
-- Check whether billable usage can be read with a token, and explain the 42.33M vs 43M gap.
+- Run everything with [cfctl](https://github.com/Hamza-Labs-Core/cfctl) and the read token, with `CFCTL_READ_ONLY=1` (§1.4):
+  - `cfctl whoami`, then `cfctl status`: account inventory and scope check. Each product the token can't read shows `"no permission"`. Save the output as the starting point for the manifest.
+  - `cfctl api POST /graphql --body @q.json` for every query in §2.1. Record the exact field names and each dataset's retention and query-window limits, and save sanitized fixtures.
+- Prove a way to count Workers Logs per script with `cfctl call telemetry.query --body @q.json`, or document the fallback estimate. Read-only mode currently blocks this POST (§1.4), so run that one call without `CFCTL_READ_ONLY` and with `--dry-run` first.
+- Try the billable-usage endpoints in the order given in §2.2 (`cfctl call billable-usage-get-v1-account-usage`, `cfctl call usage-analytics-get-account-billing-usage …`). Record which works and which permission it needs, and explain the 42.33M vs 43M gap from its line items.
 - Check the Bunny billing and statistics endpoints and the pull zone list. Check the Resend plan and quota.
 - **AC:** an appendix (`docs/cost-monitoring/phase-0-findings.md`) lists every verified query and its fields, the fixtures are committed, the Workers Logs source is decided, and the stopgap notifications are on.
 
 ### Phase 1: collector, storage, attribution and a minimal overview
 
 - `packages/cost-pricing` (vendored, with gap fixes 1–3 from §1.2) and `packages/cost-attribution` (manifest plus the `apps.ts` link).
-- `apps/cost-monitor` worker, D1 `al-ummah-now-costs` and migrations, the hourly cron, the daily inventory, backfill, runs and retention. Add it to `apps.ts`.
+- `apps/cost-monitor` worker, D1 `al-ummah-now-costs` and migrations, the hourly cron, the daily inventory, backfill, runs and retention. Add it to `apps.ts`. The HTTP client is ported from cfctl's `src/client.js` (§1.4).
+- If Phase 0 found a billable-usage endpoint that works, read it daily from Phase 1 on. Don't wait for Phase 4.
 - admin-api `/api/costs/overview`, `/apps`, `/products`, guarded by role. admin-web `/costs` overview and apps matrix in English and Arabic.
 - **AC:**
   - Workers requests and Workers Logs MTD are within ±5% of Cloudflare's billable-usage page for the same day.
@@ -499,9 +540,15 @@ Every phase is blocked until the owner approves this spec. Phase 0 can start as 
 ### Phase 4: Resend, reconciliation, upstream
 
 - Resend send counters (AE data points in auth and the collector) and Resend cost.
-- Estimate vs billed reconciliation: an API if Phase 0 found one, otherwise a CSV upload.
-- Pricing PRs sent upstream to CloudFlareCostMonitor. Publish cfctl to GitHub (if the owner agrees, Q1).
-- **AC:** the overview shows every vendor; the previous month's estimate is within ±3% of the invoice, or the drift is explained per line item; the upstream PR is opened.
+- Estimate vs billed reconciliation: per-product drift view if the API was already wired in Phase 1, otherwise a CSV upload.
+- Upstream:
+  - Pricing PRs to CloudFlareCostMonitor.
+  - cfctl PRs (§1.4): telemetry reads added to `POST_READS`, a `graphql` shortcut, a runtime-neutral `cfctl/client` export, and a fix for the missing `costs` command.
+  - `scripts/cost/catalog-coverage.ts`, the weekly check for newly billable products.
+- **AC:**
+  - The overview shows every vendor.
+  - The previous month's estimate is within ±3% of the invoice, or the drift is explained per line item.
+  - The upstream PRs are opened.
 
 ### Issues
 
@@ -511,7 +558,7 @@ One issue per phase is created with labels `queue` and `blocked`, and each says 
 
 ## 11. Open questions for the owner
 
-1. **cfctl, the "Cloudflare CLI".** It isn't on GitHub. It's a local-only repo at `~/Code/Cloudflare cli` (one commit, no remote). Should it be pushed to `Hamza-Labs-Core/cfctl` (private?), so `@cfcost/pricing`'s `cfctl costs` consumer and our Phase 0 scripts reference something shared? Or is there another CLI repo you meant?
+1. **cfctl's role:** OK to send the §1.4 changes upstream to `Hamza-Labs-Core/cfctl` (telemetry reads in `POST_READS`, a `graphql` shortcut, a runtime-neutral client export, and the missing `costs` command or a README fix)? Or should cfctl stay a laptop tool, with the collector's client kept as a plain copy?
 2. **Moderators:** no access to cost data (recommended), or a read-only Overview without $ amounts (usage only)?
 3. **`www`:** which worker serves `www.alummahnow.net`? Is it `al-ummah-now-ui` (AlUmmahNowUI), the CMS (`bknd`), or the web worker?
 4. **`al-ummah-now-auth-tail`:** keep one shared tail consumer (we split it by proportion), or create `al-ummah-now-auth-tail-qa` so QA cost is exact? Does QA need a tail consumer at all, since it doubles invocations and logs?
@@ -521,4 +568,4 @@ One issue per phase is created with labels `queue` and `blocked`, and each says 
 8. **QA collector:** fixtures only (default), or live account data every 6h?
 9. **Budgets:** starting monthly budgets per env. Suggested: prod $X, stage $5, QA $10, account $Y. Who receives alerts, and in which time zone or language?
 10. **Hamza Labs workers on this account** (`cfcost-*`, and any others): show them as `hamza-labs` and leave them out of Al Ummah Now totals, or move them to another account?
-11. **Billing permission:** if billable usage needs `Billing: Read` (which also exposes payment details), is that acceptable, or should we reconcile by monthly CSV upload?
+11. **Billing permission:** if the billable-usage endpoints (§2.2) need `Billing: Read` (which also exposes payment details), is that acceptable, or should we reconcile by monthly CSV upload?
