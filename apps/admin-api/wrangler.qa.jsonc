@@ -34,6 +34,10 @@
     {
       "binding": "global_settings",
       "bucket_name": "global-settings-qa"
+    },
+    {
+      "binding": "community_posts",
+      "bucket_name": "community-posts-qa"
     }
   ],
 
@@ -50,7 +54,9 @@
     "ENVIRONMENT": "qa",
     "LOG_LEVEL": "debug",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
-    "Issuer": "https://auth.qa.alummahnow.net"
+    "Issuer": "https://auth.qa.alummahnow.net",
+    // Shown in admin when D1 has no cap; keep equal to the processor's value
+    "AI_MODERATION_DAILY_NEURON_CAP": "10000"
   },
 
   "secrets_store_secrets": [
