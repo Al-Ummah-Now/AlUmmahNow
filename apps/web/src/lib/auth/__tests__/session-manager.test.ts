@@ -65,7 +65,7 @@ function writeSession(data: unknown) {
 function serveApi(channelsByUser: Record<string, ReturnType<typeof channel>[]>, delays = { profile: 0, channels: 0 }) {
   apiRequestServer.mockImplementation(async (opts: { url: string }, getAuth: () => Promise<{ userId: string }>) => {
     const { userId } = await getAuth();
-    if (opts.url.includes('/api/profiles/')) {
+    if (opts.url.endsWith('/api/profile')) {
       await new Promise((r) => setTimeout(r, delays.profile));
       return { profile: { displayName: `Name of ${userId}`, avatarUrl: `https://img/${userId}.png` } };
     }
