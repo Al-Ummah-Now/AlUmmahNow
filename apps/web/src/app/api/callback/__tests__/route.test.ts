@@ -44,6 +44,11 @@ describe('GET /api/callback', () => {
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/ar/auth/error' });
   });
 
+  it('keeps the Arabic locale from the query', async () => {
+    const res = await GET(request('https://videos.example/api/callback?locale=ar&error=access_denied'));
+    expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/ar/auth/error' });
+  });
+
   it('treats a callback without a code as an error', async () => {
     const res = await GET(request('https://videos.example/api/callback?locale=en'));
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/en/auth/error' });
@@ -54,6 +59,12 @@ describe('GET /api/callback', () => {
     exchange.mockResolvedValue({ err: new Error('invalid_grant') });
     const res = await GET(request('https://videos.example/api/callback?code=abc&locale=en'));
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/en/auth/error' });
+    expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback');
+  });
+
+  it('exchanges with the exact redirect_uri used at authorize (bare callback; locale is in a cookie)', async () => {
+    exchange.mockResolvedValue({ err: new Error('invalid_grant') });
+    await GET(request('https://videos.example/api/callback?code=abc', { auth_locale: 'ar' }));
     expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback');
   });
 });

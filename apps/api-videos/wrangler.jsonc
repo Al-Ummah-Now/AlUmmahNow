@@ -187,12 +187,12 @@
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "internal-api-key"
 	  },
-	{
+	  {
 		// Bunny CDN token authentication key of legacy library 400189 (vz-215a1ffd)
 		"binding": "BUNNY_TOKEN_KEY",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "bunny-stream-token-key"
-	}
+	  }
 	],
 	/**
 	 * Environment Variables

@@ -14,7 +14,7 @@ import {
 } from "@al-ummah/shared-types";
 
 // Cache for translations to avoid redundant fetches
-const translationsCache = new Map<string, { data: TranslationData; timestamp: number }>();
+const translationsCache = new Map<string, { data: TranslationData | null; timestamp: number }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
 
 export interface TranslationsResponse {
@@ -55,6 +55,13 @@ export async function getTranslations(
         revalidate: 3600, // Next.js cache revalidation (1 hour)
       },
     });
+
+    if (response.status === 404) {
+      // No edited translations stored for this locale: the static ones apply
+      logger.debug('No stored translations; using static', { locale });
+      translationsCache.set(locale, { data: null, timestamp: Date.now() });
+      return null;
+    }
 
     if (!response.ok) {
       logger.error('Failed to fetch translations', { locale, status: response.status });
