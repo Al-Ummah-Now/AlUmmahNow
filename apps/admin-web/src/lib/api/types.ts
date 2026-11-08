@@ -6,6 +6,8 @@
  * files can only export async functions.
  */
 
+import type { AiModerationConfig, AiUsageDay, ModerationCategoryPolicy, ModerationSignal } from '@al-ummah/shared-types';
+
 import type {
   Report,
   ReportStatus,
@@ -53,4 +55,56 @@ export interface ActionResponse {
     action: string;
     notes?: string;
   };
+}
+
+// ---------- AI moderation (Epic 28) ----------
+
+export interface AiSignalList {
+  signals: ModerationSignal[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AiAuditRow {
+  id: string;
+  action: string;
+  actor_type: 'ai' | 'user';
+  actor_id: string | null;
+  model: string | null;
+  category: string | null;
+  score: number | null;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface AiSubjectContent {
+  available: boolean;
+  text: string | null;
+  hidden: boolean;
+  hiddenByModeration: boolean;
+  canHide: boolean;
+}
+
+export interface AiSignalDetail {
+  signal: ModerationSignal;
+  actions: AiAuditRow[];
+  content: AiSubjectContent | null;
+}
+
+export type AiConfigView = AiModerationConfig & { updatedAt: string | null; updatedBy: string | null; canEdit?: boolean };
+
+export interface AiConfigPatch {
+  enabled?: boolean;
+  dailyNeuronCap?: number;
+  extensionsEnabled?: boolean;
+  policies?: Record<string, Partial<ModerationCategoryPolicy>>;
+}
+
+export interface AiUsageView {
+  days: number;
+  since: string;
+  rows: AiUsageDay[];
+  today: { day: string; neurons: number; usd: number };
+  dailyNeuronCap: number | null;
 }

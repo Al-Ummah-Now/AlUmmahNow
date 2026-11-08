@@ -10,6 +10,11 @@ import type {
   TakeActionParams,
   ActionResponse,
   IndexStats,
+  AiSignalList,
+  AiSignalDetail,
+  AiConfigView,
+  AiConfigPatch,
+  AiUsageView,
 } from './types';
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL || 'http://127.0.0.1:3090';
@@ -133,4 +138,59 @@ export async function getIndexStatus(): Promise<IndexStats> {
   const body = await requestAdmin('/api/indices?operation=status');
   const stats = body.stats as IndexStats | undefined;
   return stats ?? { indices: [], totalVideos: 0 };
+}
+
+// ---------- AI moderation (Epic 28) ----------
+
+export interface AiSignalFilters {
+  review_status?: string | undefined;
+  decision?: string | undefined;
+  surface?: string | undefined;
+  language?: string | undefined;
+  category?: string | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}
+
+export async function listAiSignals(filters: AiSignalFilters = {}): Promise<AiSignalList> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  }
+  const query = params.toString();
+  return fetchAdmin<AiSignalList>(`/api/moderation/ai/signals${query ? `?${query}` : ''}`);
+}
+
+export async function getAiSignal(id: string): Promise<AiSignalDetail> {
+  return fetchAdmin<AiSignalDetail>(`/api/moderation/ai/signals/${encodeURIComponent(id)}`);
+}
+
+async function mutate<T>(endpoint: string, method: string, body: unknown): Promise<ActionResult<T>> {
+  try {
+    const data = await fetchAdmin<T>(endpoint, { method, body: JSON.stringify(body) });
+    return { ok: true, data };
+  } catch (error) {
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function reviewAiSignal(id: string, verdict: 'agree' | 'disagree', note?: string): Promise<ActionResult<unknown>> {
+  return mutate(`/api/moderation/ai/signals/${encodeURIComponent(id)}/review`, 'POST', { verdict, ...(note ? { note } : {}) });
+}
+
+export async function setAiSignalVisibility(id: string, hidden: boolean, reason?: string): Promise<ActionResult<unknown>> {
+  return mutate(`/api/moderation/ai/signals/${encodeURIComponent(id)}/visibility`, 'POST', { hidden, ...(reason ? { reason } : {}) });
+}
+
+export async function getAiConfig(): Promise<AiConfigView> {
+  return fetchAdmin<AiConfigView>('/api/moderation/ai/config');
+}
+
+export async function updateAiConfig(patch: AiConfigPatch): Promise<ActionResult<AiConfigView>> {
+  return mutate<AiConfigView>('/api/moderation/ai/config', 'PUT', patch);
+}
+
+export async function getAiUsage(days = 30): Promise<AiUsageView> {
+  return fetchAdmin<AiUsageView>(`/api/moderation/ai/usage?days=${days}`);
 }
