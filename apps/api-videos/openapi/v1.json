@@ -10061,6 +10061,41 @@
         }
       }
     },
+    "/api/v1/entitlements": {
+      "get": {
+        "tags": [
+          "Entitlements"
+        ],
+        "summary": "A subject's plan, resolved entitlements and usage",
+        "operationId": "get_EntitlementsGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "channel:{id} or user:{id}"
+            },
+            "required": true,
+            "description": "channel:{id} or user:{id}",
+            "name": "subject",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved entitlements"
+          },
+          "400": {
+            "description": "Invalid subject"
+          },
+          "403": {
+            "description": "Not your subject"
+          },
+          "404": {
+            "description": "Channel not found"
+          }
+        }
+      }
+    },
     "/api/v1/explore": {
       "get": {
         "tags": [
