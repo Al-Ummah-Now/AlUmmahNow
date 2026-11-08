@@ -68,6 +68,16 @@
 		}
 	],
 
+	// Secrets Store: authenticates /broadcast calls to the websocket server.
+	// Needs wrangler 4; wrangler 3 silently drops secrets_store_secrets.
+	"secrets_store_secrets": [
+		{
+			"binding": "INTERNAL_API_KEY",
+			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+			"secret_name": "internal-api-key"
+		}
+	],
+
 	// Environment variables
 	"secrets_store_secrets": [
 		{

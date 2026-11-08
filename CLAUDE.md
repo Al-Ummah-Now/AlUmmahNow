@@ -748,7 +748,7 @@ Each app has its own detailed documentation:
 - **Authentication**: JWT with OpenAuth
 - **Features**: Channel subscriptions, presence tracking, rate limiting, broadcasting
 - **KV Namespaces**: `al-ummah-now-analytics-kv` (presence state)
-- **Deployment**: `wss://ws.alummahnow.net` (production)
+- **Deployment**: `wss://realtime.alummahnow.net/ws` (production; custom domain on `al-ummah-now-comms`)
 
 ### Admin API (`apps/admin-api/`)
 - **Overview**: `apps/admin-api/README.md`

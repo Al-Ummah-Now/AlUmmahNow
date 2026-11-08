@@ -122,6 +122,26 @@ export const APPS: AppRule[] = [
 		},
 	},
 	{
+		app: 'scheduler',
+		configPath: 'apps/scheduler/wrangler.jsonc',
+		dir: 'apps/scheduler',
+		deployFlags: 'any',
+		production: {
+			env: null,
+			name: 'al-ummah-scheduler',
+			vars: { WEBSOCKET_URL: 'https://realtime.alummahnow.net' },
+			requiredBindings: [
+				INTERNAL_API_KEY,
+				{ kind: 'queue_producer', name: 'QUEUE' },
+				{ kind: 'r2_buckets', name: 'VIDEOS' },
+				{ kind: 'r2_buckets', name: 'SCHEDULED_VIDEOS' },
+				{ kind: 'kv_namespaces', name: 'SCHEDULER_LOCKS' },
+				{ kind: 'durable_objects', name: 'SCHEDULER_LOCK' },
+			],
+			...PROD_GUARDS,
+		},
+	},
+	{
 		app: 'admin-api',
 		configPath: 'apps/admin-api/wrangler.jsonc',
 		dir: 'apps/admin-api',
