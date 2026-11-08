@@ -34,6 +34,7 @@ export * from './d1';
 
 // Moderation types
 export * from './moderation';
+export * from './ai-moderation';
 
 // Export schemas
 export * from './schemas/chapter';
