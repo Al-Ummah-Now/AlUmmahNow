@@ -1037,11 +1037,13 @@ jobs:
           echo ""
           echo "Note: Some workers may not exist if deployment failed earlier."
 
-  # Deploy to QA Environment (develop branch only, requires approval)
+  # Deploy to QA from main (owner rule: fix on main, deploy QA and prod from main).
+  # Runs on every push to main and on manual dispatch from main; never from
+  # develop, integrate/* or hotfix branches. Prod stays manual (deploy-production).
   deploy-qa:
-    needs: [build-web, build-admin-web, validate-api, validate-processor, validate-websocket, validate-admin-api]
+    needs: [test, release-checks, build-web, build-admin-web, validate-api, validate-processor, validate-websocket, validate-admin-api]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     environment: qa
     steps:
       - uses: actions/checkout@v4
@@ -1090,6 +1092,7 @@ jobs:
       - name: Deploy API to QA
         run: |
           cd apps/api-videos
+          pnpm wrangler d1 migrations apply al-ummah-now-search-qa --remote --config wrangler.qa.jsonc
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -1098,6 +1101,7 @@ jobs:
       - name: Deploy Processor to QA
         run: |
           cd apps/processor
+          pnpm wrangler d1 migrations apply al-ummah-now-notifications-qa --remote --config wrangler.qa.jsonc
           pnpm wrangler deploy --config wrangler.qa.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
