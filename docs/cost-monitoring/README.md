@@ -13,7 +13,7 @@ In early November 2026, Workers Observability Logs reached **62.33M events month
 | Worker (Nov 1–8) | Invocations | App / env (per §3) |
 | --- | --- | --- |
 | `al-ummah-web-qa` | 3.4M | web / qa |
-| `al-ummah-now-auth-tail` | 3.2M | auth / **shared** (tail consumer of prod and QA auth) |
+| `al-ummah-now-auth-tail` | 3.2M | auth / **shared**: the Baselime integration's tail consumer for prod and QA auth. AlUmmahNowAuth#213 detaches it (§3.3). |
 | `al-ummah-now-auth-qa` | 3.2M | auth / qa |
 | `videos-qa` | 1.9M | api / qa |
 
@@ -175,7 +175,7 @@ If the telemetry API can't count events per script, use this fallback for Worker
   2. `GET /accounts/{id}/billing/usage?metrics&since&until&time_delta` (`usage-analytics-get-account-billing-usage`): a time series per billable metric, Workers and KV included.
   3. `GET|POST /accounts/{id}/billable/usage` (v2, FOCUS v1.3 cost and usage records, *alpha, restricted*). It may not be enabled for our account.
 
-  If one works, the collector reads it **daily** and the dashboard shows "estimate vs billed" per product. Whichever works becomes the source of truth for MTD, and our hourly estimate fills in the hours since the last daily read. If none works with an API token, a Super Admin uploads the monthly invoice or usage CSV in the admin (Phase 4), and the dashboard shows the drift for that month. Each endpoint's required permission (Billing Read?) is recorded in Phase 0 (Q7).
+  If one works, the collector reads it **daily** and the dashboard shows "estimate vs billed" per product. Whichever works becomes the source of truth for MTD, and our hourly estimate fills in the hours since the last daily read. If none works with an API token, a Super Admin uploads the monthly invoice or usage CSV in the admin (Phase 4), and the dashboard shows the drift for that month. Each endpoint's required permission (Billing Read?) is recorded in Phase 0 (Q5).
 - The **0.67M gap** between 62.33M − 20M = 42.33M and "43M billable" has to be explained in Phase 0 (rounding up to whole millions, or a different snapshot time). The golden test (§9) must reproduce the billed figure.
 - **Safety net now, without code:** in Phase 0, turn on Cloudflare's own *Usage Based Billing* notifications for the products that support them, starting with Workers.
 
@@ -259,7 +259,7 @@ Each secret is bound **only** to the cost-monitor worker.
 
    The suffix rule only assigns an **env** to something already in the manifest. It never brings a resource into scope.
 2. **Not in the manifest** → out of scope. Its usage is dropped in memory (§2.1), with one exception (point 3).
-3. **"Looks like ours" check.** This makes sure a new worker of ours isn't missed silently. The daily inventory sync tests every *unmatched* resource name against a short list of patterns:
+3. **"Looks like ours" check.** This makes sure a new worker of ours isn't missed silently. The daily inventory sync tests every *unmatched* resource name (not in the manifest, and not on its `ignore` or `retired` lists) against a short list of patterns:
    - names starting `al-ummah`, `alummah` or `al-ummah-now`
    - names containing `alummahnow`
    - the base name of an existing manifest entry plus an env suffix (for example `videos-dev`, or `al-ummah-now-profile-preview`)
@@ -285,10 +285,10 @@ Inventory as of today, from this repo's wrangler configs plus AlUmmahNowAuth, Al
 | scheduler | `al-ummah-scheduler` | `…-stage` | `…-qa` | DO `SCHEDULER_LOCK`, R2 `scheduled-videos[-stage\|-qa]` |
 | realtime | `al-ummah-now-comms` | `…-stage` | `…-qa` | DO `WEBSOCKET_DO`, R2 `al-ummah-now-messages[-stage\|-qa]` |
 | admin | `al-ummah-admin-web`, `al-ummah-admin-api` | `…-stage` | `…-qa` | `al-ummah-admin-web-dev` (dev), D1 `al-ummah-now-reports[-stage\|-qa]` |
-| auth | `al-ummah-now-auth`, `al-ummah-now-auth-admin`, `al-ummah-now-audit-consumer` | `…-stage` | `…-qa` | **`al-ummah-now-auth-tail` = shared** (tail consumer of prod and QA auth), D1 `al-ummah-now-d1[-stage\|-qa]`, queue `audit-events[-stage\|-qa]`, AE `auth_events*` |
+| auth | `al-ummah-now-auth`, `al-ummah-now-auth-admin`, `al-ummah-now-audit-consumer` | `…-stage` | `…-qa` | **`al-ummah-now-auth-tail` = shared** (Baselime tail consumer; follows AlUmmahNowAuth main, see below), D1 `al-ummah-now-d1[-stage\|-qa]`, queue `audit-events[-stage\|-qa]`, AE `auth_events*` |
 | profile | `al-ummah-now-profile` | `…-stage` | `…-qa` | |
-| cms | `bknd` | | | D1 `al-ummah-now-cms`, R2 `al-ummah-now-cms` |
-| www | `al-ummah-now-ui`? | | | see Q1 |
+| www (repo AlUmmahNowUI, `www.alummahnow.net` and `alummahnow.net`) | `al-ummah-now-ui` (today) → `al-ummah-now-www` | `al-ummah-now-www-stage` | `al-ummah-now-www-qa` | KV `al-ummah-now-www-snapshot[-stage\|-qa]`; service binding to cms |
+| cms (repo AlUmmahNowCMS, www's admin at `cms.alummahnow.net`) | `bknd` (today) → `al-ummah-now-cms` | `al-ummah-now-cms-stage` | `al-ummah-now-cms-qa` | D1 `al-ummah-now-cms[-stage\|-qa]`, R2 `al-ummah-now-cms[-stage\|-qa]` |
 | api (shared storage) | R2 `videos`, `channels`, `profiles`, `playlists`, `subtitles`, `watch-history`, `community-posts`, `channel-sections`, `channel-tabs`, `global-settings`, `upload-defaults`, `reports` | `-stage` variants | `-qa` variants | `videos-preview`, `videos-staging` |
 | api (Bunny) | Stream library (prod) and its pull zone | shares the QA library, `[stage] ` prefix | Stream library (qa) and its pull zone | library ids filled in during Phase 0 |
 
@@ -296,7 +296,19 @@ Not in the table, and so out of scope: `cfcost-*` and every other Hamza Labs pro
 
 **Shared resources.** R2 buckets are written by several apps (web, api, admin-api, scheduler all bind `videos`). Storage and operations are attributed to the **owning app** named in the manifest (`api` for the content buckets). The R2 dataset has no per-caller split, so we don't pretend to split it.
 
-`al-ummah-now-auth-tail` stays `auth/shared`. Its invocations are split between prod and QA in proportion to `al-ummah-now-auth` versus `al-ummah-now-auth-qa` invocations in the same hour, which is exact for a tail consumer. The UI marks the split as derived. Q2 asks whether to give QA its own tail worker instead.
+**www and cms (decided):** both are ours, with entries for prod, stage and QA.
+- **Today:** prod runs `al-ummah-now-ui` and `bknd`, from the current `wrangler.json` on each repo's main.
+- **v1:** the open PRs (AlUmmahNowUI#7, AlUmmahNowCMS#12) rename the workers to `al-ummah-now-www[-stage|-qa]` and `al-ummah-now-cms[-stage|-qa]`, and add the stage and QA resources (`docs/PLAN.md` in both repos).
+- **In the manifest:** the old and new names both map to the same app and env, so cost carries across the rename. Once the old workers are deleted from the account, the old names move to a `retired` list. They stay retired so the "looks like ours" check doesn't flag them while history is still shown. The v1 names are added in Phase 1 whether or not those PRs have merged, because the manifest ignores names that don't exist yet.
+
+**`al-ummah-now-auth-tail` (decided: follow AlUmmahNowAuth main):**
+- **What it is:** the Baselime integration's tail worker. It runs once per auth invocation (prod and QA) and forwards sampled events to Baselime, which is now part of Workers Observability.
+- **The fix in progress:** AlUmmahNowAuth#213, open as of 2026-11-08, sets `"tail_consumers": []` on QA and prod (stage already had none). It also sets `head_sampling_rate` to 0.1 on QA and stage for auth, profile, admin and audit-consumer. Deleting the worker from the account is left to the owner.
+- **How the manifest follows it:**
+  - **While `tail_consumers` on main still lists it:** the manifest keeps `al-ummah-now-auth-tail` as `auth/shared`. Its usage is split between prod and QA in proportion to `al-ummah-now-auth` versus `al-ummah-now-auth-qa` invocations in the same hour. That's exact for a tail consumer, and the UI marks the split as derived.
+  - **Once #213 (or whatever replaces it) lands on main:** the entry stays only so the remaining cost is visible until it drops to zero, and the proportional split is removed. When the worker is deleted, the name moves to `retired`.
+  - **If main instead introduces per-env tail workers** (for example `al-ummah-now-auth-tail-qa`): they get ordinary per-env entries, and the shared split is removed.
+- **Keeping it in sync:** the Phase 1 manifest task records the AlUmmahNowAuth main commit it was checked against. The weekly drift report (§7.2) flags any `al-ummah-now-auth-tail*` that appears or disappears in the account, so the manifest can't fall behind main without someone noticing.
 
 ### 3.4 Account-level charges: only our share (owner decision)
 
@@ -399,7 +411,7 @@ The daily cron prunes old rows in batches of 5k.
   - *Trailing*: MTD + (average of the last 7 full days × days left). This one drives the budget-overrun alerts, because it reacts to fixes and to new spikes.
 - **Included allowance:** per product, *our* MTD usage as a % of the allowance, plus the derived **account exhaustion date** at the trailing rate (§3.4). No account totals are shown.
 - **Unit economics:** cost per 1K views and cost per monthly active user (MAU) = prod cost ÷ (`kpi_daily.views` ÷ 1000) and ÷ MAU. QA and stage are left out of the numerator.
-  - Source: the platform's analytics rollups (views) and auth's active-user counts. Phase 3 picks the exact source; see Q3.
+  - Source: the platform's analytics rollups (views) and auth's active-user counts. Phase 3 picks the exact source; see Q1.
   - Shown monthly and over the trailing 30 days.
 
 ---
@@ -479,7 +491,7 @@ Rules decide when an alert **fires** and record it in `alerts`, whether or not a
   1. A banner and count badge on admin-web's Costs nav, read from `alerts`, is shown to every admin who opens Costs, subscribed or not. Seeing the dashboard isn't a notification.
   2. **Subscribers with `via_inapp`** also get a platform notification: a `NotificationCreate` queue message (processor writes it to `NOTIFICATIONS_DB`) to their `user_id`. That needs new key `costAlert` and category `admin` in `packages/shared-types/src/notifications.ts`, plus translations. `action_url` points to the admin page.
   3. The `admin` category isn't in the user's general notification settings. Opting in and out happens only through cost subscriptions.
-  4. admin-web has no bell today. Q5 asks whether to add one or whether the videos-site bell is enough.
+  4. admin-web has no bell today. Q3 asks whether to add one or whether the videos-site bell is enough.
 
 ### 6.4 Dedupe, escalation, quiet hours
 
@@ -515,7 +527,7 @@ admin-api binds the same D1 (`COSTS_DB`):
 
 **Environments:**
 - One prod collector covers all of our envs (prod, stage, QA, preview, dev), since they share the account.
-- A QA deployment (`al-ummah-cost-monitor-qa`, D1 `al-ummah-now-costs-qa`) runs the same code, either on recorded fixtures (default) or against the live account every 6h, with alerts going only to QA subscribers. See Q6.
+- A QA deployment (`al-ummah-cost-monitor-qa`, D1 `al-ummah-now-costs-qa`) runs the same code, either on recorded fixtures (default) or against the live account every 6h, with alerts going only to QA subscribers. See Q4.
 - Add the app to `scripts/release/apps.ts` with its required bindings so `check:config` guards it.
 
 ### 7.2 Crons
@@ -566,7 +578,7 @@ admin-api binds the same D1 (`COSTS_DB`):
 | Layer | What |
 | --- | --- |
 | **Pricing (unit, vitest)** | Ported upstream cases, plus golden cases for each product we use: Workers requests and CPU over the included amount; **Workers Logs 62.33M → the billed $25.80** (and explaining the 42.33M vs 43M gap); R2 Class A/B and storage; D1 rows; KV; Queues; DO GB-s; allowance edges (exactly at the included amount, one unit over); month boundaries and leap February. |
-| **Attribution and scope (unit)** | Every worker and resource name in the inventory table resolves to the expected app/env. Every `apps.ts` entry and every `apps/*/wrangler*.jsonc` name in this repo is in the manifest. Suffix edge cases (`videos-staging`, `al-ummah-now-staging`, `-pr-123`). auth-tail proportional split. **Scope:** a fixture inventory with `cfcost-api-qa`, `zajel-*`, `tamma-*`, `maktaba-*` and `daleel-*` produces zero stored rows for them. `al-ummah-now-newthing` and `videos-dev` (unmatched) go to `candidate_resources` with no usage. A name on the `ignore` list doesn't. |
+| **Attribution and scope (unit)** | Every worker and resource name in the inventory table resolves to the expected app/env. Every `apps.ts` entry and every `apps/*/wrangler*.jsonc` name in this repo is in the manifest. Suffix edge cases (`videos-staging`, `al-ummah-now-staging`, `-pr-123`). www and cms: `al-ummah-now-ui` and `al-ummah-now-www` both resolve to `www/prod`, `bknd` and `al-ummah-now-cms` to `cms/prod`, and the `-stage`/`-qa` names to their envs. Retired names don't raise candidates. auth-tail proportional split while it's attached, no split once it's detached. **Scope:** a fixture inventory with `cfcost-api-qa`, `zajel-*`, `tamma-*`, `maktaba-*` and `daleel-*` produces zero stored rows for them. `al-ummah-now-newthing` and `videos-dev` (unmatched) go to `candidate_resources` with no usage. A name on the `ignore` list doesn't. |
 | **Our-share method (unit)** | Proportional share with the account inside the allowance (share $0, usage % shown), at the allowance edge, and over it. Platform-fee split, including the $0-cost fallback. Totals are never written: a spy on D1 writes finds no account-level figure. |
 | **Subscriptions (unit and integration)** | No subscriptions → firing alerts are recorded, nothing is delivered, and the banner shows. Scope filtering (env and app). Minimum severity. A subscriber with overlapping subscriptions gets one delivery per channel. Quiet hours per subscriber time zone (including a DST change). Language picks the template. Role revoke → subscription deleted and audited. Unverified for 30 days → paused. A moderator or a non-self `user_id` → 403. |
 | **CF client (unit)** | Ported from cfctl together with its test approach: a local mock of the Cloudflare API (as in cfctl's `test/cli.test.js`). Checks page and cursor pagination, 429 with `Retry-After`, 5xx retry limits, a 403 mapped to a `token` alert, and `success: false` envelopes. |
@@ -667,14 +679,12 @@ One issue per phase, labelled `queue` and `blocked`. Phases 0–4 wait for owner
 
 ## 11. Open questions for the owner
 
-1. **`www`:** which worker serves `www.alummahnow.net`? Is it `al-ummah-now-ui` (AlUmmahNowUI), the CMS (`bknd`), or the web worker? Its manifest entry depends on the answer.
-2. **`al-ummah-now-auth-tail`:** keep one shared tail consumer (we split it by proportion), or create `al-ummah-now-auth-tail-qa` so QA cost is exact? Does QA need a tail consumer at all, since it doubles invocations and logs?
-3. **Unit economics source:** which numbers count as "views" and "active users": video analytics daily rollups and auth's MAU, or something else?
-4. **Budgets:** starting monthly budgets per env (our share). Suggested: prod $X, stage $5, QA $10, total $Y.
-5. **In-app channel:** is the videos-site bell (notifications system) plus an admin-web banner enough for in-app subscribers, or should admin-web get its own bell?
-6. **QA collector:** fixtures only (default), or live account data every 6h?
-7. **Billing permission:** if the billable-usage endpoints (§2.2) need `Billing: Read` (which also exposes payment details), is that acceptable, or should we reconcile by monthly CSV upload?
-8. **Phase 5 display:** should channel owners see **estimated $** or only usage (GB stored, hours delivered)? The default in §12.6 is usage first, with estimated $ shown behind a flag until the numbers are trusted.
+1. **Unit economics source:** which numbers count as "views" and "active users": video analytics daily rollups and auth's MAU, or something else?
+2. **Budgets:** starting monthly budgets per env (our share). Suggested: prod $X, stage $5, QA $10, total $Y.
+3. **In-app channel:** is the videos-site bell (notifications system) plus an admin-web banner enough for in-app subscribers, or should admin-web get its own bell?
+4. **QA collector:** fixtures only (default), or live account data every 6h?
+5. **Billing permission:** if the billable-usage endpoints (§2.2) need `Billing: Read` (which also exposes payment details), is that acceptable, or should we reconcile by monthly CSV upload?
+6. **Phase 5 display:** should channel owners see **estimated $** or only usage (GB stored, hours delivered)? The default in §12.6 is usage first, with estimated $ shown behind a flag until the numbers are trusted.
 
 ---
 
@@ -759,7 +769,7 @@ Mapping our video id to the provider id: video metadata holds the Bunny `guid` (
 - A new **"Usage & cost"** tab in channel analytics, with a month picker.
 - Tiles: storage (GB, est. $), delivery (hours watched, GB delivered where known, est. $), encoding ("included" on Bunny).
 - A daily stacked chart, and a per-video table (title, size, watch hours, est. $), sorted by cost and linking to each video's analytics.
-- Default display is **usage first**. Estimated $ is shown only if Q8 approves it, behind a flag such as `studio.costs.dollars`.
+- Default display is **usage first**. Estimated $ is shown only if Q6 approves it, behind a flag such as `studio.costs.dollars`.
 - A short "How this is estimated" note: provider, allocation by size and watch time, daily refresh.
 - Arabic and English with RTL charts, as in §5.
 - **Empty state:** "Cost data appears once your videos are linked to your channel." This is what every creator sees until #245 is done.
@@ -783,3 +793,5 @@ Mapping our video id to the provider id: video metadata holds the Bunny `guid` (
 | 4 | **Phase 5: per-channel cost** for channel owners. Bunny now, swappable for Cloudflare later, depends on #245. | §12, Phase 5 issue |
 | 5 | **Bunny key:** Secrets Store only, bound only to the scheduled cost worker (no public route), GET-only through a path allowlist, per-library keys where Bunny offers them. No blocker found. | §2.3, §8 |
 | 6 | **cfctl changes go upstream** to `Hamza-Labs-Core/cfctl` in Phase 4 (telemetry reads, `graphql` shortcut, Worker-friendly client export), so both repos share one client. | §1.4, Phase 4 |
+| 7 | **www and cms are ours** (closes the old `www` question). `www.alummahnow.net` is served by `al-ummah-now-ui` (repo AlUmmahNowUI), renamed `al-ummah-now-www` in v1. `bknd` (repo AlUmmahNowCMS), renamed `al-ummah-now-cms` in v1, is www's admin at `cms.alummahnow.net`. Both get manifest entries for prod, stage and QA. | §3.3 table and notes, §9 |
+| 8 | **auth-tail follows AlUmmahNowAuth main** (closes the old auth-tail question). The cost-cut work decides it (AlUmmahNowAuth#213, open: detach the Baselime tail worker and sample QA and stage at 0.1). The manifest follows whatever lands on main: shared split while it's attached, no split after it's detached, per-env entries if it's split, retired after it's deleted. | §0, §3.3, §9 |
