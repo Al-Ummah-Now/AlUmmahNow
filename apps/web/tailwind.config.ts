@@ -1,3 +1,5 @@
+const fanousBrand = require("../../packages/fanous-tokens/generated/web/brand.cjs");
+
 /** @type {import('tailwindcss').Config} */
 
 module.exports = {
@@ -22,9 +24,9 @@ module.exports = {
           text: "#000000",
           label: "#aaaaaa",
           bg: "#ffffff",
-          50: "#ffa037",
+          50: fanousBrand.lantern,
           100: "#f6e196",
-          150: "#8e6c53",
+          150: fanousBrand.earth,
           400: "#888888",
           500: "#092735",
           900: "#091f29",
