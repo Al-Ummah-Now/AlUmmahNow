@@ -70,21 +70,13 @@ A fix tested on QA isn't the code users get, and prod hotfixes made on `main` ar
 
 **Target (both repos):** PR → CI → QA (deployed from the PR, or from `main` after merge) → stage → promote to prod. There are no long-lived integration branches.
 
+**Branch rule (owner, binding).** Always fix on `main` and always deploy from `main`, QA included. No fix lands on `integrate/qa-features` or `develop`. Stage-then-promote is the target path to prod, but main's fixes and deploys never wait for it. Prod switches to it once it works (phase 7).
+
 **Getting there** (PLAN phase C):
 
-1. **Forward-port.** Merge `main` into `integrate/qa-features`, so integrate contains every prod hotfix. Where integrate already has an equivalent fix (#188, #197, #205, the Bunny file-name and URL-field signing), keep integrate's version. Each hotfix's regression test must pass on QA, which means equivalence is checked by behaviour, not by commit subject.
-
-   Missing from integrate today:
-   - #209: sign-in `redirect_uri`
-   - #214: profile loop, prod API CORS, quiet missing translations
-   - legacy Bunny library URL signing
-   - bulk-delete ownership check
-   - CI on Node 22 and `ubuntu-24.04`
-   - Seed QA workflow registration
-
-   Until step 3 is done, every prod hotfix lands on both branches.
-2. **Promote through stage.** Integrate's code reaches prod only through the stage-then-promote path (section 5.2), as one release. It goes out only after stage passes the full E2E, including R1 sign-up → code → sign-in for web, profile and admin, and the data steps below. `main` then fast-forwards to the promoted commit.
-3. **Single trunk.** QA deploys from `main`, either on merge or as PR previews. PRs target `main`. `integrate/qa-features` and `develop` are frozen, tagged (`archive/integrate-qa-features`, `archive/develop`), removed from every workflow trigger, and deleted.
+1. **Converge now: land integrate into `main`.** A single PR into `main` (#217) merges `integrate/qa-features` together with main's hotfixes (#188, #197, #205, #209, #214, #211, #218, Bunny signing, bulk-delete ownership). Where both branches fixed the same thing, integrate's version stays, but only if the behaviour matches. Where main changed later (for example, #218's admin role helpers), the merge resolves toward main. Merging deploys nothing, because prod deploy is manual (`workflow_dispatch`).
+2. **QA deploys from `main`.** Once main contains integrate's code, the QA deploy builds from `main`, on merge or as PR previews. Then `integrate/qa-features` and `develop` are frozen, tagged (`archive/integrate-qa-features`, `archive/develop`), removed from every workflow trigger, and deleted.
+3. **Prod from converged `main`.** Each app deploys to prod from `main`. The prod data steps below run first. Until stage-then-promote works, a prod deploy is gated by the QA E2E and the release regressions passing on `main`, plus the prod smoke. After that, every prod deploy goes through stage.
 
 **Prod data integrate needs.** Both are expand-only: the code serving prod today doesn't read either one, so they can run before the promote and survive a rollback.
 
@@ -149,7 +141,7 @@ Required checks, both repos:
 3. Data checks (section 6): migration immutability, schema snapshot, data-contract snapshot.
 4. Config checks (section 8): every `env.production` and `env.stage` has the right `ENVIRONMENT`, issuer, routes and required bindings, and no test-only bindings in production.
 5. Build every deployable app (catches build-only breakage).
-6. E2E against QA (auth: the existing `qa-e2e.yml`, now including the regression specs; AlUmmahNow: `e2e-tests.yml` and `release-e2e.yml`. Until phase C finishes, these also run on PRs into `integrate/*`).
+6. E2E against QA (auth: the existing `qa-e2e.yml`, now including the regression specs; AlUmmahNow: `e2e-tests.yml` and `release-e2e.yml`. PRs target `main`. The `integrate/*` triggers go away in phase C3).
 
 Runners: `ubuntu-24.04` for anything that installs Playwright browsers (`ubuntu-latest` = 26.04 has no builds). Node 22 everywhere (wrangler requires ≥ 22).
 
@@ -316,10 +308,10 @@ Stage never uses a prod secret value. Stage signing keys are separate, so a stag
 2. **Stage hostnames.** Proposed: as in section 3, `*.stage.alummahnow.net`. Workers custom domains issue a certificate per hostname, so the nested names (`profile.auth.stage…`) need no extra certificate purchase.
 3. **Stage data.** Proposed: seeded fixtures only, no prod PII. Alternative: weekly anonymized prod snapshot into stage D1/R2 (more realistic, needs an anonymization script and a PII sign-off).
 4. **Synthetic prod sign-in.** A dedicated prod account (`smoke@alummahnow.net`, password login, no content) used by post-promote smoke for a full sign-in → session check in prod. This is the only check that would have caught the redirect_uri bug *in prod* if stage had somehow differed. Needs: the account, its password in the `production` environment, and acceptance that it shows up in prod analytics. It can be excluded by user id.
-5. **AlUmmahNow prod catch-up (#185).** The pipeline will promote every app it manages. Processor and websocket in prod are a year behind and admin apps were never deployed. Proposed: at first the pipeline manages **web and api-videos** only (what's actually deployed and changing). Processor, websocket and admin apps join after #163/#185 are resolved, with a one-time verified catch-up release.
+5. **AlUmmahNow prod catch-up (#185).** The pipeline will promote every app it manages. Processor and websocket in prod are a year behind and admin apps were never deployed. Proposed: at first the pipeline manages **web and api-videos** only (what's actually deployed and changing). Processor, websocket and admin apps join after #163/#185 are resolved, with a one-time verified catch-up release. The admin apps' first prod deploy is done from `main` by a separate workstream (#218), outside this pipeline.
 6. **Cost.** Stage adds about 10 workers, 4 D1 databases, 2–3 KV namespaces, 6 R2 buckets and 3 queues. On the Workers Paid plan these fit in included usage at E2E volume. Bunny already has `*-staging` zones. Resend: stage sends use the sink, so no extra volume. Expected extra cost: approximately $0. Confirm the account is on Workers Paid.
-7. **One trunk (decided by the owner).** `main` is the single trunk for AlUmmahNow, as it already is for auth. `integrate/qa-features` and `develop` are retired after convergence (section 3.1, PLAN phase C).
-8. **Convergence release window.** The one release that takes integrate's 177 commits to prod is the largest change prod will see. Proposed: run it at a low-traffic time, with the rollback workflow ready. A rollback restores code only; the expand-only data steps stay. The owner picks the window.
+7. **One trunk (decided by the owner).** `main` is the single trunk for AlUmmahNow, as it already is for auth. Fixes land on `main` and every deploy, QA included, is built from `main`. `integrate/qa-features` and `develop` are retired after convergence (section 3.1, PLAN phase C).
+8. **First prod deploy of converged `main`.** This deploy takes integrate's 177 commits to prod, the largest change prod will see. Stage doesn't block main deploys, so the gate is QA E2E plus the release regressions on `main`. Proposed: deploy app by app (api-videos first, then web) at a low-traffic time, with `wrangler rollback` ready. A rollback restores code only; the expand-only data steps stay. The owner picks the window, and whether to wait for stage instead.
 
 ## 12. Incident regressions
 
