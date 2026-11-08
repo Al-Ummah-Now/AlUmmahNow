@@ -1,58 +1,106 @@
-name: Release regressions (web)
+name: Release regressions
 
-# R1 (sign-up → code → sign-in, sign-in and add-account redirect_uri) and R4
-# (callbacks never answer with raw JSON) against QA on every PR; the release
-# workflow (phase 7) runs the same specs against stage with E2E_ENV=stage.
-# Independent of the legacy E2E suite (#185): no seeded users, no global setup;
-# verification codes come from the auth server's E2E sink (QA/stage only).
+# The release E2E suite (apps/web/e2e/release, playwright.release.config.ts):
+# web/profile/admin-web sign-in, callback errors, playback, watch history and
+# uploads, each spec with its own new sink user. Runs against QA on every PR
+# into main, and against stage from the release workflow (workflow_call with
+# env: stage). Independent of the legacy E2E suite (e2e-tests.yml).
+#
+# It needs only @playwright/test, so it does not install the monorepo (no
+# GitHub Packages token, no build). Only the test step sees secrets.
 
 on:
   pull_request:
-    branches: [main, 'integrate/**']
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      env:
+        description: 'Target environment'
+        type: choice
+        options: [qa, stage]
+        default: qa
+  workflow_call:
+    inputs:
+      env:
+        description: 'Target environment: qa or stage (never production)'
+        type: string
+        required: true
+      ref:
+        description: 'Git ref of the specs to run (default: the calling commit)'
+        type: string
+        required: false
+        default: ''
+    secrets:
+      E2E_CODE_SINK_SECRET:
+        description: 'Auth server code sink secret for the target env'
+        required: true
+      TEST_PROMOTE_SECRET:
+        description: 'Auth server /test/promote secret for the target env (admin-web spec skips without it)'
+        required: false
 
 permissions:
   contents: read
-  packages: read
+
+concurrency:
+  group: release-e2e-${{ inputs.env || 'qa' }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   release-e2e:
-    name: Release regressions (QA)
-    runs-on: ubuntu-24.04  # Playwright has no browser builds for ubuntu-latest (26.04)
-    timeout-minutes: 20
+    name: Release regressions (${{ inputs.env || 'qa' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      E2E_ENV: ${{ inputs.env || 'qa' }}
+      PLAYWRIGHT_VERSION: 1.56.1  # keep in step with apps/web/package.json
     steps:
-      - uses: actions/checkout@v4
+      - name: Check target
+        run: |
+          case "$E2E_ENV" in
+            qa|stage) ;;
+            *) echo "::error::env must be qa or stage, got '$E2E_ENV'"; exit 1 ;;
+          esac
 
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v4
         with:
-          version: 9.15.4
+          ref: ${{ inputs.ref || '' }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-          cache: 'pnpm'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # Same layout as a local run: the release specs, the code-sink helper,
+      # the fixtures and the config, next to a standalone @playwright/test.
+      - name: Prepare the suite
+        run: |
+          SUITE="$RUNNER_TEMP/release-e2e"
+          mkdir -p "$SUITE/e2e/test-utils"
+          cp -R apps/web/e2e/release apps/web/e2e/test-fixtures "$SUITE/e2e/"
+          cp apps/web/e2e/test-utils/code-sink.ts "$SUITE/e2e/test-utils/"
+          cp apps/web/playwright.release.config.ts "$SUITE/"
+          cd "$SUITE"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION"
+          echo "SUITE=$SUITE" >> "$GITHUB_ENV"
+
+      # chromium for the auth flows, branded Chrome for real H.264 playback
+      - name: Install browsers
+        working-directory: ${{ env.SUITE }}
+        run: npx playwright install --with-deps chromium chrome
+
+      - name: Run release regressions
+        working-directory: ${{ env.SUITE }}
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install Chromium
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run release regressions against QA
-        working-directory: apps/web
-        env:
-          E2E_ENV: qa
-          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
-        run: pnpm exec playwright test -c playwright.release.config.ts
+          CI: 'true'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
+        run: npx playwright test -c playwright.release.config.ts
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: release-regressions-report
+          name: release-regressions-${{ env.E2E_ENV }}
           path: |
-            apps/web/release-report/
-            apps/web/test-results/
+            ${{ env.SUITE }}/release-report/
+            ${{ env.SUITE }}/test-results/
           retention-days: 14

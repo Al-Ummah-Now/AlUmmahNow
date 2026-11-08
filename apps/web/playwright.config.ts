@@ -23,7 +23,8 @@ const isRemoteTarget = baseURL.startsWith('https://');
  * run in their own projects, once, on Desktop Chrome; the browser/device
  * projects run every other spec.
  */
-const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//];
+// e2e/release/ is the release suite (playwright.release.config.ts), never run here
+const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//, /e2e\/release\//];
 
 export default defineConfig({
   testDir: './e2e',
