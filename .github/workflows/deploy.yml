@@ -69,6 +69,11 @@ jobs:
       - name: Release script tests
         run: pnpm test:scripts
 
+      - name: Fanous tokens (generators, snapshots, WCAG AA contrast)
+        run: |
+          pnpm test:tokens
+          pnpm check:tokens
+
       - name: Wrangler config check
         run: pnpm check:config
 
