@@ -129,7 +129,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
                 <VideoMetricsDisplay
                   key={videoDetails.id}
                   videoId={videoId}
-                  channelId={videoDetails.channel}
+                  channelId={videoDetails.channelId || undefined}
                   initialViewCount={parseInt(videoDetails.views?.replace(/[^\d]/g, '') || '0')}
                   initialLikesCount={videoDetails.likesCount || 0}
                   initialDislikesCount={videoDetails.dislikesCount || 0}

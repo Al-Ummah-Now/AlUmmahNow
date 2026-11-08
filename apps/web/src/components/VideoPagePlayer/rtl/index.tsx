@@ -9,6 +9,7 @@ import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlaye
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
+import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
 
 interface WatchPlayerProps {
   options: PlayerOptions;
@@ -75,18 +76,25 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
 
       {/* Video Details */}
       <div className="flex space-x-4 mt-4 justify-start items-center w-full" dir="rtl">
-        <Link
-          href={`/ar/channels/${options.channel}`}
-          className="w-11 h-11 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
-        >
-          <Image
-            src={options.channelAvatar || '/avatar.png'}
-            alt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(options.channelName))}
-            sizes="10vw"
-            className="bg-gray-500"
-            fill
-          />
-        </Link>
+        {(() => {
+          const href = playerChannelHref('ar', options);
+          const avatar = (
+            <Image
+              src={options.channelAvatar || '/avatar.png'}
+              alt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(playerChannelName(options)))}
+              sizes="44px"
+              className="bg-gray-500 object-cover"
+              fill
+            />
+          );
+          return href ? (
+            <Link href={href} data-testid="watch-channel-link" className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity">
+              {avatar}
+            </Link>
+          ) : (
+            <span className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative">{avatar}</span>
+          );
+        })()}
         <div className="mt-4">
           <h1 className="sm:text-md md:text-xl font-semibold text-black dark:text-white">
             {removeUnwantedChars(title)}

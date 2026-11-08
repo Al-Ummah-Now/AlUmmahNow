@@ -113,8 +113,8 @@ export const SubscriptionManagement: React.FC = () => {
               data-channel-id={channel.id}
               className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 relative rounded-full overflow-hidden bg-gray-200">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-16 h-16 shrink-0 aspect-square relative rounded-full overflow-hidden bg-gray-200" data-testid="subscription-avatar">
                   {channel.avatarUrl && (
                     <Image
                       src={resolveUrl(channel.avatarUrl)}
@@ -125,8 +125,8 @@ export const SubscriptionManagement: React.FC = () => {
                   )}
                 </div>
 
-                <div>
-                  <h2 className="font-semibold text-lg">{channel.name}</h2>
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-lg truncate">{channel.name}</h2>
                   {channel.description && (
                     <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
                       {channel.description}

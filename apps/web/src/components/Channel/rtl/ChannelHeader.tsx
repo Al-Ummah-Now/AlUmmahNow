@@ -69,12 +69,13 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
       <div className="container mx-auto px-4 py-6">
         <div className="flex gap-6 items-start">
           {/* Channel Avatar */}
-          <div className="relative w-20 h-20 md:w-32 md:h-32 rounded-full overflow-hidden bg-gray-300 dark:bg-gray-700 flex-shrink-0">
+          <div className="relative w-20 h-20 md:w-32 md:h-32 aspect-square rounded-full overflow-hidden bg-gray-300 dark:bg-gray-700 flex-shrink-0" data-testid="channel-header-avatar">
             {channel.avatarUrl ? (
               <Image
                 src={channel.avatarUrl}
                 alt={`${displayName} avatar`}
                 fill
+                sizes="(min-width: 768px) 128px, 80px"
                 className="object-cover"
               />
             ) : (

@@ -9,6 +9,7 @@ import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlaye
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
+import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
 
 interface WatchPlayerProps {
   options: PlayerOptions;
@@ -24,6 +25,8 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
   const locale = lang;
 
   const title = getLocalizedValue(options.titleLocalized, options.title, locale);
+  const channelHref = playerChannelHref(locale, options);
+  const channelName = playerChannelName(options);
 
   // Convert PlayerOptions to CustomVideoPlayer props
   // Memoize to prevent new array reference on every render
@@ -84,27 +87,34 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
 
         {/* Channel Info */}
         <div className="flex space-x-3 rtl:space-x-reverse items-center">
-          <Link
-            href={`/${lang}/channels/${options.channel}`}
-            className="w-11 h-11 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
-            tabIndex={-1}
-            aria-hidden="true"
-          >
-            <Image
-              src={options.channelAvatar || '/avatar.png'}
-              alt=""
-              sizes="10vw"
-              className="bg-gray-500"
-              fill
-            />
-          </Link>
-          <div>
+          {channelHref ? (
             <Link
-              href={`/${lang}/channels/${options.channel}`}
-              className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
+              href={channelHref}
+              className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
+              tabIndex={-1}
+              aria-hidden="true"
             >
-              {removeUnwantedChars(options.channelName)}
+              <Image src={options.channelAvatar || '/avatar.png'} alt="" sizes="44px" className="bg-gray-500 object-cover" fill />
             </Link>
+          ) : (
+            <span className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative" aria-hidden="true">
+              <Image src={options.channelAvatar || '/avatar.png'} alt="" sizes="44px" className="bg-gray-500 object-cover" fill />
+            </span>
+          )}
+          <div className="min-w-0">
+            {channelHref ? (
+              <Link
+                href={channelHref}
+                data-testid="watch-channel-link"
+                className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
+              >
+                {removeUnwantedChars(channelName)}
+              </Link>
+            ) : (
+              <span className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300">
+                {removeUnwantedChars(channelName)}
+              </span>
+            )}
           </div>
         </div>
       </div>
