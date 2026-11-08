@@ -27,7 +27,7 @@ function authHeaders() {
 }
 
 async function getProfile(): Promise<ApiProfile> {
-  const res = await fetch(`${API_URL}/api/profiles/${readAccount('none').userId}`, { headers: authHeaders() });
+  const res = await fetch(`${API_URL}/api/profile`, { headers: authHeaders() });
   expect(res.ok).toBe(true);
   const body = (await res.json()) as ApiProfile & { result?: { profile?: ApiProfile }; profile?: ApiProfile };
   const profile = body.result?.profile ?? body.profile ?? (body.id ? body : undefined);
