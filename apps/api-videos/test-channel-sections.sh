@@ -76,9 +76,9 @@ echo -e "${YELLOW}=== AUTHENTICATED ENDPOINTS (Auth Required) ===${NC}"
 echo -e "${RED}Note: These will fail without valid JWT token${NC}"
 echo ""
 
-# For testing purposes, use a dummy token
-# In production, get this from OpenAuth login
-JWT_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5Y2M1N2E1M2M5OTdiMDMwOGVkMzE1OTZkOWI1ZWEzYSIsImVtYWlsIjoibWV5d2RAbXNuLmNvbSIsImlhdCI6MTczMjI0NzY3MCwiZXhwIjoxNzMyODUyNDcwfQ.test"
+# Pass a real access token (from an OpenAuth login) via the environment:
+#   JWT_TOKEN=... ./test-channel-sections.sh
+JWT_TOKEN="${JWT_TOKEN:-replace-with-access-token}"
 
 # 4. CREATE SECTIONS
 echo "4. CREATE SECTIONS (Different Types)"
