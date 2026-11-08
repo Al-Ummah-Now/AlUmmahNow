@@ -45,19 +45,10 @@ export class WebSocketManager {
       this.state.status = 'connecting';
 
       try {
-        // Build WebSocket URL - SECURITY: Never send token in URL
-        // Token is sent via first message after connection (industry standard)
-        let wsUrl = this.config.url;
-        const params = new URLSearchParams();
-
-        // Only userId in URL (not sensitive)
-        if (userId || this.config.userId) {
-          params.append('userId', userId || this.config.userId!);
-        }
-
-        if (params.toString()) {
-          wsUrl += `?${params.toString()}`;
-        }
+        // SECURITY: Never send the token in the URL; it goes in the first message.
+        // No userId either: the server takes identity only from the verified token.
+        void userId;
+        const wsUrl = this.config.url;
 
         logger.info('🔌 Connecting to WebSocket:', wsUrl);
 
@@ -70,9 +61,7 @@ export class WebSocketManager {
           this.state.reconnectAttempts = 0;
 
           // SECURITY: Send auth token via first message, not URL
-          if (this.config.authToken) {
-            this.sendAuthMessage(this.config.authToken);
-          }
+          void this.authenticate();
 
           this.startHeartbeat();
           this.flushMessageQueue();
@@ -382,6 +371,22 @@ export class WebSocketManager {
 
   private generateMessageId(): string {
     return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Send the access token, fetching a fresh one on each (re)connect when a getter is configured.
+   */
+  private async authenticate(): Promise<void> {
+    try {
+      const token = this.config.getAuthToken
+        ? await this.config.getAuthToken()
+        : this.config.authToken;
+      if (token) {
+        this.sendAuthMessage(token);
+      }
+    } catch (error) {
+      logger.error('❌ Failed to get WebSocket auth token:', error);
+    }
   }
 
   /**

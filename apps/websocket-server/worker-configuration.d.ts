@@ -13,6 +13,8 @@ interface Env {
 	Issuer?: string;
 	Audience?: string;
 	ClientId?: string;
+	// Comma-separated OpenAuth client ids whose access tokens may connect (checked against `aud`)
+	ALLOWED_CLIENT_IDS?: string;
 
 	// Internal API key for server-to-server communication
 	// Can be a string (from vars) or SecretStoreSecret (from secrets_store_secrets)
