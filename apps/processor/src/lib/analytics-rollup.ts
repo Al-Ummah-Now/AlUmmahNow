@@ -29,6 +29,27 @@ export const ROLLUP_PREFIX = 'analytics/rollups';
 export interface DailyRollupEntry {
   views: number;
   watchTime: number;
+  /** Views per playback surface ("watch" | "embed"). Absent on documents written before embeds. */
+  sources?: Record<string, number>;
+  /** Embed views per embedding origin; at most MAX_EMBED_ORIGINS keys, the rest under "other". */
+  embedOrigins?: Record<string, number>;
+}
+
+/** Bound on distinct embed origins kept per day (the rest are counted under "other"). */
+export const MAX_EMBED_ORIGINS = 50;
+export const OTHER_ORIGIN = 'other';
+
+export interface ViewDimensions {
+  source?: 'watch' | 'embed';
+  embedOrigin?: string | null;
+}
+
+/** Pure: add one to a bounded counter map. */
+export function incrementBounded(map: Record<string, number> | undefined, key: string, maxKeys: number): Record<string, number> {
+  const next = { ...(map || {}) };
+  const target = key in next || Object.keys(next).filter((k) => k !== OTHER_ORIGIN).length < maxKeys ? key : OTHER_ORIGIN;
+  next[target] = (next[target] || 0) + 1;
+  return next;
 }
 
 export interface MonthlyRollup {
@@ -57,7 +78,8 @@ export function applyView(
   entityType: 'video' | 'channel',
   entityId: string,
   day: string,
-  watchTimeSeconds: number
+  watchTimeSeconds: number,
+  dimensions: ViewDimensions = {}
 ): MonthlyRollup {
   const month = day.slice(0, 7);
   const next: MonthlyRollup = doc && doc.month === month
@@ -65,10 +87,18 @@ export function applyView(
     : { entityType, entityId, month, days: {} };
   const current = next.days[day] || { views: 0, watchTime: 0 };
   const watchTime = Number.isFinite(watchTimeSeconds) && watchTimeSeconds > 0 ? watchTimeSeconds : 0;
-  next.days[day] = {
+  const entry: DailyRollupEntry = {
+    ...current,
     views: current.views + 1,
     watchTime: Math.round((current.watchTime + watchTime) * 100) / 100,
   };
+  if (dimensions.source) {
+    entry.sources = incrementBounded(current.sources, dimensions.source, 10);
+    if (dimensions.source === 'embed') {
+      entry.embedOrigins = incrementBounded(current.embedOrigins, dimensions.embedOrigin || 'unknown', MAX_EMBED_ORIGINS);
+    }
+  }
+  next.days[day] = entry;
   next.updatedAt = new Date().toISOString();
   return next;
 }
@@ -90,7 +120,8 @@ export function applyWatchTime(
     : { entityType, entityId, month, days: {} };
   const current = next.days[day] || { views: 0, watchTime: 0 };
   const add = Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, MAX_WATCH_TIME_DELTA_SECONDS) : 0;
-  next.days[day] = { views: current.views, watchTime: Math.round((current.watchTime + add) * 100) / 100 };
+  // Keep the day's other fields (views, sources, embedOrigins)
+  next.days[day] = { ...current, watchTime: Math.round((current.watchTime + add) * 100) / 100 };
   next.updatedAt = new Date().toISOString();
   return next;
 }
@@ -147,6 +178,19 @@ export interface ViewEventPayload {
   videoChannelId?: unknown;
   watchTime?: unknown;
   timestamp?: unknown;
+  /** "watch" | "embed" (docs/embeds §6); absent on views sent before embeds */
+  source?: unknown;
+  embedOrigin?: unknown;
+}
+
+/** Pure: the rollup dimensions a tracked view carries (invalid values dropped). */
+export function viewDimensions(payload: ViewEventPayload): ViewDimensions {
+  if (payload.source !== 'watch' && payload.source !== 'embed') return {};
+  if (payload.source === 'watch') return { source: 'watch' };
+  const origin = typeof payload.embedOrigin === 'string' && /^https?:\/\/[^/\s]{1,253}$/.test(payload.embedOrigin)
+    ? payload.embedOrigin
+    : null;
+  return { source: 'embed', embedOrigin: origin };
 }
 
 /**
@@ -179,9 +223,11 @@ export async function recordViewRollup(
   const watchTime = typeof payload.watchTime === 'number' ? payload.watchTime : Number(payload.watchTime) || 0;
   const day = toUtcDay(typeof payload.timestamp === 'string' ? payload.timestamp : messageTimestamp);
 
+  const dimensions = viewDimensions(payload);
+  const withDimensions: Apply = (doc, entityType, entityId, d, amount) => applyView(doc, entityType, entityId, d, amount, dimensions);
   await Promise.all([
-    updateRollup(bucket, 'video', videoId, day, watchTime),
-    channelId ? updateRollup(bucket, 'channel', channelId, day, watchTime) : Promise.resolve(),
+    updateRollup(bucket, 'video', videoId, day, watchTime, withDimensions),
+    channelId ? updateRollup(bucket, 'channel', channelId, day, watchTime, withDimensions) : Promise.resolve(),
   ]);
   return true;
 }

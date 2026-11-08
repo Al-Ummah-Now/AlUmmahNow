@@ -61,7 +61,7 @@ Legend: **W** = working (consumed and its output is used), **L** = consumed but 
 
 | MessageType | Produced by | Processor | Writes | Read by | State |
 |---|---|---|---|---|---|
-| VideoView (from `/videos/:id/view`) | `videoView.ts` | rollup | `analytics/rollups/video\|channel/*` | `GET /api/analytics*` | **B → fixed**: videos with `channelId: null` (imported legacy videos) were skipped entirely, and prod had **no** rollup objects. The video rollup is now always written. watchTime is always 0 (§5). |
+| VideoView (from `/videos/:id/view`) | `videoView.ts` | rollup | `analytics/rollups/video\|channel/*` | `GET /api/analytics*` | **B → fixed**: videos with `channelId: null` (imported legacy videos) were skipped entirely, and prod had **no** rollup objects. The video rollup is now always written. watchTime is always 0 (§5). Payloads now carry `source` (`watch` \| `embed`) and `embedOrigin`; the rollup day entries gain optional `sources` and `embedOrigins` maps (top 50 origins per day, rest under `other`). Deleted and hidden videos no longer count. |
 | VideoView (fetch, search telemetry) | `videoFetch.ts`, `videoSearch.ts` | log | archive | nothing | L. Overloads VideoView; should become its own type. |
 | WatchHistory | `watch-history/record.ts`, `update-progress.ts` | log | archive | nothing | **B → fixed** (envelope). Still log-only. |
 | ProfileCreate/Update/Delete/View | profile endpoints, legacy `watchHistoryAdd` | log | archive | nothing | L |
@@ -112,7 +112,7 @@ Daily views and watch time come from the rollups. Likes, comments and subscriber
 | Daily likes, comments, new subscribers | Supported. Gross gains only, no unsubscribes. |
 | Watch time, average view duration | Supported from #235 on: the player accumulates played (wall-clock) seconds, reports them as `watch_time` analytics events (with analytics consent only), and the web route forwards them to `POST /api/videos/:id/watch-time` (≤ 60 s per report, 6 reports/min per session and video via the `WATCH_TIME_LIMITER` binding). `MessageType.VideoWatchTime` (220) adds them to the rollups without counting a view. Data before the deploy stays 0. |
 | Retention curve, quartiles | Missing. The player tracks them, but the Next route drops everything except `ready`. |
-| Traffic sources, devices, geography | Missing. Hardcoded `direct`/`desktop`. |
+| Traffic sources, devices, geography | Partial. Embed views carry `source: embed` and the embedding origin, rolled up per day as `sources` / `embedOrigins` (docs/embeds/README.md §6). Other surfaces, devices and countries are still hardcoded `direct`/`desktop` (#237). Not shown in the API or UI yet. |
 | Logged-in vs anonymous, unique viewers | Missing. The view call carries no identity. |
 | View dedup and anti-abuse | Missing. One view per player load. |
 | Realtime, hourly | Missing. `granularity=hour` falls back to daily. |

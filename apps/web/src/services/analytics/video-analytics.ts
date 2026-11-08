@@ -537,7 +537,7 @@ export class VideoAnalytics {
 
     const flushPromise = (async () => {
       try {
-        const batch: AnalyticsBatch = { events };
+        const batch: AnalyticsBatch = this.config.context ? { events, context: this.config.context } : { events };
 
         const response = await fetch(this.config.endpoint, {
           method: 'POST',

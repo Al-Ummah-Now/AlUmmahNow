@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import type { Player } from "video.js";
 import Link from "next/link";
 import { Edit, VideoOff } from "lucide-react";
 import { logger } from '@/lib/logger-client';
@@ -16,6 +18,8 @@ import { VideoMetricsDisplay } from "@/components/videoMetrics/VideoMetricsDispl
 import SaveToPlaylist from "@/components/SaveToPlaylist";
 import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
 import { WatchLaterButton } from "@/components/library/WatchLaterButton";
+import ShareDialog from "@/components/video/ShareDialog";
+import { parseTime } from "@/lib/embed/params";
 import { VideoInfo } from "@/interfaces";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
@@ -38,6 +42,18 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const { user } = useAuth();
   const { t, lang, isRTL } = useLanguage();
+  // ?t=754 / ?t=12m34s starts the video there (share links "at current time")
+  const searchParams = useSearchParams();
+  const startTime = parseTime(searchParams?.get('t')) ?? undefined;
+  const playerRef = useRef<Player | null>(null);
+  const handlePlayerReady = useCallback((player: Player) => {
+    playerRef.current = player;
+  }, []);
+  const getCurrentTime = useCallback(() => {
+    const player = playerRef.current;
+    if (!player || player.isDisposed()) return 0;
+    return player.currentTime() || 0;
+  }, []);
 
   const Comments = isRTL ? CommentsSectionRTL : CommentsSection;
   const Player = isRTL ? VideoPlayerRTL : VideoPlayer;
@@ -101,7 +117,12 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
               <section id={VIDEO_PLAYER_ID} className="w-full" tabIndex={-1}>
-                <Player key={videoDetails.id} options={videoDetails} />
+                <Player
+                  key={videoDetails.id}
+                  options={videoDetails}
+                  startTime={startTime}
+                  onPlayerReady={handlePlayerReady}
+                />
               </section>
 
               <div className="w-full max-w-4xl mt-4 px-4">
@@ -121,8 +142,13 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
                 />
               </div>
 
-              {(user || isOwnVideo) && (
-                <div className="w-full max-w-4xl mt-4 px-4 flex flex-wrap items-center gap-3">
+              <div className="w-full max-w-4xl mt-4 px-4 flex flex-wrap items-center gap-3">
+                  <ShareDialog
+                    videoId={videoId}
+                    title={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
+                    lang={lang === 'ar' ? 'ar' : 'en'}
+                    getCurrentTime={getCurrentTime}
+                  />
                   {user && <WatchLaterButton videoId={videoId} />}
                   {user && <SaveToPlaylistControl videoId={videoId} />}
                   {isOwnVideo && (
@@ -135,8 +161,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
                       <span>{t.video.editVideo}</span>
                     </Link>
                   )}
-                </div>
-              )}
+              </div>
 
               {/* Report video (hidden for anonymous viewers and the owner) */}
               {!isOwnVideo && (

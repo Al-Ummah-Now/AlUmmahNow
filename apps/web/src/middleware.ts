@@ -24,9 +24,12 @@ import {
 import { DEFAULT_LOCALE, LOCALE_REQUEST_HEADER } from '@/lib/i18n/locales';
 import {
   buildContentSecurityPolicy,
+  EMBED_SECURITY_HEADERS,
   generateNonce,
   SECURITY_HEADERS,
 } from '@/lib/security/csp';
+import { EMBED_REQUEST_HEADER, isEmbedPath, isOEmbedPath } from '@/lib/embed/routes';
+import { parseEmbedLang } from '@/lib/embed/params';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { handleRewritePath } from '@/lib/channel-url';
 
@@ -35,11 +38,12 @@ import { handleRewritePath } from '@/lib/channel-url';
  * request; Next.js reads it from the request's Content-Security-Policy header
  * and applies it to every script it renders.
  */
-function createCsp(isDevelopment: boolean): { csp: string; nonce?: string } {
+function createCsp(isDevelopment: boolean, embed = false): { csp: string; nonce?: string } {
   const nonce = isDevelopment ? undefined : generateNonce();
   const csp = buildContentSecurityPolicy({
     isDevelopment,
     nonce,
+    frameAncestors: embed ? '*' : "'none'",
     env: {
       apiUrl: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL,
       websocketUrl: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL,
@@ -54,11 +58,15 @@ function createCsp(isDevelopment: boolean): { csp: string; nonce?: string } {
  * Continue the request with the CSP (and nonce) visible to server rendering,
  * and attach CSP + security headers to the response.
  */
-function nextWithSecurityHeaders(request: NextRequest, isDevelopment: boolean, locale?: string, rewriteTo?: URL): NextResponse {
-  const { csp, nonce } = createCsp(isDevelopment);
+function nextWithSecurityHeaders(request: NextRequest, isDevelopment: boolean, locale?: string, rewriteTo?: URL, embed = false): NextResponse {
+  const { csp, nonce } = createCsp(isDevelopment, embed);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('Content-Security-Policy', csp);
   if (nonce) requestHeaders.set(NONCE_HEADER, nonce);
+  // Only the middleware decides what is an embed frame (the root layout renders
+  // the minimal shell for it); never trust the header from the client.
+  if (embed) requestHeaders.set(EMBED_REQUEST_HEADER, '1');
+  else requestHeaders.delete(EMBED_REQUEST_HEADER);
   // Forward the locale so the root layout can render <html lang dir> for it
   if (locale) requestHeaders.set(LOCALE_REQUEST_HEADER, locale);
 
@@ -66,7 +74,7 @@ function nextWithSecurityHeaders(request: NextRequest, isDevelopment: boolean, l
     ? NextResponse.rewrite(rewriteTo, { request: { headers: requestHeaders } })
     : NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('Content-Security-Policy', csp);
-  Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
+  Object.entries(embed ? EMBED_SECURITY_HEADERS : SECURITY_HEADERS).forEach(([header, value]) => {
     response.headers.set(header, value);
   });
   if (isDevelopment) {
@@ -100,6 +108,20 @@ export function middleware(request: NextRequest) {
   if (pathname === '/') {
     const preferredLocale = getLanguagePreferenceFromCookie(request) || DEFAULT_LOCALE;
     return NextResponse.redirect(new URL(`/${preferredLocale}`, request.url));
+  }
+
+  // oEmbed endpoint (route handler with its own CORS/caching headers): no locale redirect
+  if (isOEmbedPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Embed frames (docs/embeds): frameable by any origin, minimal shell, ?lang= locale
+  if (isEmbedPath(pathname)) {
+    const locale = parseEmbedLang(request.nextUrl.searchParams.get('lang'));
+    const response = nextWithSecurityHeaders(request, isDevelopment, locale, undefined, true);
+    response.headers.set('X-Locale', locale);
+    response.headers.set('X-Text-Direction', getTextDirection(locale));
+    return response;
   }
 
   // Channel @handle URLs (Story 29.1): handles may contain `.`, so this runs

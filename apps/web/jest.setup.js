@@ -41,8 +41,8 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
 }
 
-// Mock matchMedia
-Object.defineProperty(window, 'matchMedia', {
+// Mock matchMedia (jsdom only: server tests opt into `@jest-environment node`)
+if (typeof window !== 'undefined') Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: jest.fn().mockImplementation(query => ({
     matches: false,

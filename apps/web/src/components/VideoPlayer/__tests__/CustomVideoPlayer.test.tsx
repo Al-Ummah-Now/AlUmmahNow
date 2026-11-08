@@ -246,6 +246,15 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
       });
     });
 
+    it('tags analytics with the embed context (docs/embeds §6)', async () => {
+      mockVideoAnalytics.mockClear();
+      const context = { source: 'embed' as const, embedOrigin: 'https://www.alummahnow.net' };
+      render(<CustomVideoPlayer {...defaultProps} userId="user-456" enableAnalytics={true} analyticsContext={context} />);
+      await waitFor(() => {
+        expect(mockVideoAnalytics).toHaveBeenCalledWith('test-video-123', 'user-456', { context });
+      });
+    });
+
     it('should not initialize analytics when disabled', async () => {
 
       mockVideoAnalytics.mockClear();
