@@ -1,4 +1,5 @@
 "use client";
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import React, { useMemo } from "react";
 import type { Player } from "video.js";
 import Image from "next/image";
@@ -109,10 +110,12 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
                 className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
               >
                 {removeUnwantedChars(channelName)}
+                {options.channelVerified && <VerifiedBadge className="ms-1" />}
               </Link>
             ) : (
               <span className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300">
                 {removeUnwantedChars(channelName)}
+                {options.channelVerified && <VerifiedBadge className="ms-1" />}
               </span>
             )}
           </div>

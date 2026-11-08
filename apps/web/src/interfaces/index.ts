@@ -18,6 +18,7 @@ export interface VideoObject {
     channel: string;
     channelId: string | null;
     channelAvatarUrl: string; // Updated to match shared-types interface
+    channelIsVerified?: boolean;
     channelCoverUrl?: string; // Channel cover/banner image
     channelName: string;
     dateCreated: string;
