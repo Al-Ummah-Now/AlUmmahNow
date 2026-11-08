@@ -6,6 +6,7 @@ import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
 import { IndexManager, INDEX_STALENESS_THRESHOLD } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
+import { emptyShelf } from "../../lib/shelf";
 
 const VideoResponseSchema = z.object({
   id: z.string(),
@@ -96,9 +97,9 @@ export class PopularVideosSection extends PublicRoute {
   };
 
   async handle(c: AppContext) {
+    // Validation stays outside the try: invalid input is a 400 from chanfana
+    const data = await this.getValidatedData<typeof this.schema>();
     try {
-      // Get validated data
-      const data = await this.getValidatedData<typeof this.schema>();
       const { limit, cursor, period = 'all', category, minViews = 0 } = data.query;
 
       // Initialize managers
@@ -232,14 +233,7 @@ export class PopularVideosSection extends PublicRoute {
         },
       });
     } catch (error) {
-      logger.error("Error in popular videos endpoint", { error });
-      return c.json(
-        {
-          success: false,
-          error: error instanceof Error ? error.message : "Internal server error",
-        },
-        500
-      );
+      return emptyShelf(c, "popular", error);
     }
   }
 }
