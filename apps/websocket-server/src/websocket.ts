@@ -4,7 +4,7 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { authenticateToken, canPublish, canSubscribe } from './auth';
+import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously } from './auth';
 import { ChannelManager } from './channels';
 import { PresenceManager } from './presence';
 import { ClientMessageSchema, ServerMessage, RateLimitInfo } from './messages';
@@ -311,8 +311,8 @@ export class WebSocketDurableObject extends DurableObject {
       return;
     }
 
-    // Require authentication for subscriptions
-    if (!connection.authenticated) {
+    // Signed-out viewers may follow public video feeds; everything else needs a token.
+    if (!connection.authenticated && !canSubscribeAnonymously(channel)) {
       this.sendMessage(ws, {
         type: 'error',
         error: 'Authentication required',
@@ -322,7 +322,7 @@ export class WebSocketDurableObject extends DurableObject {
     }
 
     // user:<id> channels carry private notifications; only that user may join.
-    if (!connection.userId || !canSubscribe(connection.userId, channel)) {
+    if (connection.authenticated && (!connection.userId || !canSubscribe(connection.userId, channel))) {
       this.sendMessage(ws, {
         type: 'error',
         error: 'Not allowed to subscribe to this channel',
