@@ -107,6 +107,29 @@ describe('WebSocketManager subscriptions', () => {
     expect(subscribes(sent)).toEqual([expect.objectContaining({ type: 'subscribe', channel: 'video:v1' })]);
   });
 
+  it('signed-out sockets join video feeds after the server acknowledges them (#301)', () => {
+    const manager = new WebSocketManager({ url: 'wss://example/ws', reconnectInterval: 1000, maxReconnectAttempts: 1, heartbeatInterval: 30000 });
+    const sent = attachSocket(manager);
+    manager.subscribe('video:v1', jest.fn());
+    manager.subscribe('notifications', jest.fn());
+    expect(subscribes(sent)).toHaveLength(0);
+
+    deliver(manager, { type: 'connection_acknowledged' });
+    expect(subscribes(sent).map(m => m.channel)).toEqual(['video:v1']);
+
+    manager.subscribe('video:v2', jest.fn());
+    manager.subscribe('channel:c1', jest.fn());
+    expect(subscribes(sent).map(m => m.channel)).toEqual(['video:v1', 'video:v2']);
+  });
+
+  it('a socket with a token waits for authentication even after the acknowledgement', () => {
+    const manager = new WebSocketManager({ url: 'wss://example/ws', reconnectInterval: 1000, maxReconnectAttempts: 1, heartbeatInterval: 30000, getAuthToken: async () => 'token' });
+    const sent = attachSocket(manager);
+    manager.subscribe('video:v1', jest.fn());
+    deliver(manager, { type: 'connection_acknowledged' });
+    expect(subscribes(sent)).toHaveLength(0);
+  });
+
   it('sends new subscriptions immediately once authenticated and resubscribes after re-auth', () => {
     const manager = new WebSocketManager({ url: 'wss://example/ws', reconnectInterval: 1000, maxReconnectAttempts: 1, heartbeatInterval: 30000 });
     const sent = attachSocket(manager);

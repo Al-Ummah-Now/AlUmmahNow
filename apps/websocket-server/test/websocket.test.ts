@@ -73,6 +73,20 @@ test('query userId without a token does not authenticate or grant access', async
   assert.equal(durable.channelManager.getChannelSubscribers('user:victim').size, 0);
 });
 
+test('a signed-out socket can follow a video feed but nothing else', async () => {
+  const { durable } = makeDO();
+  const ws = await connect(durable, '');
+
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'subscribe', channel: 'video:v1' }));
+  assert.equal(ws.last().type, 'subscribed');
+  assert.equal(durable.channelManager.getChannelSubscribers('video:v1').size, 1);
+
+  for (const channel of ['notifications', 'live-streams', 'user:u1', 'channel:c1']) {
+    await durable.webSocketMessage(ws, JSON.stringify({ type: 'subscribe', channel }));
+    assert.equal(ws.last().code, 'AUTH_REQUIRED');
+  }
+});
+
 test('query userId is ignored even with a valid token; identity comes from the token', async () => {
   const { durable } = makeDO();
   const ws = await connect(durable, '?userId=victim');

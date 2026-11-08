@@ -195,6 +195,14 @@ export function canSubscribe(userId: string, channel: string): boolean {
   return true;
 }
 
+/**
+ * Channels an unauthenticated socket may join. Only per-video feeds, whose
+ * events (new comments, counters) are already public on the watch page.
+ */
+export function canSubscribeAnonymously(channel: string): boolean {
+  return channel.startsWith('video:');
+}
+
 /** Clients may not publish into private `user:<id>` channels (server-fed via /broadcast). */
 export function canPublish(channel: string): boolean {
   return !channel.startsWith('user:');

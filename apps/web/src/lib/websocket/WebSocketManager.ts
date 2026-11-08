@@ -18,6 +18,8 @@ export class WebSocketManager {
   private messageQueue: WebSocketMessage[] = [];
   /** True once the server has accepted our authenticate message on this socket. */
   private authenticated = false;
+  /** Server acknowledged a socket that will never authenticate (signed-out viewer). */
+  private anonymousReady = false;
   private eventListeners: Map<string, Set<(data: WebSocketConnectionState) => void>> = new Map();
 
   /** Set the token sent in the authenticate message on (re)connect. */
@@ -69,6 +71,7 @@ export class WebSocketManager {
           logger.info('✅ WebSocket connected');
           this.state.status = 'connected';
           this.authenticated = false;
+          this.anonymousReady = false;
           this.state.lastConnected = new Date();
           this.state.reconnectAttempts = 0;
 
@@ -107,6 +110,7 @@ export class WebSocketManager {
 
         this.ws.onclose = (event) => {
           this.authenticated = false;
+          this.anonymousReady = false;
           logger.info('🔌 WebSocket closed', { code: event.code, reason: event.reason });
           this.state.status = 'disconnected';
           this.stopHeartbeat();
@@ -165,7 +169,7 @@ export class WebSocketManager {
 
     // The server only accepts subscriptions from an authenticated socket. Before
     // that, the channel is kept and sent by resubscribeAll() once authenticated.
-    if (this.authenticated) {
+    if (this.canSendSubscribe(channel)) {
       this.sendChannelMessage('subscribe', channel);
     }
 
@@ -213,9 +217,16 @@ export class WebSocketManager {
     }
   }
 
+  /** Signed-out sockets may join public video feeds only (see the server's canSubscribeAnonymously). */
+  private canSendSubscribe(channel: string): boolean {
+    return this.authenticated || (this.anonymousReady && channel.startsWith('video:'));
+  }
+
   /** (Re)send every active subscription, e.g. after (re)authentication. */
   private resubscribeAll(): void {
-    this.subscriptions.forEach((_subs, channel) => this.sendChannelMessage('subscribe', channel));
+    this.subscriptions.forEach((_subs, channel) => {
+      if (this.canSendSubscribe(channel)) this.sendChannelMessage('subscribe', channel);
+    });
   }
 
   /**
@@ -276,6 +287,10 @@ export class WebSocketManager {
     // Handle connection acknowledgment
     if (message.type === 'connection_acknowledged') {
       logger.info('✅ Connection acknowledged by server');
+      if (!this.config.getAuthToken && !this.config.authToken) {
+        this.anonymousReady = true;
+        this.resubscribeAll();
+      }
       return;
     }
 
