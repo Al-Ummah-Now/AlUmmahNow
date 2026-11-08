@@ -26,6 +26,7 @@
     "Issuer": "https://auth.alummahnow.net"
   },
   "vars":{
+    "ClientId": "f0de3c30-0304-4ac4-86d6-1e185dec0439",
     "Issuer": "https://auth.alummahnow.net",
     "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
     "NEXTJS_ENV": "production",
