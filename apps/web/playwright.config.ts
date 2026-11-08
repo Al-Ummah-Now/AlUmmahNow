@@ -150,6 +150,19 @@ export default defineConfig({
       use: { ...devices['iPhone 12'] },
     },
 
+    /*
+     * Player regressions (R5, docs/release-pipeline/SPEC.md): bundled Chromium has
+     * no H.264 decoder, so on it every player control test skips. Branded Chrome
+     * plays the QA HLS streams, so here they really run (CI installs it with
+     * `playwright install chrome`).
+     */
+    {
+      name: 'player-chrome',
+      testMatch: /31-video-player\.spec\.ts/,
+      testIgnore: [],
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+    },
+
     /* axe-core WCAG 2.1 AA sweep of every page, en/ar x light/dark */
     {
       name: 'a11y',

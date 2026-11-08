@@ -130,10 +130,12 @@ jobs:
       cancel-in-progress: false
 
     # Pull requests: chromium only. Everything else: the full matrix.
+    # player-chrome: branded Chrome, the only browser here that decodes the H.264
+    # HLS streams, so the 31-video-player control tests run instead of skipping (R5).
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","users":"1795000000001"}]' || '[{"project":"chromium","users":"1795000000001"},{"project":"firefox","users":"1795000000002"},{"project":"webkit","users":"1795000000003"},{"project":"Mobile Chrome","users":"1795000000004"},{"project":"Mobile Safari","users":"1795000000005"}]') }}
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","users":"1795000000001"}]' || '[{"project":"chromium","users":"1795000000001"},{"project":"firefox","users":"1795000000002"},{"project":"webkit","users":"1795000000003"},{"project":"Mobile Chrome","users":"1795000000004"},{"project":"Mobile Safari","users":"1795000000005"},{"project":"player-chrome","users":"1795000000006"}]') }}
 
     steps:
       - name: Checkout code
@@ -180,6 +182,7 @@ jobs:
           case "${{ matrix.project }}" in
             firefox) B=firefox ;;
             webkit|'Mobile Safari') B=webkit ;;
+            player-chrome) B=chrome ;;
             *) B= ;;
           esac
           pnpm exec playwright install --with-deps chromium $B
