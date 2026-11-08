@@ -12,10 +12,15 @@ import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
 import { highestAdminRole, hasAdminAccess, type SystemRole } from './roles';
 import { logger } from './logger';
+import {
+  LEGACY_ACCESS_COOKIE,
+  LEGACY_REFRESH_COOKIE,
+  SESSION_COOKIE_NAME,
+  parseSessionCookie,
+  sessionCookieOptions,
+} from './session-cookie';
 
-// Session configuration
-export const SESSION_COOKIE_NAME = 'admin_session';
-const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+export { SESSION_COOKIE_NAME };
 
 export interface AdminUser {
   id: string;
@@ -47,18 +52,6 @@ export async function getAuthClient(): Promise<AuthClient> {
   return authClient;
 }
 
-function parseSessionCookie(value: string): { accessToken: string; refreshToken: string } | null {
-  try {
-    const parsed = JSON.parse(value) as Partial<AdminSession>;
-    if (typeof parsed?.accessToken !== 'string' || typeof parsed?.refreshToken !== 'string') {
-      return null;
-    }
-    return { accessToken: parsed.accessToken, refreshToken: parsed.refreshToken };
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Resolve the current admin session.
  *
@@ -78,8 +71,8 @@ export const getAdminSession = cache(async (): Promise<AdminSession | null> => {
     if (sessionValue) {
       tokens = parseSessionCookie(sessionValue);
     } else {
-      const accessToken = cookieStore.get('access_token')?.value;
-      const refreshToken = cookieStore.get('refresh_token')?.value;
+      const accessToken = cookieStore.get(LEGACY_ACCESS_COOKIE)?.value;
+      const refreshToken = cookieStore.get(LEGACY_REFRESH_COOKIE)?.value;
       if (accessToken && refreshToken) {
         tokens = { accessToken, refreshToken };
         fromLegacyCookies = true;
@@ -115,9 +108,10 @@ export const getAdminSession = cache(async (): Promise<AdminSession | null> => {
     };
 
     if (verified.tokens || fromLegacyCookies) {
-      // Cookies can only be written from route handlers and server actions;
-      // during a server component render the refreshed tokens are still used
-      // for this request and persisted on the next writable request.
+      // Cookies can only be written from route handlers and server actions.
+      // Pages normally never get here with an expired token: middleware.ts
+      // refreshes it ahead of expiry and persists the rotated pair. This is
+      // the fallback for when that refresh failed transiently.
       try {
         await setAdminSession(session);
       } catch {
@@ -145,13 +139,7 @@ export async function setAdminSession(session: AdminSession | null): Promise<voi
     return;
   }
 
-  cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(session), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: SESSION_MAX_AGE,
-    path: '/',
-  });
+  cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(session), sessionCookieOptions());
 }
 
 /**
@@ -160,8 +148,8 @@ export async function setAdminSession(session: AdminSession | null): Promise<voi
 export async function clearAdminSession(): Promise<void> {
   const cookieStore = await getCookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
-  cookieStore.delete('access_token');
-  cookieStore.delete('refresh_token');
+  cookieStore.delete(LEGACY_ACCESS_COOKIE);
+  cookieStore.delete(LEGACY_REFRESH_COOKIE);
 }
 
 /**
