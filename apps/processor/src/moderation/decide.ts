@@ -80,8 +80,11 @@ export function decide(
     if (ESCALATE.has(category)) escalate = true;
 
     const weight = (SEVERITY[category] ?? DEFAULT_SEVERITY) * score;
-    const bestRank = best ? (RANK[best.action] ?? 0) : -1;
-    const rank = RANK[action] ?? 0;
+    // An enforced action always outranks a shadow one, so a shadow `would_hide` can never mask an
+    // enforced `flag`; within the same mode, hide > flag, then severity × score.
+    const rankOf = (a: string, m: string) => (m === 'enforce' ? 10 : 0) + (RANK[a] ?? 0);
+    const bestRank = best ? rankOf(best.action, best.mode) : -1;
+    const rank = rankOf(action, policy.mode);
     if (!best || rank > bestRank || (rank === bestRank && weight > best.weight)) {
       best = { action, mode: policy.mode, category, score, weight, note };
     }

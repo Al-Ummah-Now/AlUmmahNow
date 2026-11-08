@@ -34,6 +34,16 @@ export function detectLanguage(text: string): DetectedLanguage {
   return 'en';
 }
 
+/** Number of Arabic-script letters (mixed text with a meaningful Arabic part is translated too). */
+export function arabicLetterCount(text: string): number {
+  return text.match(ARABIC_LETTER)?.length ?? 0;
+}
+
+/** Number of Latin letters. */
+export function latinLetterCount(text: string): number {
+  return text.match(LATIN_LETTER)?.length ?? 0;
+}
+
 /** Rough token count when a model reports no usage: ~4 chars/token Latin, ~2 Arabic. */
 export function estimateTokens(text: string): number {
   if (!text) return 0;

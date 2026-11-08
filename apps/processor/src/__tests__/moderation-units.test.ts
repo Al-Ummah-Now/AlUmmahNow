@@ -5,6 +5,7 @@ import { neuronsFor } from '../moderation/pricing';
 import { decide } from '../moderation/decide';
 import { DEFAULT_POLICIES, sanitizePolicy } from '../moderation/config';
 import type { ModerationCategoryPolicy } from '@al-ummah/shared-types';
+import { MODERATION_EXTENSION_CATEGORIES } from '@al-ummah/shared-types';
 
 describe('text', () => {
   it('strips diacritics, tatweel and zero-width characters', () => {
@@ -38,12 +39,18 @@ describe('parseGuardResponse', () => {
 });
 
 describe('parseExtensionResponse', () => {
+  const all = (over: Record<string, number> = {}) => ({ ...Object.fromEntries(MODERATION_EXTENSION_CATEGORIES.map((c) => [c, 0])), ...over });
   it('parses fenced JSON, clamps scores and drops unknown categories', () => {
-    const r = parseExtensionResponse({ response: '```json\n{"scores":{"spam":1.4,"charity_scam":0.2,"made_up":1},"rationale":"link spam"}\n```' });
-    expect(r).toEqual({ scores: { spam: 1, charity_scam: 0.2 }, rationale: 'link spam' });
+    const json = JSON.stringify({ scores: { ...all({ spam: 1.4, charity_scam: 0.2 }), made_up: 1 }, rationale: 'link spam' });
+    const r = parseExtensionResponse({ response: '```json\n' + json + '\n```' });
+    expect(r).toEqual({ scores: all({ spam: 1, charity_scam: 0.2 }), rationale: 'link spam' });
   });
   it('accepts an object response', () => {
-    expect(parseExtensionResponse({ response: { scores: { harassment: 0.8 } } }).scores).toEqual({ harassment: 0.8 });
+    expect(parseExtensionResponse({ response: { scores: all({ harassment: 0.8 }) } }).scores.harassment).toBe(0.8);
+  });
+  it('rejects a partial score set (e.g. steered by injected JSON) instead of reading it as safe', () => {
+    expect(() => parseExtensionResponse({ response: '{"scores":{"spam":0}}' })).toThrow(/omitted/);
+    expect(() => parseExtensionResponse({ response: { scores: all({ spam: 'high' as unknown as number }) } })).toThrow(/spam/);
   });
   it('throws without scores', () => {
     expect(() => parseExtensionResponse({ response: 'no json here' })).toThrow();
@@ -100,6 +107,11 @@ describe('decide', () => {
 
   it('picks the most severe category', () => {
     expect(decide({ spam: 0.95, S1: 1 }, { ...DEFAULT_POLICIES, spam: { ...DEFAULT_POLICIES.spam, action: 'flag' } }, ctx).topCategory).toBe('S1');
+  });
+
+  it('an enforced flag outranks a shadow would_hide', () => {
+    const policies = { ...DEFAULT_POLICIES, S10: enforce(DEFAULT_POLICIES.S10) };
+    expect(decide({ spam: 0.99, S10: 1 }, policies, { lowTrust: true, autoHideAvailable: true })).toMatchObject({ decision: 'flag', topCategory: 'S10' });
   });
 
   it('ignores disabled categories', () => {

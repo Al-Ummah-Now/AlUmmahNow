@@ -13,7 +13,7 @@ import { loadConfig, PROMPT_VERSION } from './config';
 import { decide } from './decide';
 import { MODELS } from './pricing';
 import { writeSignal } from './store';
-import { detectLanguage, normalizeText } from './text';
+import { arabicLetterCount, detectLanguage, latinLetterCount, normalizeText } from './text';
 import { neuronsUsedToday } from './usage';
 
 export interface ModerationConsumerEnv {
@@ -27,6 +27,11 @@ export interface ModerationConsumerEnv {
 export type ScanOutcome =
   | { status: 'done'; signalId?: string; decision: string }
   | { status: 'retry'; error: string };
+
+/** Arabic letters from which text is translated before Llama Guard. */
+const MIN_ARABIC_LETTERS = 8;
+/** Latin letters from which mixed text is also checked untranslated. */
+const MIN_LATIN_LETTERS = 20;
 
 const SURFACES = new Set(['video_comment', 'community_post', 'post_comment', 'video_metadata']);
 
@@ -51,7 +56,9 @@ export async function handleModerationScan(
     return { status: 'done', decision: 'skipped:disabled' };
   }
 
-  const text = normalizeText(payload.text).slice(0, MODERATION_MAX_TEXT);
+  // The sender already capped the raw text at MODERATION_MAX_TEXT. NFKC can expand it (ligatures),
+  // so the cap here is generous: cutting at the same length would drop the end of the text unscanned.
+  const text = normalizeText(payload.text.slice(0, MODERATION_MAX_TEXT)).slice(0, MODERATION_MAX_TEXT * 2);
   const language = detectLanguage(text);
   const base = { payload, language, scores: {}, topCategory: null, topScore: null, models: [], promptVersion: PROMPT_VERSION, priority: 0 };
 
@@ -73,13 +80,25 @@ export async function handleModerationScan(
   const scores: Record<string, number> = {};
 
   try {
-    let english = text;
-    if (language === 'ar') {
+    // Llama Guard does not list Arabic, so any meaningful Arabic part is translated (not only
+    // Arabic-majority text: otherwise a few English words could carry Arabic abuse past it).
+    // Mixed text with a real Latin part is also checked as-is; the stricter verdict wins.
+    const arabic = arabicLetterCount(text);
+    const latin = latinLetterCount(text);
+    const guardInputs: string[] = [];
+    if (arabic >= MIN_ARABIC_LETTERS) {
       translation = await translateToEnglish(ctx, text);
-      english = translation;
       models.push(MODELS.translate);
+      guardInputs.push(translation);
+      if (latin >= MIN_LATIN_LETTERS) guardInputs.push(text);
+    } else {
+      guardInputs.push(text);
     }
-    Object.assign(scores, await runGuard(ctx, english));
+    for (const input of guardInputs) {
+      for (const [category, score] of Object.entries(await runGuard(ctx, input))) {
+        scores[category] = Math.max(scores[category] ?? 0, score);
+      }
+    }
     models.push(MODELS.guard);
 
     if (config.extensionsEnabled) {

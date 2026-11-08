@@ -8,7 +8,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '@al-ummah/logger';
-import { LLAMA_GUARD_CATEGORIES, type ModerationScanPayload } from '@al-ummah/shared-types';
+import { LLAMA_GUARD_CATEGORIES, MODERATION_EXTENSION_CATEGORIES, type ModerationScanPayload } from '@al-ummah/shared-types';
 import { handleModerationScan } from '../moderation/consumer';
 import type { AiBinding } from '../moderation/ai';
 import { DEFAULT_POLICIES } from '../moderation/config';
@@ -76,12 +76,13 @@ describe('golden set (mocked Workers AI)', () => {
       run: async (model, input) => {
         if (model.includes('m2m100')) return { translated_text: `EN:${String(input.text)}` };
         const messages = input.messages as { role: string; content: string }[];
-        const content = messages[messages.length - 1].content;
+        const content = messages[messages.length - 1].content.replace(/^<content>|<\/content>$/g, '');
         const item = byText.get(content.replace(/^EN:/, ''))!;
         if (model.includes('llama-guard')) {
           return item.label in LLAMA_GUARD_CATEGORIES ? { response: `unsafe\n${item.label}` } : { response: { safe: true, categories: [] } };
         }
-        const scores = item.label in LLAMA_GUARD_CATEGORIES || item.label === 'safe' ? {} : { [item.label]: 0.95 };
+        const scores: Record<string, number> = Object.fromEntries(MODERATION_EXTENSION_CATEGORIES.map((c) => [c, 0]));
+        if (!(item.label in LLAMA_GUARD_CATEGORIES) && item.label !== 'safe') scores[item.label] = 0.95;
         return { response: JSON.stringify({ scores }) };
       },
     };

@@ -3,6 +3,7 @@ import { MessageProcessor } from './messageProcessor';
 import { createLogger } from '@al-ummah/logger';
 import { purgeExpiredNotifications } from './lib/notifications-store';
 import { handleModerationScan, isScanPayload } from './moderation/consumer';
+import { purgeExpiredModerationData } from './moderation/store';
 
 interface QueueMessage<T> {
   body: T;
@@ -97,6 +98,12 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
     logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
     forceHttpLogging: true,
   });
+  // AI moderation retention (Epic 28): 30-day translations, 12-month signals
+  try {
+    await purgeExpiredModerationData(env.REPORTS_DB, now);
+  } catch (error) {
+    logger.error('[Retention] Moderation retention failed', error);
+  }
   if (!env.NOTIFICATIONS_DB) {
     logger.warn('[Retention] NOTIFICATIONS_DB not bound; notification retention skipped');
     return 0;

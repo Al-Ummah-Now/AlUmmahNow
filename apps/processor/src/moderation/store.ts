@@ -26,6 +26,8 @@ export async function writeSignal(db: D1Database, input: SignalInput, now: numbe
   const id = crypto.randomUUID();
   const createdAt = new Date(now).toISOString();
   const reviewable = REVIEWABLE.includes(input.decision);
+  // An AI failure is not a "safe" verdict: those items go to human review (fail safe).
+  const needsReview = reviewable || input.skipReason === 'error';
   // Keep the reviewer translation only for items a reviewer will look at (no content copies otherwise).
   const translation = reviewable && input.translation ? input.translation : null;
   const { payload } = input;
@@ -55,7 +57,7 @@ export async function writeSignal(db: D1Database, input: SignalInput, now: numbe
         input.decision,
         input.skipReason ?? null,
         input.priority,
-        reviewable ? 'pending' : 'n/a',
+        needsReview ? 'pending' : 'n/a',
         translation,
         translation ? new Date(now + TRANSLATION_TTL_MS).toISOString() : null,
         createdAt
@@ -89,4 +91,33 @@ export async function writeSignal(db: D1Database, input: SignalInput, now: numbe
 
   await db.batch(statements);
   return id;
+}
+
+/** Signals (and their AI audit rows) are kept 12 months for appeals and audits (spec §11). */
+export const SIGNAL_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * GDPR erasure (story 1.3): tombstone the author on the user's signals and drop their reviewer
+ * translations (the only content-derived field). Appeals filed by the user are tombstoned too.
+ */
+export async function eraseUserModerationData(db: D1Database, userId: string, tombstone: string): Promise<void> {
+  await db.batch([
+    db
+      .prepare('UPDATE moderation_signals SET author_id = ?, translation = NULL, translation_expires_at = NULL WHERE author_id = ?')
+      .bind(tombstone, userId),
+    db.prepare('UPDATE moderation_appeals SET user_id = ?, message = NULL WHERE user_id = ?').bind(tombstone, userId),
+  ]);
+}
+
+/** Daily: clear translations past their 30 days, delete signals and AI audit rows past 12 months. */
+export async function purgeExpiredModerationData(db: D1Database, now: number = Date.now()): Promise<void> {
+  const nowIso = new Date(now).toISOString();
+  const cutoff = new Date(now - SIGNAL_RETENTION_MS).toISOString();
+  await db.batch([
+    db
+      .prepare('UPDATE moderation_signals SET translation = NULL, translation_expires_at = NULL WHERE translation_expires_at IS NOT NULL AND translation_expires_at < ?')
+      .bind(nowIso),
+    db.prepare("DELETE FROM moderation_actions WHERE actor_type = 'ai' AND created_at < ?").bind(cutoff),
+    db.prepare('DELETE FROM moderation_signals WHERE created_at < ?').bind(cutoff),
+  ]);
 }
