@@ -141,14 +141,14 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
             <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
               {subscriberCount !== undefined && (
                 <span data-testid="channel-subscriber-count">
-                  {formatSubscriberCount(subscriberCount)} {t.channel.subscribers.toLowerCase()}
+                  {formatSubscriberCount(subscriberCount)} {(subscriberCount === 1 ? t.channel.subscriberSingular : t.channel.subscribers).toLowerCase()}
                 </span>
               )}
               {channel.videosCount !== undefined && channel.videosCount > 0 && (
                 <>
                   <span>•</span>
                   <span>
-                    {formatNumber(channel.videosCount)} {t.video.videos.toLowerCase()}
+                    {formatNumber(channel.videosCount)} {(channel.videosCount === 1 ? t.video.videoSingular : t.video.videos).toLowerCase()}
                   </span>
                 </>
               )}

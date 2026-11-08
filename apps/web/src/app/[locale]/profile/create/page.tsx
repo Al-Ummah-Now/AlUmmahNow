@@ -8,11 +8,11 @@ import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { login } from '@/lib/actions';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
+import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneLabel, localizedTimezoneRegion, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 
 const ProfileCreatePage = () => {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const params = useParams();
   const locale = params.locale as string;
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -291,20 +291,20 @@ const ProfileCreatePage = () => {
                 className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
               >
                 {timezone && !isListedTimezone(timezone) && (
-                  <option value={timezone}>{getTimezoneDisplayName(timezone)}</option>
+                  <option value={timezone}>{getTimezoneDisplayName(timezone, lang)}</option>
                 )}
                 {Object.entries(COMMON_TIMEZONES).map(([region, timezones]) => (
-                  <optgroup key={region} label={region}>
+                  <optgroup key={region} label={localizedTimezoneRegion(region, lang)}>
                     {timezones.map((tz) => (
                       <option key={tz.value} value={tz.value}>
-                        {tz.label} ({tz.offset})
+                        {localizedTimezoneLabel(tz, lang)} ({tz.offset})
                       </option>
                     ))}
                   </optgroup>
                 ))}
               </select>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {t.profile?.timezoneDetected || 'Detected timezone'}: {getTimezoneDisplayName(timezone)}
+                {t.profile?.timezoneDetected || 'Detected timezone'}: {getTimezoneDisplayName(timezone, lang)}
               </p>
             </div>
 

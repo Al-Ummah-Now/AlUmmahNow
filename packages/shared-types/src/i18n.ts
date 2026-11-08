@@ -222,6 +222,7 @@ export interface AppTranslations {
     channel: string;
     channels: string;
     removeAccount: string;
+    removeAccountConfirm: string;
     /** Uses {count} placeholder */
     signOutOfAllDescription: string;
     openMenu: string;
@@ -253,6 +254,7 @@ export interface AppTranslations {
     channelAvatar: string;
     mainChannel: string;
     subscribers: string;
+    subscriberSingular: string;
     videos: string;
     subscribe: string;
     subscribed: string;
@@ -482,6 +484,7 @@ export interface AppTranslations {
    */
   video: {
     videos: string;
+    videoSingular: string;
     uploadVideo: string;
     editVideo: string;
     deleteVideo: string;
@@ -686,6 +689,7 @@ export interface AppTranslations {
     searchButton: string;
     searching: string;
     foundResults: string;
+    foundOneResult: string;
     foundResultsFor: string;
     activeFilters: string;
     category: string;
@@ -1906,6 +1910,7 @@ export interface AppTranslations {
     removeFailed: string;
     clearFailed: string;
     totalCount: string;
+    totalCountOne: string;
     pause: string;
     resume: string;
     pausedNotice: string;

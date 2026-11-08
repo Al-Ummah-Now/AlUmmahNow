@@ -118,7 +118,7 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
 
       {currentSubscribersCount > 0 && (
         <span className="text-sm text-gray-600 dark:text-gray-400">
-          {currentSubscribersCount.toLocaleString()} {t.channel.subscribers}
+          {currentSubscribersCount.toLocaleString()} {currentSubscribersCount === 1 ? t.channel.subscriberSingular : t.channel.subscribers}
         </span>
       )}
     </div>
