@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { ADMIN_WEB_URL, OPENAUTH_URL, accounts, storageStatePath } from './support/env';
 import { uiLogin } from './support/ui';
@@ -95,25 +96,6 @@ test.describe('authentication - signed in', () => {
     await expect(page.getByTestId('welcome')).toContainText(accounts.admin.email);
     await expect(page.getByRole('link', { name: 'Go to Dashboard' })).toBeVisible();
   });
-
-  test('AUTH-12 logout from the nav clears the session', async ({ browser }) => {
-    // Own context so the shared admin storage state is not affected
-    const context = await browser.newContext({ storageState: storageStatePath('admin') });
-    const page = await context.newPage();
-    await page.goto('/dashboard');
-    await page.getByTestId('logout-button').click();
-    await expect(page).toHaveURL(`${ADMIN_WEB_URL}/`);
-    await expect(page.getByRole('link', { name: 'Log in' })).toBeVisible();
-    const cookies = await context.cookies();
-    expect(cookies.find((c) => c.name === 'admin_session')).toBeUndefined();
-    await context.close();
-  });
-
-  test('AUTH-13 logout endpoint answers with 303 (no form re-POST)', async ({ request }) => {
-    const response = await request.post('/api/logout', { maxRedirects: 0 });
-    expect(response.status()).toBe(303);
-    expect(response.headers()['location']).toMatch(/\/$/);
-  });
 });
 
 test.describe('access denied page', () => {
@@ -139,11 +121,55 @@ test.describe('access denied page', () => {
     expect(hops.some((u) => u.startsWith(`${OPENAUTH_URL}/authorize`)), `no auth round trip: ${hops.join(' → ')}`).toBe(true);
     expect((await context.cookies()).find((c) => c.name === 'admin_session')).toBeUndefined();
   });
+});
 
-  test('AUTH-15 log out from access denied returns to the public home page', async ({ page }) => {
-    await page.goto('/access-denied');
-    await page.getByRole('button', { name: 'Log out' }).click();
-    await expect(page).toHaveURL(`${ADMIN_WEB_URL}/`);
+/**
+ * Log out is single sign-out (#295): admin-web clears its cookies, then the
+ * auth server's /logout ends the shared sign-in and walks every app's
+ * front-channel logout before returning here. It revokes that auth browser
+ * session, so these tests sign in fresh in an empty context: logging out of
+ * the shared storage state would sign out every other test that uses it
+ * (AUTH-14 depends on the non-admin's silent sign-in, #417).
+ */
+test.describe('log out (single sign-out)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  /** Clicks a log out control and follows the chain back to the public home page. */
+  async function logOutThroughAuthServer(page: Page, click: () => Promise<void>) {
+    const hops: string[] = [];
+    page.on('request', (r) => {
+      if (r.isNavigationRequest() && r.frame() === page.mainFrame()) hops.push(r.url());
+    });
+    await click();
+    await expect(page).toHaveURL(`${ADMIN_WEB_URL}/`, { timeout: 30_000 });
+    expect(hops.some((u) => u.startsWith(`${OPENAUTH_URL}/logout`)), `no auth server sign-out: ${hops.join(' → ')}`).toBe(true);
     await expect(page.getByRole('link', { name: 'Log in' })).toBeVisible();
+
+    const cookies = await page.context().cookies([ADMIN_WEB_URL, OPENAUTH_URL]);
+    expect(cookies.find((c) => c.name === 'admin_session')).toBeUndefined();
+    expect(cookies.find((c) => c.name === '__session' && c.value)).toBeUndefined();
+
+    // The shared sign-in is gone: signing in again asks for the password
+    await page.goto('/login');
+    await page.waitForURL((u) => u.href.startsWith(OPENAUTH_URL), { timeout: 30_000 });
+    await expect(page.locator('input[name="password"]')).toBeVisible();
+  }
+
+  test('AUTH-12 logout from the nav signs out everywhere', async ({ page }) => {
+    await uiLogin(page, accounts.admin);
+    await logOutThroughAuthServer(page, () => page.getByTestId('logout-button').click());
+  });
+
+  test('AUTH-13 logout endpoint answers 303 to the auth server sign-out (no form re-POST)', async ({ request }) => {
+    const response = await request.post('/api/logout', { maxRedirects: 0 });
+    expect(response.status()).toBe(303);
+    const location = new URL(response.headers()['location']);
+    expect(location.origin + location.pathname).toBe(`${OPENAUTH_URL}/logout`);
+    expect(location.searchParams.get('return')).toBe(`${ADMIN_WEB_URL}/`);
+  });
+
+  test('AUTH-15 log out from access denied signs out everywhere and returns to the public home page', async ({ page }) => {
+    await uiLogin(page, accounts.nonadmin, /\/access-denied$/);
+    await logOutThroughAuthServer(page, () => page.getByRole('button', { name: 'Log out' }).click());
   });
 });

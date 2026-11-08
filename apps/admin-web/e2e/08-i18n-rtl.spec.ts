@@ -18,7 +18,7 @@ test.describe('language and direction', () => {
     await page.getByTestId('language-select').selectOption('ar');
     await expectDirection(page, 'ar');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('لوحة تحكم الإدارة');
-    await expect(page.getByRole('navigation', { name: 'التنقل الرئيسي' }).getByRole('link', { name: 'الإشراف' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'التنقل الرئيسي' }).getByRole('link', { name: 'الإشراف', exact: true })).toBeVisible();
 
     await page.reload();
     await expectDirection(page, 'ar');
