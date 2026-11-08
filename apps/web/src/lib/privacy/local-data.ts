@@ -31,6 +31,7 @@ export const LOCAL_DATA_INVENTORY: ReadonlyArray<LocalDataEntry> = [
   { key: 'al-ummah-ab-assignments', classification: 'tracking', purpose: 'Keep A/B experiment variants stable (experiments consent only)', retention: '30 days unused', encrypted: false },
   { key: 'darkmode', classification: 'preference', purpose: 'Theme preference', retention: 'Until cleared', encrypted: false },
   { key: 'preferred-language', classification: 'preference', purpose: 'Language preference', retention: 'Until cleared', encrypted: false },
+  { key: 'playerGestureHintSeen', classification: 'preference', purpose: 'Touch gesture hint already shown', retention: 'Until cleared', encrypted: false },
   { key: 'videoPlayerVolume', classification: 'preference', purpose: 'Player volume', retention: 'Until cleared', encrypted: false },
   { key: 'video-player-playback-rate', classification: 'preference', purpose: 'Player speed', retention: 'Until cleared', encrypted: false },
   { key: 'subtitle-settings', classification: 'preference', purpose: 'Subtitle appearance', retention: 'Until cleared', encrypted: false },

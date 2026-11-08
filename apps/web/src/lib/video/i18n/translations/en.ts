@@ -14,6 +14,11 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     error: 'Error loading video',
   },
 
+  gestures: {
+    hint: 'Double-tap the sides to seek 10 seconds. Swipe up or down to change the volume.',
+    dismiss: 'Dismiss',
+  },
+
   accessibility: {
     videoPlayer: 'Video player',
     playButton: 'Play video',

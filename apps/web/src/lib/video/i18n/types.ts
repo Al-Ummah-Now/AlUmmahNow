@@ -72,6 +72,12 @@ export interface VideoPlayerTranslations {
   /**
    * Accessibility labels for screen readers
    */
+  /** First-run hint about the touch gestures */
+  gestures: {
+    hint: string;
+    dismiss: string;
+  };
+
   accessibility: {
     videoPlayer: string;
     playButton: string;
