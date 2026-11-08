@@ -81,7 +81,9 @@ Legend: **W** = working (consumed and its output is used), **L** = consumed but 
 | NotificationCreate / NotificationFanout | `lib/notifications.ts` | D1 + push | D1 notifications | notification center | W |
 | SearchIndexSync | admin-api, scheduler | D1 search index | D1 | search | W |
 
-On prod (2026-11-08), the messages archive holds 282 objects since 2025-11: VideoView, ProfileView, one ProfileCreate and one VideoLike. That is far less than the traffic, which suggests most producers are not reaching the processor, or the archive is being trimmed. The queue has a consumer (`batch_size` 10, `max_retries` 3, DLQ `al-ummah-now-dlq`). The backlog and DLQ depth need the Queues metrics API, which was not available. Investigate this (issue filed).
+On prod (2026-11-08), the messages archive holds 282 objects since 2025-11: VideoView, ProfileView, one ProfileCreate and one VideoLike. That matches the very low traffic (369 videos, 79 lifetime views in total), so there is no sign of lost events. The queue has a consumer (`batch_size` 10, `max_retries` 3, DLQ `al-ummah-now-dlq`). Backlog and DLQ depth need the Queues metrics API (issue filed).
+
+**Prod data caveat:** all 369 prod videos are legacy imports with `channelId: null`, owned by a placeholder `userId` (`d3b07384-…`). Until they are assigned to real channels and owners (data migration issue filed), channel rollups stay empty, and no real creator passes the owner check in `/api/analytics`.
 
 ## 4. Creator analytics
 
