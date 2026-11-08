@@ -27,7 +27,7 @@ describe('notification center (processor)', () => {
       MESSAGE_QUEUE: { send: jest.fn() },
       MESSAGES_BUCKET: { put: jest.fn(), get: jest.fn().mockResolvedValue(null), list: jest.fn() },
       community_posts: { put: jest.fn(), get: jest.fn(), list: jest.fn() },
-      REPORTS_DB: { prepare: () => ({ bind: () => ({ run: async () => ({ success: true }) }) }) } as unknown as QueueEnvironment['REPORTS_DB'],
+      REPORTS_DB: { prepare: () => ({ bind: () => ({ run: async () => ({ success: true }) }) }), batch: async () => [] } as unknown as QueueEnvironment['REPORTS_DB'],
       NOTIFICATIONS_DB: db,
       ENVIRONMENT: 'test',
       LOG_LEVEL: 'error',

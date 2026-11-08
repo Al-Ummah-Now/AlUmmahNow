@@ -95,9 +95,9 @@ It is unset in Phase A (open question Q2).
 | `ai_usage_daily` | per day × model: calls, input tokens, output tokens, neurons, estimated USD. Read by the budget check and by the cost dashboard |
 | `moderation_appeals` | appeal per action: user id, message, status (`open`, `upheld`, `overturned`), reviewer, timestamps (Phase C UI; table now so actions can link to it) |
 
-Retention (spec §11): a daily cron in the processor clears `translation` after 30 days and deletes
-signals older than 12 months (Phase C issue). User erasure (story 1.3) deletes the user's signals
-in the existing `UserDataErased` handler (Phase C issue).
+Retention (spec §11): the processor's daily cron clears `translation` after 30 days and deletes
+signals (and the AI's audit rows) older than 12 months. User erasure (story 1.3): the existing
+`UserDataErased` handler tombstones the author on the user's signals and appeals and drops translations.
 
 ## 3. Thresholds and actions (seed config, all `mode: shadow`)
 
@@ -120,8 +120,9 @@ score (28.2) exists, the engine treats every author as *not* low trust, so `char
 
 - **Kill switch:** two levels, both must allow. `AI_MODERATION_ENABLED` env var in the processor's
   wrangler config (`"false"` stops all AI calls at the next deploy), and `moderation_config.enabled`
-  in D1, which an Admin flips in admin-web and which takes effect on the next message. Off means
-  the processor writes a `skipped` signal and makes no AI call. The content is unaffected.
+  in D1, which an Admin flips in admin-web and which takes effect on the next message. **No D1 row
+  means off**, so a newly deployed environment (stage, production) makes no AI call until an Admin
+  turns it on. Off means no AI call and no row (keeps D1 quiet); the content is unaffected.
 - **Daily budget cap:** `AI_MODERATION_DAILY_NEURON_CAP` (env default) overridable by
   `moderation_config.daily_neuron_cap`. Before each message the processor sums today's (UTC)
   neurons in `ai_usage_daily`; at or above the cap it skips with reason `budget` and logs a warning
@@ -224,8 +225,7 @@ Raise the cap in admin-web as volume grows; the usage card shows when it binds.
 28.2 fast path + trust score · 28.6 vision on images and video frames · 28.7 Whisper transcripts and
 draft captions · 28.8 bge-m3 spam clustering · 28.9 CSAM Scanning Tool + reporting runbook · 28.10
 creator/site controls with entitlements · 28.11 appeals UI and notices · 28.12 live chat · 28.13
-staged model/prompt rollout · 28.14 report triage assistant · retention cron and user erasure of
-signals · `workers_ai` product in the cost collector · AI Gateway.
+staged model/prompt rollout · 28.14 report triage assistant · `workers_ai` product in the cost collector · AI Gateway.
 
 ## 12. Open questions
 

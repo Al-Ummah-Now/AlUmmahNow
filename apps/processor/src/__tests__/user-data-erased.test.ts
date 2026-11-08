@@ -14,7 +14,7 @@ describe('UserDataErased', () => {
     const env = {
       MESSAGE_QUEUE: { send: jest.fn() },
       MESSAGES_BUCKET: { put: jest.fn().mockResolvedValue(undefined) },
-      REPORTS_DB: { prepare },
+      REPORTS_DB: { prepare, batch: jest.fn().mockResolvedValue([]) },
       ENVIRONMENT: 'test',
       LOG_LEVEL: 'error',
     } as unknown as QueueEnvironment;

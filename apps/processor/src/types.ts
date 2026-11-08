@@ -90,4 +90,12 @@ export interface QueueEnvironment {
   WEBSOCKET_URL?: string;
   /** Secrets Store binding (or plain string in local dev) for websocket-server /broadcast */
   INTERNAL_API_KEY?: string | { get: () => Promise<string> };
+  /** Workers AI binding (Epic 28 moderation). Optional: scans are skipped when unbound. */
+  AI?: { run(model: string, input: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown> };
+  /** Env-level kill switch for AI moderation ("false" = off). */
+  AI_MODERATION_ENABLED?: string;
+  /** Default daily Workers AI neuron cap for moderation (D1 moderation_config overrides). */
+  AI_MODERATION_DAILY_NEURON_CAP?: string;
+  /** AI Gateway id; when set every Workers AI call goes through it. */
+  AI_GATEWAY_ID?: string;
 }

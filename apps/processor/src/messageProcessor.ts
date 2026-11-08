@@ -15,6 +15,7 @@ import {
   removeChannelSubscriber,
   upsertChannelSubscriber,
 } from './lib/notifications-store';
+import { eraseUserModerationData } from './moderation/store';
 import type { NotificationCreatePayload, NotificationFanoutPayload } from '@al-ummah/shared-types';
 
 /** Tombstone replacing a user id after GDPR erasure (matches api-videos lib/privacy/user-data.ts). */
@@ -743,6 +744,8 @@ export class MessageProcessor {
     const result = await env.REPORTS_DB.prepare('UPDATE reports SET reporter_id = ? WHERE reporter_id = ?')
       .bind(DELETED_USER_ID, userId)
       .run();
+    // AI moderation signals (Epic 28): tombstone the author, drop reviewer translations
+    await eraseUserModerationData(env.REPORTS_DB, userId, DELETED_USER_ID);
     if (env.NOTIFICATIONS_DB) {
       await eraseUserNotifications(env.NOTIFICATIONS_DB, userId);
     }

@@ -55,6 +55,13 @@
 				"max_batch_timeout": 30,
 				"max_retries": 3,
 				"dead_letter_queue": "al-ummah-now-dlq"
+			},
+			{
+				"queue": "al-ummah-now-moderation",
+				"max_batch_size": 5,
+				"max_batch_timeout": 10,
+				"max_retries": 3,
+				"dead_letter_queue": "al-ummah-now-dlq"
 			}
 		]
 	},
@@ -63,8 +70,15 @@
 	"vars": {
 		"ENVIRONMENT": "production",
 		"LOG_LEVEL": "info",
-		"WEBSOCKET_URL": "https://realtime.alummahnow.net"
+		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
+		// Epic 28: env kill switch ("false" = no AI calls) and default daily cap; D1 moderation_config
+		// must ALSO enable it (off until an Admin turns it on in admin-web).
+		"AI_MODERATION_ENABLED": "true",
+		"AI_MODERATION_DAILY_NEURON_CAP": "100000"
 	},
+
+	// Workers AI (Epic 28 moderation)
+	"ai": { "binding": "AI" },
 
 	// Secrets Store
 	"secrets_store_secrets": [
@@ -118,14 +132,24 @@
 						"max_batch_timeout": 30,
 						"max_retries": 3,
 						"dead_letter_queue": "al-ummah-now-dlq-stage"
+					},
+					{
+						"queue": "al-ummah-now-moderation-stage",
+						"max_batch_size": 5,
+						"max_batch_timeout": 10,
+						"max_retries": 3,
+						"dead_letter_queue": "al-ummah-now-dlq-stage"
 					}
 				]
 			},
 			"vars": {
 				"ENVIRONMENT": "stage",
 				"LOG_LEVEL": "info",
-				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net"
+				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
+				"AI_MODERATION_ENABLED": "true",
+				"AI_MODERATION_DAILY_NEURON_CAP": "10000"
 			},
+			"ai": { "binding": "AI" },
 			"secrets_store_secrets": [
 				{
 					"binding": "INTERNAL_API_KEY",
