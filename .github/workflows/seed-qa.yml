@@ -46,15 +46,19 @@ jobs:
     timeout-minutes: 120
 
     steps:
+      # Each target has its own secret; never fall back to the other env's password
       - name: Mask seed password
         env:
-          QA_SEED_PASSWORD: ${{ inputs.target == 'stage' && secrets.STAGE_SEED_PASSWORD || secrets.QA_SEED_PASSWORD }}
+          TARGET: ${{ inputs.target }}
+          STAGE_SEED_PASSWORD: ${{ secrets.STAGE_SEED_PASSWORD }}
+          QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
         run: |
-          if [ -z "$QA_SEED_PASSWORD" ]; then
-            echo "::error::seed password secret (QA_SEED_PASSWORD / STAGE_SEED_PASSWORD) is not set"
+          if [ "$TARGET" = stage ]; then pw="$STAGE_SEED_PASSWORD"; name=STAGE_SEED_PASSWORD; else pw="$QA_SEED_PASSWORD"; name=QA_SEED_PASSWORD; fi
+          if [ -z "$pw" ]; then
+            echo "::error::$name secret is not set"
             exit 1
           fi
-          echo "::add-mask::$QA_SEED_PASSWORD"
+          echo "::add-mask::$pw"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -105,14 +109,20 @@ jobs:
 
       - name: Run QA seed
         working-directory: apps/web
-        run: npx tsx e2e/seed/seed-qa.ts
+        # The script reads QA_SEED_PASSWORD: set it from the target's own secret only
+        run: |
+          if [ "$TARGET" = stage ]; then export QA_SEED_PASSWORD="$STAGE_SEED_PASSWORD"; else export QA_SEED_PASSWORD="$QA_SEED_PASSWORD_QA"; fi
+          [ -n "$QA_SEED_PASSWORD" ] || { echo "::error::seed password for $TARGET is empty"; exit 1; }
+          npx tsx e2e/seed/seed-qa.ts
         env:
           CI: true
           SEED_MODE: ${{ inputs.mode }}
           SEED_STRICT: ${{ inputs.strict }}
           SEED_SKIP_ROLES: ${{ inputs.skip_roles }}
           SEED_MEDIA_DIR: ${{ runner.temp }}/seed-qa-media
-          QA_SEED_PASSWORD: ${{ inputs.target == 'stage' && secrets.STAGE_SEED_PASSWORD || secrets.QA_SEED_PASSWORD }}
+          TARGET: ${{ inputs.target }}
+          STAGE_SEED_PASSWORD: ${{ secrets.STAGE_SEED_PASSWORD }}
+          QA_SEED_PASSWORD_QA: ${{ secrets.QA_SEED_PASSWORD }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           E2E_CODE_SINK_SECRET: ${{ inputs.target == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE || '' }}
           SEED_EMAIL_DOMAIN: ${{ inputs.target == 'stage' && 'e2e.alummahnow.net' || 'delivered.resend.dev' }}
