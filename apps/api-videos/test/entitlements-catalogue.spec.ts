@@ -116,7 +116,7 @@ describe('catalogue validation', () => {
 		assert.equal(new Set(ENTITLEMENT_CATALOGUE.map((d) => d.key)).size, ENTITLEMENT_CATALOGUE.length);
 		for (const d of ENTITLEMENT_CATALOGUE) {
 			assert.ok(d.description_en);
-			expect(d.description_ar).toMatch(/[؀-ۿ]/);
+			assert.match(d.description_ar, /[؀-ۿ]/);
 		}
 	});
 	it('computes the calendar-month period in UTC', () => {
