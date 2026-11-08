@@ -18,10 +18,17 @@ export interface SeedAccount {
   rbacRoleId?: 'role_admin' | 'role_moderator';
 }
 
+/**
+ * Mailbox domain of the seed accounts. QA's historical accounts live at
+ * delivered.resend.dev (codes read through the Resend API); stage uses the auth
+ * server's E2E code sink domain, e2e.alummahnow.net (SEED_EMAIL_DOMAIN).
+ */
+export const SEED_EMAIL_DOMAIN = process.env.SEED_EMAIL_DOMAIN || 'delivered.resend.dev';
+
 export const SEED_ACCOUNTS: readonly SeedAccount[] = [
   {
     key: 'admin',
-    email: 'qa-admin@delivered.resend.dev',
+    email: `qa-admin@${SEED_EMAIL_DOMAIN}`,
     displayName: 'QA Admin',
     displayNameAr: 'مسؤول الاختبار',
     bio: 'Seeded QA administrator account.',
@@ -29,7 +36,7 @@ export const SEED_ACCOUNTS: readonly SeedAccount[] = [
   },
   {
     key: 'moderator',
-    email: 'qa-moderator@delivered.resend.dev',
+    email: `qa-moderator@${SEED_EMAIL_DOMAIN}`,
     displayName: 'QA Moderator',
     displayNameAr: 'مشرف الاختبار',
     bio: 'Seeded QA moderator account.',
@@ -37,14 +44,14 @@ export const SEED_ACCOUNTS: readonly SeedAccount[] = [
   },
   {
     key: 'creator',
-    email: 'qa-creator@delivered.resend.dev',
+    email: `qa-creator@${SEED_EMAIL_DOMAIN}`,
     displayName: 'QA Creator',
     displayNameAr: 'منشئ محتوى الاختبار',
     bio: 'Seeded QA content creator account.',
   },
   {
     key: 'viewer',
-    email: 'qa-viewer@delivered.resend.dev',
+    email: `qa-viewer@${SEED_EMAIL_DOMAIN}`,
     displayName: 'QA Viewer',
     displayNameAr: 'مشاهد الاختبار',
     bio: 'Seeded QA viewer account.',

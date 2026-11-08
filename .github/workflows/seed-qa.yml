@@ -1,6 +1,6 @@
-name: Seed QA
+name: Seed QA / stage
 
-# Idempotently seeds the QA environment (accounts, roles, channels, videos,
+# Idempotently seeds the QA or stage environment (accounts, roles, channels, videos,
 # playlists, community posts, viewer interactions). Safe to re-run: existing
 # items are detected by natural key and skipped.
 # Script: apps/web/e2e/seed/seed-qa.ts
@@ -8,6 +8,13 @@ name: Seed QA
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: 'Environment to seed (stage accounts use the auth E2E code sink)'
+        type: choice
+        options:
+          - qa
+          - stage
+        default: qa
       mode:
         description: 'apply = create missing data; check = read-only report'
         type: choice
@@ -29,25 +36,29 @@ permissions:
   packages: read
 
 concurrency:
-  group: seed-qa
+  group: seed-${{ inputs.target }}
   cancel-in-progress: false
 
 jobs:
   seed:
-    name: Seed QA data
+    name: Seed ${{ inputs.target }} data
     runs-on: ubuntu-24.04  # Playwright 1.56 has no browser builds for ubuntu-latest (26.04)
     timeout-minutes: 120
 
     steps:
+      # Each target has its own secret; never fall back to the other env's password
       - name: Mask seed password
         env:
+          TARGET: ${{ inputs.target }}
+          STAGE_SEED_PASSWORD: ${{ secrets.STAGE_SEED_PASSWORD }}
           QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
         run: |
-          if [ -z "$QA_SEED_PASSWORD" ]; then
-            echo "::error::QA_SEED_PASSWORD secret is not set"
+          if [ "$TARGET" = stage ]; then pw="$STAGE_SEED_PASSWORD"; name=STAGE_SEED_PASSWORD; else pw="$QA_SEED_PASSWORD"; name=QA_SEED_PASSWORD; fi
+          if [ -z "$pw" ]; then
+            echo "::error::$name secret is not set"
             exit 1
           fi
-          echo "::add-mask::$QA_SEED_PASSWORD"
+          echo "::add-mask::$pw"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -98,21 +109,30 @@ jobs:
 
       - name: Run QA seed
         working-directory: apps/web
-        run: npx tsx e2e/seed/seed-qa.ts
+        # The script reads QA_SEED_PASSWORD: set it from the target's own secret only
+        run: |
+          if [ "$TARGET" = stage ]; then export QA_SEED_PASSWORD="$STAGE_SEED_PASSWORD"; else export QA_SEED_PASSWORD="$QA_SEED_PASSWORD_QA"; fi
+          [ -n "$QA_SEED_PASSWORD" ] || { echo "::error::seed password for $TARGET is empty"; exit 1; }
+          npx tsx e2e/seed/seed-qa.ts
         env:
           CI: true
           SEED_MODE: ${{ inputs.mode }}
           SEED_STRICT: ${{ inputs.strict }}
           SEED_SKIP_ROLES: ${{ inputs.skip_roles }}
           SEED_MEDIA_DIR: ${{ runner.temp }}/seed-qa-media
-          QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
+          TARGET: ${{ inputs.target }}
+          STAGE_SEED_PASSWORD: ${{ secrets.STAGE_SEED_PASSWORD }}
+          QA_SEED_PASSWORD_QA: ${{ secrets.QA_SEED_PASSWORD }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          E2E_CODE_SINK_SECRET: ${{ inputs.target == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE || '' }}
+          SEED_EMAIL_DOMAIN: ${{ inputs.target == 'stage' && 'e2e.alummahnow.net' || 'delivered.resend.dev' }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
-          OPENAUTH_URL: https://auth.qa.alummahnow.net
-          WEB_APP_URL: https://videos.qa.alummahnow.net
-          API_URL: https://videos.api.qa.alummahnow.net
-          OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
-          D1_DATABASE_NAME: al-ummah-now-d1-qa
-          D1_DATABASE_ID: 28590f3c-dd92-4c26-a803-d73a9bbe2b58
+          OPENAUTH_URL: https://auth.${{ inputs.target }}.alummahnow.net
+          WEB_APP_URL: https://videos.${{ inputs.target }}.alummahnow.net
+          API_URL: https://videos.api.${{ inputs.target }}.alummahnow.net
+          # Stage mirrors prod's client ids; QA has its own
+          OPENAUTH_CLIENT_ID: ${{ inputs.target == 'stage' && 'f0de3c30-0304-4ac4-86d6-1e185dec0439' || 'e0de3c30-0304-4ac4-86d6-1e185dec0439' }}
+          D1_DATABASE_NAME: al-ummah-now-d1-${{ inputs.target }}
+          D1_DATABASE_ID: ${{ inputs.target == 'stage' && 'c7886ef6-c70b-4b7f-a65b-3df9f9aba9e2' || '28590f3c-dd92-4c26-a803-d73a9bbe2b58' }}
