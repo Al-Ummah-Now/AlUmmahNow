@@ -9,7 +9,7 @@ import { SIGN_IN_COOKIES, singleSignOutNext } from "@/lib/auth/single-sign-out"
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const response = NextResponse.redirect(
-    singleSignOutNext(process.env.Issuer!, url.searchParams.get("next"), url.origin),
+    singleSignOutNext(process.env.Issuer!, url.searchParams, url.origin),
     302,
   )
   for (const name of SIGN_IN_COOKIES) response.cookies.delete(name)

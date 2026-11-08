@@ -22,13 +22,24 @@ export function startSingleSignOut(issuer: string, returnTo: string): string {
  * Where the front-channel endpoint goes next: `next` when it is the auth
  * server's /logout (never anywhere else: no open redirect), otherwise it
  * starts single sign-out itself.
+ *
+ * On Cloudflare (OpenNext) the query string reaches the route already
+ * percent-decoded once, so `next=<auth>/logout?step=2%26return=…` arrives as
+ * `next=<auth>/logout?step=2` plus a separate top-level `return`. Any other
+ * top-level parameters are therefore folded back into `next`.
  */
-export function singleSignOutNext(issuer: string, next: string | null, appOrigin: string): string {
+export function singleSignOutNext(issuer: string, query: URLSearchParams, appOrigin: string): string {
   const auth = new URL(issuer);
+  const next = query.get("next");
   if (next) {
     try {
       const target = new URL(next);
-      if (target.origin === auth.origin && target.pathname === "/logout") return target.toString();
+      if (target.origin === auth.origin && target.pathname === "/logout") {
+        for (const [key, value] of query) {
+          if (key !== "next" && !target.searchParams.has(key)) target.searchParams.set(key, value);
+        }
+        return target.toString();
+      }
     } catch {
       // ignore a malformed next
     }
