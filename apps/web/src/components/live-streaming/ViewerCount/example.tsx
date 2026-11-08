@@ -106,7 +106,7 @@ export function RealtimeViewerCount({ streamId: _streamId }: { streamId: string 
   // const [isLoading, setIsLoading] = useState(true);
   //
   // useEffect(() => {
-  //   const ws = new WebSocket(`wss://ws.alummahnow.net`);
+  //   const ws = new WebSocket(`wss://realtime.alummahnow.net/ws`);
   //
   //   ws.onopen = () => {
   //     ws.send(JSON.stringify({
