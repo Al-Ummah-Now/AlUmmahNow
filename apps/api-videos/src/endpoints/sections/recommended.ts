@@ -6,6 +6,7 @@ import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
 import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
+import { emptyShelf } from "../../lib/shelf";
 import { isWatchHistoryPaused } from "../../lib/watch-history";
 
 const VideoResponseSchema = z.object({
@@ -62,7 +63,6 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
           description: "Base recommendations on this video",
         }).optional(),
       }),
-      headers: z.object({}),
     },
     responses: {
       "200": {
@@ -99,9 +99,9 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
   };
 
   async handle(c: AppContext) {
+    // Validation stays outside the try: invalid input is a 400 from chanfana
+    const data = await this.getValidatedData<typeof this.schema>();
     try {
-      // Get validated data
-      const data = await this.getValidatedData<typeof this.schema>();
       const { limit, cursor, strategy = 'popular', excludeWatched = false, seedVideoId } = data.query;
       const userId = this.getUserId(c);
 
@@ -230,14 +230,7 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
         },
       });
     } catch (error) {
-      logger.error("Error in recommended videos endpoint", { error });
-      return c.json(
-        {
-          success: false,
-          error: error instanceof Error ? error.message : "Internal server error",
-        },
-        500
-      );
+      return emptyShelf(c, "recommended", error);
     }
   }
 }
