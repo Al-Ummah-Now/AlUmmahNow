@@ -56,6 +56,13 @@
 			"bucket_name": "global-settings",
 			"preview_bucket_name": "global-settings-preview",
 			"remote": true
+		},
+		{
+			// Read by AI moderation review (Epic 28) to show post text
+			"binding": "community_posts",
+			"bucket_name": "community-posts",
+			"preview_bucket_name": "community-posts-preview",
+			"remote": true
 		}
 	],
 
@@ -74,7 +81,9 @@
 		"ENVIRONMENT": "production",
 		"LOG_LEVEL": "info",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
-		"Issuer": "https://auth.alummahnow.net"
+		"Issuer": "https://auth.alummahnow.net",
+		// Shown in admin when D1 has no cap; keep equal to the processor's value
+		"AI_MODERATION_DAILY_NEURON_CAP": "100000"
 	},
 
 	// Secrets Store
@@ -128,6 +137,10 @@
 				{
 					"binding": "global_settings",
 					"bucket_name": "global-settings-stage"
+				},
+				{
+					"binding": "community_posts",
+					"bucket_name": "community-posts-stage"
 				}
 			],
 			"queues": {
@@ -142,7 +155,9 @@
 				"ENVIRONMENT": "stage",
 				"LOG_LEVEL": "info",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
-				"Issuer": "https://auth.stage.alummahnow.net"
+				"Issuer": "https://auth.stage.alummahnow.net",
+				// Shown in admin when D1 has no cap; keep equal to the processor's value
+				"AI_MODERATION_DAILY_NEURON_CAP": "10000"
 			},
 			"secrets_store_secrets": [
 				{

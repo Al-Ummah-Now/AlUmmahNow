@@ -24,11 +24,15 @@ export interface AdminBindings {
   profiles: R2Bucket;
   playlists: R2Bucket;
   global_settings: R2Bucket;
+  /** Community posts (read for AI moderation review; optional) */
+  community_posts?: R2Bucket;
 
   // Queue
   queue: any;
 
   // Environment variables
+  /** Default daily neuron cap shown when D1 has none (mirrors the processor's var) */
+  AI_MODERATION_DAILY_NEURON_CAP?: string;
   ENVIRONMENT: string;
   LOG_LEVEL: string;
   Issuer: string;
