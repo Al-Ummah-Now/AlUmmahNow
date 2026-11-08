@@ -5,6 +5,8 @@ import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { waitUntilOf } from "../../lib/search/ownership";
+import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
 
 export class ChannelShortsList extends OptionalAuthRoute {
 	schema = {
@@ -101,57 +103,77 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				}, 404);
 			}
 
-			// Get videos from R2 bucket
+			// Same visibility rules as the Videos tab (deleted, hidden and private channels are not listed)
+			if (channel.isDeleted || channel.isHidden || (channel.isPrivate && channel.userId !== userId)) {
+				logger.warn('Channel not listable', { channelId, isDeleted: !!channel.isDeleted, isHidden: !!channel.isHidden });
+				return c.json({
+					success: false,
+					error: 'Channel not found'
+				}, 404);
+			}
+
 			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
+			const isOwner = Boolean(userId && channel.userId === userId);
 
-			// Use R2's native cursor pagination to get all videos
-			const videos = await repository.listObjects(limit * 10, cursor); // Get more to filter
-
-			// Filter videos for this channel's shorts (< 60 seconds) and based on privacy settings
-			let channelShorts = (videos.items || []).filter(video => {
-				// Must belong to this channel
-				if (video.channelId !== channelId) {
-					return false;
-				}
-
-				// Must be a short (duration < 60 seconds)
-				// If duration is not set, exclude it from shorts
-				if (!video.duration || video.duration >= 60) {
-					return false;
-				}
-
-				// Exclude live streams (even if short duration)
-				if (video.isLive) {
-					return false;
-				}
-
-				// If video is explicitly private (false), only show if user is channel owner
-				if (video.isPublic === false) {
-					return userId && channel.userId === userId;
-				}
-
-				// If video is public (true) or undefined/null (default to public), show it
+			const isListed = (video: VideoType | null): video is VideoType => {
+				if (!video) return false;
+				if (video.channelId !== channelId) return false;
+				if (video.isDeleted || video.isHidden) return false;
+				// A short has a known duration under 60 seconds and is not a live stream
+				if (!video.duration || video.duration >= 60) return false;
+				if (video.isLive) return false;
+				// Private videos only for the channel owner; public or unset counts as public
+				if (video.isPublic === false) return isOwner;
 				return true;
-			});
+			};
 
-			// Sort shorts based on sort parameter
-			channelShorts.sort((a, b) => {
+			const byDate = (a: VideoType, b: VideoType) =>
+				new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
+			const compare = (a: VideoType, b: VideoType) => {
 				switch (sort) {
-					case "latest":
-						return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
 					case "popular":
 						return (b.views || 0) - (a.views || 0);
 					case "oldest":
-						return new Date(a.dateCreated || 0).getTime() - new Date(b.dateCreated || 0).getTime();
+						return -byDate(a, b);
 					default:
-						return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
+						return byDate(a, b);
 				}
+			};
+
+			let limitedShorts: VideoType[];
+			let nextCursor: string;
+			let source: "index" | "scan" = "scan";
+
+			// Ownership index (D1): filter, sort and page by channel, then load only
+			// this page's objects. A bucket slice almost never contains a new short (#296).
+			const page = await channelVideosFromIndex<VideoType>(c.env as never, {
+				channelId,
+				cursor,
+				limit,
+				query: {
+					sort: (sort || "latest") as "latest" | "popular" | "oldest",
+					privateFor: isOwner,
+					shortsOnly: true,
+				},
+				load: id => repository.getObject(id),
+				isListed,
+				waitUntil: waitUntilOf(c as never),
 			});
 
-			// Limit to requested amount
-			const limitedShorts = channelShorts.slice(0, limit);
+			if (page) {
+				source = "index";
+				limitedShorts = page.videos;
+				nextCursor = page.cursor;
+			} else {
+				// Index incomplete (or a legacy R2 cursor): one bounded slice of the
+				// bucket, as before (the helper schedules an index heal).
+				const videos = await repository.listObjects(limit * 10, cursor);
+				const channelShorts = (videos.items || []).filter(isListed).sort(compare);
+				limitedShorts = channelShorts.slice(0, limit);
+				nextCursor = channelShorts.length > limit ? (videos.cursor || "") : "";
+			}
 
 			// Transform business videos to view models
 			const transformToView = (video: VideoType) => ({
@@ -163,11 +185,6 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				commentsCount: video.comments?.length || 0,
 			});
 
-			// Return response with custom cursor for pagination
-			// Since we filtered after fetching, we need to manage cursor differently
-			const hasMore = channelShorts.length > limit;
-			const nextCursor = hasMore ? videos.cursor : "";
-
 			const response: PaginationResponse<ReturnType<typeof transformToView>> = {
 				cursor: nextCursor || "",
 				limit,
@@ -178,8 +195,8 @@ export class ChannelShortsList extends OptionalAuthRoute {
 			logger.info('Successfully fetched channel shorts', {
 				channelId,
 				shortsCount: limitedShorts.length,
-				totalFiltered: channelShorts.length,
-				hasMore,
+				hasMore: Boolean(nextCursor),
+				source,
 				duration
 			});
 
