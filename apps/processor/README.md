@@ -302,6 +302,25 @@ The worker implements comprehensive error handling:
 2. **Processing Errors**: Temporary failures are retried up to 3 times
 3. **Unexpected Errors**: Caught and logged with retry logic
 4. **Dead Letter Queue**: Failed messages after max retries are sent to DLQ for manual review
+5. **Unknown message types** are not retried (a retry cannot make them work).
+
+### Dead letters (`src/dlq`)
+
+The processor also consumes its environment's DLQ (`al-ummah-now-dlq`, `-stage`, `-qa`).
+Each message is:
+
+- logged as `[DLQ] Message dead-lettered` with `alert: "queue_dead_letter"` (search Workers Logs for it), and
+- stored in the `dead_letters` table of `NOTIFICATIONS_DB` (migration `0004_dead_letters.sql`, kept 30 days).
+
+Internal endpoints (header `X-API-Key: <INTERNAL_API_KEY>`):
+
+- `GET /dlq?limit=50&all=1`: newest dead letters (`all=1` includes replayed ones)
+- `POST /dlq/replay` with `{"id": "<dead letter id>"}`: re-sends the original message to the videos
+  queue once (the row is claimed first). Moderation scans and truncated bodies cannot be replayed.
+
+Query directly: `wrangler d1 execute al-ummah-now-notifications-qa --remote --command "SELECT type_name, count(*) FROM dead_letters GROUP BY 1"`.
+
+`scripts/release/queue-budget.ts` checks queue writes per minute and DLQ writes for a window; the E2E workflow runs it after each run.
 
 ## Monitoring and Observability
 

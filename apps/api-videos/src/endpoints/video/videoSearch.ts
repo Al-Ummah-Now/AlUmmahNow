@@ -4,7 +4,6 @@ import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
 import { Channel } from "@al-ummah/shared-types";
 import { logger } from "../../lib/logger";
 import { isVideoRemoved } from "../../lib/visibility";
@@ -92,7 +91,6 @@ export class VideoSearch extends OptionalAuthRoute {
 
 		// Get auth context for user information
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
 
 		// Retrieve the validated parameters
 		const {
@@ -337,21 +335,8 @@ export class VideoSearch extends OptionalAuthRoute {
 			};
 		};
 
-		// Send analytics event for search
-		const queue = new Queue(c.env.queue);
-		await queue.send(MessageType.VideoView, {
-			searchQuery: query || "",
-			searchFilter: filter,
-			searchSort: sort,
-			channelIds: channelIdList,
-			durationFilter,
-			scheduleFilter,
-			isOwner,
-			totalResults,
-			userId: userId,
-			channelId: channelId,
-			timestamp: new Date().toISOString(),
-		});
+		// No queue message per search: the processor only logged it, and per-read
+		// messages cost queue operations and processor invocations.
 
 		const searchTime = Date.now() - startTime;
 		const nextCursor = endIndex < totalResults ? endIndex.toString() : "";

@@ -120,11 +120,13 @@ export const APPS: AppRule[] = [
 				{ kind: 'd1_databases', name: 'REPORTS_DB' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-videos' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-moderation' },
+				// Dead-letter visibility: the processor stores every DLQ message (src/dlq).
+				{ kind: 'queue_consumer', name: 'al-ummah-now-dlq' },
 				{ kind: 'ai', name: 'AI' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'ai', name: 'AI' }] }),
+		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-dlq-stage' }, { kind: 'ai', name: 'AI' }] }),
 	},
 	{
 		app: 'websocket-server',

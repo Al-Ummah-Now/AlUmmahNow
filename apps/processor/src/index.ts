@@ -4,8 +4,13 @@ import { createLogger } from '@al-ummah/logger';
 import { purgeExpiredNotifications } from './lib/notifications-store';
 import { handleModerationScan, isScanPayload } from './moderation/consumer';
 import { purgeExpiredModerationData } from './moderation/store';
+import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
+import { listDeadLetters, purgeExpiredDeadLetters, replayDeadLetter } from './dlq/store';
+import { getApiKey } from './lib/websocket-notify';
 
 interface QueueMessage<T> {
+  /** Queue message id (Cloudflare Queues). */
+  id?: string;
   body: T;
   ack: () => void;
   retry: () => void;
@@ -46,6 +51,49 @@ export async function processModerationBatch(
       message.retry();
     }
   }
+}
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+/** Constant-time comparison of the X-API-Key header with INTERNAL_API_KEY. */
+async function isInternalCaller(request: Request, env: QueueEnvironment): Promise<boolean> {
+  const expected = await getApiKey(env.INTERNAL_API_KEY);
+  const given = request.headers.get('X-API-Key') ?? '';
+  if (!expected || given.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * Internal dead-letter API (X-API-Key = INTERNAL_API_KEY):
+ *   GET  /dlq?limit=50&all=1   newest dead letters (all=1 includes replayed ones)
+ *   POST /dlq/replay {"id"}    re-send one stored message to the videos queue
+ */
+export async function handleDeadLetterRequest(
+  request: Request,
+  url: URL,
+  env: QueueEnvironment,
+  logger: ReturnType<typeof createLogger>
+): Promise<Response> {
+  if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
+  if (!env.NOTIFICATIONS_DB) return json({ error: 'NOTIFICATIONS_DB not bound' }, 503);
+
+  if (url.pathname === '/dlq' && request.method === 'GET') {
+    const limit = Number(url.searchParams.get('limit') ?? 50) || 50;
+    const deadLetters = await listDeadLetters(env.NOTIFICATIONS_DB, { limit, includeReplayed: url.searchParams.get('all') === '1' });
+    return json({ deadLetters });
+  }
+  if (url.pathname === '/dlq/replay' && request.method === 'POST') {
+    const body = (await request.json().catch(() => null)) as { id?: unknown } | null;
+    if (!body || typeof body.id !== 'string' || !body.id) return json({ error: 'id is required' }, 400);
+    const outcome = await replayDeadLetter(env.NOTIFICATIONS_DB, env.MESSAGE_QUEUE, body.id);
+    logger.info('[DLQ] Replay requested', { id: body.id, status: outcome.status });
+    const status = outcome.status === 'replayed' ? 200 : outcome.status === 'not_found' ? 404 : 409;
+    return json(outcome, status);
+  }
+  return json({ error: 'Method not allowed' }, 405);
 }
 
 // Health check helper functions
@@ -109,6 +157,12 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
     return 0;
   }
   try {
+    const purged = await purgeExpiredDeadLetters(env.NOTIFICATIONS_DB, now);
+    if (purged > 0) logger.info('[Retention] Expired dead letters deleted', { purged });
+  } catch (error) {
+    logger.error('[Retention] Dead-letter retention failed', error);
+  }
+  try {
     const deleted = await purgeExpiredNotifications(env.NOTIFICATIONS_DB, now);
     logger.info('[Retention] Expired notifications deleted', { deleted });
     return deleted;
@@ -128,6 +182,12 @@ export default {
       logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
       forceHttpLogging: true,
     });
+    // Dead-letter queues: alert + store for replay (see src/dlq). Checked first:
+    // a DLQ batch must never be processed (and fail) again as a normal message.
+    if (isDeadLetterQueue(batch.queue)) {
+      await processDeadLetterBatch(batch, env, logger);
+      return;
+    }
     if (batch.queue?.includes('moderation')) {
       await processModerationBatch(batch, env, logger);
       return;
@@ -192,6 +252,11 @@ export default {
     
     logger.debug(`Received ${request.method} request to ${url.pathname}`);
     
+    // Dead letters (see src/dlq): GET /dlq lists, POST /dlq/replay {"id"} re-sends one.
+    if (url.pathname === '/dlq' || url.pathname === '/dlq/replay') {
+      return handleDeadLetterRequest(request, url, env, logger);
+    }
+
     // Health check endpoint
     if (url.pathname === '/health') {
       logger.debug('Health check requested');
@@ -307,7 +372,7 @@ export default {
     logger.warn(`Unknown endpoint requested: ${url.pathname}`);
     return new Response(JSON.stringify({
       error: 'Not Found',
-      message: 'Available endpoints: /health, /queue/status',
+      message: 'Available endpoints: /health, /queue/status, /dlq, /dlq/replay',
     }), {
       status: 404,
       headers: { 'content-type': 'application/json' },

@@ -64,7 +64,7 @@ export default {
 
       // 5. Report metrics
       const duration = Date.now() - startTime;
-      await reportMetrics(env.QUEUE, {
+      reportMetrics({
         processed: results.successful.length,
         failed: results.failed.length,
         duration,
@@ -79,7 +79,7 @@ export default {
       }
     } catch (error) {
       logger.error('Scheduler error:', error);
-      await sendAlert(env, error);
+      sendAlert(error);
     }
   },
 };
@@ -141,7 +141,7 @@ async function processBatch(
         }
 
         // Log success event
-        await logEvent(env.QUEUE, {
+        logEvent({
           type: 'SCHEDULED_PUBLISH_SUCCESS',
           videoId: video.videoId,
           scheduledTime: video.scheduledPublishDate,
@@ -161,7 +161,7 @@ async function processBatch(
         logger.error(`Failed to publish video ${video.videoId}:`, error);
 
         // Log failure event
-        await logEvent(env.QUEUE, {
+        logEvent({
           type: 'SCHEDULED_PUBLISH_FAILURE',
           videoId: video.videoId,
           scheduledTime: video.scheduledPublishDate,

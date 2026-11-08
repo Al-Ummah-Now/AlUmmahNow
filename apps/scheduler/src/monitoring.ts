@@ -3,46 +3,25 @@ import { getLastRun } from './locks';
 import { logger } from './lib/logger';
 
 /**
- * Report metrics to queue for analytics
- * @param queue Queue binding
- * @param metrics Metrics data
+ * Report run metrics as a structured log line.
+ *
+ * These used to be sent to the processor's queue as ad-hoc objects
+ * ({ type: 'SCHEDULER_METRICS', ... }). They are not AlUmmahMessages, so the
+ * processor rejected every one as "Invalid message structure": a queue write,
+ * read and delete plus a processor invocation for nothing. Workers Logs is
+ * where they are read.
  */
-export async function reportMetrics(
-  queue: Queue,
-  metrics: {
-    processed: number;
-    failed: number;
-    duration: number;
-  }
-): Promise<void> {
-  try {
-    await queue.send({
-      type: 'SCHEDULER_METRICS',
-      timestamp: new Date().toISOString(),
-      ...metrics,
-    });
-
-    logger.debug(`Reported metrics: ${metrics.processed} processed, ${metrics.failed} failed, ${metrics.duration}ms duration`);
-  } catch (error) {
-    logger.error('Failed to report metrics:', error);
-  }
+export function reportMetrics(metrics: { processed: number; failed: number; duration: number }): void {
+  logger.info('[Scheduler] Run metrics', { event: 'SCHEDULER_METRICS', ...metrics });
 }
 
 /**
- * Log publish event to queue
- * @param queue Queue binding
- * @param event Publish event data
+ * Log a publish event (success, failure, retry) as a structured log line.
+ * Not sent to the queue, for the same reason as reportMetrics.
  */
-export async function logEvent(
-  queue: Queue,
-  event: PublishEvent
-): Promise<void> {
-  try {
-    await queue.send(event);
-    logger.debug(`Logged event: ${event.type} for video ${event.videoId}`);
-  } catch (error) {
-    logger.error('Failed to log event:', error);
-  }
+export function logEvent(event: PublishEvent | Record<string, unknown>): void {
+  if (event.type === 'SCHEDULED_PUBLISH_FAILURE') logger.warn(`[Scheduler] ${String(event.type)}`, event);
+  else logger.info(`[Scheduler] ${String(event.type)}`, event);
 }
 
 /**
@@ -161,29 +140,17 @@ export async function updateDailyMetrics(
 }
 
 /**
- * Send alert for critical issues
- * @param env Environment bindings
- * @param error Error or message
+ * Alert for critical issues: a structured error log (`alert: scheduler_error`),
+ * searchable in Workers Logs. No longer sent to the processor's queue, which
+ * rejected it as an invalid message.
  */
-export async function sendAlert(
-  env: Env,
-  error: unknown
-): Promise<void> {
-  try {
-    const message = error instanceof Error ? error.message : String(error);
-
-    logger.error(`ALERT: ${message}`);
-
-    // Log to queue for external monitoring
-    await env.QUEUE.send({
-      type: 'SCHEDULER_ALERT',
-      timestamp: new Date().toISOString(),
-      message,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-  } catch (alertError) {
-    logger.error('Failed to send alert:', alertError);
-  }
+export function sendAlert(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  logger.error(`ALERT: ${message}`, {
+    alert: 'scheduler_error',
+    event: 'SCHEDULER_ALERT',
+    stack: error instanceof Error ? error.stack : undefined,
+  });
 }
 
 /**
