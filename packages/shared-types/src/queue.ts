@@ -122,6 +122,10 @@ export enum MessageType {
   // VideoWatchTimePayload). The processor adds them to the video and channel
   // rollups' watchTime without counting a view.
   VideoWatchTime = 220,
+
+  // AI-assisted moderation (Epic 28). Explicit value in its own reserved range (230-239).
+  // Sent by api-videos to the dedicated moderation queue (payload: ModerationScanPayload).
+  ModerationScan = 230,
 }
 
 /** Payload of MessageType.VideoWatchTime. */
