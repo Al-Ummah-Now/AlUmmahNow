@@ -3,7 +3,7 @@
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, UploadCloud, Trash2, Eye, Edit, X } from 'lucide-react';
+import { Search, UploadCloud, Trash2, Eye, Edit, X, BarChart3 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -600,6 +600,14 @@ export default function VideoDashboardPage() {
                     >
                       <Edit size={14} />
                       <span className="text-xs">{t.common.edit}</span>
+                    </Link>
+                    <Link
+                      href={`/${lang}/analytics/videos/${encodeURIComponent(video.id)}`}
+                      data-testid="dashboard-video-analytics"
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
+                    >
+                      <BarChart3 size={14} aria-hidden="true" />
+                      <span className="text-xs">{t.analytics.dashboard.viewAnalytics}</span>
                     </Link>
                     <button
                       onClick={() => handleDeleteVideo(video.id)}

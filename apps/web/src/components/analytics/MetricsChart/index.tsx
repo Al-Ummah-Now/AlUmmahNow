@@ -23,8 +23,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
   const totalViews = data?.reduce((sum, m) => sum + m.views, 0) ?? 0;
   const totalLikes = data?.reduce((sum, m) => sum + m.likes, 0) ?? 0;
   const totalComments = data?.reduce((sum, m) => sum + m.comments, 0) ?? 0;
+  const totalWatchTime = data?.reduce((sum, m) => sum + (m.watchTime || 0), 0) ?? 0;
+  const totalSubscribers = data?.reduce((sum, m) => sum + (m.subscribers || 0), 0) ?? 0;
 
-  if (!data || data.length === 0 || totalViews + totalLikes + totalComments === 0) {
+  if (!data || data.length === 0 || totalViews + totalLikes + totalComments + totalWatchTime + totalSubscribers === 0) {
     return (
       <div className="h-32 flex items-center justify-center text-gray-500 dark:text-gray-400">
         {d.noMetrics}
@@ -35,6 +37,9 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
   const maxViews = Math.max(...data.map(m => m.views));
   const maxLikes = Math.max(...data.map(m => m.likes));
   const maxComments = Math.max(...data.map(m => m.comments));
+  const maxWatchTime = Math.max(...data.map(m => m.watchTime || 0));
+  const maxSubscribers = Math.max(...data.map(m => m.subscribers || 0));
+  const minutes = (seconds: number) => Math.round((seconds || 0) / 60);
   // Label every Nth day so long ranges stay readable
   const labelEvery = Math.max(1, Math.ceil(data.length / 10));
 
@@ -85,6 +90,37 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
             <div className="w-3 h-3 bg-yellow-500 rounded"></div>
             <span className="text-xs text-gray-600 dark:text-gray-300">{d.comments}</span>
           </div>
+        </div>
+      </div>
+
+      {/* #241: watch time (minutes per day) and new subscribers per day */}
+      <div data-testid="metrics-watch-time">
+        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{d.watchTimeOverTime}</h4>
+        <div className="h-24 flex items-end gap-1">
+          {data.map((metric) => (
+            <div key={metric.date} className="flex flex-col items-center flex-1 min-w-0 h-full justify-end">
+              <div
+                className="bg-purple-500 dark:bg-purple-400 rounded-t w-full min-h-[2px]"
+                style={{ height: scale(metric.watchTime || 0, maxWatchTime, 100) }}
+                title={`${dayLabel(metric.date)}: ${d.minutesCount.replace('{count}', fmt(minutes(metric.watchTime)))}`}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div data-testid="metrics-subscribers">
+        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{d.subscribersOverTime}</h4>
+        <div className="h-24 flex items-end gap-1">
+          {data.map((metric) => (
+            <div key={metric.date} className="flex flex-col items-center flex-1 min-w-0 h-full justify-end">
+              <div
+                className="bg-red-500 dark:bg-red-400 rounded-t w-full min-h-[2px]"
+                style={{ height: scale(metric.subscribers || 0, maxSubscribers, 100) }}
+                title={`${dayLabel(metric.date)}: ${d.subscribersCount.replace('{count}', fmt(metric.subscribers || 0))}`}
+              />
+            </div>
+          ))}
         </div>
       </div>
 

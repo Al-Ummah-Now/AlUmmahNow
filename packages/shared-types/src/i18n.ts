@@ -953,6 +953,25 @@ export interface AppTranslations {
       avgDailyViews: string;
       noMetrics: string;
       changeVsPrevious: string;
+      /** #241: watch time and subscriber growth */
+      watchTimeHours: string;
+      hoursValue: string;
+      newSubscribers: string;
+      inLastDays: string;
+      watchTimeOverTime: string;
+      subscribersOverTime: string;
+      minutesCount: string;
+      subscribersCount: string;
+      /** #241: per-video analytics page */
+      videoAnalytics: string;
+      viewAnalytics: string;
+      backToAnalytics: string;
+      avgViewDuration: string;
+      watchTimeTotal: string;
+      published: string;
+      videoLoadError: string;
+      retry: string;
+      retentionComingSoon: string;
     };
   };
 

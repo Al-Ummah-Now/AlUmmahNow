@@ -14,7 +14,17 @@ export interface AnalyticsDashboardProps {
   CardComponent?: typeof AnalyticsCard;
 }
 
-type ChangeField = 'views' | 'likes' | 'comments' | 'subscribers';
+type ChangeField = 'views' | 'likes' | 'comments' | 'subscribers' | 'watchTime';
+
+/** Sum of one field over the daily series (0 without data). */
+export function seriesTotal(metrics: AnalyticsMetrics[] | null, field: ChangeField): number {
+  return (metrics ?? []).reduce((n, m) => n + (Number(m[field]) || 0), 0);
+}
+
+/** Seconds as hours with one decimal (watch time cards). */
+export function toHours(seconds: number): number {
+  return Math.round((seconds / 3600) * 10) / 10;
+}
 
 /**
  * Compare the second half of the daily series with the first half (by default
@@ -68,6 +78,24 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         <CardComponent title={d.totalLikes} value={fmt(summary.totalLikes)} icon="heart" {...change('likes')} />
         <CardComponent title={d.totalComments} value={fmt(summary.totalComments)} icon="message" {...change('comments')} />
         <CardComponent title={t.analytics.subscribers} value={fmt(summary.totalSubscribers)} icon="users" {...change('subscribers')} />
+      </div>
+
+      {/* #241: watch time and subscriber growth over the series' period */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-testid="analytics-growth-cards">
+        <CardComponent
+          title={d.watchTimeHours}
+          value={d.hoursValue.replace('{hours}', toHours(seriesTotal(metrics, 'watchTime')).toLocaleString(lang === 'ar' ? 'ar' : 'en-US'))}
+          subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
+          icon="clock"
+          {...change('watchTime')}
+        />
+        <CardComponent
+          title={d.newSubscribers}
+          value={fmt(seriesTotal(metrics, 'subscribers'))}
+          subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
+          icon="users"
+          {...change('subscribers')}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
