@@ -263,6 +263,7 @@ export function ChannelTabBar({
           <div
             ref={tabBarRef}
             role="tablist"
+            data-testid="channel-tabs"
             dir={isRTL ? 'rtl' : 'ltr'}
             className="flex overflow-x-auto scrollbar-hide scroll-smooth"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -272,12 +273,14 @@ export function ChannelTabBar({
                 key={tab}
                 type="button"
                 role="tab"
+                id={`tab-${tab}`}
+                data-testid={`tab-${tab}`}
                 aria-selected={activeTab === tab}
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => handleTabClick(tab)}
                 className={
                   activeTab === tab
-                    ? "flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer relative text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20"
+                    ? "flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer relative text-yellow-800 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20"
                     : "flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer relative text-gray-600 dark:text-gray-400"
                 }
                 style={

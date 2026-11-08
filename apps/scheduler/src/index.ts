@@ -128,7 +128,7 @@ async function processBatch(
         const publishStartTime = Date.now();
 
         // Publish the video (idempotent - checks if already public)
-        await publishVideo(env.VIDEOS, video);
+        await publishVideo(env.VIDEOS, video, env.QUEUE);
 
         // Calculate publish delay
         const scheduledTime = new Date(video.scheduledPublishDate).getTime();

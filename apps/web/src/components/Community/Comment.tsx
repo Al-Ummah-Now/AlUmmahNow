@@ -1,6 +1,8 @@
+'use client';
+
 import { logger } from '@/lib/logger-client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PostComment } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -12,8 +14,11 @@ import {
   updatePostComment,
   listCommentReplies,
   heartPostComment,
+  unheartPostComment,
   pinPostComment,
+  unpinPostComment,
 } from '@/lib/api/post-comments';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface CommentProps {
   comment: PostComment;
@@ -77,7 +82,8 @@ export default function Comment({
   onCommentDeleted,
   onReplyCreated,
 }: CommentProps) {
-  const [liked, setLiked] = useState(false);
+  const { t } = useLanguage();
+  const [liked, setLiked] = useState(Boolean(comment.isLikedByViewer));
   const [likes, setLikes] = useState(comment.likes);
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
@@ -91,6 +97,11 @@ export default function Comment({
   const [showMenu, setShowMenu] = useState(false);
   const [hearted, setHearted] = useState(comment.isHeartedByCreator);
   const [pinned, setPinned] = useState(comment.isPinned);
+
+  // Pinning another comment unpins this one in the parent list; keep local state in sync.
+  useEffect(() => {
+    setPinned(comment.isPinned);
+  }, [comment.isPinned]);
 
   const isOwner = userId === comment.userId;
   const timeAgo = getTimeAgo(new Date(comment.createdAt), isRTL);
@@ -210,13 +221,15 @@ export default function Comment({
     if (!isPostOwner || !channelId || !userId) return;
 
     try {
-      const result = await heartPostComment(postChannelId, postId, comment.id, { channelId });
+      const result = hearted
+        ? await unheartPostComment(postChannelId, postId, comment.id, { channelId })
+        : await heartPostComment(postChannelId, postId, comment.id, { channelId });
 
       if (result?.success) {
         setHearted(result.hearted);
       }
     } catch (error) {
-      logger.error('Failed to heart comment:', error);
+      logger.error('[Comment] Failed to toggle comment heart', { commentId: comment.id, error });
     }
   };
 
@@ -224,14 +237,19 @@ export default function Comment({
     if (!isPostOwner || !channelId || !userId) return;
 
     try {
-      const result = await pinPostComment(postChannelId, postId, comment.id, { channelId });
+      const result = pinned
+        ? await unpinPostComment(postChannelId, postId, comment.id, { channelId })
+        : await pinPostComment(postChannelId, postId, comment.id, { channelId });
 
       if (result?.success) {
-        setPinned(!pinned);
+        setPinned(result.pinned);
         setShowMenu(false);
+        if (onCommentUpdated) {
+          onCommentUpdated({ ...comment, isPinned: result.pinned });
+        }
       }
     } catch (error) {
-      logger.error('Failed to pin comment:', error);
+      logger.error('[Comment] Failed to toggle comment pin', { commentId: comment.id, error });
     }
   };
 
@@ -282,7 +300,7 @@ export default function Comment({
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L11 4.323V3a1 1 0 011-1h-2z" />
                   </svg>
-                  {isRTL ? 'مثبت' : 'Pinned'}
+                  {t.community.pinned}
                 </span>
               )}
               <span className="text-sm text-gray-500 dark:text-gray-400">{timeAgo}</span>
@@ -331,7 +349,7 @@ export default function Comment({
                         onClick={handlePin}
                         className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100"
                       >
-                        {pinned ? (isRTL ? 'إلغاء التثبيت' : 'Unpin') : isRTL ? 'تثبيت' : 'Pin'}
+                        {pinned ? t.community.unpinComment : t.community.pinComment}
                       </button>
                     )}
                   </div>
@@ -385,7 +403,12 @@ export default function Comment({
 
             {/* Heart from Creator */}
             {isPostOwner && (
-              <button onClick={handleHeart} className={cn('flex items-center gap-1', hearted && 'text-red-500')}>
+              <button
+                onClick={handleHeart}
+                className={cn('flex items-center gap-1', hearted && 'text-red-500')}
+                aria-label={hearted ? t.community.removeHeart : t.community.heartComment}
+                aria-pressed={hearted}
+              >
                 <svg className="w-4 h-4" fill={hearted ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
@@ -394,7 +417,7 @@ export default function Comment({
 
             {/* Creator Heart Badge */}
             {hearted && !isPostOwner && (
-              <div className="flex items-center gap-1 text-red-500">
+              <div className="flex items-center gap-1 text-red-500" title={t.community.heartedByCreator} aria-label={t.community.heartedByCreator}>
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                   <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>

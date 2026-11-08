@@ -87,12 +87,16 @@ export class DislikeDelete extends AuthenticatedRoute {
 			timestamp: new Date().toISOString(),
 		});
 
-        video.dislikes = video.dislikes.filter((d) => d.id !== dislike.id);
         // Note: dislikesCount is calculated in view layer, not stored
-        
-		await repository.putObject(video.id, video);
+		// Conditional write: a concurrent reaction on this video is re-read, not overwritten
+		await repository.updateObject(video.id, (fresh) => {
+			const before = (fresh.dislikes || []).length;
+			fresh.dislikes = (fresh.dislikes || []).filter((d) => !(d.channelId === channelId && d.entityId === id));
+			return fresh.dislikes.length !== before;
+		});
 
-		return true;
+		// chanfana cannot build a response from a bare boolean (it 500ed after the change was stored)
+		return { success: true };
 	}
 }
 

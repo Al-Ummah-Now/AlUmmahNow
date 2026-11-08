@@ -1,3 +1,4 @@
+import type { VideoCategory } from '@al-ummah/shared-types';
 export type PaginationResponse<T> = {
     cursor: string;
     limit: number;
@@ -33,6 +34,10 @@ export interface VideoObject {
     commentsCount: number;
     isPublic?: boolean; // Added from API spec
     isLive?: boolean;   // Added from API spec
+    tags?: string[];
+    category?: VideoCategory;
+    thumbnailType?: 'auto' | 'custom';
+    uploadStatus?: 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
     comments?: Comments[]; // Optional array of Comments
     likes?: Likes[];       // Optional array of Likes
     dislikes?: Dislikes[]; // Optional array of Dislikes
@@ -159,11 +164,25 @@ export interface Comments {
     isEdited: boolean;       // Made required to match API spec
     isDeleted: boolean;      // Made required to match API spec
     isPinned: boolean;       // Made required to match API spec
+    isLiked?: boolean;       // Viewer channel liked this comment (GET /api/videos/:id/comments)
+    isDisliked?: boolean;    // Viewer channel disliked this comment
+    author?: CommentAuthor;  // Resolved author (channel name/avatar, falling back to profile)
+    isHeld?: boolean;        // Awaiting the video owner's review (visible to author + owner only)
+    parentCommentId?: string | null; // Set on replies (one level deep)
+}
+
+export interface CommentAuthor {
+    userId: string;
+    channelId: string;
+    displayName: string;
+    avatarUrl?: string;
 }
 
 export interface Likes {
     id: string;
     userId: string;
+    /** Channel the reaction was made as */
+    channelId?: string;
     videoId: string;
     dateCreated?: string;
 }
@@ -171,6 +190,8 @@ export interface Likes {
 export interface Dislikes {
     id: string;
     userId: string;
+    /** Channel the reaction was made as */
+    channelId?: string;
     videoId: string;
     dateCreated?: string;
 }

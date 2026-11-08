@@ -92,9 +92,12 @@ export default function ScheduledVideosPage() {
       params.delete('calendarType');
 
       const newUrl = `${pathname}?${params.toString()}`;
-      router.replace(newUrl, { scroll: false });
+      // history.replaceState (which Next syncs into useSearchParams) instead of
+      // router.replace: a router navigation on mount dropped the session
+      // server action that was still in flight, leaving the list loading forever
+      window.history.replaceState(window.history.state, '', newUrl);
     }
-  }, [view, calendarView, pathname, router, searchParams]);
+  }, [view, calendarView, pathname, searchParams]);
 
   // Redirect if not authenticated or no channels
   useEffect(() => {
@@ -187,7 +190,7 @@ export default function ScheduledVideosPage() {
       }
     } catch (err) {
       logger.error('[fetchScheduledVideos] Error fetching scheduled videos:', err);
-      setError('An error occurred while fetching scheduled videos');
+      setError(t.schedule?.errorFetchingScheduled ?? t.errors.genericError);
     } finally {
       logger.debug('[fetchScheduledVideos] Setting fetchLoading = false');
       setFetchLoading(false);
@@ -239,7 +242,7 @@ export default function ScheduledVideosPage() {
             {t.schedule?.scheduledVideos ?? 'Scheduled Videos'}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Please sign in to view your scheduled videos.
+            {t.schedule?.signInToViewScheduled ?? t.errors.unauthorized}
           </p>
           <Link
             href={`/${locale}/`}
@@ -253,7 +256,7 @@ export default function ScheduledVideosPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8 max-w-7xl">
+    <div data-testid="scheduled-videos-page" className="container mx-auto px-4 md:px-6 lg:px-8 py-8 max-w-7xl">
       {/* Header */}
       <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -261,7 +264,7 @@ export default function ScheduledVideosPage() {
             {t.schedule?.myScheduledVideos ?? 'My Scheduled Videos'}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            {t.schedule?.noScheduledVideosMessage ?? 'View and manage your scheduled videos'}
+            {t.schedule?.manageScheduledVideos ?? t.schedule?.scheduledVideos}
           </p>
         </div>
 

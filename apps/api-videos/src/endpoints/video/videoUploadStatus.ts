@@ -6,6 +6,8 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
+import { inBackground } from "../../lib/websocket-notify";
+import { announceProcessingResult } from "../../lib/notification-events";
 
 // Upload status type
 const UploadStatus = z.object({
@@ -142,7 +144,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);
 
 				// Log transcoding messages if video failed or has warnings
-				if (bunnyStreamStatus.status >= 4 || bunnyStreamStatus.transcodingMessages?.length) {
+				if (bunnyStreamStatus.status === 5 || bunnyStreamStatus.status === 6 || bunnyStreamStatus.transcodingMessages?.length) {
 					logger.warn('[VideoUploadStatus] Bunny.net transcoding messages', {
 						videoId: id,
 						status: bunnyStreamStatus.status,
@@ -160,38 +162,36 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		let message = "Video is ready";
 		
 		if (bunnyStreamStatus) {
-			// Map Bunny Stream status to our status
-			// Status: 0=Queued, 1=Processing, 2=Encoding, 3=Finished, 4=Error, 5=Deleted
+			// Map Bunny Stream status to our status (see lib/bunny/schema.json):
+			// 0=Created, 1=Uploaded, 2=Processing, 3=Transcoding, 4=Finished,
+			// 5=Error, 6=UploadFailed, 7=Transcribing (captions; playable), 8+ JIT states (playable)
 			switch (bunnyStreamStatus.status) {
-				case 0: // Queued
+				case 0: // Created
 					status = "uploading";
 					progress = Math.max(10, bunnyStreamStatus.encodeProgress || 0);
 					message = "Video upload queued";
 					break;
-				case 1: // Processing
+				case 1: // Uploaded
+				case 2: // Processing
 					status = "processing";
 					progress = Math.max(25, bunnyStreamStatus.encodeProgress || 25);
 					message = "Video is being processed";
 					break;
-				case 2: // Encoding
+				case 3: // Transcoding
 					status = "processing";
 					progress = Math.max(50, bunnyStreamStatus.encodeProgress || 50);
 					message = "Video is being encoded";
 					break;
-				case 3: // Finished
-					status = "ready";
-					progress = 100;
-					message = "Video is ready";
-					break;
-				case 4: // Error
+				case 5: // Error
+				case 6: // UploadFailed
 					status = "failed";
 					progress = 0;
 					message = "Video processing failed";
 					break;
-				case 5: // Deleted
-					status = "deleted";
-					progress = 0;
-					message = "Video has been deleted";
+				default: // 4=Finished, 7=Transcribing and later states are playable
+					status = "ready";
+					progress = 100;
+					message = "Video is ready";
 					break;
 			}
 		} else if (video.uploadStatus === 'initiated' || video.uploadStatus === 'uploading') {
@@ -216,6 +216,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		);
 
 		if (needsUpdate) {
+			const previousStatus = video.uploadStatus;
 			try {
 				logger.info('[VideoUploadStatus] Updating video status in R2', {
 					videoId: id,
@@ -249,9 +250,21 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 				if (!video.playUrl && bunnyStreamStatus.guid) {
 					video.playUrl = `https://${c.env.bunny_hostname}/${bunnyStreamStatus.guid}/playlist.m3u8`;
 				}
+				// Bunny's auto thumbnail sits next to the playlist
+				if (!video.thumbnailUrl && video.playUrl?.endsWith('/playlist.m3u8')) {
+					video.thumbnailUrl = video.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg');
+				}
 
 				await repository.putObject(id, video);
 				logger.info('[VideoUploadStatus] Video status updated in R2', { videoId: id, status });
+
+				// Terminal transition: uploader notification + subscriber fan-out (Story 29.10).
+				// Repeated polls never reach here twice (status already stored); the
+				// processor de-duplicates anyway.
+				if (previousStatus !== status && (status === 'ready' || status === 'failed')) {
+					const terminal = status;
+					inBackground(c, 'processing-result', () => announceProcessingResult(c.env, { ...video, id }, terminal));
+				}
 			} catch (error) {
 				logger.error('[VideoUploadStatus] Failed to update video status in R2', {
 					videoId: id,
@@ -267,7 +280,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 			progress,
 			message,
 			encodingStatus: bunnyStreamStatus ? {
-				isProcessing: bunnyStreamStatus.status === 1 || bunnyStreamStatus.status === 2,
+				isProcessing: bunnyStreamStatus.status >= 1 && bunnyStreamStatus.status <= 3,
 				encodingProgress: bunnyStreamStatus.encodeProgress || progress,
 				availableResolutions: bunnyStreamStatus.availableResolutions 
 					? bunnyStreamStatus.availableResolutions.split(',').map(r => r.trim()) 

@@ -36,8 +36,20 @@ export interface VideoWebSocketOptions {
   onError?: (error: Error) => void;
 }
 
+/**
+ * Engagement counters pushed by the API on `video:<id>` (only fields that
+ * have been received are present).
+ */
+export interface VideoLiveCounts {
+  viewCount?: number;
+  likesCount?: number;
+  dislikesCount?: number;
+  commentsAdded?: number;
+}
+
 export interface VideoWebSocketReturn {
   viewerCount: number;
+  liveCounts: VideoLiveCounts;
   isConnected: boolean;
   sendViewingHeartbeat: () => void;
   disconnect: () => void;
@@ -62,6 +74,7 @@ export function useVideoWebSocket({
   onError
 }: VideoWebSocketOptions): VideoWebSocketReturn {
   const [viewerCount, setViewerCount] = useState<number>(0);
+  const [liveCounts, setLiveCounts] = useState<VideoLiveCounts>({});
   const [isConnected, setIsConnected] = useState(false);
   const wsManager = useRef<WebSocketManager | null>(null);
   const heartbeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -135,8 +148,20 @@ export function useVideoWebSocket({
       setViewerCount(data.viewerCount);
     } else if (data.type === 'viewer_count' && 'viewerCount' in data && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
+    } else {
+      const counters = eventData as { type: string; viewCount?: unknown; likesCount?: unknown; dislikesCount?: unknown };
+      if (counters.type === 'view_count_updated' && typeof counters.viewCount === 'number') {
+        const viewCount = counters.viewCount;
+        setLiveCounts(prev => ({ ...prev, viewCount }));
+      } else if ((counters.type === 'video_liked' || counters.type === 'video_unliked') && typeof counters.likesCount === 'number') {
+        const likesCount = counters.likesCount;
+        const dislikesCount = typeof counters.dislikesCount === 'number' ? counters.dislikesCount : undefined;
+        setLiveCounts(prev => ({ ...prev, likesCount, ...(dislikesCount !== undefined && { dislikesCount }) }));
+      } else if (counters.type === 'comment_added') {
+        setLiveCounts(prev => ({ ...prev, commentsAdded: (prev.commentsAdded || 0) + 1 }));
+      }
     }
-  }, []); // Empty deps - setViewerCount is stable
+  }, []); // Empty deps - state setters are stable
 
   /**
    * Disconnect WebSocket and cleanup all timers
@@ -304,6 +329,7 @@ export function useVideoWebSocket({
 
   return {
     viewerCount,
+    liveCounts,
     isConnected,
     sendViewingHeartbeat,
     disconnect

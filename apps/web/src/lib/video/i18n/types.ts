@@ -75,6 +75,24 @@ export interface VideoPlayerTranslations {
     volumeSlider: string;
     progressBar: string;
     seekSlider: string;
+    currentTime: string;
+    duration: string;
+    qualityButton: string;
+    keyboardHelpButton: string;
+    keyboardHelpButtonTitle: string;
+    /** Screen reader announcements (live region) */
+    announcements: {
+      playing: string;
+      paused: string;
+      muted: string;
+      /** Contains a {volume} placeholder */
+      volume: string;
+      fullscreenOn: string;
+      fullscreenOff: string;
+      playbackError: string;
+      buffering: string;
+      readyToPlay: string;
+    };
   };
 
   /**
@@ -180,6 +198,7 @@ export interface VideoPlayerTranslations {
       volume: string;
       display: string;
       speed: string;
+      navigation: string;
     };
     shortcuts: {
       playPause: { keys: string; description: string };
@@ -195,6 +214,10 @@ export interface VideoPlayerTranslations {
       speedDecrease: { keys: string; description: string };
       speedIncrease: { keys: string; description: string };
       seekPercent: { keys: string; description: string };
+      help: { keys: string; description: string };
+      tabNavigation: { keys: string; description: string };
+      activate: { keys: string; description: string };
+      closeDialog: { keys: string; description: string };
     };
     closeButton: string;
   };

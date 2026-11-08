@@ -25,6 +25,8 @@ export interface ApiRequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   functionName: string;
+  /** Abort the request (and resolve null) after this many milliseconds */
+  timeoutMs?: number;
 }
 
 export interface AuthContext {
@@ -41,7 +43,7 @@ export async function apiRequest<T>(
   options: ApiRequestOptions,
   authContext?: AuthContext
 ): Promise<T | null> {
-  const { method, url, body, headers = {}, functionName } = options;
+  const { method, url, body, headers = {}, functionName, timeoutMs } = options;
 
   logApiStart({ functionName, method, url });
 
@@ -82,7 +84,8 @@ export async function apiRequest<T>(
     // Make request
     const fetchOptions: RequestInit = {
       method,
-      headers: requestHeaders
+      headers: requestHeaders,
+      ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     };
 
     if (body) {
@@ -110,6 +113,13 @@ export async function apiRequest<T>(
       });
       logApiEnd(functionName, false);
       return null;
+    }
+
+    // 204 No Content (e.g. DELETE /api/upload-defaults/:id) has no body to parse;
+    // treating it as an error made successful deletes look like failures
+    if (response.status === 204) {
+      logApiEnd(functionName, true);
+      return { success: true } as T;
     }
 
     // Parse response

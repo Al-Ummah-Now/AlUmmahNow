@@ -125,7 +125,7 @@ export const SaveButton: React.FC<SaveButtonProps> = ({
       case 'error':
         return `${baseStyles} ${widthStyles} bg-red-500 dark:bg-red-600 text-white`;
       default:
-        return `${baseStyles} ${widthStyles} bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white ${
+        return `${baseStyles} ${widthStyles} bg-blue-600 hover:bg-blue-700 text-white ${
           disabled ? 'opacity-50 cursor-not-allowed' : ''
         }`;
     }

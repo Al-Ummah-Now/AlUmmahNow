@@ -1,12 +1,12 @@
 import { Str, Num } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { Channel } from "@al-ummah/shared-types";
+import { Channel, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
-import { generateTUSConfig } from "../../lib/bunny/tus";
+import { generateTUSConfig, createTusProxySession } from "../../lib/bunny/tus";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -27,6 +27,11 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							mimeType: Str({ description: "MIME type of the video file", required: true }),
 							isPublic: z.boolean().optional().default(true),
 							tags: z.string().optional().describe("Comma-separated tags"),
+							// The web uploader sends these; they were stripped by the schema, so the
+							// Arabic title/description and the category chosen on upload were lost
+							titleLocalized: z.record(z.string()).optional().describe("Multi-language titles, e.g. {en, ar}"),
+							descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
+							category: z.nativeEnum(VideoCategory).optional().describe("Video category"),
 							thumbnail: z.object({
 								type: z.enum(['auto', 'custom']).describe("Thumbnail type: auto-generated or custom"),
 								data: z.string().optional().describe("Base64 encoded image data for custom thumbnails"),
@@ -96,7 +101,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -271,6 +276,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				});
 			}
 
+			// No custom thumbnail: point at the one Bunny generates next to the
+			// playlist, so cards and listings have an image (signed per response)
+			if (!thumbnailUrl) {
+				thumbnailUrl = `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`;
+			}
+
 			// Create video metadata for R2 storage
 			const video = {
 				id: videoId,
@@ -291,7 +302,10 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				dislikes: [],
 				isPublic: isPublic ?? true,
 				isLive: false,
-				tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+				tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
+				...(titleLocalized && { titleLocalized }),
+				...(descriptionLocalized && { descriptionLocalized }),
+				...(category && { category }),
 				uploadStatus: 'uploading' as const,
 				fileSize: fileSize,  // Store file size directly
 				originalFormat: mimeType,  // Store MIME type as original format
@@ -351,30 +365,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				1 // 1 hour expiration
 			);
 
-			// Generate UUID for TUS session
-			const tusSessionId = crypto.randomUUID();
-
-			// Store TUS session in KV with UUID as key
-			const tusSessionData = {
+			// Store TUS proxy session in KV (1 hour expiration)
+			const tusSessionId = await createTusProxySession(c.env.TUS_SESSIONS, {
 				videoId,
 				userId,
 				channelId,
-				tusEndpoint: tusConfig.tusEndpoint,
-				tusHeaders: tusConfig.tusHeaders,
-				expiresAt: tusConfig.expiresAt,
-				createdAt: new Date().toISOString(),
-			};
-
-			await c.env.TUS_SESSIONS.put(
-				`tus:session:${tusSessionId}`,
-				JSON.stringify(tusSessionData),
-				{ expirationTtl: 3600 } // 1 hour expiration
-			);
-
-			logger.info('[UploadInitiate] TUS session created', {
-				tusSessionId,
-				videoId,
-				userId,
+				tusConfig,
 			});
 
 			// Return session ID to client (no TUS credentials exposed)

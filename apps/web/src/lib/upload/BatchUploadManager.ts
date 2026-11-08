@@ -7,7 +7,7 @@ import {
 } from '@al-ummah/shared-types';
 import { TusParallelManager } from './TusParallelManager';
 import { UploadOptimizer } from './UploadOptimizer';
-import { logger } from '@/lib/logger-server';
+import { logger } from '@/lib/logger-client';
 
 
 /**
@@ -38,6 +38,20 @@ export type StatusChangeCallback = (status: UploadStatus) => void;
 export type ProgressCallback = (progress: BatchProgress) => void;
 
 /**
+ * Called once a file has been fully uploaded through TUS
+ */
+export type UploadSuccessCallback = (item: UploadQueueItem) => void;
+
+/**
+ * A file paired with the video record and TUS config created for it by the API
+ */
+export interface BatchUploadEntry {
+  file: File;
+  videoId: string;
+  tusConfig: TusConfig;
+}
+
+/**
  * Manages batch video uploads with parallel upload support
  */
 export class BatchUploadManager {
@@ -46,6 +60,7 @@ export class BatchUploadManager {
   private queue: Map<string, UploadQueueItem>;
   private statusCallbacks: Map<string, Set<StatusChangeCallback>>;
   private progressCallbacks: Set<ProgressCallback>;
+  private successCallbacks: Set<UploadSuccessCallback> = new Set();
   private uploadSpeeds: Map<string, number[]>; // Track upload speeds for ETA
 
   constructor(concurrentLimit: number = 3) {
@@ -65,18 +80,12 @@ export class BatchUploadManager {
    * Add videos to the upload queue
    */
   async addVideos(
-    files: File[],
-    sharedMetadata: Partial<VideoUploadMetadata>,
-    tusConfigs: Map<string, { videoId: string; tusConfig: TusConfig }>
+    entries: BatchUploadEntry[],
+    sharedMetadata: Partial<VideoUploadMetadata>
   ): Promise<void> {
-    for (const file of files) {
+    for (const config of entries) {
+      const { file } = config;
       const id = this.generateId();
-      const config = tusConfigs.get(file.name);
-
-      if (!config) {
-        logger.error(`No TUS config found for file: ${file.name}`);
-        continue;
-      }
 
       const queueItem: UploadQueueItem = {
         id,
@@ -152,6 +161,19 @@ export class BatchUploadManager {
   async cancelUpload(videoId: string): Promise<void> {
     this.tusManager.cancel(videoId);
     this.updateStatus(videoId, 'cancelled');
+  }
+
+  /**
+   * Remove an upload from the queue entirely (cancelling it first). Unlike
+   * cancelUpload, the item does not come back in later queue snapshots.
+   */
+  removeUpload(videoId: string): void {
+    if (!this.queue.has(videoId)) return;
+    this.tusManager.cancel(videoId);
+    this.queue.delete(videoId);
+    this.statusCallbacks.delete(videoId);
+    this.uploadSpeeds.delete(videoId);
+    this.notifyProgressUpdate();
   }
 
   /**
@@ -267,6 +289,16 @@ export class BatchUploadManager {
   }
 
   /**
+   * Register a callback fired when a file finishes uploading
+   */
+  onUploadSuccess(callback: UploadSuccessCallback): () => void {
+    this.successCallbacks.add(callback);
+    return () => {
+      this.successCallbacks.delete(callback);
+    };
+  }
+
+  /**
    * Register a status change callback for a specific video
    */
   onStatusChange(videoId: string, callback: StatusChangeCallback): () => void {
@@ -360,7 +392,16 @@ export class BatchUploadManager {
         const item = this.queue.get(id);
         if (item) {
           item.completedAt = new Date();
+          item.progress = 100;
+          item.bytesUploaded = item.bytesTotal;
           this.queue.set(id, item);
+          this.successCallbacks.forEach((callback) => {
+            try {
+              callback(item);
+            } catch (error) {
+              logger.error('[BatchUploadManager] Upload success callback failed', { id, error });
+            }
+          });
         }
         this.notifyProgressUpdate();
       },

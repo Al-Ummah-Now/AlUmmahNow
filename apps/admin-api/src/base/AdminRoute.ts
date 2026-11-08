@@ -154,7 +154,8 @@ export abstract class AdminRoute extends OpenAPIRoute {
    * Check if user is an admin (not just moderator)
    */
   protected isAdmin(c: AppContext): boolean {
-    return this.getRoles(c).includes('admin');
+    const roles = this.getRoles(c);
+    return roles.includes('admin') || roles.includes('super_admin');
   }
 
   /**
@@ -162,6 +163,6 @@ export abstract class AdminRoute extends OpenAPIRoute {
    */
   protected isModerator(c: AppContext): boolean {
     const roles = this.getRoles(c);
-    return roles.includes('admin') || roles.includes('moderator');
+    return roles.includes('admin') || roles.includes('super_admin') || roles.includes('moderator');
   }
 }

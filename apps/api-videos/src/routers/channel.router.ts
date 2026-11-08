@@ -7,6 +7,7 @@ import { ChannelCreate } from '../endpoints/channel/channelCreate';
 import { ChannelFetch } from '../endpoints/channel/channelFetch';
 import { ChannelUpdate } from '../endpoints/channel/channelUpdate';
 import { ChannelDelete } from '../endpoints/channel/channelDelete';
+import { ChannelAbout, ChannelByHandleFetch, ChannelHandleAvailability } from '../endpoints/channel/channelHandle';
 
 // Channel content endpoints
 import { ChannelVideosList } from '../endpoints/channel/channelVideosList';
@@ -17,6 +18,7 @@ import { ChannelPlaylistsList } from '../endpoints/channel/channelPlaylistsList'
 // Channel subscriptions
 import { SubscriptionCreate } from '../endpoints/channel/SubscriptionCreate';
 import { SubscriptionDelete } from '../endpoints/channel/SubscriptionDelete';
+import { SubscriptionStatus } from '../endpoints/channel/SubscriptionStatus';
 
 // Channel tabs
 import { ChannelTabsFetch } from '../endpoints/channel/channelTabsFetch';
@@ -51,8 +53,15 @@ channelRouter.get('/', ChannelsList);
 // Create new channel (auth required)
 channelRouter.post('/', ChannelCreate);
 
+// @handle lookups (registered before /:id so the static segments win)
+channelRouter.get('/handles/:handle/availability', ChannelHandleAvailability);
+channelRouter.get('/by-handle/:handle', ChannelByHandleFetch);
+
 // Get channel by ID (public)
 channelRouter.get('/:id', ChannelFetch);
+
+// About tab data with totals (public)
+channelRouter.get('/:id/about', ChannelAbout);
 
 // Update channel (auth required)
 channelRouter.put('/:id', ChannelUpdate);
@@ -85,6 +94,9 @@ channelRouter.post('/:id/subscriptions', SubscriptionCreate);
 
 // Unsubscribe from channel (auth required)
 channelRouter.delete('/:id/subscriptions', SubscriptionDelete);
+
+// Subscription status for the current viewer (public; isSubscribed=false when unauthenticated)
+channelRouter.get('/:id/subscriptions/status', SubscriptionStatus);
 
 // ============================================================================
 // TABS

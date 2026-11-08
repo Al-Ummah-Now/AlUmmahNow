@@ -34,7 +34,7 @@ const handleCoverUpdate = async (c) => {
         }
 
         // Get R2 bucket from context
-        const bucket: R2Bucket = c.c.env.channels;
+        const bucket: R2Bucket = c.env.channels;
         type ChannelType = z.infer<typeof Channel>;
         const repository = new R2Repository<ChannelType>(bucket);
 
@@ -59,7 +59,7 @@ const handleCoverUpdate = async (c) => {
         const path = `/${photoId}_cover.${file.type.split("/")[1]}`;
 
         // Get Bunny.net storage key and zone from environment
-        const key = await requireSecret(c.c.env.image_storage_key, 'image_storage_key');
+        const key = await requireSecret(c.env.image_storage_key, 'image_storage_key');
         const zone = requireEnvVar(c.env, 'ZONE');
 
         const bunnyStorageClient = new BunnyStorageClient(zone, key);

@@ -13,7 +13,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 		description: "Get a paginated list of live streams. Public endpoint that returns both scheduled and active streams.",
 		request: {
 			headers: z.object({
-				channelId: Str({ description: "User's selected channel ID" }).optional(),
+				channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
 			}),
 			query: z.object({
 				cursor: z.string().optional().openapi({ example: "" }),
@@ -68,7 +68,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			// Since R2Repository doesn't support prefix directly, we'll need to use the R2 bucket directly for listing
 			const listResult = await bucket.list({
 				prefix: "livestream:",
-				cursor,
+				cursor: cursor || undefined,
 				limit,
 			});
 

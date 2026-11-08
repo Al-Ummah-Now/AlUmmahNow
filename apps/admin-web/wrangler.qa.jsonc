@@ -9,6 +9,9 @@
   ],
   "logpush": true,
   "minify": true,
+  // esbuild keepNames injects __name() into fn.toString() output, breaking
+  // next-themes inline script in the browser ("e is not defined").
+  "keep_names": false,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

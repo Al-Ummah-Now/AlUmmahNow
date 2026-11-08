@@ -1,11 +1,11 @@
+import type { Metadata } from 'next';
 import { logger } from '@/lib/logger-client';
-import { getChannelById } from '@/lib/api/channels';
-import { ChannelHeader as ChannelHeaderLTR } from '@/components/Channel/ChannelHeader';
-import { ChannelHeader as ChannelHeaderRTL } from '@/components/Channel/rtl/ChannelHeader';
-import { ChannelTabBar } from '@/components/ChannelTabs';
+import { loadChannelById } from '@/lib/channel-loaders';
 import { notFound } from 'next/navigation';
-import { isLocaleSupported, getTextDirection } from '@/lib/i18n/utils';
-import { isChannelOwner } from '@/lib/channel-utils';
+import { isLocaleSupported } from '@/lib/i18n/utils';
+import { getCurrentUserId } from '@/lib/channel-utils';
+import { ChannelPageShell } from '@/components/Channel/ChannelPageShell';
+import { buildChannelMetadata } from '@/lib/channel-metadata';
 
 interface ChannelLayoutProps {
   children: React.ReactNode;
@@ -15,11 +15,15 @@ interface ChannelLayoutProps {
   }>;
 }
 
+/** Canonical link points at /{locale}/@{handle} when the channel has a handle. */
+export async function generateMetadata({ params }: Pick<ChannelLayoutProps, 'params'>): Promise<Metadata> {
+  const { locale, id } = await params;
+  return buildChannelMetadata(await loadChannelById(id), locale);
+}
+
 /**
- * Channel Layout for Dynamic Locale Routes
- *
- * Displays channel header, tabs, and content with proper locale support.
- * Uses query param-based tabs with database-driven configuration.
+ * Channel Layout for /[locale]/channels/[id] (id URLs keep working; the
+ * canonical URL is the @handle one, see generateMetadata).
  */
 export default async function ChannelLayout({
   children,
@@ -33,33 +37,15 @@ export default async function ChannelLayout({
     notFound();
   }
 
-  // Fetch channel data
-  const channel = await getChannelById(id);
+  const [channel, userId] = await Promise.all([loadChannelById(id), getCurrentUserId()]);
 
   if (!channel) {
     notFound();
   }
 
-  // Check if current user is the channel owner
-  const isOwner = await isChannelOwner(id);
-
-  // Determine text direction and component variant
-  const direction = getTextDirection(locale);
-  const isRTL = direction === 'rtl';
-  const ChannelHeader = isRTL ? ChannelHeaderRTL : ChannelHeaderLTR;
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {/* Channel Header (banner, avatar, name, subscribe) */}
-      <ChannelHeader channel={channel} locale={locale} isOwner={isOwner} />
-
-      {/* Channel Tabs - Query param-based with database config */}
-      <ChannelTabBar channelId={id} isOwner={isOwner} />
-
-      {/* Tab Content */}
-      <div className="container mx-auto px-4 py-6">
-        {children}
-      </div>
-    </div>
+    <ChannelPageShell channel={channel} locale={locale} isOwner={!!userId && channel.userId === userId}>
+      {children}
+    </ChannelPageShell>
   );
 }

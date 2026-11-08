@@ -1,23 +1,31 @@
 import type { Metadata } from 'next';
 import { QueryProvider } from '@/providers/QueryProvider';
+import { I18nProvider } from '@/i18n/I18nProvider';
+import { getI18n, getTheme } from '@/i18n/server';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: 'Al Ummah Now - Admin',
-  description: 'Admin dashboard for Al Ummah Now platform',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getI18n();
+  return {
+    title: t('meta.title'),
+    description: t('meta.description'),
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { locale, dir } = await getI18n();
+  const theme = await getTheme();
+
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-gray-900">
-        <QueryProvider>
-          {children}
-        </QueryProvider>
+    <html lang={locale} dir={dir} data-theme={theme === 'system' ? undefined : theme}>
+      <body className="min-h-screen bg-bg text-fg">
+        <I18nProvider locale={locale} theme={theme}>
+          <QueryProvider>{children}</QueryProvider>
+        </I18nProvider>
       </body>
     </html>
   );

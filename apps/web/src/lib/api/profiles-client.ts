@@ -1,11 +1,10 @@
 import { Profile } from "@/interfaces";
 import { User } from "@/interfaces";
-import { getProfileCurrent, getProfileById, createProfileAPI, updateProfileAPI, uploadProfileAvatar, uploadProfileCover } from "./profiles";
-import { getApiUrl } from "@/lib/runtime-config";
+import { getProfileCurrent, getProfileById, createProfileAPI, updateProfileAPI } from "./profiles";
+import { uploadFileDirect } from "./direct-upload";
 import { logger } from '@/lib/logger-client';
 
 
-const baseUrl = getApiUrl();
 
 /**
  * Client-side helper function for fetching the current user's profile
@@ -136,6 +135,14 @@ export const checkProfileExists = async (user: User | null | undefined): Promise
  * Client-side helper function for updating the current user's profile
  * Uses server session automatically for userId
  */
+/**
+ * api-videos returns { success, result: { profile } }; older callers used { data: { profile } }.
+ */
+function profileFrom(res: unknown): Profile | undefined {
+    const r = res as { result?: { profile?: Profile }; data?: { profile?: Profile } } | null | undefined;
+    return r?.result?.profile ?? r?.data?.profile;
+}
+
 export const updateProfile = async (profile: Profile, setProfile: (profile: Profile) => void) => {
     logger.info('[updateProfile] ========== START (CLIENT) ==========');
     logger.info('[updateProfile] Timestamp:', new Date().toISOString());
@@ -186,14 +193,14 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
 
             logger.info('[updateProfile] Create result:', {
                 hasResult: !!createResult,
-                hasProfile: !!createResult?.data?.profile,
-                profile: createResult?.data?.profile
+                hasProfile: !!profileFrom(createResult),
+                profile: profileFrom(createResult)
             });
 
-            if (createResult?.data?.profile) {
+            if (profileFrom(createResult)) {
                 logger.info('[updateProfile] ✅ Profile created successfully');
                 logger.info('[updateProfile] Step 4: Setting created profile in React state...');
-                setProfile(createResult.data.profile);
+                setProfile(profileFrom(createResult)!);
                 logger.info('[updateProfile] ========== END (CREATED) ==========');
                 return true;
             }
@@ -204,49 +211,23 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
 
             logger.info('[updateProfile] Update result:', {
                 hasResult: !!updateResult,
-                hasProfile: !!updateResult?.data?.profile,
-                profile: updateResult?.data?.profile
+                hasProfile: !!profileFrom(updateResult),
+                profile: profileFrom(updateResult)
             });
 
-            if (updateResult?.data?.profile) {
+            if (profileFrom(updateResult)) {
                 logger.info('[updateProfile] ✅ Profile updated successfully');
                 logger.info('[updateProfile] Step 4: Setting updated profile in React state...');
-                setProfile(updateResult.data.profile);
+                setProfile(profileFrom(updateResult)!);
                 logger.info('[updateProfile] ========== END (UPDATED) ==========');
                 return true;
             }
         }
 
-        // Fallback to old API with PUT
-        logger.info('[updateProfile] ⚠️ Falling back to old API');
-        const fallbackUrl = `${baseUrl}/api/profiles/${profile.id}`;
-        logger.info('[updateProfile] Fallback URL:', fallbackUrl);
-        logger.info('[updateProfile] Fallback body:', JSON.stringify(profile, null, 2));
-
-        const response = await fetch(fallbackUrl, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(profile),
-        });
-
-        logger.info('[updateProfile] Fallback response:', {
-            status: response.status,
-            statusText: response.statusText,
-            ok: response.ok
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error updating profile: ${response.statusText}`);
-        }
-
-        const updatedProfile: Profile = await response.json();
-        logger.info('[updateProfile] ✅ Fallback successful, profile:', updatedProfile);
-        logger.info('[updateProfile] Step 5: Setting profile in React state...');
-        setProfile(updatedProfile);
-        logger.info('[updateProfile] ========== END (FALLBACK) ==========');
-        return true;
+        // The API rejected the request (validation/auth); surface it to the form
+        logger.error('[updateProfile] ❌ API did not return a profile');
+        logger.info('[updateProfile] ========== END (FAILED) ==========');
+        return false;
     } catch (error) {
         logger.error('[updateProfile] ❌ Exception caught:', {
             error,
@@ -260,16 +241,14 @@ export const updateProfile = async (profile: Profile, setProfile: (profile: Prof
 
 /**
  * Client-side helper function for updating profile photo
- * Uses server action with proper authentication
+ * Uploads directly to the API (see lib/api/direct-upload)
  */
 export const updateProfilePhoto = async (profile: Profile, file: File, setProfile: (profile: Profile) => void) => {
     if (!profile || !file) return false;
     try {
-        const formData = new FormData();
-        formData.append("photo", file);
-
-        // Call server action which handles authentication
-        const updatedProfile = await uploadProfileAvatar(formData);
+        // Direct browser -> API upload; Server Actions with image bodies can be
+        // blocked by Cloudflare's WAF rule for CVE-2025-55183 (403).
+        const updatedProfile = await uploadFileDirect<Profile>('/api/profile/avatar', file);
 
         if (updatedProfile) {
             setProfile(updatedProfile);
@@ -285,16 +264,14 @@ export const updateProfilePhoto = async (profile: Profile, file: File, setProfil
 
 /**
  * Client-side helper function for updating cover photo
- * Uses server action with proper authentication
+ * Uploads directly to the API (see lib/api/direct-upload)
  */
 export const updateCoverPhoto = async (profile: Profile, file: File, setProfile: (profile: Profile) => void) => {
     if (!profile || !file) return false;
     try {
-        const formData = new FormData();
-        formData.append("photo", file);
-
-        // Call server action which handles authentication
-        const updatedProfile = await uploadProfileCover(formData);
+        // Direct browser -> API upload; Server Actions with image bodies can be
+        // blocked by Cloudflare's WAF rule for CVE-2025-55183 (403).
+        const updatedProfile = await uploadFileDirect<Profile>('/api/profile/cover', file);
 
         if (updatedProfile) {
             setProfile(updatedProfile);

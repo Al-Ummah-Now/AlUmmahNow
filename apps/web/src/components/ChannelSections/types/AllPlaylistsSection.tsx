@@ -88,7 +88,7 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
                       />
                     )}
                     <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
-                      {playlist.videosCount || 0} videos
+                      {t.playlist.videoCount.replace('{count}', String(playlist.videosCount || 0))}
                     </div>
                   </div>
                   <div className="p-3">

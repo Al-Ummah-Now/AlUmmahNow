@@ -86,8 +86,17 @@ export const VideoView = z.object({
     likesCount: z.number(),
     dislikesCount: z.number(),
     commentsCount: z.number(),
+    commentSettings: z.enum(["on", "held", "off"]).optional().describe("Comments: on, held for review, off"),
     isPublic: z.boolean(),
     isLive: z.boolean(),
+    titleLocalized: z.record(z.string()).optional(),
+    descriptionLocalized: z.record(z.string()).optional(),
+    thumbnailType: z.enum(['auto', 'custom']).optional(),
+    thumbnailSizes: z.record(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
+    category: z.string().optional(),
+    language: z.string().optional(),
+    duration: z.number().optional(),
     ...SoftDeleteFields,
     ...ModerationFields,
     // For detailed views, include recent comments
@@ -107,9 +116,11 @@ export const PlaylistView = z.object({
     dateModified: DateTime(),
     videosCount: z.number(),
     isPublic: z.boolean(),
+    name: Str().optional(), // Alias of title (shared-types Playlist uses `name`)
+    videos: z.array(Str()).optional(), // Ordered video IDs
     ...SoftDeleteFields,
     ...ModerationFields,
-    // Note: videos array removed to avoid circular reference
+    // Note: video objects are not embedded; use GET /api/playlists/:id?includeVideos=true
     // Use separate endpoint to get playlist videos if needed
 });
 
@@ -151,6 +162,10 @@ export const ChannelView = z.object({
     isPrivate: z.boolean().optional(), // User-controlled privacy
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
+    handle: Str().optional().describe("Unique @handle (display casing)"),
+    links: z.array(z.object({ title: Str(), url: Str() })).optional(),
+    contactEmail: Str().optional(),
+    location: Str().optional(),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     playlistsCount: z.number(),

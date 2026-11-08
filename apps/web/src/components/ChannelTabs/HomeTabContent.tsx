@@ -9,7 +9,7 @@ interface HomeTabContentProps {
 
 export function HomeTabContent({ channelId }: HomeTabContentProps) {
   return (
-    <div role="tabpanel" id="tabpanel-home" aria-labelledby="tab-home">
+    <div role="tabpanel" id="tabpanel-home" data-testid="tabpanel-home" aria-labelledby="tab-home">
       <ChannelSections channelId={channelId} />
     </div>
   );

@@ -27,7 +27,7 @@ export function ViewSwitcher({
   const { t } = useLanguage();
 
   return (
-    <div className={`inline-flex rounded-lg border border-gray-300 dark:border-gray-600 ${className}`}>
+    <div role="group" aria-label={t.schedule?.scheduledVideos} className={`inline-flex rounded-lg border border-gray-300 dark:border-gray-600 ${className}`}>
       <button
         onClick={() => onViewChange('list')}
         className={`
@@ -40,6 +40,8 @@ export function ViewSwitcher({
           }
         `}
         aria-label={t.schedule?.views?.list ?? 'List'}
+        data-testid="view-switch-list"
+        type="button"
         aria-pressed={currentView === 'list'}
       >
         <List size={18} />
@@ -58,6 +60,8 @@ export function ViewSwitcher({
           }
         `}
         aria-label={t.schedule?.views?.calendar ?? 'Calendar'}
+        data-testid="view-switch-calendar"
+        type="button"
         aria-pressed={currentView === 'calendar'}
       >
         <Calendar size={18} />

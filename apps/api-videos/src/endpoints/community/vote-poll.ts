@@ -3,6 +3,7 @@ import {
   CommunityPost,
   PostType,
   VoteRecord,
+  VoteOnPollResponse,
 } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
@@ -14,7 +15,7 @@ const voteSchema = z.object({
 });
 
 export class VoteOnPoll extends AuthenticatedRoute {
-  static schema = addAuthToSchema({
+  schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Vote on a community poll',
     request: {
@@ -41,6 +42,14 @@ export class VoteOnPoll extends AuthenticatedRoute {
             schema: z.object({
               success: z.boolean(),
               message: z.string(),
+              results: z.object({
+                totalVotes: z.number(),
+                options: z.array(z.object({
+                  id: z.string(),
+                  votes: z.number(),
+                  percentage: z.number(),
+                })),
+              }),
             }),
           },
         },
@@ -144,10 +153,27 @@ export class VoteOnPoll extends AuthenticatedRoute {
         timestamp: new Date().toISOString(),
       });
 
-      return c.json({
-        success: true,
-        message: 'Vote recorded successfully',
+      // Stored results are recalculated asynchronously by the processor; return
+      // the projected results including this vote so the voter sees them at once.
+      // Same rounding as the processor (one decimal place).
+      const projectedTotal = (post.poll.totalVotes || 0) + 1;
+      const projectedOptions = post.poll.options.map((opt) => {
+        const votes = (opt.votes || 0) + (body.optionIds.includes(opt.id) ? 1 : 0);
+        return {
+          id: opt.id,
+          votes,
+          percentage: Math.round((votes / projectedTotal) * 100 * 10) / 10,
+        };
       });
+
+      const response: VoteOnPollResponse = {
+        success: true,
+        results: {
+          totalVotes: projectedTotal,
+          options: projectedOptions,
+        },
+      };
+      return c.json({ ...response, message: 'Vote recorded successfully' });
     } catch (error) {
       logger.error('Error voting on poll:', error);
       return c.json({ error: 'Failed to record vote' }, 500);

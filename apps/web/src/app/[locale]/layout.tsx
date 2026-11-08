@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger-client';
 import React from 'react';
 import { notFound } from 'next/navigation';
 import ProfileGuard from '@/components/ProfileGuard';
+import { HtmlLocaleAttributes } from '@/components/HtmlLocaleAttributes';
 import { isLocaleSupported, getTextDirection } from '@/lib/i18n/utils';
 
 interface LocaleLayoutProps {
@@ -49,6 +50,7 @@ export default async function LocaleLayout({
 
   return (
     <ProfileGuard>
+      <HtmlLocaleAttributes locale={locale} dir={dir} />
       <div dir={dir} lang={locale}>
         {children}
       </div>

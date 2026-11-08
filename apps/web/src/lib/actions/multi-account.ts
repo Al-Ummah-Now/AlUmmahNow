@@ -241,6 +241,20 @@ export async function reloadUserChannels(userId?: string): Promise<Channel[]> {
 }
 
 /**
+ * Re-read the active account's profile (display name, avatar) into the session,
+ * e.g. after the user changes their photo, so the navigation shows it.
+ */
+export async function reloadActiveProfile(): Promise<void> {
+  try {
+    const session = await SessionManager.getActiveSession();
+    if (!session) return;
+    await SessionManager.loadUserProfile(session.userId);
+  } catch (error) {
+    logger.error('[reloadActiveProfile] Error:', error);
+  }
+}
+
+/**
  * Create a new channel for the active user
  */
 export async function createChannelForActiveUser(
@@ -258,17 +272,22 @@ export async function createChannelForActiveUser(
       channelId: session.channelId || '', // Use empty string if no channel selected
     });
 
-    if (response?.data?.channel) {
+    // POST /api/channels responds with { success, result: { channel } };
+    // `data.channel` is kept for the ApiResponse shape the client is typed with
+    const created =
+      (response as { result?: { channel?: Channel } } | null)?.result?.channel ?? response?.data?.channel;
+
+    if (created) {
       // Reload channels to include the new one
       await SessionManager.loadUserChannels(session.userId);
 
       // If this is the first channel, set it as active
       if (!session.channelId) {
-        await SessionManager.setActiveChannel(response.data.channel.id);
+        await SessionManager.setActiveChannel(created.id);
       }
 
       revalidatePath('/');
-      return response.data.channel;
+      return created;
     }
 
     return null;

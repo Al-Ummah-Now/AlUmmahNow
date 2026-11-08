@@ -12,6 +12,7 @@ import { Folder, ChevronDown } from 'lucide-react';
 import { VideoCategory, VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 
 interface CategorySelectorProps {
+  id?: string;
   value?: VideoCategory;
   onChange: (category?: VideoCategory) => void;
   required?: boolean;
@@ -19,6 +20,7 @@ interface CategorySelectorProps {
 }
 
 export function CategorySelector({
+  id = 'video-category-select',
   value,
   onChange,
   required = false,
@@ -33,7 +35,7 @@ export function CategorySelector({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
         <span className="flex items-center gap-2">
           <Folder className="w-4 h-4" />
           {isRTL ? 'تصنيف الفيديو' : 'Video Category'}
@@ -43,6 +45,8 @@ export function CategorySelector({
 
       <div className="relative">
         <select
+          id={id}
+          data-testid="category-select"
           value={value || ''}
           onChange={handleChange}
           disabled={disabled}

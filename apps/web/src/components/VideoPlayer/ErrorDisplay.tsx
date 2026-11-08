@@ -63,7 +63,7 @@ export function ErrorDisplay({
   );
 
   return (
-    <div className={`${baseClasses} ${className}`} dir={dir}>
+    <div className={`${baseClasses} ${className}`} dir={dir} role="alert" data-testid="video-error">
       {errorIcon}
 
       <h2 className="text-2xl font-bold mb-2 text-center">

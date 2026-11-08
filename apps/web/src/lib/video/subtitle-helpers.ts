@@ -6,7 +6,7 @@
 
 import type { Player } from 'video.js';
 import type { SubtitleTrack } from '@/lib/api/subtitles-types';
-import { logger } from '@/lib/logger-server';
+import { logger } from '@/lib/logger-client';
 
 // Extend Player type to include methods not in type definitions
 interface TextTrack {

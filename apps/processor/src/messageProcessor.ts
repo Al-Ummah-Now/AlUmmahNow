@@ -3,6 +3,22 @@ import { Logger } from '@al-ummah/logger';
 import { handleChannelSectionEvent } from './handlers/channel-section';
 import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
+import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
+import { recordViewRollup } from './lib/analytics-rollup';
+import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
+import {
+  eraseUserNotifications,
+  fanoutNotification,
+  insertNotification,
+  isNotificationKey,
+  pushStoredNotifications,
+  removeChannelSubscriber,
+  upsertChannelSubscriber,
+} from './lib/notifications-store';
+import type { NotificationCreatePayload, NotificationFanoutPayload } from '@al-ummah/shared-types';
+
+/** Tombstone replacing a user id after GDPR erasure (matches api-videos lib/privacy/user-data.ts). */
+export const DELETED_USER_ID = 'deleted-user';
 // Channel tabs are frontend-only, no backend processing needed
 // import { handleChannelTabEvent } from './handlers/channel-tab';
 
@@ -80,14 +96,25 @@ export class MessageProcessor {
       // Subscription messages
       case MessageType.Subscribe:
       case MessageType.Unsubscribe:
-        await this.processSubscriptionMessage(message);
+        await this.processSubscriptionMessage(message, env);
+        break;
+
+      // Notification center (Story 29.10)
+      case MessageType.NotificationCreate:
+        await this.processNotificationCreate(message, env);
+        break;
+      case MessageType.NotificationFanout:
+        await this.processNotificationFanout(message, env);
         break;
 
       // Video-related messages
+      case MessageType.VideoView:
+        await this.processVideoViewMessage(message, env);
+        break;
+
       case MessageType.VideoCreate:
       case MessageType.VideoEdit:
       case MessageType.VideoDelete:
-      case MessageType.VideoView:
       case MessageType.VideoLike:
       case MessageType.VideoUnlike:
       case MessageType.VideoDislike:
@@ -159,10 +186,49 @@ export class MessageProcessor {
         await handleChannelSectionEvent(message, env, this.logger);
         break;
 
+      // Upload / processing lifecycle events - pushed to the uploader in realtime
+      case MessageType.VideoUploadStarted:
+      case MessageType.VideoUploadCompleted:
+      case MessageType.VideoProcessingCompleted:
+      case MessageType.VideoUploadFailed:
+      case MessageType.VideoUploadCancelled:
+        await this.processUploadLifecycleMessage(message, env);
+        break;
+
+      // Live stream lifecycle events - pushed on the shared live-streams channel
+      case MessageType.LiveStreamCreate:
+      case MessageType.LiveStreamUpdate:
+      case MessageType.LiveStreamStart:
+      case MessageType.LiveStreamEnd:
+      case MessageType.LiveStreamView:
+        await this.processLiveStreamMessage(message, env);
+        break;
+
+      // Client-side telemetry (A/B test exposures, web vitals, player performance).
+      // Persisted by saveMessageToR2; nothing else to do.
+      case MessageType.ClientAnalyticsEvent:
+        this.logger.info('Client analytics batch stored', {
+          kind: (message.payload as { kind?: string }).kind,
+          eventCount: Array.isArray((message.payload as { events?: unknown[] }).events)
+            ? (message.payload as { events: unknown[] }).events.length
+            : 0,
+        });
+        break;
+
       // Content moderation events
       case MessageType.ReportCreate:
       case MessageType.ReportResolve:
         await this.processReportMessage(message, env);
+        break;
+
+      // GDPR erasure (Story 1.3): anonymise the reporter on moderation reports in D1
+      case MessageType.UserDataErased:
+        await this.processUserDataErased(message, env);
+        break;
+
+      // Search index (Story 29.9): content written outside api-videos
+      case MessageType.SearchIndexSync:
+        await handleSearchIndexSync(message, env, this.logger);
         break;
 
       // Channel tab events - REMOVED: tabs are frontend-only, no backend processing
@@ -231,13 +297,25 @@ export class MessageProcessor {
     }
   }
 
-  private async processSubscriptionMessage(message: AlUmmahMessage): Promise<void> {
+  private async processSubscriptionMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
     this.logger.debug(`Processing subscription message: ${MessageType[message.type]}`, message.payload);
 
-    const { userId, channelId } = message.payload as { userId: string; channelId: string };
-    
+    // api-videos sends targetChannelId (the subscribed-to channel); channelId is the legacy name
+    const payload = message.payload as { userId: string; channelId?: string; targetChannelId?: string };
+    const userId = payload.userId;
+    const channelId = payload.targetChannelId || payload.channelId;
+
     if (!userId || !channelId) {
       throw new Error('Subscription message missing required fields: userId, channelId');
+    }
+
+    // Subscriber index used for notification fan-out (per-channel bell lives on the row)
+    if (env.NOTIFICATIONS_DB) {
+      if (message.type === MessageType.Subscribe) {
+        await upsertChannelSubscriber(env.NOTIFICATIONS_DB, channelId, userId);
+      } else {
+        await removeChannelSubscriber(env.NOTIFICATIONS_DB, channelId, userId);
+      }
     }
 
     // Process subscription actions
@@ -290,6 +368,134 @@ export class MessageProcessor {
         this.logger.info(`Video ${videoId} undisliked by user ${actualUserId || 'unknown'}`);
         break;
     }
+  }
+
+  private async processVideoViewMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as { videoId?: string; searchQuery?: string };
+
+    // Search telemetry is published with the VideoView type but has no videoId.
+    if (!payload.videoId && payload.searchQuery !== undefined) {
+      this.logger.info('Search event recorded', { query: payload.searchQuery });
+      return;
+    }
+
+    await this.processVideoMessage(message);
+
+    try {
+      const recorded = await recordViewRollup(env.MESSAGES_BUCKET, message.payload, message.timestamp);
+      if (recorded) {
+        this.logger.debug('View rollup updated', { videoId: payload.videoId });
+      }
+    } catch (error) {
+      // Rollups are derived data; never fail (and retry) the message because of them.
+      this.logger.warn('Failed to update view rollup', { videoId: payload.videoId, error });
+    }
+  }
+
+  private async processUploadLifecycleMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as { videoId?: string; userId?: string; title?: string; error?: string; duration?: number };
+    if (!payload.videoId) {
+      throw new Error('Upload message missing required field: videoId');
+    }
+
+    const statusByType: Partial<Record<MessageType, ProcessingStatus>> = {
+      [MessageType.VideoUploadStarted]: 'uploading',
+      [MessageType.VideoUploadCompleted]: 'processing',
+      [MessageType.VideoProcessingCompleted]: 'ready',
+      [MessageType.VideoUploadFailed]: 'failed',
+      [MessageType.VideoUploadCancelled]: 'cancelled',
+    };
+    const status = statusByType[message.type] as ProcessingStatus;
+    this.logger.info(`Video ${payload.videoId} upload status: ${status}`, { userId: payload.userId });
+
+    // Terminal states are stored in the uploader's notification center first so
+    // the realtime event carries the stored id (or is skipped when opted out).
+    let notificationId: string | null | undefined;
+    if (env.NOTIFICATIONS_DB && payload.userId && (status === 'ready' || status === 'failed')) {
+      const stored = await insertNotification(env.NOTIFICATIONS_DB, {
+        notificationId: crypto.randomUUID(),
+        recipientUserId: payload.userId,
+        notificationKey: status === 'ready' ? 'uploadReady' : 'uploadFailed',
+        params: { videoTitle: payload.title || '' },
+        actionUrl: `/video/${payload.videoId}`,
+        entityId: payload.videoId,
+        dedupeKey: `upload:${status}:${payload.videoId}`,
+      });
+      notificationId = stored ? stored.id : null;
+    }
+
+    await notifyVideoProcessing(env, payload.videoId, payload.userId, status, {
+      title: payload.title,
+      error: payload.error,
+      duration: payload.duration,
+    }, notificationId);
+  }
+
+  /**
+   * Persist one notification (produced by api-videos, e.g. new comment, reply,
+   * new subscriber) and push it unless the producer already did.
+   */
+  private async processNotificationCreate(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as unknown as NotificationCreatePayload;
+    if (!payload.recipientUserId || !payload.notificationId || !isNotificationKey(payload.notificationKey)) {
+      throw new Error('Notification message missing required fields: recipientUserId, notificationId, notificationKey');
+    }
+    if (!env.NOTIFICATIONS_DB) {
+      this.logger.warn('NOTIFICATIONS_DB not bound; notification not stored', { key: payload.notificationKey });
+      return;
+    }
+    const stored = await insertNotification(env.NOTIFICATIONS_DB, payload);
+    this.logger.info('Notification stored', {
+      userId: payload.recipientUserId,
+      key: payload.notificationKey,
+      stored: !!stored,
+    });
+    if (stored && !payload.realtimeSent) {
+      await pushStoredNotifications(env, [stored], payload);
+    }
+  }
+
+  /** Fan a new-video / live-started notification out to the channel's subscribers. */
+  private async processNotificationFanout(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as unknown as NotificationFanoutPayload;
+    if (!payload.channelId || !payload.entityId || (payload.kind !== 'new_video' && payload.kind !== 'live_started')) {
+      throw new Error('Notification fan-out message missing required fields: kind, channelId, entityId');
+    }
+    if (!env.NOTIFICATIONS_DB) {
+      this.logger.warn('NOTIFICATIONS_DB not bound; fan-out skipped', { kind: payload.kind, channelId: payload.channelId });
+      return;
+    }
+    const rows = await fanoutNotification(env.NOTIFICATIONS_DB, payload);
+    const pushed = await pushStoredNotifications(env, rows, {
+      notificationKey: payload.kind === 'live_started' ? 'liveStarted' : 'newVideo',
+      params: payload.params,
+      actionUrl: payload.actionUrl,
+    });
+    this.logger.info('Notification fan-out finished', {
+      kind: payload.kind,
+      channelId: payload.channelId,
+      entityId: payload.entityId,
+      recipients: rows.length,
+      pushed,
+    });
+  }
+
+  private async processLiveStreamMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as { liveStreamId?: string; channelId?: string; status?: string; title?: string };
+    if (!payload.liveStreamId) {
+      throw new Error('Live stream message missing required field: liveStreamId');
+    }
+    this.logger.info(`Live stream ${payload.liveStreamId} event ${MessageType[message.type]}`, { status: payload.status });
+
+    if (message.type === MessageType.LiveStreamView) return;
+
+    await notifyLiveStream(env, payload.liveStreamId, {
+      event: message.type === MessageType.LiveStreamCreate ? 'created' : 'updated',
+      status: payload.status
+        ?? (message.type === MessageType.LiveStreamStart ? 'live' : message.type === MessageType.LiveStreamEnd ? 'ended' : undefined),
+      channelId: payload.channelId,
+      title: payload.title,
+    });
   }
 
   private async processCommentMessage(message: AlUmmahMessage): Promise<void> {
@@ -508,6 +714,28 @@ export class MessageProcessor {
     }
   }
 
+  /**
+   * Reports are kept for moderation history after a GDPR erasure, but the
+   * reporter's identity is replaced with a tombstone (same value api-videos
+   * writes to its R2 copy).
+   */
+  private async processUserDataErased(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const { userId } = message.payload as { userId?: string };
+    if (!userId || userId === DELETED_USER_ID) {
+      throw new Error('UserDataErased message missing required field: userId');
+    }
+    const result = await env.REPORTS_DB.prepare('UPDATE reports SET reporter_id = ? WHERE reporter_id = ?')
+      .bind(DELETED_USER_ID, userId)
+      .run();
+    if (env.NOTIFICATIONS_DB) {
+      await eraseUserNotifications(env.NOTIFICATIONS_DB, userId);
+    }
+    this.logger.info('Anonymised moderation reports after user data erasure', {
+      userId,
+      changes: (result as { meta?: { changes?: number } })?.meta?.changes ?? 0,
+    });
+  }
+
   private async processReportMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
     this.logger.debug(`Processing report message: ${MessageType[message.type]}`, message.payload);
 
@@ -534,7 +762,7 @@ export class MessageProcessor {
         const createdAt = timestamp || new Date().toISOString();
 
         await env.REPORTS_DB.prepare(`
-          INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at)
+          INSERT OR IGNORE INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at)
           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
         `).bind(reportId, entityType, entityId, reporterId, reason, description || null, createdAt).run();
 
@@ -545,29 +773,38 @@ export class MessageProcessor {
         break;
 
       case MessageType.ReportResolve:
-        const { moderatorId, action, moderatorNotes } = message.payload as {
+        const { moderatorId, action, moderatorNotes, status } = message.payload as {
           moderatorId?: string;
           action?: string;
           moderatorNotes?: string;
+          status?: string;
         };
         const resolvedAt = new Date().toISOString();
+        // Dismissals must stay 'dismissed'; older admin-api builds sent no
+        // status, so derive it from the action in that case.
+        const finalStatus = status === 'dismissed' || status === 'resolved'
+          ? status
+          : action === 'dismissed' ? 'dismissed' : 'resolved';
 
+        // admin-api has usually written this row already; never erase the
+        // notes it stored when the message carries none.
         await env.REPORTS_DB.prepare(`
           UPDATE reports
-          SET status = 'resolved',
-              moderator_id = ?,
-              action = ?,
-              moderator_notes = ?,
-              resolved_at = ?,
+          SET status = ?,
+              moderator_id = COALESCE(?, moderator_id),
+              action = COALESCE(?, action),
+              moderator_notes = COALESCE(?, moderator_notes),
+              resolved_at = COALESCE(resolved_at, ?),
               updated_at = ?
           WHERE id = ?
-        `).bind(moderatorId, action, moderatorNotes || null, resolvedAt, resolvedAt, reportId).run();
+        `).bind(finalStatus, moderatorId ?? null, action ?? null, moderatorNotes || null, resolvedAt, resolvedAt, reportId).run();
 
         this.logger.info(`Report ${reportId} resolved by moderator ${moderatorId}`, {
           action,
           entityType,
           entityId,
         });
+        await applyModerationToSearchIndex({ entityType, entityId, action }, env, this.logger);
         break;
     }
   }

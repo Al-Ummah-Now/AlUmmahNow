@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRealTimeNotifications, Notification } from '@/hooks/useRealTimeNotifications';
 import { X, Bell, Heart, MessageCircle, UserPlus, Video, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface NotificationToastProps {
   notification: Notification;
@@ -12,6 +13,7 @@ interface NotificationToastProps {
 }
 
 function NotificationToast({ notification, onClose, onAction }: NotificationToastProps) {
+  const { t } = useLanguage();
   const [isExiting, setIsExiting] = useState(false);
 
   const handleClose = useCallback(() => {
@@ -77,7 +79,7 @@ function NotificationToast({ notification, onClose, onAction }: NotificationToas
               className="mt-2"
               onClick={() => onAction?.(notification)}
             >
-              View
+              {t.notifications.view}
             </Button>
           )}
         </div>
@@ -87,12 +89,13 @@ function NotificationToast({ notification, onClose, onAction }: NotificationToas
           size="sm"
           className="flex-shrink-0 h-auto p-1"
           onClick={handleClose}
+          aria-label={t.common.close}
         >
-          <X className="w-4 h-4" />
+          <X className="w-4 h-4" aria-hidden="true" />
         </Button>
       </div>
       
-      <div className="text-xs text-gray-400 mt-2">
+      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
         {notification.timestamp.toLocaleTimeString()}
       </div>
     </div>
@@ -100,6 +103,7 @@ function NotificationToast({ notification, onClose, onAction }: NotificationToas
 }
 
 export function NotificationCenter() {
+  const { t } = useLanguage();
   const {
     notifications,
     unreadCount,
@@ -141,9 +145,9 @@ export function NotificationCenter() {
       {/* Notification badge (for header integration) */}
       {unreadCount > 0 && (
         <div className="fixed top-4 left-4 z-40">
-          <div className="flex items-center gap-2 bg-blue-500 text-white px-3 py-1 rounded-full text-sm">
+          <div className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1 rounded-full text-sm">
             <Bell className="w-4 h-4" />
-            <span>{unreadCount} new</span>
+            <span>{unreadCount} {t.notifications.new}</span>
           </div>
         </div>
       )}

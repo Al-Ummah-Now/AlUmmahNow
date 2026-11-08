@@ -37,7 +37,7 @@ export class VideoScheduleList extends OptionalAuthRoute {
           channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         query: z.object({
-          channelId: Str({ description: 'Filter by channel ID' }).optional(),
+          channelId: Str({ description: 'Filter by channel ID' }).optional().nullable(),
           startDate: Str({ description: 'Filter by start date (ISO 8601)' }).optional(),
           endDate: Str({ description: 'Filter by end date (ISO 8601)' }).optional(),
           status: z.enum(['scheduled', 'publishing', 'published', 'failed', 'cancelled']).optional(),

@@ -11,7 +11,8 @@ export class VideoDelete extends AuthenticatedRoute {
 		summary: "Delete a Video",
 		request: {
 			params: z.object({
-				videoId: Str({ description: "Video id" }),
+				// Must match the router's '/:id' segment
+				id: Str({ description: "Video id" }),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }),
@@ -27,6 +28,22 @@ export class VideoDelete extends AuthenticatedRoute {
 								success: Bool(),
 							}),
 						}),
+					},
+				},
+			},
+			"403": {
+				description: "Forbidden - the video belongs to another user",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
+			"404": {
+				description: "Video not found",
+				content: {
+					"application/json": {
+						schema: ResponseError,
 					},
 				},
 			},
@@ -54,7 +71,7 @@ export class VideoDelete extends AuthenticatedRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated slug
-		const { videoId } = request.params;
+		const { id: videoId } = request.params;
 		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
@@ -69,6 +86,14 @@ export class VideoDelete extends AuthenticatedRoute {
 				success: false,
 				error: "Video not found",
 			}, 404);
+		}
+
+		// Only the owner may delete a video
+		if (video.userId !== userId) {
+			return c.json({
+				success: false,
+				error: "Forbidden - you can only delete your own videos",
+			}, 403);
 		}
 
 		// Send queue message for video deletion

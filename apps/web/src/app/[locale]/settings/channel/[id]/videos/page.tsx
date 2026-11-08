@@ -18,6 +18,9 @@ type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
 type SortBy = 'date' | 'views' | 'title';
 
+const VIDEO_PAGE_SIZE = 100;
+const MAX_VIDEO_PAGES = 10;
+
 export default function ChannelVideosPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -61,19 +64,35 @@ export default function ChannelVideosPage() {
       setLoading(true);
       try {
         // Fetch videos and channel in parallel
-        const [result, channel] = await Promise.all([
-          listVideos({ channelId }, { channelId: channelId }),
+        // Management lists every video (shorts, live, private): the channel
+        // endpoint is the public Videos tab and hides shorts and live streams.
+        // /api/videos?channelId= pages this channel from the index; follow the cursor.
+        const loadAllVideos = async () => {
+          const all: VideoObject[] = [];
+          let cursor: string | undefined;
+          for (let page = 0; page < MAX_VIDEO_PAGES; page++) {
+            const result = await listVideos({ channelId, limit: VIDEO_PAGE_SIZE, cursor }, { channelId });
+            if (!result) break;
+            all.push(...result.data);
+            // api-videos returns the cursor at the top level; the shared type nests it under `pagination`
+            cursor = (result as { cursor?: string }).cursor || result.pagination?.nextCursor || result.pagination?.cursor || undefined;
+            if (!cursor) break;
+          }
+          return all;
+        };
+
+        const [allVideos, channel] = await Promise.all([
+          loadAllVideos(),
           getChannelById(channelId)
         ]);
 
         if (channel) {
-          setChannelName(channel.name || '');
+          setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
         }
 
-        if (result) {
-          setVideos(result.data);
-          setFilteredVideos(result.data);
-        }
+        logger.info('Channel videos loaded', { channelId, count: allVideos.length });
+        setVideos(allVideos);
+        setFilteredVideos(allVideos);
       } catch (error) {
         logger.error('Error fetching videos and channel', { error, channelId });
       } finally {
@@ -84,7 +103,7 @@ export default function ChannelVideosPage() {
     if (isOwner) {
       fetchData();
     }
-  }, [user, channelId, isOwner]);
+  }, [user, channelId, isOwner, locale]);
 
   // Apply filters and search
   useEffect(() => {
@@ -238,6 +257,7 @@ export default function ChannelVideosPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
+                aria-label={t.video.filterByStatus || t.video.allStatus}
                 className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               >
                 <option value="all">{t.video.allStatus}</option>
@@ -250,6 +270,7 @@ export default function ChannelVideosPage() {
               <select
                 value={privacyFilter}
                 onChange={(e) => setPrivacyFilter(e.target.value as FilterPrivacy)}
+                aria-label={t.video.filterByPrivacy}
                 className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               >
                 <option value="all">{t.video.filterByPrivacy}</option>
@@ -260,6 +281,7 @@ export default function ChannelVideosPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
+                aria-label={t.search.sortBy}
                 className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               >
                 <option value="date">{t.video.sortByDate}</option>
@@ -317,6 +339,7 @@ export default function ChannelVideosPage() {
                     type="checkbox"
                     checked={selectedVideos.has(video.id)}
                     onChange={() => handleSelectVideo(video.id)}
+                    aria-label={`${t.video.selectVideo || t.video.selectAll}: ${video.title}`}
                     className="absolute top-3 left-3 w-5 h-5 z-10 cursor-pointer"
                   />
 
@@ -367,7 +390,7 @@ export default function ChannelVideosPage() {
                       className={`px-2 py-1 rounded text-xs font-medium ${
                         video.isPublic
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                       }`}
                     >
                       {video.isPublic ? t.video.public : t.video.private}

@@ -1,10 +1,68 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { LiveStream, PaginatedResponse } from '@al-ummah/shared-types';
 import { listLiveStreams } from '@/lib/api/livestreams';
 import { logger } from '@/lib/logger-client';
+import { useOptionalWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
+import type { ApiLiveStream } from '@/components/ChannelSections/sectionData';
+
+type LiveStreamsPageBody = {
+  data?: Array<LiveStream | ApiLiveStream>;
+  pagination?: PaginatedResponse<LiveStream>['pagination'];
+  cursor?: string;
+  limit?: number;
+};
+
+const toDate = (value?: string): Date | undefined => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+/** API live stream -> LiveStreamCard model (same mapping as the channel Events section) */
+function toCardModel(stream: ApiLiveStream): LiveStream {
+  return {
+    id: stream.id,
+    title: stream.title,
+    thumbnailUrl: stream.thumbnailUrl || '/logo.png',
+    status: stream.status === 'cancelled' ? 'ended' : stream.status,
+    viewerCount: stream.currentViewers,
+    channel: { id: stream.channelId, name: stream.channelName || '' },
+    startedAt: toDate(stream.actualStartTime),
+    scheduledStartTime: toDate(stream.scheduledStartTime),
+    endedAt: toDate(stream.actualEndTime),
+    duration: stream.duration,
+  };
+}
+
+/**
+ * GET /api/live-streams responds with `{ success, result: { data, cursor, limit } }`
+ * and API-shaped streams (channelId, currentViewers). Older clients expected
+ * `{ success, data: { data, pagination } }` with card-shaped streams. Accept
+ * both and always return card models with a pagination block, so the live
+ * page shows its empty state / grid instead of failing on the real API.
+ */
+export function normalizeLiveStreamsPage(
+  response: { data?: unknown; result?: unknown },
+  limit: number
+): PaginatedResponse<LiveStream> | null {
+  const body = (response.data ?? response.result) as LiveStreamsPageBody | undefined;
+  if (!body || typeof body !== 'object') return null;
+
+  const items = Array.isArray(body.data) ? body.data : [];
+  const data = items.map((stream) =>
+    'channel' in stream && stream.channel ? (stream as LiveStream) : toCardModel(stream as ApiLiveStream)
+  );
+  const pagination = body.pagination ?? {
+    limit: body.limit ?? limit,
+    cursor: body.cursor || undefined,
+    nextCursor: body.cursor || undefined,
+    hasMore: !!body.cursor,
+  };
+  return { data, pagination };
+}
 
 /**
  * Options for configuring the useLiveStreams hook
@@ -150,6 +208,19 @@ export function useLiveStreams({
   // Build query key for React Query caching
   const queryKey = ['live-streams', { status, channelId, limit }];
 
+  // Realtime: the processor broadcasts `live_stream_updated` on `live-streams`
+  // whenever a stream is created or changes status; refetch instead of waiting
+  // for the next poll.
+  const queryClient = useQueryClient();
+  const handleLiveStreamEvent = useCallback((eventData: unknown) => {
+    if (!eventData || typeof eventData !== 'object') return;
+    const event = eventData as { type?: string; liveStreamId?: string; status?: string };
+    if (event.type !== 'live_stream_updated') return;
+    logger.debug('[useLiveStreams] Live stream changed, refreshing', { liveStreamId: event.liveStreamId, status: event.status });
+    void queryClient.invalidateQueries({ queryKey: ['live-streams'] });
+  }, [queryClient]);
+  useOptionalWebSocketSubscription(enabled ? 'live-streams' : '', handleLiveStreamEvent);
+
   // Determine refetch interval based on status
   const effectiveRefetchInterval = refetchInterval !== undefined
     ? refetchInterval
@@ -189,12 +260,13 @@ export function useLiveStreams({
         throw new Error('Failed to fetch live streams');
       }
 
-      if (!response.data) {
+      const page = normalizeLiveStreamsPage(response, limit);
+      if (!page) {
         throw new Error('Failed to fetch live streams: Invalid response format');
       }
 
-      logger.debug('[useLiveStreams] Fetched streams', { count: response.data.data?.length ?? 0 });
-      return response.data;
+      logger.debug('[useLiveStreams] Fetched streams', { count: page.data.length });
+      return page;
     },
     getNextPageParam: (lastPage: PaginatedResponse<LiveStream>) => {
       // Return the cursor for the next page, or undefined if no more pages

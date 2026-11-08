@@ -44,7 +44,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
       try {
         const channel = await getChannelById(id);
         if (channel) {
-          setChannelName(channel.name || '');
+          setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
         }
       } catch (error) {
         logger.error('Failed to load channel', { error, channelId: id });
@@ -52,7 +52,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
     };
 
     fetchChannel();
-  }, [id]);
+  }, [id, locale]);
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -78,12 +78,10 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
     loadPosts();
   }, [loadPosts]);
 
+  // Posts are shown on the channel page's Community tab (there is no per-post page)
   const handleView = (post: CommunityPost) => {
-    router.push(`/${locale}/channels/${id}/community?post=${post.id}`);
-  };
-
-  const handleEdit = (post: CommunityPost) => {
-    router.push(`/${locale}/settings/channel/${id}/community/edit/${post.id}`);
+    logger.info('Opening community post on channel page', { channelId: id, postId: post.id });
+    router.push(`/${locale}/channels/${id}?tab=community`);
   };
 
   const handleDelete = async (postId: string) => {
@@ -92,7 +90,9 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
     });
 
     if (result?.success) {
-      setPosts(posts.filter(p => p.id !== postId));
+      setPosts((prev) => prev.filter(p => p.id !== postId));
+    } else {
+      logger.error('Failed to delete community post', { channelId: id, postId });
     }
   };
 
@@ -170,7 +170,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
 
             <div className="flex gap-3">
               <Select value={filterType} onValueChange={(v) => setFilterType(v as PostType | 'all')}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]" aria-label={t.community.filterByType}>
                   <Filter className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
                   <SelectValue />
                 </SelectTrigger>
@@ -274,7 +274,6 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                     post={post}
                     locale={locale}
                     onView={handleView}
-                    onEdit={handleEdit}
                     onDelete={handleDelete}
                   />
                 ))}

@@ -79,7 +79,7 @@ function ErrorState({
         {t.live?.failedToLoadStreams || 'فشل تحميل البثوث المباشرة'}
       </h2>
       <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
-        {error?.message || t.live?.failedToLoadStreamsDescription || 'حدث خطأ أثناء تحميل البثوث المباشرة. يرجى المحاولة مرة أخرى.'}
+        {t.live?.failedToLoadStreamsDescription || error?.message || 'حدث خطأ أثناء تحميل البثوث المباشرة. يرجى المحاولة مرة أخرى.'}
       </p>
       <button
         onClick={onRetry}

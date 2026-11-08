@@ -10,6 +10,10 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// Daily GDPR retention sweep (src/lib/privacy/retention.ts)
+	"triggers": {
+		"crons": ["17 3 * * *"]
+	},
 	"observability": {
 		"enabled": true
 	},
@@ -108,6 +112,35 @@
 			"bucket_name": "global-settings",
 			"preview_bucket_name": "global-settings-preview",
 			"remote": true
+		},
+		{
+			// Read-only use: daily view/watch-time rollups written by the processor
+			// (analytics/rollups/*) in the processor's messages bucket
+			"binding": "analytics_rollups",
+			"bucket_name": "al-ummah-now-messages",
+			"remote": true
+		}
+	],
+	"d1_databases": [
+		{
+			// Notification center + library indexes (Epic 29); migrations live in apps/processor.
+			// PLACEHOLDER: create the production database first (see apps/processor/wrangler.jsonc)
+			// and replace this id with the one `npx wrangler d1 create al-ummah-now-notifications` returns.
+			"binding": "NOTIFICATIONS_DB",
+			"database_name": "al-ummah-now-notifications",
+			"database_id": "00000000-0000-0000-0000-000000000000"
+		},
+		{
+			// Search index (Epic 29, Story 29.9). Schema: migrations/search
+			// PRODUCTION DATABASE NOT CREATED YET: before the first production deploy run
+			//   npx wrangler d1 create al-ummah-now-search
+			// put the returned id here (and in apps/processor/wrangler.jsonc), then
+			//   npx wrangler d1 migrations apply al-ummah-now-search --remote
+			// and run scripts/search-backfill.sh against production.
+			"binding": "SEARCH_DB",
+			"database_name": "al-ummah-now-search",
+			"database_id": "00000000-0000-0000-0000-000000000001",
+			"migrations_dir": "migrations/search"
 		}
 	],
 	"kv_namespaces": [
@@ -153,7 +186,13 @@
 		"binding": "INTERNAL_API_KEY",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "internal-api-key"
-	  }
+	  },
+	{
+		// Bunny CDN token authentication key of legacy library 400189 (vz-215a1ffd)
+		"binding": "BUNNY_TOKEN_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "bunny-stream-token-key"
+	}
 	],
 	/**
 	 * Environment Variables
@@ -167,6 +206,10 @@
 		"Issuer": "https://auth.alummahnow.net",
 		"Audience": "https://videos.api.alummahnow.net",
 		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",
+		// Existing videos live on legacy library 400189 with CDN token auth on:
+		// sign its URLs (playUrl, thumbnails) in API responses
+		"BUNNY_SIGN_URLS": "true",
+		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
 	},

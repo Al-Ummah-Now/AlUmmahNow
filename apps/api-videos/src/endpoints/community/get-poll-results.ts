@@ -4,7 +4,7 @@ import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';
 
 export class GetPollResults extends OptionalAuthRoute {
-  static schema = {
+  schema = {
     tags: ['Community'],
     summary: 'Get poll results',
     request: {

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { NotificationEvent } from '@/interfaces/websocket';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
 import { logger } from '@/lib/logger-client';
+import { useLanguage } from '@/hooks/useLanguage';
+import { resolveNotificationText } from '@/lib/websocket/notification-text';
 
 
 export interface Notification {
@@ -24,6 +26,8 @@ export interface UseRealTimeNotificationsOptions {
 export interface UseRealTimeNotificationsReturn {
   notifications: Notification[];
   unreadCount: number;
+  /** Ask for browser notification permission; call from a user gesture */
+  requestBrowserPermission: () => Promise<NotificationPermission | null>;
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
   markAsRead: (notificationId: string) => void;
   markAllAsRead: () => void;
@@ -37,6 +41,11 @@ export function useRealTimeNotifications(
 ): UseRealTimeNotificationsReturn {
   const {  maxNotifications = 50, autoRemoveAfter } = options;
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { t } = useLanguage();
+  const translationsRef = useRef(t);
+  useEffect(() => {
+    translationsRef.current = t;
+  }, [t]);
 
   // Remove specific notification
   const removeNotification = useCallback((notificationId: string) => {
@@ -79,10 +88,11 @@ export function useRealTimeNotifications(
     logger.info('📥 Real-time notification:', event);
 
     if (event.type === 'notification') {
+      const { title, message } = resolveNotificationText(event, translationsRef.current);
       const notification: Notification = {
         id: event.notificationId,
-        title: event.title,
-        message: event.message,
+        title,
+        message,
         type: event.notificationType,
         actionUrl: event.actionUrl,
         timestamp: new Date(),
@@ -125,7 +135,8 @@ export function useRealTimeNotifications(
   // Subscribe to real-time notifications
   // Note: handleNotificationUpdate should NOT be in dependencies as it would cause re-subscriptions
   const isConnected = useWebSocketSubscription(
-    options.userId ? `user:${options.userId}:notifications` : 'notifications',
+    // The websocket server auto-subscribes every authenticated session to `user:<id>`
+    options.userId ? `user:${options.userId}` : 'notifications',
     handleNotificationUpdate,
     [options.userId]
   );
@@ -143,6 +154,15 @@ export function useRealTimeNotifications(
       const newNotifications = [notification, ...prevNotifications];
       return newNotifications.slice(0, maxNotifications);
     });
+
+    // Local notifications honour autoRemoveAfter just like server-pushed ones
+    if (autoRemoveAfterRef.current) {
+      const timerId = setTimeout(() => {
+        autoRemoveTimersRef.current.delete(timerId);
+        removeNotificationRef.current(notification.id);
+      }, autoRemoveAfterRef.current);
+      autoRemoveTimersRef.current.add(timerId);
+    }
   }, [maxNotifications]);
   
   // Mark notification as read
@@ -168,13 +188,15 @@ export function useRealTimeNotifications(
     setNotifications([]);
   }, []);
   
-  // Request notification permission on mount
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().then(permission => {
-        logger.info('Notification permission:', permission);
-      });
-    }
+  // Browser notification permission must be requested from a user gesture:
+  // Firefox throws when it is requested on page load, and Chrome suppresses
+  // such prompts. Call this from a click (e.g. a notifications setting).
+  const requestBrowserPermission = useCallback(async (): Promise<NotificationPermission | null> => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return null;
+    if (Notification.permission !== 'default') return Notification.permission;
+    const permission = await Notification.requestPermission();
+    logger.info('Notification permission:', permission);
+    return permission;
   }, []);
   
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -182,6 +204,7 @@ export function useRealTimeNotifications(
   return {
     notifications,
     unreadCount,
+    requestBrowserPermission,
     addNotification,
     markAsRead,
     markAllAsRead,

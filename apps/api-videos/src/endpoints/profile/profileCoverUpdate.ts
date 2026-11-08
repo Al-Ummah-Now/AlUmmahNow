@@ -49,7 +49,7 @@ const handleCoverUpdate = async (c) => {
         const path = `/${photoId}_cover.${file.type.split("/")[1]}`;
 
         // Get Bunny.net storage key and zone from environment
-        const key = await requireSecret(c.c.env.image_storage_key, 'image_storage_key');
+        const key = await requireSecret(c.env.image_storage_key, 'image_storage_key');
         const zone = requireEnvVar(c.env, 'ZONE');
 
         const bunnyStorageClient = new BunnyStorageClient(zone, key);

@@ -56,11 +56,7 @@ const AccountNavigation: React.FC<AccountNavigationProps> = ({
             items.push({ label: "Profile", icon: "fa-user", href: "/en/profile", onClick: onClose });
             items.push({ label: "Analytics", icon: "fa-chart-line", href: "/en/analytics", onClick: onClose });
             items.push({ label: "Settings", icon: "fa-cog", href: "/en/settings", onClick: onClose });
-            
-            // Add moderation link for admin/moderator users
-            if (user.roles?.includes('admin') || user.roles?.includes('moderator')) {
-                items.push({ label: "Moderation", icon: "fa-shield-alt", href: "/en/moderation", onClick: onClose });
-            }
+            // Moderation lives in the separate admin app (admin-web); no in-app link
         }
         if (user) {
             items.push({ label: "Logout", icon: "fa-sign-out-alt", href: "#", onClick: handleLogout });

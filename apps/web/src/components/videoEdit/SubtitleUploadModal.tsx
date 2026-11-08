@@ -3,10 +3,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import {
-  uploadSubtitle,
-  validateSubtitleFile,
-} from '@/lib/api/subtitles';
+import { validateSubtitleFile } from '@/lib/api/subtitle-validation';
+import { uploadSubtitleDirect } from '@/lib/api/direct-upload';
 import type { SubtitleValidationResult, SubtitleTrack } from '@/lib/api/subtitles-types';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitlePreview from './SubtitlePreview';
@@ -151,7 +149,7 @@ export default function SubtitleUploadModal({
         setUploadProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
-      const result = await uploadSubtitle(
+      const result = await uploadSubtitleDirect(
         videoId,
         selectedFile,
         selectedLanguage,
@@ -233,6 +231,7 @@ export default function SubtitleUploadModal({
             >
               <SelectTrigger
                 id="language"
+                data-testid="subtitle-language"
                 className="
                   w-full
                   h-10
@@ -310,7 +309,8 @@ export default function SubtitleUploadModal({
                 onChange={handleFileInputChange}
                 className="hidden"
                 disabled={isUploading}
-                aria-label="File input"
+                aria-label={t.subtitle?.uploadFileArea || 'Upload subtitle file'}
+                data-testid="subtitle-file-input"
               />
 
               {!selectedFile && (
@@ -399,6 +399,7 @@ export default function SubtitleUploadModal({
               <input
                 type="checkbox"
                 id="isDefault"
+                data-testid="subtitle-is-default"
                 checked={isDefault}
                 onChange={(e) => setIsDefault(e.target.checked)}
                 disabled={isUploading}
@@ -446,7 +447,7 @@ export default function SubtitleUploadModal({
 
           {/* Error Message */}
           {error && (
-            <div className="
+            <div role="alert" data-testid="subtitle-upload-error" className="
               flex
               items-start
               gap-2
@@ -481,7 +482,7 @@ export default function SubtitleUploadModal({
 
           {/* Success Message */}
           {success && (
-            <div className="
+            <div role="status" data-testid="subtitle-upload-success" className="
               flex
               items-center
               gap-2
@@ -524,7 +525,9 @@ export default function SubtitleUploadModal({
             dark:border-gray-700
           ">
             <Button
+              type="button"
               variant="outline"
+              data-testid="subtitle-upload-cancel"
               onClick={() => handleOpenChange(false)}
               disabled={isUploading}
               className="
@@ -540,6 +543,8 @@ export default function SubtitleUploadModal({
               {t.common?.cancel || 'Cancel'}
             </Button>
             <Button
+              type="button"
+              data-testid="subtitle-upload-submit"
               onClick={handleUpload}
               disabled={
                 !selectedFile ||

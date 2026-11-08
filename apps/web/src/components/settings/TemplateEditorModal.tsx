@@ -76,6 +76,17 @@ export function TemplateEditorModal({
     }
   }, [mode, template]);
 
+  // Escape closes the dialog wherever focus is (Safari does not focus clicked
+  // buttons, so a keydown handler on the overlay alone missed it)
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   // Reset form when modal closes
   useEffect(() => {
     if (!isOpen) {
@@ -188,6 +199,10 @@ export function TemplateEditorModal({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="template-editor-title"
+        data-testid="template-editor"
         className="
           relative
           w-full
@@ -205,7 +220,7 @@ export function TemplateEditorModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+          <h2 id="template-editor-title" className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
             {mode === 'create'
               ? isRTL
                 ? 'إنشاء قالب جديد'
@@ -215,7 +230,10 @@ export function TemplateEditorModal({
               : 'Edit Template'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
+            aria-label={t.common.close}
+            data-testid="template-editor-close"
             className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <X className="w-5 h-5 text-gray-500" />
@@ -227,7 +245,7 @@ export function TemplateEditorModal({
           <div className="p-6 space-y-6">
             {/* Error Message */}
             {error && (
-              <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <div role="alert" data-testid="template-editor-error" className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                 <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               </div>
@@ -241,12 +259,14 @@ export function TemplateEditorModal({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-name-en" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'اسم القالب (إنجليزي)' : 'Template Name (English)'}
                     <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
+                    id="template-name-en"
+                    data-testid="template-name-en"
                     value={nameEn}
                     onChange={(e) => setNameEn(e.target.value)}
                     className="
@@ -270,11 +290,13 @@ export function TemplateEditorModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-name-ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'اسم القالب (عربي)' : 'Template Name (Arabic)'}
                   </label>
                   <input
                     type="text"
+                    id="template-name-ar"
+                    data-testid="template-name-ar"
                     value={nameAr}
                     onChange={(e) => setNameAr(e.target.value)}
                     className="
@@ -300,10 +322,12 @@ export function TemplateEditorModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="template-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {isRTL ? 'وصف القالب' : 'Template Description'}
                 </label>
                 <textarea
+                  id="template-description"
+                  data-testid="template-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={2}
@@ -332,11 +356,12 @@ export function TemplateEditorModal({
                 <input
                   type="checkbox"
                   id="isDefault"
+                  data-testid="template-is-default"
                   checked={isDefault}
                   onChange={(e) => setIsDefault(e.target.checked)}
                   className="w-4 h-4 text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-primary"
                 />
-                <label htmlFor="isDefault" className="ml-2 rtl:mr-2 rtl:ml-0 text-sm text-gray-700 dark:text-gray-300">
+                <label htmlFor="isDefault" className="ms-2 text-sm text-gray-700 dark:text-gray-300">
                   {isRTL ? 'تعيين كقالب افتراضي' : 'Set as default template'}
                 </label>
               </div>
@@ -354,12 +379,14 @@ export function TemplateEditorModal({
               {/* Title */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-title-en" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'العنوان (إنجليزي)' : 'Title (English)'}
                     <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
+                    id="template-title-en"
+                    data-testid="template-title-en"
                     value={titleEn}
                     onChange={(e) => setTitleEn(e.target.value)}
                     onFocus={() => setActiveField('titleEn')}
@@ -384,11 +411,13 @@ export function TemplateEditorModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-title-ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'العنوان (عربي)' : 'Title (Arabic)'}
                   </label>
                   <input
                     type="text"
+                    id="template-title-ar"
+                    data-testid="template-title-ar"
                     value={titleAr}
                     onChange={(e) => setTitleAr(e.target.value)}
                     onFocus={() => setActiveField('titleAr')}
@@ -417,10 +446,12 @@ export function TemplateEditorModal({
               {/* Description */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-description-en" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'الوصف (إنجليزي)' : 'Description (English)'}
                   </label>
                   <textarea
+                    id="template-description-en"
+                    data-testid="template-description-en"
                     value={descriptionEn}
                     onChange={(e) => setDescriptionEn(e.target.value)}
                     onFocus={() => setActiveField('descriptionEn')}
@@ -446,10 +477,12 @@ export function TemplateEditorModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-description-ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'الوصف (عربي)' : 'Description (Arabic)'}
                   </label>
                   <textarea
+                    id="template-description-ar"
+                    data-testid="template-description-ar"
                     value={descriptionAr}
                     onChange={(e) => setDescriptionAr(e.target.value)}
                     onFocus={() => setActiveField('descriptionAr')}
@@ -478,11 +511,13 @@ export function TemplateEditorModal({
 
               {/* Tags */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="template-tags" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {isRTL ? 'الوسوم' : 'Tags'}
                 </label>
                 <input
                   type="text"
+                  id="template-tags"
+                  data-testid="template-tags"
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
                   className="
@@ -511,10 +546,12 @@ export function TemplateEditorModal({
               {/* Category, Visibility, Language */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'التصنيف' : 'Category'}
                   </label>
                   <select
+                    id="template-category"
+                    data-testid="template-category"
                     value={category}
                     onChange={(e) => setCategory(e.target.value as VideoCategory)}
                     className="
@@ -544,10 +581,12 @@ export function TemplateEditorModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-visibility" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'الخصوصية' : 'Visibility'}
                   </label>
                   <select
+                    id="template-visibility"
+                    data-testid="template-visibility"
                     value={visibility}
                     onChange={(e) => setVisibility(e.target.value as 'public' | 'private' | 'unlisted')}
                     className="
@@ -574,10 +613,12 @@ export function TemplateEditorModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="template-language" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'اللغة' : 'Language'}
                   </label>
                   <select
+                    id="template-language"
+                    data-testid="template-language"
                     value={language}
                     onChange={(e) => setLanguage(e.target.value as 'en' | 'ar')}
                     className="
@@ -610,6 +651,7 @@ export function TemplateEditorModal({
             <button
               type="button"
               onClick={onClose}
+              data-testid="template-editor-cancel"
               className="
                 px-6
                 py-2
@@ -633,6 +675,7 @@ export function TemplateEditorModal({
             <button
               type="submit"
               disabled={saving}
+              data-testid="template-editor-save"
               className="
                 flex
                 items-center

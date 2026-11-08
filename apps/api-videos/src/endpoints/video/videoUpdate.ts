@@ -9,6 +9,8 @@ import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
+import { inBackground } from "../../lib/websocket-notify";
+import { announceNewVideo } from "../../lib/notification-events";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class VideoUpdate extends AuthenticatedRoute {
@@ -127,14 +129,25 @@ export class VideoUpdate extends AuthenticatedRoute {
 		}
 
 		// Update the video with new values
-		const updatedVideo = {
+		const { category, tags, ...restInput } = videoUpdateInput;
+		const updatedVideo: VideoType = {
 			...existingVideo,
-			...videoUpdateInput,
+			...restInput,
 			dateModified: new Date().toISOString(),
 			// Preserve localized fields if provided
 			titleLocalized: videoUpdateInput.titleLocalized ?? existingVideo.titleLocalized,
 			descriptionLocalized: videoUpdateInput.descriptionLocalized ?? existingVideo.descriptionLocalized,
+			// Tags replace the existing list (deduplicated); omitted keeps current tags
+			tags: tags !== undefined ? Array.from(new Set(tags)) : existingVideo.tags,
+			// Category: undefined keeps current value, null clears it
+			category: category === undefined ? existingVideo.category : (category ?? undefined),
 		};
+
+		logger.info('[VideoUpdate] Updating video', {
+			videoId: id,
+			userId: effectiveUserId,
+			fields: Object.keys(videoUpdateInput),
+		});
 
 		// Update the video in Bunny Stream if title changed
 		if (videoUpdateInput.title && videoUpdateInput.title !== existingVideo.title) {
@@ -155,6 +168,11 @@ export class VideoUpdate extends AuthenticatedRoute {
 
 		// Save the updated video to the repository
 		await repository.putObject(id, updatedVideo);
+
+		// Made public after processing: tell subscribers (processor de-duplicates per video)
+		if (existingVideo.isPublic === false && updatedVideo.isPublic !== false) {
+			inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...updatedVideo, id }));
+		}
 
 		// Send queue message for video update
 		const queue = new Queue(c.env.queue);

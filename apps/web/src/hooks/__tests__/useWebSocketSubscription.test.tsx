@@ -19,6 +19,15 @@ import { useRealTimeNotifications } from '@/hooks/useRealTimeNotifications';
 import { WebSocketProvider } from '@/lib/websocket/WebSocketProvider';
 import React from 'react';
 
+// useRealTimeNotifications renders server notification keys through i18n
+jest.mock('@/hooks/useLanguage', () => ({
+  useLanguage: () => ({
+    t: jest.requireActual('@/lib/i18n/translations').EN_TRANSLATIONS,
+    lang: 'en',
+    isRTL: false,
+  }),
+}));
+
 // Mock WebSocketManager
 jest.mock('@/lib/websocket/WebSocketManager', () => {
   let subscriptions: Map<string, Array<(data: unknown) => void>> = new Map();
@@ -73,6 +82,28 @@ jest.mock('@/lib/websocket/WebSocketManager', () => {
 describe('useWebSocketSubscription', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('delivers events to a child that subscribed before the provider created its manager', async () => {
+    // Child effects run before the provider's, so the first subscribe happens
+    // while no manager exists yet; the provider must replay it once it does.
+    const { WebSocketManager } = jest.requireMock('@/lib/websocket/WebSocketManager') as {
+      WebSocketManager: jest.Mock;
+    };
+    const received: unknown[] = [];
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <WebSocketProvider user={{ id: 'early-user', email: 'early@example.com' }}>{children}</WebSocketProvider>
+    );
+    renderHook(() => useWebSocketSubscription('video:early', (data) => received.push(data), []), { wrapper });
+
+    await waitFor(() => expect(WebSocketManager).toHaveBeenCalled());
+    const manager = WebSocketManager.mock.results[WebSocketManager.mock.results.length - 1].value as {
+      subscribe: jest.Mock;
+      _triggerEvent: (channel: string, data: unknown) => void;
+    };
+    expect(manager.subscribe).toHaveBeenCalledWith('video:early', expect.any(Function));
+    act(() => manager._triggerEvent('video:early', { type: 'comment_added' }));
+    expect(received).toEqual([{ type: 'comment_added' }]);
   });
 
   it('should not re-subscribe when callback changes', async () => {

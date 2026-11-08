@@ -7,6 +7,8 @@ import { transformChannelToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { claimHandle, handleKey, normalizeHandleInput, releaseHandle } from "../../lib/channelHandles";
+import { logger } from "../../lib/logger";
 
 export class ChannelUpdate extends AuthenticatedRoute {
     schema = {
@@ -40,6 +42,14 @@ export class ChannelUpdate extends AuthenticatedRoute {
             },
             "400": {
                 description: "Bad request - invalid input data",
+                content: {
+                    "application/json": {
+                        schema: ResponseError,
+                    },
+                },
+            },
+            "409": {
+                description: "The requested @handle is invalid, reserved or taken (error = handle_unavailable, reason = too_short | too_long | invalid_characters | reserved | taken)",
                 content: {
                     "application/json": {
                         schema: ResponseError,
@@ -106,10 +116,35 @@ export class ChannelUpdate extends AuthenticatedRoute {
             }, 403);
         }
 
+        const { handle: requestedHandle, contactEmail, location, ...restInput } = channelUpdateInput;
+
+        // @handle claim/change (case-only changes keep the same index entry)
+        let handle = existingChannel.handle;
+        if (requestedHandle !== undefined && normalizeHandleInput(requestedHandle) !== (existingChannel.handle || '')) {
+            const claim = await claimHandle(c.env.channel_tabs, requestedHandle, existingChannel);
+            if (claim.ok === false) {
+                logger.info('[ChannelUpdate] Handle unavailable', { channelId: id, reason: claim.reason });
+                return c.json({
+                    success: false,
+                    error: "handle_unavailable",
+                    reason: claim.reason,
+                }, 409);
+            }
+            if (existingChannel.handle && handleKey(existingChannel.handle) !== handleKey(claim.handle)) {
+                await releaseHandle(c.env.channel_tabs, existingChannel.handle, id);
+            }
+            logger.info('[ChannelUpdate] Handle claimed', { channelId: id, handle: claim.handle, previous: existingChannel.handle });
+            handle = claim.handle;
+        }
+
         // Update the channel with new values
         const updatedChannel = {
             ...existingChannel,
-            ...channelUpdateInput,
+            ...restInput,
+            handle,
+            // Empty strings clear optional About fields
+            contactEmail: contactEmail === undefined ? existingChannel.contactEmail : (contactEmail || undefined),
+            location: location === undefined ? existingChannel.location : (location || undefined),
             dateModified: new Date().toISOString(),
             // Preserve localized fields if provided
             nameLocalized: channelUpdateInput.nameLocalized ?? existingChannel.nameLocalized,

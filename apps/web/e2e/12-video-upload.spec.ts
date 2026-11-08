@@ -1,361 +1,362 @@
 import { test, expect, helpers } from './fixtures';
+import { AUTH_STATE, ANONYMOUS_STATE } from './test-utils/auth-state';
+import {
+  deleteVideos,
+  expectUploadSuccess,
+  failTusPatches,
+  gotoUpload,
+  holdTusPatches,
+  selectVideo,
+  startUpload,
+  trackUploads,
+  uploadUi,
+} from './test-utils/upload';
 
 /**
  * Video Upload Flow E2E Tests
- * Tests for complete video upload functionality
+ *
+ * Runs the real upload flow against the target environment as the
+ * single-channel E2E user: server-side initiate, browser TUS upload through
+ * the api-videos proxy, then completion/processing. Only the browser TUS
+ * requests are intercepted (to hold or fail chunks deterministically).
+ * Every video a test creates is deleted afterwards.
  */
 
+const ARABIC = /[؀-ۿ]/;
+
 test.describe('Video Upload Flow', () => {
+  test.use({ storageState: AUTH_STATE.single });
+
+  let tracker: ReturnType<typeof trackUploads>;
+
   test.beforeEach(async ({ page }) => {
-    // Mock video upload API for all tests
-    await helpers.mockVideoUploadAPI(page);
+    tracker = trackUploads(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await deleteVideos(page, tracker.videoIds);
   });
 
   test('should upload video with complete metadata', async ({ page }) => {
-    // Login and navigate to upload page
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await gotoUpload(page, 'en');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
-    // Verify upload page loaded
-    await expect(page.locator('h1:has-text("Upload")')).toBeVisible();
-
-    // Create test video
-    const videoPath = await helpers.createTestVideo('test-video.mp4', 1024);
-
-    // Upload video with metadata
+    const videoPath = await helpers.createTestVideo('test-video.mp4', 64);
     await helpers.uploadTestVideo(page, {
       videoPath,
       titleEn: 'Test Islamic Lecture',
       titleAr: 'محاضرة إسلامية تجريبية',
       descriptionEn: 'A test video about Islamic teachings',
       descriptionAr: 'فيديو تجريبي عن التعاليم الإسلامية',
-      isPublic: true
+      isPublic: true,
     });
 
-    // Wait for upload to complete
-    await helpers.waitForUploadComplete(page);
+    await expectUploadSuccess(page, 'Test Islamic Lecture');
+    const ui = uploadUi(page);
+    await expect(ui.viewVideo).toBeVisible();
+    await expect(ui.uploadAnother).toBeVisible();
+    expect(tracker.videoIds.size).toBe(1);
 
-    // Verify success message
-    await expect(page.locator('text=Upload Complete')).toBeVisible();
-    await expect(page.locator('text=Test Islamic Lecture')).toBeVisible();
-
-    // Verify action buttons
-    await expect(page.locator('button:has-text("View Video")')).toBeVisible();
-    await expect(page.locator('button:has-text("Upload Another")')).toBeVisible();
+    // "Upload Another" returns to an empty drop zone
+    await ui.uploadAnother.click();
+    await expect(ui.dropzone).toBeVisible();
   });
 
   test('should show upload progress tracking', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await gotoUpload(page, 'en');
+    const hold = await holdTusPatches(page);
+    const ui = uploadUi(page);
 
-    const videoPath = await helpers.createTestVideo('test-progress.mp4', 2048);
+    await startUpload(page, await helpers.createTestVideo('test-progress.mp4', 64), 'Progress Test Video');
 
-    // Start upload
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-    await page.fill('input[placeholder*="Title in English"]', 'Progress Test Video');
-    await page.click('button:has-text("Upload")');
+    // While the chunk is in flight the form shows the uploading state
+    await hold.waitForHeldPatch();
+    await expect(ui.progress).toHaveAttribute('data-state', 'uploading');
+    await expect(ui.progressPercent).toHaveText(/^\d+%$/);
+    await expect(ui.progressBar).toHaveAttribute('aria-valuenow', /\d+/);
+    await expect(ui.pause).toBeVisible();
+    await expect(ui.cancel).toBeVisible();
+    // Inputs are locked during the transfer
+    await expect(ui.titleEn).toBeDisabled();
 
-    // Verify progress bar appears
-    await expect(page.locator('[class*="progress"]')).toBeVisible();
-
-    // Verify progress percentage updates
-    await expect(page.locator('text=/\\d+%/')).toBeVisible();
-
-    // Verify stages appear
-    await expect(
-      page.locator('text=/Preparing|Uploading|Processing/')
-    ).toBeVisible();
-
-    // Wait for completion
-    await helpers.waitForUploadComplete(page);
+    await hold.release();
+    await expectUploadSuccess(page, 'Progress Test Video');
   });
 
   test('should validate file type', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await gotoUpload(page, 'en');
+    const ui = uploadUi(page);
 
-    // Create invalid file (text file)
-    const invalidPath = await helpers.createTestVideo('invalid.txt', 100);
+    await ui.fileInput.setInputFiles(await helpers.createTestVideo('invalid.txt', 4));
 
-    // Try to upload invalid file
-    await page.setInputFiles('input[type="file"]', invalidPath);
-
-    // Should show error for invalid type
-    // Note: Browser file input may not trigger for wrong type
-    // This test validates client-side validation
-    await page.waitForTimeout(1000);
+    await expect(ui.pageError).toBeVisible();
+    await expect(ui.pageError).toContainText('MP4');
+    await expect(ui.details).toBeHidden();
+    await expect(ui.dropzone).toBeVisible();
   });
 
-  test('should validate file size', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
-
-    // Create large file (> 2GB is hard to test, so we mock validation)
-    const videoPath = await helpers.createTestVideo('large-video.mp4', 1024);
-
-    // Mock API to return file too large error
-    await page.route('**/api/videos/upload/initiate', route => {
-      route.fulfill({
-        status: 400,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: false,
-          error: 'File size exceeds maximum allowed size of 2GB'
-        })
-      });
+  test('should accept files larger than 2GB (no client-side size limit)', async ({ page }) => {
+    // TUS uploads have no size cap, so the client must not reject big files.
+    // Report a 3 GB size for the selected file instead of creating one.
+    await gotoUpload(page, 'en');
+    await page.evaluate(() => {
+      Object.defineProperty(File.prototype, 'size', { configurable: true, get: () => 3 * 1024 ** 3 });
     });
+    const ui = uploadUi(page);
 
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-    await page.fill('input[placeholder*="Title in English"]', 'Large Video Test');
-    await page.click('button:has-text("Upload")');
+    await selectVideo(page, await helpers.createTestVideo('large-video.mp4', 16));
 
-    // Should show error message
-    await expect(
-      page.locator('text=/File size exceeds|too large/')
-    ).toBeVisible({ timeout: 10000 });
+    await expect(ui.details).toContainText('3.00 GB');
+    await expect(ui.pageError).toBeHidden();
+    await expect(ui.submit).toBeEnabled();
   });
 
   test('should pause and resume upload', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await gotoUpload(page, 'en');
+    const hold = await holdTusPatches(page);
+    const ui = uploadUi(page);
 
-    const videoPath = await helpers.createTestVideo('pause-resume.mp4', 2048);
+    await startUpload(page, await helpers.createTestVideo('pause-resume.mp4', 64), 'Pause Resume Test');
+    await hold.waitForHeldPatch();
 
-    // Start upload
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-    await page.fill('input[placeholder*="Title in English"]', 'Pause Resume Test');
-    await page.click('button:has-text("Upload")');
+    await ui.pause.click();
+    await expect(ui.progress).toHaveAttribute('data-state', 'paused');
+    await expect(ui.resume).toBeVisible();
+    await expect(ui.pause).toBeHidden();
 
-    // Wait for upload to start (progress visible)
-    await expect(page.locator('[class*="progress"]')).toBeVisible();
-
-    // Click cancel to pause (current implementation)
-    const cancelButton = page.locator('button:has-text("Cancel")');
-    if (await cancelButton.isVisible()) {
-      await cancelButton.click();
-
-      // Verify upload stopped
-      await expect(page.locator('[class*="progress"]')).not.toBeVisible();
-    }
+    // Resume continues the same TUS upload (no new video is created)
+    await hold.release();
+    await ui.resume.click();
+    await expectUploadSuccess(page, 'Pause Resume Test');
+    expect(tracker.videoIds.size).toBe(1);
   });
 
   test('should cancel upload', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await gotoUpload(page, 'en');
+    const hold = await holdTusPatches(page);
+    const ui = uploadUi(page);
 
-    const videoPath = await helpers.createTestVideo('cancel-test.mp4', 2048);
+    await startUpload(page, await helpers.createTestVideo('cancel-test.mp4', 64), 'Cancel Test Video');
+    await hold.waitForHeldPatch();
+    await expect(ui.progress).toBeVisible();
 
-    // Start upload
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-    await page.fill('input[placeholder*="Title in English"]', 'Cancel Test Video');
-    await page.click('button:has-text("Upload")');
+    await ui.cancel.click();
 
-    // Wait for progress
-    await expect(page.locator('[class*="progress"]')).toBeVisible();
-
-    // Click cancel
-    await page.click('button:has-text("Cancel")');
-
-    // Verify progress bar disappears
-    await expect(page.locator('[class*="progress"]')).not.toBeVisible();
-
-    // Verify form is reset
-    await expect(page.locator('text=Video Details')).not.toBeVisible();
+    await expect(ui.details).toBeHidden();
+    await expect(ui.progress).toBeHidden();
+    await expect(page.getByTestId('upload-page-progress')).toBeHidden();
+    await expect(ui.dropzone).toBeVisible();
+    await hold.release();
   });
 
   test('should work in RTL (Arabic) interface', async ({ page }) => {
-    // Login with Arabic locale
-    await helpers.loginAndNavigateToUpload(page, 'ar');
+    await gotoUpload(page, 'ar');
+    const ui = uploadUi(page);
 
-    // Verify RTL layout
-    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    // The upload page renders inside the RTL locale container with Arabic UI text
+    expect(await ui.dropzone.evaluate((el) => (el.closest('[dir]') as HTMLElement | null)?.dir)).toBe('rtl');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(ARABIC);
 
-    // Verify upload page in Arabic
-    await expect(page.locator('h1')).toBeVisible();
+    await selectVideo(page, await helpers.createTestVideo('arabic-test.mp4', 64));
 
-    const videoPath = await helpers.createTestVideo('arabic-test.mp4', 1024);
+    await ui.langTabAr.click();
+    await expect(ui.langTabAr).toHaveAttribute('aria-selected', 'true');
+    await expect(ui.titleAr).toHaveAttribute('dir', 'rtl');
+    await ui.titleAr.fill('فيديو تجريبي');
 
-    // Upload with Arabic metadata
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
+    // English title is required
+    await ui.langTabEn.click();
+    await ui.titleEn.fill('Test Video');
+    await ui.submit.click();
 
-    // Fill Arabic title
-    await page.click('button:has-text("العربية")');
-    await page.fill('input[placeholder*="العنوان بالعربية"]', 'فيديو تجريبي');
-
-    // Fill English title (required)
-    await page.click('button:has-text("English")');
-    await page.fill('input[placeholder*="Title in English"]', 'Test Video');
-
-    await page.click('button:has-text("Upload")');
-
-    // Wait for completion
-    await helpers.waitForUploadComplete(page);
-
-    // Verify success in Arabic context
-    await expect(page.locator('text=Upload Complete')).toBeVisible();
+    await expectUploadSuccess(page, 'Test Video');
   });
 });
 
 test.describe('Video Upload - Drag and Drop', () => {
-  test('should upload via drag and drop', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test.use({ storageState: AUTH_STATE.single });
 
-    // Verify drag-drop area exists
-    await expect(page.locator('text=/Drag.*drop|Drop here/')).toBeVisible();
+  test('should accept a video dropped on the drop zone', async ({ page }) => {
+    await gotoUpload(page, 'en');
+    const ui = uploadUi(page);
+    await expect(ui.dropzone).toContainText(/drag/i);
 
-    // Note: Playwright's drag-drop for files requires special handling
-    // Using setInputFiles is more reliable for testing
-    const videoPath = await helpers.createTestVideo('drag-drop.mp4', 1024);
+    const dataTransfer = await page.evaluateHandle(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array(1024)], 'drag-drop.mp4', { type: 'video/mp4' }));
+      return dt;
+    });
 
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
+    await ui.dropzone.dispatchEvent('dragover', { dataTransfer });
+    await expect(ui.dropzone).toHaveAttribute('data-drag-over', 'true');
 
-    await expect(page.locator('text=drag-drop.mp4')).toBeVisible();
+    await ui.dropzone.dispatchEvent('drop', { dataTransfer });
+    await expect(ui.details).toBeVisible();
+    await expect(ui.fileName).toHaveText('drag-drop.mp4');
+    // The title defaults to the file name without its extension
+    await expect(ui.titleEn).toHaveValue('drag-drop');
   });
 });
 
 test.describe('Video Upload - Validation', () => {
+  test.use({ storageState: AUTH_STATE.single });
+
   test('should require title before upload', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await gotoUpload(page, 'en');
+    const ui = uploadUi(page);
+    await selectVideo(page, await helpers.createTestVideo('no-title.mp4', 16));
 
-    const videoPath = await helpers.createTestVideo('no-title.mp4', 1024);
-
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-
-    // Clear the auto-filled title
-    await page.fill('input[placeholder*="Title in English"]', '');
-
-    // Try to upload without title
-    const uploadButton = page.locator('button:has-text("Upload")');
-    await expect(uploadButton).toBeDisabled();
+    await expect(ui.submit).toBeEnabled();
+    await ui.titleEn.fill('');
+    await expect(ui.submit).toBeDisabled();
+    await ui.titleEn.fill('   ');
+    await expect(ui.submit).toBeDisabled();
   });
 
-  test('should show unsaved changes warning', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test('should discard the form when closed', async ({ page }) => {
+    await gotoUpload(page, 'en');
+    const ui = uploadUi(page);
+    await selectVideo(page, await helpers.createTestVideo('unsaved.mp4', 16));
+    await ui.titleEn.fill('Unsaved Test');
 
-    const videoPath = await helpers.createTestVideo('unsaved.mp4', 1024);
+    await ui.close.click();
+    await expect(ui.details).toBeHidden();
+    await expect(ui.dropzone).toBeVisible();
 
-    // Select file and fill metadata
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-    await page.fill('input[placeholder*="Title in English"]', 'Unsaved Test');
-
-    // Try to close form
-    const closeButton = page.locator('button[class*="close"], button:has(svg)').first();
-    if (await closeButton.isVisible()) {
-      await closeButton.click();
-
-      // Form should reset (current implementation doesn't have confirmation dialog)
-      await page.waitForTimeout(500);
-    }
+    // Selecting again starts from a fresh form
+    await selectVideo(page, await helpers.createTestVideo('unsaved.mp4', 16));
+    await expect(ui.titleEn).toHaveValue('unsaved');
   });
 });
 
 test.describe('Video Upload - Mobile', () => {
+  test.use({ storageState: AUTH_STATE.single, viewport: { width: 375, height: 667 } });
+
   test('should work on mobile viewport', async ({ page }) => {
-    // Set mobile viewport
-    await helpers.setMobileViewport(page);
+    await gotoUpload(page, 'en');
+    const ui = uploadUi(page);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // Mode toggle buttons keep an accessible name when their label is hidden
+    await expect(page.getByTestId('upload-mode-single')).toHaveAccessibleName(/.+/);
 
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await selectVideo(page, await helpers.createTestVideo('mobile-test.mp4', 16));
+    await ui.titleEn.fill('Mobile Upload Test');
 
-    // Verify responsive layout
-    await expect(page.locator('h1:has-text("Upload")')).toBeVisible();
+    await ui.langTabAr.click();
+    await expect(ui.titleAr).toBeVisible();
+    await ui.langTabEn.click();
+    await expect(ui.titleEn).toHaveValue('Mobile Upload Test');
 
-    const videoPath = await helpers.createTestVideo('mobile-test.mp4', 512);
-
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-
-    // Verify form is usable on mobile
-    await page.fill('input[placeholder*="Title in English"]', 'Mobile Upload Test');
-
-    // Language tabs should be accessible
-    await page.click('button:has-text("English")');
-    await page.click('button:has-text("العربية")');
-
-    await expect(page.locator('button:has-text("Upload")')).toBeVisible();
+    await ui.submit.scrollIntoViewIfNeeded();
+    await expect(ui.submit).toBeInViewport();
+    const box = await ui.details.boundingBox();
+    expect(box?.width ?? 0).toBeLessThanOrEqual(375);
   });
 });
 
 test.describe('Video Upload - Error Handling', () => {
-  test('should handle network errors gracefully', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+  test.describe('signed in', () => {
+    test.use({ storageState: AUTH_STATE.single });
 
-    // Mock network error
-    await page.route('**/api/videos/upload/initiate', route => {
-      route.abort('failed');
+    let tracker: ReturnType<typeof trackUploads>;
+    test.beforeEach(async ({ page }) => {
+      tracker = trackUploads(page);
+    });
+    test.afterEach(async ({ page }) => {
+      await deleteVideos(page, tracker.videoIds);
     });
 
-    const videoPath = await helpers.createTestVideo('network-error.mp4', 1024);
+    test('should report a rejected upload and allow retry', async ({ page }) => {
+      await gotoUpload(page, 'en');
+      const ui = uploadUi(page);
+      const restore = await failTusPatches(page, 403);
 
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-    await page.fill('input[placeholder*="Title in English"]', 'Network Error Test');
-    await page.click('button:has-text("Upload")');
+      await startUpload(page, await helpers.createTestVideo('network-error.mp4', 64), 'Network Error Test');
 
-    // Should show error message
-    await expect(
-      page.locator('text=/error|failed|network/i')
-    ).toBeVisible({ timeout: 10000 });
+      await expect(ui.progress).toHaveAttribute('data-state', 'error');
+      await expect(ui.error).toBeVisible();
+      await expect(ui.pageError).toBeVisible();
+      await expect(ui.retry).toBeVisible();
 
-    // Should have retry button
-    await expect(page.locator('button:has-text("Try Again")')).toBeVisible();
+      // Retry resumes the same upload once the proxy accepts chunks again
+      await restore();
+      await ui.retry.click();
+      await expect(ui.pageError).toBeHidden();
+      await expectUploadSuccess(page, 'Network Error Test');
+      expect(tracker.videoIds.size).toBe(1);
+    });
   });
 
-  test('should handle authentication errors', async ({ page }) => {
-    // Don't mock auth for this test
-    await page.goto('/en/upload');
+  test.describe('signed out', () => {
+    test.use({ storageState: ANONYMOUS_STATE });
 
-    // Should redirect to login or show auth error
-    await page.waitForTimeout(2000);
+    test('should ask anonymous visitors to sign in', async ({ page }) => {
+      await page.goto('/en/upload');
+      const ui = uploadUi(page);
+      await expect(ui.signIn).toBeVisible();
+      await expect(ui.signIn.getByRole('button')).toBeVisible();
+      await expect(ui.dropzone).toHaveCount(0);
+      await expect(ui.channelRequired).toHaveCount(0);
+    });
+  });
 
-    // Either redirected to login or error shown
-    const url = page.url();
-    const hasError = await page.locator('text=/login|sign in|authenticate/i').isVisible();
+  test.describe('without a channel', () => {
+    test.use({ storageState: AUTH_STATE.none });
 
-    expect(url.includes('/login') || hasError).toBeTruthy();
+    test('should explain that a channel is required', async ({ page }) => {
+      await page.goto('/en/upload');
+      const ui = uploadUi(page);
+      await expect(ui.channelRequired).toBeVisible();
+      await expect(page.getByTestId('upload-create-channel')).toBeVisible();
+      await expect(ui.dropzone).toHaveCount(0);
+    });
+
+    test('should explain that a channel is required in Arabic', async ({ page }) => {
+      await page.goto('/ar/upload');
+      const ui = uploadUi(page);
+      await expect(ui.channelRequired).toBeVisible();
+      await expect(ui.channelRequired.getByRole('heading')).toHaveText(ARABIC);
+    });
   });
 });
 
 test.describe('Video Upload - Accessibility', () => {
+  test.use({ storageState: AUTH_STATE.single });
+
   test('should be keyboard accessible', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await gotoUpload(page, 'en');
+    const ui = uploadUi(page);
+    await selectVideo(page, await helpers.createTestVideo('keyboard-test.mp4', 16));
 
-    // Focus file input with Tab
-    await page.keyboard.press('Tab');
+    // Language tabs, title and the upload button are reachable and operable by keyboard
+    await ui.langTabAr.focus();
+    await page.keyboard.press('Enter');
+    await expect(ui.langTabAr).toHaveAttribute('aria-selected', 'true');
+    await ui.langTabEn.focus();
+    await page.keyboard.press('Enter');
 
-    const videoPath = await helpers.createTestVideo('keyboard-test.mp4', 1024);
-
-    // Select file
-    await page.setInputFiles('input[type="file"]', videoPath);
-    await page.waitForSelector('text=Video Details');
-
-    // Navigate with Tab
-    await page.keyboard.press('Tab'); // Language tab
-    await page.keyboard.press('Tab'); // Title input
-
-    // Fill title
+    await ui.titleEn.focus();
+    await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('Keyboard Accessibility Test');
+    await expect(ui.titleEn).toHaveValue('Keyboard Accessibility Test');
 
-    // Tab to upload button
-    await page.keyboard.press('Tab'); // Description
-    await page.keyboard.press('Tab'); // Privacy checkbox
-    await page.keyboard.press('Tab'); // Upload button
-
-    // Verify upload button is focused
-    const uploadButton = page.locator('button:has-text("Upload")');
-    await expect(uploadButton).toBeFocused();
+    await ui.submit.focus();
+    await expect(ui.submit).toBeFocused();
+    await expect(ui.submit).toBeEnabled();
   });
 
   test('should have proper ARIA labels', async ({ page }) => {
-    await helpers.loginAndNavigateToUpload(page, 'en');
+    await gotoUpload(page, 'en');
+    const ui = uploadUi(page);
 
-    // Check for accessible elements
-    // Note: Need to add ARIA labels to components if missing
-    await page.waitForTimeout(1000);
+    await expect(ui.fileInput).toHaveAccessibleName(/.+/);
+    await selectVideo(page, await helpers.createTestVideo('aria-test.mp4', 16));
 
-    // File input should be accessible
-    const fileInput = page.locator('input[type="file"]');
-    await expect(fileInput).toBeVisible();
+    await expect(ui.titleEn).toHaveAccessibleName(/.+/);
+    await expect(ui.descriptionEn).toHaveAccessibleName(/.+/);
+    await expect(ui.close).toHaveAccessibleName(/.+/);
+    await expect(ui.submit).toHaveAccessibleName(/.+/);
+    await expect(page.getByRole('tablist').getByRole('tab')).toHaveCount(2);
+    await expect(ui.isPublic).toHaveAccessibleName(/.+/);
   });
 });

@@ -53,6 +53,11 @@ interface UploadButtonProps {
    * Optional title attribute for accessibility
    */
   title?: string;
+
+  /**
+   * Optional test id for E2E tests
+   */
+  testId?: string;
 }
 
 const sizeClasses = {
@@ -99,6 +104,7 @@ export function UploadButton({
   disabled = false,
   className,
   title,
+  testId,
 }: UploadButtonProps) {
   const baseClasses = cn(
     // Layout
@@ -154,6 +160,7 @@ export function UploadButton({
         className={baseClasses}
         title={title || text}
         aria-label={text}
+        data-testid={testId}
       >
         {content}
       </Link>
@@ -169,6 +176,7 @@ export function UploadButton({
       className={baseClasses}
       title={title || text}
       aria-label={text}
+      data-testid={testId}
     >
       {content}
     </button>

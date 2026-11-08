@@ -4,7 +4,18 @@ import { Channel, Profile, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
+import { inBackground, notifyUser } from '../../lib/websocket-notify';
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { countSubscribers } from "../../lib/subscriptions";
+
+const SubscriptionStatusResponse = z.object({
+	success: z.boolean(),
+	result: z.object({
+		channelId: z.string(),
+		isSubscribed: z.boolean(),
+		subscriberCount: z.number(),
+	}),
+});
 
 export class SubscriptionCreate extends AuthenticatedRoute {
 	schema = {
@@ -23,7 +34,7 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 				description: "Subscription created successfully",
 				content: {
 					"application/json": {
-						schema: Channel,
+						schema: SubscriptionStatusResponse,
 					},
 				},
 			},
@@ -68,7 +79,8 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 			const bucket = c.env.channels;
 			type ChannelType = z.infer<typeof Channel>;
 			const repository = new R2Repository<ChannelType>(bucket);
-			let channel = await repository.getObject(channelId);
+			// Load the TARGET channel (route param), not the subscriber's channel (header)
+			let channel = await repository.getObject(id);
 
 			const exists = channel !== null;
 	
@@ -79,6 +91,16 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 						error: "Object not found",
 					},
 					404
+				);
+			}
+
+			if (id === channelId) {
+				return c.json(
+					{
+						success: false,
+						error: "Cannot subscribe to your own channel",
+					},
+					400
 				);
 			}
 
@@ -94,7 +116,26 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 				entityId: id,
 				dateCreated: new Date().toISOString(),
 			};
-			
+
+			// Check if the user has already subscribed to the channel
+			const alreadySubscribed = channel.subscriptions.find((s) => s.channelId === subscription.channelId);
+			if (alreadySubscribed) {
+				return c.json(
+					{
+						success: true,
+						result: {
+							channelId: id,
+							isSubscribed: true,
+							subscriberCount: countSubscribers(channel.subscriptions),
+						},
+					},
+					200
+				);
+			}
+
+			channel.subscriptions.push(subscription);
+			await repository.putObject(id, channel);
+
 			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.Subscribe, {
 				subscriptionId: subscription.id,
@@ -104,20 +145,18 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 				timestamp: new Date().toISOString(),
 			});
 
-			// Check if the user has already subscriped the video
-			const alreadySubscribed = channel.subscriptions.find((s) => s.channelId === subscription.channelId);
-			if (alreadySubscribed) {
-				return c.json(
-					{
-						success: true,
-						error: "Already Subscribed",
-					},
-					201
-				);
-			}
-
-			channel.subscriptions.push(subscription);
-			await repository.putObject(id, channel);
+			// Realtime: tell the subscribed-to channel's owner (looked up after the response)
+			inBackground(c, 'new-subscriber', async () => {
+				const target = await repository.getObject(id);
+				if (target?.userId && target.userId !== userId) {
+					await notifyUser(c.env, target.userId, {
+						notificationType: 'subscription',
+						notificationKey: 'newSubscriber',
+						params: { channelName: target.name || '' },
+						actionUrl: `/channel/${id}`,
+					});
+				}
+			});
 
 			// Update reverse index on subscriber's profile
 			try {
@@ -142,7 +181,17 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 				logger.warn('Failed to update profile subscribedTo index:', profileError);
 			}
 
-			return channel;
+			return c.json(
+				{
+					success: true,
+					result: {
+						channelId: id,
+						isSubscribed: true,
+						subscriberCount: countSubscribers(channel.subscriptions),
+					},
+				},
+				201
+			);
 		}
 		catch (error) {
 			logger.error("Error fetching Channel:", error);

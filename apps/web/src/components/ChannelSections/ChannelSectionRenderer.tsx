@@ -12,9 +12,17 @@ import { UpcomingEventsSection } from './types/UpcomingEventsSection';
 import { MultipleChannelsSection } from './types/MultipleChannelsSection';
 import { SubscriptionsSection } from './types/SubscriptionsSection';
 import { logger } from '@/lib/logger-client';
+import { useLanguage } from '@/hooks/useLanguage';
+import {
+  getSectionChannelIds,
+  getSectionPlaylistIds,
+  getSectionPopulatedChannels,
+  getSectionVideoIds,
+  type PopulatedChannelSection,
+} from './sectionData';
 
 interface ChannelSectionRendererProps {
-  section: ChannelSection;
+  section: ChannelSection | PopulatedChannelSection;
   channelId: string;
 }
 
@@ -31,6 +39,10 @@ function normalizeType(backendType: ChannelSectionType | string): string {
     single_playlist: 'singlePlaylist',
     multiple_playlists: 'multiplePlaylists',
     subscribed_channels: 'subscriptions',
+    multiple_channels: 'multipleChannels',
+    live_events: 'liveEvents',
+    upcoming_events: 'upcomingEvents',
+    completed_events: 'completedEvents',
     liked_videos: 'likedVideos',
   };
 
@@ -38,6 +50,7 @@ function normalizeType(backendType: ChannelSectionType | string): string {
 }
 
 export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRendererProps) {
+  const { t } = useLanguage();
   const normalizedType = normalizeType(section.type);
   logger.info('ChannelSectionRenderer: Rendering section', {
     originalType: section.type,
@@ -50,7 +63,7 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
     case 'featuredVideos':
       return (
         <FeaturedVideosSection
-          videoIds={section.videoIds || []}
+          videoIds={getSectionVideoIds(section)}
           title={section.title}
           channelId={channelId}
         />
@@ -65,36 +78,42 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
     case 'multiplePlaylists':
       return (
         <MultiplePlaylistsSection
-          title={section.title || 'Playlists'}
-          playlistIds={section.playlistIds || []}
+          title={section.title || t.channel.featuredPlaylists}
+          playlistIds={getSectionPlaylistIds(section)}
         />
       );
 
     case 'singlePlaylist':
-      return <SinglePlaylistSection playlistId={section.playlistIds?.[0] || ''} />;
+      return <SinglePlaylistSection playlistId={getSectionPlaylistIds(section)[0] || ''} />;
 
     case 'allPlaylists':
       return <AllPlaylistsSection channelId={channelId} />;
 
     case 'liveEvents':
-      return <LiveEventsSection channelId={channelId} />;
+      return <LiveEventsSection channelId={channelId} title={section.title} />;
 
     case 'completedEvents':
-      return <CompletedEventsSection channelId={channelId} />;
+      return <CompletedEventsSection channelId={channelId} title={section.title} />;
 
     case 'upcomingEvents':
-      return <UpcomingEventsSection channelId={channelId} />;
+      return <UpcomingEventsSection channelId={channelId} title={section.title} />;
 
     case 'multipleChannels':
       return (
         <MultipleChannelsSection
-          title={section.title || 'Featured Channels'}
-          channelIds={section.channelIds || []}
+          title={section.title || t.channel.featuredChannels}
+          channelIds={getSectionChannelIds(section)}
         />
       );
 
     case 'subscriptions':
-      return <SubscriptionsSection channelId={channelId} />;
+      return (
+        <SubscriptionsSection
+          channelId={channelId}
+          title={section.title}
+          channels={getSectionPopulatedChannels(section)}
+        />
+      );
 
     case 'likedVideos':
       return <LikedVideosSection channelId={channelId} title={section.title} />;

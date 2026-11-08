@@ -1,4 +1,5 @@
 import { PublicRoute, AppContext } from "../../base";
+import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
@@ -184,7 +185,7 @@ export class CategoryVideosSection extends PublicRoute {
             const video = await videoRepo.getObject(indexVideo.videoId);
             return video;
           })
-        ).then(results => results.filter(v => v !== null) as VideoObject[]);
+        ).then(results => results.filter(v => isVideoPubliclyVisible(v)) as VideoObject[]);
 
         // Create next cursor if there are more results
         if (endIndex < sortedIndexVideos.length) {
@@ -215,7 +216,7 @@ export class CategoryVideosSection extends PublicRoute {
         while (iterations < 5 && allVideos.length < 200) { // Limit iterations and results
           const result = await videoRepo.listObjects(100, fetchCursor);
           const categoryVideos = (result.items || []).filter(v =>
-            v.category === category && v.isPublic !== false
+            v.category === category && isVideoPubliclyVisible(v)
           );
           allVideos.push(...categoryVideos);
 
@@ -352,7 +353,7 @@ async function rebuildCategoryIndex(videoBucket: R2Bucket, category: string): Pr
   while (iterations < 10) { // Limit iterations
     const result = await videoRepo.listObjects(100, cursor);
     const filtered = (result.items || []).filter(v =>
-      v.category === category && v.isPublic !== false
+      v.category === category && isVideoPubliclyVisible(v)
     );
     categoryVideos.push(...filtered);
 

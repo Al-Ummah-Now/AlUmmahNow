@@ -6,32 +6,47 @@ import {
   TrendingVideosSection,
   RecommendedVideosSection,
 } from '@/components/VideoSections';
+import { getTranslations } from '@/lib/i18n/utils/getTranslations';
 
 /**
  * Video Sections Page
  * Displays all video sections on one page (Recent, Popular, Trending, Recommended)
  */
 
-export const metadata: Metadata = {
-  title: 'Video Sections - Al Ummah Now',
-  description: 'Browse recent, popular, trending, and recommended Islamic videos',
-  openGraph: {
-    title: 'Video Sections - Al Ummah Now',
-    description: 'Browse recent, popular, trending, and recommended Islamic videos',
-  },
-};
+interface SectionsPageProps {
+  params: Promise<{ locale: string }>;
+}
 
-export default function SectionsPage() {
+export async function generateMetadata({ params }: SectionsPageProps): Promise<Metadata> {
+  const { locale } = await params;
+  const t = getTranslations(locale === 'ar' ? 'ar' : 'en');
+  const title = `${t.sections?.pageTitle} | ${t.common.appName}`;
+  const description = t.sections?.pageDescription;
+
+  return {
+    title,
+    description,
+    openGraph: { title, description },
+    alternates: {
+      languages: { en: '/en/sections', ar: '/ar/sections' },
+    },
+  };
+}
+
+export default async function SectionsPage({ params }: SectionsPageProps) {
+  const { locale } = await params;
+  const t = getTranslations(locale === 'ar' ? 'ar' : 'en');
+
   return (
-    <main className="min-h-screen bg-white dark:bg-gray-900">
+    <main className="min-h-screen bg-white dark:bg-gray-900" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-12">
         {/* Page Header */}
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-            Explore Videos
+            {t.sections?.pageTitle}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Discover Islamic content across different categories
+            {t.sections?.pageDescription}
           </p>
         </header>
 

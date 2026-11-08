@@ -1,5 +1,9 @@
-import { chromium, FullConfig } from '@playwright/test';
+import { chromium, type Browser, type BrowserContext, type FullConfig, type Page } from '@playwright/test';
 import { ResendTestClient } from './test-utils/resend-client';
+import { ApiClient } from './seed/seed-api';
+import { extractSession, loginOnPage } from './seed/seed-auth';
+import { ensureChannels, ensureProfile, purgeDisposableChannels, type UserChannelSpec } from './seed/seed-users';
+import { consentCookie } from './test-utils/consent';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -30,6 +34,129 @@ export interface TestUser {
   password: string;
   name: string;
   storageStatePath: string;
+  /** Channels the user must own; [] means profile only (no channels) */
+  channels: UserChannelSpec[];
+  /**
+   * Leftover throwaway channels younger than this are kept (a concurrent local
+   * run may still be using them). Default 0: delete every leftover.
+   */
+  disposableChannelGraceMs?: number;
+}
+
+interface SessionCookieChannel {
+  id: string;
+  isMain?: boolean;
+}
+
+interface SessionCookieData {
+  activeUserId: string;
+  activeChannelId: string | null;
+  accounts: Record<string, { channels?: SessionCookieChannel[]; activeChannelId?: string | null }>;
+}
+
+const SESSION_COOKIE = 'al_ummah_session';
+
+function parseSessionCookie(value: string): SessionCookieData {
+  let raw = value;
+  try {
+    raw = decodeURIComponent(value);
+  } catch {
+    // not URI-encoded
+  }
+  return JSON.parse(raw) as SessionCookieData;
+}
+
+/**
+ * Provisions the user's profile and channels through api-videos, then logs in
+ * again in a fresh browser context so the web callback (SessionManager.addAccount
+ * -> loadUserChannels) caches the channels in the al_ummah_session cookie.
+ * Returns the context holding the refreshed session; the caller saves and closes it.
+ */
+async function provisionAndRefreshSession(
+  browser: Browser,
+  page: Page,
+  user: TestUser,
+  cfg: { openAuthUrl: string; webAppUrl: string; clientId: string; apiUrl: string },
+): Promise<BrowserContext> {
+  const api = new ApiClient(cfg.apiUrl);
+  const session = await extractSession(page, { webUrl: cfg.webAppUrl });
+
+  const profileCreated = await ensureProfile(api, session, { email: user.email, displayName: user.name });
+  // Throwaway channels left by a cancelled or crashed run would otherwise show
+  // up in this user's menu, profile and active channel for every later run.
+  const purged = await purgeDisposableChannels(api, session, {
+    keep: user.channels.map((c) => c.name),
+    minAgeMs: user.disposableChannelGraceMs ?? 0,
+  });
+  if (purged.length > 0) ciLogger.warn(`[Setup] Deleted leftover throwaway channels of ${user.email}`, { purged });
+  const { channels, created, extra } = await ensureChannels(api, session, user.channels);
+  ciLogger.info(`[Setup] Provisioned ${user.email}`, {
+    userId: session.userId,
+    profileCreated,
+    channelsExpected: user.channels.length,
+    channelsCreated: created,
+  });
+  if (extra.length > 0) {
+    ciLogger.warn(`[Setup] ${user.email} owns channels beyond the expected set (left untouched)`, { extra });
+  }
+
+  // Fresh context: the callback's addAccount() loads profile + channels into the cookie.
+  const refreshed = await browser.newContext({ baseURL: cfg.webAppUrl });
+  await refreshed.addCookies([consentCookie(cfg.webAppUrl)]);
+  const refreshPage = await refreshed.newPage();
+  const login = await loginOnPage(
+    refreshPage,
+    { issuerUrl: cfg.openAuthUrl, webUrl: cfg.webAppUrl, clientId: cfg.clientId },
+    user.email,
+    user.password,
+  );
+  if (!login.ok) {
+    await refreshed.close();
+    throw new Error(`Re-login to refresh the web session failed for ${user.email}: ${login.message}`);
+  }
+  await refreshPage.waitForLoadState('networkidle').catch(() => undefined);
+
+  // Verify the cookie caches the channels. SessionManager.loadUserChannels calls
+  // GET /api/channels with the default page size, which can miss the user's
+  // channels once the environment has many channels; in that case patch the
+  // cookie with the channels we just verified via the API.
+  const cookies = await refreshed.cookies(cfg.webAppUrl);
+  const cookie = cookies.find((c) => c.name === SESSION_COOKIE);
+  if (!cookie) {
+    await refreshed.close();
+    throw new Error(`Refreshed session for ${user.email} has no ${SESSION_COOKIE} cookie`);
+  }
+  const data = parseSessionCookie(cookie.value);
+  const account = data.accounts[data.activeUserId];
+  if (account) {
+    // The stored session must describe exactly the user's fixed channels with
+    // the main one active: specs read it (readSession/userApi) to know which
+    // channel to use, and must not pick up a channel another run created.
+    const cached = account.channels || [];
+    const cachedIds = new Set(cached.map((c) => c.id));
+    const expectedIds = new Set(channels.map((c) => c.id));
+    const missing = channels.filter((c) => !cachedIds.has(c.id));
+    const unexpected = cached.filter((c) => !expectedIds.has(c.id));
+    if (missing.length > 0 || unexpected.length > 0) {
+      ciLogger.warn(`[Setup] Web session for ${user.email} does not match its channels; patching the cookie`, {
+        cached: cachedIds.size,
+        expected: channels.length,
+        missing: missing.length,
+        unexpected: unexpected.length,
+      });
+    }
+    account.channels = [...cached.filter((c) => expectedIds.has(c.id)), ...missing];
+    const main = account.channels.find((c) => c.isMain) || account.channels[0];
+    const activeChannelId = main?.id ?? null;
+    const changed = account.activeChannelId !== activeChannelId || data.activeChannelId !== activeChannelId;
+    account.activeChannelId = activeChannelId;
+    data.activeChannelId = activeChannelId;
+    if (missing.length > 0 || unexpected.length > 0 || changed) {
+      await refreshed.addCookies([{ ...cookie, value: encodeURIComponent(JSON.stringify(data)) }]);
+    }
+  }
+  ciLogger.info(`[Setup] Web session for ${user.email} caches ${account?.channels?.length ?? 0} channel(s)`);
+  return refreshed;
 }
 
 /**
@@ -48,7 +175,7 @@ async function globalSetup(_config: FullConfig) {
     ciLogger.info('[Global Setup] SKIP_AUTH_SETUP=true, checking for existing auth state...');
 
     const authDir = path.join(process.cwd(), 'e2e/.auth');
-    const requiredFiles = ['user-single.json', 'user-multi.json', 'user-none.json'];
+    const requiredFiles = ['user-single.json', 'user-multi.json', 'user-none.json', 'user-scratch.json'];
     const allExist = requiredFiles.every(file => {
       const filePath = path.join(authDir, file);
       const exists = fs.existsSync(filePath);
@@ -68,9 +195,17 @@ async function globalSetup(_config: FullConfig) {
 
   ciLogger.info('[Global Setup] Starting test user registration...');
 
+  // E2E_REUSE_USERS_TIMESTAMP=<n> logs in to the existing test-*-<n> users
+  // instead of registering new ones (no RESEND_API_KEY needed).
+  const reuseTimestamp = process.env.E2E_REUSE_USERS_TIMESTAMP;
+  // E2E_USERS_TIMESTAMP=<n> pins a stable user set (e.g. one per CI project so
+  // parallel jobs never share accounts): log in to test-*-<n>, registering only
+  // the users that don't exist yet (needs RESEND_API_KEY the first time).
+  const pinnedTimestamp = process.env.E2E_USERS_TIMESTAMP;
+
   // Verify required environment variables
   const resendApiKey = process.env.RESEND_API_KEY;
-  if (!resendApiKey) {
+  if (!resendApiKey && !reuseTimestamp && !pinnedTimestamp) {
     throw new Error(
       'RESEND_API_KEY environment variable is required for test user registration. ' +
       'Get your API key from https://resend.com/api-keys'
@@ -82,6 +217,9 @@ async function globalSetup(_config: FullConfig) {
   // Must be the web app's registered client id (QA: e0de3c30-…); the web
   // callback exchanges the code with its own ClientId.
   const clientId = process.env.OPENAUTH_CLIENT_ID || 'e0de3c30-0304-4ac4-86d6-1e185dec0439';
+  const apiUrl = (process.env.API_URL || (webAppUrl.startsWith('https://videos.qa.')
+    ? 'https://videos.api.qa.alummahnow.net'
+    : 'http://127.0.0.1:3086')).replace(/\/$/, '');
 
   // Log working directory for debugging path issues
   const cwd = process.cwd();
@@ -91,6 +229,8 @@ async function globalSetup(_config: FullConfig) {
     openAuthUrl,
     webAppUrl,
     clientId,
+    apiUrl,
+    reuseTimestamp: reuseTimestamp || null,
     cwd,
     authDir
   });
@@ -101,28 +241,44 @@ async function globalSetup(_config: FullConfig) {
     fs.mkdirSync(authDir, { recursive: true });
   }
 
-  const resendClient = new ResendTestClient(resendApiKey);
+  const resendClient = resendApiKey ? new ResendTestClient(resendApiKey) : null;
 
   // Generate unique emails per test run to avoid conflicts
-  const timestamp = Date.now();
+  const timestamp = reuseTimestamp ? Number(reuseTimestamp) : pinnedTimestamp ? Number(pinnedTimestamp) : Date.now();
   const testUsers: TestUser[] = [
     {
       email: `test-single-${timestamp}@delivered.resend.dev`,
       password: 'TestPassword123!',
       name: 'Single Channel User',
       storageStatePath: path.join(authDir, 'user-single.json'),
+      channels: [{ name: 'E2E Single Channel', description: 'E2E test channel (single-channel user)', isMain: true }],
     },
     {
       email: `test-multi-${timestamp}@delivered.resend.dev`,
       password: 'TestPassword456!',
       name: 'Multi Channel User',
       storageStatePath: path.join(authDir, 'user-multi.json'),
+      channels: [
+        { name: 'E2E Multi Channel One', description: 'E2E test channel 1 (multi-channel user)', isMain: true },
+        { name: 'E2E Multi Channel Two', description: 'E2E test channel 2 (multi-channel user)' },
+      ],
     },
     {
       email: `test-none-${timestamp}@delivered.resend.dev`,
       password: 'TestPassword789!',
       name: 'No Channels User',
       storageStatePath: path.join(authDir, 'user-none.json'),
+      channels: [],
+    },
+    {
+      // Owns the throwaway channels specs create and delete (channel create /
+      // delete / handle flows), so the users above keep a fixed channel set.
+      email: `test-scratch-${timestamp}@delivered.resend.dev`,
+      password: 'TestPassword321!',
+      name: 'Scratch Channel User',
+      storageStatePath: path.join(authDir, 'user-scratch.json'),
+      channels: [{ name: 'E2E Scratch Channel', description: 'E2E test channel (throwaway-channel user)', isMain: true }],
+      disposableChannelGraceMs: 30 * 60 * 1000,
     },
   ];
 
@@ -139,6 +295,7 @@ async function globalSetup(_config: FullConfig) {
     const context = await browser.newContext({
       baseURL: webAppUrl,
     });
+    await context.addCookies([consentCookie(webAppUrl)]);
     const page = await context.newPage();
 
     try {
@@ -147,70 +304,85 @@ async function globalSetup(_config: FullConfig) {
       const authorizeUrl = `${openAuthUrl}/authorize?redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&client_id=${clientId}`;
 
       ciLogger.info(`[Setup] Starting OAuth flow for ${user.email}`);
-      await page.goto(authorizeUrl, { waitUntil: 'networkidle' });
-
-      // Click the "Register" link to go to registration page
-      const registerLink = await page.$('a[href*="register"], a:has-text("Register")');
-      if (registerLink) {
-        await registerLink.click();
-        await page.waitForLoadState('networkidle');
+      let loggedIn = false;
+      if (reuseTimestamp || pinnedTimestamp) {
+        const login = await loginOnPage(page, { issuerUrl: openAuthUrl, webUrl: webAppUrl, clientId }, user.email, user.password);
+        if (login.ok) {
+          loggedIn = true;
+        } else if (reuseTimestamp) {
+          throw new Error(`Login for existing user ${user.email} failed: ${login.message}`);
+        } else {
+          ciLogger.info(`[Setup] Pinned user ${user.email} not found (${login.message}); registering it`);
+          if (!resendClient) throw new Error(`RESEND_API_KEY is required to register pinned user ${user.email}`);
+        }
       }
+      if (!loggedIn) {
+        await page.goto(authorizeUrl, { waitUntil: 'networkidle' });
 
-      ciLogger.info(`[Setup] Filling registration form for ${user.email}`);
-
-      // Fill registration form - OpenAuth uses name attributes
-      await page.fill('input[name="email"]', user.email);
-      await page.fill('input[name="password"]', user.password);
-      await page.fill('input[name="repeat"]', user.password); // Repeat password field
-      await page.click('button[data-component="button"]');
-
-      // Wait for verification code page or direct redirect
-      ciLogger.info(`[Setup] Waiting for next step for ${user.email}`);
-
-      // Wait a moment for the page to transition
-      await page.waitForTimeout(2000);
-
-      // Check if we're on a verification page by looking for "Code" placeholder
-      const codeInput = await page.$('input[placeholder*="Code"], input[placeholder*="code"], input[name="code"]');
-
-      if (codeInput) {
-        ciLogger.info(`[Setup] Verification code required for ${user.email}`);
-
-        // Get verification code from Resend
-        const emailHtml = await resendClient.getVerificationEmail(user.email);
-
-        if (!emailHtml) {
-          throw new Error('No verification email received within timeout period');
+        // Click the "Register" link to go to registration page
+        const registerLink = await page.$('a[href*="register"], a:has-text("Register")');
+        if (registerLink) {
+          await registerLink.click();
+          await page.waitForLoadState('networkidle');
         }
 
-        const code = resendClient.extractVerificationCode(emailHtml);
+        ciLogger.info(`[Setup] Filling registration form for ${user.email}`);
 
-        if (!code) {
-          throw new Error('Failed to extract verification code from email');
-        }
-
-        ciLogger.info(`[Setup] Entering verification code for ${user.email}`);
-
-        // Enter verification code
-        await codeInput.fill(code);
+        // Fill registration form - OpenAuth uses name attributes
+        await page.fill('input[name="email"]', user.email);
+        await page.fill('input[name="password"]', user.password);
+        await page.fill('input[name="repeat"]', user.password); // Repeat password field
         await page.click('button[data-component="button"]');
-      }
 
-      // Wait for successful authentication - callback URL or home page
-      ciLogger.info(`[Setup] Waiting for authentication to complete for ${user.email}`);
+        // Wait for verification code page or direct redirect
+        ciLogger.info(`[Setup] Waiting for next step for ${user.email}`);
 
-      // Wait for callback URL and then navigate to verify auth
-      try {
-        await page.waitForURL('**/api/callback**', { timeout: 20000 });
+        // Wait a moment for the page to transition
+        await page.waitForTimeout(2000);
 
-        // Give time for cookies to be set
-        await page.waitForTimeout(1000);
+        // Check if we're on a verification page by looking for "Code" placeholder
+        const codeInput = await page.$('input[placeholder*="Code"], input[placeholder*="code"], input[name="code"]');
 
-        // Navigate to home page to verify authentication worked
-        await page.goto(`${webAppUrl}/en`, { waitUntil: 'networkidle' });
-      } catch {
-        // Already on home page or elsewhere - continue
-        ciLogger.debug(`[Setup] Current URL after auth: ${page.url()}`);
+        if (codeInput) {
+          ciLogger.info(`[Setup] Verification code required for ${user.email}`);
+
+          // Get verification code from Resend
+          if (!resendClient) throw new Error('RESEND_API_KEY is required to register users');
+          const emailHtml = await resendClient.getVerificationEmail(user.email);
+
+          if (!emailHtml) {
+            throw new Error('No verification email received within timeout period');
+          }
+
+          const code = resendClient.extractVerificationCode(emailHtml);
+
+          if (!code) {
+            throw new Error('Failed to extract verification code from email');
+          }
+
+          ciLogger.info(`[Setup] Entering verification code for ${user.email}`);
+
+          // Enter verification code
+          await codeInput.fill(code);
+          await page.click('button[data-component="button"]');
+        }
+
+        // Wait for successful authentication - callback URL or home page
+        ciLogger.info(`[Setup] Waiting for authentication to complete for ${user.email}`);
+
+        // Wait for callback URL and then navigate to verify auth
+        try {
+          await page.waitForURL('**/api/callback**', { timeout: 20000 });
+
+          // Give time for cookies to be set
+          await page.waitForTimeout(1000);
+
+          // Navigate to home page to verify authentication worked
+          await page.goto(`${webAppUrl}/en`, { waitUntil: 'networkidle' });
+        } catch {
+          // Already on home page or elsewhere - continue
+          ciLogger.debug(`[Setup] Current URL after auth: ${page.url()}`);
+        }
       }
 
       // Fail fast if the web app did not establish a session (e.g. wrong client id)
@@ -219,9 +391,15 @@ async function globalSetup(_config: FullConfig) {
         throw new Error("Web session cookie not set after OAuth callback");
       }
 
+      // Ensure profile + channels exist and refresh the web session so the
+      // al_ummah_session cookie caches them (new users otherwise get sent to
+      // /profile/create and have no channels for upload specs).
+      const refreshed = await provisionAndRefreshSession(browser, page, user, { openAuthUrl, webAppUrl, clientId, apiUrl });
+
       // Save authenticated state
       ciLogger.info(`[Setup] Saving authentication state for ${user.email} to ${user.storageStatePath}`);
-      await context.storageState({ path: user.storageStatePath });
+      await refreshed.storageState({ path: user.storageStatePath });
+      await refreshed.close();
 
       // Verify file was created
       if (fs.existsSync(user.storageStatePath)) {

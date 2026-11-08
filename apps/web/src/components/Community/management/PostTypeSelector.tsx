@@ -73,7 +73,10 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
   const isRTL = locale === 'ar';
 
   return (
-    <div className="
+    <div
+      role="radiogroup"
+      aria-label={isRTL ? 'نوع المنشور' : 'Post type'}
+      className="
       grid
       grid-cols-2          /* Mobile: 2 columns */
       sm:grid-cols-3       /* Tablet: 3 columns */
@@ -104,6 +107,16 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
               }
             `}
             onClick={() => onSelect(postType.type)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelect(postType.type);
+              }
+            }}
+            role="radio"
+            aria-checked={isSelected}
+            tabIndex={0}
+            data-post-type={postType.type}
           >
             <div className="
               flex

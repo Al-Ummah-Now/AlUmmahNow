@@ -1,137 +1,116 @@
 import { test, expect } from './fixtures';
+import { AUTH_STATE, ANONYMOUS_STATE } from './test-utils/auth-state';
 
 /**
  * Profile E2E Tests
- * Tests for user profile functionality
+ *
+ * Every project runs these, some with a stored session and some without, so
+ * each describe pins its own auth state instead of branching on what the
+ * page happens to render.
  */
 
-test.describe('Profile Pages', () => {
+test.describe('Profile Pages - anonymous', () => {
+  test.use({ storageState: ANONYMOUS_STATE });
+
   test('should load profile page', async ({ page }) => {
-    await page.goto('/en/profile');
-
-    // Page should load
+    const response = await page.goto('/en/profile');
+    expect(response?.status()).toBeLessThan(500);
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('should load profile create page', async ({ page }) => {
+  test('profile create shows a sign-in prompt', async ({ page }) => {
     await page.goto('/en/profile/create');
 
-    // Page should load (may show login prompt or create form depending on auth state)
-    await expect(page.locator('body')).toBeVisible();
-
-    // Check for either heading or login message
-    const hasHeading = await page.locator('h1').count();
-    const hasLoginMessage = await page.getByText(/log in/i).count();
-
-    expect(hasHeading + hasLoginMessage).toBeGreaterThan(0);
+    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /sign in/i }).last()).toBeVisible();
+    await expect(page.locator('form input[name="firstNameEn"]')).toHaveCount(0);
   });
 
-  test('profile create form should have required fields when authenticated', async ({ page }) => {
-    await page.goto('/en/profile/create');
+  test('profile create shows an Arabic sign-in prompt in RTL', async ({ page }) => {
+    await page.goto('/ar/profile/create');
 
-    // Wait for page to load
-    await page.waitForTimeout(1000);
-
-    // Check if form exists (only if authenticated)
-    const formCount = await page.locator('form').count();
-
-    if (formCount > 0) {
-      // User is authenticated, check form fields
-      const emailField = page.locator('input[type="email"]');
-      await expect(emailField).toBeVisible();
-      await expect(emailField).toBeDisabled();
-
-      const firstNameField = page.locator('input[name="firstName"]');
-      await expect(firstNameField).toBeVisible();
-
-      const lastNameField = page.locator('input[name="lastName"]');
-      await expect(lastNameField).toBeVisible();
-
-      const submitButton = page.locator('button[type="submit"]');
-      await expect(submitButton).toBeVisible();
-    } else {
-      // User is not authenticated, check for login message
-      await expect(page.getByText(/log in/i)).toBeVisible();
-    }
-  });
-
-  test('profile create should validate required fields when authenticated', async ({ page }) => {
-    await page.goto('/en/profile/create');
-
-    // Wait for page to load
-    await page.waitForTimeout(1000);
-
-    const formCount = await page.locator('form').count();
-
-    if (formCount > 0) {
-      // User is authenticated, test validation
-      const submitButton = page.locator('button[type="submit"]');
-      await submitButton.click();
-
-      // HTML5 validation should prevent submission
-      const firstNameField = page.locator('input[name="firstName"]');
-      const isInvalid = await firstNameField.evaluate((el: HTMLInputElement) => {
-        return !el.validity.valid;
-      });
-
-      expect(isInvalid).toBe(true);
-    } else {
-      // User is not authenticated, skip this test
-      await expect(page.getByText(/log in/i)).toBeVisible();
-    }
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('heading', { name: 'تسجيل الدخول' })).toBeVisible();
   });
 
   test('should load profile edit page', async ({ page }) => {
-    await page.goto('/en/profile/edit');
-
-    // Page should load
+    const response = await page.goto('/en/profile/edit');
+    expect(response?.status()).toBeLessThan(500);
     await expect(page.locator('body')).toBeVisible();
   });
 });
 
-test.describe('Profile Pages - RTL', () => {
-  test('should load Arabic profile create page', async ({ page }) => {
-    await page.goto('/ar/profile/create');
+test.describe('Profile Pages - authenticated', () => {
+  test.use({ storageState: AUTH_STATE.single });
 
-    // Check page loads
-    await expect(page.locator('body')).toBeVisible();
+  test('profile create form has the required fields', async ({ page }) => {
+    await page.goto('/en/profile/create');
 
-    // Check for RTL direction on page content
-    const mainDiv = page.locator('div[dir="rtl"]').first();
-    if (await mainDiv.count() > 0) {
-      await expect(mainDiv).toBeVisible();
-    }
+    const email = page.locator('form input[type="email"]');
+    await expect(email).toBeVisible();
+    await expect(email).toBeDisabled();
+    await expect(email).toHaveValue(/@/);
+
+    await expect(page.locator('input[name="firstNameEn"]')).toBeVisible();
+    await expect(page.locator('input[name="lastNameEn"]')).toBeVisible();
+    await expect(page.locator('form button[type="submit"]')).toBeVisible();
   });
 
-  test('should load Arabic profile edit page', async ({ page }) => {
+  test('profile create validates the required first name', async ({ page }) => {
+    await page.goto('/en/profile/create');
+
+    const firstName = page.locator('input[name="firstNameEn"]');
+    await expect(firstName).toBeVisible();
+    await page.locator('form button[type="submit"]').click();
+
+    // HTML5 validation blocks submission while the required field is empty
+    expect(await firstName.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
+    await expect(page).toHaveURL(/\/en\/profile\/create/);
+  });
+
+  // Every E2E user already has a profile, so ProfileGuard redirects /profile/create;
+  // the edit form shares the same bilingual fields.
+  test('profile form switches to Arabic fields', async ({ page }) => {
+    await page.goto('/en/profile/edit');
+
+    await page.getByRole('button', { name: /^(Arabic|العربية)$/ }).click();
+    const firstNameAr = page.locator('input[name="firstNameAr"]');
+    await expect(firstNameAr).toBeVisible();
+    await expect(firstNameAr).toHaveAttribute('dir', 'rtl');
+  });
+
+  test('Arabic profile create page renders RTL', async ({ page }) => {
+    await page.goto('/ar/profile/create');
+
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('div[dir="rtl"]').first()).toBeVisible();
+    await expect(page.locator('form input[type="email"]')).toBeVisible();
+  });
+
+  test('Arabic profile edit page renders RTL', async ({ page }) => {
     await page.goto('/ar/profile/edit');
 
-    // Check page loads
-    await expect(page.locator('body')).toBeVisible();
-
-    // Check for RTL direction on page content
-    const mainDiv = page.locator('div[dir="rtl"]').first();
-    if (await mainDiv.count() > 0) {
-      await expect(mainDiv).toBeVisible();
-    }
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('div[dir="rtl"]').first()).toBeVisible();
   });
 });
 
 test.describe('Profile Responsiveness', () => {
-  test('profile create should be responsive', async ({ page }) => {
-    // Desktop
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto('/en/profile/create');
-    await expect(page.locator('body')).toBeVisible();
+  test.use({ storageState: AUTH_STATE.single });
 
-    // Tablet
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto('/en/profile/create');
-    await expect(page.locator('body')).toBeVisible();
+  for (const viewport of [
+    { width: 1920, height: 1080 },
+    { width: 768, height: 1024 },
+    { width: 375, height: 667 },
+  ]) {
+    test(`profile create form fits a ${viewport.width}px viewport`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/en/profile/create');
 
-    // Mobile
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/en/profile/create');
-    await expect(page.locator('body')).toBeVisible();
-  });
+      const form = page.locator('form').first();
+      await expect(form).toBeVisible();
+      const box = await form.boundingBox();
+      expect(box?.width ?? 0).toBeLessThanOrEqual(viewport.width);
+    });
+  }
 });

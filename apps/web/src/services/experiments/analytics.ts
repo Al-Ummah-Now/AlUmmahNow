@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger-client';
+import { hasConsent } from '@/lib/consent/ConsentManager';
 export interface ExperimentEvent {
   eventType: 'assignment' | 'conversion' | 'exposure';
   experimentId: string;
@@ -30,6 +31,8 @@ class ExperimentAnalytics {
   }
 
   trackEvent(event: ExperimentEvent): void {
+    // GDPR (Story 1.3): experiment events are only collected with consent.
+    if (!hasConsent('experiments')) return;
     this.eventQueue.push(event);
 
     if (this.eventQueue.length >= this.BATCH_SIZE) {
@@ -104,54 +107,6 @@ class ExperimentAnalytics {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
-    }
-  }
-
-  async getExperimentResults(experimentId: string): Promise<unknown> {
-    try {
-      // Get auth token from cookies (client-side)
-      const { getAuthHeaders } = await import('@/lib/auth/client-token');
-      const authHeaders = getAuthHeaders();
-
-      const response = await fetch(`/api/analytics/ab-test?experimentId=${experimentId}`, {
-        headers: {
-          ...authHeaders,
-        },
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      return data;
-    } catch (error) {
-      logger.error('Failed to fetch experiment results:', error);
-      throw error;
-    }
-  }
-
-  async getExperimentStatistics(experimentId: string): Promise<unknown> {
-    try {
-      // Get auth token from cookies (client-side)
-      const { getAuthHeaders } = await import('@/lib/auth/client-token');
-      const authHeaders = getAuthHeaders();
-
-      const response = await fetch(`/api/analytics/ab-test/stats?experimentId=${experimentId}`, {
-        headers: {
-          ...authHeaders,
-        },
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      return data;
-    } catch (error) {
-      logger.error('Failed to fetch experiment statistics:', error);
-      throw error;
     }
   }
 }

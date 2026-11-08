@@ -2,8 +2,10 @@ import React from "react";
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { ThemeProvider } from "@/components/themeProvider";
 import { authenticated } from "../lib/actions"
-import { Suspense } from "react"
 import type { Metadata, Viewport } from 'next'
+import { headers } from "next/headers";
+import { DEFAULT_LOCALE, LOCALE_REQUEST_HEADER } from "@/lib/i18n/locales";
+import { getTextDirection, isLocaleSupported } from "@/lib/i18n/utils";
 import "./globals.css";
 import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
@@ -14,6 +16,12 @@ import { MultiAccountProvider } from "@/hooks/useMultiAccount";
 import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
 import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { NONCE_HEADER } from "@/lib/security/nonce-header";
+import { serializeForInlineScript } from "@/lib/security/csp";
+import { deriveAuthProfileUrl } from "@/lib/runtime-config";
+import { SecurityBootstrap } from "@/components/security/SecurityBootstrap";
+import { ConsentBanner } from "@/components/consent/ConsentBanner";
+import SkipLinks from "@/components/SkipLinks";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -52,8 +60,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Pinch-zoom must stay enabled (WCAG 1.4.4 Resize Text / axe meta-viewport)
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)', color: '#111827' }, // gray-900
@@ -63,9 +70,13 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
   const subject = await authenticated()
   const user = subject ? subject.properties : null;
+  const requestedLocale = (await headers()).get(LOCALE_REQUEST_HEADER);
+  const locale = requestedLocale && isLocaleSupported(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
+  // Per-request CSP nonce set by middleware (production only).
+  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
       <head>
         {/* Font Awesome - Consider self-hosting for better performance */}
         <link
@@ -77,22 +88,32 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
         />
         {/* Runtime configuration injected from server */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
-            __html: `window.__RUNTIME_CONFIG__ = ${JSON.stringify({
+            __html: `window.__RUNTIME_CONFIG__ = ${serializeForInlineScript({
               API_URL: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '',
               WEBSOCKET_URL: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '',
+              AUTH_PROFILE_URL: deriveAuthProfileUrl(
+                process.env.OPENAUTH_ISSUER || process.env.Issuer,
+                process.env.AUTH_PROFILE_URL
+              ),
             })};`,
           }}
         />
       </head>
       <body className="font-inter">
-        <Suspense>
+        <SecurityBootstrap />
+        {/* No <Suspense> around the app: with one, the shell (and a 200 status)
+            streamed before a page or layout could call notFound(), so unknown
+            channels/handles/playlists were soft 404s rendered twice. Every route
+            is dynamic (cookies/headers above), so nothing needs the boundary. */}
           <QueryProvider>
             <NuqsAdapter>
               <ThemeProvider
               attribute="class"
               defaultTheme="system"
               enableSystem
+              nonce={nonce}
               disableTransitionOnChange>
               <MultiAccountProvider>
                 <AuthProvider>
@@ -100,12 +121,20 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                     <WebSocketProvider user={user}>
                       <TranslationSyncProvider>
                         <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                          {/* Skip links must be the first focusable elements (WCAG 2.4.1) */}
+                          <SkipLinks />
                           {/* Header */}
                           <Navigation></Navigation>
-                          {children}
+                          {/* Skip-link target for pages without <main id="main-content"> (PAGE_CONTENT_ID in SkipLinks; a literal because this is a server component) */}
+                          <div id="page-content" className="flex flex-1 flex-col">
+                            {children}
+                          </div>
 
                           {/* Real-time notification center */}
                           <NotificationCenter />
+
+                          {/* Cookie / tracking consent (GDPR, Story 1.3) */}
+                          <ConsentBanner />
                         </div>
                       </TranslationSyncProvider>
                     </WebSocketProvider>
@@ -117,9 +146,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
             </ThemeProvider>
             </NuqsAdapter>
           </QueryProvider>
-        </Suspense>
       </body>
-      <script async type="text/javascript" src="//assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>
+      <script async nonce={nonce} type="text/javascript" src="https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>
 
     </html>
   );

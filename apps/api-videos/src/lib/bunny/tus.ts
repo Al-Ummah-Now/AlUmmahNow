@@ -203,3 +203,58 @@ export function isTUSConfigValid(config: TUSUploadConfig): boolean {
   // Check if expired (with 30 second buffer for clock skew)
   return expirationTime > now + 30000;
 }
+
+/**
+ * TUS proxy session stored in KV.
+ *
+ * The client never receives Bunny.net credentials; it only gets the opaque
+ * session ID and sends it as `tusSessionId` upload metadata to the TUS proxy
+ * (/api/videos/tus), which resolves the session and forwards to Bunny.net.
+ */
+export interface TusProxySession {
+  videoId: string;
+  userId: string;
+  channelId: string;
+  tusEndpoint: string;
+  tusHeaders: TUSUploadConfig['tusHeaders'];
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** KV key the TUS proxy uses to resolve a session ID. */
+export function getTusSessionKey(tusSessionId: string): string {
+  return `tus:session:${tusSessionId}`;
+}
+
+/**
+ * Persist a TUS proxy session and return its ID.
+ * Shared by single and batch upload initiation so both use the same proxy flow.
+ */
+export async function createTusProxySession(
+  kv: KVNamespace,
+  params: { videoId: string; userId: string; channelId: string; tusConfig: TUSUploadConfig },
+  ttlSeconds: number = 3600
+): Promise<string> {
+  const tusSessionId = crypto.randomUUID();
+  const session: TusProxySession = {
+    videoId: params.videoId,
+    userId: params.userId,
+    channelId: params.channelId,
+    tusEndpoint: params.tusConfig.tusEndpoint,
+    tusHeaders: params.tusConfig.tusHeaders,
+    expiresAt: params.tusConfig.expiresAt,
+    createdAt: new Date().toISOString(),
+  };
+
+  await kv.put(getTusSessionKey(tusSessionId), JSON.stringify(session), {
+    expirationTtl: ttlSeconds,
+  });
+
+  logger.info('[TUS] Proxy session created', {
+    tusSessionId,
+    videoId: params.videoId,
+    userId: params.userId,
+  });
+
+  return tusSessionId;
+}

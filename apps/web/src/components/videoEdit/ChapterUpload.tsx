@@ -148,13 +148,13 @@ export default function ChapterUpload({
 
     // Validate file size (max 100KB)
     if (file.size > 100 * 1024) {
-      setParseErrors([{ line: 0, message: 'File too large (max 100KB)' }]);
+      setParseErrors([{ line: 0, message: t.video.chapterFileTooLarge ?? 'File too large (max 100KB)' }]);
       return;
     }
 
     // Validate file type
     if (!file.name.match(/\.(txt|srt)$/i)) {
-      setParseErrors([{ line: 0, message: 'Only .txt or .srt files are supported' }]);
+      setParseErrors([{ line: 0, message: t.video.chapterFileType ?? 'Only .txt or .srt files are supported' }]);
       return;
     }
 
@@ -175,7 +175,7 @@ export default function ChapterUpload({
       setParseErrors(errors);
     } catch (error) {
       logger.error('Error parsing file:', error);
-      setParseErrors([{ line: 0, message: 'Failed to read file' }]);
+      setParseErrors([{ line: 0, message: t.video.chapterFileReadFailed ?? 'Failed to read file' }]);
     } finally {
       setIsParsing(false);
     }
@@ -216,6 +216,7 @@ export default function ChapterUpload({
         {!selectedFile && (
           <div
             onClick={() => fileInputRef.current?.click()}
+            data-testid="chapter-file-dropzone"
             className="border-2 border-dashed dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors"
           >
             <div className="flex flex-col items-center gap-3">
@@ -223,10 +224,10 @@ export default function ChapterUpload({
               <div>
                 <p className="font-medium dark:text-white">{t.upload.selectFile}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Drag and drop a chapters file or click to browse
+                  {t.video.chapterFileHint}
                 </p>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                  Supported: .txt, .srt (Max 100KB)
+                  {t.video.chapterFileSupported}
                 </p>
               </div>
             </div>
@@ -234,6 +235,8 @@ export default function ChapterUpload({
               ref={fileInputRef}
               type="file"
               accept=".txt,.srt"
+              aria-label={t.video.chapterFileInput}
+              data-testid="chapter-file-input"
               onChange={handleFileSelect}
               className="hidden"
             />
@@ -253,9 +256,11 @@ export default function ChapterUpload({
               </div>
             </div>
             <button
+              type="button"
               onClick={handleReset}
+              data-testid="chapter-file-remove"
               className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              aria-label="Remove file"
+              aria-label={t.video.removeChapterFile}
             >
               <X size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
@@ -266,24 +271,24 @@ export default function ChapterUpload({
         {isParsing && (
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <p className="text-sm text-blue-700 dark:text-blue-400">
-              Parsing chapters...
+              {t.video.parsingChapters}
             </p>
           </div>
         )}
 
         {/* Parse Errors */}
         {parseErrors.length > 0 && (
-          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg space-y-2">
+          <div role="alert" data-testid="chapter-file-errors" className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg space-y-2">
             <div className="flex items-start gap-2">
               <AlertCircle size={20} className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium text-red-700 dark:text-red-400">
-                  {parseErrors.length} error(s) found
+                  {(t.video.chapterErrorsFound ?? '{count} error(s) found').replace('{count}', String(parseErrors.length))}
                 </p>
                 <ul className="mt-2 space-y-1">
                   {parseErrors.map((error, index) => (
                     <li key={index} className="text-sm text-red-600 dark:text-red-400">
-                      {error.line > 0 && `Line ${error.line}: `}
+                      {error.line > 0 && (t.video.chapterErrorLine ?? 'Line {line}: ').replace('{line}', String(error.line))}
                       {error.message}
                     </li>
                   ))}
@@ -295,7 +300,7 @@ export default function ChapterUpload({
 
         {/* Parsed Chapters Preview */}
         {parsedChapters.length > 0 && parseErrors.length === 0 && (
-          <div className="space-y-3">
+          <div className="space-y-3" data-testid="chapter-file-preview">
             <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
               <Check size={20} className="text-green-600 dark:text-green-400" />
               <p className="text-sm text-green-700 dark:text-green-400">
@@ -313,6 +318,7 @@ export default function ChapterUpload({
                 {parsedChapters.map((chapter) => (
                   <div
                     key={chapter.id}
+                    data-testid="chapter-file-preview-item"
                     className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                   >
                     <div className="flex items-start gap-3">
@@ -331,6 +337,8 @@ export default function ChapterUpload({
         {/* Action Buttons */}
         <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
           <button
+            type="button"
+            data-testid="chapter-file-import"
             onClick={handleImport}
             disabled={parsedChapters.length === 0 || parseErrors.length > 0}
             className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
@@ -339,6 +347,8 @@ export default function ChapterUpload({
           </button>
           {onCancel && (
             <button
+              type="button"
+              data-testid="chapter-file-cancel"
               onClick={onCancel}
               className="px-6 py-3 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors dark:text-white font-medium"
             >

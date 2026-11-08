@@ -21,6 +21,9 @@ import { UpdatePostComment } from '../endpoints/community/post-comment-update';
 import { DeletePostComment } from '../endpoints/community/post-comment-delete';
 import { LikePostComment } from '../endpoints/community/post-comment-like';
 import { UnlikePostComment } from '../endpoints/community/post-comment-unlike';
+import { ListPostCommentReplies } from '../endpoints/community/post-comment-replies-list';
+import { PinPostComment, UnpinPostComment } from '../endpoints/community/post-comment-pin';
+import { HeartPostComment, UnheartPostComment } from '../endpoints/community/post-comment-heart';
 
 // Community Posts - Media Upload
 import { UploadCommunityPostImages } from '../endpoints/community/upload-images';
@@ -58,6 +61,15 @@ communityRouter.delete('/channels/:channelId/posts/:postId/comments/:commentId',
 // Comments - Likes (auth required)
 communityRouter.post('/channels/:channelId/posts/:postId/comments/:commentId/like', LikePostComment);
 communityRouter.delete('/channels/:channelId/posts/:postId/comments/:commentId/like', UnlikePostComment);
+
+// Comments - Replies (public list; create via POST /comments with parentCommentId)
+communityRouter.get('/channels/:channelId/posts/:postId/comments/:commentId/replies', ListPostCommentReplies);
+
+// Comments - Creator moderation (auth required, channel owner only)
+communityRouter.post('/channels/:channelId/posts/:postId/comments/:commentId/pin', PinPostComment);
+communityRouter.delete('/channels/:channelId/posts/:postId/comments/:commentId/pin', UnpinPostComment);
+communityRouter.post('/channels/:channelId/posts/:postId/comments/:commentId/heart', HeartPostComment);
+communityRouter.delete('/channels/:channelId/posts/:postId/comments/:commentId/heart', UnheartPostComment);
 
 // Media Upload (auth required)
 communityRouter.post('/media/upload/images', UploadCommunityPostImages);

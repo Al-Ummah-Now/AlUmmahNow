@@ -86,14 +86,11 @@ export interface BatchUploadInitiateResponse {
   success: boolean;
   result?: Array<{
     videoId: string;
-    tusEndpoint: string;
-    tusHeaders: {
-      AuthorizationSignature: string;
-      AuthorizationExpire: string;
-      LibraryId: string;
-      VideoId: string;
-    };
+    /** Session ID for the TUS proxy (send as `tusSessionId` upload metadata) */
+    tusSessionId: string;
     expiresAt: string;
+    chunkSize: number;
+    resumable: boolean;
   }>;
   error?: string;
 }
@@ -102,13 +99,12 @@ export interface BatchUploadInitiateResponse {
  * TUS upload configuration
  */
 export interface TusConfig {
+  /** TUS endpoint (the API's /api/videos/tus proxy) */
   tusEndpoint: string;
-  tusHeaders: {
-    AuthorizationSignature: string;
-    AuthorizationExpire: string;
-    LibraryId: string;
-    VideoId: string;
-  };
+  /** Headers sent with every TUS request (e.g. Authorization) */
+  tusHeaders: Record<string, string>;
+  /** Extra upload metadata (e.g. tusSessionId, videoId) */
+  metadata?: Record<string, string>;
   chunkSize: number;
   expiresAt: string;
 }

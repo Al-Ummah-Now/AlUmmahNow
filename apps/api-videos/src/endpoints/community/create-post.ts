@@ -13,6 +13,8 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateCreatePost } from '../../validation/community-posts';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
+import R2Repository from '../../lib/r2Repo';
+import { getChannelObject } from './post-comment-helpers';
 
 // Sanitization configuration for community posts
 // Allows basic formatting while preventing XSS attacks
@@ -71,7 +73,7 @@ const createPostSchema = z.object({
 const Str = (opts: { description: string }) => z.string().openapi(opts);
 
 export class CreateCommunityPost extends AuthenticatedRoute {
-  static schema = addAuthToSchema({
+  schema = addAuthToSchema({
     tags: ['Community'],
     summary: 'Create a community post',
     request: {
@@ -140,8 +142,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
 
     try {
       // Get channel info for denormalized fields
-      const channelKey = `${channelId}/channel.json`;
-      const channelData = await c.env.channels.get(channelKey);
+      const channelData = await getChannelObject(c.env.channels, channelId);
 
       if (!channelData) {
         return c.json({ error: 'Channel not found' }, 404);
@@ -233,23 +234,16 @@ export class CreateCommunityPost extends AuthenticatedRoute {
   }
 
   private async updateChannelIndex(c: any, channelId: string, postId: string) {
-    const indexKey = `posts/${channelId}/index.json`;
-    const existing = await c.env.community_posts.get(indexKey);
-
-    let index = { postIds: [] as string[], lastUpdated: new Date().toISOString() };
-    if (existing) {
-      index = await existing.json();
-    }
-
-    // Add to beginning (newest first)
-    index.postIds.unshift(postId);
-
-    // Keep max 1000 post IDs in index
-    if (index.postIds.length > 1000) {
-      index.postIds = index.postIds.slice(0, 1000);
-    }
-
-    index.lastUpdated = new Date().toISOString();
-    await c.env.community_posts.put(indexKey, JSON.stringify(index));
+    type PostIndex = { postIds: string[]; lastUpdated: string };
+    // Conditional write: posts created at the same time must not drop each other from the index
+    await new R2Repository<PostIndex>(c.env.community_posts).updateObject(
+      `posts/${channelId}/index.json`,
+      (index) => {
+        // Add to beginning (newest first); keep max 1000 post IDs in index
+        index.postIds = [postId, ...index.postIds.filter((id) => id !== postId)].slice(0, 1000);
+        index.lastUpdated = new Date().toISOString();
+      },
+      { initial: () => ({ postIds: [], lastUpdated: new Date().toISOString() }) },
+    );
   }
 }

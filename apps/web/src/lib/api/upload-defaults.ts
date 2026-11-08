@@ -105,12 +105,12 @@ export async function deleteTemplate(templateId: string): Promise<{ success: boo
 
 /**
  * Set a template as the default
- * POST /api/upload-defaults/:id/default
+ * PUT /api/upload-defaults/:id/default (the API has no POST route; POST returned 404)
  */
 export async function setDefaultTemplate(templateId: string): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>(
     {
-      method: 'POST',
+      method: 'PUT',
       url: buildApiUrl(`/api/upload-defaults/${templateId}/default`),
       functionName: 'setDefaultTemplate',
     },

@@ -73,14 +73,16 @@ export class SubtitlesList extends PublicRoute {
       const metadataKey = `${videoId}/metadata.json`;
       const metadataObject = await subtitleBucket.get(metadataKey);
 
+      // No subtitles is a normal state for a video - return an empty list so
+      // players can request this unconditionally without error noise.
       if (!metadataObject) {
-        return c.json(
-          {
-            success: false,
-            error: 'No subtitles found for this video',
+        return c.json({
+          success: true,
+          data: {
+            tracks: [],
+            defaultLanguage: undefined,
           },
-          404
-        );
+        });
       }
 
       const metadata = (await metadataObject.json()) as SubtitleMetadata;

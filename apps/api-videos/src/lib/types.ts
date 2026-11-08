@@ -58,6 +58,9 @@ const BaseComment = z.object({
     isEdited: z.boolean().default(false),
     isDeleted: z.boolean().default(false),
     isPinned: z.boolean().default(false),
+    isHidden: z.boolean().optional(),
+    parentCommentId: Str().optional(),
+    status: z.enum(['published', 'held']).optional(),
 });
 
 // Define Comment with lazy evaluation for replies to avoid circular reference
@@ -96,6 +99,8 @@ export const Video = z.object({
     dislikes: z.array(Dislike).default([]),
     isPublic: z.boolean().default(true),
     isLive: z.boolean().default(false),
+    // Per-video comment settings (Story 29.2): on | held (for review) | off
+    commentSettings: z.enum(['on', 'held', 'off']).optional(),
     // Scheduling fields
     scheduledPublishDate: DateTime().optional(),
     scheduledPublishTimezone: Str().optional(),
@@ -168,6 +173,11 @@ export const Channel = z.object({
     isPrivate: z.boolean().optional(), // User-controlled privacy
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
+    // Story 29.1: unique @handle (display casing; uniqueness is case-insensitive) and About details
+    handle: Str().optional(),
+    links: z.array(z.object({ title: Str(), url: Str() })).optional(),
+    contactEmail: Str().optional(),
+    location: Str().optional(),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     playlists: z.array(Str()).default([]), // Array of playlist IDs

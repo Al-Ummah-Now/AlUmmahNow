@@ -104,9 +104,9 @@ export function CalendarControlsRTL({
       </div>
 
       {/* Left Section: Header + Navigation + Today Button */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 min-w-0 max-w-full">
         {/* Current Period Header */}
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mr-2 min-w-[280px] transition-all duration-200">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white me-2 sm:min-w-[280px] transition-all duration-200">
           {headerText}
         </h2>
 

@@ -4,10 +4,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
-import VideoCard from '@/components/videoCard';
+import VideoCardLTR from '@/components/videoCard';
+import VideoCardRTL from '@/components/videoCard/rtl';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Users } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getSubscriptionFeed } from '@/lib/api/channels';
+import { SignInPrompt } from '@/components/common/SignInPrompt';
+
+const FEED_PAGE_SIZE = 24;
 
 interface SubscriptionFeedProps {
   className?: string;
@@ -18,25 +23,60 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
 }) => {
   const router = useRouter();
   const { user } = useAuth();
-  const { t, lang } = useLanguage();
+  const { t, lang, isRTL } = useLanguage();
+  const VideoCard = isRTL ? VideoCardRTL : VideoCardLTR;
   const isAuthenticated = !!user;
-  const [videos, _setVideos] = useState<VideoObject[]>([]);
+  const [videos, setVideos] = useState<VideoObject[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  // Set on the client after the first load: a server-rendered time would not
+  // match the client's and break hydration (React error #418)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   const loadSubscriptionFeed = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(false);
     try {
-      // TODO: Implement API call to fetch subscription feed
-      // const response = await fetchSubscriptionVideos(user.id);
-      // _setVideos(response.videos);
+      const response = await getSubscriptionFeed({ limit: FEED_PAGE_SIZE });
+      if (!response?.success) {
+        logger.warn('[SubscriptionFeed] Feed request failed');
+        setLoadError(true);
+        return;
+      }
+      setVideos(response.data || []);
+      setNextCursor(response.cursor);
       setLastRefresh(new Date());
     } catch (error) {
-      logger.error('Failed to load subscription feed:', error);
+      logger.error('[SubscriptionFeed] Failed to load subscription feed', { error });
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    setIsLoadingMore(true);
+    try {
+      const response = await getSubscriptionFeed({ limit: FEED_PAGE_SIZE, cursor: nextCursor });
+      if (!response?.success) {
+        setLoadError(true);
+        return;
+      }
+      setVideos((prev) => {
+        const seen = new Set(prev.map((v) => v.id));
+        return [...prev, ...(response.data || []).filter((v) => !seen.has(v.id))];
+      });
+      setNextCursor(response.cursor);
+    } catch (error) {
+      logger.error('[SubscriptionFeed] Failed to load more feed videos', { error });
+      setLoadError(true);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [nextCursor]);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -49,21 +89,11 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
   };
 
   if (!isAuthenticated) {
-    return (
-      <div className={`p-6 text-center ${className}`}>
-        <div className="flex flex-col items-center gap-4">
-          <Users className="w-16 h-16 text-gray-400" />
-          <h2 className="text-2xl font-bold">{t.subscriptions.subscriptionFeed}</h2>
-          <p className="text-gray-600 dark:text-gray-400 max-w-md">
-            {t.subscriptions.loginToSeeVideos}
-          </p>
-        </div>
-      </div>
-    );
+    return <SignInPrompt title={t.subscriptions.subscriptionFeed} message={t.subscriptions.loginToSeeVideos} />;
   }
 
   return (
-    <div className={`max-w-7xl mx-auto p-6 ${className}`}>
+    <div className={`max-w-7xl mx-auto p-6 ${className}`} dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">{t.subscriptions.subscriptionFeed}</h1>
@@ -73,9 +103,11 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
         </div>
 
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {t.subscriptions.lastUpdated} {lastRefresh.toLocaleTimeString()}
-          </span>
+          {lastRefresh && (
+            <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="feed-last-updated">
+              {t.subscriptions.lastUpdated} {lastRefresh.toLocaleTimeString(lang === 'ar' ? 'ar' : 'en-US')}
+            </span>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -96,10 +128,17 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
             <span>{t.subscriptions.loadingFeed}</span>
           </div>
         </div>
+      ) : loadError && videos.length === 0 ? (
+        <div className="text-center py-12" role="alert">
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{t.subscriptions.loadFailed}</p>
+          <Button variant="outline" onClick={refreshFeed}>
+            {t.subscriptions.refresh}
+          </Button>
+        </div>
       ) : videos.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="text-center py-12" data-testid="feed-empty">
           <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">{t.subscriptions.noVideosInFeed}</h3>
+          <h2 className="text-xl font-semibold mb-2">{t.subscriptions.noVideosInFeed}</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             {t.subscriptions.subscribeToSeeVideos}
           </p>
@@ -111,16 +150,17 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {videos.map((video) => (
-              <VideoCard key={video.id} {...video} />
+              <VideoCard key={video.id} {...video} channel={video.channel || video.channelName} />
             ))}
           </div>
 
-          {/* Load More Button */}
-          <div className="flex justify-center mt-8">
-            <Button variant="outline" disabled>
-              {t.subscriptions.loadMoreComingSoon}
-            </Button>
-          </div>
+          {nextCursor && (
+            <div className="flex justify-center mt-8">
+              <Button variant="outline" onClick={loadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? t.common.loading : t.subscriptions.loadMore}
+              </Button>
+            </div>
+          )}
         </>
       )}
 

@@ -1,4 +1,5 @@
 import { PublicRoute, AppContext } from "../../base";
+import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
@@ -148,7 +149,7 @@ export class PopularVideosSection extends PublicRoute {
         });
 
         videos = await Promise.all(videoPromises).then(results =>
-          results.filter(v => v !== null) as VideoObject[]
+          results.filter(v => isVideoPubliclyVisible(v)) as VideoObject[]
         );
 
         // Apply category filter if needed (not in index)
@@ -183,7 +184,7 @@ export class PopularVideosSection extends PublicRoute {
         // Filter by time period
         const now = Date.now();
         videos = videos.filter(v => {
-          if (v.isPublic === false) return false;
+          if (!isVideoPubliclyVisible(v)) return false;
           if (category && v.category !== category) return false;
           if (minViews > 0 && (v.views || 0) < minViews) return false;
 

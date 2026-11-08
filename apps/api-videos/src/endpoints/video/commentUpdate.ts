@@ -4,6 +4,8 @@ import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { MAX_COMMENT_LENGTH, StoredComment, findStoredComment, normalizeCommentText } from "../../lib/comments";
+import { broadcastInBackground } from "../../lib/websocket-notify";
 
 
 export class CommentUpdate extends AuthenticatedRoute {
@@ -21,8 +23,10 @@ export class CommentUpdate extends AuthenticatedRoute {
 			body: {
 				content: {
 					"application/json": {
+						// Accepts `text` (preferred) or `content` (shared-types CommentUpdateRequest)
 						schema: z.object({
-							text: z.string(),
+							text: z.string().optional(),
+							content: z.string().optional(),
 						}),
 					},
 				},
@@ -93,23 +97,39 @@ export class CommentUpdate extends AuthenticatedRoute {
 			}, 404);
 		}
 
-		const commentIndex = video.comments.findIndex(comment => comment.id === cid);
-		if (commentIndex === -1) {
+		// Top-level comment or reply
+		const found = findStoredComment(video.comments as unknown as StoredComment[], cid);
+		if (!found || found.comment.isDeleted) {
 			return c.json({
 				success: false,
 				error: "Comment not found",
 			}, 404);
 		}
 
-		// Update the comment
-		const updatedComment = {
-			...video.comments[commentIndex],
-			...request.body,
-			dateModified: new Date().toISOString(),
-			isEdited: true,
-		};
+		// Only the comment author may edit it
+		if (found.comment.userId !== userId) {
+			return c.json({
+				success: false,
+				error: "Forbidden",
+			}, 403);
+		}
 
-		video.comments[commentIndex] = updatedComment;
+		const text = normalizeCommentText(request.body);
+		if (!text) {
+			return c.json({ success: false, error: "Comment text is required" }, 400);
+		}
+		if (text.length > MAX_COMMENT_LENGTH) {
+			return c.json({ success: false, error: `Comment text must be at most ${MAX_COMMENT_LENGTH} characters` }, 400);
+		}
+
+		// Update the comment in place (it lives either in video.comments or in a parent's replies)
+		const updatedComment = found.comment;
+		const changed = updatedComment.text !== text;
+		updatedComment.text = text;
+		if (changed) {
+			updatedComment.dateModified = new Date().toISOString();
+			updatedComment.isEdited = true;
+		}
 
 		// Send queue message for comment edit
 		const queue = new Queue(c.env.queue);
@@ -123,6 +143,20 @@ export class CommentUpdate extends AuthenticatedRoute {
 
 		// Save updated video
 		await repository.putObject(video.id, video);
+
+		if (updatedComment.status !== 'held') {
+			broadcastInBackground(c, `video:${id}`, 'comment_updated', {
+				videoId: id,
+				commentId: cid,
+				parentCommentId: found.parent?.id || null,
+				comment: {
+					id: cid,
+					text: updatedComment.text,
+					isEdited: updatedComment.isEdited === true,
+					dateModified: updatedComment.dateModified || updatedComment.dateCreated,
+				},
+			});
+		}
 
 		return {
 			success: true,

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useLanguage } from '@/hooks/useLanguage';
-import { ChevronRight, Home, Settings, FileEdit, Video, LayoutGrid, Users, Layers } from 'lucide-react';
+import { ChevronRight, Home, Settings, FileEdit, Video, LayoutGrid, Users, Layers, ListVideo } from 'lucide-react';
 
 interface BreadcrumbItem {
   label: string;
@@ -14,7 +14,7 @@ interface ChannelSettingsBreadcrumbProps {
   channelId: string;
   channelName: string;
   locale: string;
-  currentPage: 'overview' | 'edit' | 'videos' | 'tabs' | 'sections' | 'community';
+  currentPage: 'overview' | 'edit' | 'videos' | 'tabs' | 'sections' | 'community' | 'playlists';
   className?: string;
 }
 
@@ -34,6 +34,7 @@ export default function ChannelSettingsBreadcrumb({
     tabs: <Layers className="w-4 h-4" />,
     sections: <LayoutGrid className="w-4 h-4" />,
     community: <Users className="w-4 h-4" />,
+    playlists: <ListVideo className="w-4 h-4" />,
   };
 
   const pageLabels = {
@@ -43,6 +44,7 @@ export default function ChannelSettingsBreadcrumb({
     tabs: t.channel.tabs?.manage_tabs || 'Manage Tabs',
     sections: t.channel.manageSections || 'Manage Sections',
     community: t.channel.communitySettings || 'Community',
+    playlists: t.playlist.managePlaylists,
   };
 
   const breadcrumbs: BreadcrumbItem[] = [
@@ -73,15 +75,16 @@ export default function ChannelSettingsBreadcrumb({
 
   return (
     <nav
-      aria-label="Breadcrumb"
-      className={`flex items-center text-sm ${isRTL ? 'flex-row-reverse' : ''} ${className}`}
+      aria-label={t.channelManage.breadcrumb}
+      data-testid="channel-settings-breadcrumb"
+      className={`flex items-center text-sm ${className}`}
     >
-      <ol className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
+      <ol className="flex items-center flex-wrap">
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
 
           return (
-            <li key={index} className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <li key={index} className="flex items-center">
               {index > 0 && <Separator />}
               {crumb.href ? (
                 <Link

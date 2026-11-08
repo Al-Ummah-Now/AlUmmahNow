@@ -1,8 +1,7 @@
 'use server';
 
-import { Playlist } from "@/interfaces";
+import { Playlist, VideoObject } from "@/interfaces";
 import {
-  ApiResponse,
   ApiHeaders,
   ListQueryParams,
   PlaylistCreateRequest,
@@ -10,82 +9,76 @@ import {
   PlaylistAddVideoRequest,
   PaginationResponse
 } from "./types";
-import { getApiUrl } from "@/lib/runtime-config";
-import { logger } from '@/lib/logger-server';
+import { apiRequestServer, buildApiUrl } from "./api-client";
+import { getServerAuthContext } from "./server-auth";
 
+/**
+ * Playlist as returned by the API: stored fields plus `name` (alias of
+ * `title`), the ordered `videos` ID list and, when requested, `videoItems`.
+ */
+export type PlaylistWithVideos = Playlist & {
+  videos: string[];
+  videoItems?: VideoObject[];
+};
 
-const baseUrl = getApiUrl();
+type PlaylistMutationResponse = {
+  success: boolean;
+  result?: { playlist: Playlist };
+  error?: string;
+};
+
+/**
+ * Optional auth for public reads: send the token when logged in (so owners
+ * see their private playlists) but never a channelId header, which the API
+ * would require auth for.
+ */
+async function optionalReadAuth() {
+  const auth = await getServerAuthContext();
+  return { accessToken: auth?.accessToken || '' };
+}
+
+async function requiredAuth(channelId: string) {
+  const auth = await getServerAuthContext();
+  return { channelId, accessToken: auth?.accessToken || '' };
+}
 
 /**
  * List playlists
- * GET /api/playlists
+ * GET /api/playlists (?channelId= filters to one channel)
  */
 export async function listPlaylists(
   params?: ListQueryParams & {
     isPublic?: boolean;
   },
-  headers?: ApiHeaders
-): Promise<PaginationResponse<Playlist> | null> {
-  try {
-    const queryParams = new URLSearchParams();
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.cursor) queryParams.append('cursor', params.cursor);
-    if (params?.channelId) queryParams.append('channelId', params.channelId);
-    if (params?.isPublic !== undefined) queryParams.append('isPublic', String(params.isPublic));
+  _headers?: ApiHeaders
+): Promise<PaginationResponse<PlaylistWithVideos> | null> {
+  const queryParams = new URLSearchParams();
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  if (params?.cursor) queryParams.append('cursor', params.cursor);
+  if (params?.channelId) queryParams.append('channelId', params.channelId);
 
-    const response = await fetch(
-      `${baseUrl}/api/playlists?${queryParams.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching playlists: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('listPlaylists error:', error);
-    return null;
-  }
+  return apiRequestServer<PaginationResponse<PlaylistWithVideos>>({
+    method: 'GET',
+    url: buildApiUrl(`/api/playlists?${queryParams.toString()}`),
+    functionName: 'listPlaylists',
+  }, optionalReadAuth, false);
 }
 
 /**
  * Get a playlist by id
- * GET /api/playlists/{id}
+ * GET /api/playlists/{id} (?includeVideos=true adds ordered videoItems)
  */
 export async function getPlaylistById(
   id: string,
-  headers?: ApiHeaders
-): Promise<Playlist | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/playlists/${id}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-
-          ...(headers?.channelId && { 'channelId': headers.channelId }),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error fetching playlist: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('getPlaylistById error:', error);
-    return null;
-  }
+  _headers?: ApiHeaders,
+  options?: { includeVideos?: boolean }
+): Promise<PlaylistWithVideos | null> {
+  const query = options?.includeVideos ? '?includeVideos=true' : '';
+  return apiRequestServer<PlaylistWithVideos>({
+    method: 'GET',
+    url: buildApiUrl(`/api/playlists/${encodeURIComponent(id)}${query}`),
+    functionName: 'getPlaylistById',
+  }, optionalReadAuth, false);
 }
 
 /**
@@ -93,66 +86,46 @@ export async function getPlaylistById(
  * POST /api/playlists
  */
 export async function createPlaylist(
-  data: PlaylistCreateRequest,
+  data: PlaylistCreateRequest & { title?: string },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ playlist: Playlist }> | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/playlists`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-        body: JSON.stringify(data),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error creating playlist: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('createPlaylist error:', error);
-    return null;
-  }
+): Promise<PlaylistMutationResponse | null> {
+  return apiRequestServer<PlaylistMutationResponse>({
+    method: 'POST',
+    url: buildApiUrl('/api/playlists'),
+    // The API stores the playlist name as `title`
+    body: {
+      title: data.title || data.name,
+      description: data.description,
+      thumbnailUrl: data.thumbnailUrl,
+      isPublic: data.isPublic,
+    },
+    functionName: 'createPlaylist',
+  }, () => requiredAuth(headers.channelId), true);
 }
 
 /**
- * Update a playlist
- * PUT /api/playlists/{id}
+ * Update a playlist (metadata and/or video order)
+ * PATCH /api/playlists/{id}
  */
 export async function updatePlaylist(
   id: string,
-  data: PlaylistUpdateRequest,
+  data: PlaylistUpdateRequest & { title?: string; videos?: string[] },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<ApiResponse<{ playlist: Playlist }> | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/playlists/${id}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
+): Promise<PlaylistMutationResponse | null> {
+  const body: Record<string, unknown> = {};
+  const title = data.title ?? data.name;
+  if (title !== undefined) body.title = title;
+  if (data.description !== undefined) body.description = data.description;
+  if (data.thumbnailUrl !== undefined) body.thumbnailUrl = data.thumbnailUrl;
+  if (data.isPublic !== undefined) body.isPublic = data.isPublic;
+  if (data.videos !== undefined) body.videos = data.videos;
 
-          'channelId': headers.channelId,
-        },
-        body: JSON.stringify(data),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error updating playlist: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('updatePlaylist error:', error);
-    return null;
-  }
+  return apiRequestServer<PlaylistMutationResponse>({
+    method: 'PATCH',
+    url: buildApiUrl(`/api/playlists/${encodeURIComponent(id)}`),
+    body,
+    functionName: 'updatePlaylist',
+  }, () => requiredAuth(headers.channelId), true);
 }
 
 /**
@@ -163,28 +136,11 @@ export async function deletePlaylist(
   id: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/playlists/${id}`,
-      {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error deleting playlist: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('deletePlaylist error:', error);
-    return null;
-  }
+  return apiRequestServer<{ success: boolean }>({
+    method: 'DELETE',
+    url: buildApiUrl(`/api/playlists/${encodeURIComponent(id)}`),
+    functionName: 'deletePlaylist',
+  }, () => requiredAuth(headers.channelId), true);
 }
 
 /**
@@ -195,30 +151,13 @@ export async function addVideoToPlaylist(
   playlistId: string,
   data: PlaylistAddVideoRequest,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/playlists/${playlistId}/videos`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-        body: JSON.stringify(data),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error adding video to playlist: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('addVideoToPlaylist error:', error);
-    return null;
-  }
+): Promise<PlaylistMutationResponse | null> {
+  return apiRequestServer<PlaylistMutationResponse>({
+    method: 'POST',
+    url: buildApiUrl(`/api/playlists/${encodeURIComponent(playlistId)}/videos`),
+    body: { videoId: data.videoId },
+    functionName: 'addVideoToPlaylist',
+  }, () => requiredAuth(headers.channelId), true);
 }
 
 /**
@@ -229,27 +168,10 @@ export async function removeVideoFromPlaylist(
   playlistId: string,
   videoId: string,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
-  try {
-    const response = await fetch(
-      `${baseUrl}/api/playlists/${playlistId}/videos/${videoId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-
-          'channelId': headers.channelId,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error removing video from playlist: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    logger.error('removeVideoFromPlaylist error:', error);
-    return null;
-  }
+): Promise<PlaylistMutationResponse | null> {
+  return apiRequestServer<PlaylistMutationResponse>({
+    method: 'DELETE',
+    url: buildApiUrl(`/api/playlists/${encodeURIComponent(playlistId)}/videos/${encodeURIComponent(videoId)}`),
+    functionName: 'removeVideoFromPlaylist',
+  }, () => requiredAuth(headers.channelId), true);
 }

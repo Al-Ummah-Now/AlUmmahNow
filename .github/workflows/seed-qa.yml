@@ -1,0 +1,118 @@
+name: Seed QA
+
+# Idempotently seeds the QA environment (accounts, roles, channels, videos,
+# playlists, community posts, viewer interactions). Safe to re-run: existing
+# items are detected by natural key and skipped.
+# Script: apps/web/e2e/seed/seed-qa.ts
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'apply = create missing data; check = read-only report'
+        type: choice
+        options:
+          - apply
+          - check
+        default: apply
+      strict:
+        description: 'Fail the run on soft failures (features with known API limitations)'
+        type: boolean
+        default: false
+      skip_roles:
+        description: 'Skip D1 role assignment (admin / moderator)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: seed-qa
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    name: Seed QA data
+    runs-on: ubuntu-24.04  # Playwright 1.56 has no browser builds for ubuntu-latest (26.04)
+    timeout-minutes: 120
+
+    steps:
+      - name: Mask seed password
+        env:
+          QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
+        run: |
+          if [ -z "$QA_SEED_PASSWORD" ]; then
+            echo "::error::QA_SEED_PASSWORD secret is not set"
+            exit 1
+          fi
+          echo "::add-mask::$QA_SEED_PASSWORD"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.4
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+
+      - name: Install Playwright (chromium only)
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install ffmpeg and fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          ffmpeg -hide_banner -version | head -1
+
+      - name: Run QA seed
+        working-directory: apps/web
+        run: npx tsx e2e/seed/seed-qa.ts
+        env:
+          CI: true
+          SEED_MODE: ${{ inputs.mode }}
+          SEED_STRICT: ${{ inputs.strict }}
+          SEED_SKIP_ROLES: ${{ inputs.skip_roles }}
+          SEED_MEDIA_DIR: ${{ runner.temp }}/seed-qa-media
+          QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_BIN: ${{ github.workspace }}/node_modules/.bin/wrangler
+          OPENAUTH_URL: https://auth.qa.alummahnow.net
+          WEB_APP_URL: https://videos.qa.alummahnow.net
+          API_URL: https://videos.api.qa.alummahnow.net
+          OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
+          D1_DATABASE_NAME: al-ummah-now-d1-qa
+          D1_DATABASE_ID: 28590f3c-dd92-4c26-a803-d73a9bbe2b58

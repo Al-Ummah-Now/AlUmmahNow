@@ -1,8 +1,13 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import type { Report } from '@al-ummah/shared-types';
 import { getReport } from '@/lib/api/admin';
+import { AdminApiError } from '@/lib/api/errors';
+import { getI18n } from '@/i18n/server';
+import { formatDate, translateDynamic } from '@/i18n/translate';
+import { ErrorAlert, StatusChip, cardClass, linkClass } from '@/components/ui';
+import { logger } from '@/lib/logger';
 import { ReportActions } from './actions';
-import type { ReportStatus } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,106 +15,101 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const statusColors: Record<ReportStatus, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-400',
-  reviewing: 'bg-blue-500/20 text-blue-400',
-  resolved: 'bg-green-500/20 text-green-400',
-  dismissed: 'bg-gray-500/20 text-gray-400',
-};
-
 export default async function ReportDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const { t, locale } = await getI18n();
 
-  let report = null;
-  let error = null;
+  let report: Report | null = null;
+  let failed = false;
 
   try {
     const data = await getReport(id);
     report = data.report;
   } catch (e) {
-    if (e instanceof Error && e.message.includes('not found')) {
+    if (e instanceof AdminApiError && e.status === 404) {
       notFound();
     }
-    error = e instanceof Error ? e.message : 'Failed to load report';
+    failed = true;
+    logger.error('[report] Failed to load report', { id, error: e instanceof Error ? e.message : String(e) });
   }
 
-  if (!report && !error) {
+  if (!report && !failed) {
     notFound();
   }
+
+  const statusLabel = report ? translateDynamic(t, 'status', report.status) : '';
 
   return (
     <div>
       <div className="mb-6">
-        <Link href="/moderation" className="text-blue-400 hover:text-blue-300">
-          &larr; Back to Queue
+        <Link href="/moderation" className={linkClass}>
+          <span aria-hidden="true" className="inline-block rtl:rotate-180">&larr;</span> {t('report.backToQueue')}
         </Link>
       </div>
 
-      {error && (
-        <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-6">
-          {error}
-        </div>
-      )}
+      {failed && <ErrorAlert testId="report-error">{t('errors.loadReport')}</ErrorAlert>}
 
       {report && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex justify-between items-start mb-6">
-                <h1 className="text-2xl font-bold text-white">Report Details</h1>
-                <span className={`px-3 py-1 rounded ${statusColors[report.status]}`}>
-                  {report.status}
-                </span>
+            <div className={cardClass} data-testid="report-details">
+              <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
+                <h1 className="text-2xl font-bold text-fg">{t('report.title')}</h1>
+                <StatusChip status={report.status} label={statusLabel} large />
               </div>
 
-              <dl className="grid grid-cols-2 gap-4">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <dt className="text-gray-400 text-sm">Report ID</dt>
-                  <dd className="text-white font-mono text-sm">{report.id}</dd>
+                  <dt className="text-fg-muted text-sm">{t('report.reportId')}</dt>
+                  <dd className="text-fg font-mono text-sm break-all" dir="ltr" data-testid="report-id">{report.id}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-400 text-sm">Entity Type</dt>
-                  <dd className="text-white capitalize">{report.entity_type}</dd>
+                  <dt className="text-fg-muted text-sm">{t('report.entityType')}</dt>
+                  <dd className="text-fg">{translateDynamic(t, 'entityType', report.entity_type)}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-400 text-sm">Entity ID</dt>
-                  <dd className="text-white font-mono text-sm">{report.entity_id}</dd>
+                  <dt className="text-fg-muted text-sm">{t('report.entityId')}</dt>
+                  <dd className="text-fg font-mono text-sm break-all" dir="ltr">{report.entity_id}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-400 text-sm">Reason</dt>
-                  <dd className="text-white capitalize">{report.reason}</dd>
+                  <dt className="text-fg-muted text-sm">{t('report.reason')}</dt>
+                  <dd className="text-fg">{translateDynamic(t, 'reason', report.reason)}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-400 text-sm">Reporter ID</dt>
-                  <dd className="text-white font-mono text-sm">{report.reporter_id || 'Anonymous'}</dd>
+                  <dt className="text-fg-muted text-sm">{t('report.reporterId')}</dt>
+                  <dd className="text-fg font-mono text-sm break-all" dir="ltr">{report.reporter_id || t('report.anonymous')}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-400 text-sm">Created</dt>
-                  <dd className="text-white">{new Date(report.created_at).toLocaleString()}</dd>
+                  <dt className="text-fg-muted text-sm">{t('report.created')}</dt>
+                  <dd className="text-fg">
+                    <time dateTime={report.created_at}>{formatDate(report.created_at, locale, true)}</time>
+                  </dd>
                 </div>
               </dl>
 
               {report.description && (
-                <div className="mt-6 pt-6 border-t border-gray-700">
-                  <h3 className="text-gray-400 text-sm mb-2">Description</h3>
-                  <p className="text-white whitespace-pre-wrap">{report.description}</p>
+                <div className="mt-6 pt-6 border-t border-border">
+                  <h2 className="text-fg-muted text-sm mb-2">{t('report.description')}</h2>
+                  <p className="text-fg whitespace-pre-wrap" dir="auto" data-testid="report-description">{report.description}</p>
                 </div>
               )}
 
               {report.moderator_notes && (
-                <div className="mt-6 pt-6 border-t border-gray-700">
-                  <h3 className="text-gray-400 text-sm mb-2">Moderator Notes</h3>
-                  <p className="text-white whitespace-pre-wrap">{report.moderator_notes}</p>
+                <div className="mt-6 pt-6 border-t border-border">
+                  <h2 className="text-fg-muted text-sm mb-2">{t('report.moderatorNotes')}</h2>
+                  <p className="text-fg whitespace-pre-wrap" dir="auto" data-testid="moderator-notes">{report.moderator_notes}</p>
                 </div>
               )}
 
               {report.action && (
-                <div className="mt-6 pt-6 border-t border-gray-700">
-                  <h3 className="text-gray-400 text-sm mb-2">Action Taken</h3>
-                  <p className="text-white capitalize">{report.action}</p>
+                <div className="mt-6 pt-6 border-t border-border">
+                  <h2 className="text-fg-muted text-sm mb-2">{t('report.actionTaken')}</h2>
+                  <p className="text-fg" data-testid="action-taken" data-action={report.action}>
+                    {translateDynamic(t, 'action', report.action)}
+                  </p>
                   {report.resolved_at && (
-                    <p className="text-gray-500 text-sm mt-1">
-                      Resolved on {new Date(report.resolved_at).toLocaleString()}
+                    <p className="text-fg-subtle text-sm mt-1">
+                      {t('report.resolvedOn', { date: formatDate(report.resolved_at, locale, true) })}
                     </p>
                   )}
                 </div>
@@ -121,11 +121,9 @@ export default async function ReportDetailPage({ params }: PageProps) {
             {report.status === 'pending' || report.status === 'reviewing' ? (
               <ReportActions reportId={report.id} />
             ) : (
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-white mb-4">Report Closed</h2>
-                <p className="text-gray-400">
-                  This report has been {report.status}. No further action is required.
-                </p>
+              <div className={cardClass} data-testid="report-closed">
+                <h2 className="text-lg font-semibold text-fg mb-4">{t('report.closedTitle')}</h2>
+                <p className="text-fg-muted">{t('report.closedDescription', { status: statusLabel })}</p>
               </div>
             )}
           </div>

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { broadcastInBackground } from "../../lib/websocket-notify";
+import { removeLike } from "../../lib/library";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class LikeDelete extends AuthenticatedRoute {
@@ -74,7 +76,13 @@ export class LikeDelete extends AuthenticatedRoute {
 			);
 		}
 
-		const like = video.likes.find((like) => like.channelId === channelId && like.entityId === id);		
+		const like = (video.likes || []).find((like) => like.channelId === channelId && like.entityId === id);
+
+		// Unlike is idempotent: nothing stored for this channel means nothing to remove
+		if (!like) {
+			await removeLike(c.env.NOTIFICATIONS_DB, userId, id);
+			return c.json({ success: true }, 200);
+		}
 
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoUnlike, {
@@ -85,12 +93,28 @@ export class LikeDelete extends AuthenticatedRoute {
 			timestamp: new Date().toISOString(),
 		});
 
-		video.likes = video.likes.filter((l) => l.id !== like.id);
+		// Conditional write: a concurrent reaction on this video is re-read, not overwritten
+		video = (await repository.updateObject(video.id, (fresh) => {
+			const before = (fresh.likes || []).length;
+			fresh.likes = (fresh.likes || []).filter((l) => !(l.channelId === channelId && l.entityId === id));
+			return fresh.likes.length !== before;
+		})) ?? video;
+		video.likes = video.likes || [];
+		// Keep the liked-videos index while another of the user's channels still likes it
+		if (!video.likes.some((l) => l.userId === userId)) {
+			await removeLike(c.env.NOTIFICATIONS_DB, userId, id);
+		}
 		// Note: likesCount is calculated in view layer, not stored
 
-		await repository.putObject(video.id, video);
+		broadcastInBackground(c, `video:${id}`, 'video_unliked', {
+			videoId: id,
+			userId,
+			likesCount: video.likes.length,
+			dislikesCount: video.dislikes?.length || 0,
+		});
 
-		return true;
+		// chanfana cannot build a response from a bare boolean (it 500ed after the change was stored)
+		return { success: true };
 	}
 }
 
