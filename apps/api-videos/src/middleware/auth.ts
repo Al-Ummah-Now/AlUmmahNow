@@ -114,7 +114,7 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
       };
 
       // Additional validation with environment config
-      logger.info(`JWT validated for issuer: ${authConfig.JWT.ISSUER}, audience: ${authConfig.JWT.AUDIENCE}`);
+      logger.debug(`JWT validated for issuer: ${authConfig.JWT.ISSUER}, audience: ${authConfig.JWT.AUDIENCE}`);
       
       return payload;
     }

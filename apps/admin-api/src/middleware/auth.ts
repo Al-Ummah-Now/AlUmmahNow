@@ -76,7 +76,7 @@ export async function authMiddleware(c: Context, next: Next) {
     }
 
     // Log non-sensitive token data only
-    logger.info('Auth token payload received', {
+    logger.debug('Auth token payload received', {
       userId: payload.sub,
       email: maskEmail(payload.email),
       roles: payload.roles,
@@ -127,7 +127,7 @@ export async function adminMiddleware(c: Context, next: Next) {
     const isAdmin = hasAdminRole(roles);
     const isModerator = hasModeratorRole(roles);
 
-    logger.info('Admin middleware checking roles', {
+    logger.debug('Admin middleware checking roles', {
       userId: auth.userId,
       email: maskEmail(auth.email),
       roles: roles,
@@ -170,7 +170,7 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
     const payload = JSON.parse(atob(parts[1])) as AuthPayload;
 
     // Log non-sensitive JWT data only
-    logger.info('JWT basic validation', {
+    logger.debug('JWT basic validation', {
       userId: payload.sub,
       email: maskEmail(payload.email),
       roles: payload.roles,
@@ -203,7 +203,7 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     const result = await client.verify(AUTH_CONFIG.SUBJECTS, token, { refresh: undefined });
 
     // Log non-sensitive OpenAuth verification result
-    logger.info('OpenAuth verify result', {
+    logger.debug('OpenAuth verify result', {
       hasSubject: 'subject' in result,
       subjectType: 'subject' in result ? result.subject?.type : undefined,
       hasError: 'err' in result

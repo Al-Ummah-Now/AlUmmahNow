@@ -8,7 +8,10 @@
     "crons": ["17 3 * * *"]
   },
   "observability": {
-    "enabled": true
+    "enabled": true,
+    // Workers Logs bills per line: log 10% of invocations (sampling drops errors too)
+    "head_sampling_rate": 0.1,
+    "logs": { "enabled": true, "head_sampling_rate": 0.1 }
   },
   "r2_buckets": [
     {

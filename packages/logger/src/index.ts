@@ -32,8 +32,12 @@ export interface LoggerConfig {
   fileLogging?: boolean;
 
   /**
-   * Log service URL for HTTP logging (local development only)
-   * @default 'http://localhost:3089'
+   * Log service URL for HTTP logging (local development only).
+   *
+   * HTTP shipping is opt-in: it runs only when this is set, when the
+   * LOG_SERVICE_URL environment variable is set, or when NODE_ENV is
+   * "development" (then http://localhost:3089). Deployed workers used to
+   * POST every log line to localhost:3089, a subrequest that always failed.
    */
   logServiceUrl?: string;
 
@@ -43,6 +47,23 @@ export interface LoggerConfig {
    * @default false
    */
   forceHttpLogging?: boolean;
+}
+
+function readEnv(name: string): string | undefined {
+  try {
+    // process.env exists in Node and in Workers with nodejs_compat
+    return typeof process !== 'undefined' ? process.env?.[name] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The log-service URL to ship to, or null when HTTP shipping is off. */
+export function resolveLogServiceUrl(configured?: string): string | null {
+  if (configured) return configured;
+  const fromEnv = readEnv('LOG_SERVICE_URL');
+  if (fromEnv) return fromEnv;
+  return readEnv('NODE_ENV') === 'development' ? 'http://localhost:3089' : null;
 }
 
 /**
@@ -71,7 +92,7 @@ export class Logger {
   private appName: string;
   private consoleLogging: boolean;
   private fileLogging: boolean;
-  private logServiceUrl: string;
+  private logServiceUrl: string | null;
   private useHttpLogging: boolean = false;
 
   constructor(config: LoggerConfig = {}) {
@@ -79,7 +100,7 @@ export class Logger {
     this.appName = config.appName ?? 'unknown';
     this.consoleLogging = config.consoleLogging ?? true;
     this.fileLogging = config.fileLogging ?? true;
-    this.logServiceUrl = config.logServiceUrl ?? 'http://localhost:3089';
+    this.logServiceUrl = resolveLogServiceUrl(config.logServiceUrl);
 
     // Detect environment
     // Use HTTP logging for Workers environments OR if explicitly forced
@@ -133,7 +154,7 @@ export class Logger {
    * Write log entry via HTTP to log service
    */
   private async sendLogToService(level: LogLevel, message: string, data?: unknown): Promise<void> {
-    if (!this.fileLogging) return;
+    if (!this.fileLogging || !this.logServiceUrl) return;
 
     try {
       // Don't await - fire and forget to avoid blocking
