@@ -33,6 +33,10 @@ export const PLATFORM_PROVIDERS: Record<PushPlatform, readonly PushProvider[]> =
 
 export const InstallIdSchema = z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, 'installId must be 8-64 of [A-Za-z0-9_-]');
 
+/**
+ * The push fan-out POSTs to these URLs, so only the real push services are
+ * accepted (no arbitrary hosts, IP literals or explicit ports: no SSRF).
+ */
 const httpsUrl = (hostOk: (host: string) => boolean) =>
 	z
 		.string()
@@ -40,14 +44,26 @@ const httpsUrl = (hostOk: (host: string) => boolean) =>
 		.refine((v) => {
 			try {
 				const u = new URL(v);
-				return u.protocol === 'https:' && hostOk(u.hostname);
+				return u.protocol === 'https:' && u.port === '' && !u.username && !u.password && hostOk(u.hostname);
 			} catch {
 				return false;
 			}
 		}, 'must be an https URL of the push service');
 
+const hostIs = (host: string, domain: string) => host === domain || host.endsWith(`.${domain}`);
+
+/** Browser push services: Chrome/Opera/Samsung (FCM), Firefox (Mozilla autopush), Safari (Apple), Edge (WNS). */
+export function isWebPushHost(host: string): boolean {
+	return (
+		host === 'fcm.googleapis.com' ||
+		hostIs(host, 'push.services.mozilla.com') ||
+		hostIs(host, 'push.apple.com') ||
+		hostIs(host, 'notify.windows.com')
+	);
+}
+
 export const WebPushSubscriptionSchema = z.object({
-	endpoint: httpsUrl(() => true),
+	endpoint: httpsUrl(isWebPushHost),
 	expirationTime: z.number().nullable().optional(),
 	keys: z.object({
 		p256dh: z.string().regex(/^[A-Za-z0-9_-]{80,100}={0,2}$/),
@@ -59,7 +75,7 @@ export const WebPushSubscriptionSchema = z.object({
 const TOKEN_FORMATS: Record<Exclude<PushProvider, 'webpush'>, z.ZodType<string>> = {
 	apns: z.string().regex(/^[0-9a-fA-F]{64,200}$/, 'APNs token must be hex'),
 	fcm: z.string().regex(/^[A-Za-z0-9_:-]{32,4096}$/, 'not an FCM registration token'),
-	wns: httpsUrl((h) => h === 'notify.windows.com' || h.endsWith('.notify.windows.com')),
+	wns: httpsUrl((h) => hostIs(h, 'notify.windows.com')),
 };
 
 export const DeviceRegistrationSchema = z

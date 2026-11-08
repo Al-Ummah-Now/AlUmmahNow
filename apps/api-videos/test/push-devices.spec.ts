@@ -57,6 +57,28 @@ describe('registration validation', () => {
 		assert.ok(!ok({ platform: 'ios', provider: 'apns', token: APNS, subscription: SUB }));
 		assert.ok(!ok({ platform: 'ios', provider: 'apns', token: APNS, categories: ['spam'] }));
 	});
+
+	it('Web Push endpoints must be a real push service (the sender POSTs there: no SSRF)', () => {
+		const web = (endpoint: string) => ok({ platform: 'web', provider: 'webpush', subscription: { ...SUB, endpoint } });
+		for (const good of [
+			'https://fcm.googleapis.com/fcm/send/x',
+			'https://updates.push.services.mozilla.com/wpush/v2/x',
+			'https://web.push.apple.com/QGx',
+			'https://wns2-par02p.notify.windows.com/w/?token=x',
+		]) assert.ok(web(good), good);
+		for (const bad of [
+			'https://169.254.169.254/latest/meta-data',
+			'https://127.0.0.1/x',
+			'https://internal.example.com/x',
+			'https://fcm.googleapis.com.evil.example/x',
+			'https://evilpush.apple.com/x',
+			'https://fcm.googleapis.com:8443/x',
+			'https://user:pw@fcm.googleapis.com/x',
+			'https://fcm.googleapis.com./x',
+			'http://fcm.googleapis.com/x',
+		]) assert.ok(!web(bad), bad);
+		assert.ok(!ok({ platform: 'windows', provider: 'wns', token: 'https://x.notify.windows.com:444/w' }));
+	});
 });
 
 describe('PUT/GET/DELETE /api/devices', () => {
