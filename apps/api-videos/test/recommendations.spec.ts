@@ -9,11 +9,13 @@ import { SqliteD1 } from './search-sqlite-d1';
 
 class MemoryCache {
 	entries = new Map<string, string>();
+	ttls = new Map<string, string | null>();
 	async match(url: string) {
 		const body = this.entries.get(url);
 		return body === undefined ? undefined : new Response(body);
 	}
 	async put(url: string, response: Response) {
+		this.ttls.set(url, response.headers.get('Cache-Control'));
 		this.entries.set(url, await response.text());
 	}
 }
@@ -127,18 +129,69 @@ describe('GET /api/recommendations', () => {
 		assert.equal(env.videos.calls, 0);
 	});
 
+	it('caches a full result for the normal time', async () => {
+		const env = await setup([video('seed'), video('a'), video('b')]);
+		const res = await get(env, 'videoId=seed&limit=2');
+		assert.equal(res.headers.get('Cache-Control'), 'public, max-age=120');
+	});
+
+	it('never caches an empty result', async () => {
+		const env = await setup([video('seed')]);
+		const empty = await get(env, 'videoId=seed&limit=5');
+		assert.deepEqual(ids((await empty.json()) as Body), []);
+		assert.equal(empty.headers.get('Cache-Control'), 'no-store');
+		assert.equal(cache.entries.size, 0);
+
+		await env.videos.put('new', JSON.stringify(video('new')));
+		await syncSearchDocument(env.SEARCH_DB as never, 'video', 'new', video('new'));
+		assert.deepEqual(ids((await (await get(env, 'videoId=seed&limit=5')).json()) as Body), ['new']);
+	});
+
+	it('keeps a short result only briefly, on a hit too', async () => {
+		const env = await setup([video('seed'), video('other')]);
+		const first = await get(env, 'videoId=seed&limit=5');
+		assert.equal(first.headers.get('Cache-Control'), 'public, max-age=10');
+		const stored = [...cache.ttls.values()];
+		assert.deepEqual(stored, ['public, max-age=10']);
+		const second = await get(env, 'videoId=seed&limit=5');
+		assert.equal(second.headers.get('X-Recommendations-Cache'), 'HIT');
+		assert.equal(second.headers.get('Cache-Control'), 'public, max-age=10');
+	});
+
+	it('backfills excludeWatched with watched videos, after the unwatched ones', async () => {
+		const env = await setup([video('seed'), video('fresh'), video('seen-1'), video('seen-2')]);
+		await env.watch_history.put('u1:seen-1', JSON.stringify({ videoId: 'seen-1' }));
+		await env.watch_history.put('u1:seen-2', JSON.stringify({ videoId: 'seen-2' }));
+		const shown = ids((await (await get(env, 'videoId=seed&excludeWatched=true&limit=3', 'u1')).json()) as Body);
+		assert.equal(shown[0], 'fresh');
+		assert.deepEqual([...shown].sort(), ['fresh', 'seen-1', 'seen-2']);
+		assert.ok(!shown.includes('seed'));
+	});
+
+	it('does not backfill excludeWatched when unwatched videos fill the limit', async () => {
+		const env = await setup([video('seed'), video('fresh'), video('seen')]);
+		await env.watch_history.put('u1:seen', JSON.stringify({ videoId: 'seen' }));
+		const shown = ids((await (await get(env, 'videoId=seed&excludeWatched=true&limit=1', 'u1')).json()) as Body);
+		assert.deepEqual(shown, ['fresh']);
+	});
+
 	it('keeps one viewer\'s personalised results away from others', async () => {
-		const seeds = [video('seed', { category: 'a', channelId: 'c-a' }), video('alice-pick', { category: 'b', channelId: 'c-b', title: 'Fiqh' }), video('generic', { category: 'z', channelId: 'c-z', title: 'Misc' })];
+		const seeds = [
+			video('seed', { category: 'a', channelId: 'c-a' }),
+			video('alice-pick', { category: 'b', channelId: 'c-b', title: 'Fiqh', views: 100000 }),
+			video('generic', { category: 'z', channelId: 'c-z', title: 'Misc' }),
+			video('generic-2', { category: 'y', channelId: 'c-y', title: 'Other' }),
+		];
 		const env = await setup(seeds);
 		await env.watch_history.put('alice:alice-pick', JSON.stringify({ videoId: 'alice-pick' }));
 
-		const alice = await get(env, 'videoId=seed&excludeWatched=true', 'alice');
+		const alice = await get(env, 'videoId=seed&excludeWatched=true&limit=2', 'alice');
 		assert.equal(alice.headers.get('X-Recommendations-Cache'), 'MISS');
 		assert.match(alice.headers.get('Cache-Control') ?? '', /private/);
 		assert.equal(alice.headers.get('Vary'), 'Authorization');
 		assert.ok(!ids((await alice.json()) as Body).includes('alice-pick'));
 
-		for (const res of [await get(env, 'videoId=seed&excludeWatched=true', 'bob'), await get(env, 'videoId=seed')]) {
+		for (const res of [await get(env, 'videoId=seed&excludeWatched=true&limit=2', 'bob'), await get(env, 'videoId=seed&limit=2')]) {
 			assert.equal(res.headers.get('X-Recommendations-Cache'), 'MISS');
 			assert.ok(ids((await res.json()) as Body).includes('alice-pick'));
 		}
@@ -154,9 +207,9 @@ describe('GET /api/recommendations', () => {
 		assert.ok(!alice.includes('alice'), 'the key does not expose the user id');
 
 		const env = await setup([video('seed'), video('other')]);
-		await get(env, 'videoId=seed');
+		await get(env, 'videoId=seed&limit=1');
 		const app = buildApp(r => r.get('/api/recommendations', RecommendationsGet), null);
-		const otherEnv = await app.request('https://videos.api.other.test/api/recommendations?videoId=seed', {}, env);
+		const otherEnv = await app.request('https://videos.api.other.test/api/recommendations?videoId=seed&limit=1', {}, env);
 		assert.equal(otherEnv.headers.get('X-Recommendations-Cache'), 'MISS');
 	});
 

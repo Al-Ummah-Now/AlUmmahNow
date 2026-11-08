@@ -499,6 +499,8 @@ export interface AppTranslations {
     videoComments: string;
     videoShares: string;
     relatedVideos: string;
+    relatedEmpty: string;
+    relatedEmptyRetry: string;
     watchLater: string;
     addToPlaylist: string;
     noVideoSelected: string;

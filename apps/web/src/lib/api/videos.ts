@@ -1,7 +1,7 @@
 'use server';
 
 import { VideoObject, VideoInfo } from "@/interfaces";
-import { loadRelated, RELATED_LIMIT, toVideoInfo } from "@/lib/video/related";
+import { loadRelated, readLastGoodShelf, RELATED_LIMIT, saveLastGoodShelf, toVideoInfo } from "@/lib/video/related";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import {
   ApiResponse,
@@ -1090,7 +1090,8 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
 
 /**
  * Related videos for the watch page (Epic 7.3): recommendations for `videoId`,
- * topped up from the general feed, without the current video.
+ * topped up from the general feed, without the current video. If those stay
+ * empty after a retry: trending, then the last shelf this tab loaded.
  */
 export async function fetchRelatedVideos(videoId: string): Promise<VideoInfo[]> {
     let recommendedCount = 0;
@@ -1101,7 +1102,13 @@ export async function fetchRelatedVideos(videoId: string): Promise<VideoInfo[]> 
             return recommended.map(v => toVideoInfo(v as never));
         },
         feed: () => fetchVideos(null),
+        lastResort: [
+            // The widest period: a quiet day must not leave the shelf empty.
+            async () => (await getTrendingVideos('month', undefined, RELATED_LIMIT)).map(v => toVideoInfo(v as never)),
+            async () => readLastGoodShelf(),
+        ],
     });
+    saveLastGoodShelf(related);
     logger.info('[fetchRelatedVideos] Related shelf', { videoId, recommended: recommendedCount, total: related.length });
     return related;
 }

@@ -36,6 +36,22 @@ test.describe('Release: related videos on the watch page', () => {
     });
   }
 
+  for (const locale of ['en', 'ar'] as const) {
+    test(`related shelf is never empty on a public video (${locale})`, async ({ page }) => {
+      const video = await findPlayableVideo();
+      test.skip(!video, NO_PLAYABLE_VIDEO);
+      const res = await fetch(`${target().api}/api/videos?limit=2`);
+      expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
+      const { data = [] } = (await res.json()) as { data?: Array<{ id: string }> };
+      test.skip(!data.some((v) => v.id !== video!.id), 'the catalogue has no other public video');
+
+      await page.goto(watchUrl(video!.id, locale));
+      const links = page.locator(`[data-testid="related-videos-list"]:visible a[href*="/${locale}/video?vid="]`);
+      await expect(links.first(), 'the related shelf lists at least one video').toBeVisible({ timeout: 30000 });
+      expect(await links.count()).toBeGreaterThanOrEqual(1);
+    });
+  }
+
   // Stage only: PR runs target QA, which still serves the previous main.
   test('recommendations answer within the latency budget', async () => {
     test.skip(process.env.E2E_ENV !== 'stage', 'the budget is enforced on the release candidate (stage)');

@@ -1,4 +1,4 @@
-import { RELATED_LIMIT, loadRelated, mergeRelated, toVideoInfo } from '../related';
+import { LAST_GOOD_SHELF_KEY, RELATED_LIMIT, loadRelated, mergeRelated, readLastGoodShelf, saveLastGoodShelf, toVideoInfo } from '../related';
 import type { VideoInfo } from '@/interfaces';
 
 const info = (id: string) => toVideoInfo({ id, title: id });
@@ -51,6 +51,98 @@ describe('related shelf (Epic 7.3)', () => {
     it('keeps recommendations when the feed fails', async () => {
       const shelf = await loadRelated('cur', { recommended: async () => [info('r1')], feed: () => Promise.reject(new Error('down')) });
       expect(shelf.map(v => v.id)).toEqual(['r1']);
+    });
+
+    describe('when the sources come back empty', () => {
+      const down = () => Promise.reject(new Error('down'));
+      const none = async () => [] as VideoInfo[];
+      const loadWith = (sources: Parameters<typeof loadRelated>[1]) => loadRelated('cur', sources, RELATED_LIMIT, 0);
+
+      it('does not retry or use a last resort once it has videos', async () => {
+        const recommended = jest.fn().mockResolvedValue([info('r1')]);
+        const lastResort = jest.fn().mockResolvedValue([info('t1')]);
+        await expect(loadWith({ recommended, feed: none, lastResort: [lastResort] })).resolves.toHaveLength(1);
+        expect(recommended).toHaveBeenCalledTimes(1);
+        expect(lastResort).not.toHaveBeenCalled();
+      });
+
+      it('retries once when both sources fail, and uses the retry', async () => {
+        const recommended = jest.fn().mockRejectedValueOnce(new Error('blip')).mockResolvedValue([info('r1')]);
+        const feed = jest.fn().mockRejectedValueOnce(new Error('blip')).mockResolvedValue([info('f1')]);
+        const lastResort = jest.fn().mockResolvedValue([info('t1')]);
+        const shelf = await loadWith({ recommended, feed, lastResort: [lastResort] });
+        expect(shelf.map(v => v.id)).toEqual(['r1', 'f1']);
+        expect(recommended).toHaveBeenCalledTimes(2);
+        expect(lastResort).not.toHaveBeenCalled();
+      });
+
+      it('treats helpers that swallow errors (empty and undefined) as a failure', async () => {
+        const recommended = jest.fn().mockResolvedValueOnce([]).mockResolvedValue([info('r1')]);
+        const feed = jest.fn().mockResolvedValue(undefined);
+        await expect(loadWith({ recommended, feed })).resolves.toHaveLength(1);
+        expect(recommended).toHaveBeenCalledTimes(2);
+      });
+
+      it('retries only once, then falls through the last resorts in order', async () => {
+        const recommended = jest.fn(down);
+        const feed = jest.fn(down);
+        const trending = jest.fn(down);
+        const lastGood = jest.fn(async () => [info('cur'), info('saved')]);
+        const shelf = await loadWith({ recommended, feed, lastResort: [trending, lastGood] });
+        expect(shelf.map(v => v.id)).toEqual(['saved']);
+        expect(recommended).toHaveBeenCalledTimes(2);
+        expect(feed).toHaveBeenCalledTimes(2);
+        expect(trending).toHaveBeenCalledTimes(1);
+      });
+
+      it('moves past a last resort that only holds the current video', async () => {
+        const shelf = await loadWith({ recommended: none, feed: none, lastResort: [async () => [info('cur')], async () => [info('t1')]] });
+        expect(shelf.map(v => v.id)).toEqual(['t1']);
+      });
+
+      it('survives a source that throws synchronously', async () => {
+        const boom = () => { throw new Error('sync'); };
+        await expect(loadWith({ recommended: boom, feed: boom, lastResort: [boom] })).resolves.toEqual([]);
+      });
+
+      it('resolves empty when everything is empty', async () => {
+        await expect(loadWith({ recommended: none, feed: none, lastResort: [none] })).resolves.toEqual([]);
+      });
+    });
+  });
+
+  describe('last good shelf', () => {
+    beforeEach(() => sessionStorage.clear());
+    afterEach(() => jest.restoreAllMocks());
+
+    it('round-trips a shelf with real dates', () => {
+      saveLastGoodShelf([toVideoInfo({ id: 'v1', title: 'a', createdAt: '2026-11-01T00:00:00.000Z' } as never)]);
+      const [restored] = readLastGoodShelf();
+      expect(restored.id).toBe('v1');
+      expect(restored.dateCreated).toBeInstanceOf(Date);
+      expect(restored.dateCreated.toISOString()).toBe('2026-11-01T00:00:00.000Z');
+    });
+
+    it('does not overwrite a good shelf with an empty one', () => {
+      saveLastGoodShelf([info('v1')]);
+      saveLastGoodShelf([]);
+      expect(readLastGoodShelf().map(v => v.id)).toEqual(['v1']);
+    });
+
+    it('ignores corrupt or malformed entries', () => {
+      sessionStorage.setItem(LAST_GOOD_SHELF_KEY, '{not json');
+      expect(readLastGoodShelf()).toEqual([]);
+      sessionStorage.setItem(LAST_GOOD_SHELF_KEY, JSON.stringify({ id: 'x' }));
+      expect(readLastGoodShelf()).toEqual([]);
+      sessionStorage.setItem(LAST_GOOD_SHELF_KEY, JSON.stringify([null, { title: 'no id' }]));
+      expect(readLastGoodShelf()).toEqual([]);
+    });
+
+    it('tolerates storage that throws', () => {
+      jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+      jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+      expect(() => saveLastGoodShelf([info('v1')])).not.toThrow();
+      expect(readLastGoodShelf()).toEqual([]);
     });
   });
 });

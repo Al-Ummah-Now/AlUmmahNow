@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import WatchPageContent from '../WatchPageContent';
 import { fetchRelatedVideos, fetchVideoById } from '@/lib/api/videos';
 
@@ -11,7 +11,7 @@ jest.mock('next/link', () => ({ __esModule: true, default: ({ children }: { chil
 jest.mock('@/lib/api/videos', () => ({ fetchRelatedVideos: jest.fn(), fetchVideoById: jest.fn() }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser }) }));
 jest.mock('@/hooks/useLanguage', () => ({
-  useLanguage: () => ({ t: { video: { relatedVideos: 'Related' }, navigation: {} }, lang: mockIsRTL ? 'ar' : 'en', isRTL: mockIsRTL }),
+  useLanguage: () => ({ t: { video: { relatedVideos: 'Related', relatedEmpty: 'Nothing here', relatedEmptyRetry: 'Retry shelf' }, navigation: {} }, lang: mockIsRTL ? 'ar' : 'en', isRTL: mockIsRTL }),
 }));
 jest.mock('@al-ummah/shared-types', () => ({ getLocalizedValue: (_: unknown, title: string) => title }));
 jest.mock('@/components/relatedVideo', () => ({ __esModule: true, default: ({ id }: { id: string }) => <div data-testid={`card-${id}`} /> }));
@@ -67,6 +67,25 @@ describe('WatchPageContent related shelf', () => {
     mockUser = { id: 'u1' };
     rerender(<WatchPageContent videoId="cur" />);
     expect(related).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([[false], [true]])('offers a retry on an empty shelf, then shows the videos (rtl=%s)', async (rtl) => {
+    mockIsRTL = rtl;
+    related.mockResolvedValueOnce([]).mockResolvedValue([card('rec-1')] as never);
+    render(<WatchPageContent videoId="cur" />);
+    const [retry] = await screen.findAllByRole('button', { name: 'Retry shelf' });
+    expect(screen.getAllByText('Nothing here').length).toBeGreaterThan(0);
+
+    fireEvent.click(retry);
+    expect((await screen.findAllByTestId('card-rec-1')).length).toBeGreaterThan(0);
+    expect(related).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId('related-videos-empty')).toBeNull();
+  });
+
+  it('shows the empty state when the request fails', async () => {
+    related.mockRejectedValue(new Error('down'));
+    render(<WatchPageContent videoId="cur" />);
+    expect((await screen.findAllByTestId('related-videos-empty')).length).toBeGreaterThan(0);
   });
 
   it('clears the skeleton when the request fails', async () => {
