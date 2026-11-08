@@ -5,13 +5,15 @@
  * This allows environment-specific values without rebuilding.
  */
 
+export interface RuntimeConfig {
+  API_URL?: string;
+  WEBSOCKET_URL?: string;
+  AUTH_PROFILE_URL?: string;
+}
+
 declare global {
   interface Window {
-    __RUNTIME_CONFIG__?: {
-      API_URL?: string;
-      WEBSOCKET_URL?: string;
-      AUTH_PROFILE_URL?: string;
-    };
+    __RUNTIME_CONFIG__?: RuntimeConfig;
   }
 }
 

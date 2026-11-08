@@ -20,6 +20,7 @@ import { NONCE_HEADER } from "@/lib/security/nonce-header";
 import { serializeForInlineScript } from "@/lib/security/csp";
 import { deriveAuthProfileUrl } from "@/lib/runtime-config";
 import { SecurityBootstrap } from "@/components/security/SecurityBootstrap";
+import { RuntimeConfigBootstrap } from "@/components/RuntimeConfigBootstrap";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import SkipLinks from "@/components/SkipLinks";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
@@ -69,19 +70,23 @@ export const viewport: Viewport = {
 };
 
 /** Runtime configuration injected from the server (read by client API helpers). */
+function serverRuntimeConfig() {
+  return {
+    API_URL: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '',
+    WEBSOCKET_URL: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '',
+    AUTH_PROFILE_URL: deriveAuthProfileUrl(
+      process.env.OPENAUTH_ISSUER || process.env.Issuer,
+      process.env.AUTH_PROFILE_URL
+    ),
+  };
+}
+
 function RuntimeConfigScript({ nonce }: { nonce?: string }) {
   return (
     <script
       nonce={nonce}
       dangerouslySetInnerHTML={{
-        __html: `window.__RUNTIME_CONFIG__ = ${serializeForInlineScript({
-          API_URL: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '',
-          WEBSOCKET_URL: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '',
-          AUTH_PROFILE_URL: deriveAuthProfileUrl(
-            process.env.OPENAUTH_ISSUER || process.env.Issuer,
-            process.env.AUTH_PROFILE_URL
-          ),
-        })};`,
+        __html: `window.__RUNTIME_CONFIG__ = ${serializeForInlineScript(serverRuntimeConfig())};`,
       }}
     />
   );
@@ -134,6 +139,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
       </head>
       <body className="font-inter">
         <SecurityBootstrap />
+        <RuntimeConfigBootstrap config={serverRuntimeConfig()} />
         {/* No <Suspense> around the app: with one, the shell (and a 200 status)
             streamed before a page or layout could call notFound(), so unknown
             channels/handles/playlists were soft 404s rendered twice. Every route
