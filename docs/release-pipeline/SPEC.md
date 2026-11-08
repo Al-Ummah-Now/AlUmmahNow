@@ -1,5 +1,7 @@
 # Release pipeline: spec
 
+> **Current state (2026-11-08):** production releases are triggered by pushing a `vYYYY.MM.DD` tag on `main` (`.github/workflows/release.yml`, PR #286). Pushes to `main` deploy QA only, and `workflow_dispatch` deploys stage only. GitHub enforces this with a `v*` tag ruleset and a `production` environment that accepts only `v*` tags. Where this document says releases run on push to `main` or by dispatch, the tag model in CLAUDE.md "Deploy Rules" supersedes it.
+
 Status: proposed, 2026-11-07. Owner review needed for section 11 (decisions).
 Applies to: `Al-Ummah-Now/AlUmmahNow` and `Al-Ummah-Now/AlUmmahNowAuth`.
 Auth-specific notes: `AlUmmahNowAuth/docs/release-pipeline.md`.

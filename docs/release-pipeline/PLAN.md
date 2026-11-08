@@ -1,5 +1,7 @@
 # Release pipeline: plan
 
+> **Current state (2026-11-08):** production releases are triggered by pushing a `vYYYY.MM.DD` tag on `main` (`.github/workflows/release.yml`, PR #286). Pushes to `main` deploy QA only, and `workflow_dispatch` deploys stage only. GitHub enforces this with a `v*` tag ruleset and a `production` environment that accepts only `v*` tags. Where this document says releases run on push to `main` or by dispatch, the tag model in CLAUDE.md "Deploy Rules" supersedes it.
+
 Implements [SPEC.md](./SPEC.md). Each phase is independently shippable. Each one leaves prod deploys working at least as well as before, and is merged only when its CI is green. Each phase has a GitHub issue labelled `queue`. Issue numbers are in the table below (`#n` = AlUmmahNow).
 
 Order: auth first (smaller, deploys from CI today), then AlUmmahNow. Auth phases 1–4 and AlUmmahNow phases 1, 5 and 6 can run in parallel.
