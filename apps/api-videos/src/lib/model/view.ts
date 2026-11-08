@@ -77,6 +77,7 @@ export const VideoView = z.object({
     channelName: Str(), // Denormalized for client convenience
     channelAvatarUrl: Str().optional(), // Denormalized for client convenience
     channelCoverUrl: Str().optional(), // Denormalized for client convenience
+    channelIsVerified: z.boolean().optional(), // Scholar/institution badge (Epic 6.1)
     dateCreated: DateTime(),
     dateModified: DateTime(),
     views: z.number(),

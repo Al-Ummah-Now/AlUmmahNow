@@ -1,4 +1,5 @@
 "use client";
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import React, { useMemo } from "react";
 import type { Player } from "video.js";
 import Image from "next/image";
@@ -87,13 +88,19 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
               fill
             />
           );
-          return href ? (
+          const avatarEl = href ? (
             <Link href={href} data-testid="watch-channel-link" className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity">
               {avatar}
             </Link>
           ) : (
             <span className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative">{avatar}</span>
           );
+          return options.channelVerified ? (
+            <span className="inline-flex items-center gap-1">
+              {avatarEl}
+              <VerifiedBadge />
+            </span>
+          ) : avatarEl;
         })()}
         <div className="mt-4">
           <h1 className="sm:text-md md:text-xl font-semibold text-black dark:text-white">

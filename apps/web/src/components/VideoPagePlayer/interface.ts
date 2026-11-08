@@ -8,6 +8,8 @@ export interface PlayerOptions {
   channel: string;
   channelName: string;
   channelAvatar: string;
+  /** Channel has the scholar/institution badge (Epic 6.1) */
+  channelVerified?: boolean;
   channelCover?: string;
   description: string;
   views: string;
