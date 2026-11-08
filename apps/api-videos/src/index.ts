@@ -5,7 +5,7 @@ import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
 import { loggingMiddleware } from "./middleware/logging";
 import { errorHandler } from "./middleware/error-handler";
-import { rateLimitMiddleware, UPLOAD_SESSION_PATHS, uploadSessionLimitMiddleware } from "./middleware/rate-limit";
+import { rateLimitMiddleware, UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/rate-limit";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
@@ -139,11 +139,14 @@ app.use('/api/*', bunnySigningMiddleware);
 // ==========================================
 
 // SECURITY: Limit new video upload SESSIONS, once per video (#290). The calls
-// that continue an initiated upload (TUS POST/HEAD/PATCH/DELETE, complete,
-// resume) are not counted: they need that upload's session, owned by the same
-// user. Rejected initiations are refused before any video record is created.
+// that continue an initiated upload (TUS HEAD/PATCH/DELETE, resume) are not
+// counted: they need that upload's session, owned by the same user. Rejected
+// initiations are refused before any video record is created.
 const uploadSessionLimit = uploadSessionLimitMiddleware();
 for (const path of UPLOAD_SESSION_PATHS) app.use(path, uploadSessionLimit);
+// TUS create and complete: a looser per-user bucket so a session cannot be replayed without bound
+const uploadContinueLimit = uploadContinueLimitMiddleware();
+for (const path of UPLOAD_CONTINUE_PATHS) app.use(path, uploadContinueLimit);
 
 // SECURITY: Apply rate limiting to community media uploads
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));

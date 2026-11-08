@@ -8,8 +8,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import {
+  UPLOAD_CONTINUE_LIMITS,
+  UPLOAD_CONTINUE_PATHS,
   UPLOAD_SESSION_LIMITS,
   UPLOAD_SESSION_PATHS,
+  uploadContinueLimitMiddleware,
   uploadSessionLimitMiddleware,
   uploadSessionLimits,
 } from '../src/middleware/rate-limit';
@@ -44,6 +47,8 @@ function harness(env: Record<string, unknown> = { UPLOAD_RATE_LIMIT: 'standard' 
   });
   const limiter = uploadSessionLimitMiddleware();
   for (const path of UPLOAD_SESSION_PATHS) app.use(path, limiter);
+  const continueLimiter = uploadContinueLimitMiddleware();
+  for (const path of UPLOAD_CONTINUE_PATHS) app.use(path, continueLimiter);
   // Stand-ins for the initiate handlers: each records the video it would create
   app.post('/api/videos/upload/initiate', (c) => {
     created.push(`video-${created.length + 1}`);
@@ -79,7 +84,9 @@ function harness(env: Record<string, unknown> = { UPLOAD_RATE_LIMIT: 'standard' 
       `tus:upload:${uploadId}`,
       JSON.stringify({ uploadId, userId: user, videoId: `vid-${uploadId}`, fileSize, uploadOffset: 0, bunnyUploadUrl: `https://bunny.test/tus/${uploadId}` }),
     );
-  return { request, initiate, chunk, startUpload, created, rateKv };
+  const tusCreate = (user: string) =>
+    request(user, '/api/videos/tus', { method: 'POST', headers: { 'tus-resumable': '1.0.0', 'upload-length': '10' } });
+  return { request, initiate, chunk, startUpload, tusCreate, created, rateKv };
 }
 
 describe('upload rate limiting (#290)', () => {
@@ -197,10 +204,25 @@ describe('upload rate limiting (#290)', () => {
 
   it('index.ts mounts the limiter only on session routes, never on TUS, complete or resume', () => {
     const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8');
-    const limited = [...index.matchAll(/app\.use\(\s*['"]([^'"]+)['"]\s*,\s*(?:rateLimitMiddleware|uploadSessionLimit)/g)].map((m) => m[1]);
+    const limited = [...index.matchAll(/app\.use\(\s*['"]([^'"]+)['"]\s*,\s*(?:rateLimitMiddleware|upload\w*Limit)/g)].map((m) => m[1]);
     for (const path of limited) {
-      assert.ok(!/\/tus|\/upload\/complete|\/upload\/resume/.test(path), `${path} must not be rate limited`);
+      assert.ok(!/\/tus|\/upload\/complete|\/upload\/resume/.test(path), `${path} must not be rate limited per request`);
     }
     assert.match(index, /for \(const path of UPLOAD_SESSION_PATHS\) app\.use\(path, uploadSessionLimit\)/);
+    assert.match(index, /for \(const path of UPLOAD_CONTINUE_PATHS\) app\.use\(path, uploadContinueLimit\)/);
+    assert.ok(!(UPLOAD_CONTINUE_PATHS as readonly string[]).some((p) => p.includes('*')), 'chunks (/tus/*) are never in a bucket');
+  });
+
+  it('bounds TUS create replays in their own bucket, without touching the session quota', async () => {
+    const h = harness();
+    const { perMinute } = UPLOAD_CONTINUE_LIMITS.standard;
+    const statuses: number[] = [];
+    for (let i = 0; i < perMinute + 1; i++) statuses.push((await h.tusCreate('alice')).status);
+    // No metadata: the proxy answers 400, but every create still counts toward the bucket
+    assert.deepEqual(statuses.slice(0, perMinute), Array(perMinute).fill(400));
+    assert.equal(statuses[perMinute], 429);
+    const next = await h.initiate('alice');
+    assert.equal(next.status, 200);
+    assert.equal(next.headers.get('X-RateLimit-Remaining-Hour'), String(UPLOAD_SESSION_LIMITS.standard.perHour - 1));
   });
 });

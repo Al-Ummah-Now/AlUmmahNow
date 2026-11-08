@@ -110,6 +110,31 @@ export const UPLOAD_SESSION_PATHS = [
   '/api/videos/upload/stream',
 ] as const;
 
+/**
+ * Calls that continue an initiated upload but are not idempotent: the TUS
+ * create (POST /api/videos/tus, which starts the Bunny upload for the session)
+ * and complete. A separate, looser bucket than sessions so normal retries never
+ * trip it, but one session cannot be replayed without bound. TUS PATCH/HEAD
+ * stay unlimited (owner-checked, bounded by the upload's length).
+ */
+export const UPLOAD_CONTINUE_PATHS = ['/api/videos/tus', '/api/videos/upload/complete'] as const;
+export const UPLOAD_CONTINUE_OPERATION = 'video_upload_continue';
+export const UPLOAD_CONTINUE_LIMITS: Record<UploadLimitProfile, RateLimitConfig> = {
+  standard: { perMinute: 30, perHour: 100, perDay: 300, maxConcurrent: 10 },
+  relaxed: { perMinute: 120, perHour: 1000, perDay: 5000, maxConcurrent: 40 },
+};
+
+export function uploadContinueLimitMiddleware() {
+  return rateLimitMiddleware(UPLOAD_CONTINUE_OPERATION, {
+    limits: (env) => {
+      const session = uploadSessionLimits(env as { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string });
+      if (!session) return null;
+      return session === UPLOAD_SESSION_LIMITS.relaxed ? UPLOAD_CONTINUE_LIMITS.relaxed : UPLOAD_CONTINUE_LIMITS.standard;
+    },
+    methods: ['POST'],
+  });
+}
+
 /** The upload-session limiter mounted on UPLOAD_SESSION_PATHS in index.ts */
 export function uploadSessionLimitMiddleware() {
   return rateLimitMiddleware(UPLOAD_SESSION_OPERATION, {
