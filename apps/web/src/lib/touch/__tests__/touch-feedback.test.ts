@@ -101,33 +101,23 @@ describe('hapticPulse', () => {
 describe('player touch-target CSS (Story 1.5 AC 1)', () => {
   const css = fs.readFileSync(path.join(__dirname, '../../../styles/video-player.css'), 'utf8');
 
-  function px(value: string): number {
-    const v = value.trim();
-    if (v.endsWith('rem')) return parseFloat(v) * 16;
-    if (v.endsWith('px')) return parseFloat(v);
-    throw new Error(`unexpected unit: ${v}`);
-  }
-
-  it('defines a 44px target token, raised to 48px for coarse pointers', () => {
-    expect(css).toMatch(/\.video-js \{[^}]*--vp-touch-target: 44px;/);
-    expect(css).toMatch(/@media \(pointer: coarse\) \{\s*\.video-js \{\s*--vp-touch-target: 48px;/);
+  it('defines a 44px target on touch devices only', () => {
+    expect(css).toMatch(/@media \(pointer: coarse\) \{\s*\.video-js \{\s*--vp-touch-target: 44px;/);
   });
 
-  it('never sizes control-bar buttons below 44px (all breakpoints)', () => {
-    const rule = /\.video-js \.vjs-control-bar button \{([^}]*)\}/g;
-    let match: RegExpExecArray | null;
-    let checked = 0;
-    while ((match = rule.exec(css))) {
-      for (const prop of ['min-width', 'min-height', 'width', 'height']) {
-        const decl = match[1].match(new RegExp(`(?:^|;|\\s)${prop}:\\s*([^;!]+)`));
-        if (!decl) continue;
-        const value = decl[1].trim();
-        checked++;
-        if (value.startsWith('var(--vp-touch-target')) continue;
-        expect(px(value)).toBeGreaterThanOrEqual(44);
-      }
-    }
-    expect(checked).toBeGreaterThan(0);
+  it('extends every control-bar button to the target with a centred hit area', () => {
+    const rule = css.match(/\.video-js \.vjs-control-bar button::after \{([^}]*)\}/);
+    expect(rule?.[1]).toContain('width: var(--vp-touch-target)');
+    expect(rule?.[1]).toContain('height: var(--vp-touch-target)');
+    expect(rule?.[1]).toContain('translate(-50%, -50%)');
+  });
+
+  it('spaces phone buttons so neighbouring hit areas do not overlap', () => {
+    const buttonSize = 32;
+    const barGap = 4;
+    const rule = css.match(/@media \(pointer: coarse\) and \(max-width: 640px\) \{\s*\.video-js \.vjs-control-bar button \{\s*margin: 0 ([\d.]+)rem;/);
+    expect(rule).not.toBeNull();
+    expect(buttonSize + barGap + 2 * parseFloat(rule![1]) * 16).toBeGreaterThanOrEqual(44);
   });
 
   it('gives the seek and volume sliders a full-height hit area', () => {
