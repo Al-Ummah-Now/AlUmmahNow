@@ -189,3 +189,36 @@ test('once its token expires a socket drops private channels, keeps public ones,
   assert.equal(durable.channelManager.getChannelSubscribers('user:user-123').size, 1);
   assert.equal(durable.channelManager.getChannelSubscribers('video:v1').size, 1);
 });
+
+test('a silent socket with an expired token gets no private broadcasts', async () => {
+  clearRevocationCache();
+  const { durable } = makeDO();
+  const ws = await connect(durable, '');
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'authenticate', token: await signer.sign() }));
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'subscribe', channel: 'video:v1' }));
+  const conn = durable.connections.get(ws);
+  await durable.broadcast('user:user-123', { type: 'message', channel: 'user:user-123', data: { n: 1 } });
+  assert.equal(ws.sent.filter((m) => m.type === 'message' && m.channel === 'user:user-123').length, 1);
+
+  conn.authExpiresAt = nowS() - 1;
+  await durable.broadcast('user:user-123', { type: 'message', channel: 'user:user-123', data: { n: 2 } });
+  assert.equal(ws.sent.filter((m) => m.type === 'message' && m.channel === 'user:user-123').length, 1, 'no private message after expiry');
+  assert.ok(ws.sent.some((m) => m.code === 'AUTH_EXPIRED'));
+  assert.equal(conn.authenticated, false);
+  // Public channels still flow
+  await durable.broadcast('video:v1', { type: 'message', channel: 'video:v1', data: { n: 3 } });
+  assert.equal(ws.sent.filter((m) => m.type === 'message' && m.channel === 'video:v1').length, 1);
+});
+
+test('a failed re-auth after expiry leaves the socket signed out', async () => {
+  clearRevocationCache();
+  const { durable } = makeDO();
+  const ws = await connect(durable, '');
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'authenticate', token: await signer.sign() }));
+  const conn = durable.connections.get(ws);
+  conn.authExpiresAt = nowS() - 1;
+  const forger = await makeSigner();
+  await durable.webSocketMessage(ws, JSON.stringify({ type: 'authenticate', token: await forger.sign() }));
+  assert.equal(conn.authenticated, false);
+  assert.equal(durable.channelManager.getChannelSubscribers('user:user-123').size, 0);
+});
