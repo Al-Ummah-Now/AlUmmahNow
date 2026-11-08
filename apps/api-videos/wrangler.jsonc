@@ -168,7 +168,7 @@
 	// "vars": { "MY_VARIABLE": "production_value" },
 	"vars": {
 		"ZONE": "al-ummah-now-images",
-		"ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+		"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",
 		"Issuer": "https://auth.alummahnow.net",
 		"Audience": "https://videos.alummahnow.net",
 		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",

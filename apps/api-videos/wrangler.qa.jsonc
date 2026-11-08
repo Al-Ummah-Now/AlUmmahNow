@@ -108,7 +108,7 @@
   ],
   "vars": {
     "ZONE": "al-ummah-now-images",
-    "ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    "ClientId": "c1770235-e4b6-42f3-9eb4-3c03ca111b02",
     "Issuer": "https://auth.qa.alummahnow.net",
     "Audience": "https://videos.qa.alummahnow.net",
     "bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
