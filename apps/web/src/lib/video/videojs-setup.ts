@@ -104,7 +104,8 @@ export function createVideoPlayer(
       if (player && typeof player.hlsQualitySelector === 'function') {
         try {
           player.hlsQualitySelector({
-            displayCurrentQuality: true
+            displayCurrentQuality: true,
+            placementIndex: qualityButtonPlacementIndex(player)
           });
         } catch (error) {
           logger.warn('HLS quality selector plugin failed to initialize:', error);
@@ -125,6 +126,22 @@ export function createVideoPlayer(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Video player initialization failed: ${errorMessage}`);
   }
+}
+
+/**
+ * Control-bar index for the quality button: just before the remaining-time
+ * display, as in production. The plugin's default ("second to last child")
+ * drifts as more controls are added (captions, keyboard help) and pushed the
+ * button after the time display. Returns undefined to keep the plugin default
+ * when there is no remaining-time display.
+ */
+export function qualityButtonPlacementIndex(player: Player): number | undefined {
+  const controlBar = (player as Player & {
+    controlBar?: { children: () => unknown[]; getChild: (name: string) => unknown };
+  }).controlBar;
+  if (!controlBar) return undefined;
+  const index = controlBar.children().indexOf(controlBar.getChild('remainingTimeDisplay'));
+  return index >= 0 ? index : undefined;
 }
 
 export const NO_QUALITY_LEVELS_CLASS = 'vjs-no-quality-levels';

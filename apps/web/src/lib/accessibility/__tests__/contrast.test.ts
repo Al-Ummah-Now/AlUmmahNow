@@ -44,32 +44,36 @@ describe('contrast helpers', () => {
   });
 });
 
-describe('video player chrome (both themes share the dark scrim)', () => {
+describe('video player chrome (transparent bar, haloed controls; both themes)', () => {
   const fg = token(playerCss, VJS_BLOCK, '--vp-fg');
   const fgMuted = token(playerCss, VJS_BLOCK, '--vp-fg-muted');
   const focus = token(playerCss, VJS_BLOCK, '--vp-focus');
   const track = token(playerCss, VJS_BLOCK, '--vp-track');
-  const scrimWeak = token(playerCss, VJS_BLOCK, '--vp-scrim-weak');
+  const halo = token(playerCss, VJS_BLOCK, '--vp-halo-color');
+  const outline = token(playerCss, VJS_BLOCK, '--vp-outline');
   const surface = token(playerCss, VJS_BLOCK, '--vp-surface');
   const selectedBg = token(playerCss, VJS_BLOCK, '--vp-selected-bg');
   const selectedFg = token(playerCss, VJS_BLOCK, '--vp-selected-fg');
 
-  // Worst case for light controls: the most transparent part of the scrim over a white frame
-  const worstScrim = composite(scrimWeak, '#ffffff');
+  const rgb = (c: { r: number; g: number; b: number }) => `rgb(${c.r}, ${c.g}, ${c.b})`;
+  const frames = ['#ffffff', '#000000'];
 
-  it('control text and icons are >= 4.5:1 over the worst-case frame', () => {
-    expect(contrastRatio(fg, worstScrim)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-    expect(contrastRatio(fgMuted, worstScrim)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+  it('control text and icons are >= 4.5:1 against their halo, even over a white frame', () => {
+    const worstHalo = composite(halo, '#ffffff');
+    expect(contrastRatio(fg, worstHalo)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+    expect(contrastRatio(fgMuted, worstHalo)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
   });
 
-  it('focus indicator is >= 3:1 against the scrim (non-text contrast)', () => {
-    expect(contrastRatio(focus, worstScrim)).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
+  it('focus indicator is >= 3:1 against its black halo (non-text contrast)', () => {
     expect(contrastRatio(focus, '#000000')).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
   });
 
-  it('slider tracks are >= 3:1 against the scrim (non-text contrast)', () => {
-    const trackOnScrim = composite(track, `rgb(${worstScrim.r}, ${worstScrim.g}, ${worstScrim.b})`);
-    expect(contrastRatio(trackOnScrim, worstScrim)).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
+  it('slider tracks are >= 3:1 against their outline over white and black frames', () => {
+    for (const frame of frames) {
+      const trackOnFrame = composite(track, frame);
+      const outlineOnFrame = composite(outline, frame);
+      expect(contrastRatio(rgb(trackOnFrame), rgb(outlineOnFrame))).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
+    }
   });
 
   it('menus (light and dark surface) and the selected item are >= 4.5:1', () => {

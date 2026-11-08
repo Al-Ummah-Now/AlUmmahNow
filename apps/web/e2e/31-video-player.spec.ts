@@ -184,11 +184,30 @@ test.describe('player controls', () => {
     await expect(items.filter({ hasText: /auto/i })).toHaveCount(1);
     await expect.poll(() => items.count(), { message: 'Auto + at least one rendition' }).toBeGreaterThan(1);
 
+    // Regression: the list existed in the DOM but was clipped to nothing (the
+    // menu box kept Video.js's height: 0 and the control bar paint-contained
+    // it), so the menu "did not open". Assert the item is really painted on top.
     const rendition = items.filter({ hasText: /\d+p/ }).last();
+    await expect.poll(() => rendition.evaluate((li) => {
+      const menu = li.closest('.vjs-menu')!.getBoundingClientRect();
+      const r = li.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return menu.height > 0 && !!hit && li.contains(hit);
+    }), { message: 'quality menu item is painted and receives clicks' }).toBe(true);
+
     const label = (await rendition.innerText()).trim();
+    const height = Number(label.match(/(\d+)p/)![1]);
     await rendition.click();
     await expect(rendition).toHaveAttribute('aria-checked', 'true');
     await expect(page.locator('.video-js .vjs-quality-selector')).toContainText(label.replace(/\s.*$/, ''));
+    // Switching really restricts playback to that rendition
+    await expect.poll(() => page.evaluate((h) => {
+      type Levels = { length: number; [i: number]: { height: number; enabled: boolean } };
+      const player = (document.querySelector('.video-js') as HTMLElement & { player?: { qualityLevels: () => Levels } }).player;
+      const levels = player?.qualityLevels();
+      if (!levels) return false;
+      return Array.from({ length: levels.length }, (_, i) => levels[i]).every((l) => l.enabled === (l.height === h));
+    }, height)).toBe(true);
   });
 
   test('PLAYER-014 captions button is hidden without tracks and lists subtitle tracks when present', async ({ page, request, browserName }, testInfo) => {

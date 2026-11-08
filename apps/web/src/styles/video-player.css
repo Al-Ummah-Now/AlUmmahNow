@@ -54,34 +54,35 @@
 }
 
 /*
-  Epic 1 (Story 1.1) - player chrome colour tokens.
-  The controls are drawn over arbitrary video frames, so the player chrome is a
-  dark scrim with light foreground in BOTH themes (the page theme only changes
-  surrounding UI). Ratios are against the worst case: the lightest scrim value
-  composited over a pure-white frame.
-    scrim (0.72 black over white)  = #474747
-    --vp-fg #ffffff on #474747       = 9.3:1  (text, icons - needs 4.5:1)
-    --vp-fg-muted #e5e7eb on #474747 = 7.5:1
-    --vp-focus #ffb84d on #474747    = 5.4:1, on solid #000 = 12.2:1 (needs 3:1)
-    --vp-track rgba(255,255,255,.45) over #474747 = #9a9a9a -> 3.3:1 vs scrim
-  .dark keeps the same scrim (contrast already maximal) with a slightly
-  cooler surface for menus so both themes are visually consistent.
+  Player chrome colour tokens.
+  The controls float over the video with no solid bar (the production look):
+  a soft scrim that fades to fully transparent at the top of the control bar,
+  plus a dark halo around every white glyph. The halo is the glyph's immediate
+  background (WCAG 1.4.3 allows an outline/halo), so white icons and text keep
+  >= 4.5:1 even over a pure-white frame:
+    --vp-fg #ffffff on the --vp-halo-color halo     = 17:1 over a white frame
+    --vp-focus #ffb84d on solid #000 focus halo     = 12.2:1 (needs 3:1)
+    slider tracks (--vp-track) carry a 1px --vp-outline ring: track vs ring is
+    >= 3:1 over both a pure-white and a pure-black frame (non-text contrast)
+  Menus use a solid dark surface (white text on #111827 = 17.7:1).
 */
 .video-js {
+  --vp-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0));
+  --vp-halo-color: rgba(0, 0, 0, 0.9);
+  --vp-halo: 0 0 2px var(--vp-halo-color), 0 0 4px rgba(0, 0, 0, 0.6);
+  --vp-outline: rgba(0, 0, 0, 0.6);
   --vp-scrim-strong: rgba(0, 0, 0, 0.88);
-  --vp-scrim-weak: rgba(0, 0, 0, 0.72);
   --vp-surface: #111827;
   --vp-surface-border: rgba(255, 255, 255, 0.24);
   --vp-fg: #ffffff;
   --vp-fg-muted: #e5e7eb;
   --vp-hover-bg: rgba(255, 255, 255, 0.18);
-  --vp-active-bg: rgba(255, 255, 255, 0.3);
   --vp-track: rgba(255, 255, 255, 0.45);
   --vp-focus: #ffb84d;
   --vp-focus-halo: #000000;
   --vp-selected-bg: #ffffff;
   --vp-selected-fg: #111827;
-  --vp-touch-target: 44px;
+  --vp-button-size: 2.25rem; /* 36px - production control size */
   color: var(--vp-fg);
 }
 
@@ -89,22 +90,19 @@
   --vp-surface: #030712;
 }
 
-@media (pointer: coarse) {
-  .video-js {
-    --vp-touch-target: 48px;
-  }
-}
-
 .video-js {
   font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
 /* Big play button styling */
+/* Production look: a bare white play glyph over the video, no disc or ring.
+   The halo keeps the glyph visible (and >= 3:1) over light frames. */
 .video-js .vjs-big-play-button {
   border-radius: 50%;
-  border: 3px solid var(--vp-fg); /* non-text contrast: white ring vs scrim/video */
-  background-color: var(--vp-scrim-strong);
+  border: none;
+  background-color: transparent;
   color: var(--vp-fg);
+  text-shadow: var(--vp-halo);
   transition: background-color var(--video-transition-base), transform var(--video-transition-fast);
 }
 
@@ -112,16 +110,16 @@
 .video-js .vjs-big-play-button:hover,
 .dark .video-js .vjs-big-play-button:hover,
 .video-js:hover .vjs-big-play-button {
-  background-color: #000000;
+  background-color: transparent;
   transform: scale(1.05);
 }
 
-/* Consolidated focus states */
+/* Consolidated focus states (keyboard only) */
 .video-js .vjs-big-play-button:focus-visible {
   outline: 3px solid var(--vp-focus);
   outline-offset: 4px;
   box-shadow: 0 0 0 8px var(--vp-focus-halo);
-  background-color: #000000;
+  background-color: transparent;
 }
 
 /* Enable pointer events for click-to-play functionality */
@@ -141,14 +139,9 @@
 /* Control bar styling - WCAG 2.1 AA compliant contrast */
 /* V3 Design: 64px height with vertically centered controls */
 .video-js .vjs-control-bar {
-  /* Story 1.1: dark scrim in both themes - >= 9.3:1 for white controls even
-     over a white frame (previously the gradient tokens were invalid CSS and the
-     bar rendered transparent: white icons over video measured ~2.8:1) */
-  background: linear-gradient(
-    to top,
-    var(--vp-scrim-strong),
-    var(--vp-scrim-weak)
-  );
+  /* Transparent bar as in production, with a scrim that fades out towards
+     the top; contrast for the white controls comes from --vp-halo */
+  background: var(--vp-scrim);
   color: var(--vp-fg);
   backdrop-filter: blur(var(--video-blur-amount));
   -webkit-backdrop-filter: blur(var(--video-blur-amount));
@@ -171,7 +164,7 @@
 .dark .video-js .vjs-control-bar button:focus-visible,
 .video-js .vjs-control-bar [role="slider"]:focus-visible,
 .video-js .vjs-menu li:focus-visible,
-.video-js .vjs-menu li.vjs-menu-item:focus {
+.video-js .vjs-menu li.vjs-menu-item:focus-visible {
   outline: 3px solid var(--vp-focus);
   outline-offset: 2px;
   box-shadow: 0 0 0 5px var(--vp-focus-halo);
@@ -179,8 +172,10 @@
 }
 
 /* Accessibility: Enhanced contrast for control icons */
-.video-js .vjs-control-bar .vjs-icon-placeholder::before {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+.video-js .vjs-control-bar .vjs-icon-placeholder::before,
+.video-js .vjs-control-bar .vjs-icon-placeholder,
+.video-js .vjs-keyboard-help-button {
+  text-shadow: var(--vp-halo);
 }
 
 /* Flip directional icons in RTL */
@@ -207,14 +202,14 @@
 
 
 /* Enhanced control button sizing and spacing */
-/* Story 1.5: 44x44px minimum (48px on coarse pointers) - was 36px (32px mobile) */
+/* V3 Design: 36px buttons, vertically centered */
 .video-js .vjs-control-bar button {
-  min-width: var(--vp-touch-target);
-  min-height: var(--vp-touch-target);
-  width: var(--vp-touch-target);
-  height: var(--vp-touch-target);
+  min-width: var(--vp-button-size);
+  min-height: var(--vp-button-size);
+  width: var(--vp-button-size);
+  height: var(--vp-button-size);
   padding: 0.5rem; /* Padding for icons */
-  margin: 0 0.125rem; /* >= 4px between adjacent targets (with the bar gap) */
+  margin: 0 0.125rem; /* Spacing between buttons */
   color: var(--vp-fg);
   border-radius: 0.375rem; /* Rounded corners */
   transition: all 0.2s ease;
@@ -224,15 +219,14 @@
 }
 
 .video-js .vjs-control-bar button:hover {
-  background: var(--vp-hover-bg);
+  background: transparent;
   transform: scale(1.05);
 }
 
-/* Story 1.5 AC 3: pressed / touch feedback */
+/* Pressed / touch feedback: a brief shrink, no fill (production look) */
 .video-js .vjs-control-bar button:active,
 .video-js .vjs-control-bar .vjs-touch-active,
 .video-js .vjs-big-play-button.vjs-touch-active {
-  background: var(--vp-active-bg);
   transform: scale(0.94);
 }
 
@@ -254,7 +248,7 @@
   height: 100%; /* Fill control bar height */
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   color: var(--vp-fg);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--vp-halo);
 }
 
 /* Hide current time and duration (left side), only show remaining time (right side) */
@@ -280,13 +274,9 @@
   min-width: 3.5rem !important; /* Increased from default */
   font-size: 0.9375rem !important; /* Larger font */
   font-weight: 600;
-  padding: 0 !important;
+  padding: 0.625rem 0.75rem !important;
   background: transparent;
   border-radius: 0.375rem;
-}
-
-.video-js .vjs-quality-selector:hover {
-  background: var(--vp-hover-bg);
 }
 
 /* Quality selector button text */
@@ -325,7 +315,14 @@
   min-width: 8rem !important; /* 128px minimum width */
   max-width: 12rem !important; /* Maximum width */
 
-  /* Constrain menu height and enable scrolling */
+  /* Constrain menu height and enable scrolling.
+     Video.js styles this box as `height: 0; margin-bottom: 1.5em` and hangs an
+     absolutely positioned list above it. The list is static here (so the box
+     scrolls), which means the box must size to its content: with Video.js's
+     height: 0 still applied, overflow clipped the whole list and the quality
+     menu "did not open". */
+  height: auto !important;
+  margin-bottom: 0 !important;
   max-height: 20rem !important; /* 320px maximum */
   overflow-y: auto !important; /* Scroll if content exceeds max-height */
   overflow-x: hidden !important;
@@ -490,7 +487,7 @@
 .video-js .vjs-volume-bar {
   background: var(--vp-track); /* >= 3:1 against the scrim (non-text contrast) */
   border-radius: 0.375rem; /* More rounded */
-  box-shadow: var(--video-shadow-inner), 0 1px 2px rgba(0, 0, 0, 0.1); /* Enhanced shadow */
+  box-shadow: var(--video-shadow-inner), 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--vp-outline);
   height: 0.5rem; /* 8px - matches V3 design */
   width: 3.75rem; /* 60px - matches V3 design */
   margin: 0 0.5rem; /* Add spacing around slider */
@@ -668,14 +665,14 @@
   border-radius: 0.5rem; /* Rounded for modern look */
   background: var(--vp-track); /* >= 3:1 against the scrim (non-text contrast) */
   transition: height var(--video-transition-fast), box-shadow var(--video-transition-fast), background var(--video-transition-fast);
-  box-shadow: var(--video-shadow-inner), 0 1px 3px rgba(0, 0, 0, 0.15); /* Enhanced shadow */
+  box-shadow: var(--video-shadow-inner), 0 1px 3px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--vp-outline);
   overflow: visible; /* Allow handle to show outside */
 }
 
 .video-js .vjs-progress-control:hover .vjs-progress-holder {
   height: 1rem; /* Increased from 0.625rem for better visibility on hover */
   background: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); /* Enhanced shadow on hover */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--vp-outline);
 }
 
 /* Play progress (current position) */
@@ -775,9 +772,11 @@
   transform: translateZ(0); /* Force hardware acceleration */
 }
 
-/* Reduce repaints with containment */
+/* Reduce repaints with containment. No paint containment on the control bar:
+   it clips descendants to the 64px bar, and the quality/captions menus open
+   above it (paint containment hid the quality menu entirely). */
 .video-js .vjs-control-bar {
-  contain: layout style paint;
+  contain: layout style;
 }
 
 .video-js .vjs-progress-holder {
@@ -1451,6 +1450,8 @@
   }
 
   .video-js .vjs-control-bar button {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
     padding: 0.5rem;
   }
 
@@ -1500,12 +1501,10 @@
     font-size: 0.6875rem;
   }
 
-  /* Enhanced touch target for progress bar: the whole 48px-tall control is the
-     hit area (Video.js forwards presses on it to the seek bar) */
+  /* Enhanced touch target for progress bar */
   .video-js .vjs-progress-control {
     height: var(--video-touch-target-size);
-    min-height: var(--vp-touch-target);
-    padding: 0;
+    padding: 1rem 0;
     touch-action: manipulation; /* Improve touch responsiveness */
   }
 
@@ -1631,7 +1630,7 @@
   /* Improved tap feedback */
   .video-js .vjs-control-bar button:hover,
   .video-js .vjs-control-bar button:focus {
-    background-color: var(--vp-hover-bg);
+    background-color: transparent;
     border-radius: var(--video-border-radius-small);
   }
 
@@ -1657,19 +1656,9 @@
     flex-shrink: 1 !important; /* Allow shrinking */
   }
 
-  /* Phones control volume with hardware keys; the 40px-wide inline slider was
-     too small to operate by touch, so the mute toggle remains as the target */
-  .video-js .vjs-volume-panel.vjs-volume-panel-horizontal .vjs-volume-control,
-  .video-js .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal,
-  .video-js .vjs-volume-panel .vjs-volume-control {
-    display: none !important;
-  }
-
-  .video-js .vjs-volume-panel,
-  .video-js .vjs-volume-panel.vjs-volume-panel-horizontal,
-  .video-js .vjs-volume-panel.vjs-hover,
-  .video-js .vjs-volume-panel.vjs-slider-active {
-    width: auto !important;
+  /* Reduce volume slider width on mobile */
+  .video-js .vjs-volume-bar {
+    width: 2.5rem !important; /* 40px instead of 60px */
   }
 
   /* Reduce timer width on mobile */
@@ -1678,24 +1667,17 @@
     font-size: 0.75rem !important; /* Smaller font */
   }
 
-  /* Story 1.5: buttons keep the 44/48px touch target on phones (previously
-     forced down to 32px). Fit is preserved by hiding the volume slider and the
-     keyboard-help button and letting the progress bar shrink. */
+  /* Reduce button sizes on mobile */
   .video-js .vjs-control-bar button {
-    min-width: var(--vp-touch-target) !important;
-    min-height: var(--vp-touch-target) !important;
-    width: var(--vp-touch-target) !important;
-    height: var(--vp-touch-target) !important;
+    min-width: 2rem !important; /* 32px instead of 40px */
+    min-height: 2rem !important;
+    width: 2rem !important;
+    height: 2rem !important;
   }
 
+  /* Phones have no keyboard: keep the bar as it is in production */
   .video-js .vjs-keyboard-help-button {
     display: none !important;
-  }
-}
-
-@media (max-width: 360px) {
-  .video-js .vjs-progress-control {
-    min-width: 3.5rem !important;
   }
 }
 
@@ -1706,10 +1688,10 @@
     gap: 0.5625rem;
   }
 
-  /* Tablet touch targets (inherit the 44/48px token) */
+  /* Tablet touch targets */
   .video-js .vjs-control-bar button {
-    min-width: var(--vp-touch-target);
-    min-height: var(--vp-touch-target);
+    min-width: 2.25rem;
+    min-height: 2.25rem;
   }
 
   .video-js .vjs-big-play-button {
@@ -1728,11 +1710,11 @@
 
   /* Enhanced touch feedback */
   .video-js .vjs-control-bar button:active {
-    background-color: var(--vp-active-bg);
+    background-color: transparent;
     transform: scale(0.95);
   }
 
-  /* Keyboard help is irrelevant without a keyboard and costs a 48px slot */
+  /* Keyboard help is irrelevant without a keyboard */
   .video-js .vjs-keyboard-help-button {
     display: none !important;
   }
@@ -1768,7 +1750,7 @@
 }
 
 .vjs-keyboard-help-button:hover {
-  background-color: var(--vp-hover-bg, rgba(255, 255, 255, 0.18));
+  background-color: transparent;
 }
 
 .vjs-keyboard-help-button:focus-visible {
@@ -2080,7 +2062,6 @@
    conveyed by colour alone (WCAG 1.4.1). */
 .video-js .vjs-menu li.vjs-menu-item {
   color: var(--vp-fg);
-  min-height: var(--vp-touch-target);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2101,6 +2082,13 @@
   color: var(--vp-selected-fg);
 }
 
+/* The menu scrolls (overflow hidden on x), so draw the item focus ring inside */
+.video-js .vjs-menu li:focus-visible,
+.video-js .vjs-menu li.vjs-menu-item:focus-visible {
+  outline-offset: -3px;
+  box-shadow: none;
+}
+
 .video-js .vjs-menu li.vjs-selected::before {
   content: "\2713";
   margin-inline-end: 0.5rem;
@@ -2117,16 +2105,6 @@
   background-color: #ffffff;
   color: #111827;
   font-size: 0.8125rem;
-}
-
-/* Touch targets: the volume control box is the slider's hit area (Video.js
-   forwards presses on it to the bar), give it the full target height. */
-.video-js .vjs-volume-panel .vjs-volume-control {
-  min-height: var(--vp-touch-target);
-}
-
-.video-js .vjs-progress-control {
-  min-height: var(--vp-touch-target);
 }
 
 /* Remaining-time display is not interactive but sits between targets; keep it

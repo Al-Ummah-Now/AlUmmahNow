@@ -2,6 +2,8 @@ declare module 'video.js' {
   export interface HlsQualitySelectorOptions {
     displayCurrentQuality?: boolean;
     vjsIconClass?: string;
+    /** Control-bar index for the quality button (plugin default: second to last) */
+    placementIndex?: number;
   }
 
   export type VideoJsEventCallback = (event?: Event) => void;
