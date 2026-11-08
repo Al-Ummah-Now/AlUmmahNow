@@ -108,8 +108,11 @@ test.describe('Release: single sign-out', () => {
     expect(await webSignedIn(page)).toBe(true);
     await signOutThroughAuthServer(page, `${target().web}/en`, () => clickHeaderSignOut(page));
 
-    // Reload: still signed out
-    await page.reload();
+    // Load the page again: still signed out (retried: the landing page may
+    // still be finishing a navigation of its own)
+    await expect(async () => {
+      await page.goto(`${target().web}/en`, { waitUntil: 'load' });
+    }).toPass({ timeout: 30000 });
     expect(await webSignedIn(page)).toBe(false);
 
     // The profile app is signed out too
