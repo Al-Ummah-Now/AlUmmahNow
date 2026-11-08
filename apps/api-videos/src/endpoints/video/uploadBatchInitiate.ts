@@ -127,7 +127,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				return c.json({ success: false, error: "Bunny Stream library ID is invalid" }, 500);
 			}
 
-			const bunnyStream = new stream(bunnyKey);
+			const bunnyStream = new stream(bunnyKey).forEnv(c.env);
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(c.env.videos);
 			const queue = new Queue(c.env.queue);

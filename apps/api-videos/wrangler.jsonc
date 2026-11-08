@@ -10,6 +10,7 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	"version_metadata": { "binding": "CF_VERSION_METADATA" },
 	// Daily GDPR retention sweep (src/lib/privacy/retention.ts)
 	"triggers": {
 		"crons": ["17 3 * * *"]
@@ -203,6 +204,8 @@
 		// Existing videos live on legacy library 400189 with CDN token auth on:
 		// sign its URLs (playUrl, thumbnails) in API responses
 		"BUNNY_SIGN_URLS": "true",
+		// Name prefix for Bunny videos/collections this env creates (stage: "[stage] "; none in production)
+		"BUNNY_NAME_PREFIX": "",
 		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net"
@@ -225,5 +228,152 @@
 		"ip": "127.0.0.1",
 		"port": 3086,
 		"local_protocol": "http"
+	},
+	"env": {
+		// Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
+		"stage": {
+			"version_metadata": { "binding": "CF_VERSION_METADATA" },
+			"name": "videos-stage",
+			"routes": [
+				{
+					"pattern": "videos.api.stage.alummahnow.net",
+					"custom_domain": true
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "videos",
+					"bucket_name": "videos-stage"
+				},
+				{
+					"binding": "profiles",
+					"bucket_name": "profiles-stage"
+				},
+				{
+					"binding": "channels",
+					"bucket_name": "channels-stage"
+				},
+				{
+					"binding": "playlists",
+					"bucket_name": "playlists-stage"
+				},
+				{
+					"binding": "reports",
+					"bucket_name": "reports-stage"
+				},
+				{
+					"binding": "watch_history",
+					"bucket_name": "watch-history-stage"
+				},
+				{
+					"binding": "channel_sections",
+					"bucket_name": "channel-sections-stage"
+				},
+				{
+					"binding": "community_posts",
+					"bucket_name": "community-posts-stage"
+				},
+				{
+					"binding": "channel_tabs",
+					"bucket_name": "channel-tabs-stage"
+				},
+				{
+					"binding": "upload-defaults",
+					"bucket_name": "upload-defaults-stage"
+				},
+				{
+					"binding": "subtitles",
+					"bucket_name": "subtitles-stage"
+				},
+				{
+					"binding": "SCHEDULED_VIDEOS",
+					"bucket_name": "scheduled-videos-stage"
+				},
+				{
+					"binding": "scheduled-videos",
+					"bucket_name": "scheduled-videos-stage"
+				},
+				{
+					"binding": "global_settings",
+					"bucket_name": "global-settings-stage"
+				},
+				{
+					"binding": "analytics_rollups",
+					"bucket_name": "al-ummah-now-messages-stage"
+				}
+			],
+			"d1_databases": [
+				{
+					"binding": "NOTIFICATIONS_DB",
+					"database_name": "al-ummah-now-notifications-stage",
+					"database_id": "8626a5a5-0291-4150-ac9e-6083b606a140"
+				},
+				{
+					"binding": "SEARCH_DB",
+					"database_name": "al-ummah-now-search-stage",
+					"database_id": "956a3550-bd20-4cfc-9bf2-b1c2265b33dd",
+					"migrations_dir": "migrations/search"
+				}
+			],
+			"kv_namespaces": [
+				{
+					"binding": "RATE_LIMIT_KV",
+					"id": "2c80e4bba64943a29e4bf091374a1362"
+				},
+				{
+					"binding": "TUS_SESSIONS",
+					"id": "a200f6a898594502971558727243e538"
+				}
+			],
+			"queues": {
+				"producers": [
+					{
+						"queue": "al-ummah-now-videos-stage",
+						"binding": "queue"
+					}
+				]
+			},
+			"secrets_store_secrets": [
+				{
+					"binding": "image_storage_key",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "al-ummah-now-images-key"
+				},
+				{
+					"binding": "bunny-stream-key",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "bunny-stream-key-qa"
+				},
+				{
+					"binding": "bunny_stream_library_id",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "bunny-stream-library-id-qa"
+				},
+				{
+					"binding": "INTERNAL_API_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "internal-api-key-stage"
+				},
+				{
+					"binding": "BUNNY_TOKEN_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "bunny-stream-token-key-qa"
+				}
+			],
+			"vars": {
+				"ENVIRONMENT": "stage",
+				"ZONE": "al-ummah-now-images",
+				"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",
+				"Issuer": "https://auth.stage.alummahnow.net",
+				"Audience": "https://videos.api.stage.alummahnow.net",
+				"bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
+				"BUNNY_SIGN_URLS": "true",
+				// Stage shares the QA Bunny library: tag what stage creates there for cleanup
+				"BUNNY_NAME_PREFIX": "[stage] ",
+				"BUNNY_SIGN_HOSTNAME": "vz-cb79844a-c5d.b-cdn.net",
+				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
+				"CORS_ORIGINS": "https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net"
+			}
+		}
 	}
 }

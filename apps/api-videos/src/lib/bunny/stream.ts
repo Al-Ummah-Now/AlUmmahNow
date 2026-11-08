@@ -10,9 +10,30 @@ import {
 
 export class BunnyStreamClient {
     private baseURL: string;
+    private namePrefix = '';
 
     constructor(private accessKey: string, baseURL: string = 'https://video.bunnycdn.com/') {
         this.baseURL = baseURL;
+    }
+
+    /**
+     * Applies the env's BUNNY_NAME_PREFIX (stage sets "[stage] ") to the titles of
+     * videos and the names of collections this client creates or renames, so an env
+     * that shares another env's Bunny library (stage shares QA's) can be told apart
+     * and cleaned up. No prefix in QA and production.
+     */
+    forEnv(env: unknown): this {
+        const prefix = (env as { BUNNY_NAME_PREFIX?: string } | undefined)?.BUNNY_NAME_PREFIX;
+        this.namePrefix = typeof prefix === 'string' ? prefix : '';
+        return this;
+    }
+
+    /** `name` with this env's prefix (once). */
+    prefixed(name: string): string;
+    prefixed(name: string | undefined): string | undefined;
+    prefixed(name: string | undefined): string | undefined {
+        if (name === undefined || !this.namePrefix || name.startsWith(this.namePrefix)) return name;
+        return `${this.namePrefix}${name}`;
     }
 
     private async request<T>(method: string, endpoint: string, body?: any, params?: Record<string, any>): Promise<T> {
@@ -50,7 +71,7 @@ export class BunnyStreamClient {
 
     // Update a collection
     async updateCollection(libraryId: number, collectionId: string, data: { name?: string }): Promise<CollectionModel> {
-        return this.request<CollectionModel>('POST', `/library/${libraryId}/collections/${collectionId}`, data);
+        return this.request<CollectionModel>('POST', `/library/${libraryId}/collections/${collectionId}`, { ...data, name: this.prefixed(data.name) });
     }
 
     // Delete a collection
@@ -68,7 +89,7 @@ export class BunnyStreamClient {
 
     // Create a collection
     async createCollection(libraryId: number, data: { name?: string }): Promise<CollectionModel> {
-        return this.request<CollectionModel>('POST', `/library/${libraryId}/collections`, data);
+        return this.request<CollectionModel>('POST', `/library/${libraryId}/collections`, { ...data, name: this.prefixed(data.name) });
     }
 
     // Get a video
@@ -78,7 +99,7 @@ export class BunnyStreamClient {
 
     // Update a video
     async updateVideo(libraryId: number, videoId: string, data: { title?: string; collectionId?: string }): Promise<VideoModel> {
-        return this.request<VideoModel>('POST', `/library/${libraryId}/videos/${videoId}`, data);
+        return this.request<VideoModel>('POST', `/library/${libraryId}/videos/${videoId}`, { ...data, title: this.prefixed(data.title) });
     }
 
     // Delete a video
@@ -96,7 +117,7 @@ export class BunnyStreamClient {
 
     // Create a video
     async createVideo(libraryId: number, data: { title: string; collectionId?: string; thumbnailTime?: number }): Promise<VideoModel> {
-        return this.request<VideoModel>('POST', `/library/${libraryId}/videos`, data);
+        return this.request<VideoModel>('POST', `/library/${libraryId}/videos`, { ...data, title: this.prefixed(data.title) });
     }
 
     // Analytics methods

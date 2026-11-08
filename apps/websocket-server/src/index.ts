@@ -32,6 +32,8 @@ app.get('/health', (c) => {
   return c.json({
     status: 'healthy',
     service: 'websocket-server',
+    // Worker version id serving this request (the release smoke checks it)
+    deployment: (c.env as { CF_VERSION_METADATA?: { id: string } }).CF_VERSION_METADATA?.id ?? 'unknown',
     timestamp: new Date().toISOString(),
   });
 });

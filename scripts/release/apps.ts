@@ -19,6 +19,20 @@ const PROD_GUARDS: Pick<EnvRule, 'forbiddenNames' | 'forbiddenValues' | 'allowed
 	allowedHosts: ['alummahnow.net', '*.alummahnow.net'],
 };
 
+/**
+ * Stage (docs/release-pipeline): env.stage in the same file production deploys,
+ * same bindings and vars as production (parity is checked), stage resources and
+ * *.stage hosts. It must never point at production or QA.
+ */
+const STAGE_AUTH = 'https://auth.stage.alummahnow.net';
+const STAGE_API = 'https://videos.api.stage.alummahnow.net';
+const STAGE_REALTIME = 'https://realtime.stage.alummahnow.net';
+const STAGE_GUARDS: Pick<EnvRule, 'forbiddenValues' | 'allowedHosts'> = {
+	forbiddenValues: [/\.qa\.alummahnow\.net/, /\/\/(auth|videos|videos\.api|realtime|admin|admin\.api)\.alummahnow\.net/],
+	allowedHosts: ['*.stage.alummahnow.net'],
+};
+const stageRule = (rule: Omit<EnvRule, 'env' | 'allowedHosts'>): EnvRule => ({ env: 'stage', ...STAGE_GUARDS, ...rule });
+
 const INTERNAL_API_KEY: Binding = { kind: 'secrets_store_secrets', name: 'INTERNAL_API_KEY' };
 
 export const APPS: AppRule[] = [
@@ -41,6 +55,7 @@ export const APPS: AppRule[] = [
 			requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }],
 			...PROD_GUARDS,
 		},
+		stage: stageRule({ name: 'al-ummah-now-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }] }),
 	},
 	{
 		app: 'admin-web',
@@ -61,6 +76,7 @@ export const APPS: AppRule[] = [
 			},
 			...PROD_GUARDS,
 		},
+		stage: stageRule({ name: 'al-ummah-admin-web-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, ADMIN_API_URL: 'https://admin.api.stage.alummahnow.net', NEXT_PUBLIC_BASE_URL: 'https://admin.stage.alummahnow.net' } }),
 	},
 	{
 		app: 'api-videos',
@@ -87,6 +103,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
+		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'd1_databases', name: 'SEARCH_DB' }] }),
 	},
 	{
 		app: 'processor',
@@ -104,6 +121,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
+		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }] }),
 	},
 	{
 		app: 'websocket-server',
@@ -126,6 +144,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
+		stage: stageRule({ name: 'al-ummah-now-comms-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'durable_objects', name: 'WEBSOCKET_DO' }] }),
 	},
 	{
 		app: 'scheduler',
@@ -146,6 +165,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
+		stage: stageRule({ name: 'al-ummah-scheduler-stage', vars: { WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'QUEUE' }] }),
 	},
 	{
 		app: 'admin-api',
@@ -163,5 +183,6 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
+		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }] }),
 	},
 ];

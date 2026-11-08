@@ -125,9 +125,19 @@ test.describe('access denied page', () => {
     await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Go to Main Site' })).toBeVisible();
     expect((await context.cookies()).find((c) => c.name === 'admin_session')).toBeUndefined();
-    // The auth server keeps no SSO session, so this asks for credentials again
+    // Since auth #196 the auth server keeps an SSO session: /dashboard → /login →
+    // /authorize answers silently with a code, and the callback checks the role
+    // again and refuses. The user goes through the auth server and lands back on
+    // access-denied; no admin page renders and no admin session is ever issued.
+    const hops: string[] = [];
+    page.on('request', (r) => {
+      if (r.isNavigationRequest() && r.frame() === page.mainFrame()) hops.push(r.url());
+    });
     await page.goto('/dashboard');
-    await page.waitForURL((url) => url.href.startsWith(OPENAUTH_URL));
+    await expect(page).toHaveURL(`${ADMIN_WEB_URL}/access-denied`);
+    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+    expect(hops.some((u) => u.startsWith(`${OPENAUTH_URL}/authorize`)), `no auth round trip: ${hops.join(' → ')}`).toBe(true);
+    expect((await context.cookies()).find((c) => c.name === 'admin_session')).toBeUndefined();
   });
 
   test('AUTH-15 log out from access denied returns to the public home page', async ({ page }) => {

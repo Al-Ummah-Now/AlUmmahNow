@@ -1,0 +1,229 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
+import { currentVersion, isMissingWorker, parseVersionId, promote, releaseApps, ReleaseError, type PromoteDeps, type ReleaseApp } from '../promote.ts';
+import { parseRollbackArgs, rollbackCommands, rollbackTarget } from '../rollback.ts';
+import { runSmoke, type CheckResult } from '../smoke.ts';
+
+const ROOT = resolve(import.meta.dirname, '../../..');
+const V = (n: number) => `${String(n).padStart(8, "0")}-0000-4000-8000-000000000000`;
+const status = (...versions: [string, number][]) => JSON.stringify({ versions: versions.map(([version_id, percentage]) => ({ version_id, percentage })) });
+
+describe('releaseApps', () => {
+	it('promotes consumers and APIs before the front ends', () => {
+		assert.deepEqual(
+			releaseApps(ROOT, 'production').map((a) => a.app),
+			['processor', 'websocket-server', 'api-videos', 'admin-api', 'scheduler', 'web', 'admin-web']
+		);
+	});
+	it('uses the production config at the top level and env.stage for stage', () => {
+		const prod = Object.fromEntries(releaseApps(ROOT, 'production').map((a) => [a.app, a]));
+		const stage = Object.fromEntries(releaseApps(ROOT, 'stage').map((a) => [a.app, a]));
+		assert.deepEqual(prod.web.configArgs, ['-c', 'wrangler.production.jsonc']);
+		assert.deepEqual(stage.web.configArgs, ['-c', 'wrangler.production.jsonc', '--env', 'stage']);
+		assert.deepEqual(prod['api-videos'].configArgs, ['-c', 'wrangler.jsonc']);
+		assert.deepEqual(stage['api-videos'].configArgs, ['-c', 'wrangler.jsonc', '--env', 'stage']);
+		assert.equal(prod['api-videos'].worker, 'videos');
+		assert.equal(stage['api-videos'].worker, 'videos-stage');
+	});
+	it('uploads the one prebuilt bundle for plain workers, the OpenNext output for Next apps', () => {
+		const apps = Object.fromEntries(releaseApps(ROOT, 'stage').map((a) => [a.app, a]));
+		assert.equal(apps.processor.bundle, resolve(ROOT, 'dist/processor/index.js'));
+		assert.equal(apps.web.bundle, null);
+		assert.equal(apps['admin-web'].bundle, null);
+	});
+});
+
+describe('wrangler output parsing', () => {
+	it('reads the version id from versions upload and from deploy', () => {
+		assert.equal(parseVersionId(`Uploaded videos\nWorker Version ID: ${V(1)}\n`), V(1));
+		assert.equal(parseVersionId(`Deployed videos-stage triggers\nCurrent Version ID: ${V(2)}`), V(2));
+		assert.throws(() => parseVersionId('nothing here'), /could not find the version id/);
+	});
+	it('refuses to release over a split deployment', () => {
+		assert.equal(currentVersion(status([V(1), 100]), 'videos'), V(1));
+		assert.throws(() => currentVersion(status([V(1), 90], [V(2), 10]), 'videos'), /split deployment/);
+	});
+	it('recognises a worker that was never deployed', () => {
+		assert.ok(isMissingWorker('wrangler deployments status failed: This Worker does not exist on your account. [code: 10007]'));
+		assert.ok(!isMissingWorker('Authentication error [code: 10000]'));
+	});
+});
+
+/** A fake wrangler: records argv, answers status/upload/deploy. */
+function fakeRun(serving: Record<string, string | null>) {
+	const calls: { worker: string; args: string[] }[] = [];
+	let next = 10;
+	const workerOf = (cwd: string) => cwd.split('/').at(-1)!;
+	const run = (cwd: string, args: string[]) => {
+		const app = workerOf(cwd);
+		calls.push({ worker: app, args });
+		if (args[0] === 'deployments') {
+			if (serving[app] === null) throw new Error('This Worker does not exist on your account. [code: 10007]');
+			return status([serving[app]!, 100]);
+		}
+		if (args[0] === 'versions' && args[1] === 'upload') return `Worker Version ID: ${V(next++)}`;
+		if (args[0] === 'deploy') return `Current Version ID: ${V(next++)}`;
+		return 'ok';
+	};
+	return { run, calls };
+}
+
+const twoApps = (env: 'stage' | 'production'): ReleaseApp[] => releaseApps(ROOT, env).filter((a) => a.app === 'api-videos' || a.app === 'web');
+const pass: CheckResult[] = [{ name: 'x', ok: true, detail: '' }];
+const deps = (run: PromoteDeps['run'], smoke: PromoteDeps['smoke'] = async () => pass): PromoteDeps => ({
+	run,
+	smoke,
+	waitForVersions: async () => {},
+	log: () => {},
+});
+
+describe('promote', () => {
+	it('uploads, splits 0%, smokes with overrides, then moves 100% and deploys triggers', async () => {
+		const { run, calls } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const overridesSeen: (Record<string, string> | undefined)[] = [];
+		const released = await promote(twoApps('production'), 'production', 'release abc', deps(run, async (_e, o) => (overridesSeen.push(o), pass)));
+		assert.deepEqual(released, [
+			{ app: 'api-videos', worker: 'videos', previous: V(1), candidate: V(10) },
+			{ app: 'web', worker: 'al-ummah-now-production', previous: V(2), candidate: V(11) },
+		]);
+		const upload = calls.find((c) => c.args[1] === 'upload' && c.worker === 'api-videos')!.args;
+		assert.deepEqual(upload.slice(-4), ['--no-bundle', resolve(ROOT, 'dist/api-videos/index.js'), '--message', 'release abc']);
+		assert.ok(calls.some((c) => c.args.join(' ').startsWith(`versions deploy ${V(10)}@0% ${V(1)}@100%`)));
+		assert.ok(calls.some((c) => c.args.join(' ').startsWith(`versions deploy ${V(10)}@100%`)));
+		assert.equal(calls.filter((c) => c.args[0] === 'triggers').length, 2);
+		assert.deepEqual(overridesSeen, [{ videos: V(10), 'al-ummah-now-production': V(11) }, undefined]);
+	});
+
+	it('rolls every worker back (front ends first) when the pre-traffic smoke fails', async () => {
+		const { run, calls } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const fail = async () => [{ name: 'web: home page renders', ok: false, detail: 'HTTP 500' }];
+		await assert.rejects(promote(twoApps('production'), 'production', 'r', deps(run, fail)), (e: unknown) => {
+			assert.ok(e instanceof ReleaseError && e.rolledBack && /pre-traffic smoke failed/.test(e.message));
+			return true;
+		});
+		const rollbacks = calls.filter((c) => c.args[0] === 'rollback');
+		assert.deepEqual(rollbacks.map((c) => [c.worker, c.args[1], c.args[3]]), [
+			['web', V(2), 'al-ummah-now-production'],
+			['api-videos', V(1), 'videos'],
+		]);
+		// traffic never moved to a candidate
+		assert.ok(!calls.some((c) => c.args[0] === 'versions' && c.args[1] === 'deploy' && c.args[2].endsWith('@100%')));
+	});
+
+	it('rolls back when the post-promote smoke fails', async () => {
+		const { run, calls } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		let n = 0;
+		const secondFails = async () => (n++ === 0 ? pass : [{ name: 'x', ok: false, detail: 'down' }]);
+		await assert.rejects(promote(twoApps('production'), 'production', 'r', deps(run, secondFails)), /post-promote smoke failed/);
+		assert.equal(calls.filter((c) => c.args[0] === 'rollback').length, 2);
+	});
+
+	it('reports a failed rollback instead of hiding it', async () => {
+		const { run: base } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const run = (cwd: string, args: string[]) => {
+			if (args[0] === 'rollback' && cwd.endsWith('/web')) throw new Error('API down');
+			return base(cwd, args);
+		};
+		await assert.rejects(promote(twoApps('production'), 'production', 'r', deps(run, async () => [{ name: 'x', ok: false, detail: '' }])), (e: unknown) => {
+			assert.ok(e instanceof ReleaseError && !e.rolledBack && /ROLLBACK FAILED.*al-ummah-now-production/.test(e.message));
+			return true;
+		});
+	});
+
+	it('creates a missing stage worker with one deploy and leaves it out of the split and rollback', async () => {
+		const { run, calls } = fakeRun({ 'api-videos': null, web: V(2) });
+		const released = await promote(twoApps('stage'), 'stage', 'r', deps(run));
+		assert.equal(released[0].previous, null);
+		const api = calls.filter((c) => c.worker === 'api-videos').map((c) => c.args[0]);
+		assert.deepEqual(api, ['deployments', 'deploy']);
+		assert.deepEqual(calls.find((c) => c.worker === 'api-videos' && c.args[0] === 'deploy')!.args.slice(0, 7), [
+			'deploy', '-c', 'wrangler.jsonc', '--env', 'stage', '--no-bundle', resolve(ROOT, 'dist/api-videos/index.js'),
+		]);
+	});
+
+	it('never bootstraps a production worker', async () => {
+		const { run, calls } = fakeRun({ 'api-videos': null, web: V(2) });
+		await assert.rejects(promote(twoApps('production'), 'production', 'r', deps(run)), /does not exist in production/);
+		assert.ok(!calls.some((c) => c.args[0] === 'deploy'));
+	});
+});
+
+describe('rollback', () => {
+	const deployments = (...list: [string, [string, number][]][]) =>
+		JSON.stringify(list.map(([created_on, versions]) => ({ created_on, versions: versions.map(([version_id, percentage]) => ({ version_id, percentage })) })));
+
+	it('targets the version served before the latest deployment', () => {
+		const json = deployments(['2026-11-01', [[V(1), 100]]], ['2026-11-02', [[V(2), 0], [V(1), 100]]], ['2026-11-03', [[V(2), 100]]]);
+		assert.deepEqual(rollbackTarget(json, 'videos'), { current: V(2), target: V(1) });
+	});
+	it('refuses a mid-promote split without --to', () => {
+		const json = deployments(['2026-11-01', [[V(1), 100]]], ['2026-11-02', [[V(2), 0], [V(1), 100]]]);
+		assert.throws(() => rollbackTarget(json, 'videos'), /mid-promote/);
+		assert.deepEqual(rollbackTarget(json, 'videos', V(1)), { current: V(1), target: V(1) });
+	});
+	it('accepts every app and needs a single app for --to', () => {
+		assert.equal(parseRollbackArgs(['--env', 'production']).apps.length, 7);
+		assert.deepEqual(parseRollbackArgs(['--env', 'stage', '--app', 'web,api-videos', '--dry-run']).apps, ['web', 'api-videos']);
+		assert.throws(() => parseRollbackArgs(['--env', 'production', '--app', 'auth']), /unknown --app auth/);
+		assert.throws(() => parseRollbackArgs(['--env', 'production', '--to', V(1)]), /single --app/);
+		assert.throws(() => parseRollbackArgs(['--env', 'qa']), /--env stage\|production/);
+	});
+	it('addresses workers by name, front ends first', () => {
+		const cmds = rollbackCommands(ROOT, parseRollbackArgs(['--env', 'production', '--reason', 'bad release']));
+		assert.equal(cmds[0].worker, 'al-ummah-admin-web');
+		assert.equal(cmds.at(-1)!.worker, 'al-ummah-now-processor');
+		assert.deepEqual(cmds[0].listArgv, ['deployments', 'list', '--json', '--name', 'al-ummah-admin-web']);
+		assert.deepEqual(cmds[0].argv(V(1)), ['rollback', V(1), '--name', 'al-ummah-admin-web', '-y', '--message', 'bad release']);
+	});
+});
+
+describe('smoke', () => {
+	const fakeFetch = (overrides: { health?: string; callback?: string } = {}) =>
+		(async (input: string | URL | Request, init?: RequestInit) => {
+			const url = new URL(String(input));
+			const headers = (init?.headers ?? {}) as Record<string, string>;
+			const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+			if (url.pathname === '/health') {
+				const m = headers['Cloudflare-Workers-Version-Overrides']?.match(new RegExp(`${url.hostname.startsWith('videos.api') ? 'videos-stage' : 'none'}="([^"]+)"`));
+				return json({ status: 'healthy', deployment: overrides.health ?? m?.[1] ?? V(9) });
+			}
+			if (url.pathname === '/api/videos') return json({ videos: [] });
+			if (url.pathname === '/api/callback') return new Response(null, { status: 307, headers: { location: overrides.callback ?? '/auth/error?error=access_denied' } });
+			return new Response('<html><body>ok</body></html>', { status: 200 });
+		}) as typeof fetch;
+
+	it('passes against a healthy env', async () => {
+		const results = await runSmoke({ env: 'stage', fetchImpl: fakeFetch() });
+		assert.deepEqual(results.filter((r) => !r.ok), []);
+		assert.equal(results.length, 7);
+	});
+	it('fails when the candidate did not answer through the override', async () => {
+		const results = await runSmoke({ env: 'stage', overrides: { 'videos-stage': V(3) }, fetchImpl: fakeFetch({ health: V(1) }) });
+		assert.match(results.find((r) => r.name === 'api-videos: health')!.detail, /expected candidate/);
+	});
+	it('fails when the callback error leaks off the error page (R4)', async () => {
+		const results = await runSmoke({ env: 'stage', fetchImpl: fakeFetch({ callback: 'https://evil.example/' }) });
+		assert.equal(results.find((r) => r.name.includes('callback'))!.ok, false);
+	});
+});
+
+describe('d1-migrate', () => {
+	it('migrates each database from the app that owns its migrations, -stage on stage', async () => {
+		const { readFileSync } = await import('node:fs');
+		const { parseJsonc } = await import('../jsonc.ts');
+		const { migrateCommands } = await import('../d1-migrate.ts');
+		for (const env of ['production', 'stage'] as const) {
+			for (const { app, argv } of migrateCommands(env)) {
+				const config = parseJsonc(readFileSync(resolve(ROOT, 'apps', app, 'wrangler.jsonc'), 'utf8')) as {
+					d1_databases: { database_name: string; migrations_dir?: string }[];
+					env: Record<string, { d1_databases: { database_name: string; migrations_dir?: string }[] }>;
+				};
+				const dbs = env === 'stage' ? config.env.stage.d1_databases : config.d1_databases;
+				const db = dbs.find((d) => d.database_name === argv[3]);
+				assert.ok(db?.migrations_dir, `${app} ${env} has no migrations_dir for ${argv[3]}`);
+				assert.equal(argv.includes('--env'), env === 'stage');
+			}
+		}
+	});
+});

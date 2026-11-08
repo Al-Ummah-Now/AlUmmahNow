@@ -244,9 +244,13 @@ export function checkEnv(app: string, resolved: ResolvedEnv, rule: EnvRule): str
 	return errors;
 }
 
-/** Stage and prod must have the same binding names and kinds (SPEC §8 parity). */
+/**
+ * Stage and prod must have the same binding names and kinds (SPEC §8 parity).
+ * A queue consumer is named by its queue, which carries the env suffix
+ * (al-ummah-now-videos vs al-ummah-now-videos-stage), so that suffix is ignored.
+ */
 export function checkParity(app: string, prod: ResolvedEnv, stage: ResolvedEnv): string[] {
-	const key = (b: Binding) => `${b.kind}:${b.name}`;
+	const key = (b: Binding) => `${b.kind}:${b.kind === 'queue_consumer' ? b.name.replace(/-stage$/, '') : b.name}`;
 	const p = new Set(prod.bindings.map(key));
 	const s = new Set(stage.bindings.map(key));
 	const errors: string[] = [];

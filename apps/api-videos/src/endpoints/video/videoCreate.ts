@@ -103,7 +103,7 @@ export class VideoCreate extends AuthenticatedRoute {
 		const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 		const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 		const libraryId = parseInt(libraryIdStr);
-		const bunnyStream = new stream(key);
+		const bunnyStream = new stream(key).forEnv(c.env);
 
 		let collectionId = null;
 		// check if collection exists

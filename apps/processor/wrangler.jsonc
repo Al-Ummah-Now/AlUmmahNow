@@ -77,6 +77,61 @@
 
 	// Environment-specific configurations
 	"env": {
+		// Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
+		"stage": {
+			"name": "al-ummah-now-processor-stage",
+			"d1_databases": [
+				{
+					"binding": "REPORTS_DB",
+					"database_name": "al-ummah-now-reports-stage",
+					"database_id": "2b2c07fc-2823-46e0-958f-acfc401544ff"
+				},
+				{
+					"binding": "NOTIFICATIONS_DB",
+					"database_name": "al-ummah-now-notifications-stage",
+					"database_id": "8626a5a5-0291-4150-ac9e-6083b606a140",
+					"migrations_dir": "migrations-notifications"
+				},
+				{
+					"binding": "SEARCH_DB",
+					"database_name": "al-ummah-now-search-stage",
+					"database_id": "956a3550-bd20-4cfc-9bf2-b1c2265b33dd"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "MESSAGES_BUCKET",
+					"bucket_name": "al-ummah-now-messages-stage"
+				},
+				{
+					"binding": "community_posts",
+					"bucket_name": "community-posts-stage"
+				}
+			],
+			"queues": {
+				"consumers": [
+					{
+						"queue": "al-ummah-now-videos-stage",
+						"max_batch_size": 10,
+						"max_batch_timeout": 30,
+						"max_retries": 3,
+						"dead_letter_queue": "al-ummah-now-dlq-stage"
+					}
+				]
+			},
+			"vars": {
+				"ENVIRONMENT": "stage",
+				"LOG_LEVEL": "info",
+				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net"
+			},
+			"secrets_store_secrets": [
+				{
+					"binding": "INTERNAL_API_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "internal-api-key-stage"
+				}
+			]
+		},
 		// Development environment
 		"development": {
 			"vars": {
