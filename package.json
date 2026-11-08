@@ -34,6 +34,7 @@
     "release:promote": "node --experimental-strip-types --no-warnings scripts/release/promote.ts",
     "release:rollback": "node --experimental-strip-types --no-warnings scripts/release/rollback.ts",
     "release:tag": "node --experimental-strip-types --no-warnings scripts/release/release-tag.ts",
+    "check:secrets": "node --experimental-strip-types --no-warnings scripts/release/check-secrets.ts",
     "clean": "turbo run clean && rm -rf node_modules",
     "log-service:dev": "turbo run dev --filter=@al-ummah/log-service",
     "log-service:start": "turbo run start --filter=@al-ummah/log-service",
