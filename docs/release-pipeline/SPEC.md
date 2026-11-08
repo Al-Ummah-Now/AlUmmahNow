@@ -165,7 +165,7 @@ Every data change that ships with a release must work with **both** the new code
 
 CI checks on every PR:
 1. **Migrations are append-only.** Any file under a `migrations*/` dir that exists on the base branch must be unchanged. New files must sort after the last existing one.
-2. **Schema snapshot.** CI applies every migration to an empty local D1 (miniflare) and dumps the resulting schema (`sqlite_master`, normalized) to `schema.snapshot.sql` next to the migrations dir. If the dump differs from the committed snapshot, CI fails. The snapshot changes only when a migration is added, so reviewers see the schema diff in the PR.
+2. **Schema snapshot.** CI applies every migration, in deploy order, to an empty in-memory SQLite database (`node:sqlite`; D1 is SQLite) and renders the resulting schema (`sqlite_master`, normalized) as `schema.snapshot.sql` next to (not inside) the migrations dir. Wrangler applies every `.sql` file inside it. If the dump differs from the committed snapshot, CI fails. The snapshot changes only when a migration is added, so reviewers see the schema diff in the PR.
 3. **Code runs against migrated schema.** The repository-layer tests run against that freshly migrated database, not hand-written fixtures. Code that uses a column no migration creates fails here.
 4. **openauth package bumps.** `@al-ummah-now/openauth` ships its own schema (`openauth migrate`). A lockfile change to that package requires the schema snapshot to be regenerated, which includes the openauth tables.
 
