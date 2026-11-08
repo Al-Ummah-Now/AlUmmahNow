@@ -26,8 +26,11 @@ export interface ModerationScanPayload {
   channelId?: string;
   /** 'create' or 'edit' (edits are re-scanned). */
   event: 'create' | 'edit';
-  /** Text to scan, already truncated by the sender (MODERATION_MAX_TEXT). */
+  /** Text to scan, at most MODERATION_MAX_TEXT characters (longer text is sent in parts). */
   text: string;
+  /** 1-based part number when the text was split, and the number of parts. */
+  part?: number;
+  parts?: number;
   timestamp: string;
 }
 

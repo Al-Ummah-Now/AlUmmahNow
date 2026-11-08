@@ -13,22 +13,41 @@ type ScanContext = Parameters<typeof inBackground>[0] & {
 	env: { MODERATION_QUEUE?: { send(message: unknown): Promise<unknown> } };
 };
 
-export type ScanRequest = Omit<ModerationScanPayload, 'text' | 'timestamp'> & { text: string | null | undefined };
+export type ScanRequest = Omit<ModerationScanPayload, 'text' | 'timestamp' | 'part' | 'parts'> & { text: string | null | undefined };
 
-/** Plain text for scanning: tags dropped (post content is sanitised HTML), entities decoded, capped. */
-export function toScanText(text: string | null | undefined): string {
+/** Surfaces whose stored text is sanitised HTML; tags are stripped only for these. */
+const HTML_SURFACES = new Set<ModerationScanPayload['surface']>(['community_post', 'post_comment']);
+
+/** Most parts sent for one write (40,000 chars); longer text is logged as truncated. */
+export const MAX_SCAN_PARTS = 10;
+
+/**
+ * Text for scanning. HTML surfaces lose their tags and entities; plain-text surfaces keep
+ * everything (bracketed text is content there). Whitespace is collapsed. Not truncated.
+ */
+export function toScanText(text: string | null | undefined, html = false): string {
 	if (!text) return '';
-	return text
-		.replace(/<[^>]*>/g, ' ')
-		.replace(/&nbsp;/g, ' ')
-		.replace(/&amp;/g, '&')
-		.replace(/&lt;/g, '<')
-		.replace(/&gt;/g, '>')
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-		.replace(/\s+/g, ' ')
-		.trim()
-		.slice(0, MODERATION_MAX_TEXT);
+	let out = text;
+	if (html) {
+		out = out
+			.replace(/<[^>]*>/g, ' ')
+			.replace(/&nbsp;/g, ' ')
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>')
+			.replace(/&quot;/g, '"')
+			.replace(/&#39;/g, "'")
+			.replace(/&amp;/g, '&');
+	}
+	return out.replace(/\s+/g, ' ').trim();
+}
+
+/** Splits text into parts of at most MODERATION_MAX_TEXT characters, so nothing goes unscanned. */
+export function splitForScan(text: string): string[] {
+	const parts: string[] = [];
+	for (let i = 0; i < text.length && parts.length < MAX_SCAN_PARTS; i += MODERATION_MAX_TEXT) {
+		parts.push(text.slice(i, i + MODERATION_MAX_TEXT));
+	}
+	return parts;
 }
 
 /** Title, description, tags and their localized variants of a video, as one text. */
@@ -49,21 +68,32 @@ export function videoScanText(video: {
 	return [...new Set(parts.filter((p): p is string => typeof p === 'string' && p.trim().length > 0))].join('\n');
 }
 
-export function buildScanMessage(request: ScanRequest, now: Date = new Date()) {
-	const text = toScanText(request.text);
-	if (!text) return null;
-	const payload: ModerationScanPayload = { ...request, text, timestamp: now.toISOString() };
-	return { id: crypto.randomUUID(), type: MessageType.ModerationScan, payload, timestamp: now.getTime() };
+export function buildScanMessages(request: ScanRequest, now: Date = new Date()) {
+	const text = toScanText(request.text, HTML_SURFACES.has(request.surface));
+	if (!text) return [];
+	const chunks = splitForScan(text);
+	if (text.length > MODERATION_MAX_TEXT * MAX_SCAN_PARTS) {
+		logger.warn('[Moderation] Text longer than the scan limit; the end is not scanned', { surface: request.surface, subjectId: request.subjectId, length: text.length });
+	}
+	return chunks.map((chunk, index) => {
+		const payload: ModerationScanPayload = {
+			...request,
+			text: chunk,
+			timestamp: now.toISOString(),
+			...(chunks.length > 1 ? { part: index + 1, parts: chunks.length } : {}),
+		};
+		return { id: crypto.randomUUID(), type: MessageType.ModerationScan, payload, timestamp: now.getTime() };
+	});
 }
 
 export function scanInBackground(c: ScanContext, request: ScanRequest): void {
 	const queue = c.env.MODERATION_QUEUE;
 	if (!queue) return;
-	const message = buildScanMessage(request);
-	if (!message) return;
+	const messages = buildScanMessages(request);
+	if (messages.length === 0) return;
 	inBackground(c, 'moderation-scan', async () => {
 		try {
-			await queue.send(message);
+			for (const message of messages) await queue.send(message);
 		} catch (error) {
 			logger.warn('[Moderation] Scan enqueue failed; content stays published', {
 				surface: request.surface,

@@ -5,7 +5,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MessageType, MODERATION_MAX_TEXT } from '@al-ummah/shared-types';
-import { buildScanMessage, communityPostScanText, toScanText, videoScanText } from '../src/lib/moderation-scan';
+import { buildScanMessages, communityPostScanText, MAX_SCAN_PARTS, toScanText, videoScanText } from '../src/lib/moderation-scan';
+import { CommentApprove } from '../src/endpoints/video/commentApprove';
 import { CommentCreate } from '../src/endpoints/video/commentCreate';
 import { CommentUpdate } from '../src/endpoints/video/commentUpdate';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
@@ -13,10 +14,22 @@ import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } fro
 const tick = () => new Promise((r) => setTimeout(r, 10));
 
 describe('scan text helpers', () => {
-	it('strips tags and entities, collapses whitespace and caps the length', () => {
-		assert.equal(toScanText('<p>Salam&nbsp;<b>all</b> &amp; welcome</p>'), 'Salam all & welcome');
-		assert.equal(toScanText('x'.repeat(MODERATION_MAX_TEXT + 50)).length, MODERATION_MAX_TEXT);
+	it('strips tags only for HTML surfaces; plain text keeps bracketed content', () => {
+		assert.equal(toScanText('<p>Salam&nbsp;<b>all</b> &amp; welcome</p>', true), 'Salam all & welcome');
+		assert.equal(toScanText('you are an <insult here>  ok'), 'you are an <insult here> ok');
 		assert.equal(toScanText(null), '');
+		const [m] = buildScanMessages({ surface: 'video_comment', event: 'create', subjectId: 'c', text: '<b>bad</b>' });
+		assert.equal(m.payload.text, '<b>bad</b>');
+	});
+
+	it('splits long text into parts so nothing goes unscanned', () => {
+		const text = 'a'.repeat(MODERATION_MAX_TEXT) + 'b'.repeat(MODERATION_MAX_TEXT) + 'TAIL';
+		const messages = buildScanMessages({ surface: 'video_comment', event: 'create', subjectId: 'c', text });
+		assert.equal(messages.length, 3);
+		assert.deepEqual(messages.map((m) => [m.payload.part, m.payload.parts]), [[1, 3], [2, 3], [3, 3]]);
+		assert.equal(messages[2].payload.text, 'TAIL');
+		assert.equal(buildScanMessages({ surface: 'video_comment', event: 'create', subjectId: 'c', text: 'x'.repeat(MODERATION_MAX_TEXT * (MAX_SCAN_PARTS + 2)) }).length, MAX_SCAN_PARTS);
+		assert.equal(buildScanMessages({ surface: 'video_comment', event: 'create', subjectId: 'c', text: 'short' })[0].payload.part, undefined);
 	});
 
 	it('joins video title, description, tags and localized variants without duplicates', () => {
@@ -30,8 +43,8 @@ describe('scan text helpers', () => {
 	});
 
 	it('builds no message for empty text', () => {
-		assert.equal(buildScanMessage({ surface: 'video_comment', event: 'create', subjectId: 'c', text: '  <br/> ' }), null);
-		const m = buildScanMessage({ surface: 'video_comment', event: 'create', subjectId: 'c', text: 'hi' })!;
+		assert.deepEqual(buildScanMessages({ surface: 'community_post', event: 'create', subjectId: 'c', text: '  <br/> ' }), []);
+		const [m] = buildScanMessages({ surface: 'video_comment', event: 'create', subjectId: 'c', text: 'hi' });
 		assert.equal(m.type, MessageType.ModerationScan);
 		assert.equal(m.payload.text, 'hi');
 	});
@@ -39,6 +52,7 @@ describe('scan text helpers', () => {
 
 describe('comment endpoints send ModerationScan', () => {
 	function routes(r: any) {
+		r.post('/api/videos/:id/comments/:cid/approve', CommentApprove);
 		r.post('/api/videos/:id/comments', CommentCreate);
 		r.put('/api/videos/:id/comments/:cid', CommentUpdate);
 	}
@@ -84,5 +98,16 @@ describe('comment endpoints send ModerationScan', () => {
 		await tick();
 		const ok = await buildApp(routes, { userId: 'viewer' }).request('/api/videos/v1/comments', req('POST', { text: 'hello' }), env(undefined));
 		assert.equal(ok.status, 200);
+	});
+});
+
+describe('moderation holds', () => {
+	it('the video owner cannot approve a comment held by moderation', async () => {
+		const videos = new MemoryBucket({ v1: videoFixture({ userId: 'owner', comments: [commentFixture('c1', { status: 'held', heldBy: 'moderation' })] }) });
+		const e = { videos, channels: new MemoryBucket(), profiles: new MemoryBucket(), queue: new MemoryQueue() };
+		const app = buildApp((r: any) => r.post('/api/videos/:id/comments/:cid/approve', CommentApprove), { userId: 'owner' });
+		const res = await app.request('/api/videos/v1/comments/c1/approve', { method: 'POST' }, e);
+		assert.equal(res.status, 403);
+		assert.equal(((await res.json()) as any).error, 'held_by_moderation');
 	});
 });
