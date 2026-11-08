@@ -77,6 +77,8 @@ test.describe('Explore - Arabic (RTL)', () => {
 
 test.describe('Explore - mobile', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  // Firefox has no mobile emulation: Playwright rejects isMobile when creating the context
+  test.skip(({ browserName }) => browserName === 'firefox', 'isMobile is not supported in Firefox');
 
   test('rails scroll inside the page without horizontal page overflow', async ({ page }) => {
     await page.goto('/en/explore');

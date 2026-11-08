@@ -212,6 +212,8 @@ const { defaultBrowserType: _ignored, ...pixel5 } = devices['Pixel 5'];
 
 test.describe('mobile touch targets (story 1.5)', () => {
   test.use(pixel5);
+  // Firefox has no mobile emulation: Playwright rejects isMobile when creating the context
+  test.skip(({ browserName }) => browserName === 'firefox', 'isMobile is not supported in Firefox');
 
   for (const locale of ['en', 'ar'] as const) {
     test(`all visible player controls are >= 44x44px and do not overlap (${locale})`, async ({ page }) => {

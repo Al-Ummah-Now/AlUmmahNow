@@ -163,6 +163,8 @@ test.describe('Search v2 - Arabic (RTL)', () => {
 
 test.describe('Search v2 - mobile', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  // Firefox has no mobile emulation: Playwright rejects isMobile when creating the context
+  test.skip(({ browserName }) => browserName === 'firefox', 'isMobile is not supported in Firefox');
 
   test('filters open as a bottom sheet and close with "Show results"', async ({ page }) => {
     await page.goto('/en/search?q=QA');
