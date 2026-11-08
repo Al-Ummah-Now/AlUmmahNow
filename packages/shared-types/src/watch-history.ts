@@ -48,6 +48,15 @@ export interface WatchHistoryEntry {
 
   /** Percentage of video watched (0-100) */
   percentageWatched: number;
+
+  /**
+   * Last-writer-wins clock of the playback position (client time of the write,
+   * clamped to server time + 5 min). Missing on older entries: `lastWatchedAt`.
+   */
+  stateUpdatedAt?: string; // ISO 8601
+
+  /** Device that wrote the current position (native clients) */
+  stateDeviceId?: string;
 }
 
 /**

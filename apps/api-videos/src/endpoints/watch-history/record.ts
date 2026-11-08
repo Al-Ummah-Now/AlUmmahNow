@@ -141,7 +141,10 @@ export class RecordWatchHistory extends AuthenticatedRoute {
           percentageWatched,
           completed: completed || existingEntry.completed,
           videoDuration: duration, // Update in case duration changed
+          // Watch-state sync (9.9): web writes take part in last-writer-wins at server time
+          stateUpdatedAt: now,
         };
+        delete watchEntry.stateDeviceId;
       } else {
         // Create new entry
         watchEntry = {
@@ -160,6 +163,7 @@ export class RecordWatchHistory extends AuthenticatedRoute {
           progress,
           completed,
           percentageWatched,
+          stateUpdatedAt: now,
         };
       }
 

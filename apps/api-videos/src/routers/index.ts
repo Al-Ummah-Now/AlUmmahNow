@@ -17,6 +17,7 @@ import libraryRouter from './library.router';
 import notificationsRouter from './notifications.router';
 import searchRouter from './search.router';
 import appConfigRouter from './app-config.router';
+import { continueWatchingRouter, watchStateRouter } from './watch-state.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -93,6 +94,8 @@ export function registerAllRouters(openapi: any) {
   openapi.route('/api/notifications', notificationsRouter);
   // App config (Epic 9.3) - API versions and minimum supported app version
   openapi.route('/api/app-config', appConfigRouter);
+  openapi.route('/api/watch-state', watchStateRouter);
+  openapi.route('/api/continue-watching', continueWatchingRouter);
 
   // Search v2 domain - index-backed search, explore, internal backfill (root level)
   openapi.route('', searchRouter);
