@@ -103,6 +103,15 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				}, 404);
 			}
 
+			// Same channel visibility rules as the Videos and Shorts tabs
+			if (channel.isDeleted || channel.isHidden || (channel.isPrivate && channel.userId !== userId)) {
+				logger.warn('Channel not listable', { channelId, isDeleted: !!channel.isDeleted, isHidden: !!channel.isHidden });
+				return c.json({
+					success: false,
+					error: 'Channel not found'
+				}, 404);
+			}
+
 			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);

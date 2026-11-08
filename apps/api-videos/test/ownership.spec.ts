@@ -328,10 +328,15 @@ describe('endpoints served from the ownership index', () => {
 		assert.equal(page2.cursor, '');
 	});
 
-	it('GET /api/channels/:id/shorts 404s for a deleted channel', async () => {
+	it('GET /api/channels/:id/shorts and /live 404 for deleted and (to others) private channels', async () => {
 		const { indexed } = await lateKeys();
-		const app = buildApp(r => r.get('/api/channels/:id/shorts', ChannelShortsList), null);
-		assert.equal((await app.request('/api/channels/mine3/shorts', {}, indexed)).status, 404);
+		const visitor = buildApp(r => { r.get('/api/channels/:id/shorts', ChannelShortsList); r.get('/api/channels/:id/live', ChannelLiveList); }, null);
+		const owner = buildApp(r => { r.get('/api/channels/:id/shorts', ChannelShortsList); r.get('/api/channels/:id/live', ChannelLiveList); }, { userId: 'owner' });
+		for (const tab of ['shorts', 'live']) {
+			assert.equal((await visitor.request(`/api/channels/mine3/${tab}`, {}, indexed)).status, 404, `${tab}: deleted`);
+			assert.equal((await visitor.request(`/api/channels/mine2/${tab}`, {}, indexed)).status, 404, `${tab}: private`);
+			assert.equal((await owner.request(`/api/channels/mine2/${tab}`, {}, indexed)).status, 200, `${tab}: private, owner`);
+		}
 	});
 
 	it('GET /api/channels/:id/live finds streams outside the first bucket slice', async () => {
