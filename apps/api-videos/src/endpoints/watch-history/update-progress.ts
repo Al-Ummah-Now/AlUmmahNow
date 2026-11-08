@@ -138,7 +138,10 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         completed: completed || existingEntry.completed,
         lastWatchedAt: now,
         videoDuration: duration, // Update in case duration changed
+        // Watch-state sync (9.9): web writes take part in last-writer-wins at server time
+        stateUpdatedAt: now,
       };
+      delete updatedEntry.stateDeviceId;
 
       await watchHistoryRepo.putObject(entryId, updatedEntry);
 

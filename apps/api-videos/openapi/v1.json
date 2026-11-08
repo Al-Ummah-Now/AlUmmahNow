@@ -9933,6 +9933,134 @@
         }
       }
     },
+    "/api/v1/continue-watching": {
+      "get": {
+        "tags": [
+          "Watch state"
+        ],
+        "summary": "Continue watching",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication. Videos the user started (≥ 5%) and has not finished (< 95%), most recently watched first. Deleted, hidden and private (not owned) videos are left out.",
+        "operationId": "get_ContinueWatchingList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "In-progress videos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "videoId": {
+                            "type": "string"
+                          },
+                          "position": {
+                            "type": "number"
+                          },
+                          "duration": {
+                            "type": "number"
+                          },
+                          "percentageWatched": {
+                            "type": "number"
+                          },
+                          "lastWatchedAt": {
+                            "type": "string"
+                          },
+                          "video": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "thumbnailUrl": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "channelId": {
+                                "type": "string"
+                              },
+                              "channelName": {
+                                "type": "string"
+                              },
+                              "duration": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "thumbnailUrl",
+                              "channelId",
+                              "channelName",
+                              "duration"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "videoId",
+                          "position",
+                          "duration",
+                          "percentageWatched",
+                          "lastWatchedAt",
+                          "video"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/explore": {
       "get": {
         "tags": [
@@ -30661,6 +30789,297 @@
           },
           "500": {
             "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/watch-state": {
+      "get": {
+        "tags": [
+          "Watch state"
+        ],
+        "summary": "Playback positions changed since a time (incremental sync)",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication. Oldest change first. `since` is inclusive: pass the `serverUpdatedAt` of the last item received (or `nextSince`); a repeated item is safe to apply again.",
+        "operationId": "get_WatchStateList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Server time (ISO 8601); omit for everything"
+            },
+            "required": false,
+            "description": "Server time (ISO 8601); omit for everything",
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed states",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "videoId": {
+                            "type": "string"
+                          },
+                          "position": {
+                            "type": "number",
+                            "description": "Playback position, seconds"
+                          },
+                          "duration": {
+                            "type": "number",
+                            "description": "Video duration, seconds"
+                          },
+                          "percentageWatched": {
+                            "type": "number",
+                            "description": "0..100"
+                          },
+                          "completed": {
+                            "type": "boolean",
+                            "description": "Watched to 95% at least once"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "description": "Last-writer-wins clock: client time of the write, clamped to server time + 5 min"
+                          },
+                          "serverUpdatedAt": {
+                            "type": "string",
+                            "description": "Server time of the last write; pass the newest as `since` for incremental sync"
+                          },
+                          "deviceId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "videoId",
+                          "position",
+                          "duration",
+                          "percentageWatched",
+                          "completed",
+                          "updatedAt",
+                          "serverUpdatedAt"
+                        ]
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "nextSince": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Pass as `since` for the next page or sync"
+                    },
+                    "serverTime": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "hasMore",
+                    "nextSince",
+                    "serverTime"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/watch-state/{videoId}": {
+      "put": {
+        "tags": [
+          "Watch state"
+        ],
+        "summary": "Save the playback position of a video (last writer wins)",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication. Stores the position for every device of the user. The write with the newest `clientUpdatedAt` wins; an older write returns `applied: false` with the stored state, so clients converge without conflicts. Creates the history entry when missing. Paused history stores nothing.",
+        "operationId": "put_WatchStatePut",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "position": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Playback position, seconds"
+                  },
+                  "duration": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Video duration, seconds"
+                  },
+                  "clientUpdatedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Device time of this position (ISO 8601); the newest write wins"
+                  },
+                  "deviceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "position",
+                  "duration",
+                  "clientUpdatedAt"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored, or the newer stored state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "applied": {
+                      "type": "boolean",
+                      "description": "false: a newer state was already stored; `state` is that state"
+                    },
+                    "paused": {
+                      "type": "boolean",
+                      "description": "Watch history is paused: nothing was stored"
+                    },
+                    "state": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "videoId": {
+                          "type": "string"
+                        },
+                        "position": {
+                          "type": "number",
+                          "description": "Playback position, seconds"
+                        },
+                        "duration": {
+                          "type": "number",
+                          "description": "Video duration, seconds"
+                        },
+                        "percentageWatched": {
+                          "type": "number",
+                          "description": "0..100"
+                        },
+                        "completed": {
+                          "type": "boolean",
+                          "description": "Watched to 95% at least once"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "Last-writer-wins clock: client time of the write, clamped to server time + 5 min"
+                        },
+                        "serverUpdatedAt": {
+                          "type": "string",
+                          "description": "Server time of the last write; pass the newest as `since` for incremental sync"
+                        },
+                        "deviceId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "videoId",
+                        "position",
+                        "duration",
+                        "percentageWatched",
+                        "completed",
+                        "updatedAt",
+                        "serverUpdatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "applied",
+                    "paused",
+                    "state"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found"
           }
         }
       }
