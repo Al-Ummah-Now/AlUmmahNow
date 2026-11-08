@@ -75,6 +75,10 @@ describe('decide', () => {
   it('returns none below thresholds', () => {
     expect(decide({ spam: 0.5 }, DEFAULT_POLICIES, ctx).decision).toBe('none');
     expect(decide({}, DEFAULT_POLICIES, ctx)).toMatchObject({ decision: 'none', priority: 0 });
+    // All-zero scores: no top category (was the first listed key, e.g. sectarian_hate).
+    expect(decide({ sectarian_hate: 0, spam: 0, S1: 0 }, DEFAULT_POLICIES, ctx)).toMatchObject({ decision: 'none', topCategory: null, topScore: 0 });
+    // Below-threshold non-zero scores still report the highest category for reviewers.
+    expect(decide({ sectarian_hate: 0, spam: 0.5 }, DEFAULT_POLICIES, ctx)).toMatchObject({ decision: 'none', topCategory: 'spam', topScore: 0.5 });
   });
 
   it('shadow mode only records would_*', () => {

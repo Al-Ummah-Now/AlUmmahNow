@@ -90,7 +90,13 @@ export function decide(
     }
   }
 
-  if (!best) return { decision: 'none', topCategory, topScore, priority: 0, escalate: false };
+  // A clean item (every score 0) has no meaningful top category: report null rather than whichever
+  // category happened to be listed first.
+  if (!best) {
+    return topScore !== null && topScore > 0
+      ? { decision: 'none', topCategory, topScore, priority: 0, escalate: false }
+      : { decision: 'none', topCategory: null, topScore, priority: 0, escalate: false };
+  }
 
   const decision: ModerationDecision =
     best.mode === 'shadow' ? (best.action === 'hide' ? 'would_hide' : 'would_flag') : best.action;
