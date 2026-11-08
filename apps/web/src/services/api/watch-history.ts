@@ -434,6 +434,46 @@ export class WatchHistoryService {
   }
 
   /**
+   * Whether recording is paused for the active account (null on failure).
+   */
+  static async getPaused(): Promise<boolean | null> {
+    try {
+      const response = await fetch(`${apiBase()}/api/watch-history/settings`, {
+        headers: await getClientAuthHeaders(),
+      });
+      if (!response.ok) return null;
+      const data = (await response.json()) as { paused?: boolean };
+      return data.paused === true;
+    } catch (error) {
+      logger.error('[WatchHistoryService] Failed to load history settings:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Pause or resume recording for the active account. Returns the stored
+   * value, or null on failure.
+   */
+  static async setPaused(paused: boolean): Promise<boolean | null> {
+    try {
+      const response = await fetch(`${apiBase()}/api/watch-history/settings`, {
+        method: 'PUT',
+        headers: { ...(await getClientAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused }),
+      });
+      if (!response.ok) {
+        logger.warn('[WatchHistoryService] Pause toggle failed', { status: response.status });
+        return null;
+      }
+      const data = (await response.json()) as { paused?: boolean };
+      return data.paused === true;
+    } catch (error) {
+      logger.error('[WatchHistoryService] Failed to change history settings:', error);
+      return null;
+    }
+  }
+
+  /**
    * Check if progress should be saved for a video
    *
    * Don't save progress for very short videos (< 30 seconds)

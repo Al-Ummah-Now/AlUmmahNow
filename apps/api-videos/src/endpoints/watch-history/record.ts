@@ -14,6 +14,7 @@ import type {
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { isWatchHistoryPaused, percentageOf, queueWatchHistoryEvent } from "../../lib/watch-history";
 
 // Request schema
 const RecordWatchRequestSchema = z.object({
@@ -97,6 +98,11 @@ export class RecordWatchHistory extends AuthenticatedRoute {
     const { videoId, progress = 0, duration } = body;
 
     try {
+      // Paused history: store nothing, queue nothing (existing entries are kept)
+      if (await isWatchHistoryPaused(c.env.profiles, effectiveUserId)) {
+        return c.json({ paused: true, videoId }, 200);
+      }
+
       // Initialize repositories
       const videoRepo = new R2Repository(c.env.videos);
       const watchHistoryRepo = new R2Repository<WatchHistoryEntry>(
@@ -116,10 +122,7 @@ export class RecordWatchHistory extends AuthenticatedRoute {
       const existingEntry = await watchHistoryRepo.getObject(entryId);
 
       const now = new Date().toISOString();
-      const percentageWatched = Math.min(
-        Math.round((progress / duration) * 100),
-        100
-      );
+      const percentageWatched = percentageOf(progress, duration);
       const completed = percentageWatched >= 95;
 
       let watchEntry: WatchHistoryEntry;
@@ -145,7 +148,8 @@ export class RecordWatchHistory extends AuthenticatedRoute {
           videoThumbnail: video.thumbnailUrl || video.thumbnail,
           videoDuration: duration,
           channelId: video.channelId || "",
-          channelName: video.channelName || "Unknown Channel",
+          // Legacy (imported) videos only carry the channel name in `channel`
+          channelName: video.channelName || video.channel || "Unknown Channel",
           firstWatchedAt: now,
           lastWatchedAt: now,
           watchCount: 1,
@@ -168,10 +172,7 @@ export class RecordWatchHistory extends AuthenticatedRoute {
         timestamp: now,
       };
 
-      await c.env.queue.send({
-        type: "WatchHistory",
-        data: event,
-      });
+      await queueWatchHistoryEvent(c.env.queue, event);
 
       return c.json(watchEntry, 201);
     } catch (error) {

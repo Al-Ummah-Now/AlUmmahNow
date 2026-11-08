@@ -23,6 +23,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 import { WatchHistoryService, WatchProgress } from '@/services/api/watch-history';
 import { logger } from '@/lib/logger-client';
+import { fetchClientAuthToken } from '@/lib/auth/client-token';
 
 
 interface UseWatchProgressOptions {
@@ -88,6 +89,22 @@ export function useWatchProgress(
   }, [enableDebugLogging]);
 
   /**
+   * Token for API calls. Callers rarely pass `authToken` (auth cookies are
+   * httpOnly), so a signed-in user's token is fetched from /api/auth/token.
+   * Without this every signed-in watch went to device storage only and the
+   * account's watch history stayed empty.
+   */
+  const resolveAuthToken = useCallback(async (): Promise<string | null> => {
+    if (authToken) return authToken;
+    if (!userId) return null;
+    try {
+      return await fetchClientAuthToken();
+    } catch {
+      return null;
+    }
+  }, [userId, authToken]);
+
+  /**
    * Process the actual save operation (internal)
    * This should only be called when the mutex is acquired
    */
@@ -95,8 +112,9 @@ export function useWatchProgress(
     if (!isMountedRef.current) return;
 
     try {
-      if (userId && authToken) {
-        const result = await WatchHistoryService.saveProgress(progress, authToken);
+      const token = await resolveAuthToken();
+      if (token) {
+        const result = await WatchHistoryService.saveProgress(progress, token);
         if (result.success) {
           debugLog('Progress saved to API:', progress.currentTime, '/', progress.duration);
         } else {
@@ -119,7 +137,7 @@ export function useWatchProgress(
         setSavedProgress(progress);
       }
     }
-  }, [userId, authToken, debugLog]);
+  }, [resolveAuthToken, debugLog]);
 
   /**
    * Save watch progress to API or localStorage with mutex protection
@@ -226,12 +244,12 @@ export function useWatchProgress(
    * Clear saved progress for this video
    */
   const clearProgress = useCallback(async () => {
-    await WatchHistoryService.clearProgress(videoId, authToken);
+    await WatchHistoryService.clearProgress(videoId, (await resolveAuthToken()) ?? undefined);
     setSavedProgress(null);
     lastSaveTimeRef.current = 0;
     lastSavedPositionRef.current = 0;
     debugLog('Progress cleared');
-  }, [videoId, authToken, debugLog]);
+  }, [videoId, resolveAuthToken, debugLog]);
 
   /**
    * Load saved progress on mount
@@ -244,8 +262,9 @@ export function useWatchProgress(
 
       let progress: WatchProgress | null = null;
 
-      if (userId && authToken) {
-        progress = await WatchHistoryService.getProgress(videoId, authToken);
+      const token = await resolveAuthToken();
+      if (token) {
+        progress = await WatchHistoryService.getProgress(videoId, token);
         debugLog('Loaded progress from API:', progress);
       }
 
@@ -264,7 +283,7 @@ export function useWatchProgress(
     return () => {
       mounted = false;
     };
-  }, [videoId, userId, authToken, debugLog]);
+  }, [videoId, resolveAuthToken, debugLog]);
 
   /**
    * Setup player event listeners for automatic progress saving

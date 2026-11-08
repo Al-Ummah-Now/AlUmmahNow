@@ -83,6 +83,23 @@ describe('WatchHistoryService', () => {
     expect(fetchMock.mock.calls[2][1]?.method).toBe('DELETE');
   });
 
+  it('reads and changes the pause setting on /api/watch-history/settings', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { paused: false }));
+    expect(await WatchHistoryService.getPaused()).toBe(false);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/api/watch-history/settings');
+
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { paused: true }));
+    expect(await WatchHistoryService.setPaused(true)).toBe(true);
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe('https://api.test/api/watch-history/settings');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ paused: true });
+    expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer client-token');
+
+    fetchMock.mockResolvedValueOnce(mockResponse(500));
+    expect(await WatchHistoryService.setPaused(false)).toBeNull();
+  });
+
   it('never calls the legacy /api/profile/watch-history path', async () => {
     fetchMock.mockResolvedValue(mockResponse(200, {}));
     await WatchHistoryService.saveProgress({ videoId: 'v1', currentTime: 1, duration: 100, completed: false, timestamp: '' }, 't');

@@ -87,15 +87,29 @@ async function updateRollup(
 
 export interface ViewEventPayload {
   videoId?: unknown;
+  /** Set by POST /api/videos/:id/view (the only producer that counts a view). */
+  trackedView?: unknown;
   videoChannelId?: unknown;
   watchTime?: unknown;
   timestamp?: unknown;
 }
 
 /**
- * Record a tracked view. Returns false (and writes nothing) for view-like events
- * that don't come from the view-tracking endpoint (e.g. fetch/search telemetry,
- * which carry no `videoChannelId`), so they never inflate the series.
+ * True for views sent by the view-tracking endpoint. Fetch/search telemetry also
+ * uses MessageType.VideoView but never carries `videoChannelId` (nor
+ * `trackedView`), so it never inflates the series. The view endpoint always sets
+ * the `videoChannelId` key, even to null for legacy videos without a channel.
+ */
+export function isTrackedView(payload: ViewEventPayload): boolean {
+  if (!payload || typeof payload.videoId !== 'string' || !payload.videoId) return false;
+  return payload.trackedView === true || Object.prototype.hasOwnProperty.call(payload, 'videoChannelId');
+}
+
+/**
+ * Record a tracked view: always the video rollup, plus the channel rollup when
+ * the video belongs to a channel. Legacy (imported) videos have channelId null;
+ * they used to be skipped entirely, so their creators' series stayed empty.
+ * Returns false (and writes nothing) for events that are not tracked views.
  */
 export async function recordViewRollup(
   bucket: R2Bucket | undefined,
@@ -103,16 +117,16 @@ export async function recordViewRollup(
   messageTimestamp: number | string
 ): Promise<boolean> {
   if (!bucket || typeof bucket.get !== 'function' || typeof bucket.put !== 'function') return false;
-  const videoId = typeof payload.videoId === 'string' ? payload.videoId : '';
+  if (!isTrackedView(payload)) return false;
+  const videoId = payload.videoId as string;
   const channelId = typeof payload.videoChannelId === 'string' ? payload.videoChannelId : '';
-  if (!videoId || !channelId) return false;
 
   const watchTime = typeof payload.watchTime === 'number' ? payload.watchTime : Number(payload.watchTime) || 0;
   const day = toUtcDay(typeof payload.timestamp === 'string' ? payload.timestamp : messageTimestamp);
 
   await Promise.all([
     updateRollup(bucket, 'video', videoId, day, watchTime),
-    updateRollup(bucket, 'channel', channelId, day, watchTime),
+    channelId ? updateRollup(bucket, 'channel', channelId, day, watchTime) : Promise.resolve(),
   ]);
   return true;
 }

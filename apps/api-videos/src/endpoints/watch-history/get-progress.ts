@@ -7,7 +7,6 @@
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Str } from "chanfana";
 import { z } from "zod";
-import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type { WatchHistoryEntry } from "@al-ummah/shared-types";
@@ -64,7 +63,7 @@ export class GetWatchProgress extends AuthenticatedRoute {
     "required"
   );
 
-  async handle(c: Context) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.headers;
 

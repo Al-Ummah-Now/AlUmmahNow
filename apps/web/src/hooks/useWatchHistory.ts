@@ -6,7 +6,7 @@ import { WatchHistoryService, WatchHistoryItem } from '@/services/api/watch-hist
 
 const PAGE_SIZE = 20;
 
-export type WatchHistoryError = 'load' | 'remove' | 'clear' | null;
+export type WatchHistoryError = 'load' | 'remove' | 'clear' | 'pause' | null;
 
 export interface UseWatchHistoryReturn {
   entries: WatchHistoryItem[];
@@ -20,6 +20,10 @@ export interface UseWatchHistoryReturn {
   loadMore: () => Promise<void>;
   remove: (videoId: string) => Promise<void>;
   clearAll: () => Promise<void>;
+  /** Recording paused for this account (null until loaded). */
+  paused: boolean | null;
+  isTogglingPause: boolean;
+  togglePause: () => Promise<void>;
 }
 
 /**
@@ -34,6 +38,8 @@ export function useWatchHistory(enabled: boolean): UseWatchHistoryReturn {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [error, setError] = useState<WatchHistoryError>(null);
+  const [paused, setPaused] = useState<boolean | null>(null);
+  const [isTogglingPause, setIsTogglingPause] = useState(false);
 
   const reload = useCallback(async () => {
     setIsLoading(true);
@@ -97,11 +103,28 @@ export function useWatchHistory(enabled: boolean): UseWatchHistoryReturn {
     setIsClearing(false);
   }, []);
 
+  const togglePause = useCallback(async () => {
+    if (paused === null) return;
+    setError(null);
+    setIsTogglingPause(true);
+    const stored = await WatchHistoryService.setPaused(!paused);
+    if (stored === null) {
+      setError('pause');
+    } else {
+      setPaused(stored);
+    }
+    setIsTogglingPause(false);
+  }, [paused]);
+
   useEffect(() => {
     if (enabled) {
       reload();
+      void WatchHistoryService.getPaused().then(setPaused);
     }
   }, [enabled, reload]);
 
-  return { entries, total, isLoading, isLoadingMore, isClearing, hasMore, error, reload, loadMore, remove, clearAll };
+  return {
+    entries, total, isLoading, isLoadingMore, isClearing, hasMore, error, reload, loadMore, remove, clearAll,
+    paused, isTogglingPause, togglePause,
+  };
 }

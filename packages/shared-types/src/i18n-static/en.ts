@@ -1681,6 +1681,10 @@ export const EN_TRANSLATIONS: AppTranslations = {
     removeFailed: 'Could not remove this video from your history.',
     clearFailed: 'Could not clear your watch history.',
     totalCount: '{count} videos',
+    pause: 'Pause watch history',
+    resume: 'Turn history back on',
+    pausedNotice: 'Watch history is paused. Videos you watch now are not added to your history or used for recommendations.',
+    pauseFailed: 'Could not change the history setting. Please try again.',
   },
 
   live: {

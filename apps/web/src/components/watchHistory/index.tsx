@@ -2,11 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { History, Trash2, X, RefreshCw } from 'lucide-react';
+import { History, Trash2, X, RefreshCw, PauseCircle, PlayCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useWatchHistory } from '@/hooks/useWatchHistory';
+import { useWatchHistory, type UseWatchHistoryReturn } from '@/hooks/useWatchHistory';
 import { resolveUrl } from '@/lib/utility';
 import type { WatchHistoryItem } from '@/services/api/watch-history';
 import type { AppTranslations } from '@/lib/i18n/types';
@@ -36,10 +36,14 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
         <Link href={`/${lang}/video/${entry.videoId}`} className="font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
           {entry.videoTitle}
         </Link>
-        {entry.channelName && (
+        {entry.channelName && entry.channelId && (
           <Link href={`/${lang}/channels/${entry.channelId}`} className="block text-sm text-gray-600 dark:text-gray-400 hover:underline">
             {entry.channelName}
           </Link>
+        )}
+        {/* Legacy videos have a channel name but no channel page */}
+        {entry.channelName && !entry.channelId && (
+          <span className="block text-sm text-gray-600 dark:text-gray-400">{entry.channelName}</span>
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           {t.watchHistory.lastWatched.replace('{date}', watchedOn)}
@@ -57,6 +61,45 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
         <X className="w-4 h-4" />
       </button>
     </li>
+  );
+}
+
+/** Error text for the history page (shared by LTR and RTL). */
+export function watchHistoryErrorMessage(error: UseWatchHistoryReturn['error'], t: AppTranslations): string | null {
+  switch (error) {
+    case 'load': return t.watchHistory.loadFailed;
+    case 'remove': return t.watchHistory.removeFailed;
+    case 'clear': return t.watchHistory.clearFailed;
+    case 'pause': return t.watchHistory.pauseFailed;
+    default: return null;
+  }
+}
+
+/** Pause / resume control (shown once the setting has loaded). */
+export function PauseHistoryButton({ history, t }: { history: UseWatchHistoryReturn; t: AppTranslations }) {
+  if (history.paused === null) return null;
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={history.togglePause}
+      disabled={history.isTogglingPause}
+      aria-pressed={history.paused}
+      className="flex items-center gap-2"
+    >
+      {history.paused ? <PlayCircle className="w-4 h-4" /> : <PauseCircle className="w-4 h-4" />}
+      {history.paused ? t.watchHistory.resume : t.watchHistory.pause}
+    </Button>
+  );
+}
+
+/** Notice shown while recording is paused. */
+export function PausedNotice({ history, t }: { history: UseWatchHistoryReturn; t: AppTranslations }) {
+  if (!history.paused) return null;
+  return (
+    <p className="mb-4 p-3 rounded-md text-sm bg-yellow-50 text-yellow-900 dark:bg-yellow-900/30 dark:text-yellow-100" role="status">
+      {t.watchHistory.pausedNotice}
+    </p>
   );
 }
 
@@ -84,13 +127,7 @@ export default function WatchHistoryPage() {
     );
   }
 
-  const errorMessage = history.error === 'load'
-    ? t.watchHistory.loadFailed
-    : history.error === 'remove'
-      ? t.watchHistory.removeFailed
-      : history.error === 'clear'
-        ? t.watchHistory.clearFailed
-        : null;
+  const errorMessage = watchHistoryErrorMessage(history.error, t);
 
   return (
     <div className="max-w-4xl mx-auto p-6" dir="ltr">
@@ -103,13 +140,18 @@ export default function WatchHistoryPage() {
               : t.watchHistory.subtitle}
           </p>
         </div>
-        {history.entries.length > 0 && (
-          <Button variant="outline" size="sm" onClick={handleClear} disabled={history.isClearing} className="flex items-center gap-2">
-            <Trash2 className="w-4 h-4" />
-            {history.isClearing ? t.watchHistory.clearing : t.watchHistory.clearAll}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <PauseHistoryButton history={history} t={t} />
+          {history.entries.length > 0 && (
+            <Button variant="outline" size="sm" onClick={handleClear} disabled={history.isClearing} className="flex items-center gap-2">
+              <Trash2 className="w-4 h-4" />
+              {history.isClearing ? t.watchHistory.clearing : t.watchHistory.clearAll}
+            </Button>
+          )}
+        </div>
       </div>
+
+      <PausedNotice history={history} t={t} />
 
       {errorMessage && (
         <p className="mb-4 text-sm text-red-600 dark:text-red-400" role="alert">{errorMessage}</p>
