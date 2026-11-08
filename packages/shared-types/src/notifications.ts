@@ -97,6 +97,23 @@ export interface NotificationFanoutPayload {
   actorUserId?: string;
 }
 
+/** One recipient of a push dispatch: the stored notification row it delivers. */
+export interface PushRecipient {
+  userId: string;
+  notificationId: string;
+}
+
+/** Queue payload of MessageType.PushDispatch (Epic 9.4): at most PUSH_DISPATCH_BATCH recipients. */
+export interface PushDispatchPayload {
+  recipients: PushRecipient[];
+  notificationKey: NotificationKey;
+  params?: NotificationParams;
+  actionUrl?: string;
+}
+
+/** Recipients per PushDispatch message. */
+export const PUSH_DISPATCH_BATCH = 100;
+
 /** Notification as returned by GET /api/notifications. */
 export interface NotificationItem {
   id: string;
