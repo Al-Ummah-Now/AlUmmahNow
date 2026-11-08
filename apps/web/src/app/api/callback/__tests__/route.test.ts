@@ -54,6 +54,12 @@ describe('GET /api/callback', () => {
     exchange.mockResolvedValue({ err: new Error('invalid_grant') });
     const res = await GET(request('https://videos.example/api/callback?code=abc&locale=en'));
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/en/auth/error' });
+    expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback?locale=en');
+  });
+
+  it('exchanges with the exact redirect_uri used at authorize (no locale → bare callback)', async () => {
+    exchange.mockResolvedValue({ err: new Error('invalid_grant') });
+    await GET(request('https://videos.example/api/callback?code=abc'));
     expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback');
   });
 });

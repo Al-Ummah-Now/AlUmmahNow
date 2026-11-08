@@ -20,7 +20,11 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
 
   const client = await getClient();
 
-  const exchanged = await client.exchange(code!, `${url.origin}/api/callback`);
+  // Must be the exact redirect_uri sent to authorize (login() adds ?locale=);
+  // the issuer rejects the code when they differ
+  const locale = url.searchParams.get("locale");
+  const redirectUri = `${url.origin}/api/callback${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`;
+  const exchanged = await client.exchange(code!, redirectUri);
   logger.debug("[exchanged]", exchanged)
   if (exchanged.err == false) {
     // Extract user info from the access token
