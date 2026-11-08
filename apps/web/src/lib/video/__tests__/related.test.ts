@@ -1,4 +1,4 @@
-import { mergeRelated, toVideoInfo } from '../related';
+import { RELATED_LIMIT, loadRelated, mergeRelated, toVideoInfo } from '../related';
 import type { VideoInfo } from '@/interfaces';
 
 const info = (id: string) => toVideoInfo({ id, title: id });
@@ -25,5 +25,32 @@ describe('related shelf (Epic 7.3)', () => {
 
   it('uses the feed alone when there are no recommendations', () => {
     expect(mergeRelated('cur', [], [info('f1')]).map(v => v.id)).toEqual(['f1']);
+  });
+
+  describe('loadRelated', () => {
+    const many = Array.from({ length: RELATED_LIMIT }, (_, i) => info(`r${i}`));
+
+    it('skips the feed when recommendations fill the shelf', async () => {
+      const feed = jest.fn().mockResolvedValue([info('f1')]);
+      const shelf = await loadRelated('cur', { recommended: async () => many, feed });
+      expect(shelf).toHaveLength(RELATED_LIMIT);
+      expect(feed).not.toHaveBeenCalled();
+    });
+
+    it('tops up from the feed when recommendations come up short', async () => {
+      const shelf = await loadRelated('cur', { recommended: async () => [info('r1')], feed: async () => [info('f1')] });
+      expect(shelf.map(v => v.id)).toEqual(['r1', 'f1']);
+    });
+
+    it('falls back to the feed when recommendations fail or are empty', async () => {
+      const feed = async () => [info('f1')];
+      await expect(loadRelated('cur', { recommended: () => Promise.reject(new Error('down')), feed })).resolves.toHaveLength(1);
+      await expect(loadRelated('cur', { recommended: async () => [], feed })).resolves.toHaveLength(1);
+    });
+
+    it('keeps recommendations when the feed fails', async () => {
+      const shelf = await loadRelated('cur', { recommended: async () => [info('r1')], feed: () => Promise.reject(new Error('down')) });
+      expect(shelf.map(v => v.id)).toEqual(['r1']);
+    });
   });
 });

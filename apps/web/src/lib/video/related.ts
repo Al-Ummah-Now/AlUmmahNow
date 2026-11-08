@@ -61,3 +61,23 @@ export function mergeRelated(
   }
   return out;
 }
+
+/**
+ * Build the shelf: recommendations alone when they fill it, otherwise topped
+ * up from the feed, which is only requested in that case. A source that fails
+ * counts as empty, so the feed still fills the shelf if recommendations fail.
+ */
+export async function loadRelated(
+  currentVideoId: string,
+  sources: {
+    recommended: () => Promise<VideoInfo[]>;
+    feed: () => Promise<VideoInfo[] | undefined>;
+  },
+  limit: number = RELATED_LIMIT,
+): Promise<VideoInfo[]> {
+  const recommended = await sources.recommended().catch(() => [] as VideoInfo[]);
+  const shelf = mergeRelated(currentVideoId, recommended, [], limit);
+  if (shelf.length >= limit) return shelf;
+  const feed = await sources.feed().catch(() => undefined);
+  return mergeRelated(currentVideoId, recommended, feed ?? [], limit);
+}
