@@ -238,6 +238,16 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             </div>
           </Link>
 
+          {/* Plan and limits (Epic 27) */}
+          <Link
+            href={`/${locale}/settings/channel/${id}/plan`}
+            className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
+            data-testid="settings-plan-link"
+          >
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">{t.plan.settingsTitle}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t.plan.settingsDescription}</p>
+          </Link>
+
           {/* Community Settings */}
           <Link
             href={`/${locale}/settings/channel/${id}/community`}

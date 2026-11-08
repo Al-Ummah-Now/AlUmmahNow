@@ -11,6 +11,8 @@ import { getClientAuthHeaders } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getSubjectEntitlements } from '@/lib/api/entitlements';
+import { readVideoDuration, uploadBlock, type UploadBlock } from '@/lib/entitlements/limits';
 
 
 interface UseBatchUploadOptions {
@@ -123,11 +125,24 @@ export function useBatchUpload({
         return;
       }
 
+      // Say so now rather than partway through; the API still enforces this
+      const durations = await Promise.all(selectedFiles.map((file) => readVideoDuration(file)));
+      const planBlock = uploadBlock(await getSubjectEntitlements(`channel:${channelId}`), {
+        count: selectedFiles.length,
+        bytes: selectedFiles.reduce((sum, file) => sum + file.size, 0),
+        maxSeconds: Math.max(0, ...durations.map((d) => d ?? 0)) || undefined,
+      });
+      if (planBlock) {
+        const planLimitMessage: Record<UploadBlock, string> = { uploads: t.plan.uploadsReached, storage: t.plan.storageReached, duration: t.plan.durationReached };
+        throw new Error(`${planLimitMessage[planBlock]} ${t.plan.higherPlan}`);
+      }
+
       // Initiate batch upload with backend (one TUS proxy session per file)
       const initiateResult = await initiateBatchUpload(
-        selectedFiles.map(file => ({
+        selectedFiles.map((file, index) => ({
           title: file.name.replace(/\.[^/.]+$/, ''),
           fileSize: file.size,
+          durationSeconds: durations[index],
           mimeType: file.type,
           isPublic: sharedMetadata.isPublic ?? true,
           description: sharedMetadata.description,

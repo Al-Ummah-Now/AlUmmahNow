@@ -7,6 +7,8 @@ import { getChannelById } from '@/lib/api/channels';
 import { uploadFileDirect } from '@/lib/api/direct-upload';
 import ImageCropDialog from '@/components/ImageCropDialog';
 import { updateChannelProfile } from '@/lib/api/channel-profile';
+import { getSubjectEntitlements } from '@/lib/api/entitlements';
+import { maxLinksFor, type EntitlementsView } from '@/lib/entitlements/limits';
 import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
 import { channelPath } from '@/lib/channel-url';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -46,6 +48,12 @@ function ChannelEditPage() {
   const [cropping, setCropping] = useState<{ type: 'avatar' | 'cover'; file: File } | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [about, setAbout] = useState<ChannelAboutValues>({ handle: '', links: [], contactEmail: '', location: '' });
+  const [planView, setPlanView] = useState<EntitlementsView | null>(null);
+  const [savedLinkCount, setSavedLinkCount] = useState(0);
+
+  useEffect(() => {
+    if (channelId) getSubjectEntitlements(`channel:${channelId}`).then(setPlanView);
+  }, [channelId]);
   const [handleStatus, setHandleStatus] = useState<HandleStatus>({ state: 'idle' });
   const [formData, setFormData] = useState({
     name: '',
@@ -83,6 +91,7 @@ function ChannelEditPage() {
             avatarUrl: channelData.avatarUrl || '',
             coverUrl: channelData.coverUrl || '',
           });
+          setSavedLinkCount(channelData.links?.length ?? 0);
           setAbout({
             handle: channelData.handle || '',
             links: channelData.links || [],
@@ -138,7 +147,7 @@ function ChannelEditPage() {
       if (result.ok === false) {
         logger.warn('Channel update rejected', { channelId, status: result.status, error: result.error, reason: result.reason });
         if (result.reason) setHandleStatus({ state: 'unavailable', reason: result.reason });
-        setError(result.reason === 'taken' ? t.channel.handleTaken : t.channel.saveFailed);
+        setError(result.reason === 'taken' ? t.channel.handleTaken : result.status === 402 ? `${t.plan.linksReached} ${t.plan.higherPlan}` : t.channel.saveFailed);
         setIsSaving(false);
         return;
       }
@@ -477,6 +486,7 @@ function ChannelEditPage() {
               onChange={setAbout}
               onHandleStatusChange={setHandleStatus}
               disabled={isSaving}
+              maxLinks={maxLinksFor(planView, savedLinkCount)}
             />
 
             {/* Buttons */}

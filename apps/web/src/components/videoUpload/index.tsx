@@ -4,6 +4,8 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import * as tus from "tus-js-client";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { getSubjectEntitlements } from '@/lib/api/entitlements';
+import { readVideoDuration, uploadBlock, type UploadBlock } from '@/lib/entitlements/limits';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
@@ -211,6 +213,14 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     const channelId = activeChannel.id;
 
     try {
+      // Say so now rather than after the upload dialog has started; the API still enforces this
+      const durationSeconds = await readVideoDuration(selectedFile);
+      const planBlock = uploadBlock(await getSubjectEntitlements(`channel:${channelId}`), { count: 1, bytes: selectedFile.size, maxSeconds: durationSeconds });
+      if (planBlock) {
+        const planLimitMessage: Record<UploadBlock, string> = { uploads: t.plan.uploadsReached, storage: t.plan.storageReached, duration: t.plan.durationReached };
+        throw new Error(`${planLimitMessage[planBlock]} ${t.plan.higherPlan}`);
+      }
+
       // Step 1: Initiate upload and get TUS configuration
       setUploadProgress({ percentage: 5, state: 'uploading' });
       onProgress(5);
@@ -233,6 +243,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           tags: tagsString,
           category: metadata.category,
           fileSize: selectedFile.size,
+          durationSeconds,
           mimeType: selectedFile.type,
           thumbnail: selectedThumbnail ? {
             type: selectedThumbnail.type,

@@ -245,6 +245,27 @@ export interface AppTranslations {
   /**
    * Channel related
    */
+  plan: {
+    title: string;
+    current: string;
+    unavailable: string;
+    channels: string;
+    links: string;
+    duration: string;
+    uploads: string;
+    storage: string;
+    unlimited: string;
+    usedOf: string;
+    nearLimit: string;
+    existingKept: string;
+    higherPlan: string;
+    uploadsReached: string;
+    storageReached: string;
+    durationReached: string;
+    linksReached: string;
+    settingsTitle: string;
+    settingsDescription: string;
+  };
   channel: {
     myChannels: string;
     selectChannel: string;

@@ -863,6 +863,7 @@ export async function initiateVideoUploadApi(
     isPublic?: boolean;
     tags?: string;
     fileSize: number;
+    durationSeconds?: number;
     mimeType: string;
   },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
@@ -967,6 +968,7 @@ export async function initiateBatchUploadApi(
       title: string;
       description?: string;
       fileSize: number;
+      durationSeconds?: number;
       mimeType: string;
       isPublic: boolean;
       tags?: string;
