@@ -263,7 +263,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       if (!account) return;
 
       const confirmed = window.confirm(
-        `Remove account ${account.email}? This will log you out of this account.`
+        t.navigation.removeAccountConfirm.replace('{email}', account.email)
       );
 
       if (!confirmed) return;

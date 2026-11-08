@@ -113,6 +113,71 @@ export const COMMON_TIMEZONES = {
   ],
 };
 
+const REGION_NAMES_AR: Record<string, string> = {
+  'North America': 'أمريكا الشمالية',
+  'Europe': 'أوروبا',
+  'Middle East': 'الشرق الأوسط',
+  'Asia': 'آسيا',
+  'Africa': 'أفريقيا',
+  'Australia & Pacific': 'أستراليا والمحيط الهادئ',
+  'South America': 'أمريكا الجنوبية',
+};
+
+const TIMEZONE_NAMES_AR: Record<string, string> = {
+  'America/New_York': 'التوقيت الشرقي (أمريكا)',
+  'America/Chicago': 'التوقيت المركزي (أمريكا)',
+  'America/Denver': 'التوقيت الجبلي (أمريكا)',
+  'America/Los_Angeles': 'توقيت المحيط الهادئ (أمريكا)',
+  'America/Anchorage': 'توقيت ألاسكا',
+  'Pacific/Honolulu': 'توقيت هاواي',
+  'Europe/London': 'لندن',
+  'Europe/Paris': 'باريس',
+  'Europe/Berlin': 'برلين',
+  'Europe/Rome': 'روما',
+  'Europe/Athens': 'أثينا',
+  'Europe/Moscow': 'موسكو',
+  'Europe/Istanbul': 'إسطنبول',
+  'Asia/Dubai': 'دبي',
+  'Asia/Riyadh': 'الرياض',
+  'Asia/Kuwait': 'الكويت',
+  'Asia/Qatar': 'الدوحة',
+  'Asia/Bahrain': 'المنامة',
+  'Asia/Jerusalem': 'القدس',
+  'Asia/Amman': 'عمّان',
+  'Asia/Beirut': 'بيروت',
+  'Asia/Karachi': 'كراتشي',
+  'Asia/Kolkata': 'مومباي/دلهي',
+  'Asia/Dhaka': 'دكا',
+  'Asia/Bangkok': 'بانكوك',
+  'Asia/Singapore': 'سنغافورة',
+  'Asia/Hong_Kong': 'هونغ كونغ',
+  'Asia/Shanghai': 'بكين',
+  'Asia/Tokyo': 'طوكيو',
+  'Asia/Seoul': 'سيول',
+  'Africa/Cairo': 'القاهرة',
+  'Africa/Lagos': 'لاغوس',
+  'Africa/Johannesburg': 'جوهانسبرغ',
+  'Africa/Nairobi': 'نيروبي',
+  'Australia/Sydney': 'سيدني',
+  'Australia/Melbourne': 'ملبورن',
+  'Australia/Perth': 'بيرث',
+  'Pacific/Auckland': 'أوكلاند',
+  'America/Sao_Paulo': 'ساو باولو',
+  'America/Buenos_Aires': 'بوينس آيرس',
+  'America/Bogota': 'بوغوتا',
+  'America/Santiago': 'سانتياغو',
+};
+
+/** A COMMON_TIMEZONES entry's label in the page language. */
+export function localizedTimezoneLabel(tz: { value: string; label: string }, locale: string): string {
+  return (locale === 'ar' && TIMEZONE_NAMES_AR[tz.value]) || tz.label;
+}
+
+/** A COMMON_TIMEZONES region name in the page language. */
+export function localizedTimezoneRegion(region: string, locale: string): string {
+  return (locale === 'ar' && REGION_NAMES_AR[region]) || region;
+}
+
 /**
  * Get flat list of all timezones (for searchable dropdowns)
  */
@@ -141,12 +206,12 @@ export function isListedTimezone(timezone: string): boolean {
  * Get timezone display name
  * Returns a friendly name like "Dubai (GST) UTC+4"
  */
-export function getTimezoneDisplayName(timezone: string): string {
+export function getTimezoneDisplayName(timezone: string, locale: string = 'en'): string {
   const allTimezones = getAllTimezones();
   const found = allTimezones.find(tz => tz.value === timezone);
 
   if (found) {
-    return `${found.label} ${found.offset}`;
+    return `${localizedTimezoneLabel(found, locale)} ${found.offset}`;
   }
 
   // Fallback: format the timezone name
