@@ -4,6 +4,13 @@ Implements [SPEC.md](./SPEC.md). Each phase is independently shippable. Each one
 
 Order: auth first (smaller, deploys from CI today), then AlUmmahNow. Auth phases 1–4 and AlUmmahNow phases 1, 5 and 6 can run in parallel.
 
+AlUmmahNow convergence comes early (owner requirement, SPEC §3.1): one codebase, with `main` as the only trunk.
+- **C1** starts right after 1B.
+- **C2** needs stage for web and api-videos, so the stage half of phase 7 moves ahead of C2.
+- **C3** retires `integrate/qa-features` and `develop`.
+
+AlUmmahNow order: 1B → C1 → 7 (stage, release workflow) → C2 → C3 → 5/6 leftovers → 8.
+
 | Phase | Repo | Title | Issue |
 |---|---|---|---|
 | 0 | both | Spec and plan | (this PR) |
@@ -12,6 +19,7 @@ Order: auth first (smaller, deploys from CI today), then AlUmmahNow. Auth phases
 | 2 | auth | Test code sink, locked test routes, regression E2E (R1 profile/admin, R3) | AlUmmahNowAuth#185 |
 | 3 | auth | Stage environment (workers, data, clients) and smoke script | AlUmmahNowAuth#186 |
 | 4 | auth | Release workflow: stage → E2E → versions promote → smoke → auto-rollback | AlUmmahNowAuth#187 |
+| C | AlUmmahNow | Convergence: forward-port hotfixes into integrate, promote integrate to prod through stage, `main` as the single trunk | #216 |
 | 5 | AlUmmahNow | Web regression E2E (R1, R4), player tests run in CI (R5) | #199 |
 | 6 | AlUmmahNow | Data contracts, data migrations, compatibility check | #200 |
 | 7 | AlUmmahNow | Stage for web + api-videos, release workflow, cross-repo stage lock | #201 |
@@ -83,13 +91,54 @@ Acceptance:
 - Rollback drill: run `rollback.yml`. Prod is on the previous version and smoke passes. Roll forward again.
 - A deliberately broken smoke (on a throwaway branch, via `workflow_dispatch` with an injected failing check) triggers auto-rollback.
 
+## Phase C: AlUmmahNow convergence (one codebase)
+
+QA runs `integrate/qa-features` (177 ahead of `main`, 20 behind, 867 files). Prod runs `main`, deployed by hand. The owner expects one codebase. AlUmmahNowAuth already uses `main` for QA and prod, and stays as it is.
+
+**C1: forward-port (now).**
+- One PR into `integrate/qa-features` that merges `main`. Where both branches fixed the same thing (#188, #197, #205, the Bunny file-name and URL-field signing), keep integrate's version.
+- Must arrive on integrate:
+  - #209: sign-in `redirect_uri`
+  - #214: profile loop, prod API CORS, quiet missing translations
+  - legacy Bunny library URL signing (`40a5313`)
+  - bulk-delete ownership (`380db16`)
+  - Node 22 / `ubuntu-24.04` CI
+  - Seed QA workflow registration
+- Includes #212 (add-account `redirect_uri`) once it merges to `main`.
+- From now until C3, every prod hotfix lands on both branches.
+- Acceptance:
+  - `git log integrate..main` is empty.
+  - QA E2E plus the release regressions pass on integrate: R1 for web, R4, and the player job.
+  - Each forward-ported hotfix's own test passes on QA.
+
+**C2: promote integrate to prod through stage** (after phase 7's stage for web + api-videos exists).
+- Prod data steps, rehearsed on stage first. Both are expand-only, run before the traffic shift, and stay if the code rolls back:
+  - **Search D1 ownership index:** create the prod `SEARCH_DB`; apply `apps/api-videos/migrations/search/`; run `scripts/search-backfill.sh` (`POST /internal/search/backfill`) until it reports `complete`. Check: `complete` is true and the row counts match the bucket object counts.
+  - **R2 translations:** seed with `translationsSync`. Check: every locale's object exists with the expected version.
+- Release integrate's head through `release.yml`. Stage E2E must pass first: R1 sign-up → code → sign-in for web, profile and admin, R4, the player job, and the legacy suite's stage-safe specs.
+- Promote at 0%, run the pre-traffic smoke, go to 100%, run the post-promote smoke. Rollback is ready, and the owner picks the window (SPEC §11.8).
+- Then fast-forward `main` to the promoted commit.
+- Acceptance:
+  - Prod runs integrate's code.
+  - `main` = that commit.
+  - The prod smoke and the synthetic sign-in pass.
+  - Both data checks are green on prod.
+
+**C3: single trunk.**
+- QA deploys from `main`: on merge, or PR previews for the apps that support them. Fix the dead `deploy-qa` job, which still keys on `develop`.
+- Every workflow triggers on `main` only; the `integrate/**` triggers are removed.
+- Default branch and PR base are `main`.
+- Tag `archive/integrate-qa-features` and `archive/develop`, then delete both branches.
+- CLAUDE.md, READMEs and the deployment docs describe one flow: PR → CI → QA → stage → promote.
+- Acceptance: no workflow mentions `integrate` or `develop`, and the branches are gone (tags remain).
+
 ## Phase 5: AlUmmahNow web regression E2E and player
 
 Scope:
 - Unit: the authorize `redirect_uri` built by `login()` equals the one `/api/callback` exchanges with (also for multi-account) (R1).
 - `apps/web/e2e/release/`: `signup-signin.spec.ts` (R1), `callback-errors.spec.ts` (R4). Targets come from env (`E2E_ENV`), codes from the auth sink.
 - Player: a Playwright project with `channel: 'chrome'`, a VP9/WebM fixture, and no silent skip under CI (R5).
-- Run on PRs into `integrate/**` and `main` against QA.
+- Run on PRs into `main` against QA (and into `integrate/**` until phase C3).
 
 Acceptance: specs run and pass on QA in CI. Reverting the #188 fix or the redirect_uri hotfix on a scratch branch makes them fail. The player spec reports "passed", not "skipped".
 

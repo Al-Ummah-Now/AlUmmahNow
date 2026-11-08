@@ -36,11 +36,11 @@ Non-goals: replacing QA, per-PR preview environments, load testing.
 | | dev | QA | stage | prod |
 |---|---|---|---|---|
 | Purpose | Local work | Integration of in-progress features | The exact release candidate, prod-shaped | Users |
-| Code | Your branch | AlUmmahNow: `integrate/qa-features`. Auth: the PR head | `main` at the release commit | Promoted from stage |
+| Code | Your branch | The PR head, or `main` after merge (both repos, once AlUmmahNow has converged: section 3.1) | `main` at the release commit | Promoted from stage |
 | Config | top-level wrangler config | `wrangler.qa.json(c)` | `env.stage` in the same file as `env.production` | `env.production` |
 | Data | local D1/KV/R2 | QA stores | **Separate stage stores** (section 6.4) | prod stores |
 | Email | console/local sink | test sink for `@e2e.alummahnow.net` | test sink for `@e2e.alummahnow.net` | real email only; the sink cannot be enabled |
-| Deployed by | you | CI on PR (auth) / on merge to integrate (AlUmmahNow) | release workflow | release workflow (promote) |
+| Deployed by | you | CI on PR and on merge to `main` | release workflow | release workflow (promote) |
 
 Hostnames:
 
@@ -55,6 +55,45 @@ Hostnames:
 | auth admin | admin.auth.qa.alummahnow.net | admin.auth.stage.alummahnow.net | admin.auth.alummahnow.net |
 
 Stage workers are named `<prod-worker-name>-stage`, for example `al-ummah-now-auth-stage` and `al-ummah-now-production-stage`.
+
+### 3.1 One codebase: `main` is the only trunk
+
+**Today (AlUmmahNow only).** QA and prod run different code:
+
+| Branch | Runs on | State |
+|---|---|---|
+| `integrate/qa-features` | QA | 177 commits ahead of `main`, 20 behind; 867 files differ |
+| `main` | prod | Deployed by hand; main's Deploy workflow hasn't deployed since Jan 2026 (#185) |
+| `develop` | nothing | Stale |
+
+A fix tested on QA isn't the code users get, and prod hotfixes made on `main` are missing from QA. AlUmmahNowAuth already uses `main` for both QA (PRs) and prod, and stays that way.
+
+**Target (both repos):** PR → CI → QA (deployed from the PR, or from `main` after merge) → stage → promote to prod. There are no long-lived integration branches.
+
+**Getting there** (PLAN phase C):
+
+1. **Forward-port.** Merge `main` into `integrate/qa-features`, so integrate contains every prod hotfix. Where integrate already has an equivalent fix (#188, #197, #205, the Bunny file-name and URL-field signing), keep integrate's version. Each hotfix's regression test must pass on QA, which means equivalence is checked by behaviour, not by commit subject.
+
+   Missing from integrate today:
+   - #209: sign-in `redirect_uri`
+   - #214: profile loop, prod API CORS, quiet missing translations
+   - legacy Bunny library URL signing
+   - bulk-delete ownership check
+   - CI on Node 22 and `ubuntu-24.04`
+   - Seed QA workflow registration
+
+   Until step 3 is done, every prod hotfix lands on both branches.
+2. **Promote through stage.** Integrate's code reaches prod only through the stage-then-promote path (section 5.2), as one release. It goes out only after stage passes the full E2E, including R1 sign-up → code → sign-in for web, profile and admin, and the data steps below. `main` then fast-forwards to the promoted commit.
+3. **Single trunk.** QA deploys from `main`, either on merge or as PR previews. PRs target `main`. `integrate/qa-features` and `develop` are frozen, tagged (`archive/integrate-qa-features`, `archive/develop`), removed from every workflow trigger, and deleted.
+
+**Prod data integrate needs.** Both are expand-only: the code serving prod today doesn't read either one, so they can run before the promote and survive a rollback.
+
+| Data | Prod today | Step (rehearsed on stage first) | Pre-promote check |
+|---|---|---|---|
+| Search D1 with the API ownership index (`apps/api-videos/migrations/search/`: `0001_search_index`, `0002_content_ownership`) | Doesn't exist | Create the prod `SEARCH_DB`, apply the migrations, run the rebuild pass (`POST /internal/search/backfill`, `scripts/search-backfill.sh`) until it reports `complete`. Readers fall back to bucket scans until then, so an incomplete index is slow, not wrong. | The index reports `complete`, and the row counts match the bucket object counts |
+| Translations in R2 (`translationsGet` reads them; `translationsSync` seeds them) | No stored translations (#214 made the web app quiet about the 404s) | Seed with `translationsSync` | Every supported locale's object exists with the expected version |
+
+Both steps become part of AlUmmahNow's data-contract checks (section 6.3). The release workflow runs them against stage first and against prod before shifting traffic.
 
 ## 4. How stage and promote work
 
@@ -101,7 +140,7 @@ The issuer URL is baked into every token (`iss`), so web cannot test against pro
 
 ## 5. The flow
 
-### 5.1 On a pull request (into `main` or `integrate/*`)
+### 5.1 On a pull request (into `main`)
 
 Required checks, both repos:
 
@@ -110,7 +149,7 @@ Required checks, both repos:
 3. Data checks (section 6): migration immutability, schema snapshot, data-contract snapshot.
 4. Config checks (section 8): every `env.production` and `env.stage` has the right `ENVIRONMENT`, issuer, routes and required bindings, and no test-only bindings in production.
 5. Build every deployable app (catches build-only breakage).
-6. E2E against QA (auth: the existing `qa-e2e.yml`, now including the regression specs; AlUmmahNow: `e2e-tests.yml` on PRs into `integrate/*` and `main`).
+6. E2E against QA (auth: the existing `qa-e2e.yml`, now including the regression specs; AlUmmahNow: `e2e-tests.yml` and `release-e2e.yml`. Until phase C finishes, these also run on PRs into `integrate/*`).
 
 Runners: `ubuntu-24.04` for anything that installs Playwright browsers (`ubuntu-latest` = 26.04 has no builds). Node 22 everywhere (wrangler requires ≥ 22).
 
@@ -279,7 +318,8 @@ Stage never uses a prod secret value. Stage signing keys are separate, so a stag
 4. **Synthetic prod sign-in.** A dedicated prod account (`smoke@alummahnow.net`, password login, no content) used by post-promote smoke for a full sign-in → session check in prod. This is the only check that would have caught the redirect_uri bug *in prod* if stage had somehow differed. Needs: the account, its password in the `production` environment, and acceptance that it shows up in prod analytics. It can be excluded by user id.
 5. **AlUmmahNow prod catch-up (#185).** The pipeline will promote every app it manages. Processor and websocket in prod are a year behind and admin apps were never deployed. Proposed: at first the pipeline manages **web and api-videos** only (what's actually deployed and changing). Processor, websocket and admin apps join after #163/#185 are resolved, with a one-time verified catch-up release.
 6. **Cost.** Stage adds about 10 workers, 4 D1 databases, 2–3 KV namespaces, 6 R2 buckets and 3 queues. On the Workers Paid plan these fit in included usage at E2E volume. Bunny already has `*-staging` zones. Resend: stage sends use the sink, so no extra volume. Expected extra cost: approximately $0. Confirm the account is on Workers Paid.
-7. **`develop` branch.** It's stale and `deploy.yml` still triggers on it. Proposed: remove it from all workflow triggers.
+7. **One trunk (decided by the owner).** `main` is the single trunk for AlUmmahNow, as it already is for auth. `integrate/qa-features` and `develop` are retired after convergence (section 3.1, PLAN phase C).
+8. **Convergence release window.** The one release that takes integrate's 177 commits to prod is the largest change prod will see. Proposed: run it at a low-traffic time, with the rollback workflow ready. A rollback restores code only; the expand-only data steps stay. The owner picks the window.
 
 ## 12. Incident regressions
 
