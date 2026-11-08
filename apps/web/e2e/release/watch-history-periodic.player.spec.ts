@@ -9,7 +9,7 @@
  * branded-Chrome "player" project.
  */
 import { test, expect } from '@playwright/test';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, playFor, watchUrl } from './videos';
+import { findPlayableVideo, HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, playFor, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 
 /** ResumePrompt's heading (lib/video/i18n translations, resume.title, en). */
@@ -22,7 +22,7 @@ interface HistoryEntry {
 
 test.describe('Release: periodic watch progress', () => {
   test('a signed-in watch is saved to history while it plays, without pausing', async ({ page }) => {
-    const video = await findPlayableVideo(20);
+    const video = await findPlayableVideo(HISTORY_MIN_SECONDS);
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     const user = await signUpOnWeb(page, 'rel-history-tick');
@@ -54,7 +54,7 @@ test.describe('Release: periodic watch progress', () => {
   });
 
   test('a signed-in watch offers to resume from the saved position (#242)', async ({ page }) => {
-    const video = await findPlayableVideo(20);
+    const video = await findPlayableVideo(HISTORY_MIN_SECONDS);
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     const user = await signUpOnWeb(page, 'rel-resume');
