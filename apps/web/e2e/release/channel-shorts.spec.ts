@@ -23,7 +23,7 @@ async function findShort(): Promise<ListedVideo | null> {
 }
 
 test.describe('Release: channel shorts', () => {
-  test('a public short is listed on its channel\'s Shorts tab (API and page)', async ({ page }) => {
+  test('a public short is listed on its channel\'s Shorts tab (API)', async () => {
     const short = await findShort();
     test.skip(!short, 'no public short (under 60 s) in this environment');
 
