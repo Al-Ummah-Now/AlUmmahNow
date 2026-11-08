@@ -38,6 +38,10 @@ export enum VideoEventType {
 
   // #235: played seconds since the previous report (data: { seconds })
   WATCH_TIME = 'watch_time',
+
+  // Loading milestones (#79)
+  LOAD_START = 'loadstart',
+  LOADED_METADATA = 'loadedmetadata',
 }
 
 /**

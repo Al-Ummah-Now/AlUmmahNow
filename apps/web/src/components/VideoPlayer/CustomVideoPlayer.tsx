@@ -568,6 +568,35 @@ export default function CustomVideoPlayer({
 
         // ==================== Phase 3: Advanced Analytics ====================
 
+        // Loading milestones. Metadata may already be known by the time the player is ready.
+        const extended = player as ExtendedPlayer;
+        const reportMetadata = () => {
+          analyticsRef.current?.trackMetadataLoaded(player.duration() ?? 0, extended.videoWidth(), extended.videoHeight());
+        };
+        player.on('loadstart', () => analyticsRef.current?.trackLoadStart());
+        if (extended.readyState() >= 1) reportMetadata();
+        else player.one('loadedmetadata', reportMetadata);
+
+        // Only real changes: restoring the saved volume above also fires volumechange
+        let lastVolume = player.volume() ?? 1;
+        let lastMuted = player.muted() ?? false;
+        player.on('volumechange', () => {
+          const volume = player.volume() ?? lastVolume;
+          const isMuted = player.muted() ?? lastMuted;
+          if (volume === lastVolume && isMuted === lastMuted) return;
+          lastVolume = volume;
+          lastMuted = isMuted;
+          analyticsRef.current?.trackVolumeChange(volume, isMuted);
+        });
+
+        let lastRate = extended.playbackRate();
+        player.on('ratechange', () => {
+          const rate = extended.playbackRate();
+          if (rate === lastRate) return;
+          analyticsRef.current?.trackSpeedChange(rate, lastRate);
+          lastRate = rate;
+        });
+
         // Seeking events - track when user seeks to different position
         player.on('seeking', () => {
           // Store the current time when seek starts

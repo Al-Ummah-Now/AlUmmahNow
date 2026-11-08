@@ -25,6 +25,8 @@ import { PlayedTimeAccumulator } from '@/lib/video/watch-time';
 
 /** Legacy localStorage backup key; no longer written, purged on start. */
 const LEGACY_PENDING_KEY = 'pendingVideoAnalytics';
+/** How long the volume must stay unchanged before the change is reported. */
+const VOLUME_SETTLE_MS = 500;
 /** Cap on events retried in memory after failed flushes. */
 const MAX_QUEUED_EVENTS = 500;
 
@@ -51,6 +53,10 @@ export class VideoAnalytics {
 
   // #235: played seconds, reported as watch_time events at every flush
   private played = new PlayedTimeAccumulator();
+
+  // #79: a slider drag fires many volumechange events; only where it ends is reported
+  private pendingVolume?: { volume: number; muted: boolean };
+  private volumeTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     videoId: string,
@@ -159,6 +165,46 @@ export class VideoAnalytics {
         previousRate,
         change: rate - previousRate
       }
+    });
+  }
+
+  /**
+   * Track a volume or mute change (#79). Changes within VOLUME_SETTLE_MS are
+   * reported once, with the final values.
+   */
+  trackVolumeChange(volume: number, muted: boolean): void {
+    this.pendingVolume = { volume, muted };
+    if (this.volumeTimer !== undefined) clearTimeout(this.volumeTimer);
+    this.volumeTimer = setTimeout(() => this.emitPendingVolume(), VOLUME_SETTLE_MS);
+  }
+
+  private emitPendingVolume(): void {
+    if (this.volumeTimer !== undefined) clearTimeout(this.volumeTimer);
+    this.volumeTimer = undefined;
+    if (!this.pendingVolume) return;
+    const data = this.pendingVolume;
+    this.pendingVolume = undefined;
+    this.addEvent({
+      eventType: VideoEventType.VOLUME_CHANGE,
+      relativeTime: Date.now() - this.startTime,
+      data,
+    });
+  }
+
+  /** Track that the player started loading the video (#79). */
+  trackLoadStart(): void {
+    this.addEvent({
+      eventType: VideoEventType.LOAD_START,
+      relativeTime: Date.now() - this.startTime,
+    });
+  }
+
+  /** Track that the video's metadata is known (#79). */
+  trackMetadataLoaded(duration: number, videoWidth: number, videoHeight: number): void {
+    this.addEvent({
+      eventType: VideoEventType.LOADED_METADATA,
+      relativeTime: Date.now() - this.startTime,
+      data: { duration, videoWidth, videoHeight },
     });
   }
 
@@ -636,6 +682,7 @@ export class VideoAnalytics {
    * Clean up resources
    */
   destroy(): void {
+    this.emitPendingVolume();
     // Flush remaining events
     void this.flush();
 

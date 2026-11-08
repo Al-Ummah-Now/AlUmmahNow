@@ -511,6 +511,44 @@ describe('VideoAnalytics', () => {
     });
   });
 
+  describe('Phase 3: volume and loading events (#79)', () => {
+    const queueOf = (a: VideoAnalytics) => (a as any).eventQueue as AnalyticsEvent[];
+
+    it('reports a burst of volume changes once, with the final values', () => {
+      jest.useFakeTimers();
+      const a = new VideoAnalytics('video-volume');
+      a.trackVolumeChange(0.5, false);
+      a.trackVolumeChange(0.4, false);
+      a.trackVolumeChange(0.3, true);
+      expect(queueOf(a).filter(e => e.eventType === VideoEventType.VOLUME_CHANGE)).toHaveLength(0);
+      jest.advanceTimersByTime(500);
+      const events = queueOf(a).filter(e => e.eventType === VideoEventType.VOLUME_CHANGE);
+      expect(events).toHaveLength(1);
+      expect(events[0].data).toEqual({ volume: 0.3, muted: true });
+      a.destroy();
+      jest.useRealTimers();
+    });
+
+    it('queues a pending volume change when the player is destroyed before it settles', () => {
+      const add = jest.spyOn(VideoAnalytics.prototype as any, 'addEvent');
+      const a = new VideoAnalytics('video-volume-2');
+      a.trackVolumeChange(0.9, false);
+      a.destroy();
+      expect(add).toHaveBeenCalledWith(expect.objectContaining({ eventType: VideoEventType.VOLUME_CHANGE, data: { volume: 0.9, muted: false } }));
+      add.mockRestore();
+    });
+
+    it('tracks load start and metadata', () => {
+      const a = new VideoAnalytics('video-load');
+      a.trackLoadStart();
+      a.trackMetadataLoaded(120, 1920, 1080);
+      const types = queueOf(a).map(e => e.eventType);
+      expect(types).toEqual(expect.arrayContaining([VideoEventType.LOAD_START, VideoEventType.LOADED_METADATA]));
+      expect(queueOf(a).find(e => e.eventType === VideoEventType.LOADED_METADATA)?.data).toEqual({ duration: 120, videoWidth: 1920, videoHeight: 1080 });
+      a.destroy();
+    });
+  });
+
   describe('Phase 3: Advanced Analytics - trackSeek()', () => {
     it('should track seek events with fromTime and toTime', () => {
       const analytics = new VideoAnalytics('video-1');
