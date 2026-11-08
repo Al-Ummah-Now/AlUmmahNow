@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { VideoPlayback } from '../src/endpoints/video/videoPlayback';
 import {
 	BunnyPlaybackAuthorizer,
+	canonicalPlaylistVideoId,
 	PlaybackUnsupportedError,
 	canPlay,
 	type PlaybackAuthorizer,
@@ -67,6 +68,25 @@ describe('BunnyPlaybackAuthorizer', () => {
 		assert.equal((await new BunnyPlaybackAuthorizer({ signHost: HOST, tokenKey: KEY }).playback({ id: 'v', playUrl: other }))!.manifestUrl, other);
 		const traversal = `https://${HOST}/${GUID}/../x/playlist.m3u8`;
 		assert.equal((await new BunnyPlaybackAuthorizer({ signHost: HOST, tokenKey: KEY }).playback({ id: 'v', playUrl: traversal }))!.expiresAt, null);
+	});
+});
+
+describe('canonicalPlaylistVideoId', () => {
+	it('accepts only the exact canonical playlist of the signing host', () => {
+		assert.equal(canonicalPlaylistVideoId(PLAY_URL, HOST), GUID);
+		for (const url of [
+			`http://${HOST}/${GUID}/playlist.m3u8`,
+			`https://vz-testxb-cdn.net/${GUID}/playlist.m3u8`,
+			`https://evil.example/${HOST}/${GUID}/playlist.m3u8`,
+			`https://${HOST}.evil.example/${GUID}/playlist.m3u8`,
+			`https://user@${HOST}/${GUID}/playlist.m3u8`,
+			`https://${HOST}/${GUID}/playlist.m3u8?x=1`,
+			`https://${HOST}/${GUID}/../${GUID}/playlist.m3u8`,
+			`https://${HOST}/${GUID}/video.mp4`,
+			'not a url',
+		]) {
+			assert.equal(canonicalPlaylistVideoId(url, HOST), null, url);
+		}
 	});
 });
 

@@ -61,7 +61,20 @@ export function canPlay(video: PlaybackVideo | null | undefined, viewer: Playbac
 	return true;
 }
 
-const BUNNY_VIDEO_ID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+const BUNNY_PLAYLIST_PATH = /^\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\/playlist\.m3u8$/;
+
+/** The video id when playUrl is exactly https://<signHost>/<guid>/playlist.m3u8, else null. */
+export function canonicalPlaylistVideoId(playUrl: string, signHost: string): string | null {
+	let url: URL;
+	try {
+		url = new URL(playUrl);
+	} catch {
+		return null;
+	}
+	// No normalisation tricks (../, encoded segments, query, userinfo): the parsed URL must equal the input
+	if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.host !== signHost.toLowerCase() || url.href !== playUrl) return null;
+	return BUNNY_PLAYLIST_PATH.exec(url.pathname)?.[1] ?? null;
+}
 
 export interface BunnyPlaybackConfig {
 	/** Library host whose URLs carry CDN tokens (BUNNY_SIGN_HOSTNAME || bunny_hostname). */
@@ -81,12 +94,12 @@ export class BunnyPlaybackAuthorizer implements PlaybackAuthorizer {
 		const { signHost, tokenKey } = this.config;
 		if (!signHost || !tokenKey) return { manifestUrl: playUrl, expiresAt: null };
 		// Only the canonical playlist of the signing library gets a directory token
-		const match = new RegExp(`^https://${signHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/(${BUNNY_VIDEO_ID})/playlist\\.m3u8$`).exec(playUrl);
-		if (!match) return { manifestUrl: playUrl, expiresAt: null };
+		const videoId = canonicalPlaylistVideoId(playUrl, signHost);
+		if (!videoId) return { manifestUrl: playUrl, expiresAt: null };
 		const nowSeconds = Math.floor((this.config.now?.() ?? Date.now()) / 1000);
 		const expires = tokenExpiry(nowSeconds);
-		const token = await bunnyDirectoryToken(tokenKey, match[1], expires);
-		return { manifestUrl: signedBunnyUrl(signHost, match[1], 'playlist.m3u8', token, expires), expiresAt: expires };
+		const token = await bunnyDirectoryToken(tokenKey, videoId, expires);
+		return { manifestUrl: signedBunnyUrl(signHost, videoId, 'playlist.m3u8', token, expires), expiresAt: expires };
 	}
 
 	async download(): Promise<DownloadGrant> {
