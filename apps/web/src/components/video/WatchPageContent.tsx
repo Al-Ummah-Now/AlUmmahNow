@@ -22,7 +22,7 @@ import ShareDialog from "@/components/video/ShareDialog";
 import { parseTime } from "@/lib/embed/params";
 import { VideoInfo } from "@/interfaces";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
-import { fetchVideoById, fetchVideos } from "@/lib/api/videos";
+import { fetchRelatedVideos, fetchVideoById } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
@@ -79,13 +79,13 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetchVideos(null).then((videos) => {
-      if (!cancelled) setRelatedVideos(videos || []);
+    fetchRelatedVideos(videoId).then((videos) => {
+      if (!cancelled) setRelatedVideos(videos);
     });
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [videoId, user?.id]);
 
   if (state.status === 'notFound') {
     return (
