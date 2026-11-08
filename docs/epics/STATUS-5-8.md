@@ -205,4 +205,20 @@ Small PRs, each with unit tests and, for user-facing flows, a release E2E (`apps
 5. **6.1** Admin endpoint to set or clear channel verification (audited), and the verified badge on the watch page.
 6. **5.3** Bulk edit of visibility, category and tags on the creator videos dashboard.
 
+## Implemented (2026-11-08)
+
+| Plan item | PR | Release E2E |
+|---|---|---|
+| #296 Shorts tab / `videosCount` | #326, #332 | `channel-shorts.spec.ts` |
+| #294 history channel name | #327 | `watch-history.player.spec.ts` |
+| 7.3 Related from `GET /api/recommendations?videoId=` | #337 | `related.spec.ts` |
+| 8.1 Previous/next chapter buttons and Ctrl/Alt+arrow keys (RTL aware) | #340 | `chapters.player.spec.ts` |
+| 6.3 Community guidelines page (en/ar), nav and upload links | #346 | `community-guidelines.spec.ts` |
+| 6.1 Admin verification endpoint with audit log | #367 | API only (admin) |
+| 6.1 Verified badge on the watch page, one localized `VerifiedBadge` | #382 | n/a |
+| 5.1 Analytics CSV export | #383 | n/a (client download) |
+| 5.3 Bulk edit visibility, category and tags | #388 | n/a (needs a creator account) |
+
+Release E2E specs: #389. Follow-ups: #368 (schema snapshot with spaces), #380 (verification vs concurrent owner edit), admin-web UI for verification (not built; the endpoint is usable from admin-api).
+
 Queued as GitHub issues (label `queue`), outside this pass: viewer demographics, posting-time insights, predictive suggestions, video file replacement/versioning, license on video, real-time trending, clips, reputation, similar-user discovery.
