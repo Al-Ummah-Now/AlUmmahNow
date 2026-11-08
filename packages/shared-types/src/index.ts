@@ -34,6 +34,7 @@ export * from './d1';
 
 // Moderation types
 export * from './moderation';
+export * from './ai-moderation';
 
 // Export schemas
 export * from './schemas/chapter';
@@ -47,6 +48,8 @@ export * from './i18n';
 // Notification center & library (Epic 29)
 export * from './notifications';
 export * from './i18n-library';
+export * from './i18n-bulk-edit';
+export * from './i18n-community-guidelines';
 
 // Static en/ar UI translations (web fallback + api-videos translation seed)
 export { EN_TRANSLATIONS } from './i18n-static/en';
@@ -54,3 +57,6 @@ export { AR_TRANSLATIONS } from './i18n-static/ar';
 
 // Search index: Arabic normalisation, documents, D1 store, API contracts (Epic 29)
 export * from './search';
+
+// Plans & entitlements catalogue and resolver (Epic 27)
+export * from './entitlements';

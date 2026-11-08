@@ -1,5 +1,7 @@
 "use client";
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import React, { useMemo } from "react";
+import type { Player } from "video.js";
 import Image from "next/image";
 import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
@@ -8,8 +10,17 @@ import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlaye
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
+import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
 
-const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
+interface WatchPlayerProps {
+  options: PlayerOptions;
+  /** Start position in seconds (?t= on the watch page) */
+  startTime?: number;
+  /** Gives the watch page the Video.js player (share "start at current time") */
+  onPlayerReady?: (player: Player) => void;
+}
+
+const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerReady }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
 
@@ -57,24 +68,40 @@ const VideoPlayerRTL: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             lang="ar"
             className="w-full"
             ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
+            title={removeUnwantedChars(title)}
+            startTime={startTime}
+            onPlayerReady={onPlayerReady}
           />
         </div>
       </div>
 
       {/* Video Details */}
       <div className="flex space-x-4 mt-4 justify-start items-center w-full" dir="rtl">
-        <Link
-          href={`/ar/channels/${options.channel}`}
-          className="w-11 h-11 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
-        >
-          <Image
-            src={options.channelAvatar || '/avatar.png'}
-            alt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(options.channelName))}
-            sizes="10vw"
-            className="bg-gray-500"
-            fill
-          />
-        </Link>
+        {(() => {
+          const href = playerChannelHref('ar', options);
+          const avatar = (
+            <Image
+              src={options.channelAvatar || '/avatar.png'}
+              alt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(playerChannelName(options)))}
+              sizes="44px"
+              className="bg-gray-500 object-cover"
+              fill
+            />
+          );
+          const avatarEl = href ? (
+            <Link href={href} data-testid="watch-channel-link" className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity">
+              {avatar}
+            </Link>
+          ) : (
+            <span className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative">{avatar}</span>
+          );
+          return options.channelVerified ? (
+            <span className="inline-flex items-center gap-1">
+              {avatarEl}
+              <VerifiedBadge />
+            </span>
+          ) : avatarEl;
+        })()}
         <div className="mt-4">
           <h1 className="sm:text-md md:text-xl font-semibold text-black dark:text-white">
             {removeUnwantedChars(title)}

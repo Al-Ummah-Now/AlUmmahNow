@@ -110,7 +110,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 			if (key) {
 				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
 				const libraryId = parseInt(libraryIdStr);
-				const bunnyStream = new stream(key);
+				const bunnyStream = new stream(key).forEnv(c.env);
 				
 				// Create a video entry for the live stream
 				const videoId = await bunnyStream.createVideo(libraryId, {

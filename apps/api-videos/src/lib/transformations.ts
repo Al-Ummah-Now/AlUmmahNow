@@ -20,6 +20,8 @@ export function transformVideoToView(
         channelName: channel?.name || "",
         channelAvatarUrl: channel?.avatarUrl,
         channelCoverUrl: channel?.coverUrl,
+        // Set only by admins (admin-api channel verification); not in the business schema
+        channelIsVerified: (channel as { isVerified?: boolean } | null | undefined)?.isVerified === true,
         likesCount: video.likes?.length || 0,
         dislikesCount: video.dislikes?.length || 0,
         commentsCount: publicComments.length,

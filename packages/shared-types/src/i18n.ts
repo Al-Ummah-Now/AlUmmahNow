@@ -1,4 +1,6 @@
 import type { LibraryTranslations, NotificationCenterTranslations } from './i18n-library';
+import type { BulkEditTranslations } from './i18n-bulk-edit';
+import type { CommunityGuidelinesTranslations } from './i18n-community-guidelines';
 /**
  * Internationalization (i18n) Types
  *
@@ -131,6 +133,8 @@ export interface AppTranslations {
   };
   /** Library hub, Watch later, liked videos, saved posts (Story 29.6) */
   library: LibraryTranslations;
+  bulkEdit: BulkEditTranslations;
+  communityGuidelines: CommunityGuidelinesTranslations;
   /** Notification center, settings and per-channel bell (Story 29.10) */
   notificationCenter: NotificationCenterTranslations;
 
@@ -220,6 +224,7 @@ export interface AppTranslations {
     channel: string;
     channels: string;
     removeAccount: string;
+    removeAccountConfirm: string;
     /** Uses {count} placeholder */
     signOutOfAllDescription: string;
     openMenu: string;
@@ -251,6 +256,7 @@ export interface AppTranslations {
     channelAvatar: string;
     mainChannel: string;
     subscribers: string;
+    subscriberSingular: string;
     videos: string;
     subscribe: string;
     subscribed: string;
@@ -480,6 +486,7 @@ export interface AppTranslations {
    */
   video: {
     videos: string;
+    videoSingular: string;
     uploadVideo: string;
     editVideo: string;
     deleteVideo: string;
@@ -684,6 +691,7 @@ export interface AppTranslations {
     searchButton: string;
     searching: string;
     foundResults: string;
+    foundOneResult: string;
     foundResultsFor: string;
     activeFilters: string;
     category: string;
@@ -953,6 +961,33 @@ export interface AppTranslations {
       avgDailyViews: string;
       noMetrics: string;
       changeVsPrevious: string;
+      /** #241: watch time and subscriber growth */
+      watchTimeHours: string;
+      hoursValue: string;
+      newSubscribers: string;
+      inLastDays: string;
+      watchTimeOverTime: string;
+      subscribersOverTime: string;
+      minutesCount: string;
+      subscribersCount: string;
+      /** #241: per-video analytics page */
+      videoAnalytics: string;
+      viewAnalytics: string;
+      backToAnalytics: string;
+      avgViewDuration: string;
+      watchTimeTotal: string;
+      published: string;
+      videoLoadError: string;
+      retry: string;
+      retentionComingSoon: string;
+      exportCsv: string;
+      exportCsvHint: string;
+      csvDate: string;
+      csvShares: string;
+      csvWatchTimeHours: string;
+      csvVideo: string;
+      csvVideoId: string;
+      csvPublished: string;
     };
   };
 
@@ -1885,6 +1920,11 @@ export interface AppTranslations {
     removeFailed: string;
     clearFailed: string;
     totalCount: string;
+    totalCountOne: string;
+    pause: string;
+    resume: string;
+    pausedNotice: string;
+    pauseFailed: string;
   };
 
   settings?: {

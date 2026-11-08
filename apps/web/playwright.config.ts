@@ -23,7 +23,8 @@ const isRemoteTarget = baseURL.startsWith('https://');
  * run in their own projects, once, on Desktop Chrome; the browser/device
  * projects run every other spec.
  */
-const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//];
+// e2e/release/ is the release suite (playwright.release.config.ts), never run here
+const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//, /e2e\/release\//];
 
 export default defineConfig({
   testDir: './e2e',
@@ -147,6 +148,19 @@ export default defineConfig({
     {
       name: 'Mobile Safari',
       use: { ...devices['iPhone 12'] },
+    },
+
+    /*
+     * Player regressions (R5, docs/release-pipeline/SPEC.md): bundled Chromium has
+     * no H.264 decoder, so on it every player control test skips. Branded Chrome
+     * plays the QA HLS streams, so here they really run (CI installs it with
+     * `playwright install chrome`).
+     */
+    {
+      name: 'player-chrome',
+      testMatch: /31-video-player\.spec\.ts/,
+      testIgnore: [],
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
 
     /* axe-core WCAG 2.1 AA sweep of every page, en/ar x light/dark */

@@ -120,10 +120,18 @@ export interface ExtendedPlayer extends VideoJsPlayer {
   muted(muted: boolean): this;
 
   /**
+   * Get or set looping (embed loop=1)
+   */
+  loop(): boolean;
+  loop(loop: boolean): this;
+
+  /**
    * Get the ready state of the media element
    * @returns Current ready state (0-4)
    */
   readyState(): number;
+  videoWidth(): number;
+  videoHeight(): number;
 
   /**
    * Get the quality levels for HLS streams (if quality selector plugin is available)

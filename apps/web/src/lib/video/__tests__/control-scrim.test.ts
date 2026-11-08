@@ -56,6 +56,9 @@ describe('control-bar scrim CSS', () => {
     const solid = backgrounds.slice(1);
     expect(solid.length).toBeLessThanOrEqual(1);
     if (solid.length) expect(playerCss).toMatch(/@media \(prefers-contrast: high\) \{[^@]*\.vjs-control-bar[^}]*background: #000000/);
+    // Any other bar background lives in the opt-in `prefers-contrast: high` block
+    const highContrast = playerCss.slice(playerCss.indexOf('@media (prefers-contrast: high)'));
+    for (const value of backgrounds.slice(1)) expect(highContrast).toContain(`background: ${value};`);
   });
 
   it('gives the popup menu a solid dark rounded surface with padding', () => {

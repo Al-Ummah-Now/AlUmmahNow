@@ -15,11 +15,13 @@ import CustomVideoPlayer, { CustomVideoPlayerProps } from '../VideoPlayer/Custom
 import { ChapterMarkers } from './ChapterMarkers';
 import { ChapterList } from './ChapterList';
 import { CurrentChapter } from './CurrentChapter';
+import { ChapterNav } from './ChapterNav';
 import { useVideoChapters } from '@/hooks/useVideoChapters';
 import { useVideoSubtitles } from '@/hooks/useVideoSubtitles';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { Player } from 'video.js';
 import { PLAYER_SEEK_EVENT, type PlayerSeekDetail } from '@/lib/video/comment-timestamps';
+import { chapterShortcut } from '@/lib/video/chapters';
 import { logger } from '@/lib/logger-client';
 
 interface VideoPlayerWithChaptersProps extends CustomVideoPlayerProps {
@@ -37,7 +39,7 @@ export function VideoPlayerWithChapters({
   onPlayerReady,
   ...playerProps
 }: VideoPlayerWithChaptersProps) {
-  const { lang } = useLanguage();
+  const { lang, isRTL } = useLanguage();
   const [player, setPlayer] = useState<Player | null>(null);
   const [progressHolder, setProgressHolder] = useState<HTMLElement | null>(null);
   const [isChapterListOpen, setIsChapterListOpen] = useState(false);
@@ -48,6 +50,8 @@ export function VideoPlayerWithChapters({
     currentChapterIndex,
     duration,
     seekToChapter,
+    nextChapter,
+    previousChapter,
     hasChapters,
   } = useVideoChapters({
     videoId,
@@ -95,6 +99,24 @@ export function VideoPlayerWithChapters({
     return () => window.removeEventListener(PLAYER_SEEK_EVENT, onSeek);
   }, [player, videoId]);
 
+  // Ctrl/Alt + arrow: previous/next chapter while the player has focus
+  useEffect(() => {
+    if (!player || !hasChapters) return undefined;
+    const root = player.el() as HTMLElement | null;
+    if (!root) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const action = chapterShortcut(event, isRTL);
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      logger.debug('[VideoPlayerWithChapters] Chapter shortcut', { videoId, action });
+      if (action === 'next') nextChapter();
+      else previousChapter();
+    };
+    root.addEventListener('keydown', onKeyDown);
+    return () => root.removeEventListener('keydown', onKeyDown);
+  }, [player, hasChapters, isRTL, nextChapter, previousChapter, videoId]);
+
   const toggleChapterList = useCallback(() => {
     setIsChapterListOpen(prev => !prev);
   }, []);
@@ -130,6 +152,14 @@ export function VideoPlayerWithChapters({
               enabled={showChapterOverlay}
             />
           )}
+
+          <ChapterNav
+            chapters={chapters}
+            currentChapter={currentChapter}
+            currentChapterIndex={currentChapterIndex}
+            onPrevious={previousChapter}
+            onNext={nextChapter}
+          />
 
           <ChapterList
             chapters={chapters}

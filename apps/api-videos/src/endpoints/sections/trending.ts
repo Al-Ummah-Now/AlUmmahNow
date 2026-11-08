@@ -7,6 +7,7 @@ import R2Repository from "../../lib/r2Repo";
 import { IndexManager, INDEX_STALENESS_THRESHOLD } from "../../lib/indexManager";
 import { processTrendingVideos, processTimeWindowTrendingVideos, processCategoryTrendingVideos } from "../../lib/trendingAlgorithm";
 import { logger } from "../../lib/logger";
+import { emptyShelf } from "../../lib/shelf";
 
 const TrendingMetadataSchema = z.object({
   rank: z.number(),
@@ -105,9 +106,9 @@ export class TrendingVideosSection extends PublicRoute {
   };
 
   async handle(c: AppContext) {
+    // Validation stays outside the try: invalid input is a 400 from chanfana
+    const data = await this.getValidatedData<typeof this.schema>();
     try {
-      // Get validated data
-      const data = await this.getValidatedData<typeof this.schema>();
       const { limit, cursor, algorithm = 'hybrid', timeWindow = '24h', category, region } = data.query;
 
       // Parse time window to hours
@@ -252,14 +253,7 @@ export class TrendingVideosSection extends PublicRoute {
         });
       }
     } catch (error) {
-      logger.error("Error in trending videos endpoint", { error });
-      return c.json(
-        {
-          success: false,
-          error: error instanceof Error ? error.message : "Internal server error",
-        },
-        500
-      );
+      return emptyShelf(c, "trending", error);
     }
   }
 }

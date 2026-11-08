@@ -8,7 +8,10 @@
     "crons": ["17 3 * * *"]
   },
   "observability": {
-    "enabled": true
+    "enabled": true,
+    // Workers Logs bills per line: log 10% of invocations (sampling drops errors too)
+    "head_sampling_rate": 0.1,
+    "logs": { "enabled": true, "head_sampling_rate": 0.1 }
   },
   "r2_buckets": [
     {
@@ -87,6 +90,10 @@
       "migrations_dir": "migrations/search"
     }
   ],
+  // Watch-time reports per playback session (#235); videoWatchTime.ts
+  "ratelimits": [
+    { "name": "WATCH_TIME_LIMITER", "namespace_id": "2203", "simple": { "limit": 6, "period": 60 } }
+  ],
   "kv_namespaces": [
     {
       "binding": "RATE_LIMIT_KV",
@@ -103,6 +110,10 @@
       {
         "queue": "al-ummah-now-videos-qa",
         "binding": "queue"
+      },
+      {
+        "queue": "al-ummah-now-moderation-qa",
+        "binding": "MODERATION_QUEUE"
       }
     ]
   },
@@ -135,15 +146,17 @@
     }
   ],
   "vars": {
+    // Upload-session limits enforced on QA with roomy numbers, so limiter bugs show here (#290)
+    "UPLOAD_RATE_LIMIT": "relaxed",
     "ZONE": "al-ummah-now-images",
-    "ClientId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    "ClientId": "c1770235-e4b6-42f3-9eb4-3c03ca111b02",
     "Issuer": "https://auth.qa.alummahnow.net",
     "Audience": "https://videos.api.qa.alummahnow.net",
     "bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
     // Flip to "true" together with enabling CDN token authentication on the library
     "BUNNY_SIGN_URLS": "true",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
-    "CORS_ORIGINS": "https://videos.qa.alummahnow.net,https://admin.qa.alummahnow.net"
+    "CORS_ORIGINS": "https://videos.qa.alummahnow.net,https://admin.qa.alummahnow.net,https://qa.alummahnow.net,https://www.qa.alummahnow.net,https://cms.qa.alummahnow.net"
   },
   "dev": {
     "ip": "127.0.0.1",

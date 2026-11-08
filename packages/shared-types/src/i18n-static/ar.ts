@@ -8,6 +8,8 @@
 
 import type { AppTranslations } from '../i18n';
 import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from '../i18n-library';
+import { BULK_EDIT_AR } from '../i18n-bulk-edit';
+import { COMMUNITY_GUIDELINES_AR } from '../i18n-community-guidelines';
 
 export const AR_TRANSLATIONS: AppTranslations = {
   imageCrop: {
@@ -24,6 +26,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
     loadFailed: 'تعذّر فتح هذه الصورة. جرّب ملف JPEG أو PNG.',
   },
   library: LIBRARY_AR,
+  bulkEdit: BULK_EDIT_AR,
+  communityGuidelines: COMMUNITY_GUIDELINES_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,
   common: {
     appName: 'الأمة الآن',
@@ -99,6 +103,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     channel: 'قناة',
     channels: 'قنوات',
     removeAccount: 'إزالة الحساب',
+    removeAccountConfirm: "إزالة الحساب {email}؟ سيؤدي ذلك إلى تسجيل خروجك من هذا الحساب.",
     signOutOfAllDescription: 'سيتم تسجيل خروجك من جميع الحسابات البالغ عددها {count}.',
     openMenu: 'فتح القائمة',
     theme: 'المظهر',
@@ -126,6 +131,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     channelBanner: 'غلاف القناة',
     mainChannel: 'القناة الرئيسية',
     subscribers: 'المشتركون',
+    subscriberSingular: "مشترك",
     videos: 'الفيديوهات',
     subscribe: 'اشترك',
     subscribed: 'مشترك',
@@ -352,6 +358,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
 
   video: {
     videos: 'الفيديوهات',
+    videoSingular: "فيديو",
     uploadVideo: 'رفع فيديو',
     editVideo: 'تعديل الفيديو',
     deleteVideo: 'حذف الفيديو',
@@ -555,6 +562,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     searchButton: 'بحث',
     searching: 'جاري البحث...',
     foundResults: 'تم العثور على {count} نتيجة',
+    foundOneResult: "تم العثور على نتيجة واحدة",
     foundResultsFor: 'تم العثور على {count} نتيجة لـ "{query}"',
     activeFilters: 'المرشحات النشطة:',
     category: 'الفئة',
@@ -937,6 +945,31 @@ export const AR_TRANSLATIONS: AppTranslations = {
       avgDailyViews: 'متوسط المشاهدات اليومية',
       noMetrics: 'لا يوجد نشاط في هذه الفترة',
       changeVsPrevious: '{change} مقارنة بالأسبوعين السابقين',
+      watchTimeHours: 'وقت المشاهدة',
+      hoursValue: '{hours} ساعة',
+      newSubscribers: 'المشتركون الجدد',
+      inLastDays: 'آخر {days} يومًا',
+      watchTimeOverTime: 'وقت المشاهدة عبر الزمن',
+      subscribersOverTime: 'المشتركون الجدد عبر الزمن',
+      minutesCount: '{count} دقيقة',
+      subscribersCount: '{count} مشترك جديد',
+      videoAnalytics: 'إحصاءات الفيديو',
+      viewAnalytics: 'الإحصاءات',
+      backToAnalytics: 'العودة إلى الإحصاءات',
+      avgViewDuration: 'متوسط مدة المشاهدة',
+      watchTimeTotal: 'إجمالي وقت المشاهدة',
+      published: 'نُشر في {date}',
+      videoLoadError: 'تعذّر تحميل إحصاءات هذا الفيديو. ربما لم يعد موجودًا أو يتبع قناة أخرى.',
+      retry: 'إعادة المحاولة',
+      retentionComingSoon: 'سيظهر هنا مدى احتفاظ الفيديو بالمشاهدين عند توفر تتبع الاحتفاظ.',
+      exportCsv: 'تصدير CSV',
+      exportCsvHint: 'نزّل الأرقام اليومية وأفضل المقاطع كملف CSV',
+      csvDate: 'التاريخ',
+      csvShares: 'المشاركات',
+      csvWatchTimeHours: 'وقت المشاهدة (ساعات)',
+      csvVideo: 'الفيديو',
+      csvVideoId: 'معرّف الفيديو',
+      csvPublished: 'تاريخ النشر',
     },
   },
 
@@ -1676,6 +1709,11 @@ export const AR_TRANSLATIONS: AppTranslations = {
     removeFailed: 'تعذر إزالة هذا الفيديو من السجل.',
     clearFailed: 'تعذر مسح سجل المشاهدة.',
     totalCount: '{count} فيديو',
+    totalCountOne: "فيديو واحد",
+    pause: 'إيقاف سجل المشاهدة مؤقتاً',
+    resume: 'تشغيل السجل مجدداً',
+    pausedNotice: 'سجل المشاهدة متوقف مؤقتاً. لن تُضاف الفيديوهات التي تشاهدها الآن إلى سجلك ولن تُستخدم في الاقتراحات.',
+    pauseFailed: 'تعذر تغيير إعداد السجل. يرجى المحاولة مرة أخرى.',
   },
 
   live: {

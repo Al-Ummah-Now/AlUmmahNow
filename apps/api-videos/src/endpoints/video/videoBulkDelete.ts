@@ -93,7 +93,7 @@ export class VideoBulkDelete extends AuthenticatedRoute {
 					}
 
 					// Only the owner may delete a video
-					if (video.userId !== userId) {
+					if (!userId || video.userId !== userId) {
 						return {
 							videoId,
 							success: false,

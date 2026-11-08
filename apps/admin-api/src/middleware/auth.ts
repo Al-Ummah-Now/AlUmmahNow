@@ -2,6 +2,7 @@ import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
+import { normalizeRoles, hasAdminRole, hasModeratorRole } from '../lib/roles';
 
 interface AuthPayload {
   sub: string;
@@ -35,14 +36,6 @@ export interface AuthContext {
   email?: string;
   payload: AuthPayload;
   roles?: string[];
-}
-
-/**
- * The auth server emits RBAC role display names ("Super Admin", "Admin",
- * "Moderator"); normalize to snake_case ids used throughout this service.
- */
-export function normalizeRole(role: string): string {
-  return String(role ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
 /**
@@ -83,7 +76,7 @@ export async function authMiddleware(c: Context, next: Next) {
     }
 
     // Log non-sensitive token data only
-    logger.info('Auth token payload received', {
+    logger.debug('Auth token payload received', {
       userId: payload.sub,
       email: maskEmail(payload.email),
       roles: payload.roles,
@@ -96,7 +89,8 @@ export async function authMiddleware(c: Context, next: Next) {
     c.set('auth', {
       userId: payload.sub,
       email: payload.email,
-      roles: (payload.roles || []).map(normalizeRole),
+      // Tokens carry RBAC display names ("Super Admin"); store snake_case ids.
+      roles: normalizeRoles(payload.roles),
       payload
     } as AuthContext);
 
@@ -130,10 +124,10 @@ export async function adminMiddleware(c: Context, next: Next) {
 
     // Get roles from auth context (populated from token)
     const roles = auth.roles || [];
-    const isAdmin = roles.includes('admin') || roles.includes('super_admin');
-    const isModerator = roles.includes('moderator');
+    const isAdmin = hasAdminRole(roles);
+    const isModerator = hasModeratorRole(roles);
 
-    logger.info('Admin middleware checking roles', {
+    logger.debug('Admin middleware checking roles', {
       userId: auth.userId,
       email: maskEmail(auth.email),
       roles: roles,
@@ -176,7 +170,7 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
     const payload = JSON.parse(atob(parts[1])) as AuthPayload;
 
     // Log non-sensitive JWT data only
-    logger.info('JWT basic validation', {
+    logger.debug('JWT basic validation', {
       userId: payload.sub,
       email: maskEmail(payload.email),
       roles: payload.roles,
@@ -209,7 +203,7 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     const result = await client.verify(AUTH_CONFIG.SUBJECTS, token, { refresh: undefined });
 
     // Log non-sensitive OpenAuth verification result
-    logger.info('OpenAuth verify result', {
+    logger.debug('OpenAuth verify result', {
       hasSubject: 'subject' in result,
       subjectType: 'subject' in result ? result.subject?.type : undefined,
       hasError: 'err' in result
@@ -264,10 +258,9 @@ export function getUserRoles(c: Context): string[] {
 }
 
 export function isAdmin(c: Context): boolean {
-  return getUserRoles(c).includes('admin');
+  return hasAdminRole(getUserRoles(c));
 }
 
 export function isModerator(c: Context): boolean {
-  const roles = getUserRoles(c);
-  return roles.includes('admin') || roles.includes('moderator');
+  return hasModeratorRole(getUserRoles(c));
 }

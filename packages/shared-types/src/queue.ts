@@ -116,6 +116,29 @@ export enum MessageType {
   // The processor projects the object and updates the D1 search index (no object = deleted).
   // Explicit value in its own reserved range, like the notification types above.
   SearchIndexSync = 210,
+
+  // Analytics (#235). Explicit values in their own reserved range (220-229).
+  // Played seconds since the last report for one playback session (payload:
+  // VideoWatchTimePayload). The processor adds them to the video and channel
+  // rollups' watchTime without counting a view.
+  VideoWatchTime = 220,
+
+  // AI-assisted moderation (Epic 28). Explicit value in its own reserved range (230-239).
+  // Sent by api-videos to the dedicated moderation queue (payload: ModerationScanPayload).
+  ModerationScan = 230,
+}
+
+/** Payload of MessageType.VideoWatchTime. */
+export interface VideoWatchTimePayload {
+  videoId: string;
+  /** Owning channel; null for legacy (imported) videos */
+  videoChannelId: string | null;
+  /** Played seconds since the previous report, 0 < seconds <= 60 */
+  seconds: number;
+  sessionId: string;
+  viewerId?: string;
+  /** ISO time of the report (selects the rollup day) */
+  timestamp: string;
 }
 
 // Generic message structure for queue messages

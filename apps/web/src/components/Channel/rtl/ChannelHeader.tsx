@@ -1,5 +1,6 @@
 'use client';
 
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { Channel } from '@al-ummah/shared-types';
 import Image from 'next/image';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -69,12 +70,13 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
       <div className="container mx-auto px-4 py-6">
         <div className="flex gap-6 items-start">
           {/* Channel Avatar */}
-          <div className="relative w-20 h-20 md:w-32 md:h-32 rounded-full overflow-hidden bg-gray-300 dark:bg-gray-700 flex-shrink-0">
+          <div className="relative w-20 h-20 md:w-32 md:h-32 aspect-square rounded-full overflow-hidden bg-gray-300 dark:bg-gray-700 flex-shrink-0" data-testid="channel-header-avatar">
             {channel.avatarUrl ? (
               <Image
                 src={channel.avatarUrl}
                 alt={`${displayName} avatar`}
                 fill
+                sizes="(min-width: 768px) 128px, 80px"
                 className="object-cover"
               />
             ) : (
@@ -91,20 +93,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white truncate">
                   {displayName}
                 </h1>
-                {channel.isVerified && (
-                  <svg
-                    className="w-5 h-5 md:w-6 md:h-6 text-blue-600 flex-shrink-0"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                    aria-label="Verified"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
+                {channel.isVerified && <VerifiedBadge size="md" />}
               </div>
 
               {/* Subscribe Button (+ per-channel bell while subscribed) - Only show if not owner */}
@@ -152,14 +141,14 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
             <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
               {subscriberCount !== undefined && (
                 <span data-testid="channel-subscriber-count">
-                  {formatSubscriberCount(subscriberCount)} {t.channel.subscribers}
+                  {formatSubscriberCount(subscriberCount)} {subscriberCount === 1 ? t.channel.subscriberSingular : t.channel.subscribers}
                 </span>
               )}
               {channel.videosCount !== undefined && channel.videosCount > 0 && (
                 <>
                   <span>•</span>
                   <span>
-                    {formatNumber(channel.videosCount)} {t.video.videos}
+                    {formatNumber(channel.videosCount)} {channel.videosCount === 1 ? t.video.videoSingular : t.video.videos}
                   </span>
                 </>
               )}

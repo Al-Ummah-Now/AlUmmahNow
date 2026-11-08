@@ -167,3 +167,14 @@ describe('subscriptions', () => {
 		assert.deepEqual(buildSubscriptionFeed(videos, ['s1', 's2'], 2, '2').items.map((v) => v.id), ['a']);
 	});
 });
+
+describe('video view carries the channel verification badge (Epic 6.1)', () => {
+	it('channelIsVerified follows the channel, false without one', async () => {
+		const { transformVideoToView } = await import('../src/lib/transformations');
+		const { videoFixture } = await import('./helpers');
+		const video = videoFixture() as never;
+		assert.equal(transformVideoToView(video, { id: 'c', name: 'Noor', isVerified: true } as never).channelIsVerified, true);
+		assert.equal(transformVideoToView(video, { id: 'c', name: 'Noor' } as never).channelIsVerified, false);
+		assert.equal(transformVideoToView(video, null).channelIsVerified, false);
+	});
+});

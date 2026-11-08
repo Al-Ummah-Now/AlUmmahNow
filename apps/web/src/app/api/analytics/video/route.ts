@@ -10,11 +10,15 @@ import { logger } from '@/lib/logger-client';
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { watchTimeReports, type WatchTimeEvent } from '@/lib/video/watch-time';
+import { viewContextFromBatch } from '@/lib/embed/view-context';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const events = body.events || [];
+    // Embed frames tag their views (docs/embeds §6); anything invalid counts as a watch-page view
+    const viewContext = viewContextFromBatch(body.context);
 
     // Log analytics event in development with detailed error information
     if (process.env.NODE_ENV === 'development') {
@@ -60,8 +64,9 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({
               watchTime: 0, // Initial view, no watch time yet
-              referrer: 'direct',
+              referrer: viewContext.source === 'embed' ? 'embed' : 'direct',
               deviceType: 'desktop',
+              ...viewContext,
             }),
           });
 
@@ -78,12 +83,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // #235: played-seconds reports → POST /api/videos/:id/watch-time
+    const watchTime = await forwardWatchTime(events);
+
     return NextResponse.json({
       success: true,
       message: 'Analytics event received',
       processed: {
         total: events.length,
-        views: readyEvents.length
+        views: readyEvents.length,
+        watchTime,
       }
     });
   } catch (error) {
@@ -97,6 +106,30 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/** Forward watch-time reports; returns how many api-videos accepted. Never throws. */
+async function forwardWatchTime(events: WatchTimeEvent[]): Promise<number> {
+  const reports = watchTimeReports(events);
+  if (reports.length === 0) return 0;
+  const apiUrl = process.env.API_URL || '';
+  const results = await Promise.all(
+    reports.map(async ({ videoId, sessionId, seconds }) => {
+      try {
+        const response = await fetch(`${apiUrl}/api/videos/${encodeURIComponent(videoId)}/watch-time`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ seconds, sessionId }),
+        });
+        if (!response.ok) logger.warn(`[Analytics] watch-time not accepted: ${response.status}`, { videoId });
+        return response.ok;
+      } catch (error) {
+        logger.error('[Analytics] Error forwarding watch time:', error);
+        return false;
+      }
+    })
+  );
+  return results.filter(Boolean).length;
 }
 
 export async function GET() {

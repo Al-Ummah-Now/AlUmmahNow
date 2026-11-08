@@ -3,6 +3,15 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2024-09-01",
 	"compatibility_flags": ["nodejs_compat"],
+	"version_metadata": { "binding": "CF_VERSION_METADATA" },
+
+	// Production custom domain (zone alummahnow.net)
+	"routes": [
+		{
+			"pattern": "admin.api.alummahnow.net",
+			"custom_domain": true
+		}
+	],
 
 	// D1 database for moderation reports
 	"d1_databases": [
@@ -79,6 +88,70 @@
 
 	// Environment-specific configurations
 	"env": {
+		// Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
+		"stage": {
+			// Workers Logs bills per line: log 10% of invocations (sampling drops errors too)
+			"observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "head_sampling_rate": 0.1 } },
+			"version_metadata": { "binding": "CF_VERSION_METADATA" },
+			"name": "al-ummah-admin-api-stage",
+			"routes": [
+				{
+					"pattern": "admin.api.stage.alummahnow.net",
+					"custom_domain": true
+				}
+			],
+			"d1_databases": [
+				{
+					"binding": "REPORTS_DB",
+					"database_name": "al-ummah-now-reports-stage",
+					"database_id": "2b2c07fc-2823-46e0-958f-acfc401544ff",
+					"migrations_dir": "migrations"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "videos",
+					"bucket_name": "videos-stage"
+				},
+				{
+					"binding": "channels",
+					"bucket_name": "channels-stage"
+				},
+				{
+					"binding": "profiles",
+					"bucket_name": "profiles-stage"
+				},
+				{
+					"binding": "playlists",
+					"bucket_name": "playlists-stage"
+				},
+				{
+					"binding": "global_settings",
+					"bucket_name": "global-settings-stage"
+				}
+			],
+			"queues": {
+				"producers": [
+					{
+						"binding": "queue",
+						"queue": "al-ummah-now-videos-stage"
+					}
+				]
+			},
+			"vars": {
+				"ENVIRONMENT": "stage",
+				"LOG_LEVEL": "info",
+				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
+				"Issuer": "https://auth.stage.alummahnow.net"
+			},
+			"secrets_store_secrets": [
+				{
+					"binding": "INTERNAL_API_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "internal-api-key-stage"
+				}
+			]
+		},
 		"development": {
 			"vars": {
 				"ENVIRONMENT": "development",
@@ -97,9 +170,10 @@
 
 	// Observability
 	"observability": {
-		"logs": {
-			"enabled": true
-		}
+		"enabled": true,
+		// Low traffic: keep every invocation. Lower this when traffic grows.
+		"head_sampling_rate": 1,
+		"logs": { "enabled": true, "head_sampling_rate": 1 }
 	},
 
 	// Development server configuration

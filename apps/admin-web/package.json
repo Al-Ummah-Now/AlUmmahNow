@@ -8,13 +8,14 @@
     "build:worker": "opennextjs-cloudflare build",
     "start": "next start --port 3091",
     "preview": "opennextjs-cloudflare build && wrangler dev",
-    "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "deploy:production": "opennextjs-cloudflare build && wrangler deploy --config wrangler.production.jsonc",
     "deploy:qa": "opennextjs-cloudflare build && CI=true wrangler deploy --config wrangler.qa.jsonc",
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@al-ummah/logger": "workspace:*",

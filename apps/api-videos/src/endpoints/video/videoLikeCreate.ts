@@ -1,11 +1,12 @@
 import { Str } from "chanfana";
-import { date, z } from "zod";
+import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import { recordLike } from "../../lib/library";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { ReactorHeaders, applyVideoReaction, reactorId } from "../../lib/reactions";
 
 export class LikeCreate extends AuthenticatedRoute {
     schema = {
@@ -15,9 +16,7 @@ export class LikeCreate extends AuthenticatedRoute {
             params: z.object({
                 id: Str({ description: "Video id" }),
             }),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-			}),
+			headers: ReactorHeaders,
         },
         responses: {
             "200": {
@@ -50,83 +49,38 @@ export class LikeCreate extends AuthenticatedRoute {
     };
 
     async handle(c: AppContext) {
-        // Get validated data
         const request = await this.getValidatedData<typeof this.schema>();
-
-        // Retrieve the validated slug
         const { id } = request.params;
-		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
+        const userId = this.getUserId(c);
+        const channelId = reactorId(request.headers.channelId, userId);
 
-        // Implement your own object fetch here
-        const bucket = c.env.videos;
-        type VideoType = z.infer<typeof Video>;
-        const repository = new R2Repository<VideoType>(bucket);
-        let video = await repository.getObject(id);
-
-        const exists = video !== null;
-
-        if (!exists) {
-            return c.json(
-                {
-                    success: false,
-                    error: "Object not found",
-                },
-                404
-            );
+        const repository = new R2Repository<z.infer<typeof Video>>(c.env.videos);
+        const result = await applyVideoReaction(repository, id, "likes", "add", { userId, channelId });
+        if (!result) {
+            return c.json({ success: false, error: "Object not found" }, 404);
         }
 
-        const like = {
-            id: crypto.randomUUID(),
-            userId: userId,
-			channelId: channelId,
-			entityId: id,
-            dateCreated: new Date().toISOString(),
-        }
-
-        const queue = new Queue(c.env.queue);
-		await queue.send(MessageType.VideoLike, {
-			likeId: like.id,
-			videoId: id,
-			userId: userId,
-			channelId: channelId,
-			timestamp: new Date().toISOString(),
-		});
-
-        // Check if the user has already liked the video
-        const alreadyLiked = (video.likes || []).find((existingLike) => existingLike.entityId === id && existingLike.channelId === channelId);
         // Per-user liked-videos index (Library, Story 29.6); idempotent
         await recordLike(c.env.NOTIFICATIONS_DB, userId, id);
-        if (alreadyLiked) {
-            return c.json(
-                {
-                    success: true,
-                },
-                201
-            );
+
+        // Liking twice is a no-op: no second event or broadcast
+        if (result.changed) {
+            await new Queue(c.env.queue).send(MessageType.VideoLike, {
+                likeId: result.changed.id,
+                videoId: id,
+                userId,
+                channelId,
+                timestamp: result.changed.dateCreated,
+            });
+            broadcastInBackground(c, `video:${id}`, 'video_liked', {
+                videoId: id,
+                userId,
+                likesCount: result.video.likes.length,
+                dislikesCount: result.video.dislikes.length,
+            });
         }
 
-		// Initialize likes array if it doesn't exist
-		if (!video.likes) {
-			video.likes = [];
-		}
-		// Note: likesCount is calculated in view layer, not stored
-		// Conditional write: a concurrent reaction on this video is re-read, not overwritten
-		video = (await repository.updateObject(video.id, (fresh) => {
-			fresh.likes = fresh.likes || [];
-			if (fresh.likes.some((l) => l.entityId === id && l.channelId === channelId)) return false;
-			fresh.likes.push(like);
-			return true;
-		})) ?? video;
-
-		broadcastInBackground(c, `video:${id}`, 'video_liked', {
-			videoId: id,
-			userId,
-			likesCount: video.likes.length,
-			dislikesCount: video.dislikes?.length || 0,
-		});
-
-		// chanfana cannot build a response from a bare boolean (it 500ed after storing the like)
-		return { success: true };
+        // chanfana cannot build a response from a bare boolean (it 500ed after storing the like)
+        return { success: true };
     }
 }

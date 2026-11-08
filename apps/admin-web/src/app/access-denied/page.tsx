@@ -1,5 +1,4 @@
 import { getAdminSession } from '@/lib/auth';
-import { logout } from '@/app/actions';
 import { getI18n } from '@/i18n/server';
 import { PublicShell } from '@/components/PublicShell';
 import { primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -50,7 +49,7 @@ export default async function AccessDeniedPage() {
           <p className="text-sm text-fg-muted">{t('accessDenied.contactAdmin')}</p>
 
           <div className="flex flex-col gap-3">
-            <form action={logout}>
+            <form action="/api/logout" method="POST">
               <button type="submit" className={`${primaryButtonClass} w-full py-2`}>
                 {t('common.logout')}
               </button>

@@ -8,7 +8,7 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useWatchHistory } from '@/hooks/useWatchHistory';
 import { resolveUrl } from '@/lib/utility';
-import type { WatchHistoryEntryProps } from '../index';
+import { PauseHistoryButton, PausedNotice, watchHistoryErrorMessage, type WatchHistoryEntryProps } from '../index';
 
 function WatchHistoryEntryRTL({ entry, lang, t, onRemove }: WatchHistoryEntryProps) {
   const percent = Math.max(0, Math.min(100, Math.round(entry.percentageWatched || 0)));
@@ -28,10 +28,14 @@ function WatchHistoryEntryRTL({ entry, lang, t, onRemove }: WatchHistoryEntryPro
         <Link href={`/${lang}/video/${entry.videoId}`} className="font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
           {entry.videoTitle}
         </Link>
-        {entry.channelName && (
+        {entry.channelName && entry.channelId && (
           <Link href={`/${lang}/channels/${entry.channelId}`} className="block text-sm text-gray-600 dark:text-gray-400 hover:underline">
             {entry.channelName}
           </Link>
+        )}
+        {/* Legacy videos have a channel name but no channel page */}
+        {entry.channelName && !entry.channelId && (
+          <span className="block text-sm text-gray-600 dark:text-gray-400">{entry.channelName}</span>
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           {t.watchHistory.lastWatched.replace('{date}', watchedOn)}
@@ -76,13 +80,7 @@ export default function WatchHistoryPageRTL() {
     );
   }
 
-  const errorMessage = history.error === 'load'
-    ? t.watchHistory.loadFailed
-    : history.error === 'remove'
-      ? t.watchHistory.removeFailed
-      : history.error === 'clear'
-        ? t.watchHistory.clearFailed
-        : null;
+  const errorMessage = watchHistoryErrorMessage(history.error, t);
 
   return (
     <div className="max-w-4xl mx-auto p-6 text-right" dir="rtl">
@@ -91,17 +89,22 @@ export default function WatchHistoryPageRTL() {
           <h1 className="text-3xl font-bold">{t.watchHistory.title}</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             {history.total > 0
-              ? t.watchHistory.totalCount.replace('{count}', String(history.total))
+              ? (history.total === 1 ? t.watchHistory.totalCountOne : t.watchHistory.totalCount.replace('{count}', String(history.total)))
               : t.watchHistory.subtitle}
           </p>
         </div>
-        {history.entries.length > 0 && (
-          <Button variant="outline" size="sm" onClick={handleClear} disabled={history.isClearing} className="flex items-center gap-2">
-            <Trash2 className="w-4 h-4" />
-            {history.isClearing ? t.watchHistory.clearing : t.watchHistory.clearAll}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <PauseHistoryButton history={history} t={t} />
+          {history.entries.length > 0 && (
+            <Button variant="outline" size="sm" onClick={handleClear} disabled={history.isClearing} className="flex items-center gap-2">
+              <Trash2 className="w-4 h-4" />
+              {history.isClearing ? t.watchHistory.clearing : t.watchHistory.clearAll}
+            </Button>
+          )}
+        </div>
       </div>
+
+      <PausedNotice history={history} t={t} />
 
       {errorMessage && (
         <p className="mb-4 text-sm text-red-600 dark:text-red-400" role="alert">{errorMessage}</p>

@@ -13,11 +13,21 @@
 import type { Player } from 'video.js';
 import type { ExtendedPlayer } from './videojs';
 import { logger } from '@/lib/logger-client';
+import { getTranslations } from '@/lib/video/i18n/utils/getTranslations';
+import type { SupportedLanguage, VideoPlayerTranslations } from '@/lib/video/i18n/types';
 
 
 const STORAGE_KEY = 'videoPlayerVolume';
 const VOLUME_STEP = 0.1; // 10% steps
-const INDICATOR_DURATION = 1500; // 1.5 seconds
+const INDICATOR_DURATION = 800;
+
+/** Pending hide per indicator, so a rapid series of changes keeps it visible once. */
+const indicatorHideTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+
+function volumeText(translations: VideoPlayerTranslations, percentage: number, muted: boolean): string {
+  const { muted: mutedText, volume } = translations.accessibility.announcements;
+  return muted ? mutedText : volume.replace('{volume}', String(percentage));
+}
 
 export interface VolumeState {
   volume: number;
@@ -139,7 +149,12 @@ function createVolumeIndicator(playerElement: HTMLElement): HTMLDivElement {
 /**
  * Show volume indicator with current volume
  */
-export function showVolumeIndicator(player: Player | ExtendedPlayer, volume: number, muted: boolean): void {
+export function showVolumeIndicator(
+  player: Player | ExtendedPlayer,
+  volume: number,
+  muted: boolean,
+  lang: SupportedLanguage = 'en'
+): void {
   const playerElement = (player as ExtendedPlayer).el();
   if (!playerElement) return;
 
@@ -151,7 +166,7 @@ export function showVolumeIndicator(player: Player | ExtendedPlayer, volume: num
     ? '<svg class="vjs-volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6"/></svg>'
     : '<svg class="vjs-volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>';
 
-  const text = muted ? 'Muted' : `${percentage}%`;
+  const text = muted ? getTranslations(lang).accessibility.announcements.muted : `${percentage}%`;
   indicator.innerHTML = `${iconHtml}<span class="vjs-volume-text">${text}</span>`;
 
   // Trigger animation
@@ -159,10 +174,16 @@ export function showVolumeIndicator(player: Player | ExtendedPlayer, volume: num
   void indicator.offsetWidth; // Force reflow
   indicator.classList.add('vjs-volume-indicator-show');
 
-  // Auto-hide after duration
-  setTimeout(() => {
-    indicator.classList.remove('vjs-volume-indicator-show');
-  }, INDICATOR_DURATION);
+  // Auto-hide after duration, restarted by each change so rapid changes don't flicker
+  const pendingHide = indicatorHideTimers.get(indicator);
+  if (pendingHide !== undefined) clearTimeout(pendingHide);
+  indicatorHideTimers.set(
+    indicator,
+    setTimeout(() => {
+      indicator.classList.remove('vjs-volume-indicator-show');
+      indicatorHideTimers.delete(indicator);
+    }, INDICATOR_DURATION)
+  );
 }
 
 /**
@@ -234,7 +255,10 @@ export function setupScrollWheelControl(player: Player | ExtendedPlayer): () => 
 /**
  * Setup keyboard accessibility for volume control
  */
-export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () => void {
+export function setupKeyboardAccessibility(
+  player: Player | ExtendedPlayer,
+  lang: SupportedLanguage = 'en'
+): () => void {
   const extPlayer = player as ExtendedPlayer;
   const playerElement = extPlayer.el();
   if (!playerElement) return () => {};
@@ -252,10 +276,14 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
   // Ensure volume bar is keyboard accessible
   volumeBar.setAttribute('tabindex', '0');
   volumeBar.setAttribute('role', 'slider');
-  volumeBar.setAttribute('aria-label', 'Volume control');
+  const translations = getTranslations(lang);
+  volumeBar.setAttribute('aria-label', translations.accessibility.volumeSlider);
   volumeBar.setAttribute('aria-valuemin', '0');
   volumeBar.setAttribute('aria-valuemax', '100');
-  volumeBar.setAttribute('aria-orientation', 'vertical');
+  // The inline slider is horizontal; a value change is already announced through
+  // aria-valuetext, so an aria-live on the slider would announce it twice.
+  volumeBar.setAttribute('aria-orientation', 'horizontal');
+  volumeBar.removeAttribute('aria-live');
 
   // Update ARIA values when volume changes
   const updateAriaValues = (): void => {
@@ -264,7 +292,7 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
     const percentage = Math.round(volume * 100);
     
     volumeBar.setAttribute('aria-valuenow', muted ? '0' : percentage.toString());
-    volumeBar.setAttribute('aria-valuetext', muted ? 'Muted' : `${percentage}% volume`);
+    volumeBar.setAttribute('aria-valuetext', volumeText(translations, percentage, muted));
   };
 
   // Initial ARIA setup
@@ -278,7 +306,9 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
     }
 
     event.preventDefault();
-    event.stopPropagation();
+    // Video.js's own slider handler is on this same element; without
+    // stopImmediatePropagation one key press would move the volume twice.
+    event.stopImmediatePropagation();
 
     const currentVolume = extPlayer.volume();
     const currentMuted = extPlayer.muted();
@@ -335,7 +365,8 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
   };
 
   // Add event listeners
-  volumeBar.addEventListener('keydown', handleKeyDown);
+  // Capture phase: runs before the Video.js handler registered earlier on this element
+  volumeBar.addEventListener('keydown', handleKeyDown, true);
   player.on('volumechange', handleVolumeChange);
 
   // Ensure volume panel shows slider when focused
@@ -356,7 +387,7 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
 
   // Return cleanup function
   return () => {
-    volumeBar.removeEventListener('keydown', handleKeyDown);
+    volumeBar.removeEventListener('keydown', handleKeyDown, true);
     volumeBar.removeEventListener('focus', handleFocus);
     volumeBar.removeEventListener('blur', handleBlur);
     player.off('volumechange', handleVolumeChange);
@@ -366,7 +397,10 @@ export function setupKeyboardAccessibility(player: Player | ExtendedPlayer): () 
 /**
  * Setup volume change listener for persistence and feedback
  */
-export function setupVolumeChangeListener(player: Player | ExtendedPlayer): () => void {
+export function setupVolumeChangeListener(
+  player: Player | ExtendedPlayer,
+  lang: SupportedLanguage = 'en'
+): () => void {
   const extPlayer = player as ExtendedPlayer;
 
   const handleVolumeChange = (): void => {
@@ -381,7 +415,7 @@ export function setupVolumeChangeListener(player: Player | ExtendedPlayer): () =
     }
 
     // Show visual feedback
-    showVolumeIndicator(player, volume, muted);
+    showVolumeIndicator(player, volume, muted, lang);
 
     logger.info('[VolumeControl] Volume changed:', { volume, muted });
   };
@@ -397,7 +431,10 @@ export function setupVolumeChangeListener(player: Player | ExtendedPlayer): () =
 /**
  * Initialize all volume controls for a player
  */
-export function initializeVolumeControls(player: Player | ExtendedPlayer): () => void {
+export function initializeVolumeControls(
+  player: Player | ExtendedPlayer,
+  lang: SupportedLanguage = 'en'
+): () => void {
   const cleanupFunctions: Array<() => void> = [];
 
   // Apply saved volume state (synchronous now)
@@ -412,11 +449,11 @@ export function initializeVolumeControls(player: Player | ExtendedPlayer): () =>
   cleanupFunctions.push(cleanupScrollWheel);
 
   // Setup volume change listener
-  const cleanupVolumeChange = setupVolumeChangeListener(player);
+  const cleanupVolumeChange = setupVolumeChangeListener(player, lang);
   cleanupFunctions.push(cleanupVolumeChange);
 
   // Setup keyboard accessibility
-  const cleanupKeyboard = setupKeyboardAccessibility(player);
+  const cleanupKeyboard = setupKeyboardAccessibility(player, lang);
   cleanupFunctions.push(cleanupKeyboard);
 
   // Return combined cleanup function

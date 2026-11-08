@@ -2,6 +2,7 @@ import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
+import { isUserScopedRoute } from '../lib/reactions';
 
 // Type for the decoded JWT payload from OpenAuth
 interface AuthPayload {
@@ -11,6 +12,7 @@ interface AuthPayload {
   exp: number; // Expiration
   aud?: string; // Audience
   iss?: string; // Issuer
+  roles?: string[]; // RBAC role names from the auth server (e.g. "Super Admin")
 }
 
 // Type for the auth context that will be available in handlers
@@ -109,10 +111,11 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
         iat: now,
         aud: authConfig.JWT.AUDIENCE,  // ✅ Now using dynamic config
         iss: authConfig.JWT.ISSUER,    // ✅ Now using dynamic config
+        roles: Array.isArray(openAuthPayload.roles) ? openAuthPayload.roles.map(String) : [],
       };
 
       // Additional validation with environment config
-      logger.info(`JWT validated for issuer: ${authConfig.JWT.ISSUER}, audience: ${authConfig.JWT.AUDIENCE}`);
+      logger.debug(`JWT validated for issuer: ${authConfig.JWT.ISSUER}, audience: ${authConfig.JWT.AUDIENCE}`);
       
       return payload;
     }
@@ -203,6 +206,13 @@ export async function channelIdMiddleware(c: Context, next: Next) {
         success: false,
         error: 'Authentication required'
       }, 401);
+    }
+
+    // Likes and dislikes belong to the member: one without a channel reacts
+    // as themselves, with their own user id as channelId (#292). Every other
+    // route still needs a real channel owned by the caller.
+    if (channelId === auth.userId && isUserScopedRoute(c.req.path)) {
+      return await next();
     }
 
     // Fetch channel from R2

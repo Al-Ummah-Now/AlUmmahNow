@@ -3,12 +3,14 @@
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, UploadCloud, Trash2, Eye, Edit, X } from 'lucide-react';
+import { Search, UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VideoObject } from '@/interfaces';
-import { searchVideos, bulkDeleteVideos } from '@/lib/api/videos';
+import { searchVideos, bulkDeleteVideos, bulkUpdateVideos } from '@/lib/api/videos';
+import { BulkEditDialog } from '@/components/bulkEdit/BulkEditDialog';
+import { applyChangesLocally, type BulkVideoChanges } from '@/lib/dashboard/bulk-edit';
 import Image from 'next/image';
 import Link from 'next/link';
 import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
@@ -56,6 +58,8 @@ export default function VideoDashboardPage() {
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
 
   // Redirect if not authenticated or no channels
   useEffect(() => {
@@ -332,6 +336,50 @@ export default function VideoDashboardPage() {
     }
   };
 
+  /** Bulk edit (Epic 5.3): one request per channel, like bulk delete. Resolves true when every video was updated. */
+  const applyBulkEdit = async (changes: BulkVideoChanges): Promise<boolean> => {
+    if (!user) return false;
+    const b = t.bulkEdit;
+    try {
+      const fallbackChannelId = multiAccountUser?.channels?.[0]?.id || '';
+      const idsByChannel = new Map<string, string[]>();
+      Array.from(selectedVideos).forEach((videoId) => {
+        const channelId = videos.find((v) => v.id === videoId)?.channelId || fallbackChannelId;
+        idsByChannel.set(channelId, [...(idsByChannel.get(channelId) || []), videoId]);
+      });
+      const responses = await Promise.all(
+        Array.from(idsByChannel.entries()).map(([channelId, videoIds]) => bulkUpdateVideos(videoIds, changes, { channelId }))
+      );
+      const updated = new Set<string>();
+      let failed = 0;
+      responses.forEach((r, index) => {
+        if (!r) {
+          failed += Array.from(idsByChannel.values())[index].length;
+          return;
+        }
+        r.results.forEach((res) => (res.success ? updated.add(res.videoId) : failed++));
+      });
+
+      if (updated.size > 0) {
+        setVideos((prev) => prev.map((v) => (updated.has(v.id) ? applyChangesLocally(v, changes) : v)));
+      }
+      if (failed === 0) {
+        setNoticeMessage(b.done.replace('{count}', updated.size.toString()));
+        return true;
+      }
+      setErrorMessage(
+        updated.size > 0
+          ? b.partial.replace('{succeeded}', updated.size.toString()).replace('{failed}', failed.toString())
+          : b.failed
+      );
+      return updated.size > 0;
+    } catch (error) {
+      logger.error('Error editing videos:', error);
+      setErrorMessage(b.failed);
+      return false;
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -454,6 +502,14 @@ export default function VideoDashboardPage() {
                   {selectedVideos.size === filteredVideos.length ? t.video.deselectAll : t.video.selectAll}
                 </button>
                 <div className="flex-1" />
+                <button
+                  onClick={() => setBulkEditOpen(true)}
+                  data-testid="dashboard-edit-selected"
+                  className="flex items-center gap-2 px-4 py-2 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                >
+                  <Pencil size={16} aria-hidden="true" />
+                  {t.bulkEdit.button}
+                </button>
                 <button
                   onClick={handleDeleteSelected}
                   data-testid="dashboard-delete-selected"
@@ -601,6 +657,14 @@ export default function VideoDashboardPage() {
                       <Edit size={14} />
                       <span className="text-xs">{t.common.edit}</span>
                     </Link>
+                    <Link
+                      href={`/${lang}/analytics/videos/${encodeURIComponent(video.id)}`}
+                      data-testid="dashboard-video-analytics"
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
+                    >
+                      <BarChart3 size={14} aria-hidden="true" />
+                      <span className="text-xs">{t.analytics.dashboard.viewAnalytics}</span>
+                    </Link>
                     <button
                       onClick={() => handleDeleteVideo(video.id)}
                       data-testid="dashboard-video-delete"
@@ -615,6 +679,20 @@ export default function VideoDashboardPage() {
             ))}
           </div>
         )}
+
+        {/* Bulk edit result */}
+        {noticeMessage && (
+          <div role="status" data-testid="dashboard-notice" className="fixed bottom-4 end-4 start-4 md:start-auto md:w-96 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 shadow-lg z-50">
+            <div className="flex items-start gap-3">
+              <p className="flex-1 text-sm font-medium text-green-800 dark:text-green-200">{noticeMessage}</p>
+              <button onClick={() => setNoticeMessage(null)} aria-label={t.common.close} className="text-green-700 dark:text-green-300">
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <BulkEditDialog open={bulkEditOpen} count={selectedVideos.size} onOpenChange={setBulkEditOpen} onApply={applyBulkEdit} />
 
         {/* Error Message Banner */}
         {errorMessage && (

@@ -63,6 +63,7 @@ import {
 import { initializeVolumeControls } from '@/lib/video/volume-control';
 import { setupKeyboardShortcuts } from '@/lib/video/keyboard-shortcuts';
 import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-touch';
+import { showGestureHintOnce } from '@/lib/video/gesture-hint';
 import { setupAccessibility } from '@/lib/video/accessibility';
 import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
@@ -73,11 +74,14 @@ import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
 import { useWatchProgress } from '@/hooks/useWatchProgress';
+import { ResumePrompt } from './ResumePrompt';
+import { resumePosition } from '@/lib/video/resume';
 import '@/styles/video-player.css';
 import '@/styles/keyboard-feedback.css';
 import type { Player } from 'video.js';
 import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
 import type { PlayerTextTrack } from '@/lib/video/subtitle-tracks';
+import type { AnalyticsContext } from '@al-ummah/shared-types';
 
 export interface CustomVideoPlayerProps {
   videoId: string;
@@ -95,6 +99,8 @@ export interface CustomVideoPlayerProps {
   isLive?: boolean;
   className?: string;
   ariaLabel?: string;
+  /** Video title, shown in the resume prompt */
+  title?: string;
   lang?: 'en' | 'ar';
   onError?: (error: VideoError) => void;
   onSourceChange?: (source: VideoSource) => void;
@@ -102,6 +108,12 @@ export interface CustomVideoPlayerProps {
   textTracks?: PlayerTextTrack[];
   /** Called once the Video.js player is ready (e.g. for chapter integration) */
   onPlayerReady?: (player: Player) => void;
+  /** Start position in seconds (watch page ?t=, embed start=) */
+  startTime?: number;
+  /** Start muted, overriding the remembered volume (embed autoplay must be muted) */
+  muted?: boolean;
+  /** Playback surface sent with analytics batches (embeds tag source/origin) */
+  analyticsContext?: AnalyticsContext;
 }
 
 /**
@@ -120,11 +132,15 @@ export default function CustomVideoPlayer({
   isLive = false,
   className = '',
   ariaLabel,
+  title,
   lang = 'en',
   onError,
   onSourceChange,
   textTracks,
   onPlayerReady,
+  startTime,
+  muted,
+  analyticsContext,
 }: CustomVideoPlayerProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
   const playerRef = useRef<Player | null>(null);
@@ -173,9 +189,11 @@ export default function CustomVideoPlayer({
   // Issue #57: Watch progress tracking integration
   // Automatically saves watch progress every 10 seconds and on pause/seek/end events
   // Falls back to localStorage for unauthenticated users
-  const { savedProgress } = useWatchProgress(
+  const { savedProgress, loadedProgress } = useWatchProgress(
     videoId,
-    playerRef.current as ExtendedPlayer | null,
+    // Keyed on playerReady (state) so the hook receives the player on the
+    // re-render after video.js 'ready' rather than a ref read at first render.
+    (playerReady ? playerRef.current : null) as ExtendedPlayer | null,
     userId,
     authToken,
     {
@@ -183,7 +201,29 @@ export default function CustomVideoPlayer({
     }
   );
 
-  // Log saved progress for debugging (will be used in Issue #58 for resume UI)
+  // #242: offer to resume from the position stored before this watch (API for
+  // signed-in users, device storage otherwise). Decided once per video, so the
+  // saves of the current watch never bring the prompt back.
+  const [resumeAt, setResumeAt] = useState<number | null>(null);
+  const resumeDecidedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!playerReady || !loadedProgress || loadedProgress.videoId !== videoId) return;
+    if (resumeDecidedForRef.current === videoId) return;
+    resumeDecidedForRef.current = videoId;
+    setResumeAt(resumePosition(loadedProgress, isLive));
+  }, [playerReady, loadedProgress, videoId, isLive]);
+
+  const handleResume = useCallback(() => {
+    if (resumeAt !== null) playerRef.current?.currentTime(resumeAt);
+    setResumeAt(null);
+  }, [resumeAt]);
+  const handleStartOver = useCallback(() => {
+    playerRef.current?.currentTime(0);
+    setResumeAt(null);
+  }, []);
+  const handleResumeDismiss = useCallback(() => setResumeAt(null), []);
+
+  // Log saved progress for debugging
   useEffect(() => {
     if (savedProgress && process.env.NODE_ENV === 'development') {
       logger.debug('[CustomVideoPlayer] Saved watch progress:', savedProgress);
@@ -391,7 +431,9 @@ export default function CustomVideoPlayer({
 
       // Initialize analytics (Phase 1.5)
       if (enableAnalytics) {
-        analyticsRef.current = new VideoAnalytics(videoId, userId);
+        analyticsRef.current = (analyticsContext
+          ? new VideoAnalytics(videoId, userId, { context: analyticsContext })
+          : new VideoAnalytics(videoId, userId));
       }
 
       // Initialize Video.js player with the DOM element
@@ -420,7 +462,21 @@ export default function CustomVideoPlayer({
         quartilesFiredRef.current.clear();
 
         // Phase 2.5: Initialize volume controls
-        volumeControlsCleanupRef.current = initializeVolumeControls(player);
+        volumeControlsCleanupRef.current = initializeVolumeControls(player, lang);
+        // Muted start wins over the remembered volume (browsers only autoplay muted)
+        if (muted) (player as ExtendedPlayer).muted(true);
+
+        // Start position: applied once the duration is known (seeking earlier is ignored)
+        if (startTime && startTime > 0) {
+          const seekToStart = () => {
+            const duration = player.duration();
+            if (!duration || !Number.isFinite(duration) || startTime < duration) {
+              player.currentTime(startTime);
+            }
+          };
+          if ((player as ExtendedPlayer).readyState?.() >= 1) seekToStart();
+          else player.one('loadedmetadata', seekToStart);
+        }
 
         // Phase 2.6: Setup fullscreen and PiP
         setupFullscreenPiP(player as ExtendedPlayer);
@@ -443,6 +499,7 @@ export default function CustomVideoPlayer({
             enableSwipeVolume: true,
             enableLongPress: true,
           });
+          showGestureHintOnce(player.el() as HTMLElement, lang);
         }
 
         // Phase 4.21: Setup accessibility enhancements
@@ -513,6 +570,35 @@ export default function CustomVideoPlayer({
 
         // ==================== Phase 3: Advanced Analytics ====================
 
+        // Loading milestones. Metadata may already be known by the time the player is ready.
+        const extended = player as ExtendedPlayer;
+        const reportMetadata = () => {
+          analyticsRef.current?.trackMetadataLoaded(player.duration() ?? 0, extended.videoWidth(), extended.videoHeight());
+        };
+        player.on('loadstart', () => analyticsRef.current?.trackLoadStart());
+        if (extended.readyState() >= 1) reportMetadata();
+        else player.one('loadedmetadata', reportMetadata);
+
+        // Only real changes: restoring the saved volume above also fires volumechange
+        let lastVolume = player.volume() ?? 1;
+        let lastMuted = player.muted() ?? false;
+        player.on('volumechange', () => {
+          const volume = player.volume() ?? lastVolume;
+          const isMuted = player.muted() ?? lastMuted;
+          if (volume === lastVolume && isMuted === lastMuted) return;
+          lastVolume = volume;
+          lastMuted = isMuted;
+          analyticsRef.current?.trackVolumeChange(volume, isMuted);
+        });
+
+        let lastRate = extended.playbackRate();
+        player.on('ratechange', () => {
+          const rate = extended.playbackRate();
+          if (rate === lastRate) return;
+          analyticsRef.current?.trackSpeedChange(rate, lastRate);
+          lastRate = rate;
+        });
+
         // Seeking events - track when user seeks to different position
         player.on('seeking', () => {
           // Store the current time when seek starts
@@ -531,6 +617,9 @@ export default function CustomVideoPlayer({
         player.on('timeupdate', () => {
           const currentTime = player.currentTime();
           const duration = player.duration();
+
+          // #235: real watch time (seeks/pauses break the run inside)
+          if (!player.paused()) analyticsRef.current?.trackPlayback(currentTime);
 
           // Skip if duration not available yet
           if (!duration || isNaN(duration) || duration === 0) {
@@ -689,13 +778,17 @@ export default function CustomVideoPlayer({
       if (analyticsRef.current) {
         analyticsRef.current.destroy();
         if (enableAnalytics) {
-          analyticsRef.current = new VideoAnalytics(videoId, userId);
+          analyticsRef.current = (analyticsContext
+          ? new VideoAnalytics(videoId, userId, { context: analyticsContext })
+          : new VideoAnalytics(videoId, userId));
         }
       }
 
       // Load the new video
       player.load();
     }
+  // analyticsContext is fixed for the life of an embed frame
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, sources, poster, enableAnalytics, userId]);
 
   /**
@@ -844,6 +937,19 @@ export default function CustomVideoPlayer({
           />
         )}
       </div>
+
+      {resumeAt !== null && loadedProgress && (
+        <ResumePrompt
+          videoTitle={title ?? ''}
+          savedTime={resumeAt}
+          duration={loadedProgress.duration}
+          thumbnailUrl={poster}
+          onResume={handleResume}
+          onStartFromBeginning={handleStartOver}
+          onDismiss={handleResumeDismiss}
+          lang={lang}
+        />
+      )}
 
       <KeyboardHelpModal
         isOpen={isKeyboardHelpOpen}

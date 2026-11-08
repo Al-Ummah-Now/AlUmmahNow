@@ -14,6 +14,11 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     error: 'Error loading video',
   },
 
+  gestures: {
+    hint: 'Double-tap the sides to seek 10 seconds. Swipe up or down to change the volume.',
+    dismiss: 'Dismiss',
+  },
+
   accessibility: {
     videoPlayer: 'Video player',
     playButton: 'Play video',
@@ -245,5 +250,14 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     startOverButton: 'Start from beginning',
     autoResumeMessage: 'Auto-resuming in',
     dismissHint: 'Press ESC or click outside to dismiss',
+  },
+
+  pluralization: {
+    videos: { zero: 'no videos', one: '1 video', other: '{{count}} videos' },
+    comments: { zero: 'no comments', one: '1 comment', other: '{{count}} comments' },
+    views: { zero: 'no views', one: '1 view', other: '{{count}} views' },
+    hours: { one: '1 hour', other: '{{count}} hours' },
+    minutes: { one: '1 minute', other: '{{count}} minutes' },
+    seconds: { one: '1 second', other: '{{count}} seconds' },
   },
 };

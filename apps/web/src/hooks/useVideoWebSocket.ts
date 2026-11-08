@@ -19,12 +19,12 @@
 
 'use client';
 
-import { getClientAuthToken } from '@/lib/auth/client-token';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { PresenceEvent } from '@/interfaces/websocket';
 import { getWebSocketUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
+import { getRealtimeAccessToken } from '@/lib/actions/realtime';
 
 
 export interface VideoWebSocketOptions {
@@ -53,13 +53,6 @@ export interface VideoWebSocketReturn {
   isConnected: boolean;
   sendViewingHeartbeat: () => void;
   disconnect: () => void;
-}
-
-/**
- * Cached access token from the same-origin token endpoint (cookies are httpOnly).
- */
-function getAuthTokenFromCookies(): string | undefined {
-  return getClientAuthToken() ?? undefined;
 }
 
 /**
@@ -198,8 +191,13 @@ export function useVideoWebSocket({
       return undefined;
     }
 
-    // Get auth token if not provided
-    const token = authToken || getAuthTokenFromCookies();
+    // The access token is in httpOnly cookies, so signed-in users fetch it via a
+    // server action on each (re)connect. Anonymous viewers connect without one.
+    const getAuthToken = authToken
+      ? async () => authToken
+      : userId
+        ? getRealtimeAccessToken
+        : undefined;
 
     if (process.env.NODE_ENV !== 'production') {
       logger.info('[useVideoWebSocket] Initializing WebSocket for video:', videoId);
@@ -210,7 +208,7 @@ export function useVideoWebSocket({
       wsManager.current = new WebSocketManager({
         url: wsUrl,
         userId,
-        authToken: token,
+        getAuthToken,
         reconnectInterval: 1000,
         maxReconnectAttempts: 5,
         heartbeatInterval: 30000

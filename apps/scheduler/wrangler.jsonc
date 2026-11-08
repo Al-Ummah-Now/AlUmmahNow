@@ -68,7 +68,8 @@
 		}
 	],
 
-	// Environment variables
+	// Secrets Store: authenticates /broadcast calls to the websocket server.
+	// Needs wrangler 4; wrangler 3 silently drops secrets_store_secrets.
 	"secrets_store_secrets": [
 		{
 			"binding": "INTERNAL_API_KEY",
@@ -76,6 +77,8 @@
 			"secret_name": "internal-api-key"
 		}
 	],
+
+	// Environment variables
 	"vars": {
 		"MAX_RETRIES": "3",
 		"BATCH_SIZE": "50",
@@ -88,5 +91,60 @@
 		"ip": "127.0.0.1",
 		"port": 3092,
 		"local_protocol": "http"
+	},
+	"env": {
+		// Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
+		"stage": {
+			"name": "al-ummah-scheduler-stage",
+			"r2_buckets": [
+				{
+					"binding": "VIDEOS",
+					"bucket_name": "videos-stage"
+				},
+				{
+					"binding": "SCHEDULED_VIDEOS",
+					"bucket_name": "scheduled-videos-stage"
+				}
+			],
+			"queues": {
+				"producers": [
+					{
+						"queue": "al-ummah-now-videos-stage",
+						"binding": "QUEUE"
+					}
+				]
+			},
+			"kv_namespaces": [
+				{
+					"binding": "SCHEDULER_LOCKS",
+					"id": "900ce7c520d34c39a0c5dd6fe3db1357"
+				},
+				{
+					"binding": "SCHEDULER_METRICS",
+					"id": "ca609f05ff684939ab6595e40cbc5090"
+				}
+			],
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "SCHEDULER_LOCK",
+						"class_name": "SchedulerLock"
+					}
+				]
+			},
+			"secrets_store_secrets": [
+				{
+					"binding": "INTERNAL_API_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "internal-api-key-stage"
+				}
+			],
+			"vars": {
+				"MAX_RETRIES": "3",
+				"BATCH_SIZE": "50",
+				"LOCK_TTL": "120",
+				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net"
+			}
+		}
 	}
 }

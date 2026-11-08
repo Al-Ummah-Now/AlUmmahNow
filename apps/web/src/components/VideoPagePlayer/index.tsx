@@ -1,5 +1,7 @@
 "use client";
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import React, { useMemo } from "react";
+import type { Player } from "video.js";
 import Image from "next/image";
 import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
@@ -8,13 +10,24 @@ import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlaye
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
+import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
 
-const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
+interface WatchPlayerProps {
+  options: PlayerOptions;
+  /** Start position in seconds (?t= on the watch page) */
+  startTime?: number;
+  /** Gives the watch page the Video.js player (share "start at current time") */
+  onPlayerReady?: (player: Player) => void;
+}
+
+const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerReady }) => {
   const { user } = useAuth();
   const { lang, t } = useLanguage();
   const locale = lang;
 
   const title = getLocalizedValue(options.titleLocalized, options.title, locale);
+  const channelHref = playerChannelHref(locale, options);
+  const channelName = playerChannelName(options);
 
   // Convert PlayerOptions to CustomVideoPlayer props
   // Memoize to prevent new array reference on every render
@@ -59,6 +72,9 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
             lang="en"
             className="w-full"
             ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
+            title={removeUnwantedChars(title)}
+            startTime={startTime}
+            onPlayerReady={onPlayerReady}
           />
         </div>
       </div>
@@ -72,27 +88,36 @@ const VideoPlayer: React.FC<{ options: PlayerOptions }> = ({ options }) => {
 
         {/* Channel Info */}
         <div className="flex space-x-3 rtl:space-x-reverse items-center">
-          <Link
-            href={`/${lang}/channels/${options.channel}`}
-            className="w-11 h-11 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
-            tabIndex={-1}
-            aria-hidden="true"
-          >
-            <Image
-              src={options.channelAvatar || '/avatar.png'}
-              alt=""
-              sizes="10vw"
-              className="bg-gray-500"
-              fill
-            />
-          </Link>
-          <div>
+          {channelHref ? (
             <Link
-              href={`/${lang}/channels/${options.channel}`}
-              className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
+              href={channelHref}
+              className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
+              tabIndex={-1}
+              aria-hidden="true"
             >
-              {removeUnwantedChars(options.channelName)}
+              <Image src={options.channelAvatar || '/avatar.png'} alt="" sizes="44px" className="bg-gray-500 object-cover" fill />
             </Link>
+          ) : (
+            <span className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative" aria-hidden="true">
+              <Image src={options.channelAvatar || '/avatar.png'} alt="" sizes="44px" className="bg-gray-500 object-cover" fill />
+            </span>
+          )}
+          <div className="min-w-0">
+            {channelHref ? (
+              <Link
+                href={channelHref}
+                data-testid="watch-channel-link"
+                className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
+              >
+                {removeUnwantedChars(channelName)}
+                {options.channelVerified && <VerifiedBadge className="ms-1" />}
+              </Link>
+            ) : (
+              <span className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300">
+                {removeUnwantedChars(channelName)}
+                {options.channelVerified && <VerifiedBadge className="ms-1" />}
+              </span>
+            )}
           </div>
         </div>
       </div>

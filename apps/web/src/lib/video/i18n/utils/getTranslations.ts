@@ -48,6 +48,18 @@ export function getTranslations(
  * ```
  */
 export function isLanguageSupported(lang: string): lang is SupportedLanguage {
+  return isValidLanguage(lang);
+}
+
+/**
+ * Type guard for a language code from outside the type system (URL, cookie, API).
+ *
+ * @example
+ * ```typescript
+ * const lang = isValidLanguage(saved) ? saved : 'en';
+ * ```
+ */
+export function isValidLanguage(lang: string): lang is SupportedLanguage {
   return lang === 'en' || lang === 'ar';
 }
 

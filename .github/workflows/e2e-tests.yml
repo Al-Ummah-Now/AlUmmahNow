@@ -1,10 +1,22 @@
 name: E2E Tests
 
+# Legacy multi-browser suite against QA. Every run is real traffic on the QA
+# workers (and Workers Logs lines), and a full matrix run takes ~1h40m, so:
+#   - pull requests run the chromium project only (the release suite in
+#     release-e2e.yml also runs on every PR into main);
+#   - the full matrix (firefox, webkit, mobile, a11y, visual, Lighthouse) runs
+#     nightly, after a Release run, and on demand (workflow_dispatch).
 on:
   pull_request:
-    branches: [main, develop]
-  push:
-    branches: [main, develop]
+    branches: [main, 'integrate/**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
     inputs:
       update_snapshots:
@@ -27,6 +39,8 @@ jobs:
   # Centralized auth setup - runs once, shares auth state with all test jobs
   auth-setup:
     name: Auth Setup
+    # Only the a11y/visual jobs use the shared auth state
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04  # Playwright 1.56 has no browser builds for ubuntu-latest (26.04)
     timeout-minutes: 10
 
@@ -40,7 +54,7 @@ jobs:
           node-version: '22'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
         with:
           version: 9.15.4
 
@@ -80,7 +94,8 @@ jobs:
         working-directory: apps/web
         run: npx tsx e2e/run-auth-setup.ts
         env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # New users are code-sink addresses (@e2e.alummahnow.net); see #185
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
 
       - name: List auth files
         run: ls -la apps/web/e2e/.auth/
@@ -114,20 +129,13 @@ jobs:
       group: e2e-qa-users-${{ matrix.users }}
       cancel-in-progress: false
 
+    # Pull requests: chromium only. Everything else: the full matrix.
+    # player-chrome: branded Chrome, the only browser here that decodes the H.264
+    # HLS streams, so the 31-video-player control tests run instead of skipping (R5).
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - project: chromium
-            users: '1795000000001'
-          - project: firefox
-            users: '1795000000002'
-          - project: webkit
-            users: '1795000000003'
-          - project: 'Mobile Chrome'
-            users: '1795000000004'
-          - project: 'Mobile Safari'
-            users: '1795000000005'
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","users":"1795000000001"}]' || '[{"project":"chromium","users":"1795000000001"},{"project":"firefox","users":"1795000000002"},{"project":"webkit","users":"1795000000003"},{"project":"Mobile Chrome","users":"1795000000004"},{"project":"Mobile Safari","users":"1795000000005"},{"project":"player-chrome","users":"1795000000006"}]') }}
 
     steps:
       - name: Checkout code
@@ -139,7 +147,7 @@ jobs:
           node-version: '22'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
         with:
           version: 9.15.4
 
@@ -174,6 +182,7 @@ jobs:
           case "${{ matrix.project }}" in
             firefox) B=firefox ;;
             webkit|'Mobile Safari') B=webkit ;;
+            player-chrome) B=chrome ;;
             *) B= ;;
           esac
           pnpm exec playwright install --with-deps chromium $B
@@ -186,7 +195,7 @@ jobs:
           E2E_USERS_TIMESTAMP: ${{ matrix.users }}
           E2E_GLOBAL_TIMEOUT_MINUTES: '100'
           E2E_MAX_FAILURES: '40'
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
 
       - name: Artifact name
         if: always()
@@ -212,7 +221,7 @@ jobs:
 
       - name: Publish JUnit results
         if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@da5b7be67623cd59bbbd1a0ce4f022050a55605f # v2
         with:
           files: apps/web/test-results/junit.xml
           check_name: E2E Results (${{ matrix.project }})
@@ -223,7 +232,7 @@ jobs:
   dedicated:
     name: E2E - ${{ matrix.project }}
     needs: auth-setup
-    if: ${{ !inputs.update_snapshots }}
+    if: ${{ github.event_name != 'pull_request' && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
 
@@ -242,7 +251,7 @@ jobs:
           node-version: '22'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
         with:
           version: 9.15.4
 
@@ -308,7 +317,7 @@ jobs:
           node-version: '22'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
         with:
           version: 9.15.4
 
@@ -357,6 +366,7 @@ jobs:
   # Non-blocking for now: assertions are warnings and the job may fail.
   lighthouse:
     name: Lighthouse (QA)
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     continue-on-error: true

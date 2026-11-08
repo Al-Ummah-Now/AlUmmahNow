@@ -6,7 +6,6 @@
 
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { z } from "zod";
-import { Context } from "hono";
 import { listUserWatchHistory } from "./user-entries";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type {
@@ -15,6 +14,7 @@ import type {
   WatchHistoryListRequest
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
+import { withChannelNames } from "../../lib/watch-history";
 
 // Request query parameters schema
 const ListWatchHistoryQuery = z.object({
@@ -99,7 +99,7 @@ export class ListWatchHistory extends AuthenticatedRoute {
     "required"
   );
 
-  async handle(c: Context) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.headers;
 
@@ -149,7 +149,7 @@ export class ListWatchHistory extends AuthenticatedRoute {
       // Apply pagination
       const startIndex = cursor ? parseInt(cursor, 10) : 0;
       const endIndex = startIndex + limit;
-      const paginatedEntries = userEntries.slice(startIndex, endIndex);
+      const paginatedEntries = await withChannelNames(c.env.channels, userEntries.slice(startIndex, endIndex));
       const hasMore = endIndex < userEntries.length;
       const nextCursor = hasMore ? String(endIndex) : undefined;
 

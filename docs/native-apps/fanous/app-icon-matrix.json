@@ -1,0 +1,31 @@
+{
+  "$description": "App icon and store art sizes for Epic 10.6, in pixels unless the entry says otherwise. needsVerification marks sizes to confirm with the store's current guidance at submission.",
+  "ios": { "master": [[1024, 1024]], "variants": ["default", "dark", "tinted"], "opaque": true },
+  "macos": { "iconset": [16, 32, 64, 128, 256, 512, 1024] },
+  "tvos": {
+    "layers": { "min": 2, "max": 5 },
+    "appIcon": [[400, 240], [800, 480]],
+    "appStoreIcon": [[1280, 768]],
+    "topShelf": [[1920, 720], [3840, 1440]],
+    "topShelfWide": [[2320, 720], [4640, 1440]]
+  },
+  "android": {
+    "adaptive": { "canvasDp": 108, "safeZoneDp": 66, "layers": ["foreground", "background", "monochrome"], "xxxhdpiPx": 432 },
+    "legacy": { "mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192 },
+    "playStoreIcon": [[512, 512]],
+    "playFeatureGraphic": [[1024, 500]]
+  },
+  "androidTv": { "bannerDp": [320, 180], "bannerXhdpiPx": [640, 360] },
+  "windows": {
+    "appList44": { "scales": { "100": 44, "125": 55, "150": 66, "200": 88, "400": 176 }, "targetsize": [16, 24, 32, 48, 256] },
+    "smallTile71": { "scales": { "100": 71, "125": 89, "150": 107, "200": 142, "400": 284 } },
+    "mediumTile150": { "scales": { "100": 150, "125": 188, "150": 225, "200": 300, "400": 600 } },
+    "wideTile310x150": { "scales": { "100": [310, 150], "200": [620, 300], "400": [1240, 600] } },
+    "largeTile310": { "scales": { "100": 310, "200": 620, "400": 1240 } },
+    "storeLogo50": { "scales": { "100": 50, "125": 63, "150": 75, "200": 100, "400": 200 } }
+  },
+  "linux": { "hicolor": [16, 22, 24, 32, 48, 64, 128, 256, 512], "scalable": true, "symbolic": true },
+  "tizen": { "needsVerification": true, "icon": [[512, 423]] },
+  "webos": { "needsVerification": true, "icon": [[80, 80]], "largeIcon": [[130, 130]] },
+  "web": { "existing": ["favicon-16x16", "favicon-32x32", "apple-touch-icon", "android-chrome-192x192", "android-chrome-512x512"] }
+}

@@ -6,6 +6,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import { removeLike } from "../../lib/library";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { ReactorHeaders, applyVideoReaction, reactorId } from "../../lib/reactions";
 
 export class LikeDelete extends AuthenticatedRoute {
 	schema = {
@@ -15,9 +16,7 @@ export class LikeDelete extends AuthenticatedRoute {
 			params: z.object({
 				id: Str({ description: "Video id" }),
 			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
-			}),
+			headers: ReactorHeaders,
 		},
 		responses: {
 			"200": {
@@ -50,71 +49,40 @@ export class LikeDelete extends AuthenticatedRoute {
 	};
 
 	async handle(c: AppContext) {
-		// Get validated data
 		const request = await this.getValidatedData<typeof this.schema>();
-
-		// Retrieve the validated slug
 		const { id } = request.params;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
+		const channelId = reactorId(request.headers.channelId, userId);
 
-        // Implement your own object fetch here
-        const bucket = c.env.videos;
-		type VideoType = z.infer<typeof Video>;
-		const repository = new R2Repository<VideoType>(bucket);
-		let video = await repository.getObject(id);		const exists = video !== null;
-
-		if (!exists) {
-			return Response.json(
-				{
-					success: false,
-					error: "Object not found",
-				},
-				{
-					status: 404,
-				},
-			);
+		const repository = new R2Repository<z.infer<typeof Video>>(c.env.videos);
+		const result = await applyVideoReaction(repository, id, "likes", "remove", { userId, channelId });
+		if (!result) {
+			return c.json({ success: false, error: "Object not found" }, 404);
 		}
 
-		const like = (video.likes || []).find((like) => like.channelId === channelId && like.entityId === id);
-
-		// Unlike is idempotent: nothing stored for this channel means nothing to remove
-		if (!like) {
-			await removeLike(c.env.NOTIFICATIONS_DB, userId, id);
-			return c.json({ success: true }, 200);
-		}
-
-		const queue = new Queue(c.env.queue);
-		await queue.send(MessageType.VideoUnlike, {
-			likeId: like.id,
-			videoId: id,
-			userId: userId,
-			channelId: channelId,
-			timestamp: new Date().toISOString(),
-		});
-
-		// Conditional write: a concurrent reaction on this video is re-read, not overwritten
-		video = (await repository.updateObject(video.id, (fresh) => {
-			const before = (fresh.likes || []).length;
-			fresh.likes = (fresh.likes || []).filter((l) => !(l.channelId === channelId && l.entityId === id));
-			return fresh.likes.length !== before;
-		})) ?? video;
-		video.likes = video.likes || [];
 		// Keep the liked-videos index while another of the user's channels still likes it
-		if (!video.likes.some((l) => l.userId === userId)) {
+		if (!result.video.likes.some((l) => l.userId === userId)) {
 			await removeLike(c.env.NOTIFICATIONS_DB, userId, id);
 		}
-		// Note: likesCount is calculated in view layer, not stored
 
-		broadcastInBackground(c, `video:${id}`, 'video_unliked', {
-			videoId: id,
-			userId,
-			likesCount: video.likes.length,
-			dislikesCount: video.dislikes?.length || 0,
-		});
+		// Unlike is idempotent: nothing stored for this reactor means nothing to remove
+		if (result.changed) {
+			await new Queue(c.env.queue).send(MessageType.VideoUnlike, {
+				likeId: result.changed.id,
+				videoId: id,
+				userId,
+				channelId,
+				timestamp: new Date().toISOString(),
+			});
+			broadcastInBackground(c, `video:${id}`, 'video_unliked', {
+				videoId: id,
+				userId,
+				likesCount: result.video.likes.length,
+				dislikesCount: result.video.dislikes.length,
+			});
+		}
 
 		// chanfana cannot build a response from a bare boolean (it 500ed after the change was stored)
 		return { success: true };
 	}
 }
-

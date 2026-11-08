@@ -4,7 +4,7 @@ import { handleChannelSectionEvent } from './handlers/channel-section';
 import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
 import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
-import { recordViewRollup } from './lib/analytics-rollup';
+import { recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
 import {
   eraseUserNotifications,
@@ -15,6 +15,7 @@ import {
   removeChannelSubscriber,
   upsertChannelSubscriber,
 } from './lib/notifications-store';
+import { eraseUserModerationData } from './moderation/store';
 import type { NotificationCreatePayload, NotificationFanoutPayload } from '@al-ummah/shared-types';
 
 /** Tombstone replacing a user id after GDPR erasure (matches api-videos lib/privacy/user-data.ts). */
@@ -110,6 +111,11 @@ export class MessageProcessor {
       // Video-related messages
       case MessageType.VideoView:
         await this.processVideoViewMessage(message, env);
+        break;
+
+      // Analytics: played seconds (#235)
+      case MessageType.VideoWatchTime:
+        await this.processVideoWatchTimeMessage(message, env);
         break;
 
       case MessageType.VideoCreate:
@@ -389,6 +395,17 @@ export class MessageProcessor {
     } catch (error) {
       // Rollups are derived data; never fail (and retry) the message because of them.
       this.logger.warn('Failed to update view rollup', { videoId: payload.videoId, error });
+    }
+  }
+
+  private async processVideoWatchTimeMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const payload = message.payload as { videoId?: string };
+    try {
+      const recorded = await recordWatchTimeRollup(env.MESSAGES_BUCKET, message.payload, message.timestamp);
+      if (!recorded) this.logger.warn('Invalid watch-time message ignored', { videoId: payload.videoId });
+    } catch (error) {
+      // Rollups are derived data; never fail (and retry) the message because of them.
+      this.logger.warn('Failed to update watch-time rollup', { videoId: payload.videoId, error });
     }
   }
 
@@ -727,6 +744,8 @@ export class MessageProcessor {
     const result = await env.REPORTS_DB.prepare('UPDATE reports SET reporter_id = ? WHERE reporter_id = ?')
       .bind(DELETED_USER_ID, userId)
       .run();
+    // AI moderation signals (Epic 28): tombstone the author, drop reviewer translations
+    await eraseUserModerationData(env.REPORTS_DB, userId, DELETED_USER_ID);
     if (env.NOTIFICATIONS_DB) {
       await eraseUserNotifications(env.NOTIFICATIONS_DB, userId);
     }

@@ -8,6 +8,8 @@
 
 import type { AppTranslations } from '../i18n';
 import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from '../i18n-library';
+import { BULK_EDIT_EN } from '../i18n-bulk-edit';
+import { COMMUNITY_GUIDELINES_EN } from '../i18n-community-guidelines';
 
 export const EN_TRANSLATIONS: AppTranslations = {
   imageCrop: {
@@ -24,6 +26,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
     loadFailed: 'This image could not be opened. Try a JPEG or PNG file.',
   },
   library: LIBRARY_EN,
+  bulkEdit: BULK_EDIT_EN,
+  communityGuidelines: COMMUNITY_GUIDELINES_EN,
   notificationCenter: NOTIFICATION_CENTER_EN,
   common: {
     appName: 'Al Ummah Now',
@@ -99,6 +103,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     channel: 'channel',
     channels: 'channels',
     removeAccount: 'Remove account',
+    removeAccountConfirm: "Remove account {email}? This will log you out of this account.",
     signOutOfAllDescription: 'You will be signed out of all {count} accounts.',
     openMenu: 'Open menu',
     theme: 'Theme',
@@ -126,6 +131,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     channelBanner: 'Channel Banner',
     mainChannel: 'Main Channel',
     subscribers: 'Subscribers',
+    subscriberSingular: "Subscriber",
     videos: 'Videos',
     subscribe: 'Subscribe',
     subscribed: 'Subscribed',
@@ -352,6 +358,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
 
   video: {
     videos: 'Videos',
+    videoSingular: "Video",
     uploadVideo: 'Upload Video',
     editVideo: 'Edit Video',
     deleteVideo: 'Delete Video',
@@ -555,6 +562,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     searchButton: 'Search',
     searching: 'Searching...',
     foundResults: 'Found {count} results',
+    foundOneResult: "Found 1 result",
     foundResultsFor: 'Found {count} results for "{query}"',
     activeFilters: 'Active filters:',
     category: 'Category',
@@ -937,6 +945,31 @@ export const EN_TRANSLATIONS: AppTranslations = {
       avgDailyViews: 'Avg Daily Views',
       noMetrics: 'No activity in this period',
       changeVsPrevious: '{change} vs previous 2 weeks',
+      watchTimeHours: 'Watch Time',
+      hoursValue: '{hours} h',
+      newSubscribers: 'New Subscribers',
+      inLastDays: 'Last {days} days',
+      watchTimeOverTime: 'Watch Time Over Time',
+      subscribersOverTime: 'New Subscribers Over Time',
+      minutesCount: '{count} min',
+      subscribersCount: '{count} new subscribers',
+      videoAnalytics: 'Video Analytics',
+      viewAnalytics: 'Analytics',
+      backToAnalytics: 'Back to analytics',
+      avgViewDuration: 'Avg View Duration',
+      watchTimeTotal: 'Total Watch Time',
+      published: 'Published {date}',
+      videoLoadError: 'Could not load analytics for this video. It may not exist or belong to another channel.',
+      retry: 'Try again',
+      retentionComingSoon: 'Audience retention will appear here once retention tracking is available.',
+      exportCsv: 'Export CSV',
+      exportCsvHint: 'Download the daily numbers and top videos as a CSV file',
+      csvDate: 'Date',
+      csvShares: 'Shares',
+      csvWatchTimeHours: 'Watch time (hours)',
+      csvVideo: 'Video',
+      csvVideoId: 'Video ID',
+      csvPublished: 'Published',
     },
   },
 
@@ -1681,6 +1714,11 @@ export const EN_TRANSLATIONS: AppTranslations = {
     removeFailed: 'Could not remove this video from your history.',
     clearFailed: 'Could not clear your watch history.',
     totalCount: '{count} videos',
+    totalCountOne: "1 video",
+    pause: 'Pause watch history',
+    resume: 'Turn history back on',
+    pausedNotice: 'Watch history is paused. Videos you watch now are not added to your history or used for recommendations.',
+    pauseFailed: 'Could not change the history setting. Please try again.',
   },
 
   live: {

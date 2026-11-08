@@ -23,6 +23,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 import { WatchHistoryService, WatchProgress } from '@/services/api/watch-history';
 import { logger } from '@/lib/logger-client';
+import { fetchClientAuthToken } from '@/lib/auth/client-token';
 
 
 interface UseWatchProgressOptions {
@@ -70,6 +71,9 @@ export function useWatchProgress(
   } = options;
 
   const [savedProgress, setSavedProgress] = useState<WatchProgress | null>(null);
+  // What was stored before this playback started (resume prompt). Unlike
+  // savedProgress it is not overwritten by the saves of the current watch.
+  const [loadedProgress, setLoadedProgress] = useState<WatchProgress | null>(null);
   const lastSaveTimeRef = useRef<number>(0);
   const lastSavedPositionRef = useRef<number>(0);
   const isMountedRef = useRef(true);
@@ -88,6 +92,22 @@ export function useWatchProgress(
   }, [enableDebugLogging]);
 
   /**
+   * Token for API calls. Callers rarely pass `authToken` (auth cookies are
+   * httpOnly), so a signed-in user's token is fetched from /api/auth/token.
+   * Without this every signed-in watch went to device storage only and the
+   * account's watch history stayed empty.
+   */
+  const resolveAuthToken = useCallback(async (): Promise<string | null> => {
+    if (authToken) return authToken;
+    if (!userId) return null;
+    try {
+      return await fetchClientAuthToken();
+    } catch {
+      return null;
+    }
+  }, [userId, authToken]);
+
+  /**
    * Process the actual save operation (internal)
    * This should only be called when the mutex is acquired
    */
@@ -95,15 +115,21 @@ export function useWatchProgress(
     if (!isMountedRef.current) return;
 
     try {
-      if (userId && authToken) {
-        const result = await WatchHistoryService.saveProgress(progress, authToken);
+      const token = await resolveAuthToken();
+      if (token) {
+        const result = await WatchHistoryService.saveProgress(progress, token);
         if (result.success) {
           debugLog('Progress saved to API:', progress.currentTime, '/', progress.duration);
         } else {
-          debugLog('Failed to save to API, falling back to localStorage:', result.error);
+          // Visible in production: a failing API save otherwise looks like a
+          // working player while the account history stays empty.
+          logger.warn('[useWatchProgress] watch-history save failed, kept on device:', result.error);
           await WatchHistoryService.saveLocal(progress);
         }
       } else {
+        if (userId) {
+          logger.warn('[useWatchProgress] signed in but no access token; watch progress kept on device');
+        }
         await WatchHistoryService.saveLocal(progress);
         debugLog('Progress saved to localStorage:', progress.currentTime, '/', progress.duration);
       }
@@ -112,14 +138,14 @@ export function useWatchProgress(
         setSavedProgress(progress);
       }
     } catch (error) {
-      debugLog('Error saving progress:', error);
+      logger.warn('[useWatchProgress] watch-history save threw, kept on device:', error);
       // Save to localStorage as fallback
       await WatchHistoryService.saveLocal(progress);
       if (isMountedRef.current) {
         setSavedProgress(progress);
       }
     }
-  }, [userId, authToken, debugLog]);
+  }, [resolveAuthToken, debugLog, userId]);
 
   /**
    * Save watch progress to API or localStorage with mutex protection
@@ -226,12 +252,12 @@ export function useWatchProgress(
    * Clear saved progress for this video
    */
   const clearProgress = useCallback(async () => {
-    await WatchHistoryService.clearProgress(videoId, authToken);
+    await WatchHistoryService.clearProgress(videoId, (await resolveAuthToken()) ?? undefined);
     setSavedProgress(null);
     lastSaveTimeRef.current = 0;
     lastSavedPositionRef.current = 0;
     debugLog('Progress cleared');
-  }, [videoId, authToken, debugLog]);
+  }, [videoId, resolveAuthToken, debugLog]);
 
   /**
    * Load saved progress on mount
@@ -241,11 +267,13 @@ export function useWatchProgress(
 
     const loadProgress = async () => {
       if (!videoId) return;
+      setLoadedProgress(null);
 
       let progress: WatchProgress | null = null;
 
-      if (userId && authToken) {
-        progress = await WatchHistoryService.getProgress(videoId, authToken);
+      const token = await resolveAuthToken();
+      if (token) {
+        progress = await WatchHistoryService.getProgress(videoId, token);
         debugLog('Loaded progress from API:', progress);
       }
 
@@ -256,6 +284,7 @@ export function useWatchProgress(
 
       if (mounted && progress) {
         setSavedProgress(progress);
+        setLoadedProgress(progress);
       }
     };
 
@@ -264,7 +293,7 @@ export function useWatchProgress(
     return () => {
       mounted = false;
     };
-  }, [videoId, userId, authToken, debugLog]);
+  }, [videoId, resolveAuthToken, debugLog]);
 
   /**
    * Setup player event listeners for automatic progress saving
@@ -272,15 +301,15 @@ export function useWatchProgress(
   useEffect(() => {
     if (!player) return;
 
-    let timeUpdateInterval: ReturnType<typeof setInterval> | undefined;
-
-    const handleReady = () => {
-      debugLog('Player ready, starting progress tracking');
-
-      timeUpdateInterval = setInterval(() => {
-        void saveProgress(false);
-      }, saveInterval);
-    };
+    // Start the periodic save as soon as the player is attached. The player
+    // usually reaches the hook after video.js 'ready' already fired while the
+    // media is still loading (readyState 0); waiting with one('ready') then
+    // never started the interval, and a watch that was never paused was never
+    // saved. saveProgress itself skips until the media has metadata.
+    debugLog('Player attached, starting progress tracking');
+    const timeUpdateInterval = setInterval(() => {
+      void saveProgress(false);
+    }, saveInterval);
 
     const handlePause = () => {
       debugLog('Player paused, saving progress');
@@ -297,29 +326,13 @@ export function useWatchProgress(
       void saveProgress(true);
     };
 
-    // Check if player is already ready, with safety check for disposed tech
-    try {
-      if (player.readyState() >= 1) {
-        handleReady();
-      } else {
-        player.one('ready', handleReady);
-      }
-    } catch (error) {
-      // Player tech not available, wait for ready event
-      debugLog('Player tech not available, waiting for ready event:', error);
-      player.one('ready', handleReady);
-    }
-
     player.on('pause', handlePause);
     player.on('ended', handleEnded);
     player.on('seeked', handleSeeked);
 
     return () => {
-      if (timeUpdateInterval) {
-        clearInterval(timeUpdateInterval);
-      }
+      clearInterval(timeUpdateInterval);
 
-      player.off('ready', handleReady);
       player.off('pause', handlePause);
       player.off('ended', handleEnded);
       player.off('seeked', handleSeeked);
@@ -343,6 +356,7 @@ export function useWatchProgress(
 
   return {
     savedProgress,
+    loadedProgress,
     saveProgress: (force = true) => saveProgress(force),
     clearProgress,
   };

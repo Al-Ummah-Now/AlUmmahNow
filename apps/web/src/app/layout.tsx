@@ -20,8 +20,10 @@ import { NONCE_HEADER } from "@/lib/security/nonce-header";
 import { serializeForInlineScript } from "@/lib/security/csp";
 import { deriveAuthProfileUrl } from "@/lib/runtime-config";
 import { SecurityBootstrap } from "@/components/security/SecurityBootstrap";
+import { RuntimeConfigBootstrap } from "@/components/RuntimeConfigBootstrap";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import SkipLinks from "@/components/SkipLinks";
+import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -67,13 +69,60 @@ export const viewport: Viewport = {
   ],
 };
 
+/** Runtime configuration injected from the server (read by client API helpers). */
+function serverRuntimeConfig() {
+  return {
+    API_URL: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '',
+    WEBSOCKET_URL: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '',
+    AUTH_PROFILE_URL: deriveAuthProfileUrl(
+      process.env.OPENAUTH_ISSUER || process.env.Issuer,
+      process.env.AUTH_PROFILE_URL
+    ),
+  };
+}
+
+function RuntimeConfigScript({ nonce }: { nonce?: string }) {
+  return (
+    <script
+      nonce={nonce}
+      dangerouslySetInnerHTML={{
+        __html: `window.__RUNTIME_CONFIG__ = ${serializeForInlineScript(serverRuntimeConfig())};`,
+      }}
+    />
+  );
+}
+
+/**
+ * Minimal document for embed frames (docs/embeds): no navigation, auth,
+ * websocket, notifications or consent banner, and no session lookup, so an
+ * embed never acts as the viewer even when the browser sent a session cookie.
+ */
+function EmbedDocument({ locale, nonce, children }: { locale: string; nonce?: string; children: React.ReactNode }) {
+  return (
+    <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
+      <head>
+        <RuntimeConfigScript nonce={nonce} />
+      </head>
+      <body className="font-inter">
+        <QueryProvider>{children}</QueryProvider>
+      </body>
+    </html>
+  );
+}
+
 export default async function RootLayout({ children, }: Readonly<{ children: React.ReactNode; }>) {
-  const subject = await authenticated()
-  const user = subject ? subject.properties : null;
-  const requestedLocale = (await headers()).get(LOCALE_REQUEST_HEADER);
+  const requestHeaders = await headers();
+  const requestedLocale = requestHeaders.get(LOCALE_REQUEST_HEADER);
   const locale = requestedLocale && isLocaleSupported(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
   // Per-request CSP nonce set by middleware (production only).
-  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
+  const nonce = requestHeaders.get(NONCE_HEADER) ?? undefined;
+
+  if (requestHeaders.get(EMBED_REQUEST_HEADER) === '1') {
+    return <EmbedDocument locale={locale} nonce={nonce}>{children}</EmbedDocument>;
+  }
+
+  const subject = await authenticated()
+  const user = subject ? subject.properties : null;
 
   return (
     <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
@@ -86,23 +135,11 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
         />
-        {/* Runtime configuration injected from server */}
-        <script
-          nonce={nonce}
-          dangerouslySetInnerHTML={{
-            __html: `window.__RUNTIME_CONFIG__ = ${serializeForInlineScript({
-              API_URL: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '',
-              WEBSOCKET_URL: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '',
-              AUTH_PROFILE_URL: deriveAuthProfileUrl(
-                process.env.OPENAUTH_ISSUER || process.env.Issuer,
-                process.env.AUTH_PROFILE_URL
-              ),
-            })};`,
-          }}
-        />
+        <RuntimeConfigScript nonce={nonce} />
       </head>
       <body className="font-inter">
         <SecurityBootstrap />
+        <RuntimeConfigBootstrap config={serverRuntimeConfig()} />
         {/* No <Suspense> around the app: with one, the shell (and a 200 status)
             streamed before a page or layout could call notFound(), so unknown
             channels/handles/playlists were soft 404s rendered twice. Every route

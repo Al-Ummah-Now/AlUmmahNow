@@ -55,7 +55,7 @@ export function SearchPageBody({ model }: { model: SearchPageModel }) {
       <ActiveFilterChips state={state} channelName={model.channelName} onRemove={model.removeFilter} />
 
       <div aria-live="polite" className="sr-only">
-        {status === 'loading' ? t.search.searching : status === 'done' ? t.search.foundResults.replace('{count}', String(results.length)) : ''}
+        {status === 'loading' ? t.search.searching : status === 'done' ? (results.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', String(results.length))) : ''}
       </div>
 
       {status === 'idle' && (

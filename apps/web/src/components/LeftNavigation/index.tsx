@@ -199,6 +199,14 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                             </span>
                         </Link>
                     </li>
+                    <li className="hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
+                        <Link href={`/${lang}/community-guidelines`} data-testid="nav-community-guidelines" className="flex items-center space-x-2 py-2 pl-2">
+                            <IcoButton style="fa-people-group" size="text-lg" color="text-black dark:text-white bg-transparent cursor-pointer" />
+                            <span className={`${isCollapsed ? "hidden" : "block"} text-black dark:text-white text-sm md:text-base`}>
+                                {t.communityGuidelines.navLabel}
+                            </span>
+                        </Link>
+                    </li>
                 </ul>
             </nav>
         </>

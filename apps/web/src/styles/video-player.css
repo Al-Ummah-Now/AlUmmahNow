@@ -2186,3 +2186,77 @@
     transform: none;
   }
 }
+
+/* Touch targets (Story 1.5 AC 1, 2): at least 44x44 on touch devices. The hit
+   area grows, the production look of the controls does not. */
+@media (pointer: coarse) {
+  .video-js {
+    --vp-touch-target: 44px;
+  }
+
+  .video-js .vjs-control-bar button {
+    position: relative;
+  }
+
+  .video-js .vjs-control-bar button::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--vp-touch-target);
+    height: var(--vp-touch-target);
+    transform: translate(-50%, -50%);
+  }
+
+  .video-js .vjs-progress-control {
+    min-height: var(--vp-touch-target);
+  }
+
+  .video-js .vjs-volume-panel .vjs-volume-control {
+    min-height: var(--vp-touch-target);
+  }
+}
+
+/* Phones draw 32px buttons with a 4px bar gap: 4px margins put neighbouring
+   centres 44px apart, so the hit areas do not overlap. */
+@media (pointer: coarse) and (max-width: 640px) {
+  .video-js .vjs-control-bar button {
+    margin: 0 0.25rem;
+  }
+}
+
+/* First-run touch gesture hint */
+.vjs-gesture-hint {
+  position: absolute;
+  top: 0.75rem;
+  inset-inline: 0.75rem;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.85);
+  color: #ffffff;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.vjs-gesture-hint span {
+  flex: 1;
+}
+
+.vjs-gesture-hint-close {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.vjs-gesture-hint-close:focus-visible {
+  outline: 2px solid var(--vp-focus);
+}

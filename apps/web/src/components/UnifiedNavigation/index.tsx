@@ -705,7 +705,7 @@ export function UnifiedNavigation() {
                 <div className="h-8 w-8 flex items-center justify-center flex-shrink-0">
                   <LogOut className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </div>
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <span className="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100" title={`${t.navigation.signOutOf} ${getDisplayName()}`}>
                   {t.navigation.signOutOf} {getDisplayName()}
                 </span>
               </button>

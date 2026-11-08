@@ -608,3 +608,20 @@ For questions or issues:
 **Document Version**: 1.0.0
 **Last Updated**: January 2025
 **Status**: ✅ Phase 3 Fully Implemented
+
+## Player analytics events (#79)
+
+Sent to `POST /api/analytics/video`, only with analytics consent.
+
+| Event | When | `data` |
+|---|---|---|
+| `seek` | a seek finishes | `fromTime`, `toTime`, direction |
+| `timeupdate` | every 10s of playback | `currentTime`, `duration`, `percentage` |
+| `volume_change` | volume or mute settles for 500ms | `volume` (0-1), `muted` |
+| `quality_change` | the rendition changes | `fromQuality`, `toQuality`, `isUpgrade`, `isAutomatic` |
+| `speed_change` | the playback rate changes | `rate`, `previousRate`, `change` |
+| `buffer_start` / `buffer_end` | buffering starts / ends | duration on `buffer_end` |
+| `loadstart` | the player starts loading | none |
+| `loadedmetadata` | metadata is known | `duration`, `videoWidth`, `videoHeight` |
+
+Failed sends are retried from a bounded in-memory queue. Events are deliberately not written to `localStorage` (GDPR, Story 1.3).

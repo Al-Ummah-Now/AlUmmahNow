@@ -13,14 +13,14 @@ type ValidationResult =
   | { success: true; user?: User }
   | { success: false; error: Error };
 
-async function validate(code: string | null, url: URL): Promise<ValidationResult> {
+async function validate(code: string, url: URL): Promise<ValidationResult> {
   logger.info("[Multi-Account Callback] code:", code);
   logger.info("[Multi-Account Callback] url:", url.toString());
 
   const client = await getClient();
 
   // Use the multi-account callback URL
-  const exchanged = await client.exchange(code!, `${url.origin}/api/callback/multi-account`);
+  const exchanged = await client.exchange(code, `${url.origin}/api/callback/multi-account`);
   logger.info("[Multi-Account Callback] exchanged:", exchanged);
 
   if (exchanged.err == false) {
@@ -95,6 +95,17 @@ export async function GET(req: NextRequest) {
   const localeParam = url.searchParams.get("locale") ?? req.cookies.get("auth_locale")?.value ?? null;
   const locale = localeParam && isLocaleSupported(localeParam) ? localeParam : DEFAULT_LOCALE;
 
+  // The auth server reports failures (cancelled sign-in, access denied, ...)
+  // as ?error=...; with no code there is nothing to exchange.
+  const authError = url.searchParams.get("error");
+  if (authError || !code) {
+    logger.warn("[Multi-Account Callback] Returned without a code", {
+      error: authError,
+      description: url.searchParams.get("error_description"),
+    });
+    return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
+  }
+
   const result = await validate(code, url);
 
   logger.info("[Multi-Account Callback] result:", result);
@@ -107,6 +118,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${url.origin}/${locale}/profile?session_updated=true`);
   }
 
-  logger.error("[Multi-Account Callback] Authentication failed:", result.error);
-  return NextResponse.json(result.error, { status: 400 });
+  // Error objects serialize to {}, so never answer with the raw error
+  logger.error("[Multi-Account Callback] Authentication failed", {
+    error: result.error instanceof Error ? result.error.message : String(result.error),
+  });
+  return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
 }

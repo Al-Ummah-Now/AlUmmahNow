@@ -51,6 +51,13 @@
         "max_batch_timeout": 30,
         "max_retries": 3,
         "dead_letter_queue": "al-ummah-now-dlq-qa"
+      },
+      {
+        "queue": "al-ummah-now-moderation-qa",
+        "max_batch_size": 5,
+        "max_batch_timeout": 10,
+        "max_retries": 3,
+        "dead_letter_queue": "al-ummah-now-dlq-qa"
       }
     ]
   },
@@ -58,8 +65,13 @@
   "vars": {
     "ENVIRONMENT": "qa",
     "LOG_LEVEL": "debug",
-    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net"
+    "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
+    "AI_MODERATION_ENABLED": "true",
+    "AI_MODERATION_DAILY_NEURON_CAP": "10000"
   },
+
+  // Workers AI (Epic 28 moderation)
+  "ai": { "binding": "AI" },
 
   "secrets_store_secrets": [
     {
@@ -70,9 +82,15 @@
   ],
 
   "observability": {
-    "logs": {
-      "enabled": true
-    }
+
+    "enabled": true,
+
+    // Workers Logs bills per line: log 10% of invocations (sampling drops errors too)
+
+    "head_sampling_rate": 0.1,
+
+    "logs": { "enabled": true, "head_sampling_rate": 0.1 }
+
   },
 
   "dev": {

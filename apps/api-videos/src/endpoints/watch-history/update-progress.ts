@@ -7,7 +7,6 @@
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Str } from "chanfana";
 import { z } from "zod";
-import { Context } from "hono";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type {
@@ -16,6 +15,7 @@ import type {
   WatchHistoryEvent
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
+import { isWatchHistoryPaused, percentageOf, queueWatchHistoryEvent } from "../../lib/watch-history";
 
 // Path parameter schema
 const ProgressParams = z.object({
@@ -84,7 +84,7 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
     "required"
   );
 
-  async handle(c: Context) {
+  async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId } = request.headers;
 
@@ -103,6 +103,10 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
     const { progress, duration } = body;
 
     try {
+      if (await isWatchHistoryPaused(c.env.profiles, userId)) {
+        return c.json({ paused: true, videoId }, 200);
+      }
+
       const watchHistoryRepo = new R2Repository<WatchHistoryEntry>(
         c.env.watch_history
       );
@@ -123,10 +127,7 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
 
       // Calculate progress metrics
       const now = new Date().toISOString();
-      const percentageWatched = Math.min(
-        Math.round((progress / duration) * 100),
-        100
-      );
+      const percentageWatched = percentageOf(progress, duration);
       const completed = percentageWatched >= 95;
 
       // Update the entry
@@ -151,10 +152,7 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         timestamp: now,
       };
 
-      await c.env.queue.send({
-        type: "WatchHistory",
-        data: event,
-      });
+      await queueWatchHistoryEvent(c.env.queue, event);
 
       return c.json(
         {

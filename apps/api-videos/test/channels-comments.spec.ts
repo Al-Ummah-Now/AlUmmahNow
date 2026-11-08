@@ -59,6 +59,9 @@ describe('handle validation', () => {
 	it('rejects short, long, non-Latin, edge punctuation and reserved handles', () => {
 		assert.equal(validateHandleFormat('ab'), 'too_short');
 		assert.equal(validateHandleFormat('a'.repeat(31)), 'too_long');
+		assert.equal(validateHandleFormat('AlUmmahNow'), 'reserved');
+		assert.equal(validateHandleFormat('AlUmmahNow', { allowOfficial: true }), null);
+		assert.equal(validateHandleFormat('api', { allowOfficial: true }), 'reserved');
 		assert.equal(validateHandleFormat('قن'), 'too_short');
 		assert.equal(validateHandleFormat('قناةالنور'), 'invalid_characters');
 		assert.equal(validateHandleFormat('has space'), 'invalid_characters');
@@ -125,6 +128,31 @@ describe('channel handle endpoints', () => {
 		assert.equal(avail.result.available, true, 'own handle counts as available');
 		const reserved = await (await other.request('/api/channels/handles/admin/availability', {}, e)).json() as any;
 		assert.deepEqual(reserved.result, { available: false, handle: 'admin', reason: 'reserved' });
+	});
+
+	it('lets only a Super Admin claim an official brand handle; system words stay reserved', async () => {
+		const e = env({ channels: new MemoryBucket({ c1: channel('c1'), c2: channel('c2', { userId: 'member' }) }) });
+		const member = buildApp(routes, { userId: 'member', roles: ['Admin'] });
+		let res = await member.request('/api/channels/c2', json({ handle: 'AlUmmahNow' }), e);
+		assert.equal(res.status, 409);
+		assert.deepEqual(await res.json(), { success: false, error: 'handle_unavailable', reason: 'reserved' });
+		const memberAvail = await (await member.request('/api/channels/handles/AlUmmahNow/availability?channelId=c2', {}, e)).json() as any;
+		assert.equal(memberAvail.result.reason, 'reserved');
+
+		const superAdmin = buildApp(routes, { userId: 'owner', roles: ['Super Admin'] });
+		const avail = await (await superAdmin.request('/api/channels/handles/AlUmmahNow/availability?channelId=c1', {}, e)).json() as any;
+		assert.equal(avail.result.available, true);
+		res = await superAdmin.request('/api/channels/c1', json({ handle: '@AlUmmahNow' }), e);
+		assert.equal(res.status, 200);
+		assert.equal(((await res.json()) as any).result.channel.handle, 'AlUmmahNow');
+		assert.equal(e.channel_tabs.read('channel-handles/alummahnow').channelId, 'c1');
+
+		// Once claimed it is taken for everyone else, and route words stay blocked even for Super Admin
+		res = await member.request('/api/channels/c2', json({ handle: 'alummahnow' }), e);
+		assert.equal(((await res.json()) as any).reason, 'reserved');
+		res = await superAdmin.request('/api/channels/c1', json({ handle: 'admin' }), e);
+		assert.equal(res.status, 409);
+		assert.equal(((await res.json()) as any).reason, 'reserved');
 	});
 
 	it('stores About fields and returns them with totals', async () => {

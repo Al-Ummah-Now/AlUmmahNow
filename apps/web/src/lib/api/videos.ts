@@ -1,6 +1,7 @@
 'use server';
 
 import { VideoObject, VideoInfo } from "@/interfaces";
+import { mergeRelated, RELATED_LIMIT, toVideoInfo } from "@/lib/video/related";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import {
   ApiResponse,
@@ -197,6 +198,44 @@ export async function bulkDeleteVideos(
     );
   } catch (error) {
     logger.error('bulkDeleteVideos error:', error);
+    return null;
+  }
+}
+
+/**
+ * Bulk Edit Videos (Epic 5.3)
+ * POST /api/videos/bulk-update
+ */
+export async function bulkUpdateVideos(
+  videoIds: string[],
+  changes: { isPublic?: boolean; category?: string | null; addTags?: string[]; removeTags?: string[] },
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<{
+  success: boolean;
+  results: Array<{ videoId: string; success: boolean; changed?: boolean; error?: string }>;
+  summary: { total: number; succeeded: number; failed: number };
+} | null> {
+  try {
+    logger.info('[bulkUpdateVideos] Editing videos', { count: videoIds.length, fields: Object.keys(changes) });
+    return apiRequestServer<{
+      success: boolean;
+      results: Array<{ videoId: string; success: boolean; changed?: boolean; error?: string }>;
+      summary: { total: number; succeeded: number; failed: number };
+    }>(
+      {
+        method: 'POST',
+        url: buildApiUrl('/api/videos/bulk-update'),
+        body: { videoIds, changes },
+        functionName: 'bulkUpdateVideos',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
+    );
+  } catch (error) {
+    logger.error('bulkUpdateVideos error:', error);
     return null;
   }
 }
@@ -1020,6 +1059,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             channel: video.channel,
             channelName: video.channelName,
             channelAvatar: video.channelAvatarUrl,
+            channelVerified: video.channelIsVerified === true,
             channelCover: video.channelCoverUrl,
             url: video.videoUrl,
             playUrl: video.playUrl,
@@ -1046,6 +1086,20 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
         logger.error('[fetchVideoById] Error:', error);
         return undefined;
     }
+}
+
+/**
+ * Related videos for the watch page (Epic 7.3): recommendations for `videoId`,
+ * topped up from the general feed, without the current video.
+ */
+export async function fetchRelatedVideos(videoId: string): Promise<VideoInfo[]> {
+    const [recommended, feed] = await Promise.all([
+        getRecommendedVideos({ videoId, limit: RELATED_LIMIT }),
+        fetchVideos(null),
+    ]);
+    const related = mergeRelated(videoId, recommended.map(v => toVideoInfo(v as never)), feed || []);
+    logger.info('[fetchRelatedVideos] Related shelf', { videoId, recommended: recommended.length, total: related.length });
+    return related;
 }
 
 export async function fetchVideos(cursor: string | null = null): Promise<VideoInfo[] | undefined> {

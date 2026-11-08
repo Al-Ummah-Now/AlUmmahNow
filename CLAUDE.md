@@ -42,6 +42,20 @@ This file contains the mandatory 10-step development workflow that MUST be follo
 
 **See `BEFORE_YOU_CODE.md` for complete details, checklists, and code examples.**
 
+## Deploy Rules
+
+**CRITICAL — production is deployed only from `main`, only by CI, and only when a release tag is pushed.**
+
+1. **Fix on `main`.** Every fix goes through a PR into `main`, including hotfixes. No `hotfix`, `qa` or long-lived release branches, and never deploy from a feature branch or a local checkout.
+2. **QA follows `main`.** Every push to `main` deploys QA (`deploy.yml` → `deploy-qa`). Merging is not a production release.
+3. **A tag releases production.** Pushing a tag `vYYYY.MM.DD` (a second release that day: `vYYYY.MM.DD.2`, and so on) on a commit that is on `main` starts `.github/workflows/release.yml`. It builds once, deploys stage, runs smoke and the release E2E suite on stage, then promotes production (0% → smoke → 100%, auto-rollback). The release refuses a tag whose commit is not on `main`.
+   ```bash
+   git fetch origin && git tag -a v2026.11.08 origin/main -m "Release v2026.11.08" && git push origin v2026.11.08
+   ```
+   Tag a commit only after its `deploy.yml` run on `main` and its QA deploy are green. Tags are never moved or deleted: to undo a release, run `.github/workflows/rollback.yml`, then fix forward on `main` and tag again. To retry a release that failed for a transient reason, re-run that tag's workflow run. Running `release.yml` by hand (Actions → Release → Run workflow on `main`) deploys **stage only** and never touches production. Releases queue one at a time, and GitHub keeps only the newest pending run, so if two tags are pushed while a release is running, only the later one is released.
+4. **No hand deploys to production.** Do not run `wrangler deploy`, `pnpm deploy:all`, `pnpm *:deploy` or `pnpm *:deploy:production` against production. The commands in [Deployment](#deployment) exist for CI and for an emergency only. An emergency deploy needs the owner's explicit go-ahead, comes from a clean checkout of a commit on `main`, and is followed by a tagged release of the same commit, so that CI is again the source of truth.
+5. **If CI is the blocker, fix CI.** A failing check, a missing secret or a broken workflow is fixed in a PR to `main`. It is never a reason to deploy by hand or to add `continue-on-error`.
+
 ## Code Quality Standards
 
 ### TODO Comments Policy
@@ -381,6 +395,9 @@ pnpm lint                # Lint all packages
 ```
 
 ### Deployment
+
+Production releases come from a tag on `main` (see [Deploy Rules](#deploy-rules)). These scripts are what CI runs. Do not run the production ones by hand.
+
 ```bash
 pnpm web:deploy:production      # Deploy web to production
 pnpm api:deploy                 # Deploy API to production
@@ -389,7 +406,7 @@ pnpm websocket:deploy           # Deploy WebSocket server to production
 pnpm admin:deploy               # Deploy admin API to production
 pnpm admin:deploy:qa            # Deploy admin API to QA
 pnpm admin-web:deploy:qa        # Deploy admin web to QA
-# Deploy admin-web to production: cd apps/admin-web && pnpm deploy
+pnpm admin-web:deploy:production # Deploy admin web to production
 pnpm deploy:all                 # Deploy all 6 CI-managed apps to production
 pnpm deploy:qa                  # Deploy all 6 CI-managed apps to QA
 ```
@@ -511,11 +528,12 @@ cd apps/processor && pnpm lint:fix
 
 ### GitHub Actions Workflow (`.github/workflows/deploy.yml`)
 
-**Trigger**: Push to `main` or `develop`, or pull requests to either branch
+**Trigger**: Push to `main`, or pull requests into `main` or `integrate/**`
 
 **Pipeline Stages**:
 
-1. **test** - Type check + lint + tests (all packages, 5 min)
+1. **test** - Type check + lint + tests (all packages). A failing test fails the PR.
+   **release-checks** - Release gates, see below (runs in parallel with `test`).
 2. **build-shared-packages** - Build `@al-ummah/shared-types` + `@al-ummah/logger` (2 min)
 3. **Build & Validate** - 6 parallel jobs (all depend on build-shared-packages):
    - `build-web`: Build Next.js user app (up to 120 min)
@@ -541,17 +559,95 @@ Note: **scheduler** and **log-service** have no CI validation or deployment jobs
 - Auto-cleanup when PR closes
 - **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
-**QA Deployment** (`develop` branch):
+**QA Deployment** (`deploy-qa` job): runs on every push to `main` (and by `workflow_dispatch` on `main`).
 - All 6 apps deployed in a single `deploy-qa` job after validation
 - QA URLs: `qa.alummahnow.net`, `videos.qa.api.alummahnow.net`, `ws.qa.alummahnow.net`, `admin.qa.alummahnow.net`, `admin.qa.api.alummahnow.net`
 - Web and admin-web use `wrangler.qa.jsonc`; others use per-app `wrangler.qa.jsonc`
 
-**Production Deployment** (`main` branch):
-- All 6 apps deployed in a single `deploy-production` job after validation
+**Production Deployment** (`.github/workflows/release.yml`, triggered by pushing a `v*` tag on `main`; see [Deploy Rules](#deploy-rules)):
+- build once → stage (migrate, deploy, smoke, seed) → release E2E on stage + live secrets check of stage and production (`secrets-check.yml`, `pnpm check:secrets`; names only, never values; manifest `scripts/release/secrets-manifest.ts`) → production (migrate, candidates at 0%, smoke through the version override, 100%, smoke, auto-rollback) → rollback dry run
+- The production job checks that the tagged commit is on `main`. Later merges to `main` do not affect a running release, because the release deploys the tag.
+- Rollback: `.github/workflows/rollback.yml` (start with `dry_run`) or `pnpm release:rollback --env production`. Code only; D1 migrations are expand-only.
+- `deploy.yml`'s old `deploy-production` job is superseded by the release workflow and is not used.
 - Web uses `wrangler.production.jsonc`; admin-web uses `wrangler.production.jsonc`; other apps use default wrangler config
 
 **Required Secrets**:
 - `CLOUDFLARE_API_TOKEN` - For all deployments
+
+### Release gates
+
+Required checks on every PR (`deploy.yml` jobs `test` and `release-checks`). Scripts live in `scripts/release/` and run with plain Node 22 (no install needed):
+
+| Command | Fails when | How to fix |
+|---|---|---|
+| `pnpm test` | any unit test fails | Fix the test or code. Known-broken tests are quarantined with `.skip` and a `// Quarantined: ... #<issue>` comment (web: #206, log-service: #207); never add `continue-on-error`. |
+| `pnpm check:config` | a production wrangler config (`apps/web` and `apps/admin-web`: `wrangler.production.jsonc`; other workers: `wrangler.jsonc`) has the wrong worker name or vars (e.g. web `OPENAUTH_ISSUER` must be `https://auth.alummahnow.net`), loses a required binding, contains localhost, a QA/stage host, a placeholder id or a test-only name; or a workflow / package script runs `wrangler deploy` for web or admin-web without `--config` (their top-level `wrangler.jsonc` is the dev config) | Fix the config or add `--config wrangler.<env>.jsonc`. If a production value changes on purpose, update `scripts/release/apps.ts` in the same PR. A known problem that can't be fixed yet goes in that app's `accepted` list with its issue; the check fails once it is fixed, so the entry gets removed. |
+| `pnpm check:migrations <base-sha>` | a file under `apps/*/migrations*/` (any depth) that exists on the base branch was modified, renamed or deleted, or a new migration sorts before the latest one in its dir | Never edit an applied migration; add a new, higher-numbered one. |
+| `pnpm check:schema` | a D1 migrations dir has no snapshot, or its snapshot (`<dir>.schema.snapshot.sql`, next to the dir) no longer matches the schema the migrations produce | Run `pnpm schema:snapshot` and commit the snapshot with the migration. Never edit a snapshot by hand. |
+| `pnpm check:tokens` | a Fanous theme colour pair is under WCAG 2.1 AA, or `packages/fanous-tokens/generated/` is out of date | Fix the colour in `packages/fanous-tokens/tokens/fanous.tokens.json`, run `pnpm tokens:generate` and commit the result. Never edit `generated/` by hand. |
+| `pnpm test:scripts` | the release scripts' own tests fail | Fix the script or its test in `scripts/release/__tests__/`. |
+
+### Release regressions
+
+The release E2E suite is the gate: `apps/web/e2e/release/` with
+`apps/web/playwright.release.config.ts`, run by `.github/workflows/release-e2e.yml`.
+
+| Where | When | Target | Secrets |
+|---|---|---|---|
+| PR check `Release regressions (qa)` | every PR into `main` | QA (`E2E_ENV=qa`) | `E2E_CODE_SINK_SECRET_QA`, `TEST_PROMOTE_SECRET_QA` |
+| `workflow_call` from the release workflow | every release | stage (`env: stage`) | caller passes `E2E_CODE_SINK_SECRET` and `TEST_PROMOTE_SECRET` (stage values) |
+| `workflow_dispatch` | by hand | `qa` or `stage` | `*_QA` / `*_STAGE` repo secrets |
+
+Never production: the specs create accounts, channels and videos. Each spec
+registers its own user with an `@e2e.alummahnow.net` address (the auth
+server's code sink stores its verification code instead of emailing it; QA and
+stage only) and creates the data it needs; there are no seeded users and no
+global setup. Passwords are random per run, so the accounts left behind
+(including promoted admins) cannot be signed into later.
+
+| Spec | Covers |
+|---|---|
+| `signup-signin.spec.ts` | web sign-up → sink code → sign-in in a fresh session, en and ar; fails on any `error=` hop or `/auth/error` (the 2026-11-07 redirect_uri incident) |
+| `callback-errors.spec.ts` | `/api/callback` and `/api/callback/multi-account` land on the localized error page, never raw JSON (`{}`) |
+| `profile-signin.spec.ts` | the auth server's profile app (`profile.auth.*`) sign-up and sign-in |
+| `admin-signin.spec.ts` | admin-web refuses a user without an admin role (`/access-denied`); a user promoted with the auth server's `/test/promote` (`TEST_PROMOTE_SECRET`) reaches `/dashboard`. The admin case skips when the secret is missing |
+| `player.spec.ts` | an anonymous watch page really plays (media `currentTime` advances), en and ar |
+| `watch-history.player.spec.ts` | a signed-in watch reaches `GET /api/watch-history` and the `/history` page (#234) |
+| `uploads.spec.ts` | profile and channel avatar uploads store a served image (#229); a channel created in the account menu, then a video uploaded on `/upload` (TUS through the api-videos proxy), is listed in the owner's search and dashboard, then deleted. Encoding is not awaited |
+
+Playback specs (`*player.spec.ts`) run in the `player` project on branded
+Chrome (`channel: 'chrome'`): Playwright's bundled Chromium cannot decode the
+H.264 HLS streams. They pick a public, encoded video from `GET /api/videos`
+and skip with a reason when the environment has none (seed stage with at
+least one public video of 8s or more).
+
+The suite needs only `@playwright/test` (no monorepo install), so keep its
+imports inside `e2e/release/`, `e2e/test-utils/code-sink.ts` and
+`e2e/test-fixtures/`. Run it locally the way CI does:
+
+```bash
+SUITE=$(mktemp -d) && mkdir -p $SUITE/e2e/test-utils
+cp -R apps/web/e2e/release apps/web/e2e/test-fixtures $SUITE/e2e/
+cp apps/web/e2e/test-utils/code-sink.ts $SUITE/e2e/test-utils/
+cp apps/web/playwright.release.config.ts $SUITE/
+cd $SUITE && npm init -y >/dev/null && npm i @playwright/test@1.56.1 && npx playwright install chromium chrome
+E2E_ENV=qa E2E_CODE_SINK_SECRET=... TEST_PROMOTE_SECRET=... npx playwright test -c playwright.release.config.ts
+```
+
+(With a working `pnpm install`, `cd apps/web && pnpm exec playwright test -c playwright.release.config.ts` works too.)
+
+The suite tests the deployed environment, not the PR's code: a fix only turns
+its spec green after it is deployed to QA (merge to `main`).
+
+#### Legacy E2E suite
+
+`.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`, every other
+spec under `apps/web/e2e/`) is not a release gate. Its specs share pinned users
+and seeded data and are known to be flaky; fix them when touching their area,
+but gate on the release suite. Its `Auth Setup` job registers users with
+code-sink addresses (`E2E_CODE_SINK_SECRET` from `E2E_CODE_SINK_SECRET_QA`,
+#185), no longer through Resend.
+
 
 ## Development Workflow
 
@@ -734,7 +830,7 @@ Each app has its own detailed documentation:
 - **Authentication**: JWT with OpenAuth
 - **Features**: Channel subscriptions, presence tracking, rate limiting, broadcasting
 - **KV Namespaces**: `al-ummah-now-analytics-kv` (presence state)
-- **Deployment**: `wss://ws.alummahnow.net` (production)
+- **Deployment**: `wss://realtime.alummahnow.net/ws` (production; custom domain on `al-ummah-now-comms`)
 
 ### Admin API (`apps/admin-api/`)
 - **Overview**: `apps/admin-api/README.md`
@@ -789,21 +885,13 @@ Note: If modifying `packages/logger`, rebuild it too: `pnpm --filter @al-ummah/l
 
 ### Deploying to Production
 
+Merge to `main` (QA deploys automatically), check QA, then tag the release. Never deploy production by hand (see [Deploy Rules](#deploy-rules)).
+
 ```bash
-# Deploy all 6 CI-managed apps to production in one command
-pnpm deploy:all
-
-# Or deploy individually
-pnpm web:deploy:production
-pnpm api:deploy
-pnpm processor:deploy
-pnpm websocket:deploy
-pnpm admin:deploy
-# Admin web production deploy (no root alias):
-cd apps/admin-web && pnpm deploy
-
-# Or push to main branch → GitHub Actions handles all 6 apps automatically
-git push origin main
+git fetch origin
+git tag -a v2026.11.08 origin/main -m "Release v2026.11.08"   # second release that day: v2026.11.08.2
+git push origin v2026.11.08                                    # starts release.yml: stage → E2E → production
+gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 ```
 
 ## Troubleshooting
@@ -849,6 +937,7 @@ Network-restricted environments may block Google Fonts. See `.github/CLAUDE.md` 
 5. **Test bilingual support** - verify both `/en/*` and `/ar/*` routes
 6. **API validation** - Use Swagger UI to test API endpoints
 7. **Auth service is separate** - Not part of this monorepo
+8. **Production = a release tag on `main`, deployed by CI** - never a hand deploy (see [Deploy Rules](#deploy-rules))
 
 ## Recommended Claude Code Agents
 

@@ -6,10 +6,12 @@ import { VideoCreate } from '../endpoints/video/videoCreate';
 import { VideoUpdate } from '../endpoints/video/videoUpdate';
 import { VideoDelete } from '../endpoints/video/videoDelete';
 import { VideoBulkDelete } from '../endpoints/video/videoBulkDelete';
+import { VideoBulkUpdate } from '../endpoints/video/videoBulkUpdate';
 import { VideoFetch } from '../endpoints/video/videoFetch';
 import { VideosList } from '../endpoints/video/videoList';
 import { VideoSearch } from '../endpoints/video/videoSearch';
 import { VideoView } from '../endpoints/video/videoView';
+import { VideoWatchTime } from '../endpoints/video/videoWatchTime';
 import { VideoUploadStatus } from '../endpoints/video/videoUploadStatus';
 import { VideoThumbnailUpload } from '../endpoints/video/videoThumbnailUpload';
 
@@ -91,6 +93,7 @@ videoRouter.delete('/:id', VideoDelete);
 
 // Bulk delete videos (authenticated)
 videoRouter.post('/bulk-delete', VideoBulkDelete);
+videoRouter.post('/bulk-update', VideoBulkUpdate);
 
 // Get video upload status (authenticated)
 videoRouter.get('/:id/upload-status', VideoUploadStatus);
@@ -224,6 +227,7 @@ videoRouter.delete('/:id/comments/:cid/dislikes', CommentDislikeDelete);
 
 // Track video view (public - for analytics)
 videoRouter.post('/:id/view', VideoView);
+videoRouter.post('/:id/watch-time', VideoWatchTime);
 
 // Export as default and named export
 export default videoRouter;

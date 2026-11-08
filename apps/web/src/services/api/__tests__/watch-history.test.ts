@@ -64,6 +64,12 @@ describe('WatchHistoryService', () => {
     expect(progress).toEqual({ videoId: 'v1', currentTime: 30, duration: 60, completed: false, timestamp: '2026-01-02T00:00:00Z' });
   });
 
+  it('filters the list by completion (Continue watching)', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { entries: [], total: 0, hasMore: false }));
+    await WatchHistoryService.list({ limit: 10, completed: false });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/api/watch-history?sort=newest&limit=10&completed=false');
+  });
+
   it('lists, removes and clears history with client auth headers', async () => {
     fetchMock
       .mockResolvedValueOnce(mockResponse(200, { entries: [], total: 0, hasMore: false }))
@@ -81,6 +87,23 @@ describe('WatchHistoryService', () => {
     expect(await WatchHistoryService.clearAll()).toBe(true);
     expect(fetchMock.mock.calls[2][0]).toBe('https://api.test/api/watch-history');
     expect(fetchMock.mock.calls[2][1]?.method).toBe('DELETE');
+  });
+
+  it('reads and changes the pause setting on /api/watch-history/settings', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { paused: false }));
+    expect(await WatchHistoryService.getPaused()).toBe(false);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/api/watch-history/settings');
+
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { paused: true }));
+    expect(await WatchHistoryService.setPaused(true)).toBe(true);
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe('https://api.test/api/watch-history/settings');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ paused: true });
+    expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer client-token');
+
+    fetchMock.mockResolvedValueOnce(mockResponse(500));
+    expect(await WatchHistoryService.setPaused(false)).toBeNull();
   });
 
   it('never calls the legacy /api/profile/watch-history path', async () => {

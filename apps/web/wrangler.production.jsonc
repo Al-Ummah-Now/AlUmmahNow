@@ -16,7 +16,10 @@
     "binding": "ASSETS"
   },
   "observability": {
-    "enabled": true
+    "enabled": true,
+    // Low traffic: keep every invocation. Lower this when traffic grows.
+    "head_sampling_rate": 1,
+    "logs": { "enabled": true, "head_sampling_rate": 1 }
   },
   "upload_source_maps": true,
   "vars": {
@@ -32,5 +35,33 @@
       "binding": "videos",
       "bucket_name": "videos"
     }
-  ]
+  ],
+  "env": {
+    // Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
+    "stage": {
+      // Workers Logs bills per line: log 10% of invocations (sampling drops errors too)
+      "observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "head_sampling_rate": 0.1 } },
+      "name": "al-ummah-now-stage",
+      "routes": [
+        {
+          "pattern": "videos.stage.alummahnow.net",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "Issuer": "https://auth.stage.alummahnow.net",
+        "OPENAUTH_ISSUER": "https://auth.stage.alummahnow.net",
+        "NEXTJS_ENV": "stage",
+        "API_URL": "https://videos.api.stage.alummahnow.net",
+        "WEBSOCKET_URL": "wss://realtime.stage.alummahnow.net/ws",
+        "ClientId": "f0de3c30-0304-4ac4-86d6-1e185dec0439"
+      },
+      "r2_buckets": [
+        {
+          "binding": "videos",
+          "bucket_name": "videos-stage"
+        }
+      ]
+    }
+  }
 }

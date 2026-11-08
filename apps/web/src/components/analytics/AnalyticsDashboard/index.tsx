@@ -5,6 +5,8 @@ import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/
 import { useLanguage } from '@/hooks/useLanguage';
 import AnalyticsCard from '../AnalyticsCard';
 import MetricsChart from '../MetricsChart';
+import { analyticsCsvFilename, buildAnalyticsCsv, downloadCsv } from '@/lib/analytics/csv-export';
+import { logger } from '@/lib/logger-client';
 
 export interface AnalyticsDashboardProps {
   summary: AnalyticsSummary | null;
@@ -14,7 +16,17 @@ export interface AnalyticsDashboardProps {
   CardComponent?: typeof AnalyticsCard;
 }
 
-type ChangeField = 'views' | 'likes' | 'comments' | 'subscribers';
+type ChangeField = 'views' | 'likes' | 'comments' | 'subscribers' | 'watchTime';
+
+/** Sum of one field over the daily series (0 without data). */
+export function seriesTotal(metrics: AnalyticsMetrics[] | null, field: ChangeField): number {
+  return (metrics ?? []).reduce((n, m) => n + (Number(m[field]) || 0), 0);
+}
+
+/** Seconds as hours with one decimal (watch time cards). */
+export function toHours(seconds: number): number {
+  return Math.round((seconds / 3600) * 10) / 10;
+}
 
 /**
  * Compare the second half of the daily series with the first half (by default
@@ -61,13 +73,62 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       : {};
   };
 
+  const exportCsv = () => {
+    const csv = buildAnalyticsCsv(metrics, channelData?.topPerformingVideos, {
+      date: d.csvDate,
+      views: t.analytics.views,
+      likes: d.likes,
+      comments: d.comments,
+      shares: d.csvShares,
+      subscribers: t.analytics.subscribers,
+      watchTimeHours: d.csvWatchTimeHours,
+      video: d.csvVideo,
+      videoId: d.csvVideoId,
+      published: d.csvPublished,
+    });
+    logger.info('[AnalyticsDashboard] CSV export', { channelId: channelData?.channelId, days: metrics?.length ?? 0 });
+    downloadCsv(analyticsCsvFilename(channelData?.channelId), csv);
+  };
+
   return (
     <div className="space-y-8" dir={isRTL ? 'rtl' : 'ltr'}>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={exportCsv}
+          title={d.exportCsvHint}
+          data-testid="analytics-export-csv"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-800 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path d="M10 3a1 1 0 011 1v7.59l2.3-2.3a1 1 0 111.4 1.42l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.42L9 11.6V4a1 1 0 011-1zM4 15a1 1 0 011 1v1h10v-1a1 1 0 112 0v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2a1 1 0 011-1z" />
+          </svg>
+          {d.exportCsv}
+        </button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <CardComponent title={d.totalViews} value={fmt(summary.totalViews)} icon="eye" {...change('views')} />
         <CardComponent title={d.totalLikes} value={fmt(summary.totalLikes)} icon="heart" {...change('likes')} />
         <CardComponent title={d.totalComments} value={fmt(summary.totalComments)} icon="message" {...change('comments')} />
         <CardComponent title={t.analytics.subscribers} value={fmt(summary.totalSubscribers)} icon="users" {...change('subscribers')} />
+      </div>
+
+      {/* #241: watch time and subscriber growth over the series' period */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-testid="analytics-growth-cards">
+        <CardComponent
+          title={d.watchTimeHours}
+          value={d.hoursValue.replace('{hours}', toHours(seriesTotal(metrics, 'watchTime')).toLocaleString(lang === 'ar' ? 'ar' : 'en-US'))}
+          subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
+          icon="clock"
+          {...change('watchTime')}
+        />
+        <CardComponent
+          title={d.newSubscribers}
+          value={fmt(seriesTotal(metrics, 'subscribers'))}
+          subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
+          icon="users"
+          {...change('subscribers')}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -11,7 +11,7 @@
 
 import { cookies } from 'next/headers';
 import type { Channel, User } from '@al-ummah/shared-types';
-import { createClient } from "@al-ummah-now/openauth/client";
+import { getOpenAuthClient } from "./openauth-client";
 import { subjects } from '../auth';
 import { logger } from '@/lib/logger-server';
 
@@ -140,6 +140,13 @@ export class SessionManager {
     // Serialize to JSON
     const jsonValue = JSON.stringify(data);
 
+    // Nothing changed (e.g. the periodic channel refresh): skip the write. A
+    // cookie set in a Server Action makes Next re-render the whole route, which
+    // refetched the page's data and churned the DOM under the user's taps.
+    if (cookieStore.get(SESSION_COOKIE_NAME)?.value === jsonValue) {
+      return;
+    }
+
     // Check cookie size
     this.checkCookieSize(jsonValue, data);
 
@@ -150,6 +157,22 @@ export class SessionManager {
       maxAge: SESSION_MAX_AGE,
       path: '/',
     });
+  }
+
+  /**
+   * Saves a clean-up of the session where cookies are writable (Route
+   * Handlers, Server Actions) and skips it during a Server Component render,
+   * where cookies().set() throws. Reads must never fail because a write is not
+   * allowed: that turned signed-in renders into signed-out ones (#288).
+   */
+  private static async persistIfWritable(data: SessionData | null): Promise<void> {
+    try {
+      await this.setSessionData(data);
+    } catch (error) {
+      logger.debug('[SessionManager] Session clean-up not saved (read-only cookies in this render)', {
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**
@@ -164,7 +187,7 @@ export class SessionManager {
     const usagePercent = ((sizeInBytes / COOKIE_SIZE_MAX) * 100).toFixed(1);
 
     // Always log size for monitoring
-    logger.info(`[SessionManager] Cookie size: ${sizeInKB} KB (${usagePercent}% of 4KB limit) | Accounts: ${accountCount}`);
+    logger.debug(`[SessionManager] Cookie size: ${sizeInKB} KB (${usagePercent}% of 4KB limit) | Accounts: ${accountCount}`);
 
     // Warn if approaching limit
     if (sizeInBytes >= COOKIE_SIZE_WARNING_THRESHOLD) {
@@ -287,12 +310,16 @@ export class SessionManager {
         },
       };
 
-      // Save new structure
-      await this.setSessionData(sessionData);
-
-      // Delete legacy cookies
-      cookieStore.delete('access_token');
-      cookieStore.delete('refresh_token');
+      // Save new structure (only possible outside a Server Component render;
+      // the session is valid for this request either way)
+      await this.persistIfWritable(sessionData);
+      try {
+        cookieStore.delete('access_token');
+        cookieStore.delete('refresh_token');
+      } catch {
+        // Read-only cookies: the legacy cookies are migrated on a later write
+        return sessionData;
+      }
 
       // Load profile and channels in background (don't await to speed up migration)
       this.loadUserProfile(userId).catch(err =>
@@ -313,10 +340,7 @@ export class SessionManager {
    * Get OpenAuth client instance
    */
   private static async getAuthClient() {
-    return createClient({
-      clientID: process.env.ClientId!,
-      issuer: process.env.Issuer!,
-    });
+    return getOpenAuthClient();
   }
 
   /**
@@ -329,35 +353,42 @@ export class SessionManager {
       accounts: {},
     };
 
-    // Check max accounts limit
-    if (Object.keys(sessionData.accounts).length >= MAX_ACCOUNTS) {
+    const existing = sessionData.accounts[userInfo.id];
+
+    // Check max accounts limit (signing in again to a stored account adds none)
+    if (!existing && Object.keys(sessionData.accounts).length >= MAX_ACCOUNTS) {
       throw new Error(`Maximum ${MAX_ACCOUNTS} accounts allowed`);
     }
 
-    // Add or update account
+    // Add the account, or refresh the tokens of one signed in before (keeping
+    // its channels and channel choice until loadUserChannels refreshes them)
+    const channels = (existing?.channels ?? []).filter(c => c.userId === userInfo.id);
+    const activeChannelId = existing?.activeChannelId && channels.some(c => c.id === existing.activeChannelId)
+      ? existing.activeChannelId
+      : null;
     sessionData.accounts[userInfo.id] = {
       userId: userInfo.id,
       email: userInfo.email,
-      displayName: userInfo.displayName || userInfo.email,
+      displayName: existing?.displayName || userInfo.displayName || userInfo.email,
+      avatarUrl: existing?.avatarUrl,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      channels: [],
-      activeChannelId: null,
+      channels,
+      activeChannelId,
       lastActivity: Date.now(),
     };
 
-    // Set as active if first account
-    if (Object.keys(sessionData.accounts).length === 1) {
-      sessionData.activeUserId = userInfo.id;
-    }
+    // The account that just signed in is the one the user is now using, and
+    // the session's channel must be one of its channels
+    sessionData.activeUserId = userInfo.id;
+    sessionData.activeChannelId = activeChannelId;
 
     await this.setSessionData(sessionData);
 
-    // Load user's profile (to get actual displayName) and channels in parallel
-    await Promise.all([
-      this.loadUserProfile(userInfo.id),
-      this.loadUserChannels(userInfo.id),
-    ]);
+    // One after the other: each reads the session, changes it and writes it
+    // back, so in parallel the later write dropped the earlier one's changes
+    await this.loadUserChannels(userInfo.id);
+    await this.loadUserProfile(userInfo.id);
   }
 
   /**
@@ -462,7 +493,7 @@ export class SessionManager {
     const activeAccount = sessionData.accounts[sessionData.activeUserId];
     if (!activeAccount) return null;
 
-    logger.info('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
+    logger.debug('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
       userId: activeAccount.userId,
       email: activeAccount.email,
       'sessionData.activeChannelId': sessionData.activeChannelId,
@@ -478,7 +509,7 @@ export class SessionManager {
       const accountChannels = account.channels.filter(c => c.userId === account.userId);
 
       if (accountChannels.length !== account.channels.length) {
-        logger.info('[SessionManager] Cleaning channels for user:', {
+        logger.debug('[SessionManager] Cleaning channels for user:', {
           userId: account.userId,
           email: account.email,
           before: account.channels.length,
@@ -505,10 +536,10 @@ export class SessionManager {
 
     // Save updated session data if we made changes
     if (sessionNeedsUpdate) {
-      await this.setSessionData(sessionData);
+      await this.persistIfWritable(sessionData);
     }
 
-    logger.info('[SessionManager.getActiveSession] TRACE AFTER FILTER:', {
+    logger.debug('[SessionManager.getActiveSession] TRACE AFTER FILTER:', {
       userId: activeAccount.userId,
       email: activeAccount.email,
       'sessionData.activeChannelId': sessionData.activeChannelId,
@@ -616,6 +647,9 @@ export class SessionManager {
         // Set first channel as active if none selected AND channels exist
         // Clear active channel if no channels exist
         if (account.channels.length > 0) {
+          if (account.activeChannelId && !account.channels.some(c => c.id === account.activeChannelId)) {
+            account.activeChannelId = null;
+          }
           if (!account.activeChannelId) {
             const mainChannel = account.channels.find(c => c.isMain) || account.channels[0];
             account.activeChannelId = mainChannel.id;

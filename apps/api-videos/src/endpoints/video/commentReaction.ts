@@ -6,6 +6,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AppContext } from '../../base';
 import { logger } from "../../lib/logger";
 import { isVideoRemoved } from "../../lib/visibility";
+import { ReactorHeaders, reactorId } from "../../lib/reactions";
 import { applyCommentReaction, findStoredComment, isCommentVisible, StoredComment } from "../../lib/comments";
 
 export type CommentReactionKind = 'like' | 'dislike';
@@ -28,9 +29,7 @@ export function commentReactionSchema(reaction: CommentReactionKind, action: Com
 				id: Str({ description: "Video id" }),
 				cid: Str({ description: "Comment id" }),
 			}),
-			headers: z.object({
-				channelId: Str({ description: "Channel ID of the reacting channel" }),
-			}),
+			headers: ReactorHeaders,
 		},
 		responses: {
 			"200": {
@@ -63,11 +62,13 @@ export function commentReactionSchema(reaction: CommentReactionKind, action: Com
  */
 export async function handleCommentReaction(
 	c: AppContext,
-	params: { id: string; cid: string; channelId: string; userId: string },
+	params: { id: string; cid: string; channelId?: string | null; userId: string },
 	reaction: CommentReactionKind,
 	action: CommentReactionAction,
 ): Promise<Response> {
-	const { id, cid, channelId, userId } = params;
+	const { id, cid, userId } = params;
+	// Members without a channel react as themselves (#292)
+	const channelId = reactorId(params.channelId, userId);
 
 	type VideoType = z.infer<typeof Video>;
 	const repository = new R2Repository<VideoType>(c.env.videos);

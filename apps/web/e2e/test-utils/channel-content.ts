@@ -101,12 +101,23 @@ export interface PublicChannel {
   userId: string;
 }
 
-/** qa-creator's seeded Lectures channel (public videos, a playlist, posts) */
+/**
+ * qa-creator's seeded Lectures channel (public videos, a playlist, posts).
+ * /api/channels caps limit at 50 and every E2E sign-up adds a channel, so the seed
+ * channel is not on the first page: follow the cursor.
+ */
 export async function findQaLecturesChannel(): Promise<PublicChannel> {
-  const body = await apiGet<{ data?: PublicChannel[] }>('/api/channels?limit=200');
-  const channel = (body.data ?? []).find((c) => c.name === QA_LECTURES_CHANNEL_NAME);
-  if (!channel) throw new Error(`Seed channel "${QA_LECTURES_CHANNEL_NAME}" not found (run the Seed QA workflow)`);
-  return channel;
+  let cursor: string | undefined;
+  for (let page = 0; page < 100; page++) {
+    const body = await apiGet<{ data?: PublicChannel[]; cursor?: string | null }>(
+      `/api/channels?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+    );
+    const channel = (body.data ?? []).find((c) => c.name === QA_LECTURES_CHANNEL_NAME);
+    if (channel) return channel;
+    if (!body.cursor || !body.data?.length) break;
+    cursor = body.cursor;
+  }
+  throw new Error(`Seed channel "${QA_LECTURES_CHANNEL_NAME}" not found (run the Seed QA workflow)`);
 }
 
 export interface PublicPlaylist {

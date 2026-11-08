@@ -35,6 +35,13 @@ export enum VideoEventType {
   QUARTILE_25 = 'quartile_25',
   QUARTILE_50 = 'quartile_50',
   QUARTILE_75 = 'quartile_75',
+
+  // #235: played seconds since the previous report (data: { seconds })
+  WATCH_TIME = 'watch_time',
+
+  // Loading milestones (#79)
+  LOAD_START = 'loadstart',
+  LOADED_METADATA = 'loadedmetadata',
 }
 
 /**
@@ -61,6 +68,17 @@ export interface AnalyticsConfig {
   enableDebugLogging?: boolean;
   retryAttempts?: number;
   retryDelay?: number;
+  /** Where the player runs; sent with every batch (docs/embeds §6) */
+  context?: AnalyticsContext;
+}
+
+/**
+ * Playback surface of a batch. `embed` = the iframe player on another page;
+ * `embedOrigin` is that page's origin (never its path). Absent = watch page.
+ */
+export interface AnalyticsContext {
+  source: 'watch' | 'embed';
+  embedOrigin?: string | null;
 }
 
 /**
@@ -68,6 +86,7 @@ export interface AnalyticsConfig {
  */
 export interface AnalyticsBatch {
   events: AnalyticsEvent[];
+  context?: AnalyticsContext;
   batchId?: string;
   sentAt?: string;
 }

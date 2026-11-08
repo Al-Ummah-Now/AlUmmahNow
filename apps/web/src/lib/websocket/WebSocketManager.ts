@@ -18,6 +18,8 @@ export class WebSocketManager {
   private messageQueue: WebSocketMessage[] = [];
   /** True once the server has accepted our authenticate message on this socket. */
   private authenticated = false;
+  /** Server acknowledged a socket that will never authenticate (signed-out viewer). */
+  private anonymousReady = false;
   private eventListeners: Map<string, Set<(data: WebSocketConnectionState) => void>> = new Map();
 
   /** Set the token sent in the authenticate message on (re)connect. */
@@ -56,19 +58,10 @@ export class WebSocketManager {
       this.state.status = 'connecting';
 
       try {
-        // Build WebSocket URL - SECURITY: Never send token in URL
-        // Token is sent via first message after connection (industry standard)
-        let wsUrl = this.config.url;
-        const params = new URLSearchParams();
-
-        // Only userId in URL (not sensitive)
-        if (userId || this.config.userId) {
-          params.append('userId', userId || this.config.userId!);
-        }
-
-        if (params.toString()) {
-          wsUrl += `?${params.toString()}`;
-        }
+        // SECURITY: Never send the token in the URL; it goes in the first message.
+        // No userId either: the server takes identity only from the verified token.
+        void userId;
+        const wsUrl = this.config.url;
 
         logger.info('🔌 Connecting to WebSocket:', wsUrl);
 
@@ -78,13 +71,12 @@ export class WebSocketManager {
           logger.info('✅ WebSocket connected');
           this.state.status = 'connected';
           this.authenticated = false;
+          this.anonymousReady = false;
           this.state.lastConnected = new Date();
           this.state.reconnectAttempts = 0;
 
           // SECURITY: Send auth token via first message, not URL
-          if (this.config.authToken) {
-            this.sendAuthMessage(this.config.authToken);
-          }
+          void this.authenticate();
 
           this.startHeartbeat();
           this.flushMessageQueue();
@@ -118,6 +110,7 @@ export class WebSocketManager {
 
         this.ws.onclose = (event) => {
           this.authenticated = false;
+          this.anonymousReady = false;
           logger.info('🔌 WebSocket closed', { code: event.code, reason: event.reason });
           this.state.status = 'disconnected';
           this.stopHeartbeat();
@@ -176,7 +169,7 @@ export class WebSocketManager {
 
     // The server only accepts subscriptions from an authenticated socket. Before
     // that, the channel is kept and sent by resubscribeAll() once authenticated.
-    if (this.authenticated) {
+    if (this.canSendSubscribe(channel)) {
       this.sendChannelMessage('subscribe', channel);
     }
 
@@ -224,9 +217,16 @@ export class WebSocketManager {
     }
   }
 
+  /** Signed-out sockets may join public video feeds only (see the server's canSubscribeAnonymously). */
+  private canSendSubscribe(channel: string): boolean {
+    return this.authenticated || (this.anonymousReady && channel.startsWith('video:'));
+  }
+
   /** (Re)send every active subscription, e.g. after (re)authentication. */
   private resubscribeAll(): void {
-    this.subscriptions.forEach((_subs, channel) => this.sendChannelMessage('subscribe', channel));
+    this.subscriptions.forEach((_subs, channel) => {
+      if (this.canSendSubscribe(channel)) this.sendChannelMessage('subscribe', channel);
+    });
   }
 
   /**
@@ -287,6 +287,10 @@ export class WebSocketManager {
     // Handle connection acknowledgment
     if (message.type === 'connection_acknowledged') {
       logger.info('✅ Connection acknowledged by server');
+      if (!this.config.getAuthToken && !this.config.authToken) {
+        this.anonymousReady = true;
+        this.resubscribeAll();
+      }
       return;
     }
 
@@ -445,6 +449,22 @@ export class WebSocketManager {
 
   private generateMessageId(): string {
     return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  /**
+   * Send the access token, fetching a fresh one on each (re)connect when a getter is configured.
+   */
+  private async authenticate(): Promise<void> {
+    try {
+      const token = this.config.getAuthToken
+        ? await this.config.getAuthToken()
+        : this.config.authToken;
+      if (token) {
+        this.sendAuthMessage(token);
+      }
+    } catch (error) {
+      logger.error('❌ Failed to get WebSocket auth token:', error);
+    }
   }
 
   /**

@@ -7,7 +7,7 @@ import ImageCropDialog from "@/components/ImageCropDialog";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getBrowserTimezone, COMMON_TIMEZONES, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
+import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneLabel, localizedTimezoneRegion, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 
@@ -396,20 +396,20 @@ const ProfileEditPage = () => {
                 className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
               >
                 {timezone && !isListedTimezone(timezone) && (
-                  <option value={timezone}>{getTimezoneDisplayName(timezone)}</option>
+                  <option value={timezone}>{getTimezoneDisplayName(timezone, locale)}</option>
                 )}
                 {Object.entries(COMMON_TIMEZONES).map(([region, timezones]) => (
-                  <optgroup key={region} label={region}>
+                  <optgroup key={region} label={localizedTimezoneRegion(region, locale)}>
                     {timezones.map((tz) => (
                       <option key={tz.value} value={tz.value}>
-                        {tz.label} ({tz.offset})
+                        {localizedTimezoneLabel(tz, locale)} ({tz.offset})
                       </option>
                     ))}
                   </optgroup>
                 ))}
               </select>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {t.profile?.currentTimezone || 'Current timezone'}: {getTimezoneDisplayName(timezone)}
+                {t.profile?.currentTimezone || 'Current timezone'}: {getTimezoneDisplayName(timezone, locale)}
               </p>
             </div>
 

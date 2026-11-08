@@ -11,7 +11,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useMemo } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import { useI18n, useI18nApi } from '@/lib/i18n';
 import { parseLocaleFromPath } from '@/lib/i18n/utils';
 import type { SupportedLanguage } from '@/lib/i18n/types';
@@ -36,6 +36,12 @@ const LANGUAGE_CONFIG: Record<SupportedLanguage, {
     displayName: 'العربية',
   },
 };
+
+/**
+ * Language for routes whose URL has no locale segment (embed frames use ?lang=).
+ * When set, it wins over the pathname.
+ */
+export const LocaleOverrideContext = createContext<SupportedLanguage | null>(null);
 
 /**
  * Extract language code from pathname
@@ -123,11 +129,13 @@ export interface UseLanguageResult {
  */
 export function useLanguage(): UseLanguageResult {
   const pathname = usePathname();
+  // Embed frames have no locale segment; their ?lang= is provided through context
+  const override = useContext(LocaleOverrideContext);
 
   // Extract language from pathname
   const lang = useMemo(
-    () => extractLanguageFromPathname(pathname),
-    [pathname]
+    () => override ?? extractLanguageFromPathname(pathname),
+    [override, pathname]
   );
 
   // Get translations from API with static fallback (key-by-key)

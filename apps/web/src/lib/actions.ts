@@ -1,17 +1,14 @@
 "use server"
-import { createClient } from "@al-ummah-now/openauth/client"
+import { getOpenAuthClient } from "./auth/openauth-client"
+import { withAuthorizeLocale } from "./auth/authorize-locale"
 import { redirect } from "next/navigation"
 import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
+import { startSingleSignOut } from "./auth/single-sign-out"
 
 export async function getClient() {
-  const client = createClient({
-    clientID: process.env.ClientId!,
-    issuer: process.env.Issuer!,
-  });
-
-  return client;
+  return getOpenAuthClient();
 }
 
 export async function authenticated(): Promise<AuthSubject | false> {
@@ -137,7 +134,7 @@ export async function login(locale: string = 'en') {
     `${protocol}://${host}/api/callback`,
     "code",
   )
-  redirect(url)
+  redirect(withAuthorizeLocale(url, locale))
 }
 
 export async function logout(locale: string = 'en') {
@@ -154,5 +151,10 @@ export async function logout(locale: string = 'en') {
   cookies.delete("access_token")
   cookies.delete("refresh_token")
 
-  redirect(`/${locale}`)
+  // Single sign-out: end the shared sign-in on the auth server too (it also
+  // signs out of profile and admin), then come back here
+  const headers = await getHeaders()
+  const host = headers.get("host")
+  const protocol = host?.includes("localhost") ? "http" : "https"
+  redirect(startSingleSignOut(process.env.Issuer!, `${protocol}://${host}/${locale}`))
 }

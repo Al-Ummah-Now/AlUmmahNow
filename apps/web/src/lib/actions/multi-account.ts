@@ -8,24 +8,23 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { withAuthorizeLocale } from '@/lib/auth/authorize-locale';
 import { revalidatePath } from 'next/cache';
 import { headers as getHeaders, cookies as getCookies } from "next/headers";
-import { createClient } from "@al-ummah-now/openauth/client";
+import { getOpenAuthClient } from "../auth/openauth-client";
 import { SessionManager, type AccountInfo } from '../auth/session-manager';
 import { createChannel } from '../api/channels';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 import { subjects } from '../auth';
 import { shouldRedirectToProfileCreation } from '../profile-helpers';
 import { logger } from '@/lib/logger-server';
+import { singleSignOutToHome } from '../auth/single-sign-out';
 
 /**
  * Get OpenAuth client
  */
 async function getAuthClient() {
-  return createClient({
-    clientID: process.env.ClientId!,
-    issuer: process.env.Issuer!,
-  });
+  return getOpenAuthClient();
 }
 
 /**
@@ -44,7 +43,7 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
     "code"
   );
 
-  redirect(url);
+  redirect(withAuthorizeLocale(url, locale));
 }
 
 /**
@@ -297,51 +296,61 @@ export async function createChannelForActiveUser(
   }
 }
 
-/**
- * Logout the current active account only
- */
-export async function logoutCurrentAccount(): Promise<void> {
-  try {
-    const session = await SessionManager.getActiveSession();
-    if (!session) {
-      redirect('/');
-      return;
-    }
+/** Result of a sign-out action: where the browser goes next. */
+export interface SignOutResult {
+  /**
+   * Auth server single sign-out URL (ends the shared sign-in and every app's
+   * session, then returns to this app's home page), or null when other
+   * accounts are still signed in here and the page only needs a refresh.
+   */
+  signOutUrl: string | null;
+}
 
-    await SessionManager.removeAccount(session.userId);
-
-    // If no accounts left, redirect to home
-    const remainingAccounts = await SessionManager.getAllSessions();
-    if (remainingAccounts.length === 0) {
-      redirect('/');
-    } else {
-      revalidatePath('/');
-    }
-  } catch (error) {
-    // Re-throw NEXT_REDIRECT errors - they're expected behavior
-    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'))) {
-      throw error;
-    }
-    logger.error('[logoutCurrentAccount] Error:', error);
-    redirect('/');
-  }
+/** Single sign-out URL back to this app's home page in `locale`. */
+async function singleSignOutUrl(locale: string): Promise<string> {
+  const host = (await getHeaders()).get('host') ?? new URL(process.env.Issuer!).host;
+  return singleSignOutToHome(process.env.Issuer!, host, locale);
 }
 
 /**
- * Logout all accounts
+ * Log out of the active account.
+ *
+ * Removing the last account also ends the shared sign-in on the auth server
+ * (single sign-out): otherwise its `__session` cookie signs the user straight
+ * back in on the next "Sign In" (#291). The client navigates to the returned
+ * URL with a full page load; a server-action redirect to another origin is
+ * not something the client router should be trusted with.
  */
-export async function logoutAllAccounts(): Promise<void> {
+export async function logoutCurrentAccount(locale: string = 'en'): Promise<SignOutResult> {
+  try {
+    const session = await SessionManager.getActiveSession();
+    if (session) {
+      await SessionManager.removeAccount(session.userId);
+    }
+
+    const remainingAccounts = await SessionManager.getAllSessions();
+    if (remainingAccounts.length > 0) {
+      revalidatePath('/');
+      return { signOutUrl: null };
+    }
+  } catch (error) {
+    // Fail closed: sign out everywhere rather than leave a session behind
+    logger.error('[logoutCurrentAccount] Error:', error);
+  }
+  return { signOutUrl: await singleSignOutUrl(locale) };
+}
+
+/**
+ * Log out of every account here and end the shared sign-in (single sign-out).
+ */
+export async function logoutAllAccounts(locale: string = 'en'): Promise<SignOutResult> {
   try {
     await SessionManager.clearAllSessions();
-    redirect('/');
   } catch (error) {
-    // Re-throw NEXT_REDIRECT errors - they're expected behavior
-    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as Error & { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'))) {
-      throw error;
-    }
+    // The front-channel step (/api/auth/logout) clears the cookies anyway
     logger.error('[logoutAllAccounts] Error:', error);
-    redirect('/');
   }
+  return { signOutUrl: await singleSignOutUrl(locale) };
 }
 
 /**

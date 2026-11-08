@@ -21,9 +21,12 @@ import {
   VideoError
 } from './types';
 import { hasConsent } from '@/lib/consent/ConsentManager';
+import { PlayedTimeAccumulator } from '@/lib/video/watch-time';
 
 /** Legacy localStorage backup key; no longer written, purged on start. */
 const LEGACY_PENDING_KEY = 'pendingVideoAnalytics';
+/** How long the volume must stay unchanged before the change is reported. */
+const VOLUME_SETTLE_MS = 500;
 /** Cap on events retried in memory after failed flushes. */
 const MAX_QUEUED_EVENTS = 500;
 
@@ -47,6 +50,13 @@ export class VideoAnalytics {
 
   // Phase 3: Buffering state tracking
   private bufferStartTime?: number;
+
+  // #235: played seconds, reported as watch_time events at every flush
+  private played = new PlayedTimeAccumulator();
+
+  // #79: a slider drag fires many volumechange events; only where it ends is reported
+  private pendingVolume?: { volume: number; muted: boolean };
+  private volumeTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     videoId: string,
@@ -100,6 +110,7 @@ export class VideoAnalytics {
    * Track pause event
    */
   trackPause(): void {
+    this.played.break();
     this.addEvent({
       eventType: VideoEventType.PAUSE,
       relativeTime: Date.now() - this.startTime
@@ -110,6 +121,7 @@ export class VideoAnalytics {
    * Track video ended event
    */
   trackComplete(): void {
+    this.played.break();
     this.addEvent({
       eventType: VideoEventType.ENDED,
       relativeTime: Date.now() - this.startTime,
@@ -153,6 +165,46 @@ export class VideoAnalytics {
         previousRate,
         change: rate - previousRate
       }
+    });
+  }
+
+  /**
+   * Track a volume or mute change (#79). Changes within VOLUME_SETTLE_MS are
+   * reported once, with the final values.
+   */
+  trackVolumeChange(volume: number, muted: boolean): void {
+    this.pendingVolume = { volume, muted };
+    if (this.volumeTimer !== undefined) clearTimeout(this.volumeTimer);
+    this.volumeTimer = setTimeout(() => this.emitPendingVolume(), VOLUME_SETTLE_MS);
+  }
+
+  private emitPendingVolume(): void {
+    if (this.volumeTimer !== undefined) clearTimeout(this.volumeTimer);
+    this.volumeTimer = undefined;
+    if (!this.pendingVolume) return;
+    const data = this.pendingVolume;
+    this.pendingVolume = undefined;
+    this.addEvent({
+      eventType: VideoEventType.VOLUME_CHANGE,
+      relativeTime: Date.now() - this.startTime,
+      data,
+    });
+  }
+
+  /** Track that the player started loading the video (#79). */
+  trackLoadStart(): void {
+    this.addEvent({
+      eventType: VideoEventType.LOAD_START,
+      relativeTime: Date.now() - this.startTime,
+    });
+  }
+
+  /** Track that the video's metadata is known (#79). */
+  trackMetadataLoaded(duration: number, videoWidth: number, videoHeight: number): void {
+    this.addEvent({
+      eventType: VideoEventType.LOADED_METADATA,
+      relativeTime: Date.now() - this.startTime,
+      data: { duration, videoWidth, videoHeight },
     });
   }
 
@@ -201,6 +253,7 @@ export class VideoAnalytics {
    * ```
    */
   trackSeek(fromTime: number, toTime: number): void {
+    this.played.break();
     this.addEvent({
       eventType: VideoEventType.SEEK,
       relativeTime: Date.now() - this.startTime,
@@ -479,9 +532,36 @@ export class VideoAnalytics {
   }
 
   /**
+   * Feed the played-time accumulator from timeupdate while the video plays
+   * (#235). Seeks/pauses break the run; the total goes out as watch_time
+   * events with the next flush.
+   */
+  trackPlayback(currentTime: number, nowMs: number = Date.now()): void {
+    this.played.tick(currentTime, nowMs);
+  }
+
+  /** Move accumulated played seconds into the queue as watch_time events. */
+  private drainWatchTime(): void {
+    const chunks = this.played.drain();
+    // Like every event but the anonymous view count: only with analytics consent
+    if (chunks.length === 0 || !this.consentCheck()) return;
+    for (const seconds of chunks) {
+      this.eventQueue.push({
+        videoId: this.videoId,
+        sessionId: this.sessionId,
+        timestamp: new Date().toISOString(),
+        relativeTime: Date.now() - this.startTime,
+        eventType: VideoEventType.WATCH_TIME,
+        data: { seconds },
+      } as AnalyticsEvent);
+    }
+  }
+
+  /**
    * Flush events to server
    */
   private async flush(): Promise<void> {
+    this.drainWatchTime();
     if (this.eventQueue.length === 0) {
       return;
     }
@@ -503,7 +583,7 @@ export class VideoAnalytics {
 
     const flushPromise = (async () => {
       try {
-        const batch: AnalyticsBatch = { events };
+        const batch: AnalyticsBatch = this.config.context ? { events, context: this.config.context } : { events };
 
         const response = await fetch(this.config.endpoint, {
           method: 'POST',
@@ -602,6 +682,7 @@ export class VideoAnalytics {
    * Clean up resources
    */
   destroy(): void {
+    this.emitPendingVolume();
     // Flush remaining events
     void this.flush();
 

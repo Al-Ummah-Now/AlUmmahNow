@@ -32,7 +32,7 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
         <h3 className="text-sm font-semibold text-black dark:text-white truncate">
           {removeUnwantedChars(info.title)}
         </h3>
-        <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{info.channel}</p>
+        <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{info.channelName || info.channel}</p>
         <p className="text-xs text-gray-600 dark:text-gray-400">
           {info.views} {t.video.videoViews.toLowerCase()} • {info?.dateModified?.toLocaleDateString()}
         </p>

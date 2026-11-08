@@ -13,6 +13,9 @@ import { setupClickOnlyMenus } from '@/lib/video/menu-interaction';
 export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
   responsive: true,
   fluid: true,
+  // Controls stay up 4s after the last activity (#87 item 8); Video.js already
+  // holds them open while the pointer is over the bar.
+  inactivityTimeout: 4000,
   playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
   html5: {
     // Emulate text tracks so cross-origin WebVTT (served by the API with CORS)
@@ -68,7 +71,10 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
       'Fullscreen': 'ملء الشاشة',
       'Exit Fullscreen': 'الخروج من ملء الشاشة',
       'Captions': 'إظهار التسميات التوضيحية',
-      'Subtitles': 'إظهار الترجمة'
+      'Subtitles': 'إظهار الترجمة',
+      // videojs-hls-quality-selector localizes these; the Arabic pack has neither
+      'Auto': 'تلقائي',
+      'Quality': 'الجودة'
     }
   }
 };
