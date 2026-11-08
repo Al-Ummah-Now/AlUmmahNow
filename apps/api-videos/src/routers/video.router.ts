@@ -8,6 +8,7 @@ import { VideoDelete } from '../endpoints/video/videoDelete';
 import { VideoBulkDelete } from '../endpoints/video/videoBulkDelete';
 import { VideoBulkUpdate } from '../endpoints/video/videoBulkUpdate';
 import { VideoFetch } from '../endpoints/video/videoFetch';
+import { VideoPlayback } from '../endpoints/video/videoPlayback';
 import { VideosList } from '../endpoints/video/videoList';
 import { VideoSearch } from '../endpoints/video/videoSearch';
 import { VideoView } from '../endpoints/video/videoView';
@@ -83,6 +84,8 @@ videoRouter.post('/', VideoCreate);
 
 // Get single video (public)
 videoRouter.get('/:id', VideoFetch);
+// Short-lived playback grant for native apps (Epic 9.6)
+videoRouter.post('/:id/playback', VideoPlayback);
 
 // Update video (authenticated)
 videoRouter.put('/:id', VideoUpdate);
