@@ -52,7 +52,7 @@ This file contains the mandatory 10-step development workflow that MUST be follo
    ```bash
    git fetch origin && git tag -a v2026.11.08 origin/main -m "Release v2026.11.08" && git push origin v2026.11.08
    ```
-   Tag a commit only after its `deploy.yml` run on `main` and its QA deploy are green. Tags are never moved or deleted: to undo a release, run `.github/workflows/rollback.yml`, then fix forward on `main` and tag again.
+   Tag a commit only after its `deploy.yml` run on `main` and its QA deploy are green. Tags are never moved or deleted: to undo a release, run `.github/workflows/rollback.yml`, then fix forward on `main` and tag again. To retry a release that failed for a transient reason, re-run that tag's workflow run. Running `release.yml` by hand (Actions → Release → Run workflow on `main`) deploys **stage only** and never touches production. Releases queue one at a time, and GitHub keeps only the newest pending run, so if two tags are pushed while a release is running, only the later one is released.
 4. **No hand deploys to production.** Do not run `wrangler deploy`, `pnpm deploy:all`, `pnpm *:deploy` or `pnpm *:deploy:production` against production. The commands in [Deployment](#deployment) exist for CI and for an emergency only. An emergency deploy needs the owner's explicit go-ahead, comes from a clean checkout of a commit on `main`, and is followed by a tagged release of the same commit, so that CI is again the source of truth.
 5. **If CI is the blocker, fix CI.** A failing check, a missing secret or a broken workflow is fixed in a PR to `main`. It is never a reason to deploy by hand or to add `continue-on-error`.
 

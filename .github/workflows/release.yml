@@ -2,22 +2,25 @@ name: Release
 
 # Stage-then-promote for the seven workers (docs/release-pipeline/SPEC.md §7):
 #   build once → stage (migrate, deploy the candidates through the same 0% → 100%
-#   promote, smoke, seed) → stage E2E (release-e2e.yml) → production (still the head of main?, migrate,
+#   promote, smoke, seed) → stage E2E (release-e2e.yml) → production (tag still on main?, migrate,
 #   candidates at 0%, pre-traffic smoke through the version override, 100%, smoke,
 #   auto-rollback) → rollback dry run (resolves each worker's target, moves nothing).
 # Nothing reaches production traffic without passing on stage first.
 # Rollback: .github/workflows/rollback.yml or `pnpm release:rollback --env production`.
 #
-# Manual (workflow_dispatch from main) until one run has passed end to end; then it
-# runs on every push to main and replaces deploy.yml's manual deploy-production job.
+# When production moves is decided by a tag (CLAUDE.md "Deploy Rules"):
+#   - push a tag vYYYY.MM.DD (vYYYY.MM.DD.N, N >= 2, for a later release that day) on a
+#     commit on main → stage → stage E2E → production. Merging to main deploys QA only.
+#   - workflow_dispatch on main → stage and stage E2E only; it never touches production.
+# A tag with a bad name, or on a commit that is not on main, is refused before anything
+# deploys. To re-run a failed release, re-run that tag's workflow run; never move a tag.
+# Runs queue in one concurrency group; GitHub keeps only the newest pending run, so if
+# two tags are pushed while a release is running, only the later one is released.
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
-    inputs:
-      production:
-        description: 'Promote to production after stage passes (false = stage only)'
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -32,9 +35,63 @@ concurrency:
 # install/build steps (dependency lifecycle scripts run there).
 
 jobs:
+  # Decides what this run is: a tag release (stage → production) or a stage-only run
+  # from main. Refuses anything else before a single build minute is spent.
+  resolve:
+    name: Resolve release (tag on main?)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.kind.outputs.tag }}
+      production: ${{ steps.kind.outputs.production }}
+      label: ${{ steps.kind.outputs.label }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # all tags and origin/main, for the ancestry check and the changelog
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Tag release or stage-only run?
+        id: kind
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            { echo "tag=$GITHUB_REF_NAME"; echo "production=true"; echo "label=$GITHUB_REF_NAME"; } >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_REF" = refs/heads/main ]; then
+            { echo "production=false"; echo "label=stage ${GITHUB_SHA::7}"; } >> "$GITHUB_OUTPUT"
+            echo "### Stage-only run of main@${GITHUB_SHA::7}. Production is released by pushing a tag." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Releases run from a tag (production) or from main (stage only), not from $GITHUB_REF."
+            exit 1
+          fi
+
+      - name: Valid tag on main?
+        id: check
+        if: steps.kind.outputs.production == 'true'
+        run: node --experimental-strip-types --no-warnings scripts/release/release-tag.ts check "$GITHUB_REF_NAME" "$GITHUB_SHA"
+
+      - name: Changes in this release
+        if: steps.kind.outputs.production == 'true'
+        env:
+          PREV: ${{ steps.check.outputs.previous }}
+        run: |
+          {
+            echo "### Release $GITHUB_REF_NAME (${GITHUB_SHA::7})"
+            if [ -n "$PREV" ]; then
+              echo "Changes since $PREV:"
+              echo '```'
+              git log --oneline --no-decorate "$PREV..$GITHUB_SHA"
+              echo '```'
+            else
+              echo "First tagged release."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   build:
     name: Build once (${{ matrix.part }})
-    if: github.ref == 'refs/heads/main'
+    needs: resolve
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -97,7 +154,7 @@ jobs:
 
   stage:
     name: Stage (migrate, deploy, smoke, seed)
-    needs: build
+    needs: [resolve, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment:
@@ -146,7 +203,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm release:promote --env stage --message "release ${GITHUB_SHA::7}"
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: pnpm release:promote --env stage --message "release $RELEASE_LABEL"
 
       - name: Stage result
         if: always()
@@ -198,8 +256,8 @@ jobs:
 
   production:
     name: Production (migrate, 0% smoke, promote)
-    needs: stage-e2e
-    if: inputs.production
+    needs: [resolve, stage-e2e]
+    if: needs.resolve.outputs.production == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment:
@@ -208,14 +266,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # A newer commit on main means this candidate is stale (e.g. built before a
-      # migration-carrying merge). Never promote it; release the new head instead.
-      - name: Still the head of main?
+      # The release deploys exactly the tagged commit, so later merges to main don't
+      # matter. A tag that was deleted or moved while stage ran is not promoted.
+      - name: Tag still points at this commit?
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
         run: |
-          head=$(git ls-remote origin refs/heads/main | cut -f1)
-          if [ "$head" != "$GITHUB_SHA" ]; then
-            echo "::error::main moved to ${head::7} while releasing ${GITHUB_SHA::7}; not promoting. Run the release from the new head."
-            echo "### Superseded: main is at ${head::7}; ${GITHUB_SHA::7} was not promoted" >> "$GITHUB_STEP_SUMMARY"
+          now=$(git ls-remote origin "refs/tags/$TAG^{}" | cut -f1)
+          [ -n "$now" ] || now=$(git ls-remote origin "refs/tags/$TAG" | cut -f1)
+          if [ "$now" != "$GITHUB_SHA" ]; then
+            echo "::error::$TAG now points at '${now::7}', not ${GITHUB_SHA::7}; not promoting. Tags are never moved: cut a new tag."
             exit 1
           fi
 
@@ -256,7 +316,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm release:promote --env production --message "release ${GITHUB_SHA::7}"
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: pnpm release:promote --env production --message "release $RELEASE_LABEL"
 
       - name: Production result
         if: always()
