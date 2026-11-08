@@ -15,6 +15,11 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     error: 'خطأ في تحميل الفيديو',
   },
 
+  gestures: {
+    hint: 'انقر مرتين على أحد الجانبين للتقديم أو الترجيع ١٠ ثوانٍ. اسحب لأعلى أو لأسفل لتغيير مستوى الصوت.',
+    dismiss: 'إغلاق',
+  },
+
   accessibility: {
     videoPlayer: 'مشغل الفيديو',
     playButton: 'تشغيل الفيديو',

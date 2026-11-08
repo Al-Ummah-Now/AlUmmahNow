@@ -2224,3 +2224,39 @@
     margin: 0 0.25rem;
   }
 }
+
+/* First-run touch gesture hint */
+.vjs-gesture-hint {
+  position: absolute;
+  top: 0.75rem;
+  inset-inline: 0.75rem;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.85);
+  color: #ffffff;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.vjs-gesture-hint span {
+  flex: 1;
+}
+
+.vjs-gesture-hint-close {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.vjs-gesture-hint-close:focus-visible {
+  outline: 2px solid var(--vp-focus);
+}

@@ -63,6 +63,7 @@ import {
 import { initializeVolumeControls } from '@/lib/video/volume-control';
 import { setupKeyboardShortcuts } from '@/lib/video/keyboard-shortcuts';
 import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-touch';
+import { showGestureHintOnce } from '@/lib/video/gesture-hint';
 import { setupAccessibility } from '@/lib/video/accessibility';
 import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
@@ -498,6 +499,7 @@ export default function CustomVideoPlayer({
             enableSwipeVolume: true,
             enableLongPress: true,
           });
+          showGestureHintOnce(player.el() as HTMLElement, lang);
         }
 
         // Phase 4.21: Setup accessibility enhancements
