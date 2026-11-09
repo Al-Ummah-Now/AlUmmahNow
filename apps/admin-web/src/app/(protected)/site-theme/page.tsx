@@ -33,7 +33,7 @@ export default async function SiteThemePage() {
         <p className="text-fg-muted mt-2">{t('siteTheme.subtitle')}</p>
       </div>
       {!state && <ErrorAlert testId="site-theme-error">{t('siteTheme.failed')}</ErrorAlert>}
-      {state && <SiteThemePicker initial={state.theme} previews={previews} canEdit={session?.user.role === 'admin'} />}
+      {state && <SiteThemePicker initial={state.theme} previews={previews} canEdit={session?.user.role === 'admin' || session?.user.role === 'super_admin'} />}
     </div>
   );
 }
