@@ -62,11 +62,10 @@ test.describe('Header - channel owner', () => {
 test.describe('Side drawer', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  test('NAV-010 lists Home, Search and Subscriptions with real links', async ({ page }) => {
+  test('NAV-010 lists Home and Subscriptions with real links', async ({ page }) => {
     await page.goto('/en');
     const drawer = await openSideDrawer(page);
     await expect(drawer.getByRole('link', { name: 'Home' })).toHaveAttribute('href', /^\/en\/?$/);
-    await expect(drawer.getByRole('link', { name: 'Search' })).toHaveAttribute('href', '/en/search');
     // Was a dead "#" link
     await expect(drawer.getByRole('link', { name: 'Subscriptions' })).toHaveAttribute('href', '/en/subscriptions');
   });
@@ -74,7 +73,7 @@ test.describe('Side drawer', () => {
   test('NAV-011 following a drawer link closes the drawer', async ({ page }) => {
     await page.goto('/en');
     const drawer = await openSideDrawer(page);
-    await clickAndWaitForURL(page, drawer.getByRole('link', { name: 'Search' }), /\/en\/search$/);
+    await clickAndWaitForURL(page, drawer.getByRole('link', { name: 'Explore' }), /\/en\/explore$/);
     await expect(drawer).toBeHidden();
     await expect(page.getByTestId('nav-drawer-toggle')).toHaveAttribute('aria-expanded', 'false');
   });
