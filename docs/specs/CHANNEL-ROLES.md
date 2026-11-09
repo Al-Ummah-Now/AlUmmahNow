@@ -7,7 +7,7 @@
 
 ## 1. Summary
 
-A channel owner can give other accounts a role on one channel: **admin**, **editor**, **moderator** or **analytics viewer**. The person must accept an invitation. They then see the channel in their switcher, with their role, and can do what that role allows.
+A channel owner can give other accounts a role on one channel: **admin**, **editor** or **moderator**. The person must accept an invitation. They then see the channel in their switcher, with their role, and can do what that role allows.
 
 There is still exactly one owner per channel. The owner can add admins and every other role. Only a super admin can change who the owner is, through the admin site (PR #460).
 
@@ -30,7 +30,7 @@ There is still exactly one owner per channel. The owner can add admins and every
 
 | | Site roles | Channel roles |
 |---|---|---|
-| Examples | user, moderator, admin, super admin | owner, admin, editor, moderator, analytics viewer |
+| Examples | user, moderator, admin, super admin | owner, admin, editor, moderator |
 | Scope | The whole platform | One channel |
 | Stored in | AlUmmahNowAuth | The videos side: `channel.userId` in R2 for the owner, `api-videos` D1 for the rest |
 | In tokens | Yes (`roles`) | **Never** |
@@ -67,36 +67,36 @@ Everything else from auth is identity only: api-videos reads the verified token'
 
 `owner` comes from `channel.userId`. The rest are rows in `channel_members`.
 
-Epics 19.8 calls the second role "manager". This spec uses **admin** (open question 1).
+Epics 19.8 called the second role "manager". This spec uses **admin** (open question 1). Epics 19.8 also listed a "viewer-of-analytics" role, which the owner dropped on 2026-11-09.
 
-| Capability | Owner | Admin | Editor | Moderator | Analytics viewer |
-|---|:-:|:-:|:-:|:-:|:-:|
-| **Channel** | | | | | |
-| `channel.view_private`: settings and private fields | Yes | Yes | No | No | No |
-| `channel.edit`: name, description, avatar, cover, sections, tabs, contact email, privacy | Yes | Yes | No | No | No |
-| `channel.handle`: change or release the @handle | Yes | No | No | No | No |
-| `channel.delete` | Yes | No | No | No | No |
-| `channel.speak`: comment, react or subscribe as the channel | Yes | Yes | Yes | Yes | No |
-| **Videos** | | | | | |
-| `video.upload` | Yes | Yes | Yes | No | No |
-| `video.view_private`: private, draft and processing videos | Yes | Yes | Yes | No | No |
-| `video.edit`: metadata, thumbnail, subtitles, chapters | Yes | Yes | Yes | No | No |
-| `video.delete` | Yes | Yes | Own uploads | No | No |
-| `video.schedule`: schedule, change, publish now | Yes | Yes | Yes | No | No |
-| `post.manage`: community posts, playlists | Yes | Yes | Yes | No | No |
-| **Comments** | | | | | |
-| `comment.moderate`: approve, delete, on videos and posts | Yes | Yes | No | Yes | No |
-| **Live** | | | | | |
-| `live.manage`: create, start, stop, see or rotate stream keys | Yes | Yes | No | No | No |
-| `live.moderate`: live chat moderation | Yes | Yes | No | Yes | No |
-| **Analytics** | | | | | |
-| `analytics.view` | Yes | Yes | No | No | Yes |
-| **Members** | | | | | |
-| `members.view`: member list and activity log | Yes | Yes | No | No | No |
-| `members.manage`: invite, change, remove editor, moderator, analytics viewer | Yes | Yes | No | No | No |
-| `members.manage_admins`: invite, change, remove channel admins | Yes | No | No | No | No |
-| Leave the channel | No | Yes | Yes | Yes | Yes |
-| Change the owner | **No. Super admin only, on the admin site** | No | No | No | No |
+| Capability | Owner | Admin | Editor | Moderator |
+|---|:-:|:-:|:-:|:-:|
+| **Channel** | | | | |
+| `channel.view_private`: settings and private fields | Yes | Yes | No | No |
+| `channel.edit`: name, description, avatar, cover, sections, tabs, contact email, privacy | Yes | Yes | No | No |
+| `channel.handle`: change or release the @handle | Yes | No | No | No |
+| `channel.delete` | Yes | No | No | No |
+| `channel.speak`: comment, react or subscribe as the channel | Yes | Yes | Yes | Yes |
+| **Videos** | | | | |
+| `video.upload` | Yes | Yes | Yes | No |
+| `video.view_private`: private, draft and processing videos | Yes | Yes | Yes | No |
+| `video.edit`: metadata, thumbnail, subtitles, chapters | Yes | Yes | Yes | No |
+| `video.delete` | Yes | Yes | Own uploads | No |
+| `video.schedule`: schedule, change, publish now | Yes | Yes | Yes | No |
+| `post.manage`: community posts, playlists | Yes | Yes | Yes | No |
+| **Comments** | | | | |
+| `comment.moderate`: approve, delete, on videos and posts | Yes | Yes | No | Yes |
+| **Live** | | | | |
+| `live.manage`: create, start, stop, see or rotate stream keys | Yes | Yes | No | No |
+| `live.moderate`: live chat moderation | Yes | Yes | No | Yes |
+| **Analytics** | | | | |
+| `analytics.view` | Yes | Yes | No | No |
+| **Members** | | | | |
+| `members.view`: member list and activity log | Yes | Yes | No | No |
+| `members.manage`: invite, change, remove editor, moderator | Yes | Yes | No | No |
+| `members.manage_admins`: invite, change, remove channel admins | Yes | No | No | No |
+| Leave the channel | No | Yes | Yes | Yes |
+| Change the owner | **No. Super admin only, on the admin site** | No | No | No |
 
 The owner can't leave. To stop owning a channel they ask a super admin, or delete it.
 
@@ -160,7 +160,7 @@ An email invitee who turns out to be a member already gets the invitation closed
 `apps/api-videos/src/lib/channelAccess.ts`, with the pure parts in `packages/shared-types/src/channel-roles.ts` so clients share them:
 
 ```ts
-export type ChannelRole = 'owner' | 'admin' | 'editor' | 'moderator' | 'analytics_viewer';
+export type ChannelRole = 'owner' | 'admin' | 'editor' | 'moderator';
 
 // Pure: the matrix in §4. Takes no token and no site role.
 export function can(role: ChannelRole | null, capability: ChannelCapability): boolean;
@@ -238,7 +238,7 @@ Comments and reactions made as the channel keep the real person's `userId` and t
 CREATE TABLE IF NOT EXISTS channel_members (
   channel_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin','editor','moderator','analytics_viewer')),
+  role TEXT NOT NULL CHECK (role IN ('admin','editor','moderator')),
   added_by TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -249,7 +249,7 @@ CREATE INDEX IF NOT EXISTS idx_channel_members_user ON channel_members (user_id)
 CREATE TABLE IF NOT EXISTS channel_invites (
   id TEXT PRIMARY KEY,
   channel_id TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin','editor','moderator','analytics_viewer')),
+  role TEXT NOT NULL CHECK (role IN ('admin','editor','moderator')),
   invitee_user_id TEXT,
   invitee_email TEXT,             -- normalized; cleared when the invite closes
   invited_by TEXT NOT NULL,
@@ -329,13 +329,13 @@ Data export (`collectUserData`) gains the user's memberships and invitations.
 
 | Limit | Value | Enforced |
 |---|---|---|
-| Members per channel | New entitlement `channel.members_max` (admin-managed, on the **channel owner's** plan). Open question 6 | On invite and accept |
+| Members per channel | Existing entitlement `studio.teamSeats` (admin-managed, on the **channel owner's** plan). Decided by the owner 2026-11-09 | On invite and accept |
 | Pending invitations per channel | 50 | On invite |
 | Shared channels per account | 50 | On accept |
 | Invitations | 30 per actor per hour, 100 per channel per day (`RATE_LIMIT_KV`) | On invite |
 | Invitation lifetime | 14 days | Daily cron, and checked at accept |
 
-Declared in `packages/shared-types/src/entitlements.ts` and `lib/entitlements.ts`. On a downgrade, existing members stay and new invitations are refused, the same as `channel.max`.
+`studio.teamSeats` is already in the catalogue in `packages/shared-types/src/entitlements.ts`, and this feature is what enforces it. On a downgrade, existing members stay and new invitations are refused, the same as `channel.max`.
 
 ## 14. API and screens
 
@@ -379,7 +379,6 @@ Theme and layout follow the web app's semantic tokens with no hex values, and lo
 | `channelRoles.admin` | Channel admin | مشرف القناة |
 | `channelRoles.editor` | Editor | محرر |
 | `channelRoles.moderator` | Channel moderator | مراقب القناة |
-| `channelRoles.analytics_viewer` | Analytics viewer | مشاهد الإحصاءات |
 | `channelRoles.invite` | Invite someone | دعوة شخص |
 | `channelRoles.inviteHint` | Email or @handle | البريد الإلكتروني أو المعرّف @ |
 | `channelRoles.pending` | Pending | قيد الانتظار |
@@ -430,7 +429,7 @@ One D1 read per request by a non-owner on a channel route, and none for owners o
 3. **Can an editor delete videos?** *Recommended: only their own uploads. Admins and the owner can delete any.*
 4. **Do editors see analytics?** *Recommended: no. A person holds one role per channel, so an editor who needs analytics would need the admin role, or a new combined role later.*
 5. **Live for editors.** Stream keys let someone broadcast as the channel. *Recommended: owner and admin only. Editors can't go live.*
-6. **Plan limit.** Every feature is tiered. *Recommended: `channel.members_max` seeded to 2 on Free and a higher number on paid plans, all editable by admins, with a hard cap of 50.*
+6. **Plan limit.** Every feature is tiered. *Decided 2026-11-09: use the existing `studio.teamSeats`. Recommended seeding: 2 on Free and a higher number on paid plans, all editable by admins, with a hard cap of 50.*
 7. **An email with no account.** *Recommended: same response as any other, and nothing is sent. Telling the inviter would reveal who has an account.*
 8. **Where the tables live.** *Recommended: a new `CHANNEL_ROLES_DB`. `SEARCH_DB` needs no new binding, but it holds rebuildable index data, while this is the only copy of who has access.*
 9. **Delivery of `account.deleted`.** Auth doesn't emit it today. *Recommended: auth posts to `/internal/events/account-deleted`, retried until accepted. It's a small AlUmmahNowAuth change, and no role data crosses.*

@@ -21,7 +21,7 @@ Each step is one PR into `main`, with tests written first (`BEFORE_YOU_CODE.md`)
 - `apps/api-videos/migrations/channel-roles/0001_channel_roles.sql`, snapshot from `pnpm schema:snapshot`, and add the new database to `check:migrations` and `check:schema` and to the CI migration step.
 - `packages/shared-types/src/channel-roles.ts`: roles, capabilities, the matrix and `can()`.
 - `apps/api-videos/src/lib/channelAccess.ts`: `getChannelRole`, `requireChannelAccess`, `canDeleteVideo`.
-- `channel.members_max` in `packages/shared-types/src/entitlements.ts` and `lib/entitlements.ts`.
+- Enforce the existing `studio.teamSeats` entitlement (`packages/shared-types/src/entitlements.ts`, `lib/entitlements.ts`). No new key.
 
 Check: the matrix unit tests and the separation tests in spec §15.
 
