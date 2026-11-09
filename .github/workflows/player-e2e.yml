@@ -101,6 +101,14 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps ${{ matrix.browsers }}
 
+      # Firefox on Linux decodes H.264 (the HLS fixtures) through the system's libavcodec, which the
+      # runner image does not ship: without it every fixture fails with a format error
+      - name: Install H.264 decoding for Firefox
+        if: startsWith(matrix.project, 'firefox')
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends ffmpeg
+
       - name: Locate the installed Firefox
         if: matrix.project == 'firefox-stable'
         run: |

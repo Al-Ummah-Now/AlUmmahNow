@@ -48,6 +48,7 @@ import { logger } from '@/lib/logger-client';
 import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
+import { isLivePlayback } from '@/lib/video/live-state';
 import { VideoAnalytics } from '@/services/analytics/video-analytics';
 import {
   createVideoErrorHandler,
@@ -610,7 +611,10 @@ export default function CustomVideoPlayer({
         player.on('seeking', () => setEnded(false));
         player.on('loadstart', () => setEnded(false));
         player.on('ended', () => {
-          if (!(player as ExtendedPlayer).loop()) setEnded(true);
+          // A live stream can report ended while it waits for the next segment (WebKit on Linux
+          // does); it has no up next until its playlist ends, which makes the duration finite
+          const live = isLivePlayback(player as unknown as Parameters<typeof isLivePlayback>[0]);
+          if (!live && !(player as ExtendedPlayer).loop()) setEnded(true);
           analyticsRef.current?.trackComplete();
           setIsPlaying(false);
         });
