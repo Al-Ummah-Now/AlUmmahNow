@@ -11,8 +11,7 @@ import {
   type DemoChannel,
   type DemoPool,
   type DemoSet,
-  type DemoVideo,
-} from './demo-filter';
+  type DemoVideo, isTestComment } from './demo-filter';
 
 const PROXY_PREFIX = '/api/qa-proxy';
 const POOL_TTL_MS = 30_000;
@@ -89,6 +88,19 @@ function json(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), { status: init?.status ?? 200, headers });
 }
 
+/** The stored count includes test comments the demo hides, so count what a viewer can actually see. */
+async function withVisibleCommentCount(fetcher: Fetch, rawUrl: string, response: Response): Promise<Response> {
+  if (!response.ok || !(response.headers.get('content-type') ?? '').includes('json')) return response;
+  const body = (await response.json()) as Record<string, unknown>;
+  const video = ('commentsCount' in body ? body : (body.result ?? body.data ?? body)) as Record<string, unknown>;
+  if (Number(video.commentsCount) > 0) {
+    const url = rawUrl.replace(/(\/api\/videos\/[^/?#]+).*$/, '$1/comments?limit=100');
+    const list = await getJson<{ result?: { comments?: { text?: unknown }[] } }>(fetcher, url);
+    if (list?.result?.comments) video.commentsCount = list.result.comments.filter((c) => !isTestComment(c.text)).length;
+  }
+  return json(body, response);
+}
+
 export function createDemoFetch(original: Fetch, set: DemoSet, apiUrl: () => string | undefined): Fetch {
   const readPool = poolReader(original, set);
   return async (input, init) => {
@@ -105,6 +117,9 @@ export function createDemoFetch(original: Fetch, set: DemoSet, apiUrl: () => str
       authenticated: headers.has('authorization'),
       channelHeader: Boolean(headers.get('channelid')),
     });
+    if (/^\/api\/videos\/[^/]+$/.test(target.pathname) && (init?.method ?? request?.method ?? 'GET').toUpperCase() === 'GET') {
+      return withVisibleCommentCount(original, rawUrl, await original(input, init));
+    }
     if (route.kind === 'none') return original(input, init);
     if (route.kind === 'replace') return json(route.respond(await readPool()));
 

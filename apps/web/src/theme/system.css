@@ -125,3 +125,11 @@ html[data-theatre] .custom-video-player,html[data-theatre] .custom-video-player.
 [data-testid=consent-banner] .mt-4.flex{align-items:center}[data-testid=consent-banner] .mt-4.flex button{flex:1 1 130px;min-height:44px}
 @media(min-width:640px){[data-testid=consent-banner] .mt-4.flex button{flex:0 1 auto}}
 @media(max-width:639px){[data-testid=consent-banner]{padding:8px;inset-block-end:64px}[data-testid=consent-banner]>div{padding:var(--fanous-spacing-lg)}}
+
+/* Interaction fixes from the pointer check */
+@media(hover:hover){.ah-brand:hover{background:var(--fanous-c-nav-hover)}.home-hero-t:hover{filter:brightness(1.06)}a[class*="text-blue-"]:hover{text-decoration:underline}}
+.ah-end [class*="bg-red-"],.ah-end [class*="bg-red-"] *{color:var(--fanous-c-button-destructive-text)!important}
+button[class*="rounded-full"][class*="border"][class*="h-9"]{background:var(--m-control)!important;color:var(--fanous-color-text-primary)!important;border-color:var(--fanous-c-button-secondary-border)!important}
+button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{background:var(--m-primary)!important;color:var(--fanous-c-button-primary-text)!important;border-color:var(--fanous-c-button-primary-border)!important}
+@media(hover:hover){button[class*="rounded-full"][class*="border"][class*="h-9"]:not([aria-pressed=true]):hover{background:var(--m-hover)!important}}
+.home-hero-tag{color:var(--fanous-color-text-secondary)}
