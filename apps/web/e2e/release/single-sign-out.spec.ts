@@ -11,6 +11,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, expectNoErrorHop, signUpOnWeb } from './web-session';
+import { expectProfileSignedOut, signInToProfileSilently } from './profile-app';
 
 /** The web app's same-origin token endpoint: 200 with a token only while signed in. */
 async function webSignedIn(page: Page): Promise<boolean> {
@@ -61,18 +62,6 @@ async function signOutThroughAuthServer(page: Page, home: string, start: () => P
   expect(hops.some((u) => u.startsWith(`${target().auth}/logout`)), `sign-out never reached the auth server: ${hops.join(' → ')}`).toBe(true);
   expectNoErrorHop(hops);
   return hops;
-}
-
-/** Profile app sign-in; with a shared sign-in it completes without a form. */
-async function signInToProfileSilently(page: Page): Promise<void> {
-  await page.goto(target().profile);
-  await page.locator('#loggedOutView button:has-text("Sign In")').click();
-  await expect(page.locator('#loggedInView')).toBeVisible({ timeout: 30000 });
-}
-
-async function expectProfileSignedOut(page: Page): Promise<void> {
-  await page.goto(target().profile);
-  await expect(page.locator('#loggedOutView')).toBeVisible({ timeout: 20000 });
 }
 
 /** The auth server shows its password form and stays there (no silent sign-in). */
