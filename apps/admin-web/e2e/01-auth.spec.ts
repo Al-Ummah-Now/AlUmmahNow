@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { ADMIN_WEB_URL, OPENAUTH_URL, accounts, storageStatePath } from './support/env';
 import { uiLogin } from './support/ui';
+import { skipUntilSignInDeployed } from './support/deployed';
 
 const PROTECTED = ['/dashboard', '/moderation', '/translations', '/indices', '/moderation/reports/does-not-exist'];
 
@@ -22,6 +23,7 @@ test.describe('authentication - signed out', () => {
   }
 
   test('AUTH-02 home page goes straight to sign-in when signed out (no "Please log in" page)', async ({ page }) => {
+    await skipUntilSignInDeployed();
     const authorize = page.waitForRequest((req) => req.url().startsWith(`${OPENAUTH_URL}/authorize`));
     await page.goto('/');
     // No prompt: the auth server signs an existing browser session in silently
@@ -76,12 +78,14 @@ test.describe('authentication - signed out', () => {
   });
 
   test('AUTH-08 a callback this browser did not start is refused (state not bound to it)', async ({ page }) => {
+    await skipUntilSignInDeployed();
     await page.goto('/api/callback');
     await expect(page).toHaveURL(/\/login\?error=auth_failed$/);
     await expect(page.getByTestId('login-error')).toHaveText('Authentication failed');
   });
 
   test('AUTH-09 a forged callback with a code is refused without a session', async ({ page, context }) => {
+    await skipUntilSignInDeployed();
     await page.goto('/api/callback?code=not-a-real-code&state=forged.Lw');
     await expect(page).toHaveURL(/\/login\?error=auth_failed$/);
     await expect(page.getByTestId('login-error')).toBeVisible();
@@ -96,6 +100,7 @@ test.describe('authentication - signed in', () => {
   });
 
   test('AUTH-11 home page takes the signed-in admin to the dashboard', async ({ page }) => {
+    await skipUntilSignInDeployed();
     await page.goto('/');
     await expect(page).toHaveURL(/\/dashboard$/);
   });
@@ -163,6 +168,7 @@ test.describe('log out (single sign-out)', () => {
   }
 
   test('AUTH-12 logout from the nav signs out everywhere', async ({ page }) => {
+    await skipUntilSignInDeployed();
     await uiLogin(page, accounts.admin);
     await logOutThroughAuthServer(page, () => page.getByTestId('logout-button').click());
   });
@@ -176,6 +182,7 @@ test.describe('log out (single sign-out)', () => {
   });
 
   test('AUTH-15 log out from access denied signs out everywhere and returns to the public home page', async ({ page }) => {
+    await skipUntilSignInDeployed();
     await uiLogin(page, accounts.nonadmin, /\/access-denied$/);
     await logOutThroughAuthServer(page, () => page.getByRole('button', { name: 'Log out' }).click());
   });
