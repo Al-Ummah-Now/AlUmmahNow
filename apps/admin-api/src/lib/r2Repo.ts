@@ -58,11 +58,13 @@ class R2Repository<T> {
     }
   }
 
-  async putObject(id: string, data: T): Promise<void> {
+  /** Returns the stored object's R2 `uploaded` time (epoch ms), the version for the search index. */
+  async putObject(id: string, data: T): Promise<number> {
     const options: R2PutOptions = {
       httpMetadata: { contentType: 'application/json' },
     };
-    await this.bucket.put(id, JSON.stringify(data), options);
+    const written = await this.bucket.put(id, JSON.stringify(data), options);
+    return written?.uploaded ? new Date(written.uploaded).getTime() : Date.now();
   }
 
   async deleteObject(id: string): Promise<void> {

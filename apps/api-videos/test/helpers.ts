@@ -15,8 +15,15 @@ export class MemoryBucket {
 	constructor(initial: Record<string, unknown> = {}) {
 		for (const [k, v] of Object.entries(initial)) {
 			this.store.set(k, JSON.stringify(v));
-			this.uploaded.set(k, new Date());
+			this.uploaded.set(k, this.tick());
 		}
+	}
+
+	/** Write time of the next write: like R2's `uploaded`, later writes get later times. */
+	private lastWrite = 0;
+	private tick(): Date {
+		this.lastWrite = Math.max(Date.now(), this.lastWrite + 1);
+		return new Date(this.lastWrite);
 	}
 
 	/** Version per key, exposed as the R2 etag (for conditional puts). */
@@ -30,7 +37,7 @@ export class MemoryBucket {
 		this.calls++;
 		const raw = this.store.get(key);
 		if (raw === undefined) return null;
-		return { key, etag: this.etag(key), json: async () => JSON.parse(raw), text: async () => raw };
+		return { key, etag: this.etag(key), uploaded: this.uploaded.get(key), json: async () => JSON.parse(raw), text: async () => raw };
 	}
 
 	/**
@@ -45,9 +52,10 @@ export class MemoryBucket {
 		if (notExpected === '*' && this.store.has(key)) return null;
 		if (notExpected !== undefined && notExpected !== '*' && this.store.has(key) && notExpected === this.etag(key)) return null;
 		this.store.set(key, value);
-		this.uploaded.set(key, new Date());
+		const uploaded = this.tick();
+		this.uploaded.set(key, uploaded);
 		this.versions.set(key, (this.versions.get(key) ?? 0) + 1);
-		return { key, etag: this.etag(key) };
+		return { key, etag: this.etag(key), uploaded };
 	}
 
 	async delete(keys: string | string[]) {

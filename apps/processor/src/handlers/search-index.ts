@@ -42,7 +42,10 @@ function searchDb(env: QueueEnvironment): SearchDb | null {
 }
 
 export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueEnvironment, logger: Logger): Promise<void> {
-  const { entity, id, object } = message.payload as unknown as SearchIndexSyncPayload;
+  const { entity, id, object, version: sent } = message.payload as unknown as SearchIndexSyncPayload;
+  // Order guard (SCALABILITY-AUDIT PR-8): the version of the snapshot (its R2
+  // `uploaded` time). A message without one only fills rows nothing newer wrote.
+  const version = typeof sent === 'number' && Number.isFinite(sent) ? sent : 0;
   if (!entity || !id || !SEARCH_ENTITY_TYPES.includes(entity)) {
     throw new Error('SearchIndexSync message missing required fields: entity, id');
   }
@@ -53,13 +56,13 @@ export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueE
   }
   const kind = ownershipKindFor(entity);
   if (kind) {
-    const ownership = await syncOwnershipSafely(db, kind, id, object ?? null);
+    const ownership = await syncOwnershipSafely(db, kind, id, object ?? null, Date.now(), version);
     if (ownership.ok === false) {
       logger.warn('Ownership index write failed; index marked incomplete', { entity, id, error: ownership.error, invalidated: ownership.invalidated });
     }
   }
-  const result = await syncSearchDocument(db, entity, id, object ?? null);
-  logger.info('Search index synced', { entity, id, result });
+  const result = await syncSearchDocument(db, entity, id, object ?? null, { version });
+  logger.info('Search index synced', { entity, id, version, result });
 }
 
 /** Remove content a moderator removed or banned from the search index. */
