@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { AUTH_STATE, ANONYMOUS_STATE, readAccount } from './test-utils/auth-state';
-import { menuTrigger, openAccountMenu, openSideDrawer } from './test-utils/navigation';
+import { menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './test-utils/navigation';
 
 /**
  * Unified Navigation (header account menu + side drawer)
@@ -18,6 +18,7 @@ test.describe('Unified Navigation - anonymous', () => {
     const menu = await openAccountMenu(page);
 
     await expect(menu.getByRole('menuitem', { name: /sign in/i })).toBeVisible();
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-context')).toHaveCount(0);
   });
 
@@ -55,6 +56,7 @@ test.describe('Unified Navigation - English (LTR)', () => {
     const { email } = readAccount('single');
     const menu = await openAccountMenu(page);
 
+    await showMenuView(menu, 'main');
     const context = menu.getByTestId('nav-active-context');
     await expect(context).toBeVisible();
     await expect(context).toContainText(email);
@@ -64,6 +66,7 @@ test.describe('Unified Navigation - English (LTR)', () => {
     const { channels } = readAccount('single');
     const menu = await openAccountMenu(page);
 
+    await showMenuView(menu, 'main');
     const active = menu.getByTestId('nav-active-channel');
     await expect(active).toBeVisible();
     await expect(active).toContainText(channels[0].name!);
@@ -73,8 +76,8 @@ test.describe('Unified Navigation - English (LTR)', () => {
   test('lists navigation links for a channel owner', async ({ page }) => {
     const menu = await openAccountMenu(page);
 
-    await expect(menu.getByText('NAVIGATION', { exact: true })).toBeVisible();
-    for (const href of ['/en/feed', '/en/history', '/en/dashboard/videos', '/en/scheduled-videos']) {
+    for (const href of ['/en/analytics', '/en/settings', '/en/dashboard/videos', '/en/scheduled-videos']) {
+      await showMenuView(menu, 'main');
       await expect(menu.locator(`a[role="menuitem"][href="${href}"]`)).toBeVisible();
     }
     await expect(menu.getByRole('menuitem', { name: 'My Videos' })).toBeVisible();
@@ -82,6 +85,7 @@ test.describe('Unified Navigation - English (LTR)', () => {
 
   test('navigates to the profile page from the context card', async ({ page }) => {
     const menu = await openAccountMenu(page);
+    await showMenuView(menu, 'main');
     await menu.getByTestId('nav-profile-link').click();
 
     await expect(page).toHaveURL(/\/en\/profile$/);
@@ -90,6 +94,7 @@ test.describe('Unified Navigation - English (LTR)', () => {
 
   test('navigates to My Videos', async ({ page }) => {
     const menu = await openAccountMenu(page);
+    await showMenuView(menu, 'main');
     await menu.locator('a[role="menuitem"][href="/en/dashboard/videos"]').click();
 
     await expect(page).toHaveURL(/\/en\/dashboard\/videos$/);
@@ -100,19 +105,24 @@ test.describe('Unified Navigation - English (LTR)', () => {
     const menu = await openAccountMenu(page);
 
     await expect(menu.getByText(/^ACCOUNTS/)).toBeVisible();
+    await showMenuView(menu, 'account');
     await expect(menu.getByTestId('nav-account')).toHaveCount(1);
+    await showMenuView(menu, 'account');
     await expect(menu.getByTestId('nav-account')).toHaveAttribute('data-active', 'true');
 
+    await showMenuView(menu, 'channel');
     const option = menu.getByTestId('nav-channel-option');
     await expect(option).toHaveCount(1);
     await expect(option).toHaveAttribute('data-channel-id', channels[0].id);
     await expect(option).toHaveAttribute('aria-checked', 'true');
     await expect(option.locator('svg.lucide-crown')).toBeVisible();
+    await showMenuView(menu, 'channel');
     await expect(menu.getByTestId('nav-channel-option-none')).toHaveAttribute('aria-checked', 'false');
   });
 
   test('opens and cancels the channel creation form', async ({ page }) => {
     const menu = await openAccountMenu(page);
+    await showMenuView(menu, 'channel');
     await menu.getByTestId('nav-create-channel').click();
 
     const input = menu.getByPlaceholder('Enter channel name');
@@ -125,15 +135,19 @@ test.describe('Unified Navigation - English (LTR)', () => {
 
     await menu.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(input).toBeHidden();
+    await showMenuView(menu, 'channel');
     await expect(menu.getByTestId('nav-create-channel')).toBeVisible();
   });
 
   test('offers Add Account and Sign Out', async ({ page }) => {
     const menu = await openAccountMenu(page);
 
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-add-account')).toHaveText(/Add another account/);
-    await expect(menu.getByTestId('nav-sign-out')).toHaveText(/Sign out of/);
+    await showMenuView(menu, 'main');
+    await expect(menu.getByTestId('nav-sign-out')).toHaveText(/Sign out/);
     // Single account: no "sign out of all"
+    await showMenuView(menu, 'main');
     await expect(menu.getByRole('menuitem', { name: /Sign out of all accounts/ })).toHaveCount(0);
   });
 
@@ -157,10 +171,15 @@ test.describe('Unified Navigation - no channels', () => {
     await page.goto('/en');
     const menu = await openAccountMenu(page);
 
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-no-active-channel')).toBeVisible();
+    await showMenuView(menu, 'channel');
     await expect(menu.getByTestId('nav-channel-option')).toHaveCount(0);
+    await showMenuView(menu, 'channel');
     await expect(menu.getByTestId('nav-channel-option-none')).toHaveAttribute('aria-checked', 'true');
-    await expect(menu.locator('a[role="menuitem"][href="/en/feed"]')).toBeVisible();
+    await showMenuView(menu, 'main');
+    await expect(menu.locator('a[role="menuitem"][href="/en/settings"]')).toBeVisible();
+    await showMenuView(menu, 'main');
     await expect(menu.locator('a[role="menuitem"][href="/en/dashboard/videos"]')).toHaveCount(0);
   });
 });
@@ -177,6 +196,7 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
     const menu = await openAccountMenu(page);
 
     await expect(menu).toHaveAttribute('dir', 'rtl');
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-context')).toContainText(email);
   });
 
@@ -185,14 +205,17 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
 
     await expect(menu.getByText('التنقل', { exact: true })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'فيديوهاتي' })).toHaveAttribute('href', '/ar/dashboard/videos');
-    await expect(menu.locator('a[role="menuitem"][href="/ar/feed"]')).toBeVisible();
+    await showMenuView(menu, 'main');
+    await expect(menu.locator('a[role="menuitem"][href="/ar/settings"]')).toBeVisible();
   });
 
   test('shows Arabic Add Account and Sign Out', async ({ page }) => {
     const menu = await openAccountMenu(page);
 
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-add-account')).toHaveText(/إضافة حساب آخر/);
-    await expect(menu.getByTestId('nav-sign-out')).toHaveText(/تسجيل الخروج من/);
+    await showMenuView(menu, 'main');
+    await expect(menu.getByTestId('nav-sign-out')).toHaveText(/تسجيل الخروج/);
   });
 
   test('closes on Escape', async ({ page }) => {
@@ -205,6 +228,7 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
     const { channels } = readAccount('single');
     const menu = await openAccountMenu(page);
 
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/ar/channels/${channels[0].id}`);
   });
 });
