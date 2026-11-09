@@ -10,6 +10,7 @@ import { useWatchHistory, type UseWatchHistoryReturn } from '@/hooks/useWatchHis
 import { resolveUrl } from '@/lib/utility';
 import type { WatchHistoryItem } from '@/services/api/watch-history';
 import type { AppTranslations } from '@/lib/i18n/types';
+import { formatAbsoluteDate, formatRelativeTime } from '@/lib/format/videoMeta';
 
 export interface WatchHistoryEntryProps {
   entry: WatchHistoryItem;
@@ -20,7 +21,8 @@ export interface WatchHistoryEntryProps {
 
 export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntryProps) {
   const percent = Math.max(0, Math.min(100, Math.round(entry.percentageWatched || 0)));
-  const watchedOn = new Date(entry.lastWatchedAt).toLocaleDateString(lang === 'ar' ? 'ar' : 'en');
+  const watchedOn = formatRelativeTime(entry.lastWatchedAt, lang === 'ar' ? 'ar' : 'en');
+  const watchedDate = formatAbsoluteDate(entry.lastWatchedAt, lang === 'ar' ? 'ar' : 'en');
 
   return (
     <li className="flex gap-4 items-start p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -46,7 +48,7 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
           <span className="block text-sm text-gray-600 dark:text-gray-400">{entry.channelName}</span>
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          {t.watchHistory.lastWatched.replace('{date}', watchedOn)}
+          <span title={watchedDate}>{t.watchHistory.lastWatched.replace('{date}', watchedOn)}</span>
           {' • '}
           {entry.completed ? t.watchHistory.completed : t.watchHistory.percentWatched.replace('{percent}', String(percent))}
         </p>

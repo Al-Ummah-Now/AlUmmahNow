@@ -4,6 +4,8 @@ import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil } from 'lucide-react';
+import { formatViews } from '@/lib/format/videoMeta';
+import { RelativeDate } from '@/components/RelativeDate';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -380,21 +382,6 @@ export default function VideoDashboardPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    // floor, not ceil: with ceil anything uploaded in the last 24 hours showed "Yesterday"
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return t.video.today;
-    if (diffDays === 1) return t.video.yesterday;
-    if (diffDays < 7) return t.video.daysAgo.replace('{count}', diffDays.toString());
-    if (diffDays < 30) return t.video.weeksAgo.replace('{count}', Math.floor(diffDays / 7).toString());
-    if (diffDays < 365) return t.video.monthsAgo.replace('{count}', Math.floor(diffDays / 30).toString());
-    return t.video.yearsAgo.replace('{count}', Math.floor(diffDays / 365).toString());
-  };
-
   if (!user) {
     return null;
   }
@@ -616,7 +603,7 @@ export default function VideoDashboardPage() {
                   </h3>
                   <p className="text-sm truncate">{video.channelName || video.channel}</p>
                   <p className="text-sm" data-testid="dashboard-video-meta">
-                    {video.views || 0} {t.video.videoViews?.toLowerCase() || 'views'} • {formatDate(video.dateCreated)}
+                    {formatViews(video.views, lang)} • <RelativeDate value={video.dateCreated} lang={lang} />
                   </p>
 
                   {/* Privacy + status badges */}

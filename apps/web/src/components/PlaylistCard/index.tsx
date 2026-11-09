@@ -7,6 +7,7 @@ import { PlaylistCover } from '@/components/PlaylistCover';
 import { Playlist } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getPlaylistDisplayName, getPlaylistVideoCount } from '@/lib/playlists/playlist-utils';
+import { RelativeDate } from '@/components/RelativeDate';
 
 export function PlaylistCard(playlist: Playlist) {
   const { lang, t, isRTL } = useLanguage();
@@ -40,7 +41,7 @@ export function PlaylistCard(playlist: Playlist) {
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            {new Date(playlist.dateCreated).toLocaleDateString(lang)}
+            <RelativeDate value={playlist.dateCreated} lang={lang} />
           </p>
         </div>
       </div>

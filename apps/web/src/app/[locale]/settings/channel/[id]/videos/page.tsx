@@ -13,6 +13,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
+import { formatViews } from '@/lib/format/videoMeta';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
@@ -22,7 +23,7 @@ const VIDEO_PAGE_SIZE = 100;
 const MAX_VIDEO_PAGES = 10;
 
 export default function ChannelVideosPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -380,7 +381,7 @@ export default function ChannelVideosPage() {
                     {video.title}
                   </h3>
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    <span>{video.views || 0} {t.video.views}</span>
+                    <span>{formatViews(video.views, lang)}</span>
                     <span>•</span>
                     <span>{formatDate(video.dateCreated)}</span>
                   </div>
