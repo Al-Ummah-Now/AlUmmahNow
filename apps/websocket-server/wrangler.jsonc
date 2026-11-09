@@ -40,6 +40,13 @@
 		}
 	],
 	/**
+	 * Video JSON objects: the per-video view counter (src/view-counter.ts)
+	 * flushes counts into them with conditional writes.
+	 */
+	"r2_buckets": [
+		{ "binding": "VIDEOS", "bucket_name": "videos" }
+	],
+	/**
 	 * KV Namespace for presence tracking and state
 	 */
 	"kv_namespaces": [
@@ -99,6 +106,9 @@
 					}
 				]
 			},
+			"r2_buckets": [
+				{ "binding": "VIDEOS", "bucket_name": "videos-stage" }
+			],
 			"kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
 			{ "binding": "TOKEN_REVOCATIONS", "id": "0831520b71144a6e848ed62918602c13" },

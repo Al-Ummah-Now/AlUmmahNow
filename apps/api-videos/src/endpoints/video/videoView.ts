@@ -7,6 +7,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import { isVideoRemoved } from "../../lib/visibility";
 import { normalizeEmbedOrigin } from "../../lib/embed-origin";
+import { countView } from "../../lib/view-counter";
+import { logger } from "../../lib/logger";
 
 export class VideoView extends OptionalAuthRoute {
 	schema = {
@@ -71,6 +73,14 @@ export class VideoView extends OptionalAuthRoute {
 					},
 				},
 			},
+			"503": {
+				description: "The view could not be counted (counter and fallback both unavailable)",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
 			"500": {
 				description: "Internal server error",
 				content: {
@@ -114,21 +124,25 @@ export class VideoView extends OptionalAuthRoute {
 			}, 404);
 		}
 
-		// Update view count
-		const updatedVideo = {
-			...video,
-			views: (video.views || 0) + 1,
-			dateModified: new Date().toISOString(),
-		};
-
-		// Save updated video
-		await repository.putObject(id, updatedVideo);
-
-		// Push the new count to everyone watching this video (non-blocking)
-		broadcastInBackground(c, `video:${id}`, 'view_count_updated', {
-			videoId: id,
-			viewCount: updatedVideo.views,
-		});
+		// Count the view through the per-video counter: it is the single writer of
+		// `views`, so concurrent views are never lost and this request never
+		// writes the video JSON (a blind write here used to revert concurrent
+		// edits, likes and comments). See lib/view-counter.ts.
+		let viewCount: number;
+		try {
+			const counted = await countView(c.env, id);
+			if (counted.via === 'counter') {
+				// Stored count plus this shard's views that are not flushed yet;
+				// viewers get the exact count pushed when the shard flushes.
+				viewCount = (video.views || 0) + counted.unflushed;
+			} else {
+				viewCount = counted.views;
+				broadcastInBackground(c, `video:${id}`, 'view_count_updated', { videoId: id, viewCount });
+			}
+		} catch (error) {
+			logger.error('[views] view not counted', { videoId: id, error: String(error) });
+			return c.json({ success: false, error: "View not counted, try again" }, 503);
+		}
 
 		// Send detailed analytics event
 		const queue = new Queue(c.env.queue);
@@ -157,7 +171,7 @@ export class VideoView extends OptionalAuthRoute {
 		return {
 			success: true,
 			result: {
-				viewCount: updatedVideo.views,
+				viewCount,
 				message: "View tracked successfully",
 			},
 		};
