@@ -352,7 +352,7 @@ export default function ChannelSectionsManagement() {
       )}
 
       {sections.length >= MAX_SECTIONS && (
-        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-800 dark:text-yellow-300">
+        <div className="p-3 bg-brand-soft dark:bg-brand-soft border border-brand-edge dark:border-brand-edge rounded-lg text-sm text-brand-ink dark:text-brand-ink">
           {s.maxReached}
         </div>
       )}

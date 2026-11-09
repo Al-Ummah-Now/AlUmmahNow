@@ -62,7 +62,7 @@ export function ChannelBellMenu({ channelId }: ChannelBellMenuProps) {
       <MenuButton
         label={`${texts.label}: ${texts[bell]}`}
         testId="channel-bell-button"
-        buttonClassName="rounded-lg bg-gray-200 p-1.5 text-gray-900 shadow-md hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500"
+        buttonClassName="rounded-lg bg-gray-200 p-1.5 text-gray-900 shadow-md hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         items={levels.map((level) => {
           const LevelIcon = ICONS[level];
           return {

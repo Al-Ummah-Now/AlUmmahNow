@@ -56,7 +56,7 @@ export function ContinueWatchingShelf() {
     <section aria-labelledby="continue-watching-heading" data-testid="continue-watching" className="mb-8">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 id="continue-watching-heading" className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-          <PlayCircle className="h-5 w-5 text-[#ffa037]" aria-hidden="true" />
+          <PlayCircle className="h-5 w-5 text-[var(--fanous-color-accent)]" aria-hidden="true" />
           {t.library.continueWatching}
         </h2>
         <Link href={`/${lang}/history`} className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">

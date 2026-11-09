@@ -96,10 +96,10 @@ export function BatchUploadQueue({
                 flex items-center gap-1.5
                 px-3 py-2
                 text-sm font-medium
-                text-white bg-yellow-600
+                text-on-brand bg-brand
                 rounded-md
-                hover:bg-yellow-700
-                focus:outline-none focus:ring-2 focus:ring-yellow-500
+                hover:bg-brand-hover
+                focus:outline-none focus:ring-2 focus:ring-brand
                 transition-colors
                 min-w-[100px]
                 justify-center
@@ -211,9 +211,9 @@ export function BatchUploadQueue({
           </div>
         )}
         {stats.paused > 0 && (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 px-2 py-1.5 rounded text-center">
-            <div className="font-semibold text-yellow-700 dark:text-yellow-300">{stats.paused}</div>
-            <div className="text-yellow-600 dark:text-yellow-400">{t.batch.paused}</div>
+          <div className="bg-brand-soft dark:bg-brand-soft px-2 py-1.5 rounded text-center">
+            <div className="font-semibold text-brand-ink dark:text-brand-ink">{stats.paused}</div>
+            <div className="text-brand-ink dark:text-brand-ink">{t.batch.paused}</div>
           </div>
         )}
         {stats.completed > 0 && (

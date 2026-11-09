@@ -238,8 +238,8 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
                     </p>
                   </div>
 
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200 flex gap-1">
+                  <div className="bg-brand-soft dark:bg-brand-soft p-3 rounded-md">
+                    <p className="text-sm text-brand-ink dark:text-brand-ink flex gap-1">
                       <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
                       <span>{t.reportContent.reviewNotice}</span>
                     </p>

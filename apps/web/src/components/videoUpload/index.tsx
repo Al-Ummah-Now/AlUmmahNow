@@ -601,7 +601,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                     : uploadProgress.state === 'complete'
                     ? 'bg-green-600'
                     : uploadProgress.state === 'paused'
-                    ? 'bg-yellow-600'
+                    ? 'bg-brand'
                     : 'bg-blue-600'
                 }`}
                 style={{ width: `${uploadProgress.percentage}%` }}
@@ -636,7 +636,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
             {/* Schedule error - shown after upload completes but scheduling failed */}
             {scheduleError && uploadProgress.state === 'complete' && (
-              <div className="flex items-start mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
+              <div className="flex items-start mt-3 p-3 bg-brand-soft dark:bg-brand-soft text-brand-ink dark:text-brand-ink rounded-lg">
                 <AlertCircle size={16} className="me-2 mt-0.5 flex-shrink-0" />
                 <span className="text-sm">{scheduleError}</span>
               </div>
@@ -823,7 +823,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 type="button"
                 onClick={pauseUpload}
                 data-testid="upload-pause"
-                className="flex-1 bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 font-medium flex items-center justify-center gap-2"
+                className="flex-1 bg-brand text-on-brand px-4 py-2 rounded-md hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand font-medium flex items-center justify-center gap-2"
               >
                 <Pause size={16} />
                 {t.upload.pause}

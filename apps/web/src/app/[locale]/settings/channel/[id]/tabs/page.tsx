@@ -163,11 +163,11 @@ export default function ChannelTabsSettingsPage() {
   if (!isOwner) {
     return (
       <div className="max-w-4xl mx-auto p-4 md:p-6">
-        <div className="p-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <h2 className="text-lg font-semibold text-yellow-900 dark:text-yellow-200 mb-2">
+        <div className="p-6 bg-brand-soft dark:bg-brand-soft border border-brand-edge dark:border-brand-edge rounded-lg">
+          <h2 className="text-lg font-semibold text-brand-ink dark:text-brand-ink mb-2">
             {t.errors.unauthorized}
           </h2>
-          <p className="text-yellow-700 dark:text-yellow-300">
+          <p className="text-brand-ink dark:text-brand-ink">
             {t.errors.forbidden}
           </p>
           <Button

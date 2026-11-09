@@ -140,7 +140,7 @@ export function LibraryListPage({ kind, dir }: Props) {
         </Link>
       </nav>
       <h1 className="mb-6 flex items-center gap-3 text-2xl font-bold text-gray-900 dark:text-white">
-        <meta.Icon className="h-7 w-7 text-[#ffa037]" aria-hidden="true" />
+        <meta.Icon className="h-7 w-7 text-[var(--fanous-color-accent)]" aria-hidden="true" />
         {meta.title}
         {total > 0 && kind !== 'saved-posts' && (
           <span className="text-base font-normal text-gray-500">{fillTemplate(texts.videosCount, { count: total.toLocaleString(lang) })}</span>
