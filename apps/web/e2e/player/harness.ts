@@ -104,7 +104,8 @@ function themeCss(theme: string): string {
  * reload socket reconnects to a changed build. The page needs the socket's first sync to finish
  * loading; after that the specs want no hot reload, so later build messages never reach the page.
  */
-const DEV_RELOAD_ACTIONS = new Set(['building', 'built', 'reloadPage', 'serverComponentChanges']);
+// Next names the message in `type` (older releases used `action`); see HMR_MESSAGE_SENT_TO_BROWSER
+const DEV_RELOAD_ACTIONS = new Set(['building', 'built', 'reloadPage', 'serverComponentChanges', 'clientChanges', 'serverOnlyChanges', 'middlewareChanges', 'addedPage', 'removedPage']);
 
 async function keepDevBuildStill(page: Page): Promise<void> {
   let synced = false;
@@ -113,7 +114,10 @@ async function keepDevBuildStill(page: Page): Promise<void> {
     server.onMessage((message) => {
       let action: unknown;
       try {
-        action = typeof message === 'string' ? (JSON.parse(message) as { action?: unknown }).action : undefined;
+        if (typeof message === 'string') {
+          const parsed = JSON.parse(message) as { type?: unknown; action?: unknown };
+          action = parsed.type ?? parsed.action;
+        }
       } catch {
         action = undefined;
       }
@@ -213,6 +217,18 @@ export const bar = (player: Locator) => player.locator('.vjs-control-bar');
 
 /** A PNG screenshot decoded to RGBA, with device-pixel helpers */
 export async function pixels(page: Page, clip: { x: number; y: number; width: number; height: number }) {
+  // WebKit now and then fails to decode a good PNG in the page ("EncodingError: Loading error"):
+  // take the screenshot again rather than fail the measurement
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await capturePixels(page, clip);
+    } catch (err) {
+      if (attempt >= 3 || !/EncodingError/.test(String(err))) throw err;
+    }
+  }
+}
+
+async function capturePixels(page: Page, clip: { x: number; y: number; width: number; height: number }) {
   const buffer = await page.screenshot({ clip, animations: 'disabled', caret: 'hide', scale: 'device' });
   const decoded = await page.evaluate(async (b64) => {
     const img = new Image();
@@ -266,6 +282,16 @@ const box = (x: number, y: number, width: number, height: number): Box => ({ x, 
  * layout boxes. `part` hides the element itself, or only its ::before or ::after.
  */
 export async function inkBox(page: Page, target: Locator, part: 'self' | 'before' | 'after' = 'self', pad = 6): Promise<Box> {
+  // A capture can land before the hide style is painted, leaving no difference: measure once more
+  try {
+    return await measureInk(page, target, part, pad);
+  } catch (err) {
+    if (!/drew nothing/.test(String(err))) throw err;
+    return measureInk(page, target, part, pad);
+  }
+}
+
+async function measureInk(page: Page, target: Locator, part: 'self' | 'before' | 'after', pad: number): Promise<Box> {
   const r = await rect(target);
   const clip = { x: Math.max(0, r.x - pad), y: Math.max(0, r.y - pad), width: r.width + pad * 2, height: r.height + pad * 2 };
   const shown = await pixels(page, clip);

@@ -174,9 +174,17 @@ for (const dpr of [1, 2]) {
             el.volume = v;
           }, volume);
           await page.waitForTimeout(250);
-          const track = await layoutBox(bar);
-          const fill = await layoutBox(level);
-          const handle = await inkBox(page, level, 'after', 10);
+          // The bar can shift between reads (adaptive quality relabels a control beside it):
+          // take the layout again after the pixels and measure again until both agree
+          let track = await layoutBox(bar);
+          let fill = await layoutBox(level);
+          let handle = await inkBox(page, level, 'after', 10);
+          for (let attempt = 0; attempt < 4; attempt++) {
+            const [t2, f2] = [await layoutBox(bar), await layoutBox(level)];
+            if (t2.x === track.x && t2.cy === track.cy && f2.right === fill.right) break;
+            [track, fill] = [t2, f2];
+            handle = await inkBox(page, level, 'after', 10);
+          }
           near(handle.cy, track.cy, `volume handle on the track at ${volume}`);
           near(handle.cx, fill.right, `volume handle on the level at ${volume}`);
           near(handle.width, 12, `volume handle not clipped at ${volume}`);
