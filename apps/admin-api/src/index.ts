@@ -6,6 +6,7 @@ import { loggingMiddleware } from "./middleware/logging";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import { readSiteTheme } from './lib/siteSettings';
+import type { AdminBindings } from './base/types';
 
 // ==========================================
 // APP SETUP
@@ -85,7 +86,7 @@ app.use('/api/*', loggingMiddleware);
 
 // The site theme is public and read by the web apps on every page, so it is short-lived at the edge
 app.get('/public/site-theme', async (c) => {
-  const { theme } = await readSiteTheme(c.env.REPORTS_DB);
+  const { theme } = await readSiteTheme((c.env as AdminBindings).REPORTS_DB);
   return c.json({ theme }, 200, { 'Cache-Control': 'public, max-age=30' });
 });
 
