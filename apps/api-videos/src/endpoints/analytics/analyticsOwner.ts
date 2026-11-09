@@ -8,11 +8,14 @@ import {
   AnalyticsChannel,
   AnalyticsVideo,
   buildDailySeries,
+  buildRetentionCurve,
   buildSummary,
+  buildTraffic,
   engagementRate,
   loadOwnedChannels,
   loadOwnedVideos,
   OwnershipLookup,
+  loadRetention,
   loadRollups,
   parseRange,
   rankTopVideos,
@@ -20,6 +23,17 @@ import {
 } from "../../lib/analytics";
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
+
+const TrafficSchema = z.object({
+  totalViews: z.number(),
+  sources: z.record(z.number()),
+  externalHosts: z.array(z.object({ host: z.string(), views: z.number() })),
+});
+
+const RetentionSchema = z.object({
+  starts: z.number(),
+  points: z.array(z.object({ bucket: z.number(), share: z.number() })).nullable(),
+});
 
 const VideoAnalyticsSchema = z.object({
   videoId: z.string(),
@@ -169,6 +183,7 @@ export class AnalyticsChannelGet extends AuthenticatedRoute {
               avgEngagementRate: z.number(),
               topPerformingVideos: z.array(VideoAnalyticsSchema),
               recentMetrics: z.array(MetricSchema),
+              traffic: TrafficSchema,
             }),
           },
         },
@@ -198,6 +213,7 @@ export class AnalyticsChannelGet extends AuthenticatedRoute {
         avgEngagementRate: summary.engagementRate,
         topPerformingVideos: rankTopVideos(scope.videos, 10),
         recentMetrics: buildDailySeries(range, scope.videos, scope.channels, rollups),
+        traffic: buildTraffic(rollups, range),
       });
     } catch (error) {
       logger.error("[Analytics] Channel analytics failed", { userId, channelId: params.channelId, error });
@@ -219,7 +235,7 @@ export class AnalyticsVideoGet extends AuthenticatedRoute {
       query: z.object(RangeQuery),
     },
     responses: {
-      "200": { description: "Video analytics", content: { "application/json": { schema: VideoAnalyticsSchema } } },
+      "200": { description: "Video analytics", content: { "application/json": { schema: VideoAnalyticsSchema.extend({ traffic: TrafficSchema }) } } },
       ...errorResponses,
     },
   });
@@ -236,10 +252,48 @@ export class AnalyticsVideoGet extends AuthenticatedRoute {
       }
       const range = parseRange(query.dateFrom, query.dateTo);
       const rollups = await loadRollups(c.env, "video", [video.id], range);
-      return c.json(videoAnalytics(video, rollups));
+      return c.json({ ...videoAnalytics(video, rollups), traffic: buildTraffic(rollups, range) });
     } catch (error) {
       logger.error("[Analytics] Video analytics failed", { userId, videoId: params.videoId, error });
       return c.json({ success: false, error: "Failed to load video analytics" }, 500);
+    }
+  }
+}
+
+/**
+ * GET /api/analytics/videos/:videoId/retention
+ */
+export class AnalyticsRetentionGet extends AuthenticatedRoute {
+  schema = addAuthToSchema({
+    tags: ["Analytics"],
+    summary: "Video retention curve",
+    description: "🔒 Owner only. Share of viewers still watching at each 5% of the video. No curve below the minimum number of starts.",
+    request: {
+      params: z.object({ videoId: Str() }),
+      query: z.object(RangeQuery),
+    },
+    responses: {
+      "200": { description: "Retention curve", content: { "application/json": { schema: RetentionSchema } } },
+      ...errorResponses,
+    },
+  });
+
+  async handle(c: AppContext) {
+    const { params, query } = await this.getValidatedData<typeof this.schema>();
+    const userId = this.getUserId(c);
+    try {
+      const object = await c.env.videos.get(params.videoId);
+      const video = object ? await object.json<AnalyticsVideo>() : null;
+      if (!video || video.isDeleted) return c.json({ success: false, error: "Video not found" }, 404);
+      if (video.userId !== userId) {
+        return c.json({ success: false, error: "You can only view analytics for your own videos" }, 403);
+      }
+      const range = parseRange(query.dateFrom, query.dateTo);
+      const docs = await loadRetention(c.env, video.id, range);
+      return c.json(buildRetentionCurve(docs, range));
+    } catch (error) {
+      logger.error("[Analytics] Retention failed", { userId, videoId: params.videoId, error });
+      return c.json({ success: false, error: "Failed to load retention" }, 500);
     }
   }
 }
