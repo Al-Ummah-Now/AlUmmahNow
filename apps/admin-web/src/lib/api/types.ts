@@ -1,3 +1,4 @@
+import type { EntitlementValue } from '@al-ummah/shared-types';
 /**
  * API Types for Admin Web
  *
@@ -107,4 +108,55 @@ export interface AiUsageView {
   rows: AiUsageDay[];
   today: { day: string; neurons: number; usd: number };
   dailyNeuronCap: number | null;
+}
+
+// Plans & entitlements (Epic 27)
+export interface PlanRow {
+  id: string;
+  slug: string;
+  name_en: string;
+  name_ar: string;
+  description_en: string | null;
+  description_ar: string | null;
+  audience: string;
+  status: 'draft' | 'active' | 'archived';
+  is_public: number;
+  is_default: number;
+  version: number;
+  subscribers?: number;
+}
+export type PlanValues = Record<string, EntitlementValue>;
+export interface PlanDetail {
+  plan: PlanRow;
+  published: PlanValues;
+  draft: PlanValues;
+  editableVersion: number;
+  hasDraft: boolean;
+  diff: { key: string; before: EntitlementValue | null; after: EntitlementValue | null }[];
+}
+export interface PlanOverride {
+  key: string;
+  value: EntitlementValue;
+  expires_at: string | null;
+  reason: string;
+}
+export interface SubjectState {
+  subject: { type: string; id: string };
+  subscription: { plan_id: string; plan_version: number; slug: string; name_en: string; name_ar: string; status: string; current_period_end: string | null } | null;
+  overrides: PlanOverride[];
+  usage: { key: string; period: string; value: number }[];
+}
+export interface PlanAuditEntry {
+  id: string;
+  actor_id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  reason: string | null;
+  created_at: string;
+}
+export interface PlanMigration {
+  affected: number;
+  applied: boolean;
+  toVersion: number;
 }
