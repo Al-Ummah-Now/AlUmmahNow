@@ -5,6 +5,7 @@ import "@/theme/active.css";
 import "@/theme/bridge.css";
 import "@/theme/demo-motion.css";
 import { DemoBanner, DemoBar } from "@/components/ThemeDemo/DemoBar";
+import backdrops from "@/theme/demo-backdrops.json";
 import { authenticated } from "../lib/actions"
 import type { Metadata, Viewport } from 'next'
 import { headers } from "next/headers";
@@ -161,7 +162,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                   <ActiveChannelWrapper>
                     <WebSocketProvider user={user}>
                       <TranslationSyncProvider>
-                        <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                        <div className="theme-bg" aria-hidden="true" dangerouslySetInnerHTML={{ __html: backdrops[(process.env.NEXT_PUBLIC_ACTIVE_THEME ?? "lantern") as keyof typeof backdrops] }} />
+                        <div className="demo-layer flex flex-col min-h-screen bg-white dark:bg-gray-900">
                           {/* Skip links must be the first focusable elements (WCAG 2.4.1) */}
                           <SkipLinks />
                           {/* Header */}

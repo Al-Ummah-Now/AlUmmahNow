@@ -7,7 +7,7 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useTheme } from 'next-themes';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
-import { Sun, Moon, Globe } from 'lucide-react';
+import { NavPrefs } from '@/components/ThemeDemo/NavPrefs';
 
 interface NavItems {
     label: string;
@@ -50,10 +50,6 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     const navItems = activeChannel
         ? allNavItems
         : allNavItems.filter(item => item.icon !== "fa-upload");
-
-    const toggleTheme = () => {
-        setTheme(theme === 'dark' ? 'light' : 'dark');
-    };
 
     const switchLanguage = () => {
         // Save language preference to localStorage and cookie
@@ -108,61 +104,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                 )}
                 <ul className="bg-white dark:bg-gray-900 h-screen flex flex-col overflow-y-auto">
                     {/* Enhanced Controls Section - AT TOP */}
-                    <li className="px-3 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <div className="space-y-2.5">
-                            {/* Dark Mode Toggle */}
-                            <button
-                                onClick={toggleTheme}
-                                className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
-                                aria-label={theme === 'dark' ? t.navigation.lightMode : t.navigation.darkMode}
-                                data-testid="theme-toggle"
-                                suppressHydrationWarning
-                            >
-                                <div
-                                    className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 ${
-                                        theme === 'dark'
-                                            ? 'bg-yellow-500/10 text-yellow-500 group-hover:bg-yellow-500/20'
-                                            : 'bg-blue-500/10 text-blue-600 group-hover:bg-blue-500/20'
-                                    }`}
-                                    suppressHydrationWarning
-                                >
-                                    {theme === 'dark' ? (
-                                        <Sun className="h-5 w-5" />
-                                    ) : (
-                                        <Moon className="h-5 w-5" />
-                                    )}
-                                </div>
-                                <div className="flex-1 text-left">
-                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                        {t.navigation.theme}
-                                    </div>
-                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100" suppressHydrationWarning>
-                                        {theme === 'dark' ? t.navigation.light : t.navigation.dark}
-                                    </div>
-                                </div>
-                            </button>
-
-                            {/* Language Selector */}
-                            <button
-                                onClick={switchLanguage}
-                                className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
-                                aria-label={t.navigation.switchToLanguage.replace('{language}', languages[oppositeLanguage].displayName)}
-                                data-testid="language-toggle"
-                            >
-                                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500/20 transition-all duration-200">
-                                    <Globe className="h-5 w-5" />
-                                </div>
-                                <div className="flex-1 text-left">
-                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                        {t.navigation.language}
-                                    </div>
-                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                        {languages[oppositeLanguage].displayName}
-                                    </div>
-                                </div>
-                            </button>
-                        </div>
-                    </li>
+                    <li><NavPrefs theme={theme} setTheme={setTheme} lang={lang} onLanguage={switchLanguage} labels={{ theme: t.navigation.theme, language: t.navigation.language, light: t.navigation.light, dark: t.navigation.dark, en: languages.en.displayName, ar: languages.ar.displayName }} /></li>
 
                     {navItems.map((item, index) => (
                         <li

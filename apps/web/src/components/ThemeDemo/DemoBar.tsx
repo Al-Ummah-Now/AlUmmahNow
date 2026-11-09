@@ -21,6 +21,7 @@ export function DemoBanner() {
 export function DemoBar() {
   const { setTheme, resolvedTheme } = useTheme();
   const [opt, setOpt] = useState('a');
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     const saved = window.localStorage.getItem('demo-upload') ?? 'a';
     setOpt(saved);
@@ -33,13 +34,24 @@ export function DemoBar() {
   };
   return (
     <div className="demo-bar" role="group" aria-label="Demo controls">
-      <span>Demo</span>
-      <button type="button" aria-pressed={resolvedTheme !== 'dark'} onClick={() => setTheme('light')}>Light</button>
-      <button type="button" aria-pressed={resolvedTheme === 'dark'} onClick={() => setTheme('dark')}>Dark</button>
-      <span>Upload</span>
-      {[['a', 'A header'], ['b', 'B menu side'], ['c', 'C floating']].map(([v, l]) => (
-        <button key={v} type="button" aria-pressed={opt === v} onClick={() => choose(v)}>{l}</button>
-      ))}
+      <div className="row">
+        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>Demo options</button>
+      </div>
+      {open && (
+        <>
+          <div className="row">
+            <strong>Mode</strong>
+            <button type="button" aria-pressed={resolvedTheme !== 'dark'} onClick={() => setTheme('light')}>Light</button>
+            <button type="button" aria-pressed={resolvedTheme === 'dark'} onClick={() => setTheme('dark')}>Dark</button>
+          </div>
+          <div className="row">
+            <strong>Upload button</strong>
+            {[['a', 'In the nav (filled)'], ['b', 'In the nav, start side (outline)'], ['c', 'Floating button (bottom corner)']].map(([v, l]) => (
+              <button key={v} type="button" aria-pressed={opt === v} onClick={() => choose(v)}>{l}</button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

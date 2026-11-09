@@ -6,7 +6,7 @@ import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useTheme } from 'next-themes';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
-import { Sun, Moon, Globe } from 'lucide-react';
+import { NavPrefs } from '@/components/ThemeDemo/NavPrefs';
 import { getTranslations } from '@/lib/i18n';
 
 const tAr = getTranslations('ar');
@@ -53,10 +53,6 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     const navItems = activeChannel
         ? allNavItems
         : allNavItems.filter(item => item.icon !== "fa-upload");
-
-    const toggleTheme = () => {
-        setTheme(theme === 'dark' ? 'light' : 'dark');
-    };
 
     const switchLanguage = () => {
         // Save language preference to localStorage and cookie
@@ -111,61 +107,7 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
                 )}
                 <ul className="bg-white dark:bg-gray-900 h-screen flex flex-col overflow-y-auto">
                     {/* Enhanced Controls Section - AT TOP */}
-                    <li className="px-3 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <div className="space-y-2.5">
-                            {/* Dark Mode Toggle */}
-                            <button
-                                onClick={toggleTheme}
-                                className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
-                                aria-label={theme === 'dark' ? tAr.navigation.lightMode : tAr.navigation.darkMode}
-                                data-testid="theme-toggle"
-                                suppressHydrationWarning
-                            >
-                                <div
-                                    className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 ${
-                                        theme === 'dark'
-                                            ? 'bg-yellow-500/10 text-yellow-500 group-hover:bg-yellow-500/20'
-                                            : 'bg-blue-500/10 text-blue-600 group-hover:bg-blue-500/20'
-                                    }`}
-                                    suppressHydrationWarning
-                                >
-                                    {theme === 'dark' ? (
-                                        <Sun className="h-5 w-5" />
-                                    ) : (
-                                        <Moon className="h-5 w-5" />
-                                    )}
-                                </div>
-                                <div className="flex-1 text-right">
-                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                        {tAr.navigation.theme}
-                                    </div>
-                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100" suppressHydrationWarning>
-                                        {theme === 'dark' ? tAr.navigation.light : tAr.navigation.dark}
-                                    </div>
-                                </div>
-                            </button>
-
-                            {/* Language Selector */}
-                            <button
-                                onClick={switchLanguage}
-                                className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 group"
-                                aria-label={tAr.navigation.switchToLanguage.replace('{language}', 'English')}
-                                data-testid="language-toggle"
-                            >
-                                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500/20 transition-all duration-200">
-                                    <Globe className="h-5 w-5" />
-                                </div>
-                                <div className="flex-1 text-right">
-                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                        {tAr.navigation.language}
-                                    </div>
-                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                        English
-                                    </div>
-                                </div>
-                            </button>
-                        </div>
-                    </li>
+                    <li><NavPrefs theme={theme} setTheme={setTheme} lang={locale} onLanguage={switchLanguage} labels={{ theme: tAr.navigation.theme, language: tAr.navigation.language, light: tAr.navigation.light, dark: tAr.navigation.dark, en: 'English', ar: 'العربية' }} /></li>
 
                     {navItems.map((item, index) => (
                         <li
