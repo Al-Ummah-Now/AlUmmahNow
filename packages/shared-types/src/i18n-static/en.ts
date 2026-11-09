@@ -989,7 +989,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     mySubscriptions: 'My Subscriptions',
     manage: 'Manage',
     notificationSettings: 'Notification Settings',
-    subscriptionFeed: 'Subscription Feed',
+    subscriptionFeed: 'Subscriptions',
     noSubscriptions: 'No subscriptions yet',
     loginToSeeVideos: 'Log in to see the latest videos from channels you\'ve subscribed to.',
     latestVideos: 'Latest videos from your subscribed channels',

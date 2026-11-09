@@ -5,7 +5,6 @@
  */
 export const SIDEBAR_PATHS = {
   home: '/',
-  search: '/search',
   explore: '/explore',
   subscriptions: '/subscriptions',
   library: '/library',
@@ -24,6 +23,7 @@ export const ACCOUNT_MENU_PATHS = {
 } as const;
 
 export const HEADER_PATHS = {
+  search: '/search',
   upload: '/upload',
   notifications: '/notifications',
 } as const;

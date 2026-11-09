@@ -40,7 +40,6 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
 
     const allNavItems: NavItems[] = [
         { label: tAr.navigation.homeLink, icon: "fa-house", href: `/${locale}${SIDEBAR_PATHS.home}` },
-        { label: tAr.navigation.search, icon: "fa-magnifying-glass", href: `/${locale}${SIDEBAR_PATHS.search}` },
         { label: tAr.navigation.explore, icon: "fa-compass", href: `/${locale}${SIDEBAR_PATHS.explore}` },
         { label: tAr.navigation.subscriptions, icon: "fa-tv", href: `/${locale}${SIDEBAR_PATHS.subscriptions}` },
         { label: tAr.navigation.library, icon: "fa-bookmark", href: `/${locale}${SIDEBAR_PATHS.library}` },
