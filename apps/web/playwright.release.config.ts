@@ -12,7 +12,7 @@ const PLAYER = /player\.spec\.ts$/;
  * every browser). Branded Chrome, not the bundled Chromium: they open the watch
  * page, and Chromium's missing H.264 decoder logs player errors of its own.
  */
-const ALL_BROWSERS = /(anonymous-console|realtime-toasts|admin-content)\.spec\.ts$/;
+const ALL_BROWSERS = /(anonymous-console|realtime-toasts|admin-content|studio-[\w-]+)\.spec\.ts$/;
 /**
  * The control-bar layout and progress-track specs also run in Firefox and WebKit when asked, locally:
  * RELEASE_PLAYER_BROWSERS=firefox,webkit (layout only, so the browsers' own decoders suffice).

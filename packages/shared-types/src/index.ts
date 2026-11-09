@@ -55,6 +55,7 @@ export * from './i18n';
 export * from './notifications';
 export * from './i18n-library';
 export * from './i18n-bulk-edit';
+export * from './i18n-studio';
 export * from './i18n-community-guidelines';
 export * from './i18n-contact';
 export * from './i18n-upload-status';

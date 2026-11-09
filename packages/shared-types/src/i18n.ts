@@ -2263,6 +2263,7 @@ export interface AppTranslations {
   /**
    * Explore page (Epic 29, Story 29.7)
    */
+  studio: import('./i18n-studio').StudioTranslations;
   explore: {
     title: string;
     subtitle: string;
