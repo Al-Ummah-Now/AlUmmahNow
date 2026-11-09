@@ -15,7 +15,7 @@ const results = (page: Page) => page.getByTestId('search-result');
 
 /** The search input once React has hydrated it (typing earlier is lost). */
 async function searchInput(page: Page) {
-  const input = page.locator('[data-testid="search-input"][data-ready="true"]');
+  const input = page.locator(':is([data-testid="search-input"],[data-testid="header-search-input"])[data-ready="true"]:visible');
   await expect(input).toBeVisible();
   return input;
 }
@@ -27,7 +27,7 @@ async function typeQuery(page: Page, text: string) {
     await input.fill('');
     await input.pressSequentially(text, { delay: 20 });
     // The clear button renders from React state, so it proves React saw the input
-    await expect(page.getByTestId('search-input-clear')).toBeVisible({ timeout: 1000 });
+    await expect(page.locator(':is([data-testid="search-input-clear"],[data-testid="header-search-clear"]):visible')).toBeVisible({ timeout: 1000 });
     await expect(input).toHaveValue(text, { timeout: 500 });
   }).toPass();
   return input;
@@ -50,7 +50,7 @@ test.describe('Search v2 - English (LTR)', () => {
     await page.goto('/en/search');
     await expect(page.getByTestId('search-idle')).toBeVisible();
     await typeQuery(page, 'seerah');
-    await page.getByTestId('search-submit').click();
+    await page.locator(':is([data-testid="search-submit"],[data-testid="header-search-submit"]):visible').click();
     await expect(page).toHaveURL(/\/en\/search\?q=seerah/);
     await expectResults(page);
   });
@@ -187,5 +187,55 @@ test.describe('Search v2 - mobile', () => {
     await expectResults(page);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
+  });
+});
+
+test.describe('Header search', () => {
+  test('SEARCH-HDR-001 suggestions, keyboard choice and history work from any page', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Phones open it from the icon: SEARCH-HDR-003');
+    await page.goto('/en/explore');
+    const input = page.locator('[data-testid="header-search-input"][data-ready="true"]:visible');
+    await input.pressSequentially('mosque', { delay: 20 });
+    await expect(page.getByTestId('search-suggestion').first()).toBeVisible();
+    await input.press('ArrowDown');
+    await expect(input).toHaveAttribute('aria-activedescendant', /opt-0$/);
+    await input.press('Enter');
+    await expect(page).toHaveURL(/\/en\/search\?.*q=/);
+
+    await page.goto('/en/explore');
+    await input.click();
+    const items = page.getByTestId('search-history-item');
+    await expect(items.first()).toBeVisible();
+    const before = await items.count();
+    await items.first().getByTestId('search-history-remove').dispatchEvent('pointerdown');
+    await expect(items).toHaveCount(before - 1);
+  });
+
+  test('SEARCH-HDR-002 the search page has one box on desktop and keeps filters on a new query', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Desktop layout only');
+    await page.goto('/en/search?q=mosque&type=video');
+    await expect(page.locator('[data-testid="search-input"]')).toBeHidden();
+    const input = page.locator('[data-testid="header-search-input"][data-ready="true"]:visible');
+    await expect(input).toHaveValue('mosque');
+    await input.fill('adhan');
+    await input.press('Enter');
+    await expect(page).toHaveURL(/type=video/);
+    await expect(page).toHaveURL(/q=adhan/);
+  });
+});
+
+test.describe('Header search on phones', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  test.skip(({ browserName }) => browserName === 'firefox', 'isMobile is not supported in Firefox');
+
+  test('SEARCH-HDR-003 the icon opens the box with its dropdown, in Arabic too', async ({ page }) => {
+    await page.goto('/ar/explore');
+    await page.getByTestId('header-search-open').click();
+    const sheet = page.getByTestId('header-search-sheet');
+    await expect(sheet).toBeVisible();
+    await sheet.locator('[data-testid="header-search-input"]').click();
+    await expect(page.getByTestId('search-dropdown')).toBeVisible();
+    await sheet.getByTestId('header-search-back').click();
+    await expect(sheet).toBeHidden();
   });
 });
