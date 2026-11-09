@@ -786,6 +786,7 @@ export interface AppTranslations {
   upload: {
     uploadTitle: string;
     uploadVideo: string;
+    createChannelToUpload: string;
     selectFile: string;
     dragDropFiles: string;
     videoDetails: string;

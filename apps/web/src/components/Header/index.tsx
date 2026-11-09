@@ -6,16 +6,11 @@ import Link from "next/link";
 import { HeaderProps } from "./interfaces";
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useAuth } from "@/components/AuthProvider/authContext";
-import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { UploadButton } from '@/components/UploadButton';
+import { UploadAction } from '@/components/Header/UploadAction';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) => {
   const { t, lang: locale } = useLanguage();
-  const { user } = useAuth();
-  const { user: multiAccountUser } = useMultiAccount();
-  const activeChannel = multiAccountUser?.channel;
 
   return (
     // Fixed height (h-14): the account menu swaps a skeleton for the avatar
@@ -32,6 +27,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
           ariaExpanded={isNavOpen}
           testId="nav-drawer-toggle"
         />
+        <UploadAction />
       </div>
 
       {/* Logo Section */}
@@ -49,14 +45,6 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
       {/* Unified Navigation and Upload Button */}
       <div className="flex-1 flex items-center justify-end gap-2">
         <HeaderSearch />
-        {user && activeChannel && (
-          <UploadButton
-            href={`/${locale}/upload`}
-            text={t.upload.uploadVideo}
-            hideTextOnMobile
-            size="sm"
-          />
-        )}
         <NotificationBell dir="ltr" />
         <UnifiedNavigation />
       </div>

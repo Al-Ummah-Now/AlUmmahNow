@@ -654,6 +654,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
   upload: {
     uploadTitle: 'Upload Video',
     uploadVideo: 'Upload Video',
+    createChannelToUpload: 'Create a channel to upload videos',
     selectFile: 'Select File',
     dragDropFiles: 'Drag and drop files here',
     videoDetails: 'Video Details',
