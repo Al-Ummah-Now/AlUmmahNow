@@ -30,6 +30,7 @@ const en = {
     aiModeration: 'AI moderation',
     translations: 'Translations',
     indices: 'Indices',
+    siteTheme: 'Site theme',
   },
   preferences: {
     language: 'Language',
@@ -363,6 +364,15 @@ const en = {
       en: 'English',
       ar: 'Arabic',
     },
+  },
+  siteTheme: {
+    title: 'Site theme',
+    subtitle: 'One theme for the whole site. Changes reach visitors within about a minute.',
+    current: 'Current theme',
+    apply: 'Use this theme',
+    saved: 'Site theme updated',
+    failed: 'Could not change the theme',
+    adminOnly: 'Only admins can change the site theme.',
   },
   indices: {
     title: 'Video Indices',
