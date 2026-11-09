@@ -1,0 +1,706 @@
+# Web Creator Studio
+
+**Status:** Draft for owner review. Not implemented.
+**Date:** 2026-11-09
+**Supersedes:** [ADR-001, channel settings navigation](../adr/0001-channel-settings-refactor.md) (never implemented, status was Proposed), and the component layout in [channel-settings-component-architecture.md](../channel-settings-component-architecture.md).
+**Related:** `docs/native-apps/EPICS.md` Epic 18 and 19.8; channel roles spec ([PR #462](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/462)); channel claim and transfer spec ([PR #460](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/460)); `docs/analytics/README.md`; `docs/design/THEMES.md`.
+
+In the API tables, **Exists** means the route is on `main` today. **Exists, #462** means it exists but is owner-only until the channel roles work widens it. **#462** means PR #462 specifies it and it isn't built. **New** means nothing specifies it yet, and this spec is the first to ask for it.
+
+## 1. Goals and non-goals
+
+### Why
+
+Creator pages on the web are scattered and duplicated:
+
+| Today | Route | Source | Scope and notes |
+|---|---|---|---|
+| My videos | `/[locale]/dashboard/videos` | `apps/web/src/app/[locale]/dashboard/videos/page.tsx` | All the user's channels. Search, status, privacy and duration filters, bulk edit and delete. Loads up to 10 pages with `searchVideos`, then filters in the browser |
+| Channel videos | `/[locale]/settings/channel/[id]/videos` | `.../settings/channel/[id]/videos/page.tsx` | One channel. A second list with its own filters and no bulk edit. Uses `listVideos` |
+| Scheduled videos | `/[locale]/scheduled-videos` | `.../scheduled-videos/page.tsx` | List and calendar views, kept in the `view` and `calendarView` query values |
+| Analytics | `/[locale]/analytics` | `.../analytics/page.tsx` | Summary for the account plus the current channel |
+| Video analytics | `/[locale]/analytics/videos/[id]` | `.../analytics/videos/[id]/page.tsx` | One video (#241). `docs/analytics/README.md` §4 still says this page doesn't exist; that line is out of date |
+| Channel settings | `/[locale]/settings/channel/[id]` and `edit`, `videos`, `playlists`, `sections`, `tabs`, `community`, `community/new` | `.../settings/channel/[id]/` | A card page linking to separate pages. `layout.tsx` adds no navigation, so each page has its own breadcrumb (`ChannelSettingsBreadcrumb`) |
+
+The account menu links My Videos, Scheduled Videos and Analytics directly (`components/UnifiedNavigation/index.tsx` around lines 275 to 305, and a parallel copy in `rtl/index.tsx`).
+
+### Goals
+
+1. One place for creators, at `/[locale]/studio`, with one left navigation and one channel in context at a time.
+2. One content list that replaces both video lists and the Scheduled page.
+3. The same sections as native Studio (§4.1), so a creator moving between web and app finds the same things.
+4. Every page and action follows the per-channel roles in #462. The navigation hides what a role can't reach, and the server refuses it anyway.
+5. Every old URL keeps working through a permanent redirect.
+6. English and Arabic, accessible, and themed only through semantic tokens.
+
+### Non-goals
+
+- **Mobile and desktop native Studio.** See Epics 18 and 19. Web doesn't take on local encoding, batch import, transcription or the video editor (19.2 to 19.5, 18.9).
+- **Live control room and going live** (18.7, 19.7). They depend on decision D3. Today web has only the live routes in `live.router.ts` and no creator page. Live videos appear in Content like any other video. A Live page can be added to the navigation later.
+- **Ownership transfer.** Only a super admin can transfer a channel, on the admin site (#460). Studio has no control that does it, for any channel role.
+- **Site roles.** Channel roles are stored on the videos side and are never in AlUmmahNowAuth RBAC or tokens. Studio never reads a token's `roles` to decide channel access. A site admin gets no Studio access to someone else's channel.
+- **Monetisation, copyright, audio library.** YouTube Studio has these areas, but this product has no backend for them.
+- **The main site sidebar.** A separate navigation clean-up PR removes the duplicate browse links. This spec only defines the Studio entries in the account menu.
+- **Payments.** Plan limits use the existing entitlements (§8.3). Nothing here touches billing.
+
+## 2. Entry points
+
+### 2.1 Account menu
+
+The creator part of the account menu in `UnifiedNavigation` becomes:
+
+| Caller has | Menu shows | Goes to |
+|---|---|---|
+| At least one owned channel | **Your channel** | The active channel's public page (`channelPath` in `lib/channel-url.ts`) |
+| | **Studio** | `/[locale]/studio` |
+| Only shared channels (a role through #462, none owned) | **Create channel** | The existing create flow (`handleCreateChannel`) |
+| | **Studio** | `/[locale]/studio` |
+| No channels and no roles | **Create channel** | The existing create flow |
+| Signed out | Neither | |
+
+My Videos, Scheduled Videos and Analytics leave the account menu. Browse links stay in the sidebar. The parallel clean-up PR removes the duplicates, so this spec doesn't describe them again.
+
+### 2.2 Other links into Studio
+
+These links exist today and must point straight at the new URLs:
+
+| Where | File | New target |
+|---|---|---|
+| Owner actions on the channel page: Customise, Manage videos, settings | `components/Channel/ChannelOwnerActions.tsx` | `customisation`, `content`, `dashboard` |
+| Channel card, edit | `components/channelManagement/index.tsx` and `rtl/index.tsx` | `customisation` |
+| Settings page, Channel card | `app/[locale]/settings/page.tsx` | `dashboard` |
+| Profile page, manage playlists | `app/[locale]/profile/ProfilePageClient.tsx` | `playlists` |
+| Video edit, back links | `app/[locale]/video/[id]/edit/page.tsx` | `content` |
+| Scheduled list | `components/scheduled-videos/ScheduledVideosList/index.tsx` | `content?tab=scheduled` |
+
+The channel page's owner actions are shown only to people who hold the matching capability (§5).
+
+`/[locale]/upload` stays where it is (open question 5). Studio's **Upload** button links to it with the Studio channel selected, and a finished upload offers a link back to Content. `/[locale]/settings/upload-defaults` and `/[locale]/settings/privacy` are account settings and stay in Settings.
+
+## 3. URLs and the channel switcher
+
+### 3.1 URL scheme
+
+Every Studio page has the channel in its path, so a link always opens the same channel. All URLs are under `/[locale]`.
+
+```text
+/studio                                       resolver: goes to the right channel
+/studio/go/{page}                             resolver for links with no channel, e.g. /studio/go/content
+/studio/video/{videoId}/{edit|analytics}      resolver for links with only a video id
+
+/studio/{channelId}/dashboard
+/studio/{channelId}/content                   ?tab=published|scheduled|drafts|processing|failed
+/studio/{channelId}/content/{videoId}/edit
+/studio/{channelId}/content/{videoId}/analytics
+/studio/{channelId}/analytics
+/studio/{channelId}/comments                  ?tab=inbox|held|removed
+/studio/{channelId}/playlists
+/studio/{channelId}/layout/sections
+/studio/{channelId}/layout/tabs
+/studio/{channelId}/community                 ?tab=published|scheduled|drafts
+/studio/{channelId}/community/new
+/studio/{channelId}/community/{postId}/edit
+/studio/{channelId}/customisation
+/studio/{channelId}/members                   ?tab=team|activity
+/studio/{channelId}/settings
+```
+
+- Static segments (`go`, `video`) win over `[channelId]` in the App Router, so they can't collide with a channel id.
+- The Next route lives under `apps/web/src/app/[locale]/studio/`. A shared `[channelId]/layout.tsx` loads the channel and role once and renders the navigation, as ADR-001 intended.
+- Filters, sort, search text and tabs are in the query string, so a view can be shared and survives a reload.
+- Studio pages are `private, no-store` and `noindex`.
+
+### 3.2 How the resolver chooses a channel
+
+`/studio` and `/studio/go/{page}` send a temporary redirect (307), because the answer depends on who is asking:
+
+1. Signed out: to sign-in, then back to the same URL.
+2. The active channel, if the caller still has a role on it.
+3. The main owned channel, then the first owned channel.
+4. The first shared channel (#462 §7: someone with only shared channels isn't forced to create one).
+5. No channel at all: the no-channel page (§3.4).
+
+If the caller's role doesn't include the page in the link, they land on Dashboard, with a notice.
+
+`/studio/video/{videoId}/...` reads the video's `channelId`. If the caller has a role on that channel, it redirects to the channel's URL. A video with no `channelId` is a legacy import and shows the not-available page (§3.5).
+
+### 3.3 Channel switcher
+
+The switcher is at the top of the left navigation, showing the channel's avatar, name and handle.
+
+| Case | Behaviour |
+|---|---|
+| One channel, no shared channels | Shows the channel. No menu except **Create channel** and **View channel** |
+| Several channels | Menu with owned channels first, then shared channels with the role next to them ("Editor"), as #462 §7 describes. Owned channels have no label |
+| Choosing a channel | Goes to the same page on the new channel, without the page's query string or nested video or post id. If the new role can't open that page, goes to Dashboard |
+| Data source | Owned channels from the session (`useMultiAccount`), shared channels from `GET /api/channels/access` when the menu opens, because the session cookie has no room for them (#462 §7). Until #462 ships, owned channels only |
+| Active channel | Choosing in the switcher also calls the existing `switchChannel`, so the header avatar follows. Opening a URL for another channel doesn't change the active channel. Studio's API calls use the channel from the URL |
+| Role removed while on the page | The next request gets 403. Studio shows the no-access page. The `channels_changed` realtime event (#460, #462) refreshes the menu |
+
+The menu also has **Leave this channel** for anyone who isn't the owner, since most roles can't open Settings (§5.1).
+
+### 3.4 No channel
+
+`/studio` for a signed-in user with no channel and no role shows a page with **Create channel**, using the same create flow as the menu, and a line about what Studio is. It never redirects to the home page, which is what today's pages do (`dashboard/videos/page.tsx:76`).
+
+### 3.5 Errors at the channel level
+
+| Case | Response |
+|---|---|
+| Unknown or deleted channel id | Localized 404 with a real 404 status |
+| Channel exists, caller has no role | Same 404 page as above, so private channels aren't revealed. Today's pages redirect to the public channel page instead |
+| Video or post isn't in this channel | 404 |
+| Role can't open this page | "You don't have access to this page", with a link to Dashboard. Status 403 |
+| Channel hidden by moderation | Studio stays open, with a banner saying the channel is hidden. Public links are not offered |
+| D1 failure for a member (#462 §6.1) | Error page with Retry. Access is never granted. Owners are unaffected |
+
+## 4. Navigation and pages
+
+### 4.1 Left navigation, compared with Epic 18 and YouTube Studio
+
+YouTube Studio is the reference: a left rail with the channel at the top and an Upload button, then Dashboard, Content (tabs for video types and playlists), Analytics, Comments, Subtitles and Customisation, with Settings at the bottom. Exact items vary by channel. Our differences are deliberate: playlists get their own item, as native has it, and subtitles stay per video.
+
+| Item | Route | Epic 18 | YouTube Studio |
+|---|---|---|---|
+| Dashboard | `dashboard` | 18.1 | Dashboard |
+| Content | `content` | 18.3, 19.1 | Content |
+| Analytics | `analytics` | 18.5 | Analytics |
+| Comments | `comments` | 18.4 | Comments |
+| Playlists | `playlists` | 18.6 | Tab in Content |
+| Layout | `layout` | 18.6 (sections, tabs) | Customisation, Layout |
+| Community | `community` | 18.4 (updates, polls) | Tab in Content, Posts |
+| Customisation | `customisation` | 18.6 (avatar, banner, about) | Customisation, Profile |
+| Members & roles | `members` | 18.6, 19.8 | Settings, Permissions |
+| Settings (pinned to the bottom) | `settings` | 18.6 | Settings |
+
+Not separate pages:
+
+- **Upload** (18.2) is a button at the top of the rail.
+- **Edit details, chapters, subtitles** (18.3) are in the video editor under Content.
+- **Notifications** (18.8) stay in the site's notification centre.
+
+The rail is in the order above. An item a role can't reach is removed, not greyed out (§5.3).
+
+### 4.2 Standards for every page
+
+So the page sections below only list what's different:
+
+- **Loading:** a skeleton in the page's real shape, not a full-page spinner. The rail and switcher stay visible.
+- **Error:** an inline message with Retry. One failed card on a page doesn't blank the others. A 403 shows the no-access page.
+- **Saving:** the button shows progress, success is announced (§7.2), failures keep what the person typed.
+- **Unsaved changes:** forms warn before leaving.
+- **Phone (below 768px):** the rail becomes a drawer opened from a top bar that shows the page title and the switcher. It opens from the inline-start edge. Tables become stacked cards. Actions in a row move into an overflow menu. Tap targets are at least 44 by 44 CSS pixels. Nothing scrolls sideways except charts or tab strips.
+- **Plan limits:** a limit explains itself where it's hit, in place of a dead control (§8.3).
+
+### 4.3 Dashboard
+
+**Purpose.** What needs attention on this channel and how the latest video is doing (18.1).
+
+| Card | Contents | Needs | Data |
+|---|---|---|---|
+| Latest video | Thumbnail, title, views, likes, comments, watch time since publishing | `video.view_private` or `analytics.view` | Content list, `GET /api/analytics/videos/:id` |
+| Channel totals | Lifetime views, subscribers, videos, plus views over the last 28 days and the change from the 28 before | `analytics.view` | `GET /api/analytics/channels/:id` |
+| Tasks | Counts of processing and failed uploads, failed schedules, comments held for review. Each links to the right tab | `video.view_private` or `comment.moderate`, per count | New summary endpoint (§8.1) |
+| Recent comments | The latest five, with approve and reply | `comment.moderate` | New comments endpoint (§8.1) |
+| Next scheduled | The next three scheduled videos | `video.view_private` | Content list |
+| Quick links | Upload, New post, Customise | The action's capability | |
+
+- **Empty, new channel:** a welcome with **Upload your first video**. Cards with only zeros are replaced by one line, not a row of 0s.
+- **Empty, role with little to show:** the analytics viewer sees only the totals and a link to Analytics. A moderator sees only recent comments and the held count.
+- **Phone:** one column, Tasks first.
+
+### 4.4 Content
+
+**Purpose.** The one video list. It replaces `/dashboard/videos`, `/settings/channel/[id]/videos` and `/scheduled-videos`.
+
+**Tabs.** Each video is in exactly one tab, chosen in this order. The first match wins:
+
+| Tab | Rule (on the video record) | Note |
+|---|---|---|
+| Failed | `uploadStatus = failed`, or `processingStatus = failed`, or `scheduledPublishStatus = failed` | Shows the reason when one is stored |
+| Processing | `uploadStatus` is `initiated`, `uploading` or `processing`, or `processingStatus` is `pending`, `processing` or `transcoding` | Status updates over the existing realtime upload events |
+| Scheduled | `scheduledPublishStatus` is `scheduled` or `publishing` | List and calendar views, reusing `ScheduledVideoCalendar` and `?view=` |
+| Drafts | New `isDraft = true` | **New work.** See below |
+| Published | Everything else, public or private | A Private badge on `isPublic = false` |
+
+**Drafts don't exist for videos today.** There's no draft state in `packages/shared-types/src/video.ts`. Community posts have one, videos don't. Today, a cancelled schedule only sets `scheduledPublishStatus = 'cancelled'`. This spec adds an optional `isDraft` on the video: upload offers **Save as draft**, a cancelled schedule becomes a draft, and publishing clears it. Existing videos are unchanged, with no backfill (open question 2).
+
+Tabs show a count. An empty tab stays visible, so people can learn where things go.
+
+**Row.** Selection box, thumbnail with duration, title, badges (Private, Live, Short, Scheduled time in the viewer's zone), date, views, comments, likes. Owners and admins also see who uploaded it (`uploadedBy`, from #462, visible only to `members.view` holders per #462 §8).
+
+**Filters and search.**
+
+| Control | Values | Today |
+|---|---|---|
+| Search | Title, description, tags | Exists in `GET /api/videos/search` |
+| Visibility | All, public, private | Exists |
+| Type | All, videos, shorts (60 seconds or less, the rule the Shorts tab uses), live | Partial: the existing duration filter's `short` means 180 seconds. New filter |
+| Duration | All, under 4 minutes, 4 to 20, over 20 | Partial: today's `short` and `standard` split at 180 seconds. These buckets are new |
+| Category | From `VideoCategory` | New filter |
+| Language | From the video's `language` | New filter |
+| Sort | Newest, oldest, most viewed, title | Exists, oldest is new |
+
+**Per-row actions** (in an overflow menu, plus Edit on the row):
+
+| Action | Capability | Tabs | Backend |
+|---|---|---|---|
+| Edit details | `video.edit` | All except Processing, while uploading | Editor (§4.5) |
+| View on site | Public or `video.view_private` | Published | Existing watch page |
+| Analytics | `analytics.view` | Published | `content/{videoId}/analytics` |
+| Copy link | Any | Published | Client |
+| Reschedule, Cancel schedule, Publish now | `video.schedule` | Scheduled | Existing schedule routes |
+| Schedule | `video.schedule` | Drafts, private Published | Existing |
+| Publish | `video.schedule` | Drafts | `POST /api/videos/:id/publish-now` must accept drafts: **new behaviour** |
+| Retry | `video.upload` | Failed, Processing if stalled | `GET /api/videos/upload/resume/:videoId` for uploads. New for a failed scheduled publish |
+| Delete | `video.delete`: editors only their own uploads | All | Existing, with a confirmation dialog |
+
+**Bulk actions.** Selecting rows replaces the filter bar with a bar showing the count. The maximum is 50 at a time (`MAX_BULK_VIDEOS`), and the page says so at the limit.
+
+| Action | Capability | State |
+|---|---|---|
+| Change visibility | `video.edit` | Exists (`bulk-update`, `BulkEditDialog`) |
+| Change category, add or remove tags | `video.edit` | Exists |
+| Delete | `video.delete` | Exists (`bulk-delete`) |
+| Add to playlist | `post.manage` | **New** (19.1) |
+| Schedule | `video.schedule` | **New** (19.1). One time, or spaced at an interval |
+
+The server checks each video on its own. An editor bulk-deleting a mix of videos gets a result per video, and the existing partial-failure notice reports it.
+
+**Empty.** Each tab has its own message: "No scheduled videos. Schedule one when you upload or edit." Published offers **Upload**. No results from a filter offers **Clear filters**.
+
+**Loading.** Skeleton rows. Results are paged with a cursor on the server. The current client-side loop over 10 pages goes away (see §8.1).
+
+**Phone.** Tabs scroll sideways. Rows become cards with a selection mode on long press or a **Select** button. The bulk bar sticks to the bottom. The calendar defaults to the day list, as a month grid is too small.
+
+### 4.5 Video editor (under Content)
+
+`/studio/{channelId}/content/{videoId}/edit` puts the existing edit page (`app/[locale]/video/[id]/edit/page.tsx`) in the Studio frame, covering 18.3: bilingual title and description, category, tags, thumbnail, visibility, schedule, chapters, subtitles, comment settings (`on`, `held`, `off`).
+
+Playlist assignment from this page is new. Everything else exists. It has tabs along the top: **Details**, **Analytics**.
+
+### 4.6 Analytics
+
+**Purpose.** How the channel and each video are performing (18.5).
+
+**Channel overview** (`/analytics`).
+
+- Date range: last 7, 28, 90, 365 days, all time. Longer ranges are limited by `analytics.retentionDays`, and the page explains the limit.
+- Metric cards with the change from the previous period: views, watch time, average view duration, likes, comments, new subscribers.
+- A daily chart with a metric selector.
+- Top content table: thumbnail, title, views, watch time, average duration, sorted by any column. A row opens that video's analytics.
+
+**Per-video** (`content/{videoId}/analytics`). Reached from a row in Content, the Top content table, or the editor's Analytics tab. Reuses `VideoAnalyticsView`.
+
+An analytics viewer has no access to Content, so they reach it through Top content. Their breadcrumb goes back to Analytics, not Content.
+
+**What the backend has** (`docs/analytics/README.md`):
+
+| Metric | State |
+|---|---|
+| Lifetime views, likes, comments | Exists |
+| Daily views, watch time, average view duration | Exists. Watch time is real only from #235 on, so the page notes when a range starts before that |
+| New subscribers per day | Exists. Gains only, no unsubscribes, and labelled "New subscribers" |
+| Retention curve (18.5) | **New work.** Not collected. The section stays out of the page until it has real data |
+| Traffic sources (18.5) | **New work.** Only embed against watch is rolled up, and the API doesn't return it. The rest is hardcoded (#237) |
+| Devices, geography, unique viewers, impressions, click-through, realtime | **New work.** Not shown |
+
+Nothing is shown with placeholder or zero values for data the backend doesn't collect. The existing "retention coming soon" line in `VideoAnalyticsView` stays until then.
+
+**Empty.** "No views yet in this period." with the option to widen the range. Prod's imported videos have `channelId: null` and a placeholder owner, so they appear in no channel's Studio until the data migration issue is done.
+
+**Error.** One failing section shows Retry and the rest still render. The current page has a 20-second timeout and a single error state. That's replaced.
+
+**Phone.** Cards in two columns, the chart full width, the table as a ranked list.
+
+**Across channels.** The old page included an account-wide summary. Studio is per channel. `GET /api/analytics/summary` stays, as an owned-channels-only read (#462 plan step 4), but no Studio page uses it (open question 3).
+
+### 4.7 Comments
+
+**Purpose.** Moderate comments across the channel's videos and posts from one place (18.4, Story 29.3). This page doesn't exist today. Approval only happens on the watch page.
+
+**Tabs.**
+
+| Tab | Contains |
+|---|---|
+| Inbox | Published comments, newest first |
+| Held for review | `status = held`. Held by platform moderation (`heldBy = 'moderation'`) is shown read-only with a note: the API refuses creator approval with `held_by_moderation`, and that stays |
+| Removed | **New:** there's no way to list soft-deleted comments today. Open question 4 |
+
+**Filters.** Search text, a specific video or post, comments with no channel reply, has a link.
+
+**Row.** Author, text, time, the video or post it's on, and its replies. Text follows its own direction (§7.1).
+
+| Action | Capability | Video comments | Post comments |
+|---|---|---|---|
+| Approve | `comment.moderate` | Exists (`POST .../approve`) | **New** |
+| Remove | `comment.moderate` | Exists (`DELETE`), owner check moves to the capability | Exists |
+| Reply as the channel | `channel.speak` | Exists (`commentCreate`) | Exists |
+| Pin | `comment.moderate` | **New.** The field exists, but no route sets it, and `CommentUpdateInput.isPinned` isn't used | Exists |
+| Heart | `comment.moderate` | **New.** No field or route | Exists |
+| Hide (hold a published comment) | `comment.moderate` | **New** | **New** |
+| Report | Any signed-in role | Exists (`POST /api/moderation/reports`) | Exists |
+| Block from channel | `comment.moderate` | **New** | **New** |
+
+Blocking is per channel: the blocked account can't comment on or reply to that channel's content. Storage is new, on the videos side, and enforcement goes in the comment create routes. It isn't a site ban.
+
+**Bulk.** Approve or remove up to 50. New route.
+
+**Backend constraint.** Video comments are stored inside each video's R2 object (`video.comments`). There's no way to read across a channel, so this page needs a new index (§8.1).
+
+**Empty.** "No comments yet", and for Held, "Nothing waiting for review".
+
+**Phone.** Cards, with Approve and Remove visible, and the rest in overflow.
+
+### 4.8 Playlists
+
+**Purpose.** Create, edit, order and delete channel playlists.
+
+Reuses `PlaylistManager`, already used by `settings/channel/[id]/playlists`. The RTL copy (`PlaylistManager/rtl`) folds into one component (§7.1).
+
+**Contents.** List with cover, title, video count, visibility, and row actions: edit, reorder videos, delete. Adding videos picks from the channel's Content.
+
+Playlist updates compare `existingPlaylist.userId` with the caller today (`playlistUpdate.ts:97`), so #462's `createdBy` change applies.
+
+**Empty.** **Create your first playlist**. **Error, loading** as §4.2. **Phone.** Cards. Reordering has move up and move down buttons as well as drag.
+
+### 4.9 Layout
+
+**Purpose.** What visitors see on the channel page. Two tabs, moved from the existing pages:
+
+- **Sections** (`layout/sections`, from `settings/channel/[id]/sections/page.tsx`): create, edit, delete and reorder.
+- **Tabs** (`layout/tabs`, from `settings/channel/[id]/tabs/page.tsx`): show, hide and order channel tabs.
+
+Each has a **Preview channel page** link. `ChannelTabUpdate` messages currently fall to the processor's default case and go to the DLQ (`docs/analytics/README.md` §3). That's an existing issue, but this page depends on the tabs save working.
+
+**Empty.** Sections: "Your channel page shows the default layout", with **Add section**. **Phone.** One column, with move up and down as well as drag.
+
+### 4.10 Community
+
+**Purpose.** Write and manage channel posts (18.4).
+
+Moved from `settings/channel/[id]/community` and `community/new`. Tabs are Published, Scheduled and Drafts, from `PostStatus`. Types are text, image, poll, quiz, video and GIF.
+
+`PostCard` has an `onEdit` prop, but the current page doesn't pass it, so editing isn't reachable today. `community/{postId}/edit` is a new page over the existing `PUT` route. Scheduled posts are listed as remaining work in Story 29.4, so the Scheduled tab only appears once they publish reliably.
+
+**Empty.** Per tab, with **New post**. **Phone.** Single column. The type picker is a list.
+
+### 4.11 Customisation
+
+**Purpose.** How the channel looks and reads to visitors. From `settings/channel/[id]/edit/page.tsx`.
+
+| Field | Capability | Notes |
+|---|---|---|
+| Name (localized) | `channel.edit` | Exists |
+| Handle | `channel.handle` (owner only) | Exists, entitlement `channel.handle`. Availability check on typing. Shown read-only to an admin with the reason |
+| Avatar, banner | `channel.edit` | Exists, with `ImageCropDialog` and the `avatar` and `cover` routes |
+| Description (localized) | `channel.edit` | Exists |
+| Links | `channel.edit` | Exists, limit from `channel.about.links.max` |
+| Contact email, location | `channel.edit` | Exists |
+
+Open PR #441 adds in-place editing to the channel settings header. Whichever lands second must move that behaviour here.
+
+**Empty.** Not applicable. **Phone.** One column, sticky Save bar.
+
+### 4.12 Members & roles
+
+**Purpose.** Who can work on this channel. Exactly as #462 §14 specifies it, with these changes in location: `settings/channel/[id]/members` becomes `studio/{channelId}/members`, and its Members and Activity tabs become `?tab=team` and `?tab=activity`. `settings/channel-invites` stays in account settings, because invitations belong to the person, not a channel.
+
+The page shows, in plain words: "Ownership can't be changed here. Contact the Al Ummah Now team." There's no transfer control, and the owner row has no menu.
+
+**States.** As #462 §14: empty, loading, member limit reached, sending, invitation sent, already invited, role saving, removed, forbidden. **Phone.** Cards, and the invite form in a sheet.
+
+**Until #462 ships,** this item doesn't appear in the navigation.
+
+### 4.13 Settings
+
+**Purpose.** Things about the channel that aren't its public appearance.
+
+| Section | Capability | Contents | State |
+|---|---|---|---|
+| Plan and limits | `channel.view_private` | The owner's limits: uploads, storage, seats | Depends on Epic 27 PRs #390 and #429, not yet merged |
+| Upload defaults | `channel.view_private` | A link to `/settings/upload-defaults`, which is per account | Exists |
+| Ownership | `channel.view_private` | Who owns the channel, and that only the Al Ummah Now team can transfer it | Text only |
+| Danger zone: delete channel | `channel.delete` (owner) | Confirm by typing the channel's name. The current controls are in `ChannelOwnerActions` and `ChannelCard` | Exists |
+
+`isMain` (the owner's main channel) keeps its current place, in channel management.
+
+Leave isn't here: it's in the switcher (§3.3).
+
+**Phone.** One column.
+
+## 5. Permissions matrix
+
+### 5.1 Pages
+
+The roles and capability names are from #462 §4, which stays the source of truth. If the owner changes #462's open questions, this table follows.
+
+| Page | Needs | Owner | Admin | Editor | Moderator | Analytics viewer |
+|---|---|:-:|:-:|:-:|:-:|:-:|
+| Dashboard | Any role, cards filtered | Yes | Yes | Yes | Yes | Yes |
+| Content | `video.view_private` | Yes | Yes | Yes | No | No |
+| Video editor | `video.edit` | Yes | Yes | Yes | No | No |
+| Analytics, per-video analytics | `analytics.view` | Yes | Yes | No | No | Yes |
+| Comments | `comment.moderate` | Yes | Yes | No | Yes | No |
+| Playlists | `post.manage` | Yes | Yes | Yes | No | No |
+| Community | `post.manage` | Yes | Yes | Yes | No | No |
+| Layout | `channel.edit` | Yes | Yes | No | No | No |
+| Customisation | `channel.edit` | Yes | Yes | No | No | No |
+| Members & roles | `members.view` | Yes | Yes | No | No | No |
+| Settings | `channel.view_private` | Yes | Yes | No | No | No |
+
+### 5.2 Actions
+
+| Action | Capability | Owner | Admin | Editor | Moderator | Analytics viewer |
+|---|---|:-:|:-:|:-:|:-:|:-:|
+| Upload | `video.upload` | Yes | Yes | Yes | No | No |
+| Edit video details, chapters, subtitles, thumbnail | `video.edit` | Yes | Yes | Yes | No | No |
+| Bulk change visibility, category, tags | `video.edit` | Yes | Yes | Yes | No | No |
+| Delete video, single or bulk | `video.delete` | Yes | Yes | Own uploads | No | No |
+| Schedule, reschedule, publish now, bulk schedule | `video.schedule` | Yes | Yes | Yes | No | No |
+| Add to playlist, manage playlists, posts | `post.manage` | Yes | Yes | Yes | No | No |
+| Approve, remove, pin, heart, hide, block | `comment.moderate` | Yes | Yes | No | Yes | No |
+| Reply as the channel | `channel.speak` | Yes | Yes | Yes, on the watch page (editors can't open Comments) | Yes | No |
+| Edit name, avatar, banner, about, links, sections, tabs | `channel.edit` | Yes | Yes | No | No | No |
+| Change handle | `channel.handle` | Yes | No | No | No | No |
+| Delete channel | `channel.delete` | Yes | No | No | No | No |
+| Invite or change editors, moderators, analytics viewers | `members.manage` | Yes | Yes | No | No | No |
+| Invite or change admins | `members.manage_admins` | Yes | No | No | No | No |
+| See activity log | `members.view` | Yes | Yes | No | No | No |
+| Leave channel | Non-owner | No | Yes | Yes | Yes | Yes |
+| Transfer ownership | **Super admin, admin site only** | No | No | No | No | No |
+
+### 5.3 Enforcement
+
+- **Display.** The role and capability list come from `GET /api/channels/access` (#462). `can()` in `packages/shared-types/src/channel-roles.ts` hides navigation items, page content and actions. This is only for display.
+- **Page guard.** `[channelId]/layout.tsx` checks the page's capability on the server before rendering. It replaces `isChannelOwner` (`lib/channel-utils.ts`) and the client-side checks that redirect after load.
+- **API.** Every route used by Studio calls `requireChannelAccess` with its capability. A route with no declaration stays owner-only (#462 §6.3). A hidden button is never the protection.
+- **Until #462 ships,** the role is `owner` or none, from `channel.userId`, through the same helper shape, so pages need no rewrite.
+- **Private video titles for analytics viewers.** `analytics.view` doesn't include `video.view_private`. In Top content, a private video is counted and shown as "Private video" with no title, thumbnail or link (open question 6).
+- **Moderators and private videos.** A moderator has no `video.view_private`, and `commentDelete.ts:74` refuses comment actions on private videos for anyone but the owner. Comments on private videos are therefore left out of a moderator's inbox.
+- **Site roles.** Studio has no check for site roles. The separation tests in #462 §15 cover it, and §9.3 adds a Studio case.
+
+## 6. Redirects
+
+### 6.1 Rules
+
+- Permanent (308) from every old URL. A redirect that needs to know who is asking points at a stable resolver URL, and the resolver then uses a 307 (§3.2).
+- The old routes' page files are removed once redirects are in. Redirects live in `routeRequest` in `apps/web/src/middleware.ts`, or in `next.config.ts`, which has none today. Either way, they apply to all supported locales.
+- Query strings are kept, with the mappings below.
+- Old URLs with no locale reach the redirect through the existing locale hop.
+- A signed-out visitor goes through sign-in and returns to the destination.
+- At most one permanent hop plus the resolver's temporary hop, on top of any locale hop.
+
+### 6.2 Map
+
+| Old (under `/[locale]`) | New | Query and notes |
+|---|---|---|
+| `/dashboard/videos` | `/studio/go/content` | The old page keeps its filters out of the URL, so there's nothing to map |
+| `/scheduled-videos` | `/studio/go/content?tab=scheduled` | Keeps `view`, `calendarView`. Drops the obsolete `calendarType` |
+| `/analytics` | `/studio/go/analytics` | |
+| `/analytics/videos/[id]` | `/studio/video/[id]/analytics` | |
+| `/video/[id]/edit` | `/studio/video/[id]/edit` | |
+| `/settings/channel/[id]` | `/studio/[id]/dashboard` | |
+| `/settings/channel/[id]/edit` | `/studio/[id]/customisation` | |
+| `/settings/channel/[id]/videos` | `/studio/[id]/content` | |
+| `/settings/channel/[id]/playlists` | `/studio/[id]/playlists` | |
+| `/settings/channel/[id]/sections` | `/studio/[id]/layout/sections` | |
+| `/settings/channel/[id]/tabs` | `/studio/[id]/layout/tabs` | |
+| `/settings/channel/[id]/community` | `/studio/[id]/community` | |
+| `/settings/channel/[id]/community/new` | `/studio/[id]/community/new` | |
+| `/settings/channel/[id]/members` (if #462 ships it first) | `/studio/[id]/members` | |
+
+Not redirected: `/upload`, `/settings`, `/settings/upload-defaults`, `/settings/privacy`, `/settings/channel-invites`.
+
+Native apps, emails and notifications that hold old links keep working through this table. Stored notifications are keys and params, so new ones get new links with no migration.
+
+## 7. Arabic, accessibility and theming
+
+### 7.1 Arabic and RTL
+
+- `en` and `ar` at launch, from `LOCALES`, with all strings in `packages/shared-types/src/i18n-static`.
+- **One component per screen.** No new `rtl/` copies. Studio uses logical properties (`ms-`, `me-`, `ps-`, `pe-`, `start`, `end`) and `dir`. Existing doubles that it adopts (`AnalyticsDashboard/rtl`, `PlaylistManager/rtl`) fold into one.
+- The rail is on the right in Arabic, and the drawer opens from the right. Direction icons mirror. Media and chart time axes follow the design used on the rest of the site and stay consistent across Studio.
+- User-written text uses `dir="auto"`, so an English title in an Arabic page reads correctly. Emails, handles and URLs are wrapped in `dir="ltr"`, as in #462 §14.
+- Numbers and dates use `Intl` for the page's locale. Times show the zone. Scheduling uses `scheduledPublishTimezone` as it does today.
+- The calendar already takes `isRTL`, and keeps that behaviour.
+- Bilingual fields (`nameLocalized`, `descriptionLocalized`) edit both languages side by side.
+- A native speaker reviews all new Arabic strings.
+
+### 7.2 Accessibility
+
+To WCAG 2.2 AA (Epic 1):
+
+- The rail is `<nav>` with a label and `aria-current="page"`. Skip link to main content. One `h1` per page, and focus moves to it on page change.
+- Tabs follow the ARIA tabs pattern. The switcher and overflow menus are keyboard-operable, Escape closes them and focus returns.
+- Tables are real tables on wide screens. Selection boxes are named for their row ("Select {title}").
+- Every drag has a button alternative (WCAG 2.5.7).
+- Saves, errors and bulk results are announced in a polite live region. Destructive confirmations use `AlertDialog`.
+- Charts have a text summary and a data table alternative, and don't rely on colour alone.
+- Status badges have text, not only a colour.
+- Motion respects `prefers-reduced-motion`.
+
+### 7.3 Theming
+
+- Every colour, radius and shadow comes from semantic tokens through `packages/fanous-tokens` and the shadcn variables, with no `dark:` pairs of raw colours. Existing pages use raw classes such as `bg-gray-100 dark:bg-gray-900`, which are not carried over as they move.
+- Studio must render correctly under all four themes, in light and dark: **lantern** (base), **zujaj** and **nahas** (looks) and **fawanees** (event, extending lantern). The registry is in open PR #455, and the `check:theme-colors` gate is in open PR #456. Studio files start with no allowlist entries.
+- The theme is chosen at build time (`ACTIVE_THEME`). Studio has no theme picker and no "Studio theme". Customisation is about the channel's own avatar and banner, and doesn't change the Studio's look.
+- Chart colours use tokens and pass non-text contrast in every theme.
+
+## 8. Analytics events, APIs and entitlements
+
+### 8.1 Endpoints per page
+
+All `api-videos`. Paths are as registered in `apps/api-videos/src/routers/`.
+
+| Page | Method and path | State | Note |
+|---|---|---|---|
+| Frame, switcher | `GET /api/channels/:id/owner` | Exists | Private fields for the owner |
+| | `GET /api/channels/access` | #462 | Role and capabilities |
+| | `POST /api/channels/:id/leave` | #462 | |
+| Content | `GET /api/channels/:id/content` | **New** | Tab, filters, search, sort, cursor. Needs `video.view_private` |
+| | `GET /api/channels/:id/content/summary` | **New** | Counts per tab. Also used by Dashboard |
+| | `GET /api/videos/search`, `/api/videos/scheduled` | Exists, retired from Studio | Today's source. Owner checks only, and filtering happens after loading |
+| | `POST /api/videos/bulk-update`, `/bulk-delete` | Exists, #462 | Limit 50 |
+| | `POST /api/videos/bulk-playlist`, `/bulk-schedule` | **New** | |
+| | `DELETE /api/videos/:id` | Exists, #462 | |
+| | `POST`, `GET`, `PATCH`, `DELETE /api/videos/:id/schedule` | Exists, #462 | |
+| | `POST /api/videos/:id/publish-now` | Exists, #462 | Must accept drafts: **new behaviour** |
+| | `GET /api/videos/upload/resume/:videoId`, `GET /api/videos/:id/upload-status` | Exists, #462 | |
+| | `isDraft` on video create, update and upload | **New** | |
+| Video editor | `GET`, `PUT /api/videos/:id`, `POST /:id/thumbnail` | Exists, #462 | |
+| | `GET`, `PUT /api/videos/:id/chapters` | Exists, #462 | |
+| | Subtitles routes under `/api/videos/:videoId/subtitles` | Exists, #462 | |
+| Analytics | `GET /api/analytics/channels/:channelId` | Exists, #462 | |
+| | `GET /api/analytics/metrics` | Exists, #462 | Daily series |
+| | `GET /api/analytics/videos/:videoId` | Exists, #462 | |
+| | `GET /api/channels/:id/analytics/top-content` | **New** | Sortable, paged, private titles masked per §5.3. Today's top list is five videos in `/api/analytics` |
+| Comments | `GET /api/channels/:id/comments`, `/comments/summary` | **New** | Across videos and posts |
+| | `POST /api/videos/:id/comments/:cid/approve`, `DELETE .../:cid` | Exists, #462 | |
+| | `POST /api/videos/:id/comments` | Exists, #462 | Reply as channel |
+| | Post comment list, delete, pin, heart | Exists, #462 | `community.router.ts` |
+| | Video comment pin and heart | **New** | |
+| | Hold (video and post), approve (post) | **New** | |
+| | `POST /api/channels/:id/comments/bulk` | **New** | |
+| | `GET`, `POST`, `DELETE /api/channels/:id/blocks` | **New** | |
+| | `POST /api/moderation/reports` | Exists | |
+| Playlists | `GET /api/channels/:id/playlists` | Exists, #462 | |
+| | `POST`, `PATCH`, `DELETE /api/playlists...`, add and remove video | Exists, #462 | |
+| Layout | Sections: `GET`, `POST`, `PUT`, `DELETE`, `PATCH reorder` under `/api/channels/:channelId/sections` | Exists, #462 | |
+| | `GET`, `PUT /api/channels/:id/tabs` | Exists, #462 | |
+| Community | `GET`, `POST`, `PUT`, `DELETE /api/channels/:channelId/posts...` | Exists, #462 | Mount per `community.router.ts`. Media upload routes too |
+| Customisation | `PUT /api/channels/:id`, `PUT .../avatar`, `.../cover` | Exists, #462 | The handle needs a separate owner-only check within `PUT` |
+| | `GET /api/channels/handles/:handle/availability` | Exists | |
+| Members | All of §14 of #462 | #462 | |
+| Settings | `DELETE /api/channels/:id` | Exists | Stays owner only |
+| | `GET /api/entitlements` | Open PR #390 | |
+
+**Supporting storage (new).**
+
+- **Content list.** The `content_ownership` table in `SEARCH_DB` already has channel, public, live, duration, `scheduleStatus`, `uploadStatus`, views and dates (`packages/shared-types/src/search/ownership.ts`). It doesn't have `processingStatus`, `isDraft`, the failure reason or `uploadedBy`. Adding those columns gets the list and counts from one D1 query, instead of loading objects from R2 and filtering them. Title search stays on the search index.
+- **Comments.** A new `channel_comments` table in `SEARCH_DB`: one row per comment, on a video or post, with channel, status, author, and time. Like `content_ownership`, R2 stays the source of truth, it's written when R2 changes, and can be rebuilt. It holds ids and status, and text is read from the source.
+- **Blocks.** A `channel_blocks` table in `CHANNEL_ROLES_DB` (#462 open question 8), since it's the only copy and can't be rebuilt.
+
+### 8.2 Studio usage events
+
+These measure whether Studio works for people. They're sent through the existing `POST /api/analytics/events` as `ClientAnalyticsEvent`, only with analytics consent. The processor only archives these messages today, so a report on them is later work.
+
+| Event | Properties |
+|---|---|
+| `studio_page_view` | `page`, `tab` |
+| `studio_channel_switched` | `from_role`, `to_role` |
+| `studio_content_filter` | `tab`, filter names only (never the search text) |
+| `studio_bulk_action` | `action`, `count`, `succeeded`, `failed` |
+| `studio_video_action` | `action`, `tab` |
+| `studio_comment_action` | `action`, `source` (video or post) |
+| `studio_redirect_landing` | `old_path_pattern` |
+| `studio_limit_hit` | `entitlement` |
+
+Events carry no email, handle, comment text or search text.
+
+### 8.3 Plan limits
+
+Every feature is tiered and managed by admins through Epic 27, so each new capability gets a key. Enforcement is on the server, and the existing catalogue is in `packages/shared-types/src/entitlements.ts`.
+
+| Key | State | Used by |
+|---|---|---|
+| `analytics.retentionDays` | Exists | Date ranges |
+| `channel.handle`, `channel.about.links.max` | Exists | Customisation |
+| `comments.settings`, `comments.heldForReview` | Exists | Editor, Comments |
+| `upload.*`, `storage.gb` | Exists | Upload, Settings |
+| `studio.teamSeats`, or `channel.members_max` | Conflict, open question 7 | Members |
+| `studio.commentsInbox` (boolean) | **New** | Comments page |
+| `comments.blockUsers` (boolean) | **New** | Block |
+| `studio.bulkSchedule` (boolean) | **New** | Bulk schedule |
+| `studio.drafts.max` (number) | **New** | Drafts |
+
+All new keys have a permissive fallback, following the catalogue's rule that an outage must not lock creators out. A hit limit explains the limit and which plan setting it comes from, and offers no payment link.
+
+Cost: the new reads are D1 and replace many R2 reads per list. This is well within the $500 per month cap.
+
+## 9. Testing requirements
+
+Tests are written first (`BEFORE_YOU_CODE.md`). E2E specs follow the release suite rules: `apps/web/e2e/release/`, against QA and stage, never production. Each spec registers throwaway `@e2e.alummahnow.net` users and creates its own data.
+
+### 9.1 Unit and API
+
+- Tab rule for Content (§4.4): table-driven over every combination of `uploadStatus`, `processingStatus`, `scheduledPublishStatus` and `isDraft`, each giving exactly one tab.
+- Navigation visibility and page guard: table-driven over every role and page in §5.1, including no role.
+- Every new route in §8.1: each role against the capability, and a route with no declaration refuses members (#462 §6.3).
+- Bulk: partial success per video, the limit of 50, and an editor's mixed delete.
+- Resolver: every branch in §3.2.
+- Index sync for the new columns and `channel_comments`, including rebuild.
+- Masked titles: an analytics viewer's response has no private title or thumbnail.
+
+### 9.2 E2E per page
+
+New specs under `apps/web/e2e/release/studio-*.spec.ts`, each added to the Release regressions table in `CLAUDE.md`.
+
+| Page | Must cover |
+|---|---|
+| Entry | Account menu for no channel, one channel, shared only. No channel page. Sign-in return |
+| Switcher | Switching keeps the page. Role with no access lands on Dashboard. Removed member sees no-access |
+| Dashboard | New channel welcome, cards after an upload, cards per role |
+| Content | A video through Processing to Published. Each tab. Filters. Bulk edit and delete. Schedule, reschedule, cancel, publish now. Calendar and list. Draft to publish |
+| Editor | Save details and return to the same tab |
+| Analytics | Real view count after a played video. Range limit. Per-video page from Content and from Top content |
+| Comments | Held comment approved. Remove, reply, pin, block. Platform-held comment is read-only |
+| Playlists | Create, add from Content, reorder with buttons, delete |
+| Layout | Add and reorder a section. Hide a tab. Check the public channel page |
+| Community | Create a text post and a poll. Edit. Delete |
+| Customisation | Each field. Handle is refused for an admin, in the UI and at the API |
+| Members | From #462 §15, moved to the new URL. No transfer control exists |
+| Settings | Delete channel with typed confirmation. Refused for an admin |
+
+### 9.3 Roles
+
+For each of the five roles and a user with no role: open every Studio URL, assert the navigation items exactly match §5.1, and call a sample write per page directly at the API, expecting the server's result, with the UI bypassed.
+
+Separation: a token with `Super Admin` and no channel role gets the 404 of §3.5 on someone else's Studio, and no ownership transfer control exists anywhere in Studio.
+
+### 9.4 Redirects
+
+For each row in §6.2, in both locales: the status is exactly 308, the destination is correct, the query mapping holds, and it ends on a working page. Also signed-out, without a locale, a channel the user can't access, and a video with `channelId: null`. Existing specs that use the old URLs move to the new ones, keeping one redirect check each: `08-unified-navigation`, `14-video-management`, `19-dashboard-videos-ownership`, `21-channel-handles-owner`, `43-video-edit-schedule`, `45-dashboard-videos-extended`, `46-scheduled-videos-extended`, `51-channel-page`, `52-channel-sections`, `53-channel-settings`, `54-playlists`, `55-community`, `62-account-menu`, `64-settings-privacy`, `67-analytics`, `scheduled-videos-calendar`, `release/uploads`, and `test-utils/page-catalog.ts`.
+
+### 9.5 RTL, accessibility, themes and browsers
+
+- **RTL:** each page in `ar`: `dir="rtl"`, rail on the right, no sideways scroll, mixed-direction text correct.
+- **Accessibility:** axe on every page with no serious or critical issues (the `a11y` project), and keyboard-only runs of the switcher, bulk bar and a dialog.
+- **Themes:** visual checks of every page in all four themes, light and dark (the `visual` project), and `check:theme-colors` passes.
+- **Browsers:** Chromium, Firefox and WebKit, plus Mobile Chrome and Mobile Safari for the phone layouts. `playwright.config.ts` has these projects, but `playwright.release.config.ts` has only `auth-flows` and `player`, so the release config needs Firefox and WebKit projects for the Studio specs. The Firefox no-referrer case for signed Bunny thumbnails is included.
+
+## 10. Open questions for the owner
+
+Each has a recommended answer. The spec above assumes these.
+
+1. **Roles before Studio, or Studio before roles?** #462 isn't built. *Recommended: Studio doesn't wait. It ships with the owner role only, through the same capability helper, and Members & roles appears when #462 lands.*
+2. **Video drafts.** No draft state exists. A new `isDraft` field is real work across upload, edit, schedule and search. The alternative is showing private, never-published videos as drafts, which guesses wrong for videos that are private on purpose. *Recommended: add `isDraft`, and leave existing videos as they are.*
+3. **Lose the view across all channels?** `/dashboard/videos` and the Analytics summary span every channel today. Studio is per channel, as YouTube Studio is. *Recommended: yes, drop both. An account with many channels uses the switcher. Revisit with Institution mode (19.9).*
+4. **Removed tab in Comments.** Showing soft-deleted comments lets a mistake be undone, but needs restore work and a retention rule. *Recommended: leave it out of the first release, and treat the tab in §4.7 as later.*
+5. **Keep `/upload` outside Studio?** It's linked from the wider site and has a working batch flow. *Recommended: keep it at its URL and link from Studio, unlike the video editor, which moves in.*
+6. **Private videos for analytics viewers.** #462 gives this role `analytics.view` without `video.view_private`. *Recommended: count them in totals and show "Private video" with no title or link.*
+7. **Team seat limit name.** The catalogue already has `studio.teamSeats`, and #462 proposes a new `channel.members_max`. They'd be the same limit. *Recommended: use the existing `studio.teamSeats`, on the channel owner's plan, and update #462.*
+8. **Blocking from a channel.** Epic 18.4 lists it, but nothing exists. *Recommended: per channel only, the blocked person isn't told, and `comment.moderate` holders can block. Not a site ban.*
+9. **Spelling and name in the UI.** The brief uses "Customisation" and "Channel settings". *Recommended: British spelling for the English UI, as Epics does: "Customisation", and "Settings" in the rail with "Channel settings" as the page title. Arabic: الاستوديو، لوحة التحكم، المحتوى، التحليلات، التعليقات، قوائم التشغيل، التخطيط، المجتمع، التخصيص، الأعضاء والأدوار، الإعدادات, for a native speaker to confirm.*
+10. **Retention and traffic in Analytics.** Epic 18.5 includes both, and the backend collects neither (`docs/analytics/README.md` §4). *Recommended: launch Studio without them, keep them out of the page until real data exists, and do the pipeline work in its own issues so web and native get it together.*
+11. **Live page.** YouTube Studio has live under Content. Decision D3 is still open. *Recommended: no Live page for now, with live videos listed in Content.*

@@ -1,7 +1,7 @@
 # ADR-001: Channel Settings Navigation Architecture Refactoring
 
 ## Status
-Proposed
+Superseded by [Web Creator Studio](../specs/CREATOR-STUDIO.md). Never implemented.
 
 ## Context
 The current Channel Settings implementation in the Al Ummah Now platform has several architectural issues that impact user experience, maintainability, and scalability:
