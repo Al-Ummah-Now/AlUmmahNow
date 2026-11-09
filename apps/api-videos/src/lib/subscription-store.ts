@@ -313,3 +313,43 @@ export async function changeSubscription(
 	}
 	return { changed: subscriptionId !== null, subscribers: legacyRows(stored.subscriptions, 0).length, subscriptionId };
 }
+
+/**
+ * The user's subscriptions stored in D1, for the privacy export (GDPR Art. 15/20).
+ * Legacy entries still in R2 arrays are exported by the channel scan.
+ */
+export async function exportUserSubscriptions(db: D1Database, userId: string): Promise<Array<Record<string, unknown>>> {
+	const { results } = await db
+		.prepare('SELECT channel_id, subscriber_channel_id, id, created_at FROM channel_subscriptions WHERE user_id = ?1 ORDER BY created_at')
+		.bind(userId)
+		.all<{ channel_id: string; subscriber_channel_id: string; id: string; created_at: number }>();
+	return (results ?? []).map((row) => ({
+		id: row.id,
+		userId,
+		channelId: row.subscriber_channel_id,
+		subscribedToChannelId: row.channel_id,
+		dateCreated: new Date(row.created_at).toISOString(),
+		source: 'd1',
+	}));
+}
+
+/**
+ * Erases the user's D1 subscriptions and takes them off the counts, in one
+ * transaction. Each decrement is derived from the rows still present, so this
+ * and the processor's eraseUserNotifications (same statements) can both run
+ * without counting anything twice. Returns the number of rows deleted.
+ */
+export async function eraseUserSubscriptions(db: D1Database, userId: string): Promise<number> {
+	const [, , removed] = await db.batch([
+		db
+			.prepare(
+				`UPDATE channel_subscriber_counts
+				 SET subscribers = MAX(subscribers - (SELECT COUNT(*) FROM channel_subscriptions s WHERE s.channel_id = channel_subscriber_counts.channel_id AND s.user_id = ?1), 0)
+				 WHERE channel_id IN (SELECT channel_id FROM channel_subscriptions WHERE user_id = ?1)`,
+			)
+			.bind(userId),
+		db.prepare('DELETE FROM channel_subscriptions WHERE user_id = ?1').bind(userId),
+		db.prepare('SELECT changes() AS n'),
+	]);
+	return Number((removed.results?.[0] as { n?: number } | undefined)?.n ?? 0);
+}

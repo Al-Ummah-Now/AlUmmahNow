@@ -5839,6 +5839,31 @@
               }
             }
           },
+          "403": {
+            "description": "The channelId header is not one of the caller's channels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "404": {
             "description": "Profile not found",
             "content": {
