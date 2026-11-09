@@ -6,6 +6,7 @@
  * chips for active filters. Changes apply immediately (URL state).
  */
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useId, useRef } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
@@ -117,7 +118,7 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40 md:hidden" aria-hidden="true" onClick={() => onOpenChange(false)} />
-      <div
+      <BodyPortal><div
         id="search-filter-panel"
         ref={panelRef}
         tabIndex={-1}
@@ -221,7 +222,7 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
             {t.search.showResults}
           </button>
         </div>
-      </div>
+      </div></BodyPortal>
     </>
   );
 }
