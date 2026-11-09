@@ -33,7 +33,8 @@ export function socketShardNames(env: { SOCKET_SHARDS?: number | string }): stri
 /** Shards in a random order: the first one takes a new socket, the rest are tried when it is full. */
 export function shardsInRandomOrder(env: { SOCKET_SHARDS?: number | string }): string[] {
 	const names = socketShardNames(env);
-	const start = crypto.getRandomValues(new Uint32Array(1))[0] % names.length;
+	// Load spreading only, not a secret: an unbiased uniform pick is all that is needed
+	const start = Math.floor(Math.random() * names.length);
 	return [...names.slice(start), ...names.slice(0, start)];
 }
 
