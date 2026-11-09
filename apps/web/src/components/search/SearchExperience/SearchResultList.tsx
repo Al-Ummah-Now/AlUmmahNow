@@ -5,6 +5,7 @@
  * community post cards.
  */
 
+import { pickLanguage } from '@/lib/format/pick-language';
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -57,6 +58,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
 }
 
 export function SearchResultCard({ item }: { item: SearchResultItem }) {
+  const { lang } = useLanguage();
   switch (item.type) {
     case 'video':
       return <VideoCard {...searchVideoToVideoObject(item.video, item.channel?.name)} />;
@@ -67,8 +69,8 @@ export function SearchResultCard({ item }: { item: SearchResultItem }) {
         <PlaylistCard
           {...({
             id: item.playlist.id,
-            name: item.playlist.name,
-            description: item.playlist.description,
+            name: pickLanguage(item.playlist.name, lang),
+            description: item.playlist.description ? pickLanguage(item.playlist.description, lang) : item.playlist.description,
             thumbnailUrl: item.playlist.thumbnailUrl,
             cover: item.playlist.cover,
             videosCount: item.playlist.videosCount,
