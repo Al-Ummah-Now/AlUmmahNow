@@ -1,7 +1,9 @@
 import { cache } from 'react';
+import { notFound } from 'next/navigation';
 import type { Channel } from '@al-ummah/shared-types';
 import { getChannelForOwner } from '@/lib/api/channels';
 import { getServerAuthContext } from '@/lib/api/server-auth';
+import { checkPath } from './nav';
 import { roleForChannel, type StudioRole } from './permissions';
 
 export type StudioAccess =
@@ -25,4 +27,11 @@ export async function getStudioChannels(): Promise<{ channels: Array<{ id: strin
   if (!session) return null;
   const channels = session.availableChannels.length ? session.availableChannels : await SessionManager.loadUserChannels(session.userId);
   return { channels, activeChannelId: session.channelId ?? null };
+}
+
+/** Guard for a built Studio page: null means render the no-access page. A missing channel is a 404. */
+export async function requireStudioPage(channelId: string, segments: readonly string[]): Promise<{ role: StudioRole; channel: Channel } | null> {
+  const access = await getStudioAccess(channelId);
+  if (access.status !== 'ok') notFound();
+  return checkPath(access.role, segments).status === 'ok' ? { role: access.role, channel: access.channel } : null;
 }
