@@ -27633,6 +27633,135 @@
         }
       }
     },
+    "/api/v1/videos/{id}/playback": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Get a short-lived playback grant",
+        "description": "Native apps call this before playing instead of using the record's playUrl. Request again when expiresAt passes.",
+        "operationId": "post_VideoPlayback",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Playback grant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "videoId": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "manifestUrl": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "description": "Unix seconds; null when the URL does not expire"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "videoId",
+                        "provider",
+                        "manifestUrl",
+                        "expiresAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Video has no playable source yet (processing)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{id}/publish-now": {
       "post": {
         "tags": [
