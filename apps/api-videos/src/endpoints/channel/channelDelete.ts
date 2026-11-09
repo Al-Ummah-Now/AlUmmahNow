@@ -116,11 +116,12 @@ export class ChannelDelete extends AuthenticatedRoute {
 			const owned = (await loadOwnedChannels(bucket, userId)) as unknown as OwnedChannelSummary[];
 			const next = pickNewMainChannel(owned, id, c.req.query('newMainChannelId'));
 			if (next) {
-				const nextChannel = await repository.getObject(next.id);
-				if (nextChannel) {
-					await repository.putObject(next.id, { ...nextChannel, isMain: true, dateModified: new Date().toISOString() });
-					newMainChannelId = next.id;
-				}
+				// Conditional write on the fresh channel (SCALABILITY-AUDIT AV-5)
+				const promoted = await repository.updateObject(next.id, (nextChannel) => {
+					nextChannel.isMain = true;
+					nextChannel.dateModified = new Date().toISOString();
+				});
+				if (promoted) newMainChannelId = next.id;
 			}
 		}
 
@@ -137,10 +138,12 @@ export class ChannelDelete extends AuthenticatedRoute {
 		try {
 			type ProfileType = z.infer<typeof BusinessProfile>;
 			const profileRepo = new R2Repository<ProfileType>(c.env.profiles);
-			const profile = await profileRepo.getObject(userId);
-			if (profile?.channels?.includes(id)) {
-				await profileRepo.putObject(userId, { ...profile, channels: profile.channels.filter((cid) => cid !== id) });
-			}
+			// Conditional write on the fresh profile (SCALABILITY-AUDIT AV-6)
+			await profileRepo.updateObject(userId, (profile) => {
+				if (!profile.channels?.includes(id)) return false;
+				profile.channels = profile.channels.filter((cid) => cid !== id);
+				return true;
+			});
 		} catch (error) {
 			logger.warn('[ChannelDelete] Could not update profile channels', { channelId: id, error: error instanceof Error ? error.message : String(error) });
 		}

@@ -16,8 +16,7 @@ import {
   insertNotification,
   isNotificationKey,
   pushStoredNotifications,
-  removeChannelSubscriber,
-  upsertChannelSubscriber,
+  reconcileChannelSubscriber,
 } from './lib/notifications-store';
 import { eraseUserModerationData } from './moderation/store';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload } from '@al-ummah/shared-types';
@@ -365,13 +364,12 @@ export class MessageProcessor {
       throw new Error('Subscription message missing required fields: userId, channelId');
     }
 
-    // Subscriber index used for notification fan-out (per-channel bell lives on the row)
+    // Subscriber index used for notification fan-out (per-channel bell lives
+    // on the row). api-videos keeps it in step with the subscription in the
+    // same transaction; this re-syncs it from the stored state, so it is
+    // correct whatever order the events arrive in.
     if (env.NOTIFICATIONS_DB) {
-      if (message.type === MessageType.Subscribe) {
-        await upsertChannelSubscriber(env.NOTIFICATIONS_DB, channelId, userId);
-      } else {
-        await removeChannelSubscriber(env.NOTIFICATIONS_DB, channelId, userId);
-      }
+      await reconcileChannelSubscriber(env.NOTIFICATIONS_DB, channelId, userId, message.type === MessageType.Subscribe ? 'subscribe' : 'unsubscribe');
     }
 
     // Process subscription actions

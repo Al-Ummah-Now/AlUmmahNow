@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { Channel, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
+import { ensureChannelCollection } from '../../lib/channelCollection';
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
@@ -173,16 +174,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 						});
 
 						try {
-							const collection = await bunnyStream.createCollection(libraryId, {
-								name: channel.name || `Channel ${channelId}`,
-							});
-
-							collectionId = collection.guid;
-
-							// Save collection ID to channel object
-							channel.bunnyCollectionId = collectionId;
-							channel.dateModified = new Date().toISOString();
-							await channelRepo.putObject(channelId, channel);
+							collectionId = await ensureChannelCollection(channelRepo, bunnyStream, libraryId, channelId, channel.name || `Channel ${channelId}`);
 
 							logger.info('[UploadInitiate] Collection created and saved to channel', {
 								channelId,

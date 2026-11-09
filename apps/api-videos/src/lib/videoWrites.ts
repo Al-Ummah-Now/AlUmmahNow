@@ -44,3 +44,9 @@ export async function patchVideo<V extends { userId?: string }>(
 	if (rejected) return { status: 'forbidden' };
 	return { status: 'ok', video: data, previous: previous ?? data, changed };
 }
+
+/**
+ * The same owner-checked conditional patch for any JSON record with a
+ * `userId` (channels, playlists, livestreams…).
+ */
+export const patchOwnedRecord = patchVideo;

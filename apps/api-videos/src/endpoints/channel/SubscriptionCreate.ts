@@ -1,12 +1,12 @@
 import { Str } from "chanfana";
 import { z } from "zod";
-import { Channel, Profile, ResponseError } from "../../lib/types";
+import { Channel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 import { inBackground, notifyUser } from '../../lib/websocket-notify';
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { countSubscribers } from "../../lib/subscriptions";
+import { changeSubscription } from "../../lib/subscription-store";
 
 const SubscriptionStatusResponse = z.object({
 	success: z.boolean(),
@@ -66,142 +66,59 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 	};
 
 	async handle(c: AppContext) {
-		// Get validated data
 		const data = await this.getValidatedData<typeof this.schema>();
-
-		// Extract channel ID and subscriber ID
 		const { id } = data.params;
 		const userId = this.getUserId(c);
 		const { channelId } = data.headers;
+		type ChannelType = z.infer<typeof Channel>;
 
-		// Implement your own object insertion here
 		try {
-			const bucket = c.env.channels;
-			type ChannelType = z.infer<typeof Channel>;
-			const repository = new R2Repository<ChannelType>(bucket);
-			// Load the TARGET channel (route param), not the subscriber's channel (header)
-			let channel = await repository.getObject(id);
-
-			const exists = channel !== null;
-	
-			if (!exists) {
-				return c.json(
-					{
-						success: false,
-						error: "Object not found",
-					},
-					404
-				);
-			}
+		// Load the TARGET channel (route param), not the subscriber's channel (header)
+		const repository = new R2Repository<ChannelType>(c.env.channels);
+		const channel = await repository.getObject(id);
+		if (!channel) {
+			return c.json({ success: false, error: "Object not found" }, 404);
+		}
 
 			if (id === channelId) {
-				return c.json(
-					{
-						success: false,
-						error: "Cannot subscribe to your own channel",
-					},
-					400
-				);
+				return c.json({ success: false, error: "Cannot subscribe to your own channel" }, 400);
 			}
 
-			if (!channel.subscriptions) {
-				channel.subscriptions = [];
+			// Atomic in D1 (SCALABILITY-AUDIT AV-4): concurrent subscribers all count
+			const change = await changeSubscription(c.env, { ...channel, id }, { userId, channelId }, 'add');
+			if (!change) {
+				return c.json({ success: false, error: "Object not found" }, 404);
 			}
-
-			// Add the subscription to the channel
-			const subscription = {
-				id: crypto.randomUUID(),
-				userId: userId,
-				channelId: channelId,
-				entityId: id,
-				dateCreated: new Date().toISOString(),
-			};
-
-			// Check if the user has already subscribed to the channel
-			const alreadySubscribed = channel.subscriptions.find((s) => s.channelId === subscription.channelId);
-			if (alreadySubscribed) {
-				return c.json(
-					{
-						success: true,
-						result: {
-							channelId: id,
-							isSubscribed: true,
-							subscriberCount: countSubscribers(channel.subscriptions),
-						},
-					},
-					200
-				);
+			const result = { channelId: id, isSubscribed: true, subscriberCount: change.subscribers };
+			if (!change.changed) {
+				return c.json({ success: true, result }, 200);
 			}
-
-			channel.subscriptions.push(subscription);
-			await repository.putObject(id, channel);
 
 			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.Subscribe, {
-				subscriptionId: subscription.id,
+				subscriptionId: change.subscriptionId,
 				targetChannelId: id,
 				subscriberChannelId: channelId,
 				userId: userId,
 				timestamp: new Date().toISOString(),
 			});
 
-			// Realtime: tell the subscribed-to channel's owner (looked up after the response)
+			// Realtime: tell the subscribed-to channel's owner (after the response)
 			inBackground(c, 'new-subscriber', async () => {
-				const target = await repository.getObject(id);
-				if (target?.userId && target.userId !== userId) {
-					await notifyUser(c.env, target.userId, {
+				if (channel.userId && channel.userId !== userId) {
+					await notifyUser(c.env, channel.userId, {
 						notificationType: 'subscription',
 						notificationKey: 'newSubscriber',
-						params: { channelName: target.name || '' },
+						params: { channelName: channel.name || '' },
 						actionUrl: `/channel/${id}`,
 					});
 				}
 			});
 
-			// Update reverse index on subscriber's profile
-			try {
-				const profileBucket = c.env.profiles;
-				type ProfileType = z.infer<typeof Profile>;
-				const profileRepository = new R2Repository<ProfileType>(profileBucket);
-				const profile = await profileRepository.getObject(userId);
-
-				if (profile) {
-					if (!profile.subscribedTo) {
-						profile.subscribedTo = [];
-					}
-					// Add target channel to subscribedTo if not already there
-					if (!profile.subscribedTo.includes(id)) {
-						profile.subscribedTo.push(id);
-						await profileRepository.putObject(userId, profile);
-						logger.debug('Updated profile subscribedTo reverse index', { userId, targetChannelId: id });
-					}
-				}
-			} catch (profileError) {
-				// Log but don't fail the subscription - reverse index is for optimization
-				logger.warn('Failed to update profile subscribedTo index:', profileError);
-			}
-
-			return c.json(
-				{
-					success: true,
-					result: {
-						channelId: id,
-						isSubscribed: true,
-						subscriberCount: countSubscribers(channel.subscriptions),
-					},
-				},
-				201
-			);
-		}
-		catch (error) {
-			logger.error("Error fetching Channel:", error);
-			return c.json(
-				{
-					success: false,
-					error: "Error creating Subscription",
-				},
-				500
-			);
+			return c.json({ success: true, result }, 201);
+		} catch (error) {
+			logger.error("Error creating Subscription:", error);
+			return c.json({ success: false, error: "Error creating Subscription" }, 500);
 		}
 	}
 }

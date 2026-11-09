@@ -16,6 +16,7 @@
 import { Str } from "chanfana";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { isSubscribedTo } from '../../lib/subscription-store';
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { CHANNEL_BELL_LEVELS, NOTIFICATION_CATEGORIES } from "@al-ummah/shared-types";
@@ -184,11 +185,11 @@ export class NotificationSettingsUpdate extends AuthenticatedRoute {
 
 type ChannelType = z.infer<typeof Channel>;
 
-/** Whether the user subscribes to the channel according to the channel record (source of truth). */
+/** Whether the user subscribes to the channel (as any of their channels), from the subscription store. */
 async function isSubscribedInR2(c: AppContext, channelId: string, userId: string): Promise<boolean | null> {
 	const channel = await new R2Repository<ChannelType>(c.env.channels).getObject(channelId);
 	if (!channel) return null;
-	return (channel.subscriptions || []).some((s) => s.userId === userId);
+	return isSubscribedTo(c.env.NOTIFICATIONS_DB, { ...channel, id: channelId }, { userId });
 }
 
 export class ChannelBellGet extends AuthenticatedRoute {

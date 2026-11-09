@@ -59,14 +59,15 @@ export class MemoryBucket {
 		}
 	}
 
-	async list(opts: { limit?: number; cursor?: string; prefix?: string } = {}) {
+	async list(opts: { limit?: number; cursor?: string; prefix?: string; startAfter?: string } = {}) {
 		this.calls++;
 		// Key-based cursor like R2: resumes after the last returned key, so
 		// deleting objects between pages does not skip any.
 		const keys = [...this.store.keys()]
 			.filter((k) => !opts.prefix || k.startsWith(opts.prefix))
 			.sort()
-			.filter((k) => !opts.cursor || k > opts.cursor);
+			.filter((k) => !opts.cursor || k > opts.cursor)
+			.filter((k) => !opts.startAfter || k > opts.startAfter);
 		const limit = opts.limit ?? 1000;
 		const page = keys.slice(0, limit);
 		const truncated = limit < keys.length;
