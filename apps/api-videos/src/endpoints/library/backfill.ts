@@ -3,7 +3,9 @@
  *
  * One-off backfill of the per-user indexes from existing R2 data:
  * - target "likes":         videos[*].likes      -> liked_videos
- * - target "subscriptions": channels[*].subscriptions -> channel_subscribers (default bell)
+ * - target "subscriptions": channels[*].subscriptions -> channel_subscriptions, counts and
+ *                            channel_subscribers (default bell), once per channel
+ *                            (importLegacySubscriptions; the hourly cron does the same)
  *
  * Inserts are idempotent (INSERT OR IGNORE), so the endpoint can be re-run.
  * Each call scans at most `pages` bucket pages; call again with `nextCursor`
@@ -14,7 +16,7 @@ import { Str } from "chanfana";
 import { z } from "zod";
 import { PublicRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
-import { DEFAULT_CHANNEL_BELL } from "@al-ummah/shared-types";
+import { importLegacySubscriptions } from "../../lib/subscription-store";
 import { isInternalRecord } from "../../lib/visibility";
 
 const PAGE_SIZE = 100;
@@ -50,16 +52,6 @@ export function collectLikeRows(video: StoredVideo, now: number): Array<[string,
 		if (prev === undefined || at < prev) seen.set(like.userId, at);
 	}
 	return [...seen.entries()].map(([userId, at]) => [userId, video.id as string, at]);
-}
-
-export function collectSubscriberRows(channel: StoredChannel, now: number): Array<[string, string, number]> {
-	if (!channel?.id) return [];
-	const seen = new Map<string, number>();
-	for (const sub of channel.subscriptions || []) {
-		if (!sub?.userId || seen.has(sub.userId)) continue;
-		seen.set(sub.userId, toMillis(sub.dateCreated, now));
-	}
-	return [...seen.entries()].map(([userId, at]) => [channel.id as string, userId, at]);
 }
 
 export class LibraryBackfill extends PublicRoute {
@@ -109,16 +101,17 @@ export class LibraryBackfill extends PublicRoute {
 			);
 			scanned += objects.length;
 
-			const rows = objects.flatMap((o) =>
-				o ? (body.target === "likes" ? collectLikeRows(o as StoredVideo, now) : collectSubscriberRows(o as StoredChannel, now)) : [],
-			);
+			if (body.target === "subscriptions") {
+				for (let i = 0; i < objects.length; i++) {
+					const channel = objects[i] as StoredChannel | null;
+					if (!channel) continue;
+					if (await importLegacySubscriptions(db, { ...channel, id: listing.objects[i].key }, now)) inserted++;
+				}
+			}
+			const rows = body.target === "likes" ? objects.flatMap((o) => (o ? collectLikeRows(o as StoredVideo, now) : [])) : [];
 			for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
 				const statements = rows.slice(i, i + INSERT_CHUNK).map((row) =>
-					body.target === "likes"
-						? db.prepare("INSERT OR IGNORE INTO liked_videos (user_id, video_id, liked_at) VALUES (?, ?, ?)").bind(...row)
-						: db
-								.prepare("INSERT OR IGNORE INTO channel_subscribers (channel_id, user_id, bell, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
-								.bind(row[0], row[1], DEFAULT_CHANNEL_BELL, row[2], row[2]),
+					db.prepare("INSERT OR IGNORE INTO liked_videos (user_id, video_id, liked_at) VALUES (?, ?, ?)").bind(...row),
 				);
 				const results = await db.batch(statements);
 				inserted += results.reduce((n, r) => n + Number(r.meta?.changes || 0), 0);

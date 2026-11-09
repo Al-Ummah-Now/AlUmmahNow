@@ -11,11 +11,17 @@ import { z } from 'zod';
 import { Channel as BusinessChannel, Profile as BusinessProfile } from './types';
 import { PublicChannelView, PublicProfileView } from './model/view';
 import { safeChannelLinks } from './channelAbout';
+import { subscriberCounts } from './subscription-store';
 
 type StoredChannel = z.infer<typeof BusinessChannel> & { isVerified?: boolean };
 type StoredProfile = z.infer<typeof BusinessProfile>;
 
-export function toPublicChannel(channel: StoredChannel): z.infer<typeof PublicChannelView> {
+/**
+ * `subscribers`: the channel's subscriber count from the subscription store
+ * (subscriberCounts, SCALABILITY-AUDIT AV-4). Without it the legacy array in
+ * the channel JSON is counted.
+ */
+export function toPublicChannel(channel: StoredChannel, subscribers?: number): z.infer<typeof PublicChannelView> {
 	return {
 		id: channel.id,
 		userId: channel.userId,
@@ -36,7 +42,7 @@ export function toPublicChannel(channel: StoredChannel): z.infer<typeof PublicCh
 		playlistsCount: channel.playlists?.length || 0,
 		videosCount: channel.videos?.length || 0,
 		subscribersCount: channel.subscribers?.length || 0,
-		subscriptionsCount: channel.subscriptions?.length || 0,
+		subscriptionsCount: subscribers ?? (channel.subscriptions?.length || 0),
 		likesCount: channel.likes?.length || 0,
 	};
 }
@@ -55,4 +61,10 @@ export function toPublicProfile(profile: StoredProfile): z.infer<typeof PublicPr
 		dateModified: profile.dateModified,
 		channelsCount: profile.channels?.length || 0,
 	};
+}
+
+/** toPublicChannel for many channels, with their subscriber counts from one D1 query. */
+export async function toPublicChannels(db: D1Database | undefined, channels: StoredChannel[]): Promise<z.infer<typeof PublicChannelView>[]> {
+	const counts = await subscriberCounts(db, channels);
+	return channels.map((channel) => toPublicChannel(channel, channel?.id ? counts.get(channel.id) : undefined));
 }

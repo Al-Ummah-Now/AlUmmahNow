@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppContext } from "../../base/types";
 import BunnyStorageClient from "../../lib/bunny/storage";
 import R2Repository from "../../lib/r2Repo";
+import { patchOwnedRecord } from '../../lib/videoWrites';
 import { Channel } from "../../lib/types";
 import { z } from "zod";
 import Queue, { MessageType } from "../../lib/queue";
@@ -70,7 +71,7 @@ const handleAvatarUpdate = async (c: AppContext) => {
         }
 
         //Update the Channel's avatar URL
-        channel.avatarUrl = `https://images.alummahnow.net${path}`;
+        const avatarUrl = `https://images.alummahnow.net${path}`;
 
         const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ChannelUpdate, {
@@ -79,7 +80,15 @@ const handleAvatarUpdate = async (c: AppContext) => {
 			timestamp: new Date().toISOString(),
 		});
 
-        await repository.putObject(id, channel);
+        // Conditional write on the fresh channel (SCALABILITY-AUDIT AV-5)
+        const saved = await patchOwnedRecord(repository, id, { avatarUrl }, { ownerId: userId });
+        if (saved.status === 'missing') {
+            return c.json({ success: false, error: "Channel not found" }, 404);
+        }
+        if (saved.status === 'forbidden') {
+            return c.json({ success: false, error: "You do not have permission to update this channel" }, 403);
+        }
+        Object.assign(channel, saved.video);
 
         return c.json(channel, 200);
     } catch (error) {

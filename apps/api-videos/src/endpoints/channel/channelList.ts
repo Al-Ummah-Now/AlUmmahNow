@@ -2,7 +2,7 @@ import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { PublicChannelView } from "../../lib/model/view";
-import { toPublicChannel } from "../../lib/public-views";
+import { toPublicChannels } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { OptionalAuthRoute, AppContext } from "../../base";
@@ -118,7 +118,7 @@ export class ChannelsList extends OptionalAuthRoute {
 		}
 
 		// Transform business channels to view models
-		const channelViews = filteredChannels.map(toPublicChannel);
+		const channelViews = await toPublicChannels(c.env.NOTIFICATIONS_DB, filteredChannels);
 
 		let response: PaginationResponse<any>;
 		if (!filteredChannels || filteredChannels.length === 0) {

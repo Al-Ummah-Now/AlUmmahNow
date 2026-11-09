@@ -38,6 +38,7 @@
     "release:tag": "node --experimental-strip-types --no-warnings scripts/release/release-tag.ts",
     "check:post-counters": "node --experimental-strip-types --no-warnings scripts/release/check-post-counters.ts",
     "check:rollup-import": "node --experimental-strip-types --no-warnings scripts/release/check-rollup-import.ts",
+    "check:subscription-import": "node --experimental-strip-types --no-warnings scripts/release/check-subscription-import.ts",
     "check:secrets": "node --experimental-strip-types --no-warnings scripts/release/check-secrets.ts",
     "clean": "turbo run clean && rm -rf node_modules",
     "log-service:dev": "turbo run dev --filter=@al-ummah/log-service",

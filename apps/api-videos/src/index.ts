@@ -1,3 +1,4 @@
+import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { fromHono } from "chanfana";
 import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { Hono } from "hono";
@@ -380,10 +381,20 @@ app.get("/", async (c) => {
 // ==========================================
 
 /**
- * Daily cron (wrangler `triggers.crons`): enforce data retention (Story 1.3, AC 5).
+ * Crons (wrangler `triggers.crons`): hourly, the subscription import;
+ * daily, enforce data retention (Story 1.3, AC 5).
  * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
  */
-async function scheduled(_controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
+async function scheduled(controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
+	if (controller?.cron === SUBSCRIPTION_IMPORT_CRON) {
+		// Hourly: move legacy channel subscriptions into D1 (SCALABILITY-AUDIT AV-4)
+		ctx.waitUntil(
+			importPendingSubscriptions(rawEnv as never)
+				.then((result) => logger.info('[SubscriptionImport] Run finished', { ...result }))
+				.catch((error) => logger.error('[SubscriptionImport] Run failed', { error: error instanceof Error ? error.message : String(error) })),
+		);
+		return;
+	}
 	// Retention deletes go through the search-sync wrapper so removed content leaves the index.
 	const env = withSearchSync(rawEnv, ctx);
 	ctx.waitUntil(

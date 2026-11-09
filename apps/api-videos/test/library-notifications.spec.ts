@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MessageType } from '@al-ummah/shared-types';
 import { WatchLaterAdd, WatchLaterList, WatchLaterRemove, WatchLaterReorder, WatchLaterStatus } from '../src/endpoints/library/watchLater';
 import { LikedVideosList, SavedPostAdd, SavedPostRemove, SavedPostStatus, SavedPostsList } from '../src/endpoints/library/liked';
-import { LibraryBackfill, collectLikeRows, collectSubscriberRows } from '../src/endpoints/library/backfill';
+import { LibraryBackfill, collectLikeRows } from '../src/endpoints/library/backfill';
 import {
 	ChannelBellGet,
 	ChannelBellUpdate,
@@ -193,11 +193,14 @@ describe('Liked videos index', () => {
 			assert.equal(res.result.nextCursor, null);
 			assert.equal(res.result.inserted, i === 0 ? 2 : 0);
 		}
-		const subs = (await (await app.request('/internal/library/backfill', json({ target: 'subscriptions' }), e)).json()) as any;
-		assert.equal(subs.result.inserted, 1);
+		for (let i = 0; i < 2; i++) {
+			const subs = (await (await app.request('/internal/library/backfill', json({ target: 'subscriptions' }), e)).json()) as any;
+			assert.equal(subs.result.inserted, i === 0 ? 1 : 0, 'each channel is imported once');
+		}
 		assert.deepEqual(e.NOTIFICATIONS_DB.rows('SELECT channel_id, user_id, bell FROM channel_subscribers'), [{ channel_id: 'ch1', user_id: 'a', bell: 'highlights' }]);
+		assert.deepEqual(e.NOTIFICATIONS_DB.rows('SELECT subscriber_channel_id FROM channel_subscriptions ORDER BY 1'), [{ subscriber_channel_id: 'ca' }, { subscriber_channel_id: 'cb' }]);
+		assert.deepEqual(e.NOTIFICATIONS_DB.rows('SELECT subscribers FROM channel_subscriber_counts'), [{ subscribers: 2 }]);
 		assert.deepEqual(collectLikeRows({ id: 'v', isDeleted: true, likes: [{ userId: 'a' }] }, 0), []);
-		assert.deepEqual(collectSubscriberRows({ id: 'c', subscriptions: [{}] }, 0), []);
 	});
 });
 

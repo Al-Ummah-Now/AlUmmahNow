@@ -248,18 +248,37 @@ export async function pushStoredNotifications(
   );
 }
 
-export async function upsertChannelSubscriber(db: D1Database, channelId: string, userId: string, now = Date.now()): Promise<void> {
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO channel_subscribers (channel_id, user_id, bell, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-    .bind(channelId, userId, DEFAULT_CHANNEL_BELL, now, now)
-    .run();
-}
-
-export async function removeChannelSubscriber(db: D1Database, channelId: string, userId: string): Promise<void> {
-  await db.prepare('DELETE FROM channel_subscribers WHERE channel_id = ? AND user_id = ?').bind(channelId, userId).run();
+/**
+ * Brings the bell row of (channel, user) in line with channel_subscriptions,
+ * which api-videos writes (migration 0006, SCALABILITY-AUDIT AV-4). Applied
+ * on every Subscribe/Unsubscribe event: for an imported channel it follows
+ * the stored subscriptions, not the event, so late or reordered events cannot
+ * resurrect or drop a subscriber. A channel whose legacy subscriptions are not
+ * imported yet (R2 is still the truth there) gets the event applied as before.
+ */
+export async function reconcileChannelSubscriber(
+  db: D1Database,
+  channelId: string,
+  userId: string,
+  event: 'subscribe' | 'unsubscribe',
+  now = Date.now(),
+): Promise<void> {
+  const subscribed = 'EXISTS (SELECT 1 FROM channel_subscriptions WHERE channel_id = ?1 AND user_id = ?2)';
+  const imported = 'EXISTS (SELECT 1 FROM channel_subscription_imports WHERE channel_id = ?1)';
+  await db.batch([
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO channel_subscribers (channel_id, user_id, bell, created_at, updated_at)
+         SELECT ?1, ?2, ?3, ?4, ?4 WHERE ${subscribed} OR (NOT ${imported} AND ?5 = 'subscribe')`,
+      )
+      .bind(channelId, userId, DEFAULT_CHANNEL_BELL, now, event),
+    db
+      .prepare(
+        `DELETE FROM channel_subscribers WHERE channel_id = ?1 AND user_id = ?2
+         AND ((${imported} AND NOT ${subscribed}) OR (NOT ${imported} AND ?3 = 'unsubscribe'))`,
+      )
+      .bind(channelId, userId, event),
+  ]);
 }
 
 /** Delete notifications older than the retention window. Returns rows deleted. */
@@ -275,6 +294,15 @@ export async function eraseUserNotifications(db: D1Database, userId: string): Pr
     db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM notification_settings WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM channel_subscribers WHERE user_id = ?').bind(userId),
+    // Their subscriptions (api-videos, migration 0006), keeping the counts exact
+    db
+      .prepare(
+        `UPDATE channel_subscriber_counts
+         SET subscribers = MAX(subscribers - (SELECT COUNT(*) FROM channel_subscriptions s WHERE s.channel_id = channel_subscriber_counts.channel_id AND s.user_id = ?1), 0)
+         WHERE channel_id IN (SELECT channel_id FROM channel_subscriptions WHERE user_id = ?1)`,
+      )
+      .bind(userId),
+    db.prepare('DELETE FROM channel_subscriptions WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM liked_videos WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM saved_posts WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM push_devices WHERE user_id = ?').bind(userId),

@@ -2,7 +2,8 @@ import { Str, Int } from "chanfana";
 import { z } from "zod";
 import { Channel, Profile, ResponseError } from "../../lib/types";
 import { PublicChannelView } from "../../lib/model/view";
-import { toPublicChannel } from "../../lib/public-views";
+import { toPublicChannels } from "../../lib/public-views";
+import { subscribedChannelIds } from "../../lib/subscription-store";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -77,7 +78,8 @@ export class SubscriptionsList extends AuthenticatedRoute {
 				);
 			}
 
-			const subscribedTo = profile.subscribedTo || [];
+			// D1 subscriptions plus legacy entries of channels not imported yet (AV-4/AV-6)
+			const subscribedTo = await subscribedChannelIds(c.env.NOTIFICATIONS_DB, userId, profile.subscribedTo);
 			const total = subscribedTo.length;
 
 			// Calculate pagination
@@ -104,7 +106,7 @@ export class SubscriptionsList extends AuthenticatedRoute {
 
 			return c.json({
 				success: true,
-				data: channels.map(toPublicChannel),
+				data: await toPublicChannels(c.env.NOTIFICATIONS_DB, channels),
 				total,
 				page,
 				pageSize,
