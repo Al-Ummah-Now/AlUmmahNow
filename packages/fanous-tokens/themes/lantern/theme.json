@@ -45,15 +45,15 @@
       "divider": "{color.derived.dividerDark}"
     },
     "light": {
-      "background": "{color.brand.parchment}",
-      "surface": "{color.derived.parchmentRaised}",
-      "surfaceRaised": "{color.derived.parchmentHigh}",
-      "heroStart": "{color.derived.parchmentDeep}",
-      "heroEnd": "{color.brand.parchment}",
-      "textPrimary": "{color.derived.ink}",
-      "textSecondary": "{color.derived.inkSecondary}",
-      "textMuted": "{color.derived.inkMuted}",
-      "link": "{color.derived.lanternInk}",
+      "background": "#efe2cc",
+      "surface": "#fbf5e9",
+      "surfaceRaised": "#fffdf8",
+      "heroStart": "#e4d3b6",
+      "heroEnd": "#efe2cc",
+      "textPrimary": "#0e2b3d",
+      "textSecondary": "#2a4654",
+      "textMuted": "#3f5a68",
+      "link": "#7a3f08",
       "successText": "{color.derived.verifiedDeep}",
       "errorText": "{color.brand.error}",
       "primary": "{color.derived.gold}",
@@ -62,11 +62,11 @@
       "onPrimaryHover": "{color.derived.inkNight}",
       "primaryPressed": "{color.derived.goldPressed}",
       "onPrimaryPressed": "{color.derived.inkNight}",
-      "primaryDisabled": "{color.derived.parchmentDeep}",
-      "onPrimaryDisabled": "{color.derived.inkMuted}",
+      "primaryDisabled": "#e4d3b6",
+      "onPrimaryDisabled": "#3f5a68",
       "primaryEdge": "{color.derived.goldEdge}",
       "primarySheen": "{color.derived.goldFlame}",
-      "motif": "{color.derived.goldPressed}",
+      "motif": "#b98c52",
       "secondary": "{color.brand.earth}",
       "onSecondary": "{color.derived.white}",
       "verifiedFill": "{color.derived.verifiedDeep}",
@@ -79,8 +79,8 @@
       "focusRing": "{color.derived.goldEdge}",
       "focusGlow": "{color.derived.lanternDeep}",
       "verifiedIcon": "{color.derived.verifiedDeep}",
-      "outline": "{color.derived.outlineLight}",
-      "divider": "{color.derived.dividerLight}"
+      "outline": "#7c6b52",
+      "divider": "#d3c0a0"
     }
   },
   "brandColor": {
@@ -151,7 +151,7 @@
   },
   "browser": {
     "themeColor": {
-      "light": "#ffffff",
+      "light": "#efe2cc",
       "dark": "#111827"
     },
     "manifest": {

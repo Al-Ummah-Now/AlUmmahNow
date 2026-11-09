@@ -78,27 +78,27 @@
             <SolidColorBrush x:Key="FanousDividerBrush" Color="{StaticResource FanousDividerColor}" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
-            <Color x:Key="FanousBackgroundColor">#FFFDF3E3</Color>
+            <Color x:Key="FanousBackgroundColor">#FFF5CFA2</Color>
             <SolidColorBrush x:Key="FanousBackgroundBrush" Color="{StaticResource FanousBackgroundColor}" />
-            <Color x:Key="FanousSurfaceColor">#FFFFFAF1</Color>
+            <Color x:Key="FanousSurfaceColor">#FFFDEEDB</Color>
             <SolidColorBrush x:Key="FanousSurfaceBrush" Color="{StaticResource FanousSurfaceColor}" />
-            <Color x:Key="FanousSurfaceRaisedColor">#FFFFFFFF</Color>
+            <Color x:Key="FanousSurfaceRaisedColor">#FFFFF7EC</Color>
             <SolidColorBrush x:Key="FanousSurfaceRaisedBrush" Color="{StaticResource FanousSurfaceRaisedColor}" />
-            <Color x:Key="FanousHeroStartColor">#FFF9E6CA</Color>
+            <Color x:Key="FanousHeroStartColor">#FFEEBD86</Color>
             <SolidColorBrush x:Key="FanousHeroStartBrush" Color="{StaticResource FanousHeroStartColor}" />
-            <Color x:Key="FanousHeroEndColor">#FFFDF3E3</Color>
+            <Color x:Key="FanousHeroEndColor">#FFF5CFA2</Color>
             <SolidColorBrush x:Key="FanousHeroEndBrush" Color="{StaticResource FanousHeroEndColor}" />
-            <Color x:Key="FanousTextPrimaryColor">#FF290D06</Color>
+            <Color x:Key="FanousTextPrimaryColor">#FF2E1206</Color>
             <SolidColorBrush x:Key="FanousTextPrimaryBrush" Color="{StaticResource FanousTextPrimaryColor}" />
-            <Color x:Key="FanousTextSecondaryColor">#FF572A13</Color>
+            <Color x:Key="FanousTextSecondaryColor">#FF4F260F</Color>
             <SolidColorBrush x:Key="FanousTextSecondaryBrush" Color="{StaticResource FanousTextSecondaryColor}" />
-            <Color x:Key="FanousTextMutedColor">#FF6F4A30</Color>
+            <Color x:Key="FanousTextMutedColor">#FF663A1F</Color>
             <SolidColorBrush x:Key="FanousTextMutedBrush" Color="{StaticResource FanousTextMutedColor}" />
-            <Color x:Key="FanousLinkColor">#FF824825</Color>
+            <Color x:Key="FanousLinkColor">#FF6D3412</Color>
             <SolidColorBrush x:Key="FanousLinkBrush" Color="{StaticResource FanousLinkColor}" />
-            <Color x:Key="FanousSuccessTextColor">#FF166534</Color>
+            <Color x:Key="FanousSuccessTextColor">#FF0F5A2C</Color>
             <SolidColorBrush x:Key="FanousSuccessTextBrush" Color="{StaticResource FanousSuccessTextColor}" />
-            <Color x:Key="FanousErrorTextColor">#FFB00020</Color>
+            <Color x:Key="FanousErrorTextColor">#FF930019</Color>
             <SolidColorBrush x:Key="FanousErrorTextBrush" Color="{StaticResource FanousErrorTextColor}" />
             <Color x:Key="FanousPrimaryColor">#FFFFA037</Color>
             <SolidColorBrush x:Key="FanousPrimaryBrush" Color="{StaticResource FanousPrimaryColor}" />
@@ -112,15 +112,15 @@
             <SolidColorBrush x:Key="FanousPrimaryPressedBrush" Color="{StaticResource FanousPrimaryPressedColor}" />
             <Color x:Key="FanousOnPrimaryPressedColor">#FF290D06</Color>
             <SolidColorBrush x:Key="FanousOnPrimaryPressedBrush" Color="{StaticResource FanousOnPrimaryPressedColor}" />
-            <Color x:Key="FanousPrimaryDisabledColor">#FFF9E6CA</Color>
+            <Color x:Key="FanousPrimaryDisabledColor">#FFEEBD86</Color>
             <SolidColorBrush x:Key="FanousPrimaryDisabledBrush" Color="{StaticResource FanousPrimaryDisabledColor}" />
-            <Color x:Key="FanousOnPrimaryDisabledColor">#FF6F4A30</Color>
+            <Color x:Key="FanousOnPrimaryDisabledColor">#FF572A13</Color>
             <SolidColorBrush x:Key="FanousOnPrimaryDisabledBrush" Color="{StaticResource FanousOnPrimaryDisabledColor}" />
             <Color x:Key="FanousPrimaryEdgeColor">#FF824825</Color>
             <SolidColorBrush x:Key="FanousPrimaryEdgeBrush" Color="{StaticResource FanousPrimaryEdgeColor}" />
             <Color x:Key="FanousPrimarySheenColor">#FFFFE0B8</Color>
             <SolidColorBrush x:Key="FanousPrimarySheenBrush" Color="{StaticResource FanousPrimarySheenColor}" />
-            <Color x:Key="FanousMotifColor">#FFD49162</Color>
+            <Color x:Key="FanousMotifColor">#FFB2693E</Color>
             <SolidColorBrush x:Key="FanousMotifBrush" Color="{StaticResource FanousMotifColor}" />
             <Color x:Key="FanousSecondaryColor">#FF824825</Color>
             <SolidColorBrush x:Key="FanousSecondaryBrush" Color="{StaticResource FanousSecondaryColor}" />
@@ -144,11 +144,11 @@
             <SolidColorBrush x:Key="FanousFocusRingBrush" Color="{StaticResource FanousFocusRingColor}" />
             <Color x:Key="FanousFocusGlowColor">#FF824825</Color>
             <SolidColorBrush x:Key="FanousFocusGlowBrush" Color="{StaticResource FanousFocusGlowColor}" />
-            <Color x:Key="FanousVerifiedIconColor">#FF166534</Color>
+            <Color x:Key="FanousVerifiedIconColor">#FF0F5A2C</Color>
             <SolidColorBrush x:Key="FanousVerifiedIconBrush" Color="{StaticResource FanousVerifiedIconColor}" />
-            <Color x:Key="FanousOutlineColor">#FFA07E63</Color>
+            <Color x:Key="FanousOutlineColor">#FF83593A</Color>
             <SolidColorBrush x:Key="FanousOutlineBrush" Color="{StaticResource FanousOutlineColor}" />
-            <Color x:Key="FanousDividerColor">#FFEDD9BD</Color>
+            <Color x:Key="FanousDividerColor">#FFDCA877</Color>
             <SolidColorBrush x:Key="FanousDividerBrush" Color="{StaticResource FanousDividerColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
