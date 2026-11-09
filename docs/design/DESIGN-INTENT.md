@@ -37,3 +37,13 @@ tooltip and a handle; play, next, volume and time at the start; captions, settin
 theatre and full screen at the end. One settings menu holds quality, speed, captions and shortcuts.
 Designed states: start, buffering, up next, live, mini player and error. Touch targets are 44px. Playback
 controls stay left-to-right in Arabic, and menus follow the language.
+
+## Selected navigation item
+
+YouTube and Kick (seen first-hand) mark the current item with a quiet rounded surface, and YouTube also
+fills the icon and strengthens the label. Linear, Arc, Twitch and Apple TV are second-hand references.
+
+Selected means: a filled icon, a heavier label, a quiet surface in the theme's material, and one 3px bar
+on the start side, which moves to the right in Arabic. The same treatment applies in the rail, the
+expanded drawer and the phone drawer. Hover is a neutral tint with no bar or filled icon. Focus-visible
+is a ring. No decorative shapes or glows beyond a faint halo on Lantern's and Fawanees's bar.

@@ -101,3 +101,13 @@ html[dir=rtl] .nv-panel[data-open=true]{transform:none}
 [class*="bg-blue-"]:not(button):not(a){background:color-mix(in srgb,var(--fanous-color-primary) 13%,var(--fanous-color-surface))!important}
 .shorts::after{content:"";position:absolute;inset:50% 0 0;background:linear-gradient(0deg,rgb(4 8 12/.9),transparent)}.shorts-t,.shorts .pc-side{z-index:1}
 main [class*="justify-between"]{flex-wrap:wrap}
+/* Selected navigation item: filled icon, stronger label, a quiet surface and one slim bar. */
+.nv::after,.nv[aria-current=page]::after{content:none}
+.nv[aria-current=page]{background:var(--m-sel);box-shadow:var(--m-sel-edge);font-weight:600}
+.nv[aria-current=page]::before{clip-path:none;inset-inline-start:0;width:3px;height:20px;margin-block-start:-10px;border-radius:3px;background:var(--m-sel-bar);box-shadow:var(--m-sel-glow)}
+.nv[aria-current=page] svg{fill:currentColor;fill-opacity:.22;stroke-width:2}
+.nv:active{background:color-mix(in srgb,var(--fanous-color-text-primary) 13%,transparent)}
+.nv[aria-current=page]:active{background:var(--m-sel)}
+.nv:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:-2px}
+.tb[aria-current=page] svg{fill:currentColor;fill-opacity:.22;stroke-width:2}.tb[aria-current=page]::before{inset-inline:calc(50% - 12px);height:3px;border-radius:0 0 3px 3px;background:var(--m-sel-bar);box-shadow:var(--m-sel-glow)}
+@media(hover:hover){.nv:hover{background:color-mix(in srgb,var(--fanous-color-text-primary) 8%,transparent)}.nv[aria-current=page]:hover{background:var(--m-sel)}}
