@@ -10,7 +10,9 @@ import { CounterBatch } from './lib/analytics-counters';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
 import {
   eraseUserNotifications,
-  fanoutNotification,
+  fanoutNotificationPage,
+  markPushed,
+  unpushedNotification,
   insertNotification,
   isNotificationKey,
   pushStoredNotifications,
@@ -500,16 +502,19 @@ export class MessageProcessor {
       return;
     }
     const stored = await insertNotification(env.NOTIFICATIONS_DB, payload);
+    // Push the row unless it was already pushed: a retry after a failure
+    // between store and push still pushes it (SCALABILITY-AUDIT PR-10)
+    const pending = await unpushedNotification(env.NOTIFICATIONS_DB, payload);
     this.logger.info('Notification stored', {
       userId: payload.recipientUserId,
       key: payload.notificationKey,
       stored: !!stored,
+      pending: !!pending,
     });
-    if (stored && !payload.realtimeSent) {
-      await pushStoredNotifications(env, [stored], payload);
-    }
-    if (stored) {
-      await enqueuePush(env, [stored], payload);
+    if (pending) {
+      if (!payload.realtimeSent) await pushStoredNotifications(env, [pending], payload);
+      await enqueuePush(env, [pending], payload);
+      await markPushed(env.NOTIFICATIONS_DB, [pending]);
     }
   }
 
@@ -523,21 +528,44 @@ export class MessageProcessor {
       this.logger.warn('NOTIFICATIONS_DB not bound; fan-out skipped', { kind: payload.kind, channelId: payload.channelId });
       return;
     }
-    const rows = await fanoutNotification(env.NOTIFICATIONS_DB, payload);
     const data = {
       notificationKey: payload.kind === 'live_started' ? ('liveStarted' as const) : ('newVideo' as const),
       params: payload.params,
       actionUrl: payload.actionUrl,
     };
-    const pushed = await pushStoredNotifications(env, rows, data);
-    await enqueuePush(env, rows, data);
-    this.logger.info('Notification fan-out finished', {
+    // One page of subscribers per message (SCALABILITY-AUDIT PR-5): the next
+    // page is queued first, so a failure below retries only this page
+    const page = await fanoutNotificationPage(env.NOTIFICATIONS_DB, payload);
+    let nextQueued = false;
+    if (page.more && page.lastUserId) {
+      const next: NotificationFanoutPayload = { ...payload, afterUserId: page.lastUserId };
+      if (env.MESSAGE_QUEUE) {
+        await env.MESSAGE_QUEUE.send({
+          id: `${message.id}:${page.lastUserId}`,
+          type: MessageType.NotificationFanout,
+          timestamp: Date.now(),
+          payload: next as unknown as Record<string, unknown>,
+        });
+        nextQueued = true;
+      }
+    }
+    // Realtime: one batched call; push: one queue batch; then mark them pushed (PR-6, PR-7, PR-10)
+    const pushed = await pushStoredNotifications(env, page.rows, data);
+    await enqueuePush(env, page.rows, data);
+    await markPushed(env.NOTIFICATIONS_DB, page.rows);
+    this.logger.info('Notification fan-out page finished', {
       kind: payload.kind,
       channelId: payload.channelId,
       entityId: payload.entityId,
-      recipients: rows.length,
+      afterUserId: page.afterUserId,
+      recipients: page.rows.length,
       pushed,
+      nextQueued,
     });
+    if (page.more && page.lastUserId && !nextQueued) {
+      // No queue to page through: carry on in this invocation
+      await this.processNotificationFanout({ ...message, payload: { ...payload, afterUserId: page.lastUserId } as unknown as Record<string, unknown> }, env);
+    }
   }
 
   /** Deliver stored notifications to the recipients' push devices (Epic 9.4). */

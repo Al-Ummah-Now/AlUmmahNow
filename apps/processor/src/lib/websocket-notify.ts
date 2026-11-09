@@ -90,6 +90,42 @@ export async function broadcast(
   return sendWebSocketNotification(env.WEBSOCKET_URL, apiKey, channel, buildRealtimeMessage(channel, type, data));
 }
 
+/** Most events per batched /broadcast call (the websocket server accepts up to 1000). */
+export const REALTIME_BATCH = 500;
+
+/**
+ * Broadcast many events with one /broadcast call per REALTIME_BATCH of them
+ * (`{ items: [...] }`). Never throws. Returns the number of events in calls
+ * the server accepted.
+ */
+export async function broadcastMany(
+  env: RealtimeEnv,
+  events: Array<{ channel: string; type: string; data: Record<string, unknown> }>,
+): Promise<number> {
+  if (!env.WEBSOCKET_URL || events.length === 0) return 0;
+  const apiKey = await getApiKey(env.INTERNAL_API_KEY);
+  if (!apiKey) {
+    logger.warn('INTERNAL_API_KEY not configured, skipping WebSocket broadcast', { events: events.length });
+    return 0;
+  }
+  let sent = 0;
+  for (let i = 0; i < events.length; i += REALTIME_BATCH) {
+    const chunk = events.slice(i, i + REALTIME_BATCH);
+    try {
+      const response = await fetch(`${env.WEBSOCKET_URL.replace(/\/$/, '')}/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+        body: JSON.stringify({ items: chunk.map((e) => ({ channel: e.channel, message: buildRealtimeMessage(e.channel, e.type, e.data) })) }),
+      });
+      if (response.ok) sent += chunk.length;
+      else logger.warn('WebSocket batch broadcast rejected', { events: chunk.length, status: response.status });
+    } catch (error) {
+      logger.error('Failed to send WebSocket batch broadcast', { events: chunk.length, error });
+    }
+  }
+  return sent;
+}
+
 export type ProcessingStatus = 'uploading' | 'processing' | 'ready' | 'failed' | 'cancelled';
 
 /**
