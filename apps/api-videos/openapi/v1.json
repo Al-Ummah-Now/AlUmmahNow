@@ -14176,6 +14176,21 @@
                             "name": {
                               "type": "string"
                             },
+                            "cover": {
+                              "type": "object",
+                              "properties": {
+                                "videoId": {
+                                  "type": "string"
+                                },
+                                "thumbnailUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "videoId",
+                                "thumbnailUrl"
+                              ]
+                            },
                             "videos": {
                               "type": "array",
                               "items": {
@@ -14712,6 +14727,21 @@
                             "name": {
                               "type": "string"
                             },
+                            "cover": {
+                              "type": "object",
+                              "properties": {
+                                "videoId": {
+                                  "type": "string"
+                                },
+                                "thumbnailUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "videoId",
+                                "thumbnailUrl"
+                              ]
+                            },
                             "videos": {
                               "type": "array",
                               "items": {
@@ -14952,6 +14982,21 @@
                             "name": {
                               "type": "string"
                             },
+                            "cover": {
+                              "type": "object",
+                              "properties": {
+                                "videoId": {
+                                  "type": "string"
+                                },
+                                "thumbnailUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "videoId",
+                                "thumbnailUrl"
+                              ]
+                            },
                             "videos": {
                               "type": "array",
                               "items": {
@@ -15183,6 +15228,21 @@
                             },
                             "name": {
                               "type": "string"
+                            },
+                            "cover": {
+                              "type": "object",
+                              "properties": {
+                                "videoId": {
+                                  "type": "string"
+                                },
+                                "thumbnailUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "videoId",
+                                "thumbnailUrl"
+                              ]
                             },
                             "videos": {
                               "type": "array",
