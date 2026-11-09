@@ -24,6 +24,8 @@ export interface AiContext {
   surface?: string | undefined;
   /** Neurons spent by this context so far (all models). */
   spent: number;
+  /** Scan clock, so usage lands on the same UTC day the budget check read. Defaults to Date.now(). */
+  now?: number | undefined;
 }
 
 interface UsageField {
@@ -37,7 +39,7 @@ async function runModel(ctx: AiContext, model: string, input: Record<string, unk
   const usage = (result as { usage?: UsageField } | null)?.usage;
   const inputTokens = usage?.prompt_tokens ?? estimateIn;
   const outputTokens = usage?.completion_tokens ?? estimateOut(result);
-  ctx.spent += await recordUsage(ctx.db, ctx.logger, { model, inputTokens, outputTokens, surface: ctx.surface });
+  ctx.spent += await recordUsage(ctx.db, ctx.logger, { model, inputTokens, outputTokens, surface: ctx.surface }, ctx.now);
   return result;
 }
 

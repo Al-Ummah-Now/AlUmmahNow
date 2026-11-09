@@ -68,7 +68,7 @@ export async function handleModerationScan(
     return { status: 'done', signalId, decision: 'skipped:budget' };
   }
 
-  const ctx: AiContext = { ai: env.AI, db, logger, gatewayId: env.AI_GATEWAY_ID || undefined, surface: payload.surface, spent: 0 };
+  const ctx: AiContext = { ai: env.AI, db, logger, gatewayId: env.AI_GATEWAY_ID || undefined, surface: payload.surface, spent: 0, now };
   const models: string[] = [];
   let translation: string | undefined;
   let rationale: string | undefined;
