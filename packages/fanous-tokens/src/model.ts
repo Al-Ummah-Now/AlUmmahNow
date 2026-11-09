@@ -23,6 +23,8 @@ export interface Model {
   focus: Named<number>[];
   tv: Named<number>[];
   layout: Named<number>[];
+  components: { dark: Record<string, string>; light: Record<string, string> };
+  componentPairs: [string, string, number][];
 }
 
 type Node = Record<string, any>;
@@ -122,6 +124,8 @@ export function buildModel(root: Node): Model {
     focus: named(root.focus, px),
     tv: named(root.tv, px),
     layout: named(root.layout, px),
+    components: root.componentColors ?? { dark: {}, light: {} },
+    componentPairs: root.componentPairs ?? [],
   };
 }
 
