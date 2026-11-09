@@ -23,8 +23,8 @@ Every step lists its tests first. Each UI step also has the page's E2E (spec §9
 ### Data collection
 
 **1. Processor rollups.** The consumer ships before anything produces.
-- Tests: `applyRetention`, `applyTraffic`, bounded hosts, an old document with no new fields, and a case for every produced `MessageType`.
-- Build: `MessageType.VideoRetention` and its payload in `packages/shared-types`. Retention documents and `traffic` and `externalHosts` in `apps/processor/src/lib/analytics-rollup.ts`.
+- Tests: the increments, bounded hosts, exact totals with concurrent consumers on the D1 fake, and a case for every produced `MessageType`.
+- Build: `MessageType.VideoRetention` and its payload in `packages/shared-types`. Retention and traffic as D1 counter increments (`retention`, `retention_start`, `traffic`, `external_host`) in `apps/processor/src/lib/analytics-rollup.ts`, on #505's `CounterBatch`.
 
 **2. api-videos ingest.**
 - Tests: `POST /api/videos/:id/retention` validation, rate limit, and deleted or hidden videos. `POST /api/videos/:id/view` accepts valid `trafficSource` and `referrerHost`, and refuses other values.

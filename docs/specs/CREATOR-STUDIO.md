@@ -720,7 +720,7 @@ Part of the first build (decision 10).
 | Report | A `retention` event with `sessionId` and the newly reached buckets. Sent when four or more are new, and on pause, end, tab hide and unload |
 | Next route | Forwards to `POST /api/videos/:id/retention` |
 | api-videos (**new route**) | Validates bucket numbers, rate-limits per session and video with the `WATCH_TIME_LIMITER` binding under its own key, and queues the new `MessageType.VideoRetention`. No counts for deleted or hidden videos |
-| Processor | Folds into `analytics/retention/video/<id>/<YYYY-MM>.json`: `{ days: { day: { starts, buckets[20] } } }`. `starts` increases when bucket 0 first arrives in a session. Uses the same per-key chaining as the rollups, with the same small risk of losing an increment between isolates |
+| Processor | Adds D1 counters in `analytics_daily` (#505), as atomic upserts batched per queue batch: `retention` +1 per bucket reached (dim = bucket 0–19) and `retention_start` +1 when the report includes bucket 0 |
 | Read | `GET /api/analytics/videos/:videoId/retention` sums the days in range. Each point is `buckets[i] / starts`. Under 10 starts it returns no curve |
 
 **Traffic sources.**
@@ -733,13 +733,13 @@ Part of the first build (decision 10).
 | `direct` | First page of the visit, with no referrer |
 | `unknown` | No analytics consent, or an old client. Shown as "Not shared" |
 
-The batch `context` carries `trafficSource` and `referrerHost`. The route forwards them instead of the hard-coded values, and `POST /api/videos/:id/view` accepts them, validated against the list above and with a length limit. Rollups gain `traffic` (a count per source) and `externalHosts` (top 50 per day, the rest under `other`, using `incrementBounded`), for both video and channel. The existing `sources` and `embedOrigins` are unchanged.
+The batch `context` carries `trafficSource` and `referrerHost`. The route forwards them instead of the hard-coded values, and `POST /api/videos/:id/view` accepts them, validated against the list above and with a length limit. Each tracked view adds the D1 counter `traffic` (dim = source) and, for an external view, `external_host` (dim = host, capped at 50 per day with the rest under `other`), for both video and channel.
 
 **Privacy.** Stored data is aggregate counts and hostnames, with no user id or session id. `sessionId` is used only for the rate limit and within the processor's message. Everything except the anonymous view count needs analytics consent. `docs/compliance/GDPR.md` and `docs/analytics/README.md` are updated with the work.
 
 **History.** There's no backfill, because the events were never kept. Charts start on the day collection is deployed.
 
-**Cost.** At most a handful of retention messages per session, each one R2 read and write on a per-video monthly document. Well within the $500 per month cap.
+**Cost.** At most a handful of retention messages per session. Their counter increments are summed per queue batch and written in one D1 transaction. Well within the $500 per month cap.
 
 ## 9. Testing requirements
 
