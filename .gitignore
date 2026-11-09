@@ -74,3 +74,6 @@ bmad/
 *.backup
 logs/
 release-result.json
+
+# Generated per-PR preview configs
+wrangler.pr-preview.json

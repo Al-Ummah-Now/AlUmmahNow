@@ -54,6 +54,7 @@ export function releaseEnv(): ReleaseEnv {
 export const target = (): Target => ({
   ...TARGETS[releaseEnv()],
   ...(process.env.WEB_APP_URL ? { web: process.env.WEB_APP_URL } : {}),
+  ...(process.env.E2E_API_URL ? { api: process.env.E2E_API_URL } : {}),
 });
 
 /** Sink addresses: the auth server stores their codes for the test instead of emailing them. */

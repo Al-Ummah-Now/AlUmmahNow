@@ -1,6 +1,9 @@
 name: Cleanup PR Preview Deployments
 
 on:
+  # Previews are removed as soon as their PR closes
+  pull_request:
+    types: [closed]
   workflow_dispatch:
     inputs:
       pr_numbers:
@@ -39,7 +42,9 @@ jobs:
       - name: Get PR numbers to clean up
         id: get-prs
         run: |
-          if [ -n "${{ inputs.pr_numbers }}" ]; then
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr_list=${{ github.event.number }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.pr_numbers }}" ]; then
             echo "pr_list=${{ inputs.pr_numbers }}" >> $GITHUB_OUTPUT
           else
             # Get all merged PRs from the last 30 days

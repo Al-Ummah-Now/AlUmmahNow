@@ -380,13 +380,21 @@ jobs:
           retention-days: 30
           include-hidden-files: true
 
-  # Deploy Web App Preview (PRs only, when requested via label)
-  deploy-web-preview:
-    needs: build-web
+  # A per-PR preview on QA data (issue #486), only when the deploy-preview label
+  # is set. Built from the QA configs by scripts/release/preview-config.ts, which
+  # refuses anything bound to production. Only web and api-videos are deployed.
+  pr-preview:
+    needs: [build-web, validate-api]
     runs-on: ubuntu-latest
     # Same-repo PRs only: fork PRs never get preview secrets, so never try to deploy their code.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
     environment: preview
+    concurrency:
+      group: pr-preview-${{ github.event.number }}
+      cancel-in-progress: true
+    outputs:
+      web: ${{ steps.config.outputs.web }}
+      api: ${{ steps.config.outputs.api }}
     steps:
       - uses: actions/checkout@v4
 
@@ -404,6 +412,12 @@ jobs:
         run: pnpm install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+        timeout-minutes: 2
 
       - name: Download web build artifacts
         uses: actions/download-artifact@v6
@@ -411,649 +425,124 @@ jobs:
           name: web-build-artifacts
           path: apps/web/
 
-      - name: Debug - List artifact contents
+      - name: Find the account's workers.dev subdomain
+        id: subdomain
         run: |
-          echo "=== Repository root ==="
-          ls -la
-          echo "=== apps/web directory ==="
-          ls -la apps/web/ || echo "apps/web directory not found"
-          echo "=== Looking for .open-next ==="
-          find . -name ".open-next" -type d
-          echo "=== Looking for worker.js ==="
-          find . -name "worker.js"
-
-      - name: Generate preview name
-        id: preview-name
-        run: |
-          PREVIEW_NAME="al-ummah-web-pr-${{ github.event.number }}"
-          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
-          echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
-
-      - name: Deploy Web Preview to Cloudflare Workers
-        run: |
-          cd apps/web
-          pnpm wrangler deploy --config wrangler.preview.jsonc \
-            --name ${{ steps.preview-name.outputs.name }} \
-            --compatibility-date $(date +%Y-%m-%d)
+          value=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r .result.subdomain)
+          test -n "$value" && test "$value" != null
+          echo "value=$value" >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Comment PR with preview link
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { owner, repo, number } = context.issue;
-            const previewUrl = '${{ steps.preview-name.outputs.url }}';
+      - name: Generate preview configs (fails on any production binding or host)
+        id: config
+        run: |
+          N=${{ github.event.number }}
+          SUB=${{ steps.subdomain.outputs.value }}
+          for app in web api-videos; do
+            node --experimental-strip-types --no-warnings scripts/release/preview-config.ts \
+              --app "$app" --pr "$N" --subdomain "$SUB" --out "apps/$app/wrangler.pr-preview.json"
+          done
+          echo "web=https://al-ummah-web-pr-$N.$SUB.workers.dev" >> "$GITHUB_OUTPUT"
+          echo "api=https://al-ummah-api-pr-$N.$SUB.workers.dev" >> "$GITHUB_OUTPUT"
 
-            const body = `## 🚀 Web App Preview Deployment
-
-            Your web app preview deployment is ready!
-
-            **Preview URL**: ${previewUrl}
-
-            This preview will be automatically cleaned up when the PR is closed.
-
-            ---
-            <sub>Deployed via Cloudflare Workers Preview</sub>`;
-
-            const comments = await github.rest.issues.listComments({
-              owner,
-              repo,
-              issue_number: number,
-            });
-
-            const existingComment = comments.data.find(comment =>
-              comment.user.login === 'github-actions[bot]' &&
-              comment.body.includes('Web App Preview Deployment')
-            );
-
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existingComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: number,
-                body
-              });
-            }
-
-  # Deploy API Videos Preview (PRs only, when requested via label)
-  deploy-api-preview:
-    needs: validate-api
-    runs-on: ubuntu-latest
-    # Same-repo PRs only: fork PRs never get preview secrets, so never try to deploy their code.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
-    environment: preview
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 9.15.4
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # Additive migrations only (check:migrations). Applied through wrangler, so
+      # d1_migrations records them and main's later deploy skips them.
+      - name: Apply this PR's migrations to QA
+        run: |
+          (cd apps/api-videos && pnpm wrangler d1 migrations apply al-ummah-now-search-qa --remote --config wrangler.qa.jsonc)
+          (cd apps/processor && pnpm wrangler d1 migrations apply al-ummah-now-notifications-qa --remote --config wrangler.qa.jsonc)
+          (cd apps/admin-api && pnpm wrangler d1 migrations apply al-ummah-now-reports-qa --remote --config wrangler.qa.jsonc)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Build shared packages
-        run: |
-          pnpm --filter @al-ummah/shared-types build
-          pnpm --filter @al-ummah/logger build
-        timeout-minutes: 2
+      - name: QA still works on main's code with those migrations
+        run: pnpm smoke --env qa
 
-      - name: Generate preview name
-        id: preview-name
-        run: |
-          PREVIEW_NAME="al-ummah-api-pr-${{ github.event.number }}"
-          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
-          echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
-
-      - name: Deploy API Preview to Cloudflare Workers
+      - name: Deploy the API preview
         run: |
           cd apps/api-videos
-          pnpm wrangler deploy \
-            --name ${{ steps.preview-name.outputs.name }} \
-            --compatibility-date $(date +%Y-%m-%d)
+          pnpm wrangler deploy --config wrangler.pr-preview.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Comment PR with API preview link
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { owner, repo, number } = context.issue;
-            const previewUrl = '${{ steps.preview-name.outputs.url }}';
-
-            const body = `## 🚀 API Preview Deployment
-
-            Your API preview deployment is ready!
-
-            **API URL**: ${previewUrl}
-            **Swagger UI**: ${previewUrl}/
-            **OpenAPI Spec**: ${previewUrl}/openapi.json
-
-            This preview will be automatically cleaned up when the PR is closed.
-
-            ---
-            <sub>Deployed via Cloudflare Workers Preview</sub>`;
-
-            const comments = await github.rest.issues.listComments({
-              owner,
-              repo,
-              issue_number: number,
-            });
-
-            const existingComment = comments.data.find(comment =>
-              comment.user.login === 'github-actions[bot]' &&
-              comment.body.includes('API Preview Deployment')
-            );
-
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existingComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: number,
-                body
-              });
-            }
-
-  # Deploy Processor Preview (PRs only, when requested via label)
-  deploy-processor-preview:
-    needs: validate-processor
-    runs-on: ubuntu-latest
-    # Same-repo PRs only: fork PRs never get preview secrets, so never try to deploy their code.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
-    environment: preview
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 9.15.4
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build shared packages
-        run: |
-          pnpm --filter @al-ummah/shared-types build
-          pnpm --filter @al-ummah/logger build
-        timeout-minutes: 2
-
-      - name: Generate preview name
-        id: preview-name
-        run: |
-          PREVIEW_NAME="al-ummah-processor-pr-${{ github.event.number }}"
-          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
-
-      - name: Deploy Processor Preview to Cloudflare Workers
-        run: |
-          cd apps/processor
-          pnpm wrangler deploy --env development \
-            --name ${{ steps.preview-name.outputs.name }} \
-            --compatibility-date $(date +%Y-%m-%d)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Comment PR with processor preview info
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { owner, repo, number } = context.issue;
-            const previewName = '${{ steps.preview-name.outputs.name }}';
-
-            const body = `## 🚀 Processor Preview Deployment
-
-            Your queue processor preview deployment is ready!
-
-            **Worker Name**: ${previewName}
-            **Environment**: development
-
-            This preview will be automatically cleaned up when the PR is closed.
-
-            ---
-            <sub>Deployed via Cloudflare Workers Preview</sub>`;
-
-            const comments = await github.rest.issues.listComments({
-              owner,
-              repo,
-              issue_number: number,
-            });
-
-            const existingComment = comments.data.find(comment =>
-              comment.user.login === 'github-actions[bot]' &&
-              comment.body.includes('Processor Preview Deployment')
-            );
-
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existingComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: number,
-                body
-              });
-            }
-
-  # Deploy WebSocket Server Preview (PRs only, when requested via label)
-  deploy-websocket-preview:
-    needs: validate-websocket
-    runs-on: ubuntu-latest
-    # Same-repo PRs only: fork PRs never get preview secrets, so never try to deploy their code.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
-    environment: preview
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 9.15.4
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build shared packages
-        run: |
-          pnpm --filter @al-ummah/shared-types build
-          pnpm --filter @al-ummah/logger build
-        timeout-minutes: 2
-
-      - name: Generate preview name
-        id: preview-name
-        run: |
-          PREVIEW_NAME="al-ummah-comms-pr-${{ github.event.number }}"
-          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
-          echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
-
-      - name: Deploy WebSocket Preview to Cloudflare Workers
-        run: |
-          cd apps/websocket-server
-          pnpm wrangler deploy \
-            --name ${{ steps.preview-name.outputs.name }} \
-            --compatibility-date $(date +%Y-%m-%d)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Comment PR with websocket preview link
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { owner, repo, number } = context.issue;
-            const previewUrl = '${{ steps.preview-name.outputs.url }}';
-
-            const body = `## 🚀 WebSocket Server Preview Deployment
-
-            Your WebSocket server preview deployment is ready!
-
-            **WebSocket URL**: ${previewUrl}/ws
-            **Health Check**: ${previewUrl}/health
-            **Stats**: ${previewUrl}/stats
-
-            This preview will be automatically cleaned up when the PR is closed.
-
-            ---
-            <sub>Deployed via Cloudflare Workers Preview</sub>`;
-
-            const comments = await github.rest.issues.listComments({
-              owner,
-              repo,
-              issue_number: number,
-            });
-
-            const existingComment = comments.data.find(comment =>
-              comment.user.login === 'github-actions[bot]' &&
-              comment.body.includes('WebSocket Server Preview Deployment')
-            );
-
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existingComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: number,
-                body
-              });
-            }
-
-  # Deploy Admin API Preview (PRs only, when requested via label)
-  deploy-admin-api-preview:
-    needs: validate-admin-api
-    runs-on: ubuntu-latest
-    # Same-repo PRs only: fork PRs never get preview secrets, so never try to deploy their code.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
-    environment: preview
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 9.15.4
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build shared packages
-        run: |
-          pnpm --filter @al-ummah/shared-types build
-          pnpm --filter @al-ummah/logger build
-        timeout-minutes: 2
-
-      - name: Generate preview name
-        id: preview-name
-        run: |
-          PREVIEW_NAME="al-ummah-admin-api-pr-${{ github.event.number }}"
-          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
-          echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
-
-      - name: Deploy Admin API Preview to Cloudflare Workers
-        run: |
-          cd apps/admin-api
-          pnpm wrangler deploy \
-            --name ${{ steps.preview-name.outputs.name }} \
-            --compatibility-date $(date +%Y-%m-%d)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Comment PR with Admin API preview link
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { owner, repo, number } = context.issue;
-            const previewUrl = '${{ steps.preview-name.outputs.url }}';
-
-            const body = `## 🚀 Admin API Preview Deployment
-
-            Your Admin API preview deployment is ready!
-
-            **API URL**: ${previewUrl}
-            **Swagger UI**: ${previewUrl}/
-            **OpenAPI Spec**: ${previewUrl}/openapi.json
-
-            This preview will be automatically cleaned up when the PR is closed.
-
-            ---
-            <sub>Deployed via Cloudflare Workers Preview</sub>`;
-
-            const comments = await github.rest.issues.listComments({
-              owner,
-              repo,
-              issue_number: number,
-            });
-
-            const existingComment = comments.data.find(comment =>
-              comment.user.login === 'github-actions[bot]' &&
-              comment.body.includes('Admin API Preview Deployment')
-            );
-
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existingComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: number,
-                body
-              });
-            }
-
-  # Deploy Admin Web Preview (PRs only, when requested via label)
-  deploy-admin-web-preview:
-    needs: build-admin-web
-    runs-on: ubuntu-latest
-    # Same-repo PRs only: fork PRs never get preview secrets, so never try to deploy their code.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
-    environment: preview
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 9.15.4
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download admin-web build artifacts
-        uses: actions/download-artifact@v6
-        with:
-          name: admin-web-build-artifacts
-          path: apps/admin-web/
-
-      - name: Generate preview name
-        id: preview-name
-        run: |
-          PREVIEW_NAME="al-ummah-admin-web-pr-${{ github.event.number }}"
-          echo "name=$PREVIEW_NAME" >> $GITHUB_OUTPUT
-          echo "url=https://$PREVIEW_NAME.workers.dev" >> $GITHUB_OUTPUT
-
-      - name: Deploy Admin Web Preview to Cloudflare Workers
-        run: |
-          cd apps/admin-web
-          pnpm wrangler deploy --config wrangler.qa.jsonc \
-            --name ${{ steps.preview-name.outputs.name }} \
-            --compatibility-date $(date +%Y-%m-%d)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Comment PR with Admin Web preview link
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { owner, repo, number } = context.issue;
-            const previewUrl = '${{ steps.preview-name.outputs.url }}';
-
-            const body = `## 🚀 Admin Web Preview Deployment
-
-            Your Admin Web preview deployment is ready!
-
-            **Preview URL**: ${previewUrl}
-
-            This preview will be automatically cleaned up when the PR is closed.
-
-            ---
-            <sub>Deployed via Cloudflare Workers Preview</sub>`;
-
-            const comments = await github.rest.issues.listComments({
-              owner,
-              repo,
-              issue_number: number,
-            });
-
-            const existingComment = comments.data.find(comment =>
-              comment.user.login === 'github-actions[bot]' &&
-              comment.body.includes('Admin Web Preview Deployment')
-            );
-
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existingComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: number,
-                body
-              });
-            }
-
-  # Cleanup previews when PR is closed
-  cleanup-previews:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 9.15.4
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate preview names
-        id: preview-names
-        run: |
-          echo "web=al-ummah-web-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
-          echo "api=al-ummah-api-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
-          echo "processor=al-ummah-processor-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
-          echo "websocket=al-ummah-comms-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
-          echo "admin_api=al-ummah-admin-api-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
-          echo "admin_web=al-ummah-admin-web-pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
-
-      - name: Delete web preview
-        continue-on-error: true
+      - name: Deploy the web preview
         run: |
           cd apps/web
-          pnpm wrangler delete ${{ steps.preview-names.outputs.web }} || echo "Web preview already deleted or doesn't exist"
+          pnpm wrangler deploy --config wrangler.pr-preview.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Delete API preview
-        continue-on-error: true
+      - name: Fill and verify new columns on QA
         run: |
-          cd apps/api-videos
-          pnpm wrangler delete ${{ steps.preview-names.outputs.api }} || echo "API preview already deleted or doesn't exist"
+          if [ -f scripts/release/content-columns.ts ]; then
+            pnpm release:content-columns --env qa
+            pnpm release:content-columns --env qa --check
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Delete processor preview
-        continue-on-error: true
+      - name: Comment the preview URLs
         run: |
-          cd apps/processor
-          pnpm wrangler delete ${{ steps.preview-names.outputs.processor }} || echo "Processor preview already deleted or doesn't exist"
+          gh pr comment ${{ github.event.number }} --edit-last --create-if-none --body \
+            "Preview on QA data. Web: ${{ steps.config.outputs.web }} API: ${{ steps.config.outputs.api }}"
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
 
-      - name: Delete websocket preview
-        continue-on-error: true
+  # The PR's own Studio specs against its own preview, in all three engines.
+  pr-preview-e2e:
+    needs: pr-preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      E2E_ENV: qa
+      WEB_APP_URL: ${{ needs.pr-preview.outputs.web }}
+      E2E_API_URL: ${{ needs.pr-preview.outputs.api }}
+      PLAYWRIGHT_VERSION: 1.56.1  # keep in step with apps/web/package.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Prepare the suite
         run: |
-          cd apps/websocket-server
-          pnpm wrangler delete ${{ steps.preview-names.outputs.websocket }} || echo "WebSocket preview already deleted or doesn't exist"
+          SUITE="$RUNNER_TEMP/preview-e2e"
+          mkdir -p "$SUITE/e2e/test-utils"
+          cp -R apps/web/e2e/release apps/web/e2e/test-fixtures "$SUITE/e2e/"
+          cp apps/web/e2e/test-utils/code-sink.ts "$SUITE/e2e/test-utils/"
+          cp apps/web/playwright.release.config.ts "$SUITE/"
+          cd "$SUITE"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION"
+          npx playwright install --with-deps chromium firefox webkit
+          echo "SUITE=$SUITE" >> "$GITHUB_ENV"
+
+      - name: Run the PR's Studio specs on its preview
+        working-directory: ${{ env.SUITE }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Delete admin-api preview
-        continue-on-error: true
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
         run: |
-          cd apps/admin-api
-          pnpm wrangler delete ${{ steps.preview-names.outputs.admin_api }} || echo "Admin API preview already deleted or doesn't exist"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          if ! ls e2e/release/studio-*.spec.ts > /dev/null 2>&1; then
+            echo "No Studio specs on this branch."
+            exit 0
+          fi
+          npx playwright test -c playwright.release.config.ts studio- --project=auth-flows --project=studio-firefox --project=studio-webkit
 
-      - name: Delete admin-web preview
-        continue-on-error: true
-        run: |
-          cd apps/admin-web
-          pnpm wrangler delete ${{ steps.preview-names.outputs.admin_web }} || echo "Admin Web preview already deleted or doesn't exist"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Cleanup summary
-        run: |
-          echo "🧹 Preview cleanup completed for PR #${{ github.event.number }}"
-          echo ""
-          echo "Attempted to delete:"
-          echo "  • ${{ steps.preview-names.outputs.web }}"
-          echo "  • ${{ steps.preview-names.outputs.api }}"
-          echo "  • ${{ steps.preview-names.outputs.processor }}"
-          echo "  • ${{ steps.preview-names.outputs.websocket }}"
-          echo "  • ${{ steps.preview-names.outputs.admin_api }}"
-          echo "  • ${{ steps.preview-names.outputs.admin_web }}"
-          echo ""
-          echo "Note: Some workers may not exist if deployment failed earlier."
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: preview-e2e-report
+          path: ${{ env.SUITE }}/test-results
+          retention-days: 7
 
   # Deploy to QA from main (owner rule: fix on main, deploy QA and prod from main).
   # Runs on every push to main and on manual dispatch from main; never from
