@@ -310,3 +310,21 @@ html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important
 .watch-desc summary{cursor:pointer;font-weight:600;display:flex;gap:10px}.watch-desc p{margin:8px 0 0;white-space:pre-line}
 [data-slot=button]{min-height:36px;gap:8px;font-size:14px;line-height:20px}[data-slot=button] svg{width:18px;height:18px}
 [data-testid=comments-section] button[class*="px-"]:not(.ts-trigger){min-height:36px;padding-block:0;font-size:14px;border-radius:var(--r-pill)}
+
+/* Decorative art: sign-in keeps it; elsewhere only in real empty gutters, never behind content */
+html:has(video) .ti,html:has(.video-card) .ti,html:has(.rv) .ti{display:none}
+html:not(:has([data-signin])) .ti-top,html:not(:has([data-signin])) .ti-lattice,html:not(:has([data-signin])) .ti-dome{display:none}
+@media(max-width:1599px){html:not(:has([data-signin])) .ti{display:none}}
+html:not(:has([data-signin])) .ti{--o:.1!important}
+
+/* Rail labels fit without truncating */
+html{--rail:88px}.nv{font-size:11px;line-height:13px}.nv span{white-space:normal;overflow:visible;text-overflow:clip;text-align:center;overflow-wrap:anywhere}
+html[data-rail=open] .nv{font-size:14px;line-height:20px}html[data-rail=open] .nv span{text-align:start}
+
+/* Quiet card overflow and row remove buttons */
+.video-card button[aria-haspopup],.video-card [aria-haspopup=menu],[data-testid*=history] button[class*="rounded-full"]{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
+@media(hover:hover){.video-card button[aria-haspopup]:hover{background:var(--m-hover)!important}}
+/* Non-16:9 thumbnails fill the frame */
+.video-card img,.vc-t img{object-fit:cover!important}
+/* Settings row chevrons centred */
+a.group svg.lucide-chevron-right{align-self:center}

@@ -11,7 +11,7 @@ export default async function DemoSignIn({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   const c = locale === 'ar' ? COPY.ar : COPY.en;
   return (
-    <main className="flex flex-1 items-center justify-center p-4">
+    <main data-signin="" className="flex flex-1 items-center justify-center p-4">
       <div style={{ width: '100%', maxWidth: 400, background: 'var(--fanous-c-form-section-bg)', borderRadius: 'var(--fanous-radius-xl)', overflow: 'hidden', boxShadow: 'var(--fanous-elevation-high)' }}>
         <div className="demo-gfx" data-t={THEME} aria-hidden="true" dangerouslySetInnerHTML={{ __html: graphics[THEME] }} />
         <form className="grid gap-4 p-6">
