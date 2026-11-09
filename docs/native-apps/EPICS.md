@@ -415,8 +415,9 @@ media engine (Epic 30). The .NET Uno importer (AlUmmahNowTools) is retired once 
 - **19.6 Analytics deep dive** with export (CSV).
 - **19.7 Live control room** (D3): stream keys, OBS profile export, health (bitrate / dropped frames),
   chat moderation, start/stop, scheduled events.
-- **19.8 Teams & roles:** owner, manager, editor, moderator, viewer-of-analytics per channel; audit log
-  (uses auth RBAC).
+- **19.8 Teams & roles:** owner, manager, editor, moderator, viewer-of-analytics per channel; audit log.
+  Channel roles are separate from site roles: stored on the videos side, never in auth or tokens
+  (see `docs/specs/CHANNEL-ROLES.md`, which supersedes the earlier "uses auth RBAC" note).
 - **19.9 Institution mode:** many channels under one organisation (masjid, university), shared
   assets, brand kit.
 
