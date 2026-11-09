@@ -3,7 +3,7 @@
 **Status:** Draft for owner review. Not implemented.
 **Date:** 2026-11-08
 **Plan:** [CHANNEL-CLAIM-AND-TRANSFER-PLAN.md](CHANNEL-CLAIM-AND-TRANSFER-PLAN.md)
-**Related:** `apps/api-videos/src/lib/channelHandles.ts`, `packages/shared-types/src/search/ownership.ts`, `docs/design/THEMES.md`, `docs/compliance/GDPR.md`, account hub spec (AlUmmahNowAuth #250, §5.3 "Email is permanent")
+**Related:** `apps/api-videos/src/lib/channelHandles.ts`, `packages/shared-types/src/search/ownership.ts`, `docs/design/THEMES.md`, `docs/compliance/GDPR.md`, channel roles spec (PR #462)
 
 ## 1. Summary
 
@@ -14,22 +14,24 @@ A super admin gets a **Channel ownership** screen on the admin site, with two op
 
 Today a super admin can only set an official handle on a channel they already own, from the normal channel settings form. Nothing can move a channel between users.
 
-A signed-in user also gets a third operation, on the same engine:
-
-3. **Move a channel, or everything, to another of their own accounts** (§13). Email is permanent across Al Ummah Now, so this is how someone switches email: create a new account and move their things to it.
+A channel owner can add admins and other roles (channel roles spec, PR #462), but can't change who owns the channel. **Only a super admin can transfer ownership**, and only on the admin site. There is no user-facing transfer of any kind.
 
 ### Goals
 
-- A transfer moves everything that hangs off the channel, and the old owner loses access to all of it.
-- The super admin operations are limited to super admins, and a self-service move needs fresh proof of both accounts, each enforced on the server.
+- A transfer changes the owner and nothing else. Everything that hangs off the channel goes to the new owner, and the access of anyone else on the channel is untouched (§6.9).
+- Every operation here is limited to super admins, enforced on the server.
 - Every operation is confirmed twice, audited, safe to retry, and recoverable if it stops halfway.
 
 ### Non-goals
 
-- Handing a channel to another person's account as a product feature. Self-service needs a sign-in to both accounts (§13.1).
-- Channel co-owners or managers. The data model has one owner per channel.
-- Moving comments, likes or watch history. Those record what a person did and stay with them (§13.4).
-- Plan gating of the super admin tools. They are operator tools, so they have no entitlement key (see §6.6 for `channel.max`). Self-service is a customer feature and has one (§13.6).
+- Any transfer by a channel owner or other user, including moving a channel between someone's own accounts.
+- Co-owners. A channel has exactly one owner.
+- Moving comments, likes or watch history. Those record what a person did and stay with them.
+- Plan gating. These are operator tools, so they have no entitlement key (see §6.6 for `channel.max`).
+
+### Out of scope / related
+
+- **Per-channel roles** (admins, editors, moderators, analytics viewers) are specified in the channel roles spec, [PR #462](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/462). They are separate from site roles: stored on the videos side, never in auth or tokens. A channel role never allows a transfer. The one link between the two is that a super admin, which is a site role, performs the transfer here.
 
 ## 2. What exists today
 
@@ -46,7 +48,9 @@ A signed-in user also gets a third operation, on the same engine:
 | User lookup | Auth has `GET /admin/users?email=` and `GET /admin/users/:id`, for M2M tokens with an `admin:*` scope plus `X-Acting-User-Id`. It reads the actor's roles from its own database | admin-api needs its own M2M client (§5.3). `email=` is a substring match, so results must be filtered to an exact match |
 | Web session | The channel list is cached in the HttpOnly session cookie and reloaded at sign-in and on an account switch | Needs a realtime nudge (§6.8) |
 
-## 3. Roles
+## 3. Site roles
+
+These are platform-wide roles from auth. They have nothing to do with channel roles: a channel admin gets 403 here unless they also hold the site role.
 
 | Layer | Form seen | Check |
 |---|---|---|
@@ -80,7 +84,7 @@ The channel immediately gets a default handle from `claimDefaultHandle`, so its 
 
 ### 4.4 Transfer a channel
 
-Input: channel, target (`toUserId`, or "me"), reason, and the options in §6.3.
+Input: channel, target (`toUserId`, or "me"), reason, and the options in §6.3 and §6.9.
 
 Refused with a specific error when:
 
@@ -159,7 +163,7 @@ Unchanged: subscribers and bells, sections and tabs, views and analytics history
 - If the channel was their main and they have others, the existing `pickNewMainChannel` picks the oldest remaining channel.
 - If it was their only channel, they are left with none. That's already a supported state after a channel delete: they can browse and create another.
 - If it was their active channel, the web client falls back to their main or first channel on the next refresh (§6.8).
-- The server stops honouring them on the moved content as soon as each record is rewritten.
+- The server stops honouring them on the moved content as soon as each record is rewritten. They lose all access unless the super admin keeps them as channel admin (§6.9).
 
 ### 6.3 Options and security clean-up
 
@@ -168,8 +172,8 @@ Unchanged: subscribers and bells, sections and tabs, views and analytics history
 | Live stream keys | **Always rotated** on every stream that hasn't ended, since the old owner knows them |
 | `contactEmail` | **Cleared by default**, because it's the old owner's public contact. A checkbox keeps it |
 | Handle | Kept by default. Option: release it (§4.3) |
-| Official handle going to a non-staff user | Warned. Needs a second tick, `allowOfficialToNonStaff`. "Staff" means the target has any admin role in auth |
-| Scholar verification | Open question 2 |
+| Official handle going to a non-staff user | Warned. Needs a second tick, `allowOfficialToNonStaff`. "Staff" means the target has any admin role in auth, which is a site role. A channel role never counts |
+| Scholar verification badge | **Removed unless the target is staff**. A tick box lets the super admin override this either way (open question 2) |
 
 `email` and `contactEmail` aren't kept in the job or audit rows, so a transfer doesn't create a second copy of personal data. GDPR access and erasure run off `userId`, so after a transfer the content is treated as the new owner's.
 
@@ -205,7 +209,7 @@ Two races can put an old `userId` back: an old owner's edit that read the record
 
 ### 6.6 Effect of `channel.max`
 
-The channel limit entitlement isn't enforced at channel creation yet. A super admin transfer can exceed it on purpose. The preview shows a note if the target would be over their plan's value.
+The channel limit entitlement isn't enforced at channel creation yet. A super admin transfer can exceed it on purpose, now and once it is enforced (open question 5). The preview shows a note if the target would be over their plan's value.
 
 ### 6.7 Notifications
 
@@ -217,7 +221,7 @@ Stored as keys and params, per the notification centre design, and rendered in t
 | `channelTransferredIn` | New owner | You are now the owner of the channel {channel}. | أصبحت الآن مالك قناة {channel}. |
 | `channelHandleChanged` | Channel owner | The handle of your channel {channel} was changed to @{handle} by the Al Ummah Now team. | غيّر فريق الأمة الآن معرّف قناتك {channel} إلى @{handle}. |
 
-The name of the acting admin is never shown. `dedupeKey` is `transfer:{jobId}:{role}`, so retries don't send duplicates. On the super admin path nobody is notified about their own action (self-service always notifies both accounts, §13.6). A super admin who sets a handle on their own channel, or who takes one to themselves, gets no notice for that side.
+The name of the acting admin is never shown. `dedupeKey` is `transfer:{jobId}:{role}`, so retries don't send duplicates. The old owner is always notified, and there is no silent option (open question 4). Nobody is notified about their own action: a super admin who sets a handle on their own channel, or who takes one to themselves, gets no notice for that side.
 
 ### 6.8 Caches, search and sessions
 
@@ -228,17 +232,31 @@ The name of the acting admin is never shown. `dedupeKey` is `transfer:{jobId}:{r
 | Handle resolution, channel pages | Read R2 on each request, so a new handle is live at once |
 | Web session cookie and channel switcher | New realtime event `channels_changed` on `user:{id}` to both owners. The web client calls `reloadUserChannels()` and refreshes. An offline user picks it up at next sign-in or account switch. Until then, a stale entry can only produce a 403 |
 
+### 6.9 Only the owner changes
+
+A transfer replaces the owner and does not touch anyone else's access. This stays correct once channel roles (PR #462) exist:
+
+| Who | After the transfer |
+|---|---|
+| Channel admins, editors, moderators, analytics viewers | Keep their roles, unchanged. The new owner can manage them afterwards |
+| Pending invitations | Stay valid, except any addressed to the new owner, which are cancelled |
+| New owner, if already a member | Their member row is removed, because an owner has no member row |
+| Old owner | **Loses all access** (open question 6) |
+
+The super admin can tick **Keep the old owner as channel admin**, option `keepOldOwnerAsAdmin`, which adds them as a channel admin. The option is hidden until channel roles exist. Until then the old owner always loses access.
+
+Membership changes happen in the `links` phase and are checked in `verify`. Under the roles spec, `video.userId` always means the channel owner, and the uploader is recorded separately in `uploadedBy`. So the rule in §6.1 that only records on the old owner are rewritten still holds, and `uploadedBy` is never changed.
+
 ## 7. Data changes
 
-**`apps/admin-api/migrations/0006_channel_ownership_audit.sql`** (`REPORTS_DB`), append-only. api-videos gets a `REPORTS_DB` binding to the same database for the self-service path:
+**`apps/admin-api/migrations/0006_channel_ownership_audit.sql`** (`REPORTS_DB`), append-only:
 
 ```sql
 CREATE TABLE IF NOT EXISTS channel_ownership_audit (
   id TEXT PRIMARY KEY,
   operation_id TEXT NOT NULL,     -- the Idempotency-Key
   event TEXT NOT NULL,            -- requested | succeeded | failed | needs_attention
-  action TEXT NOT NULL,           -- handle_set | handle_take | handle_release | transfer | user_lookup | self_move_channel | self_move_all
-  source TEXT NOT NULL,           -- admin | self
+  action TEXT NOT NULL,           -- handle_set | handle_take | handle_release | transfer | user_lookup
   channel_id TEXT,
   actor_id TEXT NOT NULL,
   from_user_id TEXT,
@@ -259,10 +277,7 @@ CREATE INDEX IF NOT EXISTS idx_channel_ownership_audit_actor ON channel_ownershi
 ```sql
 CREATE TABLE IF NOT EXISTS channel_transfers (
   id TEXT PRIMARY KEY,            -- the operation id
-  kind TEXT NOT NULL,             -- channel | user_data
-  source TEXT NOT NULL,           -- admin | self
-  move_id TEXT,                   -- groups the jobs of one "Move everything"
-  channel_id TEXT,                -- null for user_data
+  channel_id TEXT NOT NULL,
   from_user_id TEXT NOT NULL,
   to_user_id TEXT NOT NULL,
   actor_id TEXT NOT NULL,
@@ -279,11 +294,8 @@ CREATE TABLE IF NOT EXISTS channel_transfers (
   completed_at INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_transfers_active
-  ON channel_transfers (channel_id) WHERE status <> 'done' AND kind = 'channel';
-CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_transfers_active_user_data
-  ON channel_transfers (from_user_id) WHERE status <> 'done' AND kind = 'user_data';
+  ON channel_transfers (channel_id) WHERE status <> 'done';
 CREATE INDEX IF NOT EXISTS idx_channel_transfers_status ON channel_transfers (status, updated_at);
-CREATE INDEX IF NOT EXISTS idx_channel_transfers_move ON channel_transfers (move_id);
 ```
 
 Both are new tables, so they're expand-only and rollback-safe. Each needs `pnpm schema:snapshot` committed with it, to pass `check:migrations` and `check:schema`.
@@ -345,6 +357,9 @@ Handle  [ alummah      ] Available  ( ) Assign to me
                                     Name <email>  Active  Roles: -
                                     [ ] Keep contact email
                                     [ ] Release the handle
+                                    [ ] Keep scholar badge
+                                    [ ] Keep the old owner as channel
+                                        admin (once roles exist)
                                     [Review transfer]
 
 Confirm dialog (focus trapped)
@@ -353,6 +368,8 @@ Confirm dialog (focus trapped)
   - Private and draft videos move too
   - A has another channel; X becomes their main channel
   - Live stream keys will be replaced
+  - Everyone else on the channel keeps their role
+  - A loses access to this channel
   Reason [                                                ]
   Type @lamahat to confirm [          ]
   [Cancel]                            [Transfer channel]
@@ -394,6 +411,10 @@ Progress
 | `channels.warnPrivate` | Private and draft videos move too. | تُنقل أيضًا مقاطع الفيديو الخاصة والمسودات. |
 | `channels.warnStreamKeys` | Live stream keys will be replaced. | سيتم استبدال مفاتيح البث المباشر. |
 | `channels.warnOfficial` | This official handle would go to a non-staff account. | سينتقل هذا المعرّف الرسمي إلى حساب ليس من فريق العمل. |
+| `channels.warnMembersKept` | Everyone else on this channel keeps their role. | يحتفظ بقية أعضاء القناة بأدوارهم. |
+| `channels.warnOldOwner` | The old owner will lose access to this channel. | سيفقد المالك السابق إمكانية الوصول إلى هذه القناة. |
+| `channels.keepOldOwner` | Keep the old owner as channel admin | الإبقاء على المالك السابق مشرفًا للقناة |
+| `channels.keepBadge` | Keep the verification badge | الإبقاء على شارة التوثيق |
 | `channels.inProgress` | Moving {done} of {total} | جارٍ نقل {done} من {total} |
 | `channels.done` | Transfer complete. | اكتمل النقل. |
 | `channels.needsAttention` | The transfer stopped before it finished. It is safe to retry. | توقف النقل قبل اكتماله. يمكن إعادة المحاولة بأمان. |
@@ -408,9 +429,10 @@ Progress
 - Phase runner: resumes from a cursor, skips records already moved, leaves foreign `userId` alone and counts it, stops on budget, verify sends a mismatch back and ends in `needs_attention` after three attempts.
 - Handle: official allowed, route words refused, exclusive write loses cleanly, take gives the holder a default handle, release leaves a working handle.
 - `previewHash` changes when any input changes.
+- Only the owner changes (§6.9): member rows are untouched, a new owner's own row is removed, `keepOldOwnerAsAdmin` adds the old owner, and `uploadedBy` isn't rewritten.
 
 **API (admin-api and api-videos)**
-- Each admin-api route: no token 401; Moderator and Admin 403; Super Admin passes.
+- Each admin-api route: no token 401; Moderator and Admin 403; Super Admin passes. A channel owner or channel admin with no site role gets 403.
 - Each internal route: no key 401; key without actor token 401; key with an Admin token 403; actor mismatch 403.
 - Idempotent replay returns the first result and writes no second `requested` row.
 - `requested` audit failure means no R2 write.
@@ -429,167 +451,13 @@ Progress
 
 Writes are one R2 operation per moved object, on a rare, operator-only action, so a transfer costs fractions of a cent. There are two small new D1 tables, a handful of queue messages, and nothing that grows with viewers. It's far inside the $500 per month cap.
 
-## 13. Self-service: move to another of your accounts
+## 13. Open questions for the owner
 
-Email is permanent (account hub spec, §5.3), so someone who wants a different email creates a new account and moves their things to it. No super admin is involved. **All of this lives in Videos.** Auth is used only to verify the two tokens, through its normal public interfaces, and needs no new API.
-
-### 13.1 Proof of ownership
-
-The user must be signed into both accounts in the same browser, using the multi-account session that already exists. Both sign-ins must be recent.
-
-| Check, made by api-videos at preview and again at commit | Failure |
-|---|---|
-| Both tokens pass the standard check: signature via `client.verify`, and not on the revocation list. A suspended or signed-out account fails here | 401 |
-| The two tokens belong to different users | `same_account` |
-| Both tokens were issued to the web client (`aud` equals `env.ClientId`), so a token given to another app can't be used | 401 |
-| Each token has `auth_time` within 600 seconds, matching auth's `REAUTH_MAX_AGE_SECONDS`. There is no fallback to `iat`, because a refresh renews `iat` but keeps `auth_time` | 401 `step_up_required`, naming `source` or `target`, with the RFC 9470 challenge auth uses |
-| The source token's user owns the channel | 403 |
-
-```text
-web server action   reads both accounts' tokens from the HttpOnly session
-   | Authorization: Bearer <source token>
-   | X-Target-Authorization: Bearer <target token>
-api-videos          /api/account-moves/*: checks above, then the transfer engine
-```
-
-- The tokens stay on the server side of the web app. `X-Target-Authorization` isn't added to the CORS allow-list, so a browser script can't send it.
-- The user's request carries no internal key. Once the job is authorized, the background `advance` step from §6.4 continues it worker to worker, with a job id and no authority of its own.
-- On `step_up_required`, the web app sends the user to `/authorize?prompt=login&max_age=0` for that account, using the existing add-account flow, and returns to the same page with the selections kept.
-- The target's email for `channel.email` comes from its verified token, so no user lookup is needed.
-
-Holding both sign-ins proves control of both accounts, not that one person owns them. Two people could use it on one device by each signing in. That is accepted: both have knowingly signed in, and both are notified.
-
-### 13.2 Operations
-
-- **Move this channel.** A section in channel settings (`settings/channel/[id]/edit`).
-- **Move everything.** A new account-level page, `settings/account-move`. It moves every channel the account owns, then the chosen user-level data. Each channel is one job, plus one `user_data` job, grouped by `move_id`. User data runs last, because its rules depend on which channels moved.
-
-Both list the other accounts signed in on this browser. If there are none, the page explains how to add one, using the existing "Add another account" flow.
-
-### 13.3 What moves
-
-A moved channel takes everything in §6.1, with the §6.2 main-channel rules and the §6.3 clean-up. Offered on top:
-
-| Data | Rule | Default for Move everything | Default for Move this channel |
-|---|---|---|---|
-| Subscriptions | Subscriptions held by a moved channel go with it (§6.1). Those held by a channel that stays behind stay with it. If no channel moves, they attach to the target's main channel, and the option is unavailable if the target has none. Already-subscribed targets and the target's own channels are skipped | On | Off |
-| Watch later | `watch-later-{from}` merged into `watch-later-{to}`, target's items first, duplicates dropped, capped at 5,000. The preview shows any overflow | On | Off |
-| Saved posts | `saved_posts` rows re-keyed. Duplicates dropped | On | Off |
-| The user's own playlists | Playlists with `userId` = old account and no channel, or a channel the old account no longer owns. Playlists on a channel that stays behind stay with it | On | Off |
-| Notification preferences | Copied into `notification_settings`, only for categories the target hasn't set. Per-channel bells move with the subscription | On | Off |
-| Upload templates | `upload-defaults/{userId}/…` copied. Not in the owner's list, but otherwise they would be left behind | On | Off |
-
-These are moves, not copies, except where the table says copied, so the old account ends up empty and the new one is complete. Move everything defaults on because switching email is its main use. Move this channel defaults off, because the user is moving one thing and may be keeping the old account.
-
-### 13.4 What stays, and why
-
-| Stays with the old account | Why |
-|---|---|
-| Comments and replies | The record of who wrote what. Moving them would rewrite authorship. Comments on moved videos can be moderated by the new owner |
-| Likes and dislikes | A person's own act, stored against that person's id on each video and in `liked_videos` |
-| Watch history | Personal, retention-limited viewing data. It remains in that account's export and erasure |
-| Audit history | Must keep naming the account that acted. Audit rows are never rewritten |
-| Notification inbox, push devices | Belong to that sign-in and device |
-| Name, profile photo, sign-in details | Each account has its own. Auth data is out of scope for Videos |
-
-The move page lists these so nothing is a surprise. The old account remains and can be deleted from the account hub.
-
-### 13.5 Refused
-
-Everything in §4.4 applies, except the auth lookup, which the verified token replaces. Added for self-service:
-
-| Condition | Error | Why |
+| # | Question | Recommendation |
 |---|---|---|
-| Channel hidden or under moderation action | `channel_under_moderation` | A move must not be a way to shed moderation. A super admin can still transfer it |
-| Channel holds an official handle | `official_handle_needs_admin` | The official names are for staff. Goes to a super admin |
-| Target has no profile | `target_has_no_profile` | The page asks the user to open that account once to finish setting it up |
-
-Scholar verification is open question 6.
-
-### 13.6 Safety
-
-| Concern | Design |
-|---|---|
-| Preview and confirm | Same `previewHash` as §5.2, covering both accounts, the selections and each channel's `dateModified`. Move this channel: type the @handle. Move everything: type the target account's email. No reason is asked for |
-| Audit | Same table, `source = 'self'`, `actor_id` = the source account, written first by api-videos. Terminal rows come from the processor. The super admin History tab shows these too |
-| Idempotency | Client `Idempotency-Key`, as in §8 |
-| One at a time | One unfinished job per channel, one unfinished `user_data` job per account |
-| Rate limits | 5 moves per source account and per target account per 24 hours, counted from the audit table. Move everything counts as one. Previews use the existing `rateLimitMiddleware`, 60 per hour |
-| Failure | Same phases, verify and retry as §6.4 and §6.5. The move page shows progress and a Retry per job. User-data phases are safe to repeat |
-| Undo | Move back the same way, with the same proof. The limits in §8 apply |
-| Notifications | **Both accounts are always notified**, even though one person acted, because it is the security signal if one account was compromised |
-| Plans | New entitlement `account.move` (boolean, fallback true, Free true), declared in the catalogue and in `lib/entitlements.ts`. `channel.max` is open question 7 |
-
-| Key | English | Arabic |
-|---|---|---|
-| `channelMovedOut` | You moved {channel} to another of your accounts. If this wasn't you, contact support. | نقلت قناة {channel} إلى حساب آخر من حساباتك. إن لم تكن أنت من فعل ذلك، فتواصل مع الدعم. |
-| `channelMovedIn` | {channel} was moved to this account from another of your accounts. | نُقلت قناة {channel} إلى هذا الحساب من حساب آخر من حساباتك. |
-| `accountDataMovedOut` | Your subscriptions and library were moved to another of your accounts. If this wasn't you, contact support. | نُقلت اشتراكاتك ومكتبتك إلى حساب آخر من حساباتك. إن لم تكن أنت من فعل ذلك، فتواصل مع الدعم. |
-| `accountDataMovedIn` | Your subscriptions and library arrived from another of your accounts. | وصلت اشتراكاتك ومكتبتك من حساب آخر من حساباتك. |
-
-These use the §6.7 `account` category and `dedupeKey`, and the `channels_changed` event in §6.8 reaches both accounts.
-
-### 13.7 Lost access
-
-| Situation | Path |
-|---|---|
-| Lost the old mailbox, still knows the password, session or not | Self-service. Step-up is a password sign-in, which needs no mailbox |
-| Lost the old mailbox and the password, still has a live session | Can't pass step-up, because a password reset needs the mailbox. Super admin transfer (§4.4), unless open question 5 changes this |
-| Lost the session and can't sign in | Super admin transfer (§4.4). The admin confirms identity outside the product |
-
-### 13.8 Screens (web app)
-
-```text
-Channel settings                      Account settings > Move to another account
-Move this channel to another          Move to:  (o) new@example.com
-of your accounts                                ( ) other@example.com
-To: [ new@example.com        v ]                [Add another account]
-[ ] Also move my subscriptions...     Channels  [x] Lamahat  [x] Second channel
-[Review move]                         Also move [x] Subscriptions [x] Watch later
-                                                [x] Saved posts   [x] Playlists
-Confirm it's you (each account)                 [x] Notification preferences
-  old@... signed in just now  OK                [x] Upload templates
-  new@... [Sign in again]             These stay: comments, likes, watch history
-                                      [Review move]
-Confirm: what moves, what stays,
-type the @handle or email             Progress: per channel, Done | Retry
-```
-
-Same theme rules as §10, using the web app's semantic tokens with no hex values. Same RTL rules, with emails and handles in `dir="ltr"`. Strings go in `packages/shared-types/src/i18n-static`.
-
-| Key | English | Arabic |
-|---|---|---|
-| `accountMove.channelTitle` | Move this channel to another of your accounts | نقل هذه القناة إلى حساب آخر من حساباتك |
-| `accountMove.allTitle` | Move everything to another account | نقل كل شيء إلى حساب آخر |
-| `accountMove.noOtherAccount` | Sign in to the other account on this browser first. | سجّل الدخول أولًا إلى الحساب الآخر على هذا المتصفح. |
-| `accountMove.confirmItsYou` | Confirm it's you | تأكيد هويتك |
-| `accountMove.signInAgain` | For your security, sign in again to continue. | لحمايتك، سجّل الدخول مجددًا للمتابعة. |
-| `accountMove.stays` | Comments, likes and watch history stay with this account. | تبقى التعليقات والإعجابات وسجل المشاهدة في هذا الحساب. |
-| `accountMove.review` | Review move | مراجعة النقل |
-| `accountMove.confirm` | Move | نقل |
-| `accountMove.typeToConfirm` | Type {value} to confirm | اكتب {value} للتأكيد |
-| `accountMove.moderated` | This channel can't be moved while under review. Contact support. | لا يمكن نقل هذه القناة أثناء مراجعتها. تواصل مع الدعم. |
-| `accountMove.officialHandle` | Channels with an official handle are moved by the Al Ummah Now team. | ينقل فريق الأمة الآن القنوات ذات المعرّفات الرسمية. |
-
-### 13.9 Tests
-
-**Unit:** each merge rule in §13.3 (duplicates, the 5,000 cap, stay-behind channels, a target with no channel, target preferences kept), repeat runs of each `user_data` phase, and the §13.5 refusals.
-
-**API:** a matrix over both tokens: missing, expired, revoked, wrong `aud`, same user, `auth_time` 601 seconds old, `auth_time` absent with a fresh `iat` (refused), and a non-owner source. A request with the internal key and no user tokens is refused. Replay and rate limits as §11.
-
-**E2E on QA** (`apps/web/e2e/release/account-move.spec.ts`, throwaway users): sign up A and B in one browser, add a channel, a subscription and a watch-later item on A, run Move everything, check B has them and A's comment and like stayed with A, and check both inboxes. Then force an old `auth_time` through the API and check the step-up refusal. Clean up.
-
-## 14. Open questions for the owner
-
-**Super admin transfer (still open)**
-
-1. **Private and draft videos.** Should the new owner receive them? *Recommended: yes, all content moves, and the confirm step says so. The alternative leaves orphaned content under an account that no longer owns the channel.*
-2. **Scholar verification on a transfer.** The badge vouches for the person or institution behind the channel. *Recommended: remove it when the target isn't staff, keep it when it is, with a tick box to override either way.*
-3. **Taking an official handle from a channel that holds it.** Is that acceptable without the holder's agreement, given that they're notified and given a default handle? *Recommended: yes, for the official list only.*
-4. **Notifying the old owner of a claim.** Always, or may a super admin stay silent in abuse cases? *Recommended: always in this version. A silent option would be easy to add later.*
-
-**Self-service (new)**
-
-5. **Live session, but the mailbox and the password are both lost.** You said someone with a session can self-transfer, but a 10-minute step-up needs the password, and a reset needs the mailbox. Should a session alone be enough for the old account in that case? *Recommended: no. A stolen cookie alone could then empty an account. These users go to a super admin.*
-6. **Scholar verification on a self-service move.** Does the badge stay, given that the two accounts are presumed to be the same person? *Recommended: keep it, because switching email is the main use, and it's still audited. Depends on your answer to question 2.*
-7. **`channel.max` on the target.** The Free plan seeds a limit of 1, and the limit isn't enforced yet. Once it is, can a move take the target over it? *Recommended: yes, but only up to the number of channels the source account held, so that someone switching email is never stranded, while repeated moves can't stack accounts beyond that number.*
+| 1 | **Private and draft videos.** Do they move with the channel? | **Yes.** All content moves, and the confirm step says so. Otherwise content is orphaned under an account that no longer owns the channel |
+| 2 | **Scholar or verification badge on transfer.** The badge vouches for the person or institution behind the channel. | **Remove it unless the target is staff.** The super admin can override either way |
+| 3 | **Taking an official handle from its holder.** Acceptable without their agreement, given that they're notified and given a default handle? | **Yes, for the official list only** |
+| 4 | **Notifying the old owner.** Always, or may a super admin stay silent in abuse cases? | **Always.** A silent option could be added later |
+| 5 | **`channel.max` on the target.** May a transfer take the target over their plan's limit? | **Allow it.** It's a super admin action, and the preview shows a note |
+| 6 | **Old owner's access after a transfer.** | **They lose all access.** Once channel roles exist, the super admin can tick "keep the old owner as channel admin". That option is hidden until then |
