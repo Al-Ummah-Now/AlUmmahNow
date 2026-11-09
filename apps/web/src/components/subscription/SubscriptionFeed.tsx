@@ -9,6 +9,7 @@ import VideoCardRTL from '@/components/videoCard/rtl';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Users } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import Link from 'next/link';
 import { getSubscriptionFeed } from '@/lib/api/channels';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 
@@ -97,6 +98,7 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">{t.subscriptions.subscriptionFeed}</h1>
+          <Link href={`/${lang}/subscriptions/manage`} data-testid="subscriptions-manage-link" className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">{t.subscriptions.manage}</Link>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             {t.subscriptions.latestVideos}
           </p>
