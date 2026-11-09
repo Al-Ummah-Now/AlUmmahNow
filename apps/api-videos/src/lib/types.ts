@@ -146,6 +146,8 @@ export const Video = z.object({
         video: z.object({ width: z.number(), height: z.number() }).optional(),
         previousThumbnailUrl: z.string().optional(),
     }).optional(),
+    processingStatus: z.enum(['pending', 'processing', 'transcoding', 'completed', 'failed', 'archived']).optional(),
+    isDraft: z.boolean().optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),
     // Who set the category: the uploader, the AI (a reviewable suggestion) or an admin

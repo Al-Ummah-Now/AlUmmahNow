@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
+import { ChannelContentList, ChannelContentSummary } from '../endpoints/channel/channelContent';
 
 // Channel CRUD endpoints
 import { ChannelsList } from '../endpoints/channel/channelList';
@@ -82,6 +83,10 @@ channelRouter.delete('/:id', ChannelDelete);
 
 // Get channel videos (public)
 channelRouter.get('/:id/videos', ChannelVideosList);
+
+// Studio: the Videos tab
+channelRouter.get('/:id/content/summary', ChannelContentSummary);
+channelRouter.get('/:id/content', ChannelContentList);
 
 // Get channel shorts (public)
 channelRouter.get('/:id/shorts', ChannelShortsList);

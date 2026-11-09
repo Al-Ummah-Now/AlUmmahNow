@@ -79,6 +79,8 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   isLive?: boolean;
   isFeatured?: boolean;
   processingStatus?: VideoProcessingStatus;
+  /** Saved but not published (docs/specs/CREATOR-STUDIO.md §4.4.1) */
+  isDraft?: boolean;
 
   // SEO and categorization
   tags?: string[];
