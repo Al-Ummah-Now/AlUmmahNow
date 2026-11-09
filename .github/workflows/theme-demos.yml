@@ -3,6 +3,7 @@ name: Theme demos
 on:
   push:
     branches: [proto/theme-demos]
+    paths-ignore: ['docs/**']
 concurrency: { group: theme-demos, cancel-in-progress: true }
 jobs:
   demo:

@@ -17,8 +17,10 @@ Screenshots of third-party sites are not committed.
 | Rumble | Nothing | Blocked by a security check |
 | Linear, Arc, Raycast | Marketing pages, product shown in them | |
 
-Security checks were not bypassed. Player findings rest on Twitch, Kick and general knowledge of the
-other players, and are marked where they are not first-hand.
+Security checks were not bypassed. No accounts were used.
+
+**Evidence levels for players.** Twitch and Kick are first-hand. YouTube, Netflix, Apple TV, Disney+,
+Vimeo and Nebula are second-hand: general knowledge of those products, not observed in this study.
 
 ## Measured
 
