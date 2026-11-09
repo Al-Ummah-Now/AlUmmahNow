@@ -7,3 +7,5 @@ e2e/.auth/
 
 # Test environment variables
 .env.test.local
+test-results-player/
+playwright-report-player/

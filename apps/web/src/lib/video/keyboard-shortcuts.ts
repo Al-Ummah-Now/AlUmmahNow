@@ -15,15 +15,12 @@
  * - Visual feedback for actions
  * - Form input detection to prevent conflicts
  * - Works in fullscreen mode
- * - RTL support (arrow keys swap for Arabic)
+ * - Same keys in every language
  *
- * RTL Behavior:
- * - In RTL mode (Arabic), horizontal arrow keys are swapped:
- *   - ArrowLeft → seeks forward (10s)
- *   - ArrowRight → seeks backward (10s)
- * - This matches natural RTL reading direction
- * - J/L keys remain unchanged (letter keys don't swap)
- * - Vertical arrows (volume) and other keys unaffected
+ * RTL Behavior (docs/specs/VIDEO-PLAYER.md section 5):
+ * - The seek bar runs left to right in Arabic too, as on every major video site, so
+ *   ArrowRight always seeks forward and ArrowLeft back: each arrow moves the handle its way
+ * - Menus, labels and the settings panel follow the page direction
  *
  * @example
  * ```typescript
@@ -37,7 +34,9 @@
  */
 
 import type { ExtendedPlayer } from './videojs';
-import { getTranslations, isRTL, type SupportedLanguage } from './i18n';
+import { getTranslations, type SupportedLanguage } from './i18n';
+import { getPlayerUi, setTheatre } from './player-ui';
+import { captionTracks } from './settings-model';
 import { shouldHandleGlobalPlayerShortcut } from '@/lib/security/listener-scope';
 import { logger } from '@/lib/logger-client';
 import { shouldHandlePlayerShortcut } from '@/lib/accessibility/keyboard-scope';
@@ -120,6 +119,9 @@ export interface KeyBindings {
   speedDecrease: string[];
   speedIncrease: string[];
   help: string[];
+  captions: string[];
+  theatre: string[];
+  next: string[];
   seek: Record<string, number>; // 0-9 keys map to percentage
 }
 
@@ -138,6 +140,9 @@ const DEFAULT_KEY_BINDINGS: KeyBindings = {
   speedDecrease: [',', '<'],
   speedIncrease: ['.', '>'],
   help: ['?', '/'],
+  captions: ['c', 'C'],
+  theatre: ['t', 'T'],
+  next: ['n', 'N'],
   seek: {
     '0': 0,
     '1': 10,
@@ -309,59 +314,6 @@ function handlePictureInPictureToggle(
 }
 
 /**
- * Add help button to video player control bar
- */
-export function addHelpButton(
-  player: ExtendedPlayer,
-  onShowHelp: () => void,
-  lang: SupportedLanguage = 'en'
-): () => void {
-  const playerElement = player.el();
-  if (!playerElement) return () => {};
-
-  // Find control bar
-  const controlBar = playerElement.querySelector('.vjs-control-bar') as HTMLElement;
-  if (!controlBar) {
-    logger.warn('[KeyboardShortcuts] Control bar not found, cannot add help button');
-    return () => {};
-  }
-
-  // Create help button (discoverability of shortcuts - Story 1.4 AC 3)
-  const translations = getTranslations(lang);
-  const helpButton = document.createElement('button');
-  helpButton.className = 'vjs-keyboard-help-button vjs-control vjs-button';
-  helpButton.setAttribute('type', 'button');
-  helpButton.setAttribute('aria-label', translations.accessibility.keyboardHelpButton);
-  helpButton.setAttribute('aria-haspopup', 'dialog');
-  helpButton.setAttribute('aria-keyshortcuts', 'Shift+Slash');
-  helpButton.setAttribute('title', translations.accessibility.keyboardHelpButtonTitle);
-
-  // Add click handler
-  helpButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onShowHelp();
-  });
-
-  // Insert button before fullscreen button (if exists) or at the end
-  const fullscreenButton = controlBar.querySelector('.vjs-fullscreen-control');
-  if (fullscreenButton) {
-    controlBar.insertBefore(helpButton, fullscreenButton);
-  } else {
-    controlBar.appendChild(helpButton);
-  }
-
-  logger.info('[KeyboardShortcuts] Help button added to control bar');
-
-  // Return cleanup function
-  return () => {
-    if (helpButton.parentNode) {
-      helpButton.parentNode.removeChild(helpButton);
-    }
-  };
-}
-
-/**
  * Setup keyboard shortcuts for a video player
  *
  * @param player - Video.js player instance
@@ -380,18 +332,10 @@ export function setupKeyboardShortcuts(
   } = options;
 
   const translations = getTranslations(lang);
-  const rtl = isRTL(lang);
 
-  // Swap arrow keys for RTL mode
-  // In RTL, left arrow should go forward and right arrow should go backward
-  const bindings: KeyBindings = rtl
-    ? {
-        ...DEFAULT_KEY_BINDINGS,
-        rewind: ['ArrowRight', 'j', 'J'], // Swap: right arrow rewinds in RTL
-        forward: ['ArrowLeft', 'l', 'L'], // Swap: left arrow forwards in RTL
-        ...customBindings,
-      }
-    : { ...DEFAULT_KEY_BINDINGS, ...customBindings };
+  // The progress bar runs left to right in both languages (docs/specs/VIDEO-PLAYER.md
+  // section 5), so Right always seeks forward, as it moves the handle.
+  const bindings: KeyBindings = { ...DEFAULT_KEY_BINDINGS, ...customBindings };
 
   // Get player element for scoped event listening
   const playerElement = player.el();
@@ -574,6 +518,40 @@ export function setupKeyboardShortcuts(
       handled = true;
     }
 
+    // Captions on or off (C): the first track, or off
+    else if (bindings.captions.includes(key)) {
+      const subs = captionTracks((player as unknown as { textTracks(): ArrayLike<{ kind: string; mode: string; label?: string }> }).textTracks());
+      if (subs.length > 0) {
+        event.preventDefault();
+        const on = subs.some((t) => t.mode === 'showing');
+        subs.forEach((t, i) => { t.mode = !on && i === 0 ? 'showing' : 'disabled'; });
+        feedbackMessage = `${translations.controls.captions}: ${on ? translations.chrome.off : subs[0].label ?? ''}`.trim();
+        handled = true;
+      }
+    }
+
+    // Theatre (T), on pages that have a theatre layout
+    else if (bindings.theatre.includes(key)) {
+      if (getPlayerUi().theatreAvailable) {
+        event.preventDefault();
+        const on = !getPlayerUi().theatre;
+        setTheatre(on);
+        feedbackMessage = on ? translations.chrome.theatre : translations.chrome.exitTheatre;
+        handled = true;
+      }
+    }
+
+    // Next video (N), when the page knows one
+    else if (bindings.next.includes(key)) {
+      const upNext = getPlayerUi().upNext;
+      if (upNext) {
+        event.preventDefault();
+        upNext.go();
+        feedbackMessage = translations.chrome.next;
+        handled = true;
+      }
+    }
+
     // Seek to percentage (0-9)
     else if (key in bindings.seek) {
       event.preventDefault();
@@ -598,12 +576,6 @@ export function setupKeyboardShortcuts(
   }
 
 
-  // Add help button if callback provided
-  let helpButtonCleanup: (() => void) | undefined;
-  if (onShowHelp) {
-    helpButtonCleanup = addHelpButton(player, onShowHelp, lang);
-  }
-
   // Add scoped event listener to player element (not global document)
   playerElement.addEventListener('keydown', handleKeyDown);
 
@@ -622,11 +594,6 @@ export function setupKeyboardShortcuts(
     // Remove scoped event listeners
     playerElement.removeEventListener('keydown', handleKeyDown);
     document.removeEventListener('keydown', handleDocumentKeyDown);
-
-    // Cleanup help button
-    if (helpButtonCleanup) {
-      helpButtonCleanup();
-    }
 
     // Cleanup feedback overlay for this player
     const state = getPlayerState(player);

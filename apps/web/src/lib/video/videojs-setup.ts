@@ -2,11 +2,17 @@ import videojs, { type Player, type PlayerOptions } from 'video.js';
 // Video.js 8 bundles @videojs/http-streaming (VHS) and the quality-levels
 // plugin. Importing them again registered both twice ("A plugin named
 // qualityLevels already exists") and added their code to the bundle again.
-import 'videojs-hls-quality-selector';
+// Quality is chosen in the settings menu (settings-model.ts), which keeps the
+// behaviour of the videojs-hls-quality-selector menu it replaces.
 import videojsArabic from 'video.js/dist/lang/ar.json';
 import { logger } from '@/lib/logger-client';
 import type { QualityLevelList } from '@/lib/video/videojs';
 import { setupClickOnlyMenus } from '@/lib/video/menu-interaction';
+import { applyBuiltInIcons, layerCaptionSettings, registerFanousComponents, syncCustomCaptions, type ChromeCopy } from '@/lib/video/components';
+import { AR_TRANSLATIONS, EN_TRANSLATIONS } from '@/lib/video/i18n/translations';
+import { guardNativePipToggle } from '@/lib/video/native-pip-toggle';
+import { syncDurationWithPlaylist } from '@/lib/video/live-state';
+import { keepSeekBarOnPlayhead } from '@/lib/video/seek-bar-sync';
 
 
 
@@ -20,30 +26,36 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
   html5: {
     // Emulate text tracks so cross-origin WebVTT (served by the API with CORS)
     // loads consistently in every browser, including with MSE-based HLS.
-    nativeTextTracks: false,
-    hls: {
-      enableLowInitialPlaylist: true,
-      smoothQualityChange: true,
-      overrideNative: true
-    }
+    nativeTextTracks: false
+    // HLS: VHS's defaults apply (it reads `html5.vhs`; the `hls` options that stood here were never
+    // read). Browsers without native HLS play through VHS with the Quality menu; Safari plays
+    // natively and adapts quality itself, so the menu hides its Quality row there.
   },
-  // Accessibility: Enable keyboard controls
-  // V3 Design: Standard control bar layout (YouTube/Netflix/Video.js/Plyr research)
-  // Order: Play → Volume (inline slider) → Progress → Time → Quality → Fullscreen
+  // Live streams with a DVR window get a seekable progress bar and the live badge
+  liveui: true,
+  // Control bar (docs/specs/VIDEO-PLAYER.md section 4): full-width progress on
+  // its own row (CSS), then play, next, volume and time at the start, and
+  // captions, settings, picture in picture, theatre and fullscreen at the end.
   controlBar: {
     children: [
-      'playToggle',           // 1. Play/Pause button (leftmost)
-      'volumePanel',          // 2. Volume button with inline slider
-      'progressControl',      // 3. Progress bar (center, large - 700px width)
-      'remainingTimeDisplay', // 4. Time remaining display
-      'subsCapsButton',       // Subtitles/captions menu (hidden when the video has no tracks)
-      'hlsQualitySelector',   // 5. Quality/Settings button
-      'fullscreenToggle'      // 6. Fullscreen button (rightmost)
+      'progressControl',
+      'playToggle',
+      'fanousNextButton',
+      'volumePanel',
+      'currentTimeDisplay',
+      'timeDivider',
+      'durationDisplay',
+      'fanousLiveBadge',
+      'customControlSpacer',
+      'fanousCaptionsToggle',
+      'fanousSettingsButton',
+      'pictureInPictureToggle',
+      'fanousTheatreToggle',
+      'fullscreenToggle'
     ],
-    remainingTimeDisplay: true,
-    pictureInPictureToggle: false, // Removed from V3 design
     volumePanel: {
-      inline: true // Show volume slider inline with control bar
+      // The slider always keeps its space, so neighbours never move under the pointer
+      inline: true
     }
   },
   // Accessibility: Better UX for screen readers
@@ -101,26 +113,42 @@ export function createVideoPlayer(
     logger.info('[createVideoPlayer] Options received:', options);
     logger.info('[createVideoPlayer] Poster URL:', options.poster);
 
+    registerFanousComponents();
+    const copy = chromeCopy(options.language === 'ar' ? 'ar' : 'en');
+    const base = VIDEO_JS_OPTIONS.controlBar as Record<string, unknown>;
     player = videojs(element, {
       ...VIDEO_JS_OPTIONS,
-      ...options
-    });
-
-    // Initialize quality selector plugin when player is ready
-    player.ready(() => {
-      if (player && typeof player.hlsQualitySelector === 'function') {
-        try {
-          player.hlsQualitySelector({
-            displayCurrentQuality: true,
-            placementIndex: qualityButtonPlacementIndex(player)
-          });
-        } catch (error) {
-          logger.warn('HLS quality selector plugin failed to initialize:', error);
-        }
-      } else {
-        logger.warn('HLS quality selector plugin not available');
+      ...options,
+      controlBar: {
+        ...base,
+        fanousNextButton: { copy },
+        fanousLiveBadge: { copy },
+        fanousCaptionsToggle: { copy },
+        fanousSettingsButton: { copy },
+        fanousTheatreToggle: { copy },
+        ...((options.controlBar as Record<string, unknown> | undefined) ?? {})
       }
+    });
+    // The skin (player-skin.css) is scoped to this class
+    player.el()?.classList.add('vjs-fanous');
+    applyBuiltInIcons(player.el());
+
+    player.ready(() => {
+      if (player) applyBuiltInIcons(player.el());
       if (player) trackQualityLevelAvailability(player);
+      if (player) {
+        syncCustomCaptions(player as unknown as Parameters<typeof syncCustomCaptions>[0]);
+        layerCaptionSettings(player as unknown as Parameters<typeof layerCaptionSettings>[0]);
+        // Firefox's own Picture-in-Picture toggle would take presses meant for the controls
+        const releasePipToggle = guardNativePipToggle(player.el()?.querySelector('video'));
+        player.on('dispose', releasePipToggle);
+        // Firefox reports no duration before metadata, so a live stream read as a 0:00 video
+        const stopDurationSync = syncDurationWithPlaylist(player as unknown as Parameters<typeof syncDurationWithPlaylist>[0]);
+        player.on('dispose', stopDurationSync);
+        // Video.js drops the bar's redraw for a seek made just after a pause
+        const stopSeekBarSync = keepSeekBarOnPlayhead(player as unknown as Parameters<typeof keepSeekBarOnPlayhead>[0]);
+        player.on('dispose', stopSeekBarSync);
+      }
       // Quality, captions and speed menus open on click/tap only, never on hover
       if (player) setupClickOnlyMenus(player as unknown as Parameters<typeof setupClickOnlyMenus>[0]);
     });
@@ -137,20 +165,19 @@ export function createVideoPlayer(
   }
 }
 
-/**
- * Control-bar index for the quality button: just before the remaining-time
- * display, as in production. The plugin's default ("second to last child")
- * drifts as more controls are added (captions, keyboard help) and pushed the
- * button after the time display. Returns undefined to keep the plugin default
- * when there is no remaining-time display.
- */
-export function qualityButtonPlacementIndex(player: Player): number | undefined {
-  const controlBar = (player as Player & {
-    controlBar?: { children: () => unknown[]; getChild: (name: string) => unknown };
-  }).controlBar;
-  if (!controlBar) return undefined;
-  const index = controlBar.children().indexOf(controlBar.getChild('remainingTimeDisplay'));
-  return index >= 0 ? index : undefined;
+/** Control labels for the player's own components, in the player's language. */
+export function chromeCopy(lang: 'en' | 'ar'): ChromeCopy {
+  const t = lang === 'ar' ? AR_TRANSLATIONS : EN_TRANSLATIONS;
+  return {
+    next: t.chrome.next,
+    theatre: t.chrome.theatre,
+    exitTheatre: t.chrome.exitTheatre,
+    captions: t.controls.captions,
+    settings: t.controls.settings,
+    live: t.chrome.live,
+    goToLive: t.chrome.goToLive,
+    behind: t.chrome.behind,
+  };
 }
 
 export const NO_QUALITY_LEVELS_CLASS = 'vjs-no-quality-levels';

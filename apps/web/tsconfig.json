@@ -25,7 +25,7 @@
     "types": ["@testing-library/jest-dom"]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"],
+  "exclude": ["node_modules", "e2e/player/fixtures"],
   "references": [
     { "path": "../../packages/shared-types" }
   ]

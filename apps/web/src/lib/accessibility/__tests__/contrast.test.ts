@@ -2,9 +2,9 @@
  * Story 1.1 - pins the colour tokens used by the video player and the page
  * chrome to WCAG 2.1 AA, in both light and dark themes.
  *
- * The values mirror the tokens in src/styles/video-player.css (.video-js) and
- * src/app/globals.css (:root / .dark). The CSS-token test below reads those
- * files so the two cannot drift apart silently.
+ * Player colours come from each theme's player.json in fanous-tokens; page
+ * colours from src/app/globals.css (:root / .dark). Both are read from disk so
+ * the test cannot drift from the shipped values.
  */
 import fs from 'fs';
 import path from 'path';
@@ -15,8 +15,8 @@ import {
   WCAG_AA_NON_TEXT,
   WCAG_AA_NORMAL_TEXT,
 } from '../contrast';
+import { loadPlayerThemes } from '@/test/player-themes';
 
-const playerCss = fs.readFileSync(path.join(__dirname, '../../../styles/video-player.css'), 'utf8');
 const globalsCss = fs.readFileSync(path.join(__dirname, '../../../app/globals.css'), 'utf8');
 
 function token(css: string, block: RegExp, name: string): string {
@@ -27,7 +27,6 @@ function token(css: string, block: RegExp, name: string): string {
   return value[1].trim();
 }
 
-const VJS_BLOCK = /\n\.video-js \{\n([\s\S]*?)\n\}/;
 const ROOT_A11Y = /:root \{\n(\s+--a11y-focus-ring[\s\S]*?)\n\}/;
 const DARK_A11Y = /\.dark \{\n(\s+--a11y-focus-ring[\s\S]*?)\n\}/;
 
@@ -44,92 +43,80 @@ describe('contrast helpers', () => {
   });
 });
 
-describe('video player chrome (transparent bar, haloed controls; both themes)', () => {
-  const fg = token(playerCss, VJS_BLOCK, '--vp-fg');
-  const fgMuted = token(playerCss, VJS_BLOCK, '--vp-fg-muted');
-  const focus = token(playerCss, VJS_BLOCK, '--vp-focus');
-  const track = token(playerCss, VJS_BLOCK, '--vp-track');
-  const halo = token(playerCss, VJS_BLOCK, '--vp-halo-color');
-  const outline = token(playerCss, VJS_BLOCK, '--vp-outline');
-  const surface = token(playerCss, VJS_BLOCK, '--vp-surface');
-  const selectedBg = token(playerCss, VJS_BLOCK, '--vp-selected-bg');
-  const selectedFg = token(playerCss, VJS_BLOCK, '--vp-selected-fg');
+describe('video player chrome: every theme in fanous-tokens', () => {
+  const themes = loadPlayerThemes();
 
-  const rgb = (c: { r: number; g: number; b: number }) => `rgb(${c.r}, ${c.g}, ${c.b})`;
-  const frames = ['#ffffff', '#000000'];
+  /** `rgb(26 15 5/.96)`, `#abc`, `#aabbcc`, `transparent` -> a string parseColor accepts */
+  function normalise(c: string): string {
+    if (c === 'transparent') return 'rgba(0, 0, 0, 0)';
+    const m = c.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[/,]\s*([\d.]+))?\s*\)$/);
+    if (m) return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${m[4] ?? 1})`;
+    return c;
+  }
 
-  it('control text and icons are >= 4.5:1 against their halo, even over a white frame', () => {
-    const worstHalo = composite(halo, '#ffffff');
-    expect(contrastRatio(fg, worstHalo)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-    expect(contrastRatio(fgMuted, worstHalo)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-  });
-
-  it('focus indicator is >= 3:1 against its black halo (non-text contrast)', () => {
-    expect(contrastRatio(focus, '#000000')).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
-  });
-
-  it('slider tracks are >= 3:1 against their outline over white and black frames', () => {
-    for (const frame of frames) {
-      const trackOnFrame = composite(track, frame);
-      const outlineOnFrame = composite(outline, frame);
-      expect(contrastRatio(rgb(trackOnFrame), rgb(outlineOnFrame))).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
+  /** Top-level comma split: background layers, first on top */
+  function layers(value: string): string[] {
+    const out: string[] = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < value.length; i++) {
+      if (value[i] === '(') depth++;
+      else if (value[i] === ')') depth--;
+      else if (value[i] === ',' && depth === 0) { out.push(value.slice(start, i)); start = i + 1; }
     }
-  });
+    out.push(value.slice(start));
+    return out.map((l) => l.trim());
+  }
 
-  it('menus (light and dark surface) and the selected item are >= 4.5:1', () => {
-    const darkSurface = token(playerCss, /\.dark \.video-js \{\n([\s\S]*?)\n\}/, '--vp-surface');
-    expect(contrastRatio(fg, surface)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-    expect(contrastRatio(fg, darkSurface)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-    expect(contrastRatio(selectedFg, selectedBg)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-  });
+  const stops = (layer: string) => (layer.match(/#[0-9a-f]{3,6}\b|rgba?\([^)]*\)|transparent/gi) ?? []).map(normalise);
 
-  describe('bottom scrim (worst case: smallest scrim over a pure-white frame, no halo)', () => {
-    const scrim = token(playerCss, VJS_BLOCK, '--vp-scrim');
-    const minHeightRem = Number(token(playerCss, VJS_BLOCK, '--vp-scrim-height').match(/([\d.]+)rem/)![1]);
-    // linear-gradient(to top, <color> [stop%], ...): alpha stops from the bottom up
-    const stops = Array.from(scrim.matchAll(/rgba\(0, 0, 0, ([\d.]+)\)(?:\s+([\d.]+)%)?/g)).map((m, i, all) => ({
-      alpha: Number(m[1]),
-      at: m[2] !== undefined ? Number(m[2]) / 100 : i / (all.length - 1),
-    }));
-    /** Scrim colour over a white frame at `rem` above the bottom of the player */
-    const scrimOverWhiteAt = (rem: number) => {
-      const f = rem / minHeightRem;
-      const upper = stops.findIndex((s) => s.at >= f);
-      const a = stops[upper - 1];
-      const b = stops[upper];
-      const alpha = a.alpha + ((b.alpha - a.alpha) * (f - a.at)) / (b.at - a.at);
-      return rgb(composite(`rgba(0, 0, 0, ${alpha})`, '#ffffff'));
-    };
-    // Control bar: 4rem tall, controls centred at 2rem; 36px icons, ~14px text
-    const BAR_CENTRE_REM = 2;
-
-    it('is taller than the 4rem control bar', () => {
-      expect(minHeightRem).toBeGreaterThan(4);
-    });
-
-    it('time and quality text are >= 4.5:1 over the whole glyph height', () => {
-      for (const rem of [BAR_CENTRE_REM - 0.4375, BAR_CENTRE_REM, BAR_CENTRE_REM + 0.4375]) {
-        expect(contrastRatio(fg, scrimOverWhiteAt(rem))).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-      }
-    });
-
-    it('icons are >= 3:1 over their whole 36px box', () => {
-      for (const rem of [BAR_CENTRE_REM - 1.125, BAR_CENTRE_REM, BAR_CENTRE_REM + 1.125]) {
-        expect(contrastRatio(fg, scrimOverWhiteAt(rem))).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
-      }
-    });
-  });
-
-  it('menu text is >= 4.5:1 on the translucent menu surface, even over a white frame', () => {
-    const menuBg = token(playerCss, VJS_BLOCK, '--vp-menu-bg');
-    for (const frame of frames) {
-      expect(contrastRatio(fg, rgb(composite(menuBg, frame)))).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-      expect(contrastRatio(fgMuted, rgb(composite(menuBg, frame)))).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+  /**
+   * Every colour the surface can show: each stop of each layer, composited bottom-up over a
+   * white and a black video frame. Contrast is checked against the worst of them.
+   */
+  function surfaceColours(value: string): string[] {
+    const stack = layers(value).reverse();
+    let results = ['#ffffff', '#000000'];
+    for (const layer of stack) {
+      const s = stops(layer);
+      results = results.flatMap((below) => s.map((top) => {
+        const c = composite(top, below);
+        return `rgb(${c.r}, ${c.g}, ${c.b})`;
+      }));
+      results = [...new Set(results)];
     }
+    return results;
+  }
+
+  const worst = (fg: string, bg: string) => Math.min(...surfaceColours(bg).map((b) => contrastRatio(normalise(fg), b)));
+
+  it('covers the four demo themes', () => {
+    expect(Object.keys(themes).sort()).toEqual(['fawanees', 'lantern', 'nahas', 'zujaj']);
   });
 
-  it('no longer uses the invalid oklch(var(--token)) form that dropped the declarations', () => {
-    expect(playerCss).not.toMatch(/oklch\(var\(/);
+  describe.each(Object.entries(themes))('%s', (_id, t) => {
+    it('settings menu text is >= 4.5:1 over a white or black frame, selected row included', () => {
+      expect(worst(t.icon, t.menu)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      expect(worst(t.dim, t.menu)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      expect(worst(t.icon, `${t['menu-selected']},${t.menu}`)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      expect(worst(t.accent, `${t['menu-selected']},${t.menu}`)).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
+    });
+
+    it('tooltip, live badge and captions are >= 4.5:1', () => {
+      expect(worst(t['tip-text'], t['tip-bg'])).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      expect(worst(t['live-text'], t.live)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      expect(worst(t.icon, t.cue)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+    });
+
+    it('the big play icon and the focus ring are >= 3:1 (non-text)', () => {
+      expect(worst(t['big-icon'], t.big)).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
+      expect(worst(t.accent, t.menu)).toBeGreaterThanOrEqual(WCAG_AA_NON_TEXT);
+    });
+
+    it('error panel text is >= 4.5:1', () => {
+      expect(worst(t.icon, t.err)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      expect(worst(t.dim, t.err)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+    });
   });
 });
 

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Player } from "video.js";
 import Link from "next/link";
 import { Edit, VideoOff } from "lucide-react";
@@ -26,6 +26,7 @@ import { fetchRelatedVideos, fetchVideoById } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
+import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi } from "@/lib/video/player-ui";
 
 type VideoState =
   | { status: 'loading' }
@@ -62,6 +63,42 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
   const Player = isRTL ? VideoPlayerRTL : VideoPlayer;
   const SaveToPlaylistControl = isRTL ? SaveToPlaylistRTL : SaveToPlaylist;
   const related = relatedVideos.filter((video) => video.id !== videoId);
+
+  // Theatre, mini player and up next belong to the watch page (docs/specs/VIDEO-PLAYER.md section 5)
+  const router = useRouter();
+  // The router is read through a ref so the up-next entry depends only on the next video itself:
+  // a new router or related-array identity must not republish it (each publish re-renders this page)
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const reportRef = useRef<HTMLDivElement | null>(null);
+  const { theatre } = useSyncExternalStore(subscribePlayerUi, getPlayerUi, getPlayerUi);
+  useEffect(() => enableWatchPageFeatures(), []);
+  const next = related[0];
+  const nextId = next?.id;
+  const nextTitle = next?.title;
+  const nextChannel = next?.channelName || '';
+  const nextThumbnail = next?.thumbnail;
+  useEffect(() => {
+    updatePlayerUi({
+      upNext: nextId
+        ? {
+            title: nextTitle ?? '',
+            channel: nextChannel,
+            thumbnail: nextThumbnail,
+            go: () => routerRef.current.push(`/${lang}/video/${encodeURIComponent(nextId)}`),
+          }
+        : null,
+    });
+  }, [nextId, nextTitle, nextChannel, nextThumbnail, lang]);
+  useEffect(() => {
+    updatePlayerUi({
+      reportProblem: () => {
+        const button = reportRef.current?.querySelector<HTMLElement>('button');
+        reportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        button?.click();
+      },
+    });
+  }, []);
   const renderRelated = (keyPrefix: string) =>
     isRTL
       ? <RelatedVideosSectionRTL relatedVideos={related} loading={relatedLoading} onRetry={retryRelated} />
@@ -127,8 +164,8 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
 
   return (
     <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
-      <div className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
-        <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
+      <div className={`flex flex-col ${theatre ? '' : 'lg:flex-row'} gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden`} data-theatre={theatre || undefined} data-testid="watch-layout">
+        <div className={`flex flex-col w-full ${theatre ? '' : 'lg:w-3/4'} overflow-hidden`}>
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
               <section id={VIDEO_PLAYER_ID} className="w-full" tabIndex={-1}>
@@ -180,7 +217,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
 
               {/* Report video (hidden for anonymous viewers and the owner) */}
               {!isOwnVideo && (
-                <div className={`w-full max-w-4xl mt-2 px-4 flex ${isRTL ? 'justify-start' : 'justify-end'}`}>
+                <div ref={reportRef} className={`w-full max-w-4xl mt-2 px-4 flex ${isRTL ? 'justify-start' : 'justify-end'}`}>
                   <ReportContentButton
                     contentType="video"
                     contentId={videoId}
@@ -203,7 +240,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
           </div>
         </div>
 
-        <div className="hidden lg:block lg:w-1/4 min-w-[350px] max-w-[500px] pt-4 overflow-auto">
+        <div className={`hidden lg:block ${theatre ? 'lg:w-full' : 'lg:w-1/4 min-w-[350px] max-w-[500px]'} pt-4 overflow-auto`}>
           {renderRelated("t_")}
         </div>
       </div>
