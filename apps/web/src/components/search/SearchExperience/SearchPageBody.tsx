@@ -21,8 +21,10 @@ export function SearchPageBody({ model }: { model: SearchPageModel }) {
 
   return (
     <main className="flex w-full flex-col gap-4 p-4 md:p-6" data-testid="search-page">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.search.searchPageTitle}</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:hidden">{t.search.searchPageTitle}</h1>
 
+      {/* The header has this box from sm up */}
+      <div className="sm:hidden">
       <SearchBar
         value={model.draft}
         onChange={model.setDraft}
@@ -33,6 +35,7 @@ export function SearchPageBody({ model }: { model: SearchPageModel }) {
         onClearHistory={model.clearHistory}
         autoFocus={!state.q}
       />
+      </div>
 
       <div className="flex items-center gap-2 min-w-0">
         <div className="min-w-0 flex-1">
