@@ -194,7 +194,15 @@
       "nav.searchBorder": "#c79a78",
       "nav.searchText": "#fdf3e3",
       "nav.searchPlaceholder": "#ecd6bd",
-      "upload.focus": "#ffc98e"
+      "upload.focus": "#ffc98e",
+      "upload.bg": "#572a13",
+      "upload.text": "#fdf3e3",
+      "upload.icon": "#ffc98e",
+      "upload.border": "#ffc98e",
+      "upload.hover": "#412010",
+      "upload.pressed": "#412010",
+      "upload.disabledBg": "#572a13",
+      "upload.disabledText": "#ecd6bd"
     }
   }
 }
