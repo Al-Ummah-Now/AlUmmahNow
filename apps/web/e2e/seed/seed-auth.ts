@@ -5,7 +5,7 @@ import { seedLogger as log, maskSecret } from './seed-logger';
  * Browser-driven OpenAuth login / registration for the QA seed.
  *
  * Flow (same as e2e/auth.setup.ts):
- *   GET {issuer}/authorize?client_id=…&redirect_uri={web}/api/callback&response_type=code
+ *   GET {web}/api/auth/login (binds the OAuth state) → {issuer}/authorize?…&redirect_uri={web}/api/callback
  *   → /password/authorize form (email, password)          [login]
  *   → /password/register form (email, password, repeat)   [register]
  *     → emailed code form (code), code read via Resend API
@@ -42,9 +42,20 @@ export function decodeJwtPayload(token: string): Record<string, unknown> {
   return JSON.parse(json) as Record<string, unknown>;
 }
 
-function authorizeUrl(cfg: AuthConfig): string {
+function directAuthorizeUrl(cfg: AuthConfig): string {
   const redirect = `${cfg.webUrl}/api/callback`;
   return `${cfg.issuerUrl}/authorize?client_id=${encodeURIComponent(cfg.clientId)}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code`;
+}
+
+/**
+ * Opens the sign-in form. It starts on the web app (/api/auth/login), which
+ * binds the OAuth state to this browser (auth_state cookie) before sending it
+ * to {issuer}/authorize: the callback refuses a direct authorize URL. Builds
+ * without that route (404) still take the direct URL.
+ */
+export async function gotoSignIn(page: Page, cfg: AuthConfig): Promise<void> {
+  const res = await page.goto(`${cfg.webUrl}/api/auth/login?locale=en`, { waitUntil: 'domcontentloaded' });
+  if (res?.status() === 404) await page.goto(directAuthorizeUrl(cfg), { waitUntil: 'domcontentloaded' });
 }
 
 /** Submits the current OpenAuth form and waits for the resulting navigation. */
@@ -118,7 +129,7 @@ export async function extractSession(page: Page, cfg: Pick<AuthConfig, 'webUrl'>
  * Never registers.
  */
 export async function loginOnPage(page: Page, cfg: AuthConfig, email: string, password: string): Promise<LoginOutcome> {
-  await page.goto(authorizeUrl(cfg), { waitUntil: 'domcontentloaded' });
+  await gotoSignIn(page, cfg);
   await page.waitForSelector('input[name="email"]', { timeout: 30000 });
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
@@ -159,7 +170,7 @@ export async function registerAccount(
   const context = await browser.newContext();
   const page = await context.newPage();
   try {
-    await page.goto(authorizeUrl(cfg), { waitUntil: 'domcontentloaded' });
+    await gotoSignIn(page, cfg);
     const registerLink = await page.waitForSelector('a[href*="register"]', { timeout: 30000 });
     await registerLink.click();
     await page.waitForSelector('input[name="repeat"]', { timeout: 30000 });

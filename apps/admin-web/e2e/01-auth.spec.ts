@@ -75,16 +75,17 @@ test.describe('authentication - signed out', () => {
     await expect(page.getByTestId('login-error')).toHaveText('An error occurred');
   });
 
-  test('AUTH-08 callback without a code reports no_code', async ({ page }) => {
+  test('AUTH-08 a callback this browser did not start is refused (state not bound to it)', async ({ page }) => {
     await page.goto('/api/callback');
-    await expect(page).toHaveURL(/\/login\?error=no_code$/);
-    await expect(page.getByTestId('login-error')).toHaveText('Authorization code not received');
+    await expect(page).toHaveURL(/\/login\?error=auth_failed$/);
+    await expect(page.getByTestId('login-error')).toHaveText('Authentication failed');
   });
 
-  test('AUTH-09 callback with an invalid code reports exchange_failed', async ({ page }) => {
-    await page.goto('/api/callback?code=not-a-real-code');
-    await expect(page).toHaveURL(/\/login\?error=(exchange_failed|auth_failed)$/);
+  test('AUTH-09 a forged callback with a code is refused without a session', async ({ page, context }) => {
+    await page.goto('/api/callback?code=not-a-real-code&state=forged.Lw');
+    await expect(page).toHaveURL(/\/login\?error=auth_failed$/);
     await expect(page.getByTestId('login-error')).toBeVisible();
+    expect((await context.cookies()).find((c) => c.name === 'admin_session')).toBeUndefined();
   });
 });
 

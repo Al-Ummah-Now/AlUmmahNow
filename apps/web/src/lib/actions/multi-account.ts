@@ -19,6 +19,7 @@ import { subjects } from '../auth';
 import { shouldRedirectToProfileCreation } from '../profile-helpers';
 import { logger } from '@/lib/logger-server';
 import { singleSignOutToHome } from '../auth/single-sign-out';
+import { newStateNonce, stateCookieOptions, withState, STATE_COOKIE } from '../auth/oauth-state';
 
 /**
  * Get OpenAuth client
@@ -35,7 +36,8 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
   const host = headers.get("host");
   const protocol = host?.includes("localhost") ? "http" : "https";
 
-  (await getCookies()).set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 });
+  const cookieStore = await getCookies();
+  cookieStore.set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 });
 
   const client = await getAuthClient();
   const { url } = await client.authorize(
@@ -43,10 +45,14 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
     "code"
   );
 
+  // Bind the callback to this browser (login CSRF)
+  const nonce = newStateNonce();
+  cookieStore.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === "https"));
+
   // prompt=login: without it the auth server's shared sign-in (__session)
   // answers with a code for the account that is already signed in, without a
   // form, so "Add another account" just signed that account in again
-  const addUrl = new URL(url);
+  const addUrl = new URL(withState(url, nonce));
   addUrl.searchParams.set("prompt", "login");
 
   redirect(withAuthorizeLocale(addUrl.toString(), locale));

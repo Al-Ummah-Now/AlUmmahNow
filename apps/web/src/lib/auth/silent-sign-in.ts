@@ -30,23 +30,57 @@ export function parsePrompt(value: string | null | undefined): LoginPrompt | und
   return value === 'none' || value === 'login' ? value : undefined;
 }
 
+const PARSE_BASE = 'https://videos.invalid';
+
+/** Backslashes and control characters anywhere: never in a return path. */
+const HOSTILE_CHARS = /[\\\u0000-\u001f\u007f]/;
 /**
- * A same-origin path to return to, or null: no absolute or protocol-relative
- * URLs (no open redirect) and nothing under /api/ (no sign-in loop).
+ * Percent-encoded backslash, slash, dot or control character in the PATH
+ * part: a parser could normalise them into a protocol-relative `//host`.
+ * (The query may carry encoded values: it never changes the target host.)
+ */
+const HOSTILE_ENCODED_PATH = /%(?:5c|2f|2e|0[0-9a-f]|1[0-9a-f]|7f)/i;
+
+function hostile(value: string): boolean {
+  return HOSTILE_CHARS.test(value) || HOSTILE_ENCODED_PATH.test(value.split(/[?#]/)[0]);
+}
+
+/**
+ * A same-origin path to return to, or null. The NORMALISED output is what
+ * gets validated (a parser differential such as `/.//evil.com` or
+ * `/%2e//evil.com` normalises to `//evil.com`), so the result is always a
+ * path on this origin that cannot be read as another host. Nothing under
+ * /api/ (no sign-in loop).
  */
 export function safeReturnPath(value: string | null | undefined): string | null {
   if (!value || typeof value !== 'string') return null;
-  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return null;
-  if (/[\u0000-\u001f]/.test(value)) return null;
+  if (!value.startsWith('/') || value.startsWith('//') || hostile(value)) return null;
   let url: URL;
   try {
-    url = new URL(value, 'https://videos.invalid');
+    url = new URL(value, PARSE_BASE);
   } catch {
     return null;
   }
-  if (url.origin !== 'https://videos.invalid' || url.pathname.startsWith('/api/')) return null;
+  if (url.origin !== PARSE_BASE || url.pathname.startsWith('/api/')) return null;
   url.searchParams.delete('session_updated');
-  return `${url.pathname}${url.search}`;
+  const out = `${url.pathname}${url.search}`;
+  if (!out.startsWith('/') || out.startsWith('//') || out.startsWith('/\\') || hostile(out)) return null;
+  if (new URL(out, PARSE_BASE).origin !== PARSE_BASE) return null;
+  return out;
+}
+
+/**
+ * The absolute URL to redirect to: `path` on `origin`, or `origin/` when it
+ * would leave that origin.
+ */
+export function sameOriginUrl(path: string, origin: string): string {
+  try {
+    const target = new URL(path, origin);
+    if (target.origin === new URL(origin).origin) return target.toString();
+  } catch {
+    // fall through
+  }
+  return new URL('/', origin).toString();
 }
 
 /** Pages where the probe never runs: the auth error page, embeds, API routes. */
