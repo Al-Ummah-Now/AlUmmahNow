@@ -24,13 +24,15 @@ interface SearchBarProps {
   onRemoveHistory: (query: string) => void;
   onClearHistory: () => void;
   autoFocus?: boolean;
+  /** Compact form for the site header */
+  variant?: 'page' | 'header';
 }
 
 type Option =
   | { kind: 'history'; text: string }
   | { kind: 'suggestion'; text: string; suggestion: SearchSuggestion };
 
-export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history, onRemoveHistory, onClearHistory, autoFocus }: SearchBarProps) {
+export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history, onRemoveHistory, onClearHistory, autoFocus, variant = 'page' }: SearchBarProps) {
   const { t } = useLanguage();
   const listId = useId();
   const [open, setOpen] = useState(false);
@@ -43,6 +45,7 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
   const containerRef = useRef<HTMLDivElement>(null);
 
   const typing = value.trim().length >= 2;
+  const header = variant === 'header';
 
   useEffect(() => {
     if (!typing) {
@@ -111,6 +114,10 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
     } else if (event.key === 'Escape') {
       setOpen(false);
       setActive(-1);
+    } else if (event.key === 'Delete' && active >= 0 && options[active]?.kind === 'history') {
+      event.preventDefault();
+      onRemoveHistory(options[active].text);
+      setActive(-1);
     }
   };
 
@@ -123,15 +130,15 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
           setOpen(false);
           onSubmit();
         }}
-        className="flex items-stretch"
+        className={header ? 'ah-search flex h-9 items-stretch overflow-hidden rounded-full border border-white/30' : 'flex items-stretch'}
       >
         <label htmlFor={`${listId}-input`} className="sr-only">{t.search.searchInputLabel}</label>
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" aria-hidden="true" />
+          {!header && <Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" aria-hidden="true" />}
           <input
             ref={inputRef}
             id={`${listId}-input`}
-            data-testid="search-input"
+            data-testid={header ? 'header-search-input' : 'search-input'}
             data-ready={ready ? 'true' : undefined}
             type="search"
             dir="auto"
@@ -154,7 +161,7 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
             // autoFocus can focus the input before hydration, so a click on an already focused input opens the list too
             onClick={() => setOpen(true)}
             onKeyDown={onKeyDown}
-            className="w-full h-11 ps-10 pe-10 rounded-s-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-search-cancel-button]:hidden"
+            className={header ? 'h-full w-full bg-transparent ps-4 pe-9 text-sm text-white placeholder:text-white/60 focus:outline-none' : "w-full h-11 ps-10 pe-10 rounded-s-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-search-cancel-button]:hidden"}
           />
           {value && (
             <button
@@ -164,7 +171,7 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
                 inputRef.current?.focus();
               }}
               aria-label={t.search.clear}
-              data-testid="search-input-clear"
+              data-testid={header ? 'header-search-clear' : 'search-input-clear'}
               className="absolute end-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <X className="h-4 w-4" aria-hidden="true" />
@@ -173,15 +180,16 @@ export function SearchBar({ value, onChange, onSubmit, onSelectCategory, history
         </div>
         <button
           type="submit"
-          data-testid="search-submit"
-          className="h-11 px-5 rounded-e-full bg-gray-800 text-white hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          aria-label={t.search.searchButton}
+          data-testid={header ? 'header-search-submit' : 'search-submit'}
+          className={header ? 'grid w-11 place-items-center border-s border-white/30 text-white hover:bg-white/10' : "h-11 px-5 rounded-e-full bg-gray-800 text-white hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"}
         >
-          {t.search.searchButton}
+          {header ? <Search className="h-[18px] w-[18px]" aria-hidden="true" /> : t.search.searchButton}
         </button>
       </form>
 
       {showList && (
-        <div className="absolute inset-x-0 top-full mt-1 z-40 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg overflow-hidden">
+        <div data-testid="search-dropdown" className="search-dd absolute inset-x-0 top-full mt-1 z-50 text-start rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg overflow-hidden">
           {!typing && (
             <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-1 text-xs text-gray-500 dark:text-gray-400">
               <span>{t.search.recentSearches}</span>
