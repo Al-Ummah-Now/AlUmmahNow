@@ -20,6 +20,13 @@
  * imported yet (api-videos lib/analytics.ts loadRollups).
  */
 
+import {
+  RETENTION_BUCKET_COUNT,
+  TRAFFIC_SOURCES,
+  isTrafficSource,
+  normalizeReferrerHost,
+  type ViewTrafficSource,
+} from '@al-ummah/shared-types';
 import type { D1Database, R2Bucket } from '../types';
 import { CounterBatch, bulkUpsertStatements, type CounterIncrement, type EntityType } from './analytics-counters';
 
@@ -42,6 +49,8 @@ export const OTHER_ORIGIN = 'other';
 export interface ViewDimensions {
   source?: 'watch' | 'embed';
   embedOrigin?: string | null;
+  trafficSource?: ViewTrafficSource;
+  referrerHost?: string;
 }
 
 /** Legacy monthly document in R2 (read only by the import). */
@@ -76,6 +85,9 @@ export interface ViewEventPayload {
   /** "watch" | "embed" (docs/embeds §6); absent on views sent before embeds */
   source?: unknown;
   embedOrigin?: unknown;
+  /** Where the view came from (docs/specs/CREATOR-STUDIO.md §8.4) */
+  trafficSource?: unknown;
+  referrerHost?: unknown;
 }
 
 /** Pure: the rollup dimensions a tracked view carries (invalid values dropped). */
@@ -99,6 +111,22 @@ export function isTrackedView(payload: ViewEventPayload): boolean {
   return payload.trackedView === true || Object.prototype.hasOwnProperty.call(payload, 'videoChannelId');
 }
 
+/**
+ * Pure: the traffic dimensions of a tracked view. A missing or invalid source is
+ * "unknown", so per-source counts add up to total views. Only external views
+ * keep a host.
+ */
+export function trafficDimensions(payload: ViewEventPayload): ViewDimensions {
+  const trafficSource: ViewTrafficSource = isTrafficSource(payload.trafficSource) ? payload.trafficSource : 'unknown';
+  if (trafficSource !== 'external') return { trafficSource };
+  const referrerHost = normalizeReferrerHost(payload.referrerHost);
+  return referrerHost ? { trafficSource, referrerHost } : { trafficSource };
+}
+
+/** Bound on distinct referring hosts kept per day; the rest are counted under "other". */
+export const MAX_EXTERNAL_HOSTS = 50;
+const MAX_TRAFFIC_SOURCES = TRAFFIC_SOURCES.length;
+
 /** Bound on distinct playback surfaces per day (only "watch" and "embed" exist). */
 export const MAX_SOURCES = 10;
 
@@ -119,12 +147,17 @@ export function viewIncrements(payload: ViewEventPayload, messageTimestamp: numb
   const watchTime = Number.isFinite(rawWatch) && rawWatch > 0 ? rawWatch : 0;
   const day = toUtcDay(typeof payload.timestamp === 'string' ? payload.timestamp : messageTimestamp);
   const dimensions = viewDimensions(payload);
+  const traffic = trafficDimensions(payload);
 
   const out: CounterIncrement[] = [];
   for (const [entityType, entityId] of entities(videoId, channelId)) {
     const base = { entityType, entityId, day };
     out.push({ ...base, metric: 'views', value: 1 });
     if (watchTime > 0) out.push({ ...base, metric: 'watch_time', value: watchTime });
+    out.push({ ...base, metric: 'traffic', dim: traffic.trafficSource ?? 'unknown', value: 1, maxDims: MAX_TRAFFIC_SOURCES });
+    if (traffic.referrerHost) {
+      out.push({ ...base, metric: 'external_host', dim: traffic.referrerHost, value: 1, maxDims: MAX_EXTERNAL_HOSTS });
+    }
     if (dimensions.source) {
       out.push({ ...base, metric: 'source', dim: dimensions.source, value: 1, maxDims: MAX_SOURCES });
       if (dimensions.source === 'embed') {
@@ -138,6 +171,43 @@ export function viewIncrements(payload: ViewEventPayload, messageTimestamp: numb
 /** Queues a tracked view in `counters`. False (nothing queued) for other events. */
 export function recordViewRollup(counters: CounterBatch, payload: ViewEventPayload, messageTimestamp: number | string): boolean {
   const increments = viewIncrements(payload, messageTimestamp);
+  if (!increments) return false;
+  for (const inc of increments) counters.add(inc);
+  return true;
+}
+
+export interface RetentionEventPayload {
+  videoId?: unknown;
+  buckets?: unknown;
+  timestamp?: unknown;
+}
+
+/** Pure: valid, unique, sorted buckets, or null when the report is invalid. */
+export function sanitizeRetentionBuckets(value: unknown): number[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const valid = value.every((bucket) => Number.isInteger(bucket) && bucket >= 0 && bucket < RETENTION_BUCKET_COUNT);
+  return valid ? [...new Set(value as number[])].sort((a, b) => a - b) : null;
+}
+
+/**
+ * Pure: the increments of one retention report (MessageType.VideoRetention):
+ * 'retention' +1 per bucket reached (dim = bucket number), and
+ * 'retention_start' +1 when the report includes bucket 0. Per video only.
+ */
+export function retentionIncrements(payload: RetentionEventPayload, messageTimestamp: number | string): CounterIncrement[] | null {
+  if (!payload || typeof payload.videoId !== 'string' || !payload.videoId) return null;
+  const buckets = sanitizeRetentionBuckets(payload.buckets);
+  if (!buckets) return null;
+  const base = { entityType: 'video' as const, entityId: payload.videoId, day: toUtcDay(typeof payload.timestamp === 'string' ? payload.timestamp : messageTimestamp) };
+  return [
+    ...(buckets.includes(0) ? [{ ...base, metric: 'retention_start', value: 1 }] : []),
+    ...buckets.map((bucket) => ({ ...base, metric: 'retention', dim: String(bucket), value: 1 })),
+  ];
+}
+
+/** Queues a retention report in `counters`. False (nothing queued) for an invalid report. */
+export function recordRetentionRollup(counters: CounterBatch, payload: RetentionEventPayload, messageTimestamp: number | string): boolean {
+  const increments = retentionIncrements(payload, messageTimestamp);
   if (!increments) return false;
   for (const inc of increments) counters.add(inc);
   return true;

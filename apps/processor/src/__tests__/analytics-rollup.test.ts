@@ -75,7 +75,11 @@ describe('events → increments', () => {
 
   it('legacy videos without a channel count for the video only (prod payload shape)', () => {
     const incs = viewIncrements({ videoId: '0269b21b', videoChannelId: null, watchTime: 0, timestamp: '2026-11-08T05:49:26.147Z' }, Date.now())!;
-    expect(incs).toEqual([{ entityType: 'video', entityId: '0269b21b', day: '2026-11-08', metric: 'views', value: 1 }]);
+    // An older client sends no traffic source: counted as unknown, so sources add up to views
+    expect(incs).toEqual([
+      { entityType: 'video', entityId: '0269b21b', day: '2026-11-08', metric: 'views', value: 1 },
+      { entityType: 'video', entityId: '0269b21b', day: '2026-11-08', metric: 'traffic', dim: 'unknown', value: 1, maxDims: 13 },
+    ]);
   });
 
   it('ignores view-like events that are not tracked views', () => {
@@ -111,7 +115,8 @@ describe('D1 counters', () => {
     const batch = new CounterBatch();
     for (let i = 0; i < 10; i++) recordViewRollup(batch, { videoId: 'v1', videoChannelId: 'c1', watchTime: 1.5, timestamp: '2026-11-06T10:00:00Z' }, 0);
     recordWatchTimeRollup(batch, { videoId: 'v1', videoChannelId: 'c1', seconds: 28.42, timestamp: '2026-11-06T10:00:00Z' }, 0);
-    expect(batch.size).toBe(4);
+    // views, watch_time and traffic for the video and for the channel
+    expect(batch.size).toBe(6);
     await batch.flush(db);
     expect(batch.size).toBe(0);
     const rows = await readCounters(db, 'video', ['v1'], '2026-11-01', '2026-11-30');
