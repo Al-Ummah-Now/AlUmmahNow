@@ -8,12 +8,13 @@ import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/hooks/useLanguage';
 import { listPlaylists } from '@/lib/api/playlists';
 import { bulkAddToPlaylist, bulkScheduleVideos, type BulkSummary } from '@/lib/api/studio-content';
+import type { LimitRefusal } from '@/lib/studio/limits';
 
 interface DialogProps {
   open: boolean;
   videoIds: string[];
   onOpenChange: (open: boolean) => void;
-  onDone: (summary: BulkSummary | null) => void | Promise<void>;
+  onDone: (summary: BulkSummary | LimitRefusal | null) => void | Promise<void>;
 }
 
 export function BulkPlaylistDialog({ open, channelId, videoIds, onOpenChange, onDone }: DialogProps & { channelId: string }) {

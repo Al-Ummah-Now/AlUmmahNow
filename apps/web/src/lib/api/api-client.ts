@@ -41,6 +41,8 @@ export interface ApiRequestOptions {
   functionName: string;
   /** Abort the request (and resolve null) after this many milliseconds */
   timeoutMs?: number;
+  /** Receives the status and body of an error response, for callers that explain it */
+  onFailure?: (status: number, body: string) => void;
 }
 
 export interface AuthContext {
@@ -142,6 +144,7 @@ async function sendApiRequest<T>(
         statusText: response.statusText,
         errorBody: errorText
       });
+      options.onFailure?.(response.status, errorText);
       logApiEnd(functionName, false);
       let errorBody: unknown;
       try {

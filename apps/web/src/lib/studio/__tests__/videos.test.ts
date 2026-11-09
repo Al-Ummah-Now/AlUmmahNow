@@ -55,8 +55,17 @@ describe('rowActions', () => {
     expect(rowActions('processing', 'owner')).toEqual(['delete']);
   });
 
-  it('offers edit and delete on a failed video', () => {
-    expect(rowActions('failed', 'owner')).toEqual(['edit', 'delete']);
+  it('offers a new upload for a failed upload', () => {
+    expect(rowActions('failed', 'owner', false, 'upload')).toEqual(['retryUpload', 'edit', 'delete']);
+  });
+
+  it('offers to publish again for a failed scheduled publish', () => {
+    expect(rowActions('failed', 'owner', false, 'publish')).toEqual(['retryPublish', 'edit', 'delete']);
+  });
+
+  it('offers no retry a role can\'t do', () => {
+    expect(rowActions('failed', 'moderator', false, 'publish')).toEqual([]);
+    expect(rowActions('failed', 'moderator', false, 'upload')).toEqual([]);
   });
 
   it('offers publish on a draft', () => {

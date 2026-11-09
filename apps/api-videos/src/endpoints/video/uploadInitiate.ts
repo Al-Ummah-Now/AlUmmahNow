@@ -3,6 +3,8 @@ import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { checkThumbnailShape, imageSize, videoSizeOf } from '../../lib/thumbnail/shape';
 import { z } from "zod";
+import { channelContentCounts } from "../../lib/search/ownership";
+import { checkDraftAllowed } from "../../lib/studioLimits";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { Channel, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
@@ -150,6 +152,13 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			const { ownerId, uploadedBy } = uploadIdentity(c, userId);
 			if (fingerprint && fingerprint.size !== fileSize) {
 				return c.json({ success: false, error: "fingerprint.size must equal fileSize" }, 400);
+			}
+
+			// Studio drafts are limited per plan (lib/studioLimits.ts)
+			if (isDraft && channelId !== userId) {
+				const counts = await channelContentCounts(c.env as never, channelId);
+				const limit = await checkDraftAllowed(c.env, { userId, channelId, drafts: counts?.drafts ?? 0 });
+				if (limit) return c.json(limit, 402);
 			}
 
 			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');

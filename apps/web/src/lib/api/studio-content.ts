@@ -2,10 +2,11 @@
 
 import type { StudioVideoStatus } from '@al-ummah/shared-types';
 import type { VideoObject } from '@/interfaces';
+import { parseLimitRefusal, type LimitRefusal } from '@/lib/studio/limits';
 import { apiRequestServer, buildApiUrl } from './api-client';
 import { getServerAuthContext } from './server-auth';
 
-export type StudioVideo = VideoObject & { studioStatus: StudioVideoStatus; isDraft: boolean };
+export type StudioVideo = VideoObject & { studioStatus: StudioVideoStatus; isDraft: boolean; failureKind?: 'upload' | 'publish' | null };
 
 export interface ChannelContentParams {
   status: StudioVideoStatus;
@@ -50,22 +51,24 @@ export interface BulkSummary {
   failed: number;
 }
 
-async function postBulk(path: string, functionName: string, body: unknown): Promise<BulkSummary | null> {
+async function postBulk(path: string, functionName: string, body: unknown): Promise<BulkSummary | LimitRefusal | null> {
+  let refusal: LimitRefusal | null = null;
   const response = await apiRequestServer<{ summary: BulkSummary }>({
     method: 'POST',
     url: buildApiUrl(path),
     body: body as Record<string, unknown>,
     functionName,
+    onFailure: (status, text) => { refusal = parseLimitRefusal(status, text); },
   }, getServerAuthContext, true);
-  return response?.summary ?? null;
+  return response?.summary ?? refusal;
 }
 
 /** POST /api/videos/bulk-playlist */
-export async function bulkAddToPlaylist(playlistId: string, videoIds: string[]): Promise<BulkSummary | null> {
+export async function bulkAddToPlaylist(playlistId: string, videoIds: string[]): Promise<BulkSummary | LimitRefusal | null> {
   return postBulk('/api/videos/bulk-playlist', 'bulkAddToPlaylist', { playlistId, videoIds });
 }
 
 /** POST /api/videos/bulk-schedule */
-export async function bulkScheduleVideos(input: { videoIds: string[]; startAt: string; intervalMinutes: number; timezone: string }): Promise<BulkSummary | null> {
+export async function bulkScheduleVideos(input: { videoIds: string[]; startAt: string; intervalMinutes: number; timezone: string }): Promise<BulkSummary | LimitRefusal | null> {
   return postBulk('/api/videos/bulk-schedule', 'bulkScheduleVideos', input);
 }
