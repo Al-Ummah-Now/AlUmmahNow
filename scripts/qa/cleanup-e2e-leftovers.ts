@@ -50,6 +50,8 @@ import {
 	DEFAULT_MIN_AGE_MS,
 	blockChannelDeletion,
 	classifyChannel,
+	classifyHandleEntry,
+	classifyTabsConfig,
 	classifyPlaylist,
 	classifyPost,
 	classifyScheduleEntry,
@@ -74,7 +76,7 @@ const QA_CONFIG = join(ROOT, 'apps/api-videos/wrangler.qa.jsonc');
 /** Bindings the cleanup needs, by binding name. */
 const READ_CONCURRENCY = 8;
 /** Kept low: each call is a local proxy connection, and too many exhaust the local ports. */
-const WRITE_CONCURRENCY = 4;
+const WRITE_CONCURRENCY = 2;
 const R2_BINDINGS = ['videos', 'channels', 'playlists', 'community_posts', 'channel_sections', 'channel_tabs', 'profiles', 'SCHEDULED_VIDEOS'] as const;
 
 type Env = Record<(typeof R2_BINDINGS)[number], R2Bucket> & { SEARCH_DB: D1Database };
@@ -217,7 +219,7 @@ interface PostRecord {
 }
 
 export interface InventoryItem {
-	kind: 'video' | 'comment' | 'channel' | 'playlist' | 'post' | 'post-comment' | 'section' | 'schedule-entry' | 'profile-ref';
+	kind: 'video' | 'comment' | 'channel' | 'playlist' | 'post' | 'post-comment' | 'section' | 'schedule-entry' | 'profile-ref' | 'handle' | 'tabs';
 	id: string;
 	title?: string;
 	owner?: string;
@@ -244,6 +246,8 @@ async function buildInventory(env: Env, minAgeMs: number) {
 	const sectionKeys = await listKeys(env.channel_sections);
 	const scheduleKeys = await listKeys(env.SCHEDULED_VIDEOS);
 	const profileKeys = await listKeys(env.profiles);
+	const handleKeys = await listKeys(env.channel_tabs, 'channel-handles/');
+	const tabKeys = await listKeys(env.channel_tabs, 'channel-tabs/');
 	const videos = (await mapLimit(videoKeys.filter((k) => !k.includes(':') && !k.includes('/')), READ_CONCURRENCY, (k) => readJson<VideoRecord>(env.videos, k)))
 		.filter((v): v is VideoRecord => !!v?.id);
 	const channels = (await mapLimit(channelKeys.filter((k) => !k.includes('/')), READ_CONCURRENCY, (k) => readJson<ChannelRecord>(env.channels, k)))
@@ -297,7 +301,7 @@ async function buildInventory(env: Env, minAgeMs: number) {
 	}
 	const deletedPosts = new Set<string>();
 	for (const p of posts) {
-		const verdict = applyMinAge(classifyPost(p.content, channelAction.get(p.channelId)), p.createdAt, now, minAgeMs);
+		const verdict = applyMinAge(classifyPost(p.content, channelAction.get(p.channelId), p.channelId), p.createdAt, now, minAgeMs);
 		if (verdict.action === 'delete') deletedPosts.add(p.id);
 		items.push({ kind: 'post', id: p.id, title: p.content?.slice(0, 120), owner: ownerLabel(ownerEmail(p.userId), p.userId), parent: p.channelId, ...verdict, detail: { status: p.status ?? null } });
 	}
@@ -307,7 +311,7 @@ async function buildInventory(env: Env, minAgeMs: number) {
 	}
 	for (const s of sections) {
 		const channelId = s.key.split('/')[0];
-		items.push({ kind: 'section', id: s.key, title: s.record?.title, parent: channelId, ...classifySection(s.record?.title, channelAction.get(channelId)) });
+		items.push({ kind: 'section', id: s.key, title: s.record?.title, parent: channelId, ...classifySection(s.record?.title, channelAction.get(channelId), channelId) });
 	}
 	for (const k of scheduleKeys) {
 		const vid = scheduleEntryVideoId(k);
@@ -321,6 +325,15 @@ async function buildInventory(env: Env, minAgeMs: number) {
 		if (stale.length > 0) {
 			items.push({ kind: 'profile-ref', id: p.id, owner: p.email, action: 'delete', reason: 'profile lists channels that are deleted', detail: { channels: stale } });
 		}
+	}
+	const handles = await mapLimit(handleKeys, READ_CONCURRENCY, async (k) => ({ key: k, entry: await readJson<{ channelId?: string; userId?: string; handle?: string }>(env.channel_tabs, k) }));
+	for (const h of handles) {
+		const verdict = classifyHandleEntry(h.entry, ownerEmail(h.entry?.userId), existingChannels, deletingChannels);
+		if (verdict.action !== 'keep') items.push({ kind: 'handle', id: h.key, title: h.entry?.handle, owner: ownerLabel(ownerEmail(h.entry?.userId), h.entry?.userId), parent: h.entry?.channelId, ...verdict });
+	}
+	for (const k of tabKeys) {
+		const verdict = classifyTabsConfig(k, existingChannels, deletingChannels);
+		if (verdict.action !== 'keep') items.push({ kind: 'tabs', id: k, ...verdict });
 	}
 	return { items, videos, channels, posts };
 }
@@ -469,6 +482,13 @@ async function apply(env: Env, inv: Awaited<ReturnType<typeof buildInventory>>, 
 		await profileRepo.putObject(item.id, { ...profile, channels: profile.channels.filter((id) => !gone.has(id)) });
 	})));
 	say(`[cleanup] updated ${refsDone}/${del('profile-ref').length} profile(s)`);
+
+	// 6c. Handles and tab configs of channels that are gone (ChannelDelete's releaseHandle and
+	//     tabs delete, for deletes that stopped half-way). Runs after step 6, so the handles of
+	//     channels deleted in this run are already released and these keys are the leftovers.
+	const deadKeys = [...del('handle'), ...del('tabs')].map((i) => i.id);
+	const deadDone = count(await mapLimit(deadKeys, WRITE_CONCURRENCY, (k) => guard(`channel-tabs ${k}`, () => env.channel_tabs.delete(k))));
+	say(`[cleanup] removed ${deadDone}/${deadKeys.length} handle / tab config object(s) of deleted channels`);
 
 	// 7. Schedule entries of deleted or missing videos
 	const entries = del('schedule-entry').map((e) => e.id);

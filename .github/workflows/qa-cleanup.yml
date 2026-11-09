@@ -2,7 +2,8 @@
 # scripts/qa/cleanup-e2e-leftovers.ts. The specs clean up after themselves; this
 # removes what a crashed, cancelled or timed-out run left behind ("E2E Temp …"
 # content, retired throwaway accounts' channels and seed videos, probe comments,
-# orphaned schedule entries). Seed fixtures, the pinned CI users' data and
+# orphaned schedule entries, dead @handles). Seed fixtures, the theme-demo content
+# (scripts/qa/theme-demo-keep.ts), the pinned CI users' data and
 # anything owned by a non-test account are kept; "unsure" items are only listed.
 # Anything younger than 2 hours is left alone, so a running E2E job is never hit.
 #
