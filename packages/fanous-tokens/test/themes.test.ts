@@ -147,3 +147,40 @@ test('build emits only the active theme, with paths inside the output', () => {
     assert.throws(() => run({ ACTIVE_THEME: 'nope' }));
   } finally { rmSync(out, { recursive: true, force: true }); }
 });
+
+test('every interface part has a colour in both modes, and reaches the web output', () => {
+  const t = fresh();
+  for (const id of t.ids) {
+    const m = themeModel(id, t, tokens);
+    const names = Object.keys(tokens.components.parts);
+    assert.deepEqual(Object.keys(m.components.dark), names, id);
+    for (const hex of [...Object.values(m.components.dark), ...Object.values(m.components.light)]) assert.match(hex, /^#[0-9a-f]{6}$/, id);
+  }
+});
+
+test('a part below its contrast minimum fails, naming the theme, mode and part', () => {
+  const t = fresh();
+  t.byId.zujaj.component.light['nav.text'] = '#0f5a6b';
+  assert.ok(validateThemes(t, tokens).some((e) => e.startsWith('zujaj: component light: nav.text #0f5a6b on nav.bg')));
+});
+
+test('a part colour outside the logo hues fails', () => {
+  const t = fresh();
+  t.byId.nahas.component.dark['nav.bg'] = '#7a3ff2';
+  assert.ok(validateThemes(t, tokens).some((e) => e.startsWith('nahas: dark.nav.bg #7a3ff2 is outside')));
+});
+
+test('text on the primary and upload buttons is held to 7:1 per part', () => {
+  const t = fresh();
+  t.byId.lantern.component.dark['upload.text'] = '#7a4a10';
+  assert.ok(validateThemes(t, tokens).some((e) => /lantern: component dark: upload\.text .* \(needs 7\)/.test(e)));
+});
+
+test('a child inherits part overrides and can replace one', () => {
+  const t = fresh();
+  t.ids.push('kid');
+  t.byId.kid = { id: 'kid', kind: 'event', extends: 'zujaj', name: { en: 'K', ar: 'ك' }, component: { light: { 'nav.bg': '#0c4c5b' } } };
+  const m = themeModel('kid', t, tokens);
+  assert.equal(m.components.light['nav.bg'], '#0c4c5b');
+  assert.equal(m.components.light['upload.bg'], '#f5cf92');
+});

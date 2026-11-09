@@ -182,5 +182,25 @@
     "buttonBackground": "#e8b477",
     "buttonText": "#09151e",
     "buttonRadius": "10px"
+  },
+  "component": {
+    "dark": {
+      "nav.bg": "#07425a"
+    },
+    "light": {
+      "nav.bg": "#093041",
+      "nav.border": "#07425a",
+      "nav.text": "#f7f1e8",
+      "nav.icon": "#f5cf92",
+      "nav.hover": "#0e3a4e",
+      "nav.activeBg": "#0e3a4e",
+      "nav.activeText": "#f5cf92",
+      "nav.indicator": "#e8b477",
+      "nav.searchBg": "#0e3a4e",
+      "nav.searchBorder": "#7f9aa7",
+      "nav.searchText": "#f7f1e8",
+      "nav.searchPlaceholder": "#c9d6dc",
+      "upload.focus": "#f5cf92"
+    }
   }
 }
