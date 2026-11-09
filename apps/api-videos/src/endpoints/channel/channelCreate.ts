@@ -9,6 +9,49 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { claimDefaultHandle } from "../../lib/channelHandles";
 import { logger } from "../../lib/logger";
+import { ownerContentIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+
+type StoredChannel = z.infer<typeof BusinessChannel>;
+
+/** Pages of the bucket scan used while the ownership index is incomplete. */
+const DUPLICATE_SCAN_MAX_PAGES = 50;
+
+function sameName(channel: StoredChannel | null, userId: string, wantedName: string): boolean {
+	return !!channel && channel.userId === userId && !channel.isDeleted
+		&& String(channel.name ?? "").trim().toLocaleLowerCase() === wantedName;
+}
+
+/**
+ * Whether `userId` already owns a not-deleted channel named `wantedName`
+ * (trimmed, lower-cased; moderation-hidden channels count).
+ *
+ * Reads the owner's channel ids from the ownership index, so the cost grows
+ * with that owner's channels. Only while the index is incomplete (or D1 is
+ * unavailable) does it fall back to scanning the bucket, which reads every
+ * channel object, and schedule a heal so later creates use the index.
+ */
+export async function ownerHasChannelNamed(
+	c: AppContext,
+	repository: R2Repository<StoredChannel>,
+	userId: string,
+	wantedName: string,
+): Promise<boolean> {
+	const ids = await ownerContentIds(c.env as never, "channel", userId);
+	if (ids) {
+		const owned = await Promise.all(ids.map((id) => repository.getObject(id)));
+		return owned.some((ch) => sameName(ch, userId, wantedName));
+	}
+
+	scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "channel");
+	let cursor: string | undefined;
+	for (let page = 0; page < DUPLICATE_SCAN_MAX_PAGES; page++) {
+		const batch = await repository.listObjects(100, cursor);
+		if ((batch.items || []).some((ch) => sameName(ch, userId, wantedName))) return true;
+		if (!batch.cursor) return false;
+		cursor = batch.cursor;
+	}
+	return false;
+}
 
 export class ChannelCreate extends AuthenticatedRoute {
 	schema = {
@@ -78,22 +121,12 @@ export class ChannelCreate extends AuthenticatedRoute {
 		}
 
 		// One owner may not have two channels with the same name (guards double
-		// submits and accidental duplicates). Channel creation is rare, so a
-		// bounded scan of the bucket is acceptable here.
+		// submits and accidental duplicates).
 		const wantedName = String(channelInput.name ?? "").trim().toLocaleLowerCase();
 		if (wantedName) {
-			const existingRepo = new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels);
-			let cursor: string | undefined;
-			for (let page = 0; page < 50; page++) {
-				const batch = await existingRepo.listObjects(100, cursor);
-				const clash = (batch.items || []).some((ch) =>
-					ch.userId === userId && !ch.isDeleted && String(ch.name ?? "").trim().toLocaleLowerCase() === wantedName
-				);
-				if (clash) {
-					return c.json({ success: false, error: "You already have a channel with this name" }, 409);
-				}
-				if (!batch.cursor) break;
-				cursor = batch.cursor;
+			const existingRepo = new R2Repository<StoredChannel>(c.env.channels);
+			if (await ownerHasChannelNamed(c, existingRepo, userId, wantedName)) {
+				return c.json({ success: false, error: "You already have a channel with this name" }, 409);
 			}
 		}
 
