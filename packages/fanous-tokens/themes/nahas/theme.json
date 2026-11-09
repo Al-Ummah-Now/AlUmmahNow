@@ -1,0 +1,180 @@
+{
+  "id": "nahas",
+  "kind": "look",
+  "name": {
+    "en": "Nahas",
+    "ar": "نحاس"
+  },
+  "color": {
+    "light": {
+      "background": "#fdf3e3",
+      "surface": "#fffaf1",
+      "surfaceRaised": "#ffffff",
+      "heroStart": "#f9e6ca",
+      "heroEnd": "#fdf3e3",
+      "textPrimary": "#290d06",
+      "textSecondary": "#572a13",
+      "textMuted": "#6f4a30",
+      "link": "#824825",
+      "successText": "#166534",
+      "errorText": "#b00020",
+      "primary": "#ffa037",
+      "onPrimary": "#290d06",
+      "primaryHover": "#ffb765",
+      "onPrimaryHover": "#290d06",
+      "primaryPressed": "#f59a2f",
+      "onPrimaryPressed": "#290d06",
+      "primaryDisabled": "#f9e6ca",
+      "onPrimaryDisabled": "#6f4a30",
+      "primaryEdge": "#824825",
+      "primarySheen": "#ffe0b8",
+      "motif": "#d49162",
+      "secondary": "#824825",
+      "onSecondary": "#ffffff",
+      "verifiedFill": "#166534",
+      "onVerifiedFill": "#ffffff",
+      "errorFill": "#b00020",
+      "onErrorFill": "#ffffff",
+      "live": "#ffa037",
+      "onLive": "#290d06",
+      "accent": "#a85600",
+      "focusRing": "#824825",
+      "focusGlow": "#824825",
+      "verifiedIcon": "#166534",
+      "outline": "#a07e63",
+      "divider": "#edd9bd"
+    },
+    "dark": {
+      "background": "#211008",
+      "surface": "#2e1a0e",
+      "surfaceRaised": "#3d2414",
+      "heroStart": "#331c0f",
+      "heroEnd": "#211008",
+      "textPrimary": "#fbf1e4",
+      "textSecondary": "#e6d2bc",
+      "textMuted": "#cdb49b",
+      "link": "#ffc46b",
+      "successText": "#4ade80",
+      "errorText": "#ff9c94",
+      "primary": "#ffa037",
+      "onPrimary": "#211008",
+      "primaryHover": "#ffb765",
+      "onPrimaryHover": "#211008",
+      "primaryPressed": "#f08f24",
+      "onPrimaryPressed": "#211008",
+      "primaryDisabled": "#3d2414",
+      "onPrimaryDisabled": "#cdb49b",
+      "primaryEdge": "#ffc98e",
+      "primarySheen": "#ffe0b8",
+      "motif": "#b2693e",
+      "secondary": "#824825",
+      "onSecondary": "#ffffff",
+      "verifiedFill": "#166534",
+      "onVerifiedFill": "#ffffff",
+      "errorFill": "#b00020",
+      "onErrorFill": "#ffffff",
+      "live": "#f5cf92",
+      "onLive": "#211008",
+      "accent": "#ffa037",
+      "focusRing": "#ffc98e",
+      "focusGlow": "#ffc98e",
+      "verifiedIcon": "#4ade80",
+      "outline": "#a88870",
+      "divider": "#4a2d1b"
+    }
+  },
+  "brandColor": {
+    "night": "#211008",
+    "nightDeep": "#331c0f",
+    "nightShallow": "#211008",
+    "lantern": "#ffa037",
+    "glow": "#ffb765",
+    "earth": "#824825",
+    "parchment": "#fdf3e3",
+    "verified": "#16a34a",
+    "error": "#b00020"
+  },
+  "font": "sourceSerifAmiri",
+  "shape": {
+    "radius": {
+      "none": "0px",
+      "sm": "4px",
+      "md": "10px",
+      "lg": "12px",
+      "xl": "14px",
+      "full": "999px"
+    },
+    "elevation": {
+      "low": {
+        "color": "#00000033",
+        "offsetX": "0px",
+        "offsetY": "1px",
+        "blur": "3px",
+        "spread": "0px"
+      },
+      "medium": {
+        "color": "#00000040",
+        "offsetX": "0px",
+        "offsetY": "4px",
+        "blur": "12px",
+        "spread": "0px"
+      },
+      "high": {
+        "color": "#00000059",
+        "offsetX": "0px",
+        "offsetY": "12px",
+        "blur": "32px",
+        "spread": "0px"
+      }
+    },
+    "borderStyle": "solid"
+  },
+  "motif": {
+    "pattern": "none",
+    "loader": "assets/loader.svg"
+  },
+  "brand": {
+    "wordmark": {
+      "light": "assets/wordmark.light.png",
+      "dark": "assets/wordmark.dark.png"
+    },
+    "logo": {
+      "light": "assets/logo.png",
+      "dark": "assets/logo.png"
+    },
+    "favicon": "assets/favicon.ico",
+    "icon192": "assets/icon-192.png",
+    "icon512": "assets/icon-512.png",
+    "iconMaskable512": "assets/icon-maskable-512.png",
+    "appleTouchIcon": "assets/apple-touch-icon.png",
+    "ogImage": "assets/og.jpg"
+  },
+  "browser": {
+    "themeColor": {
+      "light": "#fdf3e3",
+      "dark": "#211008"
+    },
+    "manifest": {
+      "background": "#fdf3e3",
+      "theme": "#211008"
+    }
+  },
+  "auth": {
+    "background": {
+      "light": "color:background",
+      "dark": "color:background"
+    },
+    "headerGraphic": {
+      "light": "assets/auth-header.light.svg",
+      "dark": "assets/auth-header.dark.svg"
+    }
+  },
+  "email": {
+    "headerImage": "assets/wordmark.light.png",
+    "background": "#ffffff",
+    "text": "#290d06",
+    "buttonBackground": "#ffa037",
+    "buttonText": "#290d06",
+    "buttonRadius": "12px"
+  }
+}

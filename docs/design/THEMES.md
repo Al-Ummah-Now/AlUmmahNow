@@ -19,6 +19,10 @@ Status: spec, 2026-11-08. Lantern is the first theme and the one deployed.
 
 ## Theme model
 
+**Every theme derives from the logo.** Its colours stay in the logo's teal and navy or ember and gold
+hues, and its motifs and sign-in graphic come from the lantern's own shapes. CI fails a colour outside
+those hues. The status green and red are shared meanings and are exempt.
+
 Each theme is a folder of data in `packages/fanous-tokens/themes/<id>/`, listed in
 `themes/registry.json`. Adding a theme means adding data and passing CI. No page or app code changes.
 
@@ -54,9 +58,10 @@ Standalone rebrand:
   "kind": "rebrand",
   "name": { "en": "New Brand", "ar": "العلامة الجديدة" },
   "color": { "light": { "...every semantic colour": "#000000" }, "dark": { "...every semantic colour": "#000000" } },
-  "font": { "latin": ["Inter"], "arabic": ["Noto Kufi Arabic"] },
+  "font": "notoKufiInter",
   "shape": { "radius": { "...": "4px" }, "elevation": { "...": "..." }, "borderStyle": "solid" },
-  "motif": { "pattern": "assets/pattern.svg", "cardCrown": "assets/crown.svg" },
+  "motif": { "pattern": "assets/pattern.svg", "loader": "assets/loader.svg" },
+  "auth": { "headerGraphic": { "light": "assets/auth-header.light.svg", "dark": "assets/auth-header.dark.svg" } },
   "asset": { "...every required asset slot": "assets/file.png" },
   "email": { "...every required email slot": "..." }
 }
@@ -89,16 +94,18 @@ Everything else in `ramadan` comes from Lantern. Its fonts, logo and emails are 
 | Group | Slot | Required | Modes | Rule |
 |---|---|---|---|---|
 | Colour | every semantic colour, including the primary action scale | yes | light, dark | passes the contrast suite |
-| Type | Latin and Arabic families and weights | yes | | Arabic and Latin both set. Files are self-hosted WOFF2 with a licence allowing it. |
-| Shape | radius scale, elevation, border style | yes | light, dark for elevation | |
-| Motif | `pattern`, `cardCrown`, `loader` | yes | | SVG, no scripts or external references, declares `mirrorInRtl` |
+| Colour | `brandColor` primitives | yes | | hex |
+| Type | `font`, the name of a pair in the shared tokens | yes | | Every pair sets Arabic and Latin. Files are self-hosted WOFF2 with a licence allowing it. |
+| Shape | radius scale, elevation, border style | yes | | |
+| Motif | `pattern`, `loader` | yes | | SVG with no scripts or external references. `pattern` may be `none`. |
 | Brand | `wordmark`, `logo` | yes | light, dark | SVG, or PNG with alpha |
 | Brand | `favicon` | yes | | ICO containing 16, 32 and 48 |
 | Brand | `icon192`, `icon512`, `iconMaskable512` | yes | | PNG, exact size |
 | Brand | `appleTouchIcon` | yes | | PNG, 180x180, no alpha |
 | Brand | `ogImage` | yes | | PNG or JPEG, 1200x630, at most 1 MB |
 | Browser | `themeColor`, manifest `background_color`, `theme_color` | yes | light, dark for `themeColor` | hex |
-| Auth | `authBackground` | yes | light, dark | an image or a solid colour |
+| Auth | `auth.background` | yes | light, dark | one or more images, or `color:<token>` |
+| Auth | `auth.headerGraphic` | yes | light, dark | The sign-in card graphic. Hand-built SVG, decorative, drawn from the logo, and correct in RTL. Colours come from `--fanous-color-*`. A theme with a parent may inherit it. |
 | Email | header image, colours, button style | yes | | PNG header at an absolute URL. System fonts only, because mail clients drop web fonts. |
 | Optional | `heroIllustration`, `emptyIllustration` | no | light, dark | may resolve to `none` |
 | Optional | `banner` | no | | may resolve to `none`. Off unless `enabled` is true. Needs both `en` and `ar` text, at most 90 characters each. |
@@ -108,8 +115,8 @@ The sizes for native launcher icons are checked per platform where a build can r
 ## Build-time selection
 
 `fanous-tokens build --theme <id> --app <app> --out <dir>` validates the theme, resolves its chain and
-writes the flat output into a gitignored directory. Apps import from that directory. `generated/` is
-replaced by `generated/<theme>/<platform>/` for inspection and snapshot tests.
+writes the flat output into a gitignored directory. Apps import from that directory. Every
+theme is also committed under `generated/<theme>/<platform>/` for inspection and snapshot tests.
 
 The value is committed, so a theme change is reviewed and reaches production only through a tag
 release. The CI matrix overrides it with the `ACTIVE_THEME` environment variable.

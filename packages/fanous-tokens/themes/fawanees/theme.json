@@ -1,0 +1,72 @@
+{
+  "id": "fawanees",
+  "kind": "event",
+  "extends": "lantern",
+  "name": {
+    "en": "Fawanees",
+    "ar": "فوانيس"
+  },
+  "color": {
+    "light": {
+      "background": "#fbefd0",
+      "surface": "#fff9e8",
+      "surfaceRaised": "#ffffff",
+      "heroStart": "#f8e8be",
+      "heroEnd": "#fbefd0",
+      "textPrimary": "#09151e",
+      "textSecondary": "#184456",
+      "textMuted": "#2f5a68",
+      "link": "#824825",
+      "primaryDisabled": "#f3dfae",
+      "onPrimaryDisabled": "#5a4a1e",
+      "motif": "#cf985d",
+      "outline": "#8c7f70",
+      "divider": "#ecd9a8",
+      "primary": "#f4ae3a",
+      "primaryHover": "#fbc661",
+      "primaryPressed": "#e0962a",
+      "primarySheen": "#ffe6a8",
+      "primaryEdge": "#8a5a12"
+    },
+    "dark": {
+      "background": "#09151e",
+      "surface": "#0e2b3d",
+      "surfaceRaised": "#184456",
+      "heroStart": "#0b1d2a",
+      "heroEnd": "#09151e",
+      "textSecondary": "#d6dfe2",
+      "textMuted": "#b0c0c8",
+      "primaryDisabled": "#3a3320",
+      "onPrimaryDisabled": "#d9cfae",
+      "motif": "#f5cf92",
+      "outline": "#8ba3ae",
+      "divider": "#184456",
+      "primary": "#f4ae3a",
+      "primaryHover": "#fbc661",
+      "primaryPressed": "#e0962a",
+      "primarySheen": "#ffe6a8",
+      "primaryEdge": "#ffd98a"
+    }
+  },
+  "brandColor": {
+    "lantern": "#f4ae3a",
+    "glow": "#fbc661",
+    "night": "#09151e"
+  },
+  "motif": {
+    "pattern": "assets/pattern.svg"
+  },
+  "auth": {
+    "headerGraphic": {
+      "light": "assets/auth-header.light.svg",
+      "dark": "assets/auth-header.dark.svg"
+    }
+  },
+  "banner": {
+    "enabled": true,
+    "text": {
+      "en": "Ramadan Mubarak. This year's Taraweeh series is live.",
+      "ar": "رمضان مبارك. سلسلة التراويح لهذا العام متاحة الآن."
+    }
+  }
+}

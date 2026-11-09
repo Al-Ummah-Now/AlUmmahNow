@@ -1,5 +1,4 @@
 // Reads the W3C-format token file, resolves {aliases} and returns a typed model for the generators.
-import { readFileSync } from 'node:fs';
 
 export type Role = 'surface' | 'fill' | 'text' | 'on' | 'nontext' | 'decorative';
 export interface Named<T> { name: string; value: T; description?: string }
@@ -124,10 +123,6 @@ export function buildModel(root: Node): Model {
     tv: named(root.tv, px),
     layout: named(root.layout, px),
   };
-}
-
-export function loadModel(url: URL = TOKENS_URL): Model {
-  return buildModel(JSON.parse(readFileSync(url, 'utf8')));
 }
 
 // Shared naming and number helpers for the generators.
