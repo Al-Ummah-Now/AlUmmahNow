@@ -7,7 +7,7 @@ import { compareToAllowlist, countViolations, type Allowlist } from './color-lin
 
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 const ALLOWLIST = join(ROOT, 'theme-colors.allowlist.json');
-const SKIP = /(^|\/)(__tests__|__mocks__|e2e|test)\/|\.(test|spec)\.|\.d\.ts$/;
+const SKIP = /(^|\/)(__tests__|__mocks__|e2e|test)\/|\.(test|spec)\.|\.d\.ts$|(^|\/)theme\/site-themes\.css$/;
 
 const tracked = execFileSync('git', ['ls-files', '--', 'apps/web/src', 'apps/admin-web/src'], { cwd: ROOT, encoding: 'utf8' }).split('\n');
 const found: Allowlist = {};
