@@ -14,6 +14,9 @@ const joseWebCrypto = path.join(
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
+    async headers() {
+        return [{ source: '/:path*', headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }] }];
+    },
     productionBrowserSourceMaps: true, // Enable source maps in production for better error tracking
 
     // Enable server-side source maps with webpack (more stable than Turbopack for Cloudflare Workers)

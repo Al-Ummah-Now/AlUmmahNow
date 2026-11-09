@@ -1,6 +1,10 @@
 import React from "react";
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { ThemeProvider } from "@/components/themeProvider";
+import "@/theme/active.css";
+import "@/theme/bridge.css";
+import "@/theme/demo-motion.css";
+import { DemoBanner, DemoBar } from "@/components/ThemeDemo/DemoBar";
 import { authenticated } from "../lib/actions"
 import type { Metadata, Viewport } from 'next'
 import { headers } from "next/headers";
@@ -30,7 +34,7 @@ export const metadata: Metadata = {
   description: 'Excerpts from scholars\' clips about the state of the nation today',
   keywords: 'Al Ummah Now, Islamic, Videos, Clips',
   authors: [{ name: 'Al Ummah Now' }],
-  robots: 'index, follow',
+  robots: 'noindex, nofollow',
   openGraph: {
     title: 'Al Ummah Now',
     description: 'Excerpts from scholars\' clips about the state of the nation today',
@@ -72,7 +76,7 @@ export const viewport: Viewport = {
 /** Runtime configuration injected from the server (read by client API helpers). */
 function serverRuntimeConfig() {
   return {
-    API_URL: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '',
+    API_URL: '/api/qa-proxy',
     WEBSOCKET_URL: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL || '',
     AUTH_PROFILE_URL: deriveAuthProfileUrl(
       process.env.OPENAUTH_ISSUER || process.env.Issuer,
@@ -161,7 +165,9 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                           {/* Skip links must be the first focusable elements (WCAG 2.4.1) */}
                           <SkipLinks />
                           {/* Header */}
+                          <DemoBanner />
                           <Navigation></Navigation>
+                          <DemoBar />
                           {/* Skip-link target for pages without <main id="main-content"> (PAGE_CONTENT_ID in SkipLinks; a literal because this is a server component) */}
                           <div id="page-content" className="flex flex-1 flex-col">
                             {children}

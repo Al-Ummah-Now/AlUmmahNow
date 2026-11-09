@@ -1,0 +1,18 @@
+{
+  // Prototype only. Temporary theme demos, backed by QA. Deployed with --name theme-demo-<theme>.
+  "name": "theme-demo",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-04-12",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "workers_dev": true,
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "vars": {
+    "Issuer": "https://auth.qa.alummahnow.net",
+    "OPENAUTH_ISSUER": "https://auth.qa.alummahnow.net",
+    "NEXTJS_ENV": "qa",
+    "API_URL": "https://videos.api.qa.alummahnow.net",
+    "WEBSOCKET_URL": "wss://realtime.qa.alummahnow.net/ws",
+    "ClientId": "e0de3c30-0304-4ac4-86d6-1e185dec0439"
+  },
+  "r2_buckets": [{ "binding": "videos", "bucket_name": "videos-qa" }]
+}

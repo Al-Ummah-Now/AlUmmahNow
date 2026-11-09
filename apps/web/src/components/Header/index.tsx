@@ -7,7 +7,7 @@ import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { UploadButton } from '@/components/UploadButton';
+import { DemoUpload } from '@/components/ThemeDemo/DemoUpload';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) => {
@@ -31,6 +31,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
           ariaExpanded={isNavOpen}
           testId="nav-drawer-toggle"
         />
+        <DemoUpload place="start" />
       </div>
 
       {/* Logo Section */}
@@ -47,14 +48,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
 
       {/* Unified Navigation and Upload Button */}
       <div className="flex-1 flex items-center justify-end gap-2">
-        {user && activeChannel && (
-          <UploadButton
-            href={`/${locale}/upload`}
-            text={t.upload.uploadVideo}
-            hideTextOnMobile
-            size="sm"
-          />
-        )}
+        <DemoUpload place="end" />
         <NotificationBell dir="ltr" />
         <UnifiedNavigation />
       </div>
