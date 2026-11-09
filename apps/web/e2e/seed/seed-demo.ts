@@ -940,9 +940,10 @@ async function main(): Promise<void> {
   const shorts = new Set(manifest.clips.filter((c) => c.orientation === 'portrait').map((c) => c.slug));
   const demoSet = {
     channels: [...channels.values()].map((c) => c.id),
-    videos: [...seeded.map((s) => s.video.id), ...manifest.keep],
+    // manifest.keep is only checked for playback: those uploads are never listed in the demo
+    videos: seeded.map((s) => s.video.id),
     shorts: seeded.filter((s) => shorts.has(s.slug)).map((s) => s.video.id),
-    extraVideos: manifest.keep,
+    extraVideos: [],
     playlists: [...playlists.values()],
   };
   fs.writeFileSync(DEMO_SET_OUT, `${JSON.stringify(demoSet, null, 2)}\n`);

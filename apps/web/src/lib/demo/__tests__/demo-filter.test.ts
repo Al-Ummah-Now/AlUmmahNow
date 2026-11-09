@@ -191,3 +191,14 @@ describe('createDemoFetch', () => {
     }
   });
 });
+
+describe('demo set contents', () => {
+  it('never lists the QA upload that ends in a TikTok outro', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const demoSet = require('../../../../demo-content/demo-set.json') as DemoSet;
+    const excluded = '443418c1-dc70-43d9-944d-5388ab7dc4c3';
+    expect(demoSet.videos).not.toContain(excluded);
+    expect(demoSet.extraVideos).not.toContain(excluded);
+    expect(buildPoolVideos(demoSet, [[{ id: excluded, title: 'x' }]])).toEqual([]);
+  });
+});
