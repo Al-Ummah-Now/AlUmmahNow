@@ -180,3 +180,7 @@ button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{
 @media(max-width:767px){.ah-search{min-width:0}}
 @media(max-width:639px){.ah{gap:4px;padding-inline:4px}.ah-search{display:none}.ah-search-phone{display:inline-flex}.ah-start,.ah-end{gap:0}.ah-brand{padding:2px;gap:6px}.ah-brand span{font-size:14px}.ah-brand .ah-logo{width:28px;height:28px}.ah-end svg[class*="chevron"],.ah-end [class*="lucide-chevron"]{display:none}}
 @media(max-width:375px){.ah-brand span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}}
+/* Nothing square behind a rounded corner: wrappers around the player and thumbnails stay unpainted. */
+[class*="bg-"]:has(.custom-video-player):not(.custom-video-player):not(body):not(html){background:transparent!important;box-shadow:none!important}
+.custom-video-player.aspect-video.aspect-video{overflow:hidden!important}
+.custom-video-player .vjs-poster,.custom-video-player .vjs-tech,.custom-video-player .vjs-poster img{border-radius:inherit}
