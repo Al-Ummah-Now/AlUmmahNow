@@ -1,15 +1,9 @@
 /**
  * Unified Navigation Component
  *
- * Consolidates AccountSwitcher, ChannelSelector, and AccountNavigation
- * into a single hierarchical dropdown menu.
- *
- * Features:
- * - Account switching and management
- * - Channel selection and creation
- * - Navigation links (Profile, Analytics, Settings, Moderation)
- * - Dark mode and language toggles
- * - Sign out options
+ * The header's account menu: account and channel scope only. Browsing links
+ * live in the sidebar (see lib/navigation/destinations). One component for
+ * both reading directions.
  */
 
 'use client';
@@ -32,14 +26,18 @@ import {
   Crown,
   Video,
   Calendar,
-  History,
-  Rss,
-  Users,
   BarChart3,
-  Library,
-  Bell,
   Settings,
+  ChevronRight,
+  ArrowLeft,
+  Users,
 } from 'lucide-react';
+import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
+
+type MenuView = 'main' | 'channels' | 'accounts';
+const ROW = 'flex items-center gap-3 w-full min-h-10 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-start';
+const ROW_TEXT = 'text-sm font-medium text-gray-900 dark:text-gray-100';
+const ROW_ICON = 'h-[18px] w-[18px] flex-shrink-0 text-gray-500 dark:text-gray-400';
 
 export function UnifiedNavigation() {
   // Get language context and translations
@@ -158,7 +156,12 @@ export function UnifiedNavigation() {
     return channelName;
   };
 
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpenState] = useState(false);
+  const [view, setView] = useState<MenuView>('main');
+  const setIsOpen = (open: boolean) => {
+    setIsOpenState(open);
+    setView('main');
+  };
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false);
@@ -167,7 +170,8 @@ export function UnifiedNavigation() {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        setIsOpen(false);
+        setIsOpenState(false);
+        setView('main');
         setIsCreatingChannel(false);
         setNewChannelName('');
       }
@@ -214,7 +218,7 @@ export function UnifiedNavigation() {
 
             {/* Menu */}
             <div
-              className="absolute right-0 mt-2 w-80 rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
+              className="absolute end-0 mt-2 w-80 rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
               role="menu"
               data-testid="nav-menu"
               aria-orientation="vertical"
@@ -254,56 +258,22 @@ export function UnifiedNavigation() {
     }
   };
 
-  // Feed/history for every signed-in account; video links only with channels
   const navItems = [
-    {
-      label: t.subscriptions.subscriptionFeed,
-      icon: Rss,
-      href: `/${lang}/feed`,
-    },
-    {
-      label: t.feed.history,
-      icon: History,
-      href: `/${lang}/history`,
-    },
-    {
-      label: t.navigation.subscriptions,
-      icon: Users,
-      href: `/${lang}/subscriptions`,
-    },
-    {
-      label: t.navigation.analytics,
-      icon: BarChart3,
-      href: `/${lang}/analytics`,
-    },
-    {
-      label: t.library.title,
-      icon: Library,
-      href: `/${lang}/library`,
-    },
-    {
-      label: t.notificationCenter.title,
-      icon: Bell,
-      href: `/${lang}/notifications`,
-    },
-    {
-      label: t.header.settings,
-      icon: Settings,
-      href: `/${lang}/settings`,
-    },
     ...(channels.length > 0 ? [
-      {
-        label: t.video.myVideos || 'My Videos',
-        icon: Video,
-        href: `/${lang}/dashboard/videos`,
-      },
-      {
-        label: t.schedule?.scheduledVideos || 'Scheduled Videos',
-        icon: Calendar,
-        href: `/${lang}/scheduled-videos`,
-      },
+      { label: t.video.myVideos || 'My Videos', icon: Video, href: `/${lang}${ACCOUNT_MENU_PATHS.myVideos}` },
+      { label: t.schedule?.scheduledVideos || 'Scheduled Videos', icon: Calendar, href: `/${lang}${ACCOUNT_MENU_PATHS.scheduled}` },
     ] : []),
+    { label: t.navigation.analytics, icon: BarChart3, href: `/${lang}${ACCOUNT_MENU_PATHS.analytics}` },
+    { label: t.header.settings, icon: Settings, href: `/${lang}${ACCOUNT_MENU_PATHS.settings}` },
   ];
+
+  const displayName = getDisplayName();
+  const backRow = (title: string) => (
+    <button type="button" autoFocus onClick={() => { setView('main'); setIsCreatingChannel(false); }} data-testid="nav-menu-back" className={`${ROW} font-semibold`} role="menuitem">
+      <ArrowLeft className={`${ROW_ICON} rtl:rotate-180`} aria-hidden="true" />
+      <span className={ROW_TEXT}>{title}</span>
+    </button>
+  );
 
   return (
     <div className="relative">
@@ -332,12 +302,12 @@ export function UnifiedNavigation() {
           />
         ) : (
           <div aria-hidden="true" className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">
-            {getDisplayName()[0]?.toUpperCase() || user.email[0].toUpperCase()}
+            {displayName[0]?.toUpperCase() || user.email[0].toUpperCase()}
           </div>
         )}
 
         {/* User Info (hidden on mobile) */}
-        <div className="hidden md:block text-left">
+        <div className="hidden md:block text-start">
           <div className="text-sm font-medium text-white truncate max-w-[150px]">
             {getDisplayName()}
           </div>
@@ -367,11 +337,12 @@ export function UnifiedNavigation() {
 
           {/* Menu */}
           <div
-            className="absolute right-0 mt-2 w-80 max-h-[85vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
+            className="absolute end-0 mt-2 w-80 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
             role="menu"
             data-testid="nav-menu"
             aria-orientation="vertical"
           >
+            {view === 'main' && <>
             {/* Active Context Card */}
             <div data-testid="nav-active-context" className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700">
               <Link
@@ -390,16 +361,18 @@ export function UnifiedNavigation() {
                   />
                 ) : (
                   <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-lg font-semibold flex-shrink-0">
-                    {getDisplayName()[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                    {displayName[0]?.toUpperCase() || user.email[0].toUpperCase()}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                     {getDisplayName()}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                    {user.email}
-                  </div>
+                  {displayName !== user.email && (
+                    <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                      {user.email}
+                    </div>
+                  )}
                 </div>
               </Link>
 
@@ -442,11 +415,21 @@ export function UnifiedNavigation() {
               )}
             </div>
 
-            {/* Navigation Links */}
+            {/* Switchers open in place */}
             <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-                {t.navigation.navigation.toUpperCase()}
-              </div>
+              <button type="button" onClick={() => setView('channels')} data-testid="nav-switch-channel" className={ROW} role="menuitem" aria-haspopup="menu">
+                <Tv className={ROW_ICON} aria-hidden="true" />
+                <span className={`${ROW_TEXT} flex-1`}>{t.navigation.switchChannel}</span>
+                <ChevronRight className={`${ROW_ICON} rtl:rotate-180`} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => setView('accounts')} data-testid="nav-switch-account" className={ROW} role="menuitem" aria-haspopup="menu">
+                <Users className={ROW_ICON} aria-hidden="true" />
+                <span className={`${ROW_TEXT} flex-1`}>{t.navigation.switchAccount}</span>
+                <ChevronRight className={`${ROW_ICON} rtl:rotate-180`} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="p-2 border-b border-gray-200 dark:border-gray-700">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -454,11 +437,11 @@ export function UnifiedNavigation() {
                     key={item.href}
                     href={item.href}
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+                    className={ROW}
                     role="menuitem"
                   >
-                    <Icon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <Icon className={ROW_ICON} aria-hidden="true" />
+                    <span className={ROW_TEXT}>
                       {item.label}
                     </span>
                   </Link>
@@ -466,153 +449,80 @@ export function UnifiedNavigation() {
               })}
             </div>
 
-            {/* Account Management with Nested Channels */}
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-                {t.navigation.accounts.toUpperCase()} {accounts.length > 1 && `(${accounts.length})`}
-              </div>
+            {/* Add Account & Sign Out */}
+            <div className="p-2">
+              {/* Add Account */}
+              <button
+                onClick={() => {
+                  addAccount();
+                  setIsOpen(false);
+                }}
+                data-testid="nav-add-account"
+                className={ROW}
+                role="menuitem"
+              >
+                <Plus className={ROW_ICON} aria-hidden="true" />
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t.navigation.addAnotherAccount}
+                </span>
+              </button>
 
-              {accounts.map((account) => {
-                // For active account, use channels from local state (filtered in useEffect)
-                // For inactive accounts, we can't show individual channels (only count)
-                const accountChannels = account.isActive ? channels.filter(ch => ch.userId === account.userId) : [];
-                const isActive = account.isActive;
-                // Use channelsCount from AccountInfo which is accurate for all accounts
-                const channelCount = account.channelsCount || 0;
+              {/* Sign Out Current */}
+              <button
+                onClick={() => {
+                  logout();
+                  setIsOpen(false);
+                }}
+                data-testid="nav-sign-out"
+                className={ROW}
+                role="menuitem"
+              >
+                <LogOut className={ROW_ICON} aria-hidden="true" />
+                <span className={ROW_TEXT}>{t.navigation.signOut}</span>
+              </button>
 
-                return (
-                  <div key={account.userId} className="mb-2" data-testid="nav-account" data-active={isActive ? 'true' : 'false'} data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
-                    {/* Account Header */}
-                    <div className="group relative rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <button
-                        onClick={() => {
-                          if (!isActive) {
-                            switchAccount(account.userId);
-                            setIsOpen(false);
-                          }
-                        }}
-                        className="flex items-center gap-3 w-full px-3 py-2 text-left"
-                        role="menuitem"
-                        disabled={isActive}
-                      >
-                        {/* Show account avatar from fetched profile if available, otherwise fallback */}
-                        {getAccountAvatar(account.userId) ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={getAccountAvatar(account.userId)!}
-                            alt={account.displayName}
-                            className="h-8 w-8 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : account.avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={account.avatarUrl}
-                            alt={account.displayName}
-                            className="h-8 w-8 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                            {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                            {account.displayName}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {/* Signed in to the browser but not here yet: its email (switching signs it in) */}
-                            {account.hasLocalSession === false
-                              ? account.email
-                              : <>{channelCount} {channelCount === 1 ? t.navigation.channel : t.navigation.channels}</>}
-                          </div>
-                        </div>
-                        {isActive && (
-                          <Check className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
-                        )}
-                      </button>
+              {/* Sign Out All (if multiple accounts) */}
+              {accounts.length > 1 && (
+                <button
+                  onClick={() => {
+                    setShowLogoutAllConfirm(true);
+                  }}
+                  className={ROW}
+                  role="menuitem"
+                >
+                  <LogOut className="h-[18px] w-[18px] flex-shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
+                  <span className="text-sm font-medium text-red-600 dark:text-red-400">
+                    {t.navigation.signOutOfAll}
+                  </span>
+                </button>
+              )}
+            </div>
 
-                      {/* Remove Account (hover only, not for active) */}
-                      {!isActive && accounts.length > 1 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeAccount(account.userId);
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label={t.navigation.removeAccount}
-                        >
-                          <LogOut className="h-4 w-4 text-red-600 dark:text-red-400" />
-                        </button>
+            </>}
+
+            {view === 'channels' && (
+              <div className="p-2" role="group" aria-label={t.navigation.switchChannel}>
+                {backRow(t.navigation.switchChannel)}
+                {channels.filter((ch) => ch.userId === user.id || !ch.userId).map((ch) => (
+                  <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-channel-id={ch.id} aria-checked={channel?.id === ch.id} className={ROW} role="menuitemradio">
+                    <span className="relative flex-shrink-0">
+                      {ch.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={ch.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                      ) : (
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500 text-xs font-semibold text-white">{getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}</span>
                       )}
-                    </div>
-
-                    {/* Nested Channels for Active Account Only */}
-                    {isActive && (
-                      <div className="ml-6 mt-1 border-l-2 border-gray-200 dark:border-gray-700 pl-2">
-                        {/* No Channel Option */}
-                        <button
-                          onClick={() => {
-                            switchToChannel(null);
-                          }}
-                          data-testid="nav-channel-option-none"
-                          aria-checked={!channel}
-                          className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                          role="menuitemradio"
-                        >
-                          <div className="h-6 w-6 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
-                            <Tv className="h-3 w-3 text-gray-500 dark:text-gray-400" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                              {t.navigation.noChannel}
-                            </div>
-                          </div>
-                          {!channel && (
-                            <Check className="h-3 w-3 text-green-600 dark:text-green-400 flex-shrink-0" />
-                          )}
-                        </button>
-
-                        {/* Account's Channels */}
-                        {accountChannels.map((ch) => (
-                          <button
-                            key={ch.id}
-                            onClick={() => {
-                              switchToChannel(ch.id);
-                            }}
-                            data-testid="nav-channel-option"
-                            data-channel-id={ch.id}
-                            aria-checked={channel?.id === ch.id}
-                            className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                            role="menuitemradio"
-                          >
-                            <div className="relative flex-shrink-0">
-                              {ch.avatarUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={ch.avatarUrl}
-                                  alt={ch.name}
-                                  className="h-6 w-6 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="h-6 w-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-semibold">
-                                  {getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}
-                                </div>
-                              )}
-                              {ch.isMain && (
-                                <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
-                                {getChannelName(ch.name, ch.nameLocalized)}
-                              </div>
-                            </div>
-                            {channel?.id === ch.id && (
-                              <Check className="h-3 w-3 text-green-600 dark:text-green-400 flex-shrink-0" />
-                            )}
-                          </button>
-                        ))}
-
+                      {ch.isMain && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full bg-white text-yellow-500 dark:bg-gray-900" />}
+                    </span>
+                    <span className={`${ROW_TEXT} flex-1 min-w-0 truncate`}>{getChannelName(ch.name, ch.nameLocalized)}</span>
+                    {channel?.id === ch.id && <Check className={ROW_ICON} aria-hidden="true" />}
+                  </button>
+                ))}
+                <button type="button" onClick={() => switchToChannel(null)} data-testid="nav-channel-option-none" aria-checked={!channel} className={ROW} role="menuitemradio">
+                  <Tv className={`${ROW_ICON} mx-[5px]`} aria-hidden="true" />
+                  <span className={`${ROW_TEXT} flex-1`}>{t.navigation.useWithoutChannel}</span>
+                  {!channel && <Check className={ROW_ICON} aria-hidden="true" />}
+                </button>
                         {/* Create Channel - Only for Active Account */}
                         {!isCreatingChannel ? (
                           <button
@@ -668,69 +578,41 @@ export function UnifiedNavigation() {
                             </div>
                           </div>
                         )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+              </div>
+            )}
 
-            {/* Add Account & Sign Out */}
-            <div className="p-2">
-              {/* Add Account */}
-              <button
-                onClick={() => {
-                  addAccount();
-                  setIsOpen(false);
-                }}
-                data-testid="nav-add-account"
-                className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                role="menuitem"
-              >
-                <div className="h-8 w-8 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
-                  <Plus className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                </div>
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {t.navigation.addAnotherAccount}
-                </span>
-              </button>
-
-              {/* Sign Out Current */}
-              <button
-                onClick={() => {
-                  logout();
-                  setIsOpen(false);
-                }}
-                data-testid="nav-sign-out"
-                className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                role="menuitem"
-              >
-                <div className="h-8 w-8 flex items-center justify-center flex-shrink-0">
-                  <LogOut className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                </div>
-                <span className="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100" title={`${t.navigation.signOutOf} ${getDisplayName()}`}>
-                  {t.navigation.signOutOf} {getDisplayName()}
-                </span>
-              </button>
-
-              {/* Sign Out All (if multiple accounts) */}
-              {accounts.length > 1 && (
-                <button
-                  onClick={() => {
-                    setShowLogoutAllConfirm(true);
-                  }}
-                  className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                  role="menuitem"
-                >
-                  <div className="h-8 w-8 flex items-center justify-center flex-shrink-0">
-                    <LogOut className="h-5 w-5 text-red-600 dark:text-red-400" />
-                  </div>
-                  <span className="text-sm font-medium text-red-600 dark:text-red-400">
-                    {t.navigation.signOutOfAll}
-                  </span>
-                </button>
-              )}
-            </div>
+            {view === 'accounts' && (
+              <div className="p-2" role="group" aria-label={t.navigation.switchAccount}>
+                {backRow(t.navigation.switchAccount)}
+                {accounts.map((account) => {
+                  const avatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
+                  const name = account.displayName || account.email;
+                  const count = account.channelsCount || 0;
+                  return (
+                    <div key={account.userId} className="group relative" data-testid="nav-account" data-active={account.isActive ? 'true' : 'false'} data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
+                      <button type="button" onClick={() => { if (!account.isActive) { switchAccount(account.userId); setIsOpen(false); } }} disabled={account.isActive} className={ROW} role="menuitem">
+                        {avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={avatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-semibold text-white">{name[0]?.toUpperCase()}</span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate ${ROW_TEXT}`}>{name}</span>
+                          <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{/* Signed in to the browser but not here yet: its email (switching signs it in) */}{account.hasLocalSession === false ? account.email : <>{count} {count === 1 ? t.navigation.channel : t.navigation.channels}</>}</span>
+                        </span>
+                        {account.isActive && <Check className={ROW_ICON} aria-hidden="true" />}
+                      </button>
+                      {!account.isActive && accounts.length > 1 && (
+                        <button type="button" onClick={(e) => { e.stopPropagation(); removeAccount(account.userId); }} className="absolute end-2 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" aria-label={t.navigation.removeAccount}>
+                          <LogOut className="h-4 w-4 text-red-600 dark:text-red-400" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Error Message */}
             {error && (

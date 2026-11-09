@@ -81,6 +81,7 @@ test.describe('Release: uploads', () => {
     ]);
     await page.goto(`${target().web}/en`);
     await page.getByTestId('nav-menu-trigger').click();
+    await page.getByTestId('nav-switch-channel').click();
     await page.getByTestId('nav-create-channel').click();
     const nameInput = page.locator('[role="menu"] input[type="text"]').first();
     await nameInput.fill(channelName);

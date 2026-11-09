@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { AUTH_STATE, combinedSessionState, readAccount } from './test-utils/auth-state';
-import { menuTrigger, openAccountMenu } from './test-utils/navigation';
+import { menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './test-utils/navigation';
 
 /**
  * Header account menu: links to the signed-in pages (feed, subscriptions,
@@ -8,7 +8,7 @@ import { menuTrigger, openAccountMenu } from './test-utils/navigation';
  * switching/creation is covered in 09, account switching in 11.
  */
 
-const SIGNED_IN_LINKS = ['feed', 'history', 'subscriptions', 'analytics', 'settings'];
+const SIGNED_IN_LINKS = ['analytics', 'settings'];
 
 test.describe('Account menu - links', () => {
   test.use({ storageState: AUTH_STATE.single });
@@ -17,21 +17,20 @@ test.describe('Account menu - links', () => {
     await page.goto('/en');
     const menu = await openAccountMenu(page);
     for (const path of SIGNED_IN_LINKS) {
+      await showMenuView(menu, 'main');
       await expect(menu.locator(`a[role="menuitem"][href="/en/${path}"]`)).toBeVisible();
     }
     await expect(menu.getByRole('menuitem', { name: 'Settings', exact: true })).toHaveAttribute('href', '/en/settings');
     await expect(menu.getByRole('menuitem', { name: 'Analytics', exact: true })).toHaveAttribute('href', '/en/analytics');
-    await expect(menu.getByRole('menuitem', { name: 'Subscriptions', exact: true })).toHaveAttribute('href', '/en/subscriptions');
   });
 
   for (const [path, heading] of [
     ['settings', /^Settings$/],
-    ['subscriptions', /^My Subscriptions$/],
-    ['feed', /^Subscription Feed$/],
   ] as const) {
     test(`NAV-051 menu link opens /${path} and closes the menu`, async ({ page }) => {
       await page.goto('/en');
       const menu = await openAccountMenu(page);
+      await showMenuView(menu, 'main');
       await menu.locator(`a[role="menuitem"][href="/en/${path}"]`).click();
       await expect(page).toHaveURL(new RegExp(`/en/${path}$`));
       await expect(menu).toBeHidden();
@@ -42,7 +41,6 @@ test.describe('Account menu - links', () => {
   test('NAV-052 Arabic menu links use the Arabic locale and labels', async ({ page }) => {
     await page.goto('/ar');
     const menu = await openAccountMenu(page);
-    await expect(menu.getByRole('menuitem', { name: 'الاشتراكات', exact: true })).toHaveAttribute('href', '/ar/subscriptions');
     await expect(menu.getByRole('menuitem', { name: 'التحليلات', exact: true })).toHaveAttribute('href', '/ar/analytics');
     await expect(menu.getByRole('menuitem', { name: 'الإعدادات', exact: true })).toHaveAttribute('href', '/ar/settings');
   });
@@ -71,8 +69,10 @@ test.describe('Account menu - no channel', () => {
     await page.goto('/en');
     const menu = await openAccountMenu(page);
     for (const path of SIGNED_IN_LINKS) {
+      await showMenuView(menu, 'main');
       await expect(menu.locator(`a[role="menuitem"][href="/en/${path}"]`)).toBeVisible();
     }
+    await showMenuView(menu, 'main');
     await expect(menu.locator('a[role="menuitem"][href="/en/scheduled-videos"]')).toHaveCount(0);
   });
 });
@@ -90,11 +90,14 @@ test.describe('Account menu - two accounts', () => {
     await page.goto('/en');
     const menu = await openAccountMenu(page);
 
+    await showMenuView(menu, 'account');
     const accounts = menu.getByTestId('nav-account');
     await expect(accounts).toHaveCount(2);
     await expect(accounts.filter({ hasText: none.email })).toHaveAttribute('data-active', 'true');
     await expect(accounts.filter({ hasText: single.email })).toHaveAttribute('data-active', 'false');
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-no-active-channel')).toBeVisible();
+    await showMenuView(menu, 'main');
     await expect(menu.getByRole('menuitem', { name: /Sign out of all accounts/ })).toBeVisible();
   });
 
@@ -102,13 +105,37 @@ test.describe('Account menu - two accounts', () => {
     const single = readAccount('single');
     await page.goto('/en');
     let menu = await openAccountMenu(page);
+    await showMenuView(menu, 'account');
     await menu.getByTestId('nav-account').filter({ hasText: single.email }).getByRole('menuitem').first().click();
 
     menu = await openAccountMenu(page);
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${single.channels[0].id}`);
     await page.keyboard.press('Escape');
     const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
     await expect(upload).toHaveAttribute('href', '/en/upload');
     if (!isMobile) await expect(upload).toBeVisible();
+  });
+});
+
+test.describe('Navigation destinations', () => {
+  test.use({ storageState: AUTH_STATE.single });
+
+  test('NAV-060 no destination appears in more than one of header, sidebar and account menu', async ({ page }) => {
+    await page.goto('/en');
+    const hrefsOf = (root: import('@playwright/test').Locator) =>
+      root.locator('a[href]').evaluateAll((links) => links.map((a) => a.getAttribute('href') as string));
+    const menu = await openAccountMenu(page);
+    const inMenu = await hrefsOf(menu);
+    await page.keyboard.press('Escape');
+    const inHeader = (await hrefsOf(page.getByRole('banner'))).filter((href) => !/^\/(en|ar)\/?$/.test(href));
+    await page.getByRole('banner').getByRole('button', { name: /notification/i }).click();
+    const inBell = await hrefsOf(page.getByRole('banner'));
+    await page.keyboard.press('Escape');
+    const drawer = await openSideDrawer(page);
+    const inSidebar = await hrefsOf(drawer);
+    const header = new Set([...inHeader, ...inBell.filter((href) => href.endsWith('/notifications'))]);
+    expect(inMenu.filter((href) => inSidebar.includes(href) || header.has(href))).toEqual([]);
+    expect(inSidebar.filter((href) => header.has(href))).toEqual([]);
   });
 });

@@ -210,6 +210,9 @@ export interface AppTranslations {
     analytics: string;
     noChannel: string;
     noActiveChannel: string;
+    switchChannel: string;
+    signOut: string;
+    useWithoutChannel: string;
     createChannel: string;
     channelName: string;
     enterChannelName: string;
