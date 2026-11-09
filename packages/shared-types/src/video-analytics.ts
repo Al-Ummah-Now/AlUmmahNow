@@ -1,3 +1,5 @@
+import type { ViewTrafficSource } from './analytics-collection';
+
 /**
  * Video Analytics Types
  * Shared analytics event types and data structures
@@ -38,6 +40,7 @@ export enum VideoEventType {
 
   // #235: played seconds since the previous report (data: { seconds })
   WATCH_TIME = 'watch_time',
+  RETENTION = 'retention',
 
   // Loading milestones (#79)
   LOAD_START = 'loadstart',
@@ -79,6 +82,10 @@ export interface AnalyticsConfig {
 export interface AnalyticsContext {
   source: 'watch' | 'embed';
   embedOrigin?: string | null;
+  /** Where the view came from. Only sent with analytics consent. */
+  trafficSource?: ViewTrafficSource;
+  /** External views only: the referring site's host */
+  referrerHost?: string;
 }
 
 /**

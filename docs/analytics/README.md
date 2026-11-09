@@ -111,8 +111,9 @@ Daily views and watch time come from the rollups. Likes, comments and subscriber
 | Daily views per video and channel | Supported from this fix on. Before it, empty for legacy videos and on prod overall. |
 | Daily likes, comments, new subscribers | Supported. Gross gains only, no unsubscribes. |
 | Watch time, average view duration | Supported from #235 on: the player accumulates played (wall-clock) seconds, reports them as `watch_time` analytics events (with analytics consent only), and the web route forwards them to `POST /api/videos/:id/watch-time` (≤ 60 s per report, 6 reports/min per session and video via the `WATCH_TIME_LIMITER` binding). `MessageType.VideoWatchTime` (220) adds them to the rollups without counting a view. Data before the deploy stays 0. |
-| Retention curve, quartiles | Missing. The player tracks them, but the Next route drops everything except `ready`. |
-| Traffic sources, devices, geography | Partial. Embed views carry `source: embed` and the embedding origin, rolled up per day as `sources` / `embedOrigins` (docs/embeds/README.md §6). Other surfaces, devices and countries are still hardcoded `direct`/`desktop` (#237). Not shown in the API or UI yet. |
+| Retention curve | Collected from the Creator Studio work on (docs/specs/CREATOR-STUDIO.md §8.4): 20 buckets per video and day in `analytics/retention/video/<id>/<YYYY-MM>.json`, consenting sessions that started at the beginning only. The read API follows in step 4. |
+| Traffic sources | Collected from the Creator Studio work on: `traffic` and `externalHosts` on the daily rollups, `unknown` without consent. The read API follows in step 4. |
+| Devices, geography | Partial. Embed views carry `source: embed` and the embedding origin, rolled up per day as `sources` / `embedOrigins` (docs/embeds/README.md §6). Other surfaces, devices and countries are still hardcoded `direct`/`desktop` (#237). Not shown in the API or UI yet. |
 | Logged-in vs anonymous, unique viewers | Missing. The view call carries no identity. |
 | View dedup and anti-abuse | Missing. One view per player load. |
 | Realtime, hourly | Missing. `granularity=hour` falls back to daily. |
