@@ -224,7 +224,13 @@ for (const dpr of [1, 2]) {
           if (await value.count()) {
             const v = await layoutBox(value);
             near(v.cy, r.cy, `${id} value centred`);
-            const gap = dir === 'ltr' ? v.x - label.right : label.x - v.right;
+            // Both from one layout: adaptive quality can widen the value ("Auto (720p)" to
+            // "Auto (1080p)") between two separate measurements, and the label yields to it
+            const gap = await row.evaluate((el, rtl) => {
+              const l = el.querySelector('.vjs-fanous-mi-label')!.getBoundingClientRect();
+              const val = el.querySelector('.vjs-fanous-mi-value')!.getBoundingClientRect();
+              return rtl ? l.left - val.right : val.left - l.right;
+            }, dir === 'rtl');
             // "QualityAuto" in the prototype: label and value must never touch
             expect(gap, `${id} label and value apart`).toBeGreaterThanOrEqual(8);
           }

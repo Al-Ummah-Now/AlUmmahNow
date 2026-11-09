@@ -622,6 +622,11 @@
   width: 76px;
   height: 76px;
   margin: -38px 0 0 -38px;
+  /* Whole pixels: half of an odd frame size puts the circle on a half pixel, and Firefox snaps
+     the blurred layer to the pixel grid, drawing the glyph up to 1px off its layout position */
+  top: round(down, 50% - 38px, 1px);
+  left: round(down, 50% - 38px, 1px);
+  margin: 0;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1714,6 +1719,9 @@
     width: 60px;
     height: 60px;
     margin: -30px 0 0 -30px;
+    top: round(down, 50% - 30px, 1px);
+    left: round(down, 50% - 30px, 1px);
+    margin: 0;
   }
 }
 
