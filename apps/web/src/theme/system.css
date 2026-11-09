@@ -223,7 +223,7 @@ main [data-slot=button]{max-width:100%;white-space:normal;height:auto;min-height
 .pc .pc-mi{display:flex;flex-direction:row;align-items:center;gap:8px;width:100%;min-height:40px;padding-inline:12px;font-size:14px;line-height:20px;text-align:start}.pc .pc-mi svg{width:18px;height:18px;flex:none}.pc .pc-mi-l{flex:1 1 auto;min-width:0}.pc .pc-mi-v{flex:none;font-size:13px;opacity:.72}.pc .pc-mi-c{display:grid;place-items:center;flex:none;width:18px;height:18px;font-style:normal}.pc .pc-back{font-weight:600;border-block-end:1px solid rgb(255 255 255/.14);border-radius:0;margin-block-end:4px}
 .pc .pc-menu{inset-block-end:78px;right:12px;width:280px}
 [dir=rtl] .pc .pc-menu svg.lucide-chevron-right,[dir=rtl] .pc .pc-menu svg.lucide-chevron-left{transform:scaleX(-1)}
-.pc .pc-big{display:grid;place-items:center;padding:0}.pc .pc-big svg{transform:translateX(7%)}
+.pc .pc-big{display:grid;place-items:center;padding:0}.pc .pc-big svg{margin:0;transform:translateX(5.55%)}
 .pc .pc-b[aria-expanded=true]{color:var(--pc-accent)}
 
 /* End screen: one blurred layer over the last frame */
@@ -422,3 +422,7 @@ body>[role=dialog],body>[role=alertdialog],body>[data-state].fixed.inset-0{z-ind
 [data-sonner-toaster]{z-index:var(--z-toast)!important}
 [data-body-portal]>.fixed.inset-0{background:rgb(0 0 0/.6);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 html[data-active-theme=zujaj] .pc .pc-menu{inset-block-end:84px;right:20px}
+
+/* Lucide's triangle: centroid at x=10.67 of 24, so +1.33 units (5.55% of the icon box) puts it on the
+   circle centre and leaves its bounding box w/6 to the right */
+.pc .pc-b svg.lucide-play{transform:translateX(5.55%)}
