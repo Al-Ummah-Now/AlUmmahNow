@@ -421,3 +421,4 @@ html{--z-header:50;--z-popover:1000;--z-modal:1100;--z-toast:1200}
 body>[role=dialog],body>[role=alertdialog],body>[data-state].fixed.inset-0{z-index:var(--z-modal)!important}
 [data-sonner-toaster]{z-index:var(--z-toast)!important}
 [data-body-portal]>.fixed.inset-0{background:rgb(0 0 0/.6);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+html[data-active-theme=zujaj] .pc .pc-menu{inset-block-end:84px;right:20px}

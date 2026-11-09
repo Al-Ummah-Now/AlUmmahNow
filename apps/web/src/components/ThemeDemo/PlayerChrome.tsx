@@ -57,9 +57,11 @@ export function PlayerChrome({ player, lang, onShortcuts }: { player: Player; la
   useEffect(() => {
     const el = root.current?.closest('.custom-video-player') as HTMLElement | null;
     if (!el || !('ResizeObserver' in window)) return;
-    const ro = new ResizeObserver(() => { el.style.setProperty('height', `${Math.round(el.getBoundingClientRect().width * 9 / 16)}px`, 'important'); });
+    let frame = 0;
+    // Deferred a frame: writing the height inside the callback makes WebKit report a resize loop
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => el.style.setProperty('height', `${Math.round(el.getBoundingClientRect().width * 9 / 16)}px`, 'important')); });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => { cancelAnimationFrame(frame); ro.disconnect(); };
   }, []);
 
   const levels = p.qualityLevels?.();
