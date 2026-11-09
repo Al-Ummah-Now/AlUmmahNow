@@ -5,6 +5,7 @@
 --   apps/admin-api/migrations/0003_channel_verification_log.sql
 --   apps/admin-api/migrations/0004_plans_entitlements.sql
 --   apps/admin-api/migrations/0005_seed_plans.sql
+--   apps/admin-api/migrations/0006_site_settings.sql
 
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
 CREATE TABLE channel_verification_log (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, verified INTEGER NOT NULL, note TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -17,6 +18,8 @@ CREATE TABLE plan_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, action
 CREATE TABLE plan_entitlements (plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, PRIMARY KEY (plan_id, plan_version, key));
 CREATE TABLE plans (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, description_en TEXT, description_ar TEXT, audience TEXT NOT NULL CHECK (audience IN ('creator', 'organisation', 'viewer', 'everyone')), status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')), is_public INTEGER NOT NULL DEFAULT 0, is_default INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
 CREATE TABLE reports (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (entity_type IN ('video', 'comment', 'channel', 'livestream', 'playlist', 'post')), entity_id TEXT NOT NULL, reporter_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other')), description TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewing', 'resolved', 'dismissed')), moderator_id TEXT, action TEXT CHECK (action IN ('warning', 'removed', 'banned', 'dismissed')), moderator_notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT, resolved_at TEXT);
+CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE site_settings_log (id TEXT PRIMARY KEY, key TEXT NOT NULL, old_value TEXT, new_value TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE subscriptions (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('trialing', 'active', 'past_due', 'canceled', 'expired')), current_period_start TEXT, current_period_end TEXT, provider TEXT NOT NULL DEFAULT 'manual', provider_subscription_ref TEXT, assigned_by TEXT NOT NULL, reason TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
 CREATE TABLE usage_counters (subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, key TEXT NOT NULL, period TEXT NOT NULL, value INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (subject_type, subject_id, key, period));
 CREATE INDEX idx_channel_verification_log_channel ON channel_verification_log (channel_id, created_at);
@@ -37,5 +40,6 @@ CREATE INDEX idx_reports_entity ON reports(entity_type, entity_id);
 CREATE INDEX idx_reports_entity_type ON reports(entity_type);
 CREATE INDEX idx_reports_reporter_id ON reports(reporter_id);
 CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_site_settings_log_key ON site_settings_log (key, created_at);
 CREATE UNIQUE INDEX idx_subscriptions_live ON subscriptions(subject_type, subject_id) WHERE status IN ('trialing', 'active', 'past_due');
 CREATE INDEX idx_subscriptions_plan ON subscriptions(plan_id, plan_version);

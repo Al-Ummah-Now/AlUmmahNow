@@ -29,6 +29,7 @@ const ar: Messages = {
     aiModeration: 'الإشراف الآلي',
     translations: 'الترجمات',
     indices: 'الفهارس',
+    siteTheme: 'مظهر الموقع',
   },
   preferences: {
     language: 'اللغة',
@@ -362,6 +363,15 @@ const ar: Messages = {
       en: 'الإنجليزية',
       ar: 'العربية',
     },
+  },
+  siteTheme: {
+    title: 'مظهر الموقع',
+    subtitle: 'مظهر واحد للموقع كله. تصل التغييرات إلى الزوار خلال دقيقة تقريبًا.',
+    current: 'المظهر الحالي',
+    apply: 'استخدام هذا المظهر',
+    saved: 'تم تحديث مظهر الموقع',
+    failed: 'تعذر تغيير المظهر',
+    adminOnly: 'يمكن للمشرفين العامين فقط تغيير مظهر الموقع.',
   },
   indices: {
     title: 'فهارس الفيديو',

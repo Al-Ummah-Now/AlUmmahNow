@@ -1,6 +1,6 @@
 'use server';
 
-import type { Report, ReportStats } from '@al-ummah/shared-types';
+import type { Report, ReportStats, SiteTheme } from '@al-ummah/shared-types';
 import { getAdminSession } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { AdminApiError, type ActionResult } from './errors';
@@ -193,4 +193,21 @@ export async function updateAiConfig(patch: AiConfigPatch): Promise<ActionResult
 
 export async function getAiUsage(days = 30): Promise<AiUsageView> {
   return fetchAdmin<AiUsageView>(`/api/moderation/ai/usage?days=${days}`);
+}
+
+// ---------- Site settings ----------
+
+export interface SiteThemeState {
+  theme: SiteTheme;
+  isDefault: boolean;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
+export async function getSiteThemeState(): Promise<SiteThemeState> {
+  return (await requestAdmin('/api/site-settings/theme')).result as SiteThemeState;
+}
+
+export async function setSiteTheme(theme: SiteTheme): Promise<SiteThemeState> {
+  return (await requestAdmin('/api/site-settings/theme', { method: 'PUT', body: JSON.stringify({ theme }) })).result as SiteThemeState;
 }
