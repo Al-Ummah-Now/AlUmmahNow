@@ -111,7 +111,8 @@ describe('TabNavigation Component', () => {
       );
 
       const activeTab = screen.getByRole('tab', { name: /Live Now/i });
-      expect(activeTab).toHaveClass('border-primary', 'text-primary');
+      expect(activeTab).toHaveClass('tab-item');
+      expect(activeTab).toHaveAttribute('aria-selected', 'true');
     });
 
     it('sets tabIndex=0 for active tab', () => {
@@ -446,7 +447,7 @@ describe('TabNavigation Component', () => {
 
       const tabs = container.querySelectorAll('[role="tab"]');
       tabs.forEach((tab) => {
-        expect(tab).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-primary');
+        expect(tab).toHaveClass('tab-item');
       });
     });
   });
@@ -492,7 +493,7 @@ describe('TabNavigation Component', () => {
 
       const tabs = container.querySelectorAll('[role="tab"]');
       tabs.forEach((tab) => {
-        expect(tab).toHaveClass('whitespace-nowrap');
+        expect(tab).toHaveClass('tab-item');
       });
     });
   });

@@ -3,7 +3,6 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Channel } from '@al-ummah/shared-types';
-import { cn } from '@/lib/utils';
 import { getTranslations } from '@/lib/i18n';
 import { getChannelTabConfig } from '@/lib/api/channel-tabs';
 import { logger } from '@/lib/logger-client';
