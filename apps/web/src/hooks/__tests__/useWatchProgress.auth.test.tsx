@@ -10,6 +10,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWatchProgress } from '../useWatchProgress';
 import { WatchHistoryService } from '@/services/api/watch-history';
 import { fetchClientAuthToken } from '@/lib/auth/client-token';
+import { simulatePlayback } from '@/test/watch-playback';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 
 jest.mock('@/services/api/watch-history', () => ({
@@ -43,6 +44,7 @@ describe('useWatchProgress - auth token resolution', () => {
   it('fetches the token for a signed-in user when no authToken prop is passed', async () => {
     (fetchClientAuthToken as jest.Mock).mockResolvedValue('fetched-token');
     const { result } = renderHook(() => useWatchProgress('video-1', player, 'user-1'));
+    simulatePlayback(player, 10);
 
     await act(async () => {
       await result.current.saveProgress(true);
@@ -61,6 +63,7 @@ describe('useWatchProgress - auth token resolution', () => {
   it('falls back to device storage when the session has no token', async () => {
     (fetchClientAuthToken as jest.Mock).mockResolvedValue(null);
     const { result } = renderHook(() => useWatchProgress('video-1', player, 'user-1'));
+    simulatePlayback(player, 10);
 
     await act(async () => {
       await result.current.saveProgress(true);
@@ -72,6 +75,7 @@ describe('useWatchProgress - auth token resolution', () => {
 
   it('never asks for a token for anonymous viewers', async () => {
     const { result } = renderHook(() => useWatchProgress('video-1', player));
+    simulatePlayback(player, 10);
 
     await act(async () => {
       await result.current.saveProgress(true);

@@ -181,7 +181,7 @@ The base works: D1 `reports`, admin-api list/stats/get/action, admin-web `/moder
 | Timestamped notes | Owned by Epic 21.8 | none | – |
 | Create and share clips | Not done | share-at-time only (`ShareDialog`) | → queue issue (needs start/end, clip player) |
 | Picture-in-picture | Done | `fullscreen-pip.ts` | – |
-| Resume across sessions | Done | `useWatchProgress` + `ResumePrompt` (#282) | – |
+| Resume across sessions | Done | `useWatchProgress` + player opens at the saved position with a "Start from beginning" pill (#282, #242) | – |
 | Accessibility | Done | `lib/video/accessibility.ts` aria labels, `ChapterList` roles | – |
 
 ---

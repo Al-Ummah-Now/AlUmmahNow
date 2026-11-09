@@ -402,6 +402,13 @@ export function setupVolumeChangeListener(
   lang: SupportedLanguage = 'en'
 ): () => void {
   const extPlayer = player as ExtendedPlayer;
+  // The indicator answers the viewer, so the remembered volume applied on load stays silent:
+  // it shows once playback has started or the viewer has pressed a key or the pointer in the player
+  let interacted = false;
+  const markInteracted = (): void => { interacted = true; };
+  const root = (player as { el?: () => Element | null }).el?.() ?? null;
+  root?.addEventListener('keydown', markInteracted, true);
+  root?.addEventListener('pointerdown', markInteracted, true);
 
   const handleVolumeChange = (): void => {
     const volume = extPlayer.volume();
@@ -415,7 +422,8 @@ export function setupVolumeChangeListener(
     }
 
     // Show visual feedback
-    showVolumeIndicator(player, volume, muted, lang);
+    const started = typeof (player as { hasStarted?: () => boolean }).hasStarted === 'function' ? (player as { hasStarted: () => boolean }).hasStarted() : true;
+    if (interacted || started) showVolumeIndicator(player, volume, muted, lang);
 
     logger.info('[VolumeControl] Volume changed:', { volume, muted });
   };
@@ -425,6 +433,8 @@ export function setupVolumeChangeListener(
   // Return cleanup function
   return () => {
     player.off('volumechange', handleVolumeChange);
+    root?.removeEventListener('keydown', markInteracted, true);
+    root?.removeEventListener('pointerdown', markInteracted, true);
   };
 }
 

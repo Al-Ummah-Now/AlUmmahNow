@@ -18,6 +18,10 @@ const eslintConfig = [
       "node_modules/**",
       "playwright-report/**",
       "test-results/**",
+      "test-results-player/**",
+      "playwright-report-player/**",
+      // HLS fixtures: .ts here are MPEG transport stream segments, not TypeScript
+      "e2e/player/fixtures/**",
       "jest.config.js",
       "tailwind.config.ts",
       "public/**",

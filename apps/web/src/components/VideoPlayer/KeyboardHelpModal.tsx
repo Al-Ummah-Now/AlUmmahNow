@@ -1,256 +1,137 @@
-/**
- * Keyboard Help Modal Component
- *
- * Displays keyboard shortcuts for the video player in a modal dialog.
- * Supports both English and Arabic languages with RTL layout.
- *
- * Features:
- * - Bilingual support (EN/AR)
- * - RTL support for Arabic
- * - Organized by category
- * - Accessible modal dialog
- * - Keyboard navigation (Esc to close)
- * - Backdrop click to close
- * - Focus trap
- *
- * @example
- * ```tsx
- * <KeyboardHelpModal
- *   isOpen={showHelp}
- *   onClose={() => setShowHelp(false)}
- *   lang="en"
- * />
- * ```
- */
-
 'use client';
-
-import { BodyPortal } from '@/components/ui/BodyPortal';
-import { useEffect, useRef } from 'react';
+/**
+ * The player's keyboard shortcuts dialog (docs/specs/VIDEO-PLAYER.md section 5, Layers).
+ *
+ * Portalled to the player layer (the body, or the fullscreen element) over a scrim, so the page
+ * around the player never draws over it. A centred card in the player's menu surface: title and
+ * description with a close X, then the groups in two columns (one on narrow screens), each row one
+ * compact line of label and key chips. It closes with the X or Escape only; focus is trapped inside
+ * and returns to the control that opened it.
+ */
+import { Fragment, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import type { SupportedLanguage } from '@/lib/video/i18n';
 import { trapFocus } from '@/lib/accessibility/focus-manager';
+import { PLAYER_LAYER_ATTR } from '@/lib/video/player-layer';
+import { usePlayerLayerHost } from './usePlayerLayerHost';
 
 /** Key lists use ", " in English and the Arabic comma "، " in Arabic */
 export function splitShortcutKeys(keys: string): string[] {
   return keys.split(/\s*[,،]\s*/).filter(Boolean);
 }
 
-export interface KeyboardHelpModalProps {
-  /**
-   * Whether the modal is open
-   */
-  isOpen: boolean;
-
-  /**
-   * Callback when modal should close
-   */
-  onClose: () => void;
-
-  /**
-   * Language for translations
-   */
-  lang?: SupportedLanguage;
+/** A combination such as "Shift+Tab" is shown as one chip per key */
+export function splitKeyCombo(key: string): string[] {
+  return key.length > 1 ? key.split('+').map((k) => k.trim()).filter(Boolean) : [key];
 }
 
-/**
- * Keyboard Help Modal Component
- */
-export function KeyboardHelpModal({
-  isOpen,
-  onClose,
-  lang = 'en',
-}: KeyboardHelpModalProps) {
+export interface KeyboardHelpModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  lang?: SupportedLanguage;
+  /** The player's element: the dialog follows it into fullscreen */
+  playerElement?: HTMLElement | null;
+}
+
+export function KeyboardHelpModal({ isOpen, onClose, lang = 'en', playerElement }: KeyboardHelpModalProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
-  const modalRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const host = usePlayerLayerHost(playerElement);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
-  /**
-   * Handle Escape key to close modal
-   */
+  // Escape closes (and does not reach the player's shortcuts or exit fullscreen handlers first)
   useEffect(() => {
-    if (!isOpen) return;
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose();
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    if (!isOpen) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      onClose();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [isOpen, onClose]);
 
-  /**
-   * Trap focus inside the dialog while open (focus starts on the close button)
-   * and return it to the control that opened the dialog when it closes.
-   */
+  // Focus starts on the close button, stays inside, and returns to the opener on close
   useEffect(() => {
-    if (!isOpen || !modalRef.current) return;
-    return trapFocus(modalRef.current, { initialFocus: closeButtonRef.current });
-  }, [isOpen]);
+    if (!isOpen || !host || !dialogRef.current) return undefined;
+    return trapFocus(dialogRef.current, { initialFocus: closeRef.current });
+  }, [isOpen, host]);
 
-  /**
-   * Prevent body scroll when modal is open
-   */
+  // The page behind does not scroll while the dialog is open
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-
+    if (!isOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = previous;
     };
   }, [isOpen]);
 
-  /**
-   * Handle backdrop click
-   */
-  function handleBackdropClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (event.target === event.currentTarget) {
-      onClose();
-    }
-  }
+  if (!isOpen || !host) return null;
 
-  if (!isOpen) return null;
-
-  const shortcuts = [
-    {
-      section: t.keyboard.sections.playback,
-      items: [
-        t.keyboard.shortcuts.playPause,
-      ],
-    },
-    {
-      section: t.keyboard.sections.seeking,
-      items: [
-        t.keyboard.shortcuts.rewind5,
-        t.keyboard.shortcuts.rewind10,
-        t.keyboard.shortcuts.forward5,
-        t.keyboard.shortcuts.forward10,
-        t.keyboard.shortcuts.seekPercent,
-      ],
-    },
-    {
-      section: t.keyboard.sections.volume,
-      items: [
-        t.keyboard.shortcuts.volumeUp,
-        t.keyboard.shortcuts.volumeDown,
-        t.keyboard.shortcuts.mute,
-      ],
-    },
-    {
-      section: t.keyboard.sections.display,
-      items: [
-        t.keyboard.shortcuts.fullscreen,
-        t.keyboard.shortcuts.pip,
-      ],
-    },
-    {
-      section: t.keyboard.sections.speed,
-      items: [
-        t.keyboard.shortcuts.speedDecrease,
-        t.keyboard.shortcuts.speedIncrease,
-      ],
-    },
-    {
-      section: t.keyboard.sections.navigation,
-      items: [
-        t.keyboard.shortcuts.tabNavigation,
-        t.keyboard.shortcuts.activate,
-        t.keyboard.shortcuts.closeDialog,
-        t.keyboard.shortcuts.help,
-      ],
-    },
+  const s = t.keyboard.shortcuts;
+  const groups = [
+    { section: t.keyboard.sections.playback, items: [s.playPause, s.next] },
+    { section: t.keyboard.sections.seeking, items: [s.rewind5, s.rewind10, s.forward5, s.forward10, s.seekPercent] },
+    { section: t.keyboard.sections.volume, items: [s.volumeUp, s.volumeDown, s.mute] },
+    { section: t.keyboard.sections.display, items: [s.fullscreen, s.pip, s.theatre, s.captions] },
+    { section: t.keyboard.sections.speed, items: [s.speedDecrease, s.speedIncrease] },
+    { section: t.keyboard.sections.navigation, items: [s.tabNavigation, s.activate, s.closeDialog, s.help] },
   ];
 
-  return (
-    <BodyPortal><div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="keyboard-help-title"
-      aria-describedby="keyboard-help-description"
-      dir={dir}
-    >
+  return createPortal(
+    <div className="vjs-fanous-layer vjs-fanous-dialog-layer" dir={dir} data-testid="player-shortcuts-layer" {...{ [PLAYER_LAYER_ATTR]: '' }}>
       <div
-        ref={modalRef}
-        data-testid="keyboard-help" className="relative flex w-full max-w-4xl max-h-[min(80vh,720px)] flex-col overflow-hidden bg-background rounded-xl shadow-xl m-4"
+        ref={dialogRef}
+        className="vjs-fanous-dialog vjs-fanous-shortcuts"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="keyboard-help-title"
+        aria-describedby="keyboard-help-description"
+        dir={dir}
+        data-testid="player-shortcuts-dialog"
       >
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between px-5 py-3 border-b">
-          <div>
-            <h2
-              id="keyboard-help-title"
-              className="text-lg font-semibold text-foreground"
-            >
-              {t.keyboard.title}
-            </h2>
-            <p id="keyboard-help-description" className="text-sm text-muted-foreground">
-              {t.keyboard.description}
-            </p>
+        <div className="vjs-fanous-dialog-head">
+          <div className="vjs-fanous-dialog-heading">
+            <h2 id="keyboard-help-title" className="vjs-fanous-dialog-title">{t.keyboard.title}</h2>
+            <p id="keyboard-help-description" className="vjs-fanous-dialog-description">{t.keyboard.description}</p>
           </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted active:bg-muted transition-colors"
-            aria-label={t.keyboard.closeButton}
-          >
-            <svg
-              aria-hidden="true"
-              className="w-[18px] h-[18px]"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+          <button ref={closeRef} type="button" className="vjs-fanous-dialog-close" onClick={onClose} aria-label={t.keyboard.closeButton} data-testid="player-shortcuts-close">
+            <X aria-hidden="true" />
           </button>
         </div>
-
-        {/* Content */}
-        <div className="overflow-y-auto px-5 py-3 md:columns-2 md:gap-8">
-          {shortcuts.map((category, categoryIndex) => (
-            <section key={categoryIndex} className="mb-4 break-inside-avoid" aria-labelledby={`keyboard-help-section-${categoryIndex}`}>
-              <h3 id={`keyboard-help-section-${categoryIndex}`} className="text-sm font-semibold text-muted-foreground mb-1">
-                {category.section}
-              </h3>
-              <dl>
-                {category.items.map((shortcut, shortcutIndex) => (
-                  <div
-                    key={shortcutIndex}
-                    className="flex min-h-10 items-center justify-between gap-4 border-b border-border/50 last:border-b-0"
-                  >
-                    <dt className="min-w-0 flex-1 text-sm text-foreground">
-                      {shortcut.description}
-                    </dt>
-                    <dd className="flex shrink-0 items-center gap-1" dir="ltr">
-                      {splitShortcutKeys(shortcut.keys).map((key, keyIndex) => (
-                        <kbd
-                          key={keyIndex}
-                          className="inline-flex h-6 min-w-6 items-center justify-center whitespace-nowrap rounded border border-border px-1.5 text-xs font-semibold text-foreground"
-                        >
-                          {key}
-                        </kbd>
-                      ))}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ))}
+        <div className="vjs-fanous-shortcuts-body">
+          <div className="vjs-fanous-shortcuts-columns">
+            {groups.map((group, g) => (
+              <section key={g} className="vjs-fanous-shortcuts-group" aria-labelledby={`keyboard-help-section-${g}`}>
+                <h3 id={`keyboard-help-section-${g}`} className="vjs-fanous-shortcuts-heading">{group.section}</h3>
+                <dl className="vjs-fanous-shortcuts-list">
+                  {group.items.map((item, i) => (
+                    <div key={i} className="vjs-fanous-shortcut" data-testid="player-shortcut-row">
+                      <dt className="vjs-fanous-shortcut-label">{item.description}</dt>
+                      <dd className="vjs-fanous-shortcut-keys" dir="ltr">
+                        {splitShortcutKeys(item.keys).map((key, k) => (
+                          <span key={k} className="vjs-fanous-shortcut-alt">
+                            {splitKeyCombo(key).map((part, c) => (
+                              <Fragment key={c}>
+                                {c > 0 && <span className="vjs-fanous-shortcut-plus" aria-hidden="true">+</span>}
+                                <kbd className="vjs-fanous-kbd">{part}</kbd>
+                              </Fragment>
+                            ))}
+                          </span>
+                        ))}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
+          </div>
         </div>
       </div>
-    </div></BodyPortal>
+    </div>,
+    host,
   );
 }

@@ -99,33 +99,28 @@ describe('hapticPulse', () => {
 });
 
 describe('player touch-target CSS (Story 1.5 AC 1)', () => {
-  const css = fs.readFileSync(path.join(__dirname, '../../../styles/video-player.css'), 'utf8');
+  // The production skin (docs/specs/VIDEO-PLAYER.md section 5) sizes every target in player-skin.css
+  const css = fs.readFileSync(path.join(__dirname, '../../../styles/player-skin.css'), 'utf8');
+  const rule = (selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    return at < 0 ? '' : css.slice(at, css.indexOf('}', at));
+  };
 
-  it('defines a 44px target on touch devices only', () => {
-    expect(css).toMatch(/@media \(pointer: coarse\) \{\s*\.video-js \{\s*--vp-touch-target: 44px;/);
+  it('gives every control-bar button a 44px target on every device, the hover shape inside it', () => {
+    expect(css).toMatch(/--vjs-fanous-hit:\s*44px/);
+    const button = rule('.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button');
+    expect(button).toContain('width: var(--vjs-fanous-hit)');
+    expect(button).toContain('height: var(--vjs-fanous-hit)');
+    // Neighbouring targets never overlap: buttons sit edge to edge with no negative margins
+    expect(button).toMatch(/margin:\s*2px 0/);
   });
 
-  it('extends every control-bar button to the target with a centred hit area', () => {
-    const rule = css.match(/\.video-js \.vjs-control-bar button::after \{([^}]*)\}/);
-    expect(rule?.[1]).toContain('width: var(--vp-touch-target)');
-    expect(rule?.[1]).toContain('height: var(--vp-touch-target)');
-    expect(rule?.[1]).toContain('translate(-50%, -50%)');
-  });
-
-  it('spaces phone buttons so neighbouring hit areas do not overlap', () => {
-    const buttonSize = 32;
-    const barGap = 4;
-    const rule = css.match(/@media \(pointer: coarse\) and \(max-width: 640px\) \{\s*\.video-js \.vjs-control-bar button \{\s*margin: 0 ([\d.]+)rem;/);
-    expect(rule).not.toBeNull();
-    expect(buttonSize + barGap + 2 * parseFloat(rule![1]) * 16).toBeGreaterThanOrEqual(44);
-  });
-
-  it('gives the seek and volume sliders a full-height hit area', () => {
-    expect(css).toMatch(/\.video-js \.vjs-progress-control \{\s*min-height: var\(--vp-touch-target\);/);
-    expect(css).toMatch(/\.video-js \.vjs-volume-panel \.vjs-volume-control \{\s*min-height: var\(--vp-touch-target\);/);
+  it('gives the seek bar a 44px touch height and the volume slider a full-height hit area', () => {
+    expect(css).toMatch(/@media \(pointer: coarse\) \{\s*\.video-js\.vjs-fanous \.vjs-progress-control \{\s*height: 44px;/);
+    expect(css).toMatch(/\.vjs-volume-control\.vjs-volume-horizontal:hover,[\s\S]*?height: var\(--vjs-fanous-hit\);/);
   });
 
   it('provides a visible pressed state for touch', () => {
-    expect(css).toContain('.video-js .vjs-control-bar .vjs-touch-active');
+    expect(css).toContain('.vjs-button.vjs-touch-active::before');
   });
 });

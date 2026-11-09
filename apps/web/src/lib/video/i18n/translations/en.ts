@@ -121,6 +121,30 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     volume: 'Volume',
   },
 
+  chrome: {
+    next: 'Next video',
+    theatre: 'Theatre mode',
+    exitTheatre: 'Exit theatre mode',
+    off: 'Off',
+    back: 'Back',
+    audioTrack: 'Audio track',
+    shortcuts: 'Keyboard shortcuts',
+    captionStyle: 'Caption style',
+    live: 'Live',
+    goToLive: 'Go to live',
+    behind: '{time} behind',
+    upNext: 'Up next',
+    playNow: 'Play now',
+    watchAgain: 'Watch again',
+    cancel: 'Cancel',
+    autoAdvance: 'Next video in {seconds} seconds',
+    playTitle: 'Play {title}',
+    closeMiniPlayer: 'Close mini player',
+    backToVideo: 'Back to video',
+    reportProblem: 'Report a problem',
+    seekValue: '{current} of {total}',
+  },
+
   quality: {
     auto: 'Auto',
     high: 'High',
@@ -239,17 +263,25 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
         keys: 'Esc',
         description: 'Close menus and dialogs',
       },
+      captions: {
+        keys: 'C',
+        description: 'Turn captions on or off',
+      },
+      theatre: {
+        keys: 'T',
+        description: 'Theatre mode',
+      },
+      next: {
+        keys: 'N',
+        description: 'Next video',
+      },
     },
     closeButton: 'Close',
   },
 
   resume: {
-    title: 'Continue watching?',
-    description: 'You previously watched this video',
-    resumeButton: 'Resume from',
     startOverButton: 'Start from beginning',
-    autoResumeMessage: 'Auto-resuming in',
-    dismissHint: 'Press ESC or click outside to dismiss',
+    resumingAt: 'Resuming at {time}',
   },
 
   pluralization: {

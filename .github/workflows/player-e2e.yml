@@ -1,0 +1,123 @@
+name: Player E2E
+
+# The video player's behaviour, alignment and end-screen specs (docs/specs/VIDEO-PLAYER.md section 9)
+# in Chrome, Firefox and WebKit. They run against a local `next dev` with the development-only
+# harness page and local HLS fixtures, so they need no QA environment and no secrets.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/src/components/VideoPlayer/**'
+      - 'apps/web/src/components/VideoPagePlayer/**'
+      - 'apps/web/src/lib/video/**'
+      - 'apps/web/src/lib/accessibility/**'
+      - 'apps/web/src/styles/player-skin.css'
+      - 'apps/web/src/styles/video-player.css'
+      # The [locale] folder: brackets are glob syntax, so match the segment with *
+      - 'apps/web/src/app/*/dev/player/**'
+      - 'apps/web/e2e/player/**'
+      - 'apps/web/playwright.player.config.ts'
+      - 'packages/fanous-tokens/**'
+      - '.github/workflows/player-e2e.yml'
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: player-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  player-e2e:
+    name: Player E2E - ${{ matrix.project }}
+    runs-on: ubuntu-24.04  # Playwright 1.56 has no browser builds for ubuntu-latest (26.04)
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # chromium runs in the installed Google Chrome: Playwright's Chromium has no H.264, which
+        # VHS needs to play the HLS fixtures
+        include:
+          - project: chromium
+            browsers: chrome
+          - project: firefox
+            browsers: firefox
+          - project: webkit
+            browsers: webkit
+          # The runner image's own Firefox release over WebDriver BiDi, as viewers run it
+          - project: firefox-stable
+            browsers: ''
+
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
+        with:
+          version: 9.15.4
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+
+      - name: Check generated player tokens are current
+        run: pnpm check:tokens
+
+      - name: Install Playwright browsers
+        if: matrix.browsers != ''
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps ${{ matrix.browsers }}
+
+      - name: Locate the installed Firefox
+        if: matrix.project == 'firefox-stable'
+        run: |
+          path="$(readlink -f "$(command -v firefox)")"
+          "$path" --version
+          echo "PLAYER_FIREFOX_PATH=$path" >> "$GITHUB_ENV"
+
+      - name: Run player specs
+        working-directory: apps/web
+        run: pnpm exec playwright test -c playwright.player.config.ts --project=${{ matrix.project }}
+
+      - name: Upload report and failure artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-e2e-${{ matrix.project }}
+          path: |
+            apps/web/playwright-report-player/
+            apps/web/test-results-player/
+          retention-days: 14

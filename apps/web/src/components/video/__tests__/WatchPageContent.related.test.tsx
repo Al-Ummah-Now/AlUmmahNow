@@ -6,7 +6,7 @@ import { fetchRelatedVideos, fetchVideoById } from '@/lib/api/videos';
 let mockIsRTL = false;
 let mockUser: { id: string } | null = null;
 
-jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
 jest.mock('@/lib/api/videos', () => ({ fetchRelatedVideos: jest.fn(), fetchVideoById: jest.fn() }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser }) }));

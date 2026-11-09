@@ -28,6 +28,14 @@ const SAMPLE_MP4 = path.join(FIXTURES_DIR, 'e2e-sample.mp4');
  * with an ISO-BMFF `free` box so the result is still a valid, encodable MP4.
  * Other extensions are zero-filled.
  */
+/** Delete the generated fixture files whose name starts with `prefix` (createTestFile output). */
+export function removeTestFiles(prefix: string): void {
+  if (!prefix || !fs.existsSync(FIXTURES_DIR)) return;
+  for (const name of fs.readdirSync(FIXTURES_DIR)) {
+    if (name.startsWith(prefix)) fs.rmSync(path.join(FIXTURES_DIR, name), { force: true });
+  }
+}
+
 export function createTestFile(filename: string, sizeKB = 100): string {
   fs.mkdirSync(FIXTURES_DIR, { recursive: true });
   const filePath = path.join(FIXTURES_DIR, filename);

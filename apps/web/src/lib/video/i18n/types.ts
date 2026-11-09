@@ -153,6 +153,36 @@ export interface VideoPlayerTranslations {
     volume: string;
   };
 
+  /** Player controls added with the production player (docs/specs/VIDEO-PLAYER.md) */
+  chrome: {
+    next: string;
+    theatre: string;
+    exitTheatre: string;
+    off: string;
+    back: string;
+    audioTrack: string;
+    shortcuts: string;
+    captionStyle: string;
+    live: string;
+    goToLive: string;
+    /** "{time} behind" */
+    behind: string;
+    upNext: string;
+    playNow: string;
+    watchAgain: string;
+    /** Stops the up-next countdown */
+    cancel: string;
+    /** Announced once when the countdown starts; {seconds} */
+    autoAdvance: string;
+    /** The up-next thumbnail button; {title} */
+    playTitle: string;
+    closeMiniPlayer: string;
+    backToVideo: string;
+    reportProblem: string;
+    /** Seek slider value, "{current} of {total}" */
+    seekValue: string;
+  };
+
   /**
    * Video quality settings
    */
@@ -232,6 +262,9 @@ export interface VideoPlayerTranslations {
       tabNavigation: { keys: string; description: string };
       activate: { keys: string; description: string };
       closeDialog: { keys: string; description: string };
+      captions: { keys: string; description: string };
+      theatre: { keys: string; description: string };
+      next: { keys: string; description: string };
     };
     closeButton: string;
   };
@@ -240,12 +273,10 @@ export interface VideoPlayerTranslations {
    * Resume playback modal
    */
   resume: {
-    title: string;
-    description: string;
-    resumeButton: string;
+    /** Player pill that seeks back to 0 after resuming */
     startOverButton: string;
-    autoResumeMessage: string;
-    dismissHint: string;
+    /** Polite announcement when the player opens at a saved position; {time} = m:ss */
+    resumingAt: string;
   };
 }
 

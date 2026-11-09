@@ -21,7 +21,8 @@ import { useVideoSubtitles } from '@/hooks/useVideoSubtitles';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { Player } from 'video.js';
 import { PLAYER_SEEK_EVENT, type PlayerSeekDetail } from '@/lib/video/comment-timestamps';
-import { chapterShortcut } from '@/lib/video/chapters';
+import { chapterShortcut, getChapterTitle } from '@/lib/video/chapters';
+import { updatePlayerUi } from '@/lib/video/player-ui';
 import { logger } from '@/lib/logger-client';
 
 interface VideoPlayerWithChaptersProps extends CustomVideoPlayerProps {
@@ -60,6 +61,13 @@ export function VideoPlayerWithChapters({
   });
 
   const textTracks = useVideoSubtitles(videoId, lang, enableSubtitles);
+
+  // The progress bar's hover tooltip names the chapter under the pointer
+  useEffect(() => {
+    if (!enableChapters) return undefined;
+    updatePlayerUi({ chapters: chapters.map((c) => ({ startTime: c.startTime, title: getChapterTitle(c, lang) })).sort((a, b) => a.startTime - b.startTime) });
+    return () => updatePlayerUi({ chapters: [] });
+  }, [chapters, lang, enableChapters]);
 
   const handlePlayerReady = useCallback((readyPlayer: Player) => {
     setPlayer(readyPlayer);
@@ -141,7 +149,6 @@ export function VideoPlayerWithChapters({
               currentChapter={currentChapter}
               duration={duration}
               onSeek={seekToChapter}
-              direction="ltr"
             />,
             progressHolder
           )}

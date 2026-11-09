@@ -11,7 +11,12 @@
  * - Inside the player, let focused controls keep their native keys:
  *   Space/Enter activate buttons and menu items, arrow/Home/End/Page keys
  *   operate sliders (seek bar, volume) and menus
+ * - Inside an open menu or dialog of the player, no key is a shortcut: the menu owns
+ *   its keys, and letters must not play, mute or seek behind it. That covers the
+ *   player's layers (portalled menus and dialogs, lib/video/player-layer.ts), which sit
+ *   outside the player element, or inside it while it is fullscreen
  */
+import { isInPlayerLayer } from '@/lib/video/player-layer';
 
 const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 const ACTIVATION_KEYS = new Set([' ', 'Enter', 'Spacebar']);
@@ -64,6 +69,7 @@ export function shouldHandlePlayerShortcut(
   if (isEditableElement(target) || isEditableElement(activeElement)) return false;
 
   const focused = target ?? activeElement;
+  if (isInPlayerLayer(focused)) return false;
   const ownerDocument = playerElement.ownerDocument;
   const nothingFocused =
     !focused || focused === ownerDocument.body || focused === ownerDocument.documentElement;
@@ -73,6 +79,8 @@ export function shouldHandlePlayerShortcut(
   }
 
   if (focused === playerElement) return true;
+
+  if (focused.closest('[role="menu"], [role="dialog"]')) return false;
 
   if (ACTIVATION_KEYS.has(event.key) && isButtonLike(focused)) return false;
   if (NAVIGATION_KEYS.has(event.key) && isArrowWidget(focused)) return false;

@@ -18,6 +18,8 @@ export interface ErrorDisplayProps {
   onFallback?: () => void;
   showDetails?: boolean;
   className?: string;
+  /** Opens the page's report flow; the button is hidden without it */
+  onReport?: () => void;
   /** Regional format for dates, e.g. 'ar-EG' or 'en-GB'. Defaults to ar-SA / en-US. */
   locale?: string;
 }
@@ -35,6 +37,7 @@ export function ErrorDisplay({
   showDetails = false,
   className = '',
   locale,
+  onReport,
 }: ErrorDisplayProps): JSX.Element {
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
   const { t, isRTL, dir } = useVideoPlayerI18n(lang);
@@ -42,15 +45,14 @@ export function ErrorDisplay({
 
   const baseClasses = `
     flex flex-col items-center justify-center
-    w-full h-full min-h-[400px]
-    bg-gray-900 bg-opacity-95
-    text-white p-8
+    w-full h-full
+    vjs-fanous-error p-8
     ${isRTL ? 'text-right' : 'text-left'}
   `;
 
   const errorIcon = (
     <svg
-      className="w-16 h-16 mb-4 text-red-500"
+      className="vjs-fanous-error-icon w-16 h-16 mb-4"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -73,7 +75,7 @@ export function ErrorDisplay({
         {t.errors.title[errorTypeKey]}
       </h2>
 
-      <p className="text-gray-300 mb-6 text-center max-w-md">
+      <p className="vjs-fanous-error-text mb-6 text-center max-w-md">
         {t.errors.description[errorTypeKey]}
       </p>
 
@@ -81,14 +83,7 @@ export function ErrorDisplay({
         {onRetry && error.retryable && (
           <button
             onClick={onRetry}
-            className="
-              px-6 py-3
-              bg-blue-600 hover:bg-blue-700
-              text-white font-semibold
-              rounded-lg
-              transition-colors duration-200
-              flex items-center gap-2
-            "
+            className="vjs-fanous-btn vjs-fanous-btn-primary"
             aria-label={t.errors.retryButton}
           >
             <svg
@@ -111,14 +106,7 @@ export function ErrorDisplay({
         {onFallback && error.fallbackAvailable && (
           <button
             onClick={onFallback}
-            className="
-              px-6 py-3
-              bg-gray-700 hover:bg-gray-600
-              text-white font-semibold
-              rounded-lg
-              transition-colors duration-200
-              flex items-center gap-2
-            "
+            className="vjs-fanous-btn"
             aria-label={t.errors.fallbackButton[errorTypeKey]}
           >
             <svg
@@ -135,6 +123,12 @@ export function ErrorDisplay({
               />
             </svg>
             {t.errors.fallbackButton[errorTypeKey]}
+          </button>
+        )}
+
+        {onReport && (
+          <button type="button" onClick={onReport} className="vjs-fanous-btn vjs-fanous-btn-ghost">
+            {t.chrome.reportProblem}
           </button>
         )}
       </div>

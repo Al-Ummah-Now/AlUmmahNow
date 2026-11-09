@@ -89,7 +89,7 @@ describe('ChapterList keyboard accessibility', () => {
 describe('ChapterMarkers', () => {
   it('are pointer-only shortcuts hidden from the tab order inside the seek slider', () => {
     const { container } = render(
-      <ChapterMarkers chapters={chapters} currentChapter={null} duration={180} onSeek={jest.fn()} direction="ltr" />
+      <ChapterMarkers chapters={chapters} currentChapter={null} duration={180} onSeek={jest.fn()} />
     );
     const group = container.firstElementChild as HTMLElement;
     expect(group).toHaveAttribute('aria-hidden', 'true');
