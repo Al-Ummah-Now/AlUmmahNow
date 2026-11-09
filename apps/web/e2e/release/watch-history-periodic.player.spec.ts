@@ -23,6 +23,30 @@ function videoTime(page: Page): Promise<number> {
   return page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0);
 }
 
+/**
+ * Whether the target serves the #242 player: its resume live region
+ * (data-testid="player-resume-announcement") is rendered on every watch page,
+ * played or not, and the old prompt build has no such element.
+ */
+async function resumeUiDeployed(page: Page, videoId: string): Promise<boolean> {
+  await page.goto(watchUrl(videoId));
+  await page.waitForSelector('.video-js', { timeout: 45000 });
+  return (await page.getByTestId('player-resume-announcement').count()) > 0;
+}
+
+/**
+ * PR runs target QA, which still runs main until the PR merges: skip there
+ * when the new player is not deployed yet. Stage (release) runs deploy the
+ * candidate first and are not pull_request events, so they never skip.
+ */
+async function skipIfResumeUiNotDeployedOnPr(page: Page, videoId: string): Promise<void> {
+  if (process.env.GITHUB_EVENT_NAME !== 'pull_request' || process.env.E2E_ENV === 'stage') return;
+  test.skip(
+    !(await resumeUiDeployed(page, videoId)),
+    'the #242 resume player (Start from beginning) is not deployed on the target yet (it lands with the PR that adds it)'
+  );
+}
+
 /** The consent banner can cover the player controls. */
 async function dismissConsent(page: Page): Promise<void> {
   const reject = page.getByRole('button', { name: 'Reject all' });
@@ -71,6 +95,7 @@ test.describe('Release: periodic watch progress', () => {
   test('a watched video reopens at the saved time with Start from beginning (#242)', async ({ page }) => {
     const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS);
     test.skip(!video, NO_PLAYABLE_VIDEO);
+    await skipIfResumeUiNotDeployedOnPr(page, video!.id);
 
     const user = await signUpOnWeb(page, 'rel-resume');
     await createProfile(user);
@@ -106,6 +131,7 @@ test.describe('Release: periodic watch progress', () => {
   test('a video that was opened but never played has no Start from beginning (#242)', async ({ page }) => {
     const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS);
     test.skip(!video, NO_PLAYABLE_VIDEO);
+    await skipIfResumeUiNotDeployedOnPr(page, video!.id);
 
     const user = await signUpOnWeb(page, 'rel-resume-none');
     await createProfile(user);
