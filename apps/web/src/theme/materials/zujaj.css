@@ -17,3 +17,4 @@
 --m-hero:linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 42%),linear-gradient(120deg,var(--fanous-color-hero-start),var(--fanous-color-surface-raised));--m-thumb-edge:0 0 0 1px color-mix(in srgb,white 42%,transparent),0 0 26px -6px var(--m-glow)}
 :root{--m-sel:color-mix(in srgb,white 16%,transparent);--m-sel-edge:inset 0 0 0 1px color-mix(in srgb,white 24%,transparent);--m-sel-bar:var(--fanous-color-link);--m-sel-glow:none}
 :root{--m-player:0 0 0 1px color-mix(in srgb,white 34%,transparent);--m-player-inner:inset 0 0 0 1px color-mix(in srgb,white 16%,transparent)}
+:root{--m-player-ring:inset 0 0 0 1px color-mix(in srgb,white 42%,transparent),inset 0 1px 0 1px color-mix(in srgb,white 18%,transparent)}

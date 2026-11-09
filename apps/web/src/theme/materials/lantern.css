@@ -17,3 +17,4 @@
 --m-hero:radial-gradient(70% 120% at 18% 0%,color-mix(in srgb,var(--fanous-color-primary) 26%,transparent),transparent 65%),linear-gradient(135deg,var(--fanous-color-surface-raised),var(--fanous-color-hero-start));--m-thumb-edge:0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 30%,transparent),0 0 26px -6px var(--m-glow)}
 :root{--m-sel:color-mix(in srgb,var(--fanous-color-primary) 13%,transparent);--m-sel-edge:none;--m-sel-bar:var(--fanous-c-nav-indicator);--m-sel-glow:0 0 8px color-mix(in srgb,var(--fanous-color-primary) 42%,transparent)}
 :root{--m-player:0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 34%,transparent),0 0 34px -10px var(--m-glow);--m-player-inner:none}
+:root{--m-player-ring:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 46%,transparent)}
