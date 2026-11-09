@@ -73,9 +73,6 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         "401": {
           description: "Unauthorized - Authentication required",
         },
-        "404": {
-          description: "Watch history entry not found",
-        },
         "500": {
           description: "Internal server error",
         },
@@ -117,12 +114,8 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
       // Check if watch history entry exists
       const existingEntry = await watchHistoryRepo.getObject(entryId);
       if (!existingEntry) {
-        return c.json(
-          {
-            error: "Watch history entry not found. Create one first by recording a watch.",
-          },
-          404
-        );
+        // Nothing to update yet: the client records the first watch instead
+        return c.json({ videoId, recorded: false }, 200);
       }
 
       // Calculate progress metrics

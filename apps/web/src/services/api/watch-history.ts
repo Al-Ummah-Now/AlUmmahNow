@@ -147,13 +147,15 @@ export class WatchHistoryService {
         duration: progress.duration,
       });
 
-      // Update the existing entry; create it on first save (404)
+      // Update the existing entry; the API says recorded: false on the first save
       let response = await fetch(
         `${apiBase()}/api/watch-history/${encodeURIComponent(progress.videoId)}/progress`,
         { method: 'POST', headers, body }
       );
 
-      if (response.status === 404) {
+      const saved = response.ok ? await response.json().catch(() => null) : null;
+      // 404 is the previous API's answer, for the window while the two deploy
+      if (response.status === 404 || saved?.recorded === false) {
         response = await fetch(`${apiBase()}/api/watch-history`, {
           method: 'POST',
           headers,
@@ -214,11 +216,12 @@ export class WatchHistoryService {
 
       const data: {
         videoId: string;
-        progress: number;
+        progress: number | null;
         duration: number;
         completed: boolean;
         lastWatchedAt?: string;
       } = await response.json();
+      if (data.progress === null) return null;
       return {
         videoId: data.videoId || videoId,
         currentTime: data.progress || 0,
