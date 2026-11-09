@@ -1,0 +1,42 @@
+{
+  "$description": "fawanees material: the depth of each surface, as CSS values over the theme's colours.",
+  "radius": {
+    "sm": "6px",
+    "md": "10px",
+    "lg": "14px",
+    "xl": "22px",
+    "pill": "999px"
+  },
+  "blur": "none",
+  "material": {
+    "glow": "color-mix(in srgb,var(--fanous-color-primary) 46%,transparent)",
+    "page": "radial-gradient(38% 36% at 16% 8%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent),transparent 72%),radial-gradient(38% 36% at 84% 14%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),transparent 72%),linear-gradient(180deg,var(--fanous-color-hero-start),var(--fanous-color-background) 46%)",
+    "header": "linear-gradient(90deg,var(--fanous-c-nav-bg),color-mix(in srgb,var(--fanous-c-nav-bg) 84%,var(--fanous-color-primary)) 50%,var(--fanous-c-nav-bg))",
+    "headerEdge": "0 1px 0 color-mix(in srgb,var(--fanous-color-primary) 66%,transparent)",
+    "rail": "linear-gradient(180deg,var(--fanous-color-surface),var(--fanous-color-background))",
+    "railEdge": "inset -1px 0 0 color-mix(in srgb,var(--fanous-color-primary) 34%,transparent)",
+    "card": "radial-gradient(80% 60% at 50% 0%,color-mix(in srgb,var(--fanous-color-primary) 11%,transparent),transparent 70%),linear-gradient(180deg,var(--fanous-color-surface-raised),var(--fanous-color-surface))",
+    "border": "linear-gradient(120deg,var(--fanous-color-primary),color-mix(in srgb,var(--fanous-color-primary) 18%,transparent) 42%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent) 62%,var(--fanous-color-primary-hover))",
+    "cardEdge": "0 18px 34px -24px var(--m-glow)",
+    "raised": "linear-gradient(180deg,var(--fanous-color-surface-raised),var(--fanous-color-surface))",
+    "raisedEdge": "0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 56%,transparent),0 26px 50px -18px var(--m-glow)",
+    "control": "var(--fanous-color-background)",
+    "controlEdge": "inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 10%,transparent)",
+    "primary": "linear-gradient(180deg,var(--fanous-color-primary-hover),var(--fanous-color-primary) 56%,var(--fanous-color-primary-pressed))",
+    "primaryHover": "linear-gradient(180deg,var(--fanous-color-primary-sheen),var(--fanous-color-primary-hover))",
+    "primaryPress": "var(--fanous-color-primary-pressed)",
+    "primaryEdge": "inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 90%,transparent),0 0 22px -4px var(--m-glow)",
+    "active": "radial-gradient(120% 200% at var(--from) 50%,color-mix(in srgb,var(--fanous-color-primary) 34%,transparent),transparent 74%)",
+    "activeEdge": "none",
+    "hover": "color-mix(in srgb,var(--fanous-color-primary) 14%,transparent)",
+    "hero": "radial-gradient(50% 130% at 82% 0%,color-mix(in srgb,var(--fanous-color-primary) 34%,transparent),transparent 70%),linear-gradient(120deg,var(--fanous-color-surface-raised),var(--fanous-color-hero-start))",
+    "thumbEdge": "0 0 0 1px var(--fanous-color-primary),0 0 30px -6px var(--m-glow)",
+    "sel": "color-mix(in srgb,var(--fanous-color-primary) 14%,transparent)",
+    "selEdge": "none",
+    "selBar": "var(--fanous-color-primary-edge)",
+    "selGlow": "0 0 6px color-mix(in srgb,var(--fanous-color-primary) 40%,transparent)",
+    "player": "0 0 0 1px var(--fanous-color-primary),0 0 36px -8px var(--m-glow)",
+    "playerInner": "none",
+    "playerRing": "inset 0 0 0 1px var(--fanous-color-primary)"
+  }
+}

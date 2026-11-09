@@ -7,6 +7,8 @@ import { contrastPairs } from './contrast.ts';
 import { generateAll } from './generate.ts';
 import { composeTokens, loadThemes, loadTokens, resolveTheme, THEMES_DIR, themeModel, validateThemes } from './themes.ts';
 import { buildModel } from './model.ts';
+import { buildNativeRegistry } from './native.ts';
+import { generateNative } from './generators/native.ts';
 
 export const GENERATED_DIR = fileURLToPath(new URL('../generated', import.meta.url));
 
@@ -68,6 +70,9 @@ for (const id of themes.ids) {
   console.log(`${id}: ${contrastPairs(model).length} colour pairs pass.`);
   for (const [path, content] of Object.entries(generateAll(model))) files[`${id}/${path}`] = content;
 }
+// Every theme in one registry per platform, so the native apps can follow site.theme at run time.
+for (const [path, content] of Object.entries(generateNative(buildNativeRegistry(themes, tokens), themeModel(themes.defaultTheme, themes, tokens)))) files[path] = content;
+console.log(`native: ${themes.ids.length} themes in one registry per platform.`);
 
 if (process.argv.includes('--check')) {
   const onDisk = listFiles(GENERATED_DIR).map((f) => relative(GENERATED_DIR, f));
