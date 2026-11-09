@@ -7,6 +7,7 @@ import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
+import { patchVideo } from '../../lib/videoWrites';
 import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleTrack, SubtitleMetadata } from '@al-ummah/shared-types';
@@ -205,40 +206,32 @@ export class SubtitlesUpload extends AuthenticatedRoute {
         isDefault: isDefault || false,
       };
 
-      // Load or create subtitle metadata
+      // Add the track to the subtitle metadata and the video with conditional
+      // writes (SCALABILITY-AUDIT AV-3): two languages uploaded at once both
+      // stay, and concurrent changes to the video are not overwritten.
       const metadataKey = `${videoId}/metadata.json`;
-      const existingMetadata = await subtitleBucket.get(metadataKey);
-
-      let metadata: SubtitleMetadata;
-      if (existingMetadata) {
-        const existingData = (await existingMetadata.json()) as SubtitleMetadata;
-        metadata = subtitleService.addTrack(existingData, track);
-
+      const metadata = await new R2Repository<SubtitleMetadata>(subtitleBucket).updateObject(metadataKey, (current) => {
+        let next = subtitleService.addTrack(current, track);
         // Update default if requested
         if (isDefault) {
-          metadata = subtitleService.setDefaultTrack(metadata, language);
+          next = subtitleService.setDefaultTrack(next, language);
         }
-      } else {
-        metadata = subtitleService.createMetadata(videoId, [track]);
-      }
+        Object.assign(current, next);
+      }, { initial: () => subtitleService.createMetadata(videoId, []) });
 
-      // Save metadata
-      await subtitleBucket.put(metadataKey, JSON.stringify(metadata), {
-        httpMetadata: {
-          contentType: 'application/json',
-        },
-      });
-
-      // Update video object with subtitle info
-      const updatedVideo: VideoObject = {
-        ...video,
+      const saved = await patchVideo(videoRepo, videoId, {
         subtitles: metadata.tracks,
         hasSubtitles: true,
         subtitleLanguages: metadata.tracks.map((t) => t.language),
         dateModified: new Date().toISOString(),
-      };
-
-      await videoRepo.putObject(videoId, updatedVideo);
+      }, { ownerId: userId });
+      if (saved.status === 'missing') {
+        return c.json({ success: false, error: 'Video not found' }, 404);
+      }
+      if (saved.status === 'forbidden') {
+        return c.json({ success: false, error: 'You do not have permission to modify this video' }, 403);
+      }
+      const updatedVideo = saved.video;
 
       // Send queue message for subtitle upload
       const queue = new Queue(c.env.queue);

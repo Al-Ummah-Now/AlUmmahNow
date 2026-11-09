@@ -58,10 +58,24 @@ export class CommentApprove extends AuthenticatedRoute {
 			return c.json({ success: false, error: "held_by_moderation" }, 403);
 		}
 
-		if (found.comment.status === 'held') {
-			found.comment.status = 'published';
-			await repository.putObject(video.id, video);
-			const [item] = await toCommentListItems(c.env, [found.comment], null, undefined, { videoId: id });
+		// Conditional write (SCALABILITY-AUDIT AV-2) on the fresh video
+		let released = undefined as StoredComment | undefined;
+		const { rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string }>(id, (fresh) => {
+			released = undefined;
+			const target = findStoredComment(fresh.comments as unknown as StoredComment[], cid);
+			if (!target || target.comment.isDeleted) return { reject: { status: 404, error: "Comment not found" } };
+			if (target.comment.heldBy === 'moderation') return { reject: { status: 403, error: "held_by_moderation" } };
+			if (target.comment.status !== 'held') return false;
+			target.comment.status = 'published';
+			released = target.comment;
+			return true;
+		});
+		if (rejected) {
+			return c.json({ success: false, error: rejected.error }, rejected.status);
+		}
+
+		if (released) {
+			const [item] = await toCommentListItems(c.env, [released], null, undefined, { videoId: id });
 			broadcastInBackground(c, `video:${id}`, 'comment_added', {
 				videoId: id,
 				commentId: cid,

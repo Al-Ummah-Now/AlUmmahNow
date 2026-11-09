@@ -7,6 +7,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import R2Repository from '../../lib/r2Repo';
+import { patchVideo } from '../../lib/videoWrites';
 import { validateChapters } from '../../lib/chapters/parser';
 import { VideoChapterSchema, VideoChapterDataSchema } from '@al-ummah/shared-types';
 import { ResponseError } from '../../lib/types';
@@ -156,11 +157,14 @@ export class VideoChaptersUpdate extends AuthenticatedRoute {
         version: 1,
       };
 
-      await videoRepo.putObject(videoId, {
-        ...video,
-        chapters: chapterData,
-        hasChapters: true,
-      });
+      // Conditional write on the fresh video (SCALABILITY-AUDIT AV-3)
+      const saved = await patchVideo(videoRepo, videoId, { chapters: chapterData, hasChapters: true }, { ownerId: userId });
+      if (saved.status === 'missing') {
+        return c.json({ success: false, error: 'Video not found' }, 404);
+      }
+      if (saved.status === 'forbidden') {
+        return c.json({ success: false, error: 'Not authorized to edit this video' }, 403);
+      }
 
       logger.info('Chapters manually updated', {
         videoId,

@@ -14,6 +14,7 @@
  * runs after the response (waitUntil).
  */
 
+import R2Repository from './r2Repo';
 import { logger } from './logger';
 
 export interface OwnedChannelSummary {
@@ -62,16 +63,22 @@ async function softDeleteMatching(bucket: R2Bucket, channelId: string, maxObject
 			counter.scanned++;
 			if (object.key.startsWith('index:')) continue;
 			try {
-				const stored = await bucket.get(object.key);
-				const record = stored ? await stored.json<Record<string, unknown>>() : null;
-				if (!record || record.channelId !== channelId || record.isDeleted === true) continue;
-				await bucket.put(object.key, JSON.stringify({
-					...record,
-					isDeleted: true,
-					deletedAt: now,
-					markedForDeletion: true,
-					markedForDeletionAt: now,
-				}), { httpMetadata: { contentType: 'application/json' } });
+				// Conditional write (SCALABILITY-AUDIT AV-3/AV-23): a concurrent edit,
+				// comment or view flush is re-read, and cannot undo the soft delete.
+				let marked = false;
+				await new R2Repository<Record<string, unknown>>(bucket).updateObject(object.key, (record) => {
+					marked = false;
+					if (!record || record.channelId !== channelId || record.isDeleted === true) return false;
+					Object.assign(record, {
+						isDeleted: true,
+						deletedAt: now,
+						markedForDeletion: true,
+						markedForDeletionAt: now,
+					});
+					marked = true;
+					return true;
+				});
+				if (!marked) continue;
 				removed++;
 			} catch (error) {
 				logger.warn('[ChannelDeletion] Could not soft-delete object', { key: object.key, channelId, error: error instanceof Error ? error.message : String(error) });

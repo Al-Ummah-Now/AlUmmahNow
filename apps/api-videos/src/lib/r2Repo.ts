@@ -6,6 +6,26 @@ export interface PaginationResponse<T> {
   items: T[];
 }
 
+/** Attempts before `updateObject` gives up on a key under constant contention. */
+export const DEFAULT_CAS_ATTEMPTS = 10;
+
+/** R2 precondition that only lets a put through when the key does not exist. */
+export const CREATE_ONLY: R2Conditional = { etagDoesNotMatch: '*' };
+
+/** Thrown when `updateObject` lost every attempt to concurrent writers (the change was not made). */
+export class ConcurrentUpdateError extends Error {
+  constructor(readonly key: string, readonly attempts: number) {
+    super(`Concurrent updates to ${key}: gave up after ${attempts} attempts`);
+    this.name = 'ConcurrentUpdateError';
+  }
+}
+
+/** Full-jitter exponential backoff: up to 10, 20, 40 … 320 ms. */
+export function casBackoff(attempt: number): Promise<void> {
+  const ceiling = Math.min(10 * 2 ** (attempt - 1), 320);
+  return new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * ceiling)));
+}
+
 class R2Repository<T> {
   private bucket: R2Bucket;
 
@@ -74,17 +94,27 @@ class R2Repository<T> {
    * to one record (e.g. two viewers liking the same video) no longer drop
    * each other's change.
    *
+   * Every writer of a key must go through here (or another conditional put):
+   * one blind `putObject` on the same key overwrites the changes this
+   * protects (docs/architecture/SCALABILITY-AUDIT.md).
+   *
    * `mutate` may change the object in place and returns false to skip the
-   * write (nothing to change). Resolves to the stored object, or null when
-   * the object does not exist and no `initial` value is given (with
-   * `initial`, a missing object is created from it first).
+   * write (nothing to change). It can run several times, so it must only
+   * change `data` (record outcomes in variables reset on each run). Resolves
+   * to the stored object, or null when the object does not exist and no
+   * `initial` value is given (with `initial`, a missing object is created
+   * from it with a create-only put, so two first writers cannot overwrite
+   * each other either).
+   *
+   * Between attempts it waits a short, growing, random delay so writers that
+   * collided do not collide again.
    */
   async updateObject(
     id: string,
     mutate: (data: T) => boolean | void,
     opts: { maxAttempts?: number; initial?: () => T } = {},
   ): Promise<T | null> {
-    const maxAttempts = opts.maxAttempts ?? 5;
+    const maxAttempts = opts.maxAttempts ?? DEFAULT_CAS_ATTEMPTS;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const object = await this.bucket.get(id);
       if (!object && !opts.initial) return null;
@@ -92,13 +122,50 @@ class R2Repository<T> {
       if (mutate(data) === false) return data;
       const written = await this.bucket.put(id, JSON.stringify(data), {
         httpMetadata: { contentType: 'application/json' },
-        // A missing object is created unconditionally (only the very first write can race)
-        ...(object ? { onlyIf: { etagMatches: object.etag } } : {}),
+        onlyIf: object ? { etagMatches: object.etag } : CREATE_ONLY,
       });
       if (written) return data;
       logger.warn('[R2Repository] Concurrent update, retrying', { id, attempt });
+      if (attempt < maxAttempts) await casBackoff(attempt);
     }
-    throw new Error(`Concurrent updates to ${id}: gave up after ${maxAttempts} attempts`);
+    throw new ConcurrentUpdateError(id, maxAttempts);
+  }
+
+  /**
+   * `updateObject` for handlers that validate the fresh object: `mutate`
+   * returns `{ reject: value }` to stop without writing (e.g. the comment it
+   * edits was deleted meanwhile), false to skip the write, or nothing to
+   * write. Resolves to the stored object (null when missing) and the
+   * rejection of the last attempt, if any.
+   */
+  async updateObjectOrReject<E>(
+    id: string,
+    mutate: (data: T) => { reject: E } | boolean | void,
+    opts: { maxAttempts?: number; initial?: () => T } = {},
+  ): Promise<{ data: T | null; rejected?: E }> {
+    let rejection = undefined as { reject: E } | undefined;
+    const data = await this.updateObject(id, (fresh) => {
+      rejection = undefined;
+      const outcome = mutate(fresh);
+      if (outcome && typeof outcome === 'object') {
+        rejection = outcome;
+        return false;
+      }
+      return outcome as boolean | void;
+    }, opts);
+    return rejection ? { data, rejected: rejection.reject } : { data };
+  }
+
+  /**
+   * Creates `id` only when it does not exist yet (R2 create-only put).
+   * Resolves to true when this call created it, false when it already existed.
+   */
+  async createObject(id: string, data: T): Promise<boolean> {
+    const written = await this.bucket.put(id, JSON.stringify(data), {
+      httpMetadata: { contentType: 'application/json' },
+      onlyIf: CREATE_ONLY,
+    });
+    return written !== null;
   }
 
   async deleteObject(id: string): Promise<void> {

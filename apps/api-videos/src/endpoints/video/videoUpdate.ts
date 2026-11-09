@@ -129,20 +129,21 @@ export class VideoUpdate extends AuthenticatedRoute {
 			);
 		}
 
-		// Update the video with new values
+		// Update the video with new values (applied to the fresh copy on every
+		// compare-and-swap attempt, SCALABILITY-AUDIT AV-3)
 		const { category, tags, ...restInput } = videoUpdateInput;
-		const updatedVideo: VideoType = {
-			...existingVideo,
+		const applyUpdate = (base: VideoType): VideoType => ({
+			...base,
 			...restInput,
 			dateModified: new Date().toISOString(),
 			// Preserve localized fields if provided
-			titleLocalized: videoUpdateInput.titleLocalized ?? existingVideo.titleLocalized,
-			descriptionLocalized: videoUpdateInput.descriptionLocalized ?? existingVideo.descriptionLocalized,
+			titleLocalized: videoUpdateInput.titleLocalized ?? base.titleLocalized,
+			descriptionLocalized: videoUpdateInput.descriptionLocalized ?? base.descriptionLocalized,
 			// Tags replace the existing list (deduplicated); omitted keeps current tags
-			tags: tags !== undefined ? Array.from(new Set(tags)) : existingVideo.tags,
+			tags: tags !== undefined ? Array.from(new Set(tags)) : base.tags,
 			// Category: undefined keeps current value, null clears it
-			category: category === undefined ? existingVideo.category : (category ?? undefined),
-		};
+			category: category === undefined ? base.category : (category ?? undefined),
+		});
 
 		logger.info('[VideoUpdate] Updating video', {
 			videoId: id,
@@ -167,11 +168,24 @@ export class VideoUpdate extends AuthenticatedRoute {
 			}
 		}
 
-		// Save the updated video to the repository
-		await repository.putObject(id, updatedVideo);
+		// Save the updated video: a conditional write on the fresh copy, so a
+		// concurrent comment, like or view flush is not overwritten
+		let previous = existingVideo;
+		const { data: updatedVideo, rejected } = await repository.updateObjectOrReject<true>(id, (fresh) => {
+			if (fresh.userId !== effectiveUserId) return { reject: true };
+			previous = { ...fresh };
+			Object.assign(fresh, applyUpdate(fresh));
+			return true;
+		});
+		if (!updatedVideo) {
+			return c.json({ success: false, error: "Video not found" }, 404);
+		}
+		if (rejected) {
+			return c.json({ success: false, error: "Forbidden - you can only update your own videos" }, 403);
+		}
 
 		// Made public after processing: tell subscribers (processor de-duplicates per video)
-		if (existingVideo.isPublic === false && updatedVideo.isPublic !== false) {
+		if (previous.isPublic === false && updatedVideo.isPublic !== false) {
 			inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...updatedVideo, id }));
 		}
 
@@ -185,7 +199,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 		});
 
 		// Re-scan only when the scanned text changed (title, description, tags, localized variants)
-		if (videoScanText(updatedVideo) !== videoScanText(existingVideo)) {
+		if (videoScanText(updatedVideo) !== videoScanText(previous)) {
 			scanInBackground(c, { surface: 'video_metadata', event: 'edit', subjectId: id, authorId: effectiveUserId, channelId, text: videoScanText(updatedVideo) });
 		}
 

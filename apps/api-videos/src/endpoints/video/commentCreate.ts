@@ -92,67 +92,82 @@ export class CommentCreate extends AuthenticatedRoute {
 
 		type VideoType = z.infer<typeof Video>;
 		const repository = new R2Repository<VideoType>(c.env.videos);
-		const video = await repository.getObject(id);
-
-		if (!video || isVideoRemoved(video)) {
-			return c.json({ success: false, error: "Object not found" }, 404);
-		}
-
-		// Check privacy permissions for commenting on videos
-		if (video.isPublic === false && video.userId !== userId) {
-			// Don't reveal that private video exists
-			return c.json({ success: false, error: "Object not found" }, 404);
-		}
-
-		const settings = getCommentSettings(video);
-		if (settings === 'off') {
-			return c.json({ success: false, error: "comments_disabled", message: "Comments are turned off for this video" }, 403);
-		}
-
-		if (!video.comments) {
-			video.comments = [];
-		}
-		const stored = video.comments as unknown as StoredComment[];
-		const isVideoOwner = video.userId === userId;
-
-		// Replies attach to the top-level comment (one level of nesting)
-		let parent: StoredComment | null = null;
-		if (requestedParentId) {
-			const found = findStoredComment(stored, requestedParentId);
-			parent = found ? (found.parent || found.comment) : null;
-			if (!parent || !isCommentVisible(parent, { userId, isVideoOwner })) {
-				return c.json({ success: false, error: "Parent comment not found" }, 404);
-			}
-		}
-
-		// The owner's own comments are never held
-		const held = settings === 'held' && !isVideoOwner;
 		const now = new Date().toISOString();
-		const comment: StoredComment = {
-			id: crypto.randomUUID(),
-			videoId: id,
-			userId,
-			channelId,
-			text,
-			likes: [],
-			dislikes: [],
-			replies: [],
-			isEdited: false,
-			isDeleted: false,
-			isPinned: false,
-			dateCreated: now,
-			dateModified: now,
-			...(parent ? { parentCommentId: parent.id } : {}),
-			...(held ? { status: 'held' as const } : {}),
-		};
+		const commentId = crypto.randomUUID();
+		let comment = undefined as StoredComment | undefined;
+		let parent = undefined as StoredComment | undefined;
+		let held = false;
 
-		if (parent) {
-			parent.replies = [...(parent.replies || []), comment];
-		} else {
-			stored.push(comment);
+		// Conditional write (SCALABILITY-AUDIT AV-2): the checks and the append
+		// run on the fresh video each attempt, so a concurrent comment, like or
+		// edit is re-read instead of overwritten.
+		const { data: video, rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string; message?: string }>(id, (fresh) => {
+			comment = undefined;
+			parent = undefined;
+			if (isVideoRemoved(fresh)) return { reject: { status: 404, error: "Object not found" } };
+			// Check privacy permissions for commenting on videos
+			if (fresh.isPublic === false && fresh.userId !== userId) {
+				// Don't reveal that private video exists
+				return { reject: { status: 404, error: "Object not found" } };
+			}
+			const settings = getCommentSettings(fresh);
+			if (settings === 'off') {
+				return { reject: { status: 403, error: "comments_disabled", message: "Comments are turned off for this video" } };
+			}
+
+			if (!fresh.comments) {
+				fresh.comments = [];
+			}
+			const stored = fresh.comments as unknown as StoredComment[];
+			const isVideoOwner = fresh.userId === userId;
+
+			// Replies attach to the top-level comment (one level of nesting)
+			if (requestedParentId) {
+				const found = findStoredComment(stored, requestedParentId);
+				const target = found ? (found.parent || found.comment) : null;
+				if (!target || !isCommentVisible(target, { userId, isVideoOwner })) {
+					return { reject: { status: 404, error: "Parent comment not found" } };
+				}
+				parent = target;
+			}
+
+			// The owner's own comments are never held
+			held = settings === 'held' && !isVideoOwner;
+			comment = {
+				id: commentId,
+				videoId: id,
+				userId,
+				channelId,
+				text,
+				likes: [],
+				dislikes: [],
+				replies: [],
+				isEdited: false,
+				isDeleted: false,
+				isPinned: false,
+				dateCreated: now,
+				dateModified: now,
+				...(parent ? { parentCommentId: parent.id } : {}),
+				...(held ? { status: 'held' as const } : {}),
+			};
+
+			if (parent) {
+				parent.replies = [...(parent.replies || []), comment];
+			} else {
+				stored.push(comment);
+			}
+			// Note: commentsCount is calculated in view layer, not stored
+			return true;
+		});
+
+		if (!video) {
+			return c.json({ success: false, error: "Object not found" }, 404);
 		}
-		// Note: commentsCount is calculated in view layer, not stored
-		await repository.putObject(video.id, video);
+		if (rejected || !comment) {
+			const failure = rejected ?? { status: 404 as const, error: "Object not found" };
+			return c.json({ success: false, error: failure.error, ...(failure.message ? { message: failure.message } : {}) }, failure.status);
+		}
+		const isVideoOwner = video.userId === userId;
 
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.CommentCreate, {

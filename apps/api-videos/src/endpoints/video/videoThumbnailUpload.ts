@@ -12,6 +12,7 @@ import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
+import { patchVideo } from '../../lib/videoWrites';
 import BunnyStorageClient from "../../lib/bunny/storage";
 import { validateImageBuffer, detectMimeType } from "../../lib/thumbnail/validator";
 import { thumbnailProcessor } from "../../lib/thumbnail/processor";
@@ -123,13 +124,19 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 			const thumbnailSizes = thumbnailProcessor.generateBunnyUrls(baseUrl);
 			const thumbnailUrl = thumbnailSizes.hd || baseUrl;
 
-			await repository.putObject(id, {
-				...video,
+			// Conditional write on the fresh video (SCALABILITY-AUDIT AV-3)
+			const saved = await patchVideo(repository, id, (fresh) => fresh.isDeleted ? false : {
 				thumbnailUrl,
-				thumbnailType: 'custom',
+				thumbnailType: 'custom' as const,
 				thumbnailSizes,
 				dateModified: new Date().toISOString(),
-			});
+			}, { ownerId: userId });
+			if (saved.status === 'forbidden') {
+				return c.json({ success: false, error: "Forbidden - you can only update your own videos" }, 403);
+			}
+			if (saved.status === 'missing' || !saved.changed) {
+				return c.json({ success: false, error: "Video not found" }, 404);
+			}
 
 			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.VideoEdit, {
