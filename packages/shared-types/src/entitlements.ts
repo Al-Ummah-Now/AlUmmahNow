@@ -47,6 +47,8 @@ export const ENTITLEMENT_CATALOGUE: readonly EntitlementDefinition[] = [
   { key: 'storage.gb', type: 'number', unit: 'GB', fallback: UNLIMITED, epic: 27, description_en: 'Video storage', description_ar: 'مساحة تخزين الفيديو', at_limit: 'New upload refused; existing videos are kept' },
   { key: 'live.monthlyMinutes', type: 'number', unit: 'minutes', fallback: UNLIMITED, epic: 27, description_en: 'Live streaming minutes per month', description_ar: 'دقائق البث المباشر شهرياً', at_limit: 'Not enforced yet' },
   { key: 'analytics.retentionDays', type: 'number', unit: 'days', fallback: UNLIMITED, epic: 27, description_en: 'Analytics history', description_ar: 'مدة الاحتفاظ بالإحصاءات', at_limit: 'Not enforced yet' },
+  { key: 'analytics.retentionCurve', type: 'boolean', fallback: true, epic: 27, description_en: 'Retention chart per video', description_ar: 'مخطط الاحتفاظ بالمشاهدين لكل فيديو', at_limit: 'The chart is replaced by a note about the plan' },
+  { key: 'analytics.trafficSources', type: 'boolean', fallback: true, epic: 27, description_en: 'Traffic sources in analytics', description_ar: 'مصادر الزيارات في التحليلات', at_limit: 'The section is replaced by a note about the plan' },
   { key: 'studio.bulkImport', type: 'boolean', fallback: true, epic: 27, description_en: 'Bulk import in Studio', description_ar: 'الاستيراد المجمّع في الاستوديو', at_limit: 'Not enforced yet' },
   { key: 'studio.teamSeats', type: 'number', unit: 'seats', fallback: UNLIMITED, epic: 27, description_en: 'Studio team seats', description_ar: 'مقاعد فريق الاستوديو', at_limit: 'Not enforced yet' },
   { key: 'share.shortLinks', type: 'boolean', fallback: true, epic: 25, description_en: 'Short share links', description_ar: 'روابط المشاركة القصيرة', at_limit: 'n/a' },
