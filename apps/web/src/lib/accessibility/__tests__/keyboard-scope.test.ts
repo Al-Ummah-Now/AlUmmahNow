@@ -80,6 +80,30 @@ describe('shouldHandlePlayerShortcut', () => {
     expect(shouldHandlePlayerShortcut(key(' ', get('seek')), player, get('seek'))).toBe(true);
   });
 
+  it('treats no key as a shortcut while focus is in a menu or dialog in the player', () => {
+    const { player, get } = setup();
+    for (const k of ['k', 'm', 'f', '5', 'Escape']) {
+      expect(shouldHandlePlayerShortcut(key(k, get('item')), player, get('item'))).toBe(false);
+    }
+  });
+
+  it('treats no key as a shortcut in a player layer, outside the player or inside it in fullscreen', () => {
+    const { player } = setup();
+    const outside = document.createElement('div');
+    outside.setAttribute('data-player-layer', '');
+    outside.innerHTML = '<button>Quality</button>';
+    document.body.appendChild(outside);
+    const inside = document.createElement('div');
+    inside.setAttribute('data-player-layer', '');
+    inside.innerHTML = '<button>Close</button>';
+    player.appendChild(inside);
+    for (const el of [outside.querySelector('button')!, inside.querySelector('button')!]) {
+      for (const k of ['k', 'm', 'ArrowLeft']) expect(shouldHandlePlayerShortcut(key(k, el), player, el)).toBe(false);
+    }
+    outside.remove();
+    inside.remove();
+  });
+
   it('handles keys when the media element inside the player is focused', () => {
     const { player, get } = setup();
     expect(shouldHandlePlayerShortcut(key('ArrowRight', get('tech')), player, get('tech'))).toBe(true);

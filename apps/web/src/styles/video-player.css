@@ -1,12 +1,11 @@
 @import 'video.js/dist/video-js.css';
 
 /* Force 16:9 aspect ratio on video player container */
-.custom-video-player.aspect-video {
+.custom-video-player.aspect-video:not([data-portrait]) {
   aspect-ratio: 16 / 9 !important;
   width: 100% !important;
   position: relative !important;
-  overflow: visible !important; /* Allow quality menu to extend outside container */
-}
+  overflow: visible !important; }
 
 /* Override Video.js's paddingTop hack for fluid mode */
 .custom-video-player.aspect-video .video-js.vjs-fluid,
@@ -31,8 +30,7 @@
   width: 100% !important;
   height: 100% !important;
   object-fit: contain !important;
-  overflow: hidden !important; /* Clip video content to maintain aspect ratio */
-}
+  overflow: hidden !important; }
 
 /* CSS Custom Properties for Video Player */
 :root {
@@ -51,404 +49,6 @@
   --video-transition-fast: 0.15s ease;
   --video-transition-base: 0.2s ease;
   --video-transition-slow: 0.3s ease;
-}
-
-/*
-  Player chrome colour tokens.
-  The controls float over the video with no solid bar (the production look):
-  a soft scrim that fades to fully transparent at the top of the control bar,
-  plus a dark halo around every white glyph. The halo is the glyph's immediate
-  background (WCAG 1.4.3 allows an outline/halo), so white icons and text keep
-  >= 4.5:1 even over a pure-white frame:
-    --vp-fg #ffffff on the --vp-halo-color halo     = 17:1 over a white frame
-    --vp-focus #ffb84d on solid #000 focus halo     = 12.2:1 (needs 3:1)
-    slider tracks (--vp-track) carry a 1px --vp-outline ring: track vs ring is
-    >= 3:1 over both a pure-white and a pure-black frame (non-text contrast)
-  Menus use a solid dark surface (white text on #111827 = 17.7:1).
-
-  Legibility over busy or bright frames comes from a bottom scrim
-  (.video-js::after, --vp-scrim): a gradient over the bottom ~30% of the
-  player, taller than the bar itself, that fades in and out with the
-  controls. It replaces the solid bar the owner did not want; the bar stays
-  transparent on top of it.
-*/
-.video-js {
-  --vp-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0));
-  --vp-scrim-height: max(30%, 8rem); /* always taller than the 4rem bar */
-  --vp-menu-bg: rgba(17, 24, 39, 0.92); /* --vp-surface at 92% */
-  --vp-halo-color: rgba(0, 0, 0, 0.9);
-  --vp-halo: 0 0 2px var(--vp-halo-color), 0 0 4px rgba(0, 0, 0, 0.6);
-  --vp-outline: rgba(0, 0, 0, 0.6);
-  --vp-scrim-strong: rgba(0, 0, 0, 0.88);
-  --vp-surface: #111827;
-  --vp-surface-border: rgba(255, 255, 255, 0.24);
-  --vp-fg: #ffffff;
-  --vp-fg-muted: #e5e7eb;
-  --vp-hover-bg: rgba(255, 255, 255, 0.18);
-  --vp-track: rgba(255, 255, 255, 0.45);
-  --vp-focus: #ffb84d;
-  --vp-focus-halo: #000000;
-  --vp-selected-bg: #ffffff;
-  --vp-selected-fg: #111827;
-  --vp-button-size: 2.25rem; /* 36px - production control size */
-  color: var(--vp-fg);
-}
-
-.dark .video-js {
-  --vp-surface: #030712;
-}
-
-.video-js {
-  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-}
-
-/* Big play button styling */
-/* Production look: a bare white play glyph over the video, no disc or ring.
-   The halo keeps the glyph visible (and >= 3:1) over light frames. */
-.video-js .vjs-big-play-button {
-  border-radius: 50%;
-  border: none;
-  background-color: transparent;
-  color: var(--vp-fg);
-  text-shadow: var(--vp-halo);
-  transition: background-color var(--video-transition-base), transform var(--video-transition-fast);
-}
-
-/* Consolidated hover states */
-.video-js .vjs-big-play-button:hover,
-.dark .video-js .vjs-big-play-button:hover,
-.video-js:hover .vjs-big-play-button {
-  background-color: transparent;
-  transform: scale(1.05);
-}
-
-/* Consolidated focus states (keyboard only) */
-.video-js .vjs-big-play-button:focus-visible {
-  outline: 3px solid var(--vp-focus);
-  outline-offset: 4px;
-  box-shadow: 0 0 0 8px var(--vp-focus-halo);
-  background-color: transparent;
-}
-
-/* Enable pointer events for click-to-play functionality */
-.video-js {
-  cursor: pointer; /* Show that video is clickable */
-}
-
-/* Ensure all interactive children have pointer events */
-.video-js .vjs-control-bar,
-.video-js .vjs-big-play-button,
-.video-js .vjs-quality-selector,
-.video-js .vjs-menu-button-popup,
-.video-js .vjs-menu {
-  pointer-events: auto !important;
-}
-
-/* Control bar styling - WCAG 2.1 AA compliant contrast */
-/* V3 Design: 64px height with vertically centered controls */
-.video-js .vjs-control-bar {
-  /* Transparent bar as in production. The player's bottom scrim
-     (.video-js::after) sits behind it; --vp-halo outlines each glyph. */
-  background: transparent;
-  color: var(--vp-fg);
-  backdrop-filter: blur(var(--video-blur-amount));
-  -webkit-backdrop-filter: blur(var(--video-blur-amount));
-  padding: 0 1.25rem; /* Horizontal padding only, vertical centering handled by height */
-  gap: 0.75rem; /* Spacing between controls */
-  display: flex;
-  align-items: center; /* Vertically center all controls */
-  height: 4rem; /* 64px - matches V3 design */
-  min-height: 4rem; /* Ensure adequate height for controls */
-  position: absolute !important; /* Position at bottom of video */
-  bottom: 0 !important; /* Stick to bottom */
-  left: 0 !important;
-  right: 0 !important;
-  z-index: 10 !important; /* Low z-index to stay below modals/popups */
-  overflow: visible !important; /* Allow quality menu to extend outside control bar */
-}
-
-/* Bottom scrim behind the controls. It shows and hides with the control bar
-   (Video.js fades the bar out when the user goes inactive while playing) and
-   stays while a popup menu is open. */
-.video-js::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--vp-scrim-height);
-  background: var(--vp-scrim);
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity 0.2s ease;
-}
-
-.video-js.vjs-has-started.vjs-user-inactive.vjs-playing:not(.vjs-menu-open)::after {
-  opacity: 0;
-  transition: opacity 1s ease; /* same fade-out as the control bar */
-}
-
-.video-js.vjs-controls-disabled::after,
-.video-js.vjs-using-native-controls::after,
-.video-js.vjs-error::after {
-  display: none;
-}
-
-/* The scrim is painted after the tech; keep the big play button and
-   captions above it (the control bar is z-index 10) */
-.video-js .vjs-big-play-button,
-.video-js .vjs-text-track-display {
-  z-index: 2;
-}
-
-/* A popup menu is open: the controls never fade out from under it */
-.video-js.vjs-menu-open .vjs-control-bar {
-  visibility: visible;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* Popup menus open on click/tap only (menu-interaction.ts stops Video.js's
-   hover handler). This keeps a stray .vjs-hover from showing a menu. */
-.video-js.vjs-workinghover .vjs-menu-button-popup.vjs-hover .vjs-menu:not(.vjs-lock-showing) {
-  display: none !important;
-}
-
-/* Consolidated focus indicators for control buttons (Story 1.4 AC 5) */
-.video-js .vjs-control-bar button:focus-visible,
-.dark .video-js .vjs-control-bar button:focus-visible,
-.video-js .vjs-control-bar [role="slider"]:focus-visible,
-.video-js .vjs-menu li:focus-visible,
-.video-js .vjs-menu li.vjs-menu-item:focus-visible {
-  outline: 3px solid var(--vp-focus);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 5px var(--vp-focus-halo);
-  text-shadow: none;
-}
-
-/* Accessibility: Enhanced contrast for control icons */
-.video-js .vjs-control-bar .vjs-icon-placeholder::before,
-.video-js .vjs-control-bar .vjs-icon-placeholder,
-.video-js .vjs-keyboard-help-button {
-  text-shadow: var(--vp-halo);
-}
-
-/* Flip directional icons in RTL */
-[dir="rtl"] .video-js .vjs-play-control::before,
-[dir="rtl"] .video-js .vjs-previous-button::before,
-[dir="rtl"] .video-js .vjs-next-button::before {
-  transform: scaleX(-1);
-}
-
-/* Ensure non-directional icons remain unchanged */
-[dir="rtl"] .video-js .vjs-mute-control::before,
-[dir="rtl"] .video-js .vjs-fullscreen-control::before,
-[dir="rtl"] .video-js .vjs-picture-in-picture-control::before {
-  transform: none;
-}
-
-/* Dark mode: same high-contrast scrim as light mode (see tokens above) */
-
-/* RTL big play button support */
-[dir="rtl"] .video-js .vjs-big-play-button::before {
-  transform: scaleX(-1);
-}
-
-
-
-/* Enhanced control button sizing and spacing */
-/* V3 Design: 36px buttons, vertically centered */
-.video-js .vjs-control-bar button {
-  min-width: var(--vp-button-size);
-  min-height: var(--vp-button-size);
-  width: var(--vp-button-size);
-  height: var(--vp-button-size);
-  padding: 0.5rem; /* Padding for icons */
-  margin: 0 0.125rem; /* Spacing between buttons */
-  color: var(--vp-fg);
-  border-radius: 0.375rem; /* Rounded corners */
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.video-js .vjs-control-bar button:hover {
-  background: transparent;
-  transform: scale(1.05);
-}
-
-/* Pressed / touch feedback: a brief shrink, no fill (production look) */
-.video-js .vjs-control-bar button:active,
-.video-js .vjs-control-bar .vjs-touch-active,
-.video-js .vjs-big-play-button.vjs-touch-active {
-  transform: scale(0.94);
-}
-
-/* Enhanced time display readability */
-/* V3 Design: Vertically centered in 64px control bar */
-.video-js .vjs-time-control {
-  /* Override Video.js defaults that cause misalignment */
-  line-height: 1; /* Override default 3em line-height from video.js */
-  padding-left: 0.5rem; /* Override default 1em */
-  padding-right: 0.5rem; /* Override default 1em */
-
-  /* Custom styling */
-  font-size: 0.875rem;
-  font-weight: 600;
-  min-width: 3.5rem;
-  display: flex;
-  align-items: center; /* Vertically center text */
-  justify-content: center; /* Horizontally center text */
-  height: 100%; /* Fill control bar height */
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: var(--vp-fg);
-  text-shadow: var(--vp-halo);
-}
-
-/* Hide current time and duration (left side), only show remaining time (right side) */
-.video-js .vjs-current-time,
-.video-js .vjs-time-divider,
-.video-js .vjs-duration {
-  display: none !important;
-}
-
-.video-js .vjs-remaining-time {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-/* No renditions exposed (native HLS in Safari/iOS): hide the empty quality menu */
-.video-js.vjs-no-quality-levels .vjs-quality-selector {
-  display: none !important;
-}
-
-/* Improve quality selector visibility */
-.video-js .vjs-quality-selector {
-  min-width: 3.5rem !important; /* Increased from default */
-  font-size: 0.9375rem !important; /* Larger font */
-  font-weight: 600;
-  padding: 0.625rem 0.75rem !important;
-  background: transparent;
-  border-radius: 0.375rem;
-}
-
-/* Quality selector button text */
-.video-js .vjs-quality-selector .vjs-menu-button-text {
-  font-size: 0.9375rem !important;
-  font-weight: 600;
-  color: var(--vp-fg);
-}
-
-/* Quality selector and menu button - allow overflow for menu */
-.video-js .vjs-quality-selector,
-.video-js .vjs-menu-button-popup {
-  overflow: visible !important; /* Allow menu to extend outside */
-  position: relative !important; /* Establish positioning context for absolute menu */
-}
-
-/* Quality selector menu - Position ABOVE button to prevent clipping */
-.video-js .vjs-quality-selector .vjs-menu,
-.video-js .vjs-menu-button-popup .vjs-menu {
-  /* Position menu above the button - use transform to move it up */
-  position: absolute !important;
-  bottom: 100% !important; /* Start above button */
-  top: auto !important; /* Override any top positioning */
-  left: 50% !important; /* Center horizontally */
-  transform: translateX(-50%) translateY(-0.5rem) !important; /* Center + gap */
-
-  /* Ensure menu appears above everything */
-  z-index: 9999 !important;
-
-  /* Visual styling - dark surface in both themes; Video.js menu text is white */
-  background: var(--vp-menu-bg) !important;
-  padding: 0.25rem 0 !important;
-  border: 1px solid var(--vp-surface-border) !important;
-  border-radius: 0.5rem !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
-              0 4px 6px -4px rgba(0, 0, 0, 0.2) !important;
-  min-width: 8rem !important; /* 128px minimum width */
-  max-width: 12rem !important; /* Maximum width */
-
-  /* Constrain menu height and enable scrolling.
-     Video.js styles this box as `height: 0; margin-bottom: 1.5em` and hangs an
-     absolutely positioned list above it. The list is static here (so the box
-     scrolls), which means the box must size to its content: with Video.js's
-     height: 0 still applied, overflow clipped the whole list and the quality
-     menu "did not open". */
-  height: auto !important;
-  margin-bottom: 0 !important;
-  max-height: 20rem !important; /* 320px maximum */
-  overflow-y: auto !important; /* Scroll if content exceeds max-height */
-  overflow-x: hidden !important;
-}
-
-/* Menu content - let it size naturally within scrollable parent */
-.video-js .vjs-quality-selector .vjs-menu .vjs-menu-content,
-.video-js .vjs-menu-button-popup .vjs-menu .vjs-menu-content {
-  /* Remove constraints - let parent handle scrolling */
-  max-height: none !important;
-  overflow: visible !important;
-  position: static !important; /* Normal flow to give parent height */
-  background: transparent !important; /* the menu box carries --vp-menu-bg */
-}
-
-/* RTL support for quality selector menu */
-[dir="rtl"] .video-js .vjs-quality-selector .vjs-menu,
-[dir="rtl"] .video-js .vjs-menu-button-popup .vjs-menu {
-  left: 50% !important; /* Keep centered in RTL */
-  right: auto !important;
-  transform: translateX(-50%) translateY(-0.5rem) !important; /* Keep centered + gap in RTL */
-}
-
-/* Enhanced RTL support */
-[dir="rtl"] .video-js .vjs-control-bar {
-  direction: rtl;
-  flex-direction: row-reverse;
-}
-
-/* Adjust control spacing for RTL */
-[dir="rtl"] .video-js .vjs-control-bar > * {
-  margin-left: 0;
-  margin-right: 0.5rem;
-}
-
-[dir="rtl"] .video-js .vjs-control-bar > *:last-child {
-  margin-right: 0;
-}
-
-/* Adjust time display positioning in RTL */
-[dir="rtl"] .video-js .vjs-time-control {
-  text-align: right;
-}
-
-[dir="rtl"] .video-js .vjs-remaining-time {
-  order: -1; /* Move remaining time to the right in RTL */
-}
-
-/* Accessibility: High contrast mode support */
-@media (prefers-contrast: high) {
-  .video-js .vjs-big-play-button {
-    border: 3px solid currentColor;
-  }
-
-  .video-js .vjs-control-bar,
-  .dark .video-js .vjs-control-bar {
-    background: #000000; /* Solid background: 21:1 for the white controls */
-    border-top: 2px solid #ffffff; /* Border for definition */
-  }
-}
-
-/* Accessibility: Reduced motion support */
-@media (prefers-reduced-motion: reduce) {
-  .video-js .vjs-big-play-button {
-    transition: none;
-  }
-
-  .video-js .vjs-big-play-button:hover {
-    transform: none;
-  }
 }
 
 /* Volume Indicator Overlay */
@@ -496,156 +96,18 @@
   color: var(--card-foreground);
 }
 
-
-
-/* Enhanced volume slider styling - horizontal inline display */
-/* V3 Design: Inline volume slider with 8px height, vertically centered */
-.video-js .vjs-volume-panel {
-  display: flex !important;
-  align-items: center !important;
-  position: relative !important;
-  width: auto !important; /* Allow natural width for slider */
-  height: 100% !important; /* Fill control bar height for vertical centering */
-}
-
-/* Show volume slider inline in horizontal mode */
-.video-js .vjs-volume-panel.vjs-volume-panel-horizontal .vjs-volume-control,
-.video-js .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal,
-.video-js .vjs-volume-panel .vjs-volume-control {
-  /* Position inline with control bar */
-  position: relative !important;
-  display: flex !important;
-  align-items: center !important;
-
-  /* Always visible */
-  opacity: 1 !important;
-  visibility: visible !important;
-
-  /* Visual styling */
-  background: transparent !important;
-  padding: 0 0.5rem !important;
-  margin: 0 !important;
-
-  /* Horizontal layout */
-  flex-direction: row !important;
-  width: auto !important;
-  height: 100% !important; /* Fill parent height */
-}
-
-/* Ensure slider is interactive */
-.video-js .vjs-volume-control .vjs-volume-bar {
-  pointer-events: auto;
-}
-
-.dark .video-js .vjs-volume-control {
-  background: transparent;
-}
-
-.video-js .vjs-volume-bar {
-  background: var(--vp-track); /* >= 3:1 against the scrim (non-text contrast) */
-  border-radius: 0.375rem; /* More rounded */
-  box-shadow: var(--video-shadow-inner), 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--vp-outline);
-  height: 0.5rem; /* 8px - matches V3 design */
-  width: 3.75rem; /* 60px - matches V3 design */
-  margin: 0 0.5rem; /* Add spacing around slider */
-  cursor: pointer; /* Show it's interactive */
-  position: relative; /* For pseudo-element positioning */
-  transition: all 0.2s ease;
-}
-
-.video-js .vjs-volume-bar:hover {
-  background: rgba(255, 255, 255, 0.55);
-  transform: scaleY(1.1); /* Slightly taller on hover */
-}
-
-.video-js .vjs-volume-level {
-  background: linear-gradient(
-    90deg,
-    #ffffff 0%,
-    rgba(255, 255, 255, 0.95) 100%
-  ); /* White gradient for volume level */
-  border-radius: 0.375rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2); /* Enhanced 3D effect */
-  position: relative; /* For pseudo-element */
-  transition: all 0.15s ease;
-}
-
-/* Volume level indicator handle */
-/* V3 Design: 12px handle */
-.video-js .vjs-volume-level::after {
-  content: '';
-  position: absolute;
-  right: -0.375rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0.75rem; /* 12px - matches V3 design */
-  height: 0.75rem; /* 12px - matches V3 design */
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.4); /* Dark border for contrast */
-  border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.video-js .vjs-volume-bar:hover .vjs-volume-level::after {
-  opacity: 1; /* Show handle on hover */
-}
-
-/* Consolidated volume control focus states */
-.video-js .vjs-volume-bar:focus,
-.video-js .vjs-volume-bar:focus-visible {
-  outline: 3px solid var(--vp-focus);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 6px var(--vp-focus-halo);
-}
-
-/* Keyboard users see the handle as soon as the slider is focused */
-.video-js .vjs-volume-bar:focus-visible .vjs-volume-level::after {
-  opacity: 1;
-}
-
-/* Ensure volume panel is accessible via keyboard */
-.video-js .vjs-volume-panel .vjs-mute-control {
-  position: relative;
-  z-index: calc(var(--video-z-control-bar) + 2);
-}
-
-.video-js .vjs-volume-panel .vjs-volume-bar {
-  position: relative;
-  z-index: calc(var(--video-z-control-bar) + 1);
-}
-
-/* Smooth volume transitions */
-.video-js .vjs-volume-level {
-  transition: width 0.1s ease-out;
-}
-
 /* Enhanced RTL volume slider positioning */
 [dir="rtl"] .vjs-volume-indicator {
   flex-direction: row-reverse;
 }
 
-/* RTL volume slider inline positioning */
-[dir="rtl"] .video-js .vjs-volume-control {
-  flex-direction: row-reverse !important;
-}
-
 /* High contrast mode support */
-@media (prefers-contrast: high) {
+@media (prefers-contrast: more) {
   .vjs-volume-indicator {
     background: var(--background);
     border: 2px solid var(--foreground);
   }
-
-  .video-js .vjs-volume-bar {
-    border: 1px solid currentColor;
-  }
 }
-
-/* ========================================
-   Phase 2.4: Progress Bar Hover Preview
-   ======================================== */
 
 /* Thumbnail preview container */
 .vjs-thumbnail-holder {
@@ -664,12 +126,6 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   transition: opacity 0.15s ease-in-out;
-}
-
-/* Show thumbnail on hover */
-.vjs-progress-control:hover .vjs-thumbnail-holder {
-  display: block;
-  opacity: 1;
 }
 
 /* Thumbnail image container */
@@ -702,69 +158,6 @@
   border-radius: inherit;
 }
 
-/* Enhanced progress bar styling */
-/* V3 Design: 12px height, 700px width (large center element), vertically centered */
-.video-js .vjs-progress-control {
-  cursor: pointer;
-  touch-action: none;
-  height: 100%; /* Fill control bar height for vertical centering */
-  display: flex !important;
-  align-items: center !important;
-  flex: 1; /* Grow to fill available space */
-  max-width: 43.75rem; /* 700px - matches V3 design */
-  min-width: 20rem; /* Minimum width for usability */
-}
-
-.video-js .vjs-progress-holder {
-  position: relative;
-  height: 0.75rem; /* 12px - matches V3 design */
-  width: 100%;
-  border-radius: 0.5rem; /* Rounded for modern look */
-  background: var(--vp-track); /* >= 3:1 against the scrim (non-text contrast) */
-  transition: height var(--video-transition-fast), box-shadow var(--video-transition-fast), background var(--video-transition-fast);
-  box-shadow: var(--video-shadow-inner), 0 1px 3px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--vp-outline);
-  overflow: visible; /* Allow handle to show outside */
-}
-
-.video-js .vjs-progress-control:hover .vjs-progress-holder {
-  height: 1rem; /* Increased from 0.625rem for better visibility on hover */
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--vp-outline);
-}
-
-/* Play progress (current position) */
-.video-js .vjs-play-progress {
-  background: linear-gradient(
-    90deg,
-    #ffffff 0%,
-    rgba(255, 255, 255, 0.95) 50%,
-    rgba(255, 255, 255, 0.9) 100%
-  ); /* White gradient for progress */
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15); /* 3D effect */
-  position: relative;
-  transition: all 0.1s linear;
-  height: 100%; /* Ensure full height for correct handle positioning */
-}
-
-/* Load progress (buffered) */
-.video-js .vjs-load-progress {
-  background: rgba(255, 255, 255, 0.25); /* buffered: lighter than played, darker than handle */
-  border-radius: 0.5rem;
-}
-
-/* Buffered ranges */
-.video-js .vjs-load-progress div {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 0.5rem;
-}
-
-/* Progress bar handle */
-.video-js .vjs-play-progress .vjs-time-tooltip,
-.video-js .vjs-play-progress::before {
-  display: block;
-}
-
 /* Dark mode adjustments */
 .dark .vjs-thumbnail-holder {
   background: color-mix(in oklch, var(--card) 95%, transparent);
@@ -784,27 +177,6 @@
   transform: translateX(50%);
 }
 
-[dir="rtl"] .vjs-progress-control .vjs-time-tooltip {
-  direction: rtl;
-}
-
-/* Fix progress bar handle positioning in RTL */
-[dir="rtl"] .video-js .vjs-play-progress::before {
-  right: auto;
-  left: -0.5rem;
-}
-
-/* Ensure proper seeking direction in RTL */
-[dir="rtl"] .video-js .vjs-progress-holder {
-  direction: ltr; /* Keep progress direction LTR for intuitive seeking */
-}
-
-[dir="rtl"] .video-js .vjs-progress-control {
-  direction: rtl; /* But keep control layout RTL */
-}
-
-
-
 /* Optimized performance: Targeted GPU acceleration */
 .vjs-thumbnail-holder:hover,
 .vjs-watched-segment.animating {
@@ -820,26 +192,11 @@
 }
 
 /* Optimize animations for better performance */
-.video-js .vjs-big-play-button,
-.video-js .vjs-control-bar button,
 .vjs-keyboard-help-modal {
   backface-visibility: hidden;
-  transform: translateZ(0); /* Force hardware acceleration */
-}
-
-/* Reduce repaints with containment. No paint containment on the control bar:
-   it clips descendants to the 64px bar, and the quality/captions menus open
-   above it (paint containment hid the quality menu entirely). */
-.video-js .vjs-control-bar {
-  contain: layout style;
-}
-
-.video-js .vjs-progress-holder {
-  contain: layout style paint;
-}
+  transform: translateZ(0); }
 
 /* Optimize backdrop-filter usage */
-.video-js .vjs-control-bar,
 .vjs-thumbnail-holder,
 .vjs-keyboard-help-backdrop {
   /* Reduce blur amount for better performance */
@@ -863,13 +220,8 @@
   contain: layout style paint;
 }
 
-/* Optimize volume slider rendering */
-.video-js .vjs-volume-control {
-  contain: layout style paint;
-}
-
 /* Accessibility: High contrast mode */
-@media (prefers-contrast: high) {
+@media (prefers-contrast: more) {
   .vjs-thumbnail-holder {
     background: var(--background);
     border: 3px solid var(--foreground);
@@ -879,117 +231,15 @@
     background: color-mix(in oklch, var(--primary) 50%, transparent);
     border-top: 1px solid var(--primary);
   }
-
-  .video-js .vjs-progress-holder {
-    border: 1px solid var(--border);
-  }
 }
 
 /* Accessibility: Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .vjs-thumbnail-holder,
-  .vjs-watched-segment,
-  .video-js .vjs-progress-holder {
-    transition: none;
-  }
-
-  .video-js .vjs-progress-control:hover .vjs-progress-holder {
-    height: 0.375rem;
-  }
-}
-
-/* Precise seeking visual feedback - Enhanced handle */
-/* V3 Design: 16px handle - Always visible, not just on hover */
-.video-js .vjs-play-progress::before {
-  content: '';
-  position: absolute;
-  right: -0.5rem; /* Positioned to center on progress bar edge */
-  top: 50%;
-  transform: translateY(-50%);
-  width: 1rem; /* 16px - matches V3 design */
-  height: 1rem; /* 16px - matches V3 design */
-  background: #ffffff; /* White handle */
-  border: 2px solid rgba(0, 0, 0, 0.3); /* Dark border for contrast */
-  border-radius: 50%;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3); /* Enhanced 3D effect */
-  cursor: pointer; /* Show it's draggable */
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-/* Handle hover effect */
-.video-js .vjs-play-progress:hover::before {
-  transform: translateY(-50%) scale(1.15); /* Slightly larger on hover */
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-.dark .video-js .vjs-play-progress::before {
-  background: #ffffff; /* Keep white in dark mode */
-  border-color: rgba(0, 0, 0, 0.5); /* Darker border in dark mode */
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.2); /* Stronger shadow in dark mode */
-}
-
-/* Smooth transitions */
-.video-js .vjs-play-progress,
-.video-js .vjs-load-progress {
-  transition: width 0.1s linear;
-}
-
-/* Consolidated focus states for progress control */
-.video-js .vjs-progress-control:focus-visible,
-.video-js .vjs-progress-holder:focus-visible {
-  outline: 3px solid var(--vp-focus);
-  outline-offset: 4px;
-  box-shadow: 0 0 0 7px var(--vp-focus-halo);
-  border-radius: var(--video-border-radius-small);
-}
-
-/* ========================================
-   Start from beginning (#242)
-   Scoped under .video-js to beat Video.js's own button reset.
-   Shown when the player opened at a saved position. Sits above the control
-   bar at the inline start (right in RTL). Minimal on purpose: restyled with
-   the rest of the controls later; keep the class and data-testid stable.
-   ======================================== */
-.video-js .vjs-start-over {
-  position: absolute;
-  bottom: calc(4rem + 0.5rem); /* clear of the 4rem control bar */
-  inset-inline-start: 1rem;
-  z-index: calc(var(--video-z-control-bar) + 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  min-height: var(--vp-button-size);
-  padding: 0 0.875rem;
-  border: 1px solid var(--vp-surface-border);
-  border-radius: 9999px;
-  background: var(--vp-menu-bg);
-  color: var(--vp-fg);
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1;
-  cursor: pointer;
-  transition: background-color var(--video-transition-fast);
-}
-
-.video-js .vjs-start-over:hover {
-  background: var(--vp-surface);
-}
-
-.video-js .vjs-start-over:focus-visible {
-  outline: 3px solid var(--vp-focus);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 5px var(--vp-focus-halo);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .video-js .vjs-start-over {
+.vjs-watched-segment {
     transition: none;
   }
 }
-
-/* ========================================
-   Real-Time Viewer Count (Issue #59)
-   ======================================== */
 
 /* Viewer count overlay - positioned top-right */
 .vjs-viewer-count-overlay {
@@ -1129,8 +379,7 @@
 }
 
 [dir="rtl"] .vjs-live-text {
-  direction: ltr; /* Keep "LIVE" text LTR */
-}
+  direction: ltr; }
 
 [dir="rtl"] .vjs-viewer-count-disconnected {
   margin-left: 0;
@@ -1141,15 +390,13 @@
   border-right: 1px solid var(--border);
 }
 
-
-
 /* Hide during fullscreen loading or buffering to avoid clutter */
 .video-js.vjs-waiting .vjs-viewer-count-overlay {
   opacity: 0.5;
 }
 
 /* High contrast mode */
-@media (prefers-contrast: high) {
+@media (prefers-contrast: more) {
   .vjs-viewer-count-overlay {
     background: var(--background);
     border: 2px solid var(--foreground);
@@ -1180,18 +427,6 @@
    ======================================== */
 
 @media (max-width: 640px) {
-  /* Enhanced touch targets for all controls */
-  .video-js .vjs-control-bar {
-    padding: 0.75rem 0.25rem; /* Reduced horizontal padding from 0.5rem to 0.25rem */
-    gap: 0.25rem;
-  }
-
-  .video-js .vjs-control-bar button {
-    min-width: 2.5rem;
-    min-height: 2.5rem;
-    padding: 0.5rem;
-  }
-
   /* Volume indicator mobile optimizations */
   .vjs-volume-indicator {
     padding: 0.875rem 1.25rem;
@@ -1208,22 +443,6 @@
     min-width: 2.5rem;
   }
 
-  /* Enhanced touch target for volume button */
-  .video-js .vjs-volume-panel {
-    min-width: auto; /* Allow natural width */
-  }
-
-  .video-js .vjs-volume-panel .vjs-mute-control {
-    min-width: var(--video-touch-target-size);
-    min-height: var(--video-touch-target-size);
-  }
-
-  /* Larger volume slider for touch */
-  .video-js .vjs-volume-bar {
-    height: 0.625rem; /* Thicker for touch */
-    width: 4rem; /* Shorter on mobile */
-  }
-
   /* Progress bar mobile optimizations */
   .vjs-thumbnail-holder {
     max-width: 120px;
@@ -1236,42 +455,6 @@
 
   .vjs-thumbnail-time {
     font-size: 0.6875rem;
-  }
-
-  /* Enhanced touch target for progress bar */
-  .video-js .vjs-progress-control {
-    height: var(--video-touch-target-size);
-    padding: 1rem 0;
-    touch-action: manipulation; /* Improve touch responsiveness */
-  }
-
-  .video-js .vjs-progress-holder {
-    height: 0.75rem; /* Increased for better touch visibility */
-  }
-
-  /* Enhanced touch feedback for progress bar */
-  .video-js .vjs-progress-holder:active {
-    transform: scaleY(1.2);
-    transition: transform var(--video-transition-fast);
-  }
-
-  /* Touch-hold support for preview */
-  .vjs-progress-control:active .vjs-thumbnail-holder {
-    display: block;
-    opacity: 1;
-  }
-
-  /* Enhanced big play button for mobile */
-  .video-js .vjs-big-play-button {
-    width: 5rem;
-    height: 5rem;
-    font-size: 2rem;
-    border-width: 3px;
-  }
-
-  /* Enhanced mobile RTL control bar */
-  [dir="rtl"] .video-js .vjs-control-bar {
-    padding: 0.75rem 0.5rem;
   }
 
   /* Viewer count mobile optimizations */
@@ -1311,72 +494,7 @@
     left: 0.5rem;
   }
 
-  /* Enhanced mobile touch interactions */
-  .video-js .vjs-control-bar button:active {
-    transform: scale(0.95);
-    transition: transform var(--video-transition-fast);
   }
-
-  /* Prevent accidental zoom on double-tap for controls */
-  .video-js .vjs-control-bar,
-  .video-js .vjs-big-play-button,
-  .video-js .vjs-start-over {
-    touch-action: manipulation;
-  }
-
-  /* Improved tap feedback */
-  .video-js .vjs-control-bar button:hover,
-  .video-js .vjs-control-bar button:focus {
-    background-color: transparent;
-    border-radius: var(--video-border-radius-small);
-  }
-
-  /* Fix timer height on mobile - ensure it fills control bar */
-  /* Need to override .vjs-control as well since timer inherits from it */
-  .video-js .vjs-control.vjs-time-control,
-  .video-js .vjs-control.vjs-remaining-time {
-    height: 64px !important;
-    min-height: 64px !important;
-  }
-
-  /* Fix horizontal overflow on mobile - reduce control sizes to fit viewport */
-  /* Hide quality selector on mobile (not critical for mobile UX) */
-  .video-js .vjs-quality-selector,
-  .video-js .vjs-hls-quality-selector {
-    display: none !important;
-  }
-
-  /* Reduce progress bar max-width on mobile */
-  .video-js .vjs-progress-control {
-    max-width: 8rem !important; /* 128px instead of 700px */
-    min-width: 6rem !important; /* Reduce minimum width */
-    flex-shrink: 1 !important; /* Allow shrinking */
-  }
-
-  /* Reduce volume slider width on mobile */
-  .video-js .vjs-volume-bar {
-    width: 2.5rem !important; /* 40px instead of 60px */
-  }
-
-  /* Reduce timer width on mobile */
-  .video-js .vjs-time-control {
-    min-width: 2.5rem !important; /* 40px instead of 56px */
-    font-size: 0.75rem !important; /* Smaller font */
-  }
-
-  /* Reduce button sizes on mobile */
-  .video-js .vjs-control-bar button {
-    min-width: 2rem !important; /* 32px instead of 40px */
-    min-height: 2rem !important;
-    width: 2rem !important;
-    height: 2rem !important;
-  }
-
-  /* Phones have no keyboard: keep the bar as it is in production */
-  .video-js .vjs-keyboard-help-button {
-    display: none !important;
-  }
-}
 
 /* Tablet optimizations */
 @media (min-width: 641px) and (max-width: 1024px) {
@@ -1385,82 +503,7 @@
     gap: 0.5625rem;
   }
 
-  /* Tablet touch targets */
-  .video-js .vjs-control-bar button {
-    min-width: 2.25rem;
-    min-height: 2.25rem;
   }
-
-  .video-js .vjs-big-play-button {
-    width: 4.5rem;
-    height: 4.5rem;
-    font-size: 1.75rem;
-  }
-}
-
-/* Touch device specific optimizations */
-@media (hover: none) and (pointer: coarse) {
-  /* Show controls by default on touch devices */
-  .video-js .vjs-control-bar {
-    opacity: 1;
-  }
-
-  /* Enhanced touch feedback */
-  .video-js .vjs-control-bar button:active {
-    background-color: transparent;
-    transform: scale(0.95);
-  }
-
-  /* Keyboard help is irrelevant without a keyboard */
-  .video-js .vjs-keyboard-help-button {
-    display: none !important;
-  }
-
-  /* Larger progress bar for touch accuracy */
-  .video-js .vjs-progress-holder {
-    height: 0.625rem;
-  }
-
-  /* Enhanced big play button visibility */
-  .video-js .vjs-big-play-button {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-}
-
-/* ========================================
-   Keyboard Help Overlay (Phase 3.1)
-   ======================================== */
-
-/* Help button in control bar */
-.vjs-keyboard-help-button {
-  position: relative;
-  background: none;
-  border: none;
-  color: var(--vp-fg, #ffffff);
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: var(--video-border-radius-small);
-  transition: background-color var(--video-transition-base);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.vjs-keyboard-help-button:hover {
-  background-color: transparent;
-}
-
-.vjs-keyboard-help-button:focus-visible {
-  outline: 3px solid var(--vp-focus, #ffb84d);
-  outline-offset: 2px;
-}
-
-.vjs-keyboard-help-button::before {
-  content: "?";
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 600;
-  font-size: 0.875rem;
-}
 
 /* Help overlay backdrop */
 .vjs-keyboard-help-backdrop {
@@ -1676,8 +719,7 @@
 
 [dir="rtl"] .vjs-keyboard-help-key {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  direction: ltr; /* Keep keyboard shortcuts LTR for readability */
-}
+  direction: ltr; }
 
 /* Mobile optimizations */
 @media (max-width: 640px) {
@@ -1708,7 +750,7 @@
 }
 
 /* High contrast mode */
-@media (prefers-contrast: high) {
+@media (prefers-contrast: more) {
   .vjs-keyboard-help-modal {
     border: 2px solid var(--foreground);
   }
@@ -1749,120 +791,13 @@
   border-width: 0;
 }
 
-
-/* ========================================
-   Epic 1 accessibility additions (Stories 1.1, 1.4, 1.5)
-   ======================================== */
-
-/* Menu items (quality, captions): white on the dark surface (17.7:1); the
-   selected item is inverted and also marked with a check so selection is not
-   conveyed by colour alone (WCAG 1.4.1). */
-.video-js .vjs-menu li.vjs-menu-item {
-  color: var(--vp-fg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9375rem;
-  text-transform: none;
-  padding: 0.5rem 1rem;
-}
-
-.video-js .vjs-menu li.vjs-menu-item:hover,
-.video-js .vjs-menu li.vjs-menu-item:focus {
-  background-color: var(--vp-hover-bg);
-  color: var(--vp-fg);
-}
-
-.video-js .vjs-menu li.vjs-selected,
-.video-js .vjs-menu li.vjs-selected:hover,
-.video-js .vjs-menu li.vjs-selected:focus {
-  background-color: var(--vp-selected-bg);
-  color: var(--vp-selected-fg);
-}
-
-/* The menu scrolls (overflow hidden on x), so draw the item focus ring inside */
-.video-js .vjs-menu li:focus-visible,
-.video-js .vjs-menu li.vjs-menu-item:focus-visible {
-  outline-offset: -3px;
-  box-shadow: none;
-}
-
-.video-js .vjs-menu li.vjs-selected::before {
-  content: "\2713";
-  margin-inline-end: 0.5rem;
-  font-weight: 700;
-}
-
-.video-js .vjs-menu li.vjs-menu-title {
-  color: var(--vp-fg-muted);
-}
-
-/* Time tooltip on the seek bar: dark text on white (Video.js default) */
-.video-js .vjs-progress-control .vjs-time-tooltip,
-.video-js .vjs-progress-control .vjs-mouse-display .vjs-time-tooltip {
-  background-color: #ffffff;
-  color: #111827;
-  font-size: 0.8125rem;
-}
-
-/* Remaining-time display is not interactive but sits between targets; keep it
-   readable at 14px/600 (white on scrim >= 9.3:1). */
-.video-js .vjs-remaining-time .vjs-remaining-time-display {
-  color: var(--vp-fg);
-}
-
 /* Keyboard feedback/volume overlays sit on top of video: use the scrim */
 .video-js .vjs-keyboard-feedback,
 .video-js .vjs-volume-indicator {
-  background: var(--vp-scrim-strong);
-  color: var(--vp-fg);
-  border: 1px solid var(--vp-surface-border);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .video-js .vjs-control-bar button:active,
-  .video-js .vjs-control-bar .vjs-touch-active,
-  .video-js .vjs-control-bar button:hover {
-    transform: none;
-  }
-}
-
-/* Touch targets (Story 1.5 AC 1, 2): at least 44x44 on touch devices. The hit
-   area grows, the production look of the controls does not. */
-@media (pointer: coarse) {
-  .video-js {
-    --vp-touch-target: 44px;
-  }
-
-  .video-js .vjs-control-bar button {
-    position: relative;
-  }
-
-  .video-js .vjs-control-bar button::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: var(--vp-touch-target);
-    height: var(--vp-touch-target);
-    transform: translate(-50%, -50%);
-  }
-
-  .video-js .vjs-progress-control {
-    min-height: var(--vp-touch-target);
-  }
-
-  .video-js .vjs-volume-panel .vjs-volume-control {
-    min-height: var(--vp-touch-target);
-  }
-}
-
-/* Phones draw 32px buttons with a 4px bar gap: 4px margins put neighbouring
-   centres 44px apart, so the hit areas do not overlap. */
-@media (pointer: coarse) and (max-width: 640px) {
-  .video-js .vjs-control-bar button {
-    margin: 0 0.25rem;
-  }
+  background: var(--fanous-player-menu);
+  color: var(--fanous-player-icon);
+  box-shadow: var(--fanous-player-menu-edge);
+  border: 0;
 }
 
 /* First-run touch gesture hint */
@@ -1898,5 +833,5 @@
 }
 
 .vjs-gesture-hint-close:focus-visible {
-  outline: 2px solid var(--vp-focus);
+  outline: 2px solid var(--fanous-player-accent);
 }

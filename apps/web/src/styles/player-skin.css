@@ -1,0 +1,1768 @@
+/*
+  Production player skin (docs/specs/VIDEO-PLAYER.md).
+
+  Scoped to .video-js.vjs-fanous, which videojs-setup.ts adds to every player. Every colour,
+  surface and shadow is a --fanous-player-* token from fanous-tokens (generated per theme); only
+  geometry lives here. Rules sit one class above Video.js's own stylesheet so the theme wins
+  (Video.js ships `.video-js button { background: none }`, which beat single-class rules before).
+
+  Shared rules from docs/design/player-themes.md:
+  - One clip: the player element owns the radius and overflow; nothing is painted behind it.
+  - Hover is a fill behind the icon only; nothing moves. Pressed is declared after hover.
+  - Focus is a 2px accent ring on :focus-visible only.
+  - Nothing clips the scrub handle: no paint containment or overflow on the progress bar.
+*/
+
+/* ---------- Frame ---------- */
+
+.custom-video-player {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.video-js.vjs-fanous {
+  --vjs-fanous-row: 48px;
+  --vjs-fanous-hit: 44px;
+  --vjs-fanous-fill: 38px;
+  --vjs-fanous-icon: 22px;
+  --vjs-fanous-handle: 18px;
+  --vjs-fanous-handle-active: 22px;
+  container: fanous-player / inline-size;
+  border-radius: var(--fanous-radius-lg, 12px);
+  overflow: hidden;
+  isolation: isolate;
+  outline: 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--fanous-player-icon);
+}
+
+.video-js.vjs-fanous .vjs-tech,
+.video-js.vjs-fanous .vjs-poster,
+.video-js.vjs-fanous .vjs-poster img {
+  border-radius: inherit;
+}
+
+.video-js.vjs-fanous .vjs-poster img {
+  object-fit: contain;
+}
+
+.video-js.vjs-fanous.vjs-user-inactive.vjs-playing {
+  cursor: none;
+}
+
+/* ---------- Control bar ---------- */
+
+/* Shown once playback has started (Video.js hides it before); until then only the big play button */
+.video-js.vjs-fanous .vjs-control-bar {
+  flex-wrap: wrap;
+  align-items: center;
+  position: absolute;
+  inset-inline: var(--fanous-player-bar-inset);
+  inset-block-end: var(--fanous-player-bar-inset);
+  width: auto;
+  height: auto;
+  padding: var(--fanous-player-bar-pad);
+  border-radius: var(--fanous-player-bar-radius);
+  background: var(--fanous-player-bar);
+  box-shadow: var(--fanous-player-bar-edge);
+  -webkit-backdrop-filter: var(--fanous-player-blur);
+  backdrop-filter: var(--fanous-player-blur);
+  /* Media controls stay left to right in Arabic; menus and labels follow the page */
+  direction: ltr;
+  z-index: 3;
+  overflow: visible;
+  contain: none;
+  font-size: 14px;
+}
+
+.video-js.vjs-fanous.vjs-has-started .vjs-control-bar {
+  display: flex;
+}
+
+/* The end screen replaces the bar until the viewer replays or seeks */
+.video-js.vjs-fanous.vjs-controls-disabled .vjs-control-bar,
+.video-js.vjs-fanous.vjs-using-native-controls .vjs-control-bar,
+.video-js.vjs-fanous.vjs-error .vjs-control-bar,
+.video-js.vjs-fanous.vjs-ended .vjs-control-bar {
+  display: none;
+}
+
+.video-js.vjs-fanous.vjs-has-started.vjs-user-inactive.vjs-playing:not(.vjs-menu-open) .vjs-control-bar {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.video-js.vjs-fanous.vjs-menu-open .vjs-control-bar {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.video-js.vjs-fanous .vjs-custom-control-spacer {
+  display: block;
+  flex: 1 1 auto;
+  height: var(--vjs-fanous-row);
+}
+
+/* ---------- Buttons ---------- */
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--vjs-fanous-hit);
+  height: var(--vjs-fanous-hit);
+  margin: 2px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--fanous-player-icon);
+  text-shadow: none;
+  outline: 0;
+  cursor: pointer;
+  isolation: isolate;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.video-js.vjs-fanous button::-moz-focus-inner {
+  border: 0;
+}
+
+.video-js.vjs-fanous button:-moz-focusring {
+  outline: 0;
+}
+
+/* The hover, pressed and focus shape, sized to the icon. The button itself never changes. */
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: calc((var(--vjs-fanous-hit) - var(--vjs-fanous-fill)) / 2);
+  border-radius: var(--fanous-player-shape);
+  background: transparent;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+@media (hover: hover) {
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button:hover::before {
+    background: var(--fanous-player-hover);
+  }
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button:active::before,
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-touch-active::before {
+  background: var(--fanous-player-press);
+  transform: scale(0.93);
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button:focus-visible::before {
+  box-shadow: 0 0 0 2px var(--fanous-player-accent);
+}
+
+.video-js.vjs-fanous .vjs-icon-placeholder {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: var(--vjs-fanous-icon);
+  height: var(--vjs-fanous-icon);
+}
+
+/* The icon font is not used: every icon is inline SVG (icons.ts) */
+.video-js.vjs-fanous .vjs-icon-placeholder::before,
+.video-js.vjs-fanous .vjs-big-play-button .vjs-icon-placeholder::before {
+  content: none !important;
+}
+
+.video-js.vjs-fanous .vjs-svg-icon-fanous {
+  grid-area: 1 / 1;
+  display: block;
+  width: var(--vjs-fanous-icon);
+  height: var(--vjs-fanous-icon);
+  stroke-width: 1.9;
+  fill: none;
+  pointer-events: none;
+}
+
+/* One icon per state; the control's state classes pick it */
+.video-js.vjs-fanous .vjs-play-control [data-icon="pause"],
+.video-js.vjs-fanous .vjs-play-control [data-icon="rotateCcw"],
+.video-js.vjs-fanous .vjs-play-control.vjs-playing [data-icon="play"],
+.video-js.vjs-fanous .vjs-play-control.vjs-ended [data-icon="play"],
+.video-js.vjs-fanous .vjs-play-control.vjs-ended [data-icon="pause"],
+.video-js.vjs-fanous .vjs-mute-control [data-icon="volumeX"],
+.video-js.vjs-fanous .vjs-mute-control [data-icon="volume1"],
+.video-js.vjs-fanous .vjs-mute-control.vjs-vol-0 [data-icon="volume2"],
+.video-js.vjs-fanous .vjs-mute-control.vjs-vol-1 [data-icon="volume2"],
+.video-js.vjs-fanous .vjs-fullscreen-control [data-icon="minimize"],
+.video-js.vjs-fanous.vjs-fullscreen .vjs-fullscreen-control [data-icon="maximize"] {
+  display: none;
+}
+
+.video-js.vjs-fanous .vjs-play-control.vjs-playing [data-icon="pause"],
+.video-js.vjs-fanous .vjs-play-control.vjs-ended [data-icon="rotateCcw"],
+.video-js.vjs-fanous .vjs-mute-control.vjs-vol-0 [data-icon="volumeX"],
+.video-js.vjs-fanous .vjs-mute-control.vjs-vol-1 [data-icon="volume1"],
+.video-js.vjs-fanous.vjs-fullscreen .vjs-fullscreen-control [data-icon="minimize"] {
+  display: block;
+}
+
+.video-js.vjs-fanous .vjs-play-control [data-icon="play"],
+.video-js.vjs-fanous .vjs-play-control [data-icon="pause"] {
+  fill: currentColor;
+  stroke-width: 1.4;
+}
+
+/*
+  Optical centring of play triangles (owner: "TEST ALIGNMENTS"). The path is centred in its viewBox
+  (icons.ts); a triangle's mass sits left of its box centre, so it reads as off-centre until it is
+  moved right by about 7% of the icon width. Applied in the bar and in the big play button.
+*/
+.video-js.vjs-fanous {
+  --vjs-fanous-play-nudge: 7%;
+}
+
+.video-js.vjs-fanous [data-icon="play"] {
+  transform: translateX(var(--vjs-fanous-play-nudge));
+}
+
+/* Toggles that are on: accent icon and a short underline */
+.video-js.vjs-fanous .vjs-control-bar .vjs-fanous-on {
+  color: var(--fanous-player-accent);
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-fanous-on::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 13px;
+  right: 13px;
+  bottom: 7px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--fanous-player-accent);
+}
+
+/* ---------- Progress bar: production geometry, themed colours ---------- */
+
+.video-js.vjs-fanous .vjs-progress-control {
+  order: -1;
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: 20px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  touch-action: none;
+  overflow: visible;
+  contain: none;
+}
+
+.video-js.vjs-fanous .vjs-progress-control .vjs-progress-holder,
+.video-js.vjs-fanous .vjs-progress-control:hover .vjs-progress-holder {
+  position: relative;
+  flex: 1 1 auto;
+  height: 12px;
+  /* Room for half the largest handle at 0% and 100%, so it is never cut off */
+  margin: 0 calc(var(--vjs-fanous-handle-active) / 2);
+  font-size: inherit;
+  border-radius: 999px;
+  background: var(--fanous-player-track);
+  box-shadow: var(--fanous-player-track-edge);
+  overflow: visible;
+  contain: none;
+  transition: height 120ms ease;
+  outline: 0;
+}
+
+@media (hover: hover) {
+  .video-js.vjs-fanous .vjs-progress-control:hover .vjs-progress-holder {
+    height: 16px;
+  }
+}
+
+.video-js.vjs-fanous.vjs-scrubbing .vjs-progress-control .vjs-progress-holder {
+  height: 16px;
+}
+
+.video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress,
+.video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress div,
+.video-js.vjs-fanous .vjs-progress-holder .vjs-play-progress {
+  top: 0;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress {
+  background: transparent;
+}
+
+.video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress div {
+  background: var(--fanous-player-buffered);
+}
+
+.video-js.vjs-fanous .vjs-progress-holder .vjs-play-progress {
+  background: var(--fanous-player-played);
+  box-shadow: var(--fanous-player-glow);
+}
+
+/* The handle: centred on the fill's edge, fully visible at 0% and 100% */
+.video-js.vjs-fanous .vjs-progress-holder .vjs-play-progress::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: calc(var(--vjs-fanous-handle) / -2);
+  width: var(--vjs-fanous-handle);
+  height: var(--vjs-fanous-handle);
+  margin: 0;
+  border-radius: 50%;
+  background: var(--fanous-player-handle);
+  box-shadow: var(--fanous-player-handle-edge);
+  font-family: inherit;
+  font-size: 0;
+  line-height: 0;
+  transform: translateY(-50%);
+  transition: transform 120ms ease;
+}
+
+@media (hover: hover) {
+  .video-js.vjs-fanous .vjs-progress-control:hover .vjs-play-progress::before {
+    transform: translateY(-50%) scale(calc(22 / 18));
+  }
+}
+
+.video-js.vjs-fanous.vjs-scrubbing .vjs-play-progress::before,
+.video-js.vjs-fanous .vjs-progress-holder:focus-visible .vjs-play-progress::before {
+  transform: translateY(-50%) scale(calc(22 / 18));
+  box-shadow: var(--fanous-player-handle-edge), 0 0 0 3px var(--fanous-player-accent);
+}
+
+.video-js.vjs-fanous .vjs-progress-holder:focus-visible {
+  box-shadow: var(--fanous-player-track-edge), 0 0 0 2px var(--fanous-player-accent);
+}
+
+/* Hover time tooltip */
+.video-js.vjs-fanous .vjs-play-progress .vjs-time-tooltip {
+  display: none !important;
+}
+
+.video-js.vjs-fanous .vjs-progress-control .vjs-mouse-display {
+  width: 0;
+  background: transparent;
+  z-index: 3;
+}
+
+/* Video.js's own time tooltip is replaced by the portalled ProgressTooltip */
+.video-js.vjs-fanous .vjs-progress-control .vjs-mouse-display .vjs-time-tooltip,
+.video-js.vjs-fanous .vjs-progress-control:hover .vjs-mouse-display .vjs-time-tooltip {
+  display: none !important;
+}
+
+/* Chapter markers: 2px gaps in the bar, with a themed title on hover */
+.video-js.vjs-fanous .vjs-fanous-chapters {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.video-js.vjs-fanous .vjs-fanous-chapter-mark {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  margin-left: -1px;
+  padding: 0;
+  border: 0;
+  background: var(--fanous-player-scrim);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ---------- Volume: always reserves its space ---------- */
+
+.video-js.vjs-fanous .vjs-volume-panel,
+.video-js.vjs-fanous .vjs-volume-panel.vjs-volume-panel-horizontal,
+.video-js.vjs-fanous .vjs-volume-panel.vjs-volume-panel-horizontal.vjs-hover,
+.video-js.vjs-fanous .vjs-volume-panel.vjs-volume-panel-horizontal:active,
+.video-js.vjs-fanous .vjs-volume-panel.vjs-volume-panel-horizontal.vjs-slider-active {
+  display: flex;
+  align-items: center;
+  flex: none;
+  width: auto;
+  height: var(--vjs-fanous-row);
+  margin: 0;
+  transition: none;
+}
+
+.video-js.vjs-fanous .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal,
+.video-js.vjs-fanous .vjs-volume-panel.vjs-hover .vjs-volume-control.vjs-volume-horizontal,
+.video-js.vjs-fanous .vjs-volume-panel:active .vjs-volume-control.vjs-volume-horizontal,
+.video-js.vjs-fanous .vjs-volume-panel:focus .vjs-volume-control.vjs-volume-horizontal,
+.video-js.vjs-fanous .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal:hover,
+.video-js.vjs-fanous .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal:active,
+.video-js.vjs-fanous .vjs-volume-panel.vjs-slider-active .vjs-volume-control.vjs-volume-horizontal {
+  position: relative;
+  display: flex;
+  align-items: center;
+  visibility: visible;
+  opacity: 1;
+  width: 84px;
+  height: var(--vjs-fanous-hit);
+  margin: 0;
+  padding: 0 6px;
+  transition: none;
+  left: auto;
+}
+
+.video-js.vjs-fanous .vjs-volume-bar.vjs-slider-horizontal {
+  position: relative;
+  width: 72px;
+  height: 4px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--fanous-player-track);
+  box-shadow: var(--fanous-player-track-edge);
+  outline: 0;
+  transition: height 120ms ease;
+}
+
+@media (hover: hover) {
+  .video-js.vjs-fanous .vjs-volume-control:hover .vjs-volume-bar.vjs-slider-horizontal {
+    height: 6px;
+  }
+}
+
+.video-js.vjs-fanous .vjs-volume-bar .vjs-volume-level {
+  position: absolute;
+  top: 0;
+  bottom: auto;
+  left: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--fanous-player-accent);
+  box-shadow: none;
+}
+
+.video-js.vjs-fanous .vjs-volume-bar .vjs-volume-level::before {
+  content: none;
+}
+
+.video-js.vjs-fanous .vjs-volume-bar .vjs-volume-level::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--fanous-player-handle);
+  box-shadow: var(--fanous-player-handle-edge);
+  transform: translateY(-50%);
+}
+
+.video-js.vjs-fanous .vjs-volume-bar:focus-visible {
+  box-shadow: var(--fanous-player-track-edge), 0 0 0 2px var(--fanous-player-accent);
+}
+
+.video-js.vjs-fanous .vjs-volume-bar .vjs-volume-tooltip,
+.video-js.vjs-fanous .vjs-volume-control .vjs-mouse-display {
+  display: none;
+}
+
+/* ---------- Time and live ---------- */
+
+.video-js.vjs-fanous .vjs-time-control.vjs-current-time,
+.video-js.vjs-fanous .vjs-time-control.vjs-time-divider,
+.video-js.vjs-fanous .vjs-time-control.vjs-duration {
+  display: flex;
+  align-items: center;
+  flex: none;
+  width: auto;
+  min-width: 0;
+  height: var(--vjs-fanous-row);
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  /* An even line box centres on a whole pixel in the even-height row (13px landed on a half pixel
+     at device scale 1, softening the digits and splitting their baselines by a pixel) */
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fanous-player-icon);
+}
+
+.video-js.vjs-fanous .vjs-time-control.vjs-current-time {
+  padding-inline-start: 8px;
+}
+
+.video-js.vjs-fanous .vjs-time-control.vjs-time-divider {
+  padding: 0 4px;
+  color: var(--fanous-player-dim);
+}
+
+.video-js.vjs-fanous .vjs-time-control.vjs-time-divider > div {
+  display: inline;
+  /* The slash runs below the baseline, so its ink sits about 1px under the digits' centre line */
+  position: relative;
+  top: -1px;
+}
+
+.video-js.vjs-fanous .vjs-time-control.vjs-duration {
+  padding-inline-end: 8px;
+  color: var(--fanous-player-dim);
+}
+
+.video-js.vjs-fanous.vjs-live .vjs-time-control,
+.video-js.vjs-fanous.vjs-liveui .vjs-time-control,
+.video-js.vjs-fanous .vjs-seek-to-live-control,
+.video-js.vjs-fanous .vjs-remaining-time {
+  display: none !important;
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: 28px;
+  margin: 0 6px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--fanous-player-live);
+  color: var(--fanous-player-live-text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-fanous-live.vjs-hidden {
+  display: none;
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-live::before {
+  display: none;
+}
+
+.video-js.vjs-fanous .vjs-fanous-live .vjs-icon-placeholder {
+  width: 8px;
+  height: 8px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-live-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: vjs-fanous-pulse 1.6s ease-in-out infinite;
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-live.vjs-fanous-behind {
+  background: var(--fanous-player-hover);
+  color: var(--fanous-player-icon);
+}
+
+.video-js.vjs-fanous .vjs-fanous-live.vjs-fanous-behind .vjs-fanous-live-dot {
+  animation: none;
+  opacity: 0.7;
+}
+
+.video-js.vjs-fanous .vjs-fanous-live:focus-visible {
+  box-shadow: 0 0 0 2px var(--fanous-player-accent);
+}
+
+
+/* ---------- Big play and loading ---------- */
+
+.video-js.vjs-fanous .vjs-big-play-button,
+.video-js.vjs-fanous.vjs-big-play-centered .vjs-big-play-button {
+  display: grid;
+  place-items: center;
+  top: 50%;
+  left: 50%;
+  width: 76px;
+  height: 76px;
+  margin: -38px 0 0 -38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fanous-player-big);
+  color: var(--fanous-player-big-icon);
+  box-shadow: var(--fanous-player-big-edge);
+  -webkit-backdrop-filter: var(--fanous-player-blur);
+  backdrop-filter: var(--fanous-player-blur);
+  font-size: 0;
+  line-height: 0;
+  outline: 0;
+  z-index: 2;
+  transition: transform 140ms ease;
+}
+
+.video-js.vjs-fanous.vjs-has-started .vjs-big-play-button,
+.video-js.vjs-fanous.vjs-error .vjs-big-play-button,
+.video-js.vjs-fanous.vjs-controls-disabled .vjs-big-play-button {
+  display: none;
+}
+
+.video-js.vjs-fanous .vjs-big-play-button .vjs-icon-placeholder {
+  width: 32px;
+  height: 32px;
+}
+
+.video-js.vjs-fanous .vjs-big-play-button .vjs-svg-icon-fanous {
+  width: 32px;
+  height: 32px;
+  fill: currentColor;
+  stroke-width: 1.4;
+}
+
+@media (hover: hover) {
+  .video-js.vjs-fanous:hover .vjs-big-play-button,
+  .video-js.vjs-fanous .vjs-big-play-button:hover {
+    border: 0;
+    background: var(--fanous-player-big);
+    box-shadow: var(--fanous-player-big-edge);
+    transform: scale(1.05);
+    transition: transform 140ms ease;
+  }
+}
+
+.video-js.vjs-fanous .vjs-big-play-button:active {
+  transform: scale(0.96);
+}
+
+.video-js.vjs-fanous .vjs-big-play-button:focus-visible {
+  background: var(--fanous-player-big);
+  box-shadow: var(--fanous-player-big-edge), 0 0 0 6px transparent;
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 6px;
+}
+
+.video-js.vjs-fanous .vjs-loading-spinner {
+  width: 56px;
+  height: 56px;
+  margin: 0;
+  border: 4px solid var(--fanous-player-track);
+  border-radius: 50%;
+  opacity: 1;
+  background-clip: padding-box;
+}
+
+.video-js.vjs-fanous .vjs-loading-spinner::before {
+  inset: -4px;
+  width: auto;
+  height: auto;
+  border: 4px solid transparent;
+  border-top-color: var(--fanous-player-spin);
+  animation: vjs-spinner-spin 1.1s linear infinite;
+}
+
+.video-js.vjs-fanous .vjs-loading-spinner::after {
+  display: none;
+}
+
+/* ---------- Captions ---------- */
+
+.video-js.vjs-fanous .vjs-text-track-display {
+  bottom: 88px;
+  z-index: 2;
+  transition: bottom 200ms ease;
+}
+
+.video-js.vjs-fanous.vjs-user-inactive.vjs-playing:not(.vjs-menu-open) .vjs-text-track-display {
+  bottom: 16px;
+}
+
+/* The theme's caption style, until the viewer sets their own in Caption style */
+.video-js.vjs-fanous:not(.vjs-fanous-custom-captions) .vjs-text-track-cue > div {
+  background-color: var(--fanous-player-cue) !important;
+  color: var(--fanous-player-icon) !important;
+  border-radius: 4px;
+}
+
+/* Caption style, opened in the player layer (lib/video/components.ts layerCaptionSettings) */
+.vjs-fanous-layer .vjs-modal-dialog.vjs-text-track-settings.vjs-fanous-caption-dialog {
+  position: relative;
+  inset: auto;
+  width: min(640px, 100%);
+  height: auto;
+  max-height: min(560px, 100%);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: 16px;
+  background: var(--fanous-player-menu);
+  box-shadow: var(--fanous-player-menu-edge);
+  color: var(--fanous-player-icon);
+  font-size: 13px;
+}
+
+.vjs-fanous-layer .vjs-fanous-caption-dialog .vjs-modal-dialog-content {
+  position: relative;
+  padding: 20px 20px 4px;
+  font-size: 13px;
+}
+
+.vjs-fanous-layer .vjs-fanous-caption-dialog legend {
+  color: var(--fanous-player-icon);
+  font-size: 14px;
+}
+
+.vjs-fanous-layer .vjs-fanous-caption-dialog select {
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--fanous-player-pill-edge);
+  border-radius: 6px;
+  background: var(--fanous-player-pill);
+  color: var(--fanous-player-icon);
+  font: inherit;
+}
+
+.vjs-fanous-layer .vjs-fanous-caption-dialog .vjs-track-settings-controls button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--fanous-player-pill-edge);
+  border-radius: 999px;
+  background: var(--fanous-player-hover);
+  background-image: none;
+  color: var(--fanous-player-icon);
+  font-weight: 600;
+}
+
+.vjs-fanous-layer .vjs-fanous-caption-dialog .vjs-track-settings-controls .vjs-done-button {
+  border-color: transparent;
+  background: var(--fanous-player-accent);
+  color: var(--fanous-player-tip-text);
+}
+
+.vjs-fanous-layer .vjs-fanous-caption-dialog .vjs-close-button {
+  position: absolute;
+  top: 8px;
+  inset-inline-end: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.vjs-fanous-layer .vjs-fanous-caption-dialog :focus-visible {
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Player layer ---------- */
+
+/*
+  Dialogs, menus and tooltips portalled out of the player to the body (or the fullscreen element),
+  so the page never draws over them (lib/video/player-layer.ts). Outside `.video-js` nothing resets
+  buttons or sets the player's type, so the layer does both.
+*/
+.vjs-fanous-layer {
+  z-index: var(--fanous-player-layer);
+  box-sizing: border-box;
+  color: var(--fanous-player-icon);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+}
+
+.vjs-fanous-layer *,
+.vjs-fanous-layer *::before,
+.vjs-fanous-layer *::after {
+  box-sizing: border-box;
+}
+
+.vjs-fanous-layer button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vjs-fanous-layer,
+  .vjs-fanous-layer *,
+  .vjs-fanous-layer *::before,
+  .vjs-fanous-layer *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* A player dialog: full-viewport scrim, the card centred on it */
+.vjs-fanous-layer.vjs-fanous-dialog-layer {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--fanous-player-scrim);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  overscroll-behavior: contain;
+}
+
+.vjs-fanous-layer .vjs-fanous-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: min(680px, 100%);
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--fanous-player-menu);
+  box-shadow: var(--fanous-player-menu-edge);
+  text-align: start;
+}
+
+.vjs-fanous-layer .vjs-fanous-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 12px 12px;
+  padding-inline-start: 20px;
+  box-shadow: inset 0 -1px 0 var(--fanous-player-menu-hover);
+}
+
+.vjs-fanous-layer .vjs-fanous-dialog-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.vjs-fanous-layer .vjs-fanous-dialog-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.vjs-fanous-layer .vjs-fanous-dialog-description {
+  margin: 2px 0 0;
+  color: var(--fanous-player-dim);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.vjs-fanous-layer .vjs-fanous-dialog-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-top: -6px;
+  border-radius: 50%;
+}
+
+.vjs-fanous-layer .vjs-fanous-dialog-close svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+@media (hover: hover) {
+  .vjs-fanous-layer .vjs-fanous-dialog-close:hover {
+    background: var(--fanous-player-menu-hover);
+  }
+}
+
+.vjs-fanous-layer .vjs-fanous-dialog-close:focus-visible {
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 0;
+}
+
+/* Two columns of groups; a group never splits across them */
+.vjs-fanous-layer .vjs-fanous-shortcuts-body {
+  overflow: auto;
+  padding: 4px 20px 16px;
+  overscroll-behavior: contain;
+}
+
+/* The columns sit inside the scroller at their natural height: a multi-column box that is itself
+   height-limited spills extra columns sideways in Firefox instead of scrolling */
+.vjs-fanous-layer .vjs-fanous-shortcuts-columns {
+  column-count: 2;
+  column-gap: 28px;
+}
+
+@media (max-width: 679px) {
+  .vjs-fanous-layer .vjs-fanous-shortcuts-columns {
+    column-count: 1;
+  }
+}
+
+.vjs-fanous-layer .vjs-fanous-shortcuts-group {
+  break-inside: avoid;
+  padding-top: 12px;
+}
+
+.vjs-fanous-layer .vjs-fanous-shortcuts-heading {
+  margin: 0 0 4px;
+  color: var(--fanous-player-dim);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+
+.vjs-fanous-layer .vjs-fanous-shortcuts-list {
+  margin: 0;
+}
+
+/* One compact line: label at the start, key chips at the end */
+.vjs-fanous-layer .vjs-fanous-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  padding-block: 4px;
+}
+
+.vjs-fanous-layer .vjs-fanous-shortcut + .vjs-fanous-shortcut {
+  box-shadow: inset 0 1px 0 var(--fanous-player-menu-hover);
+}
+
+.vjs-fanous-layer .vjs-fanous-shortcut-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.vjs-fanous-layer .vjs-fanous-shortcut-keys {
+  display: flex;
+  flex: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.vjs-fanous-layer .vjs-fanous-shortcut-alt {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.vjs-fanous-layer .vjs-fanous-shortcut-plus {
+  color: var(--fanous-player-dim);
+  font-size: 11px;
+}
+
+.vjs-fanous-layer .vjs-fanous-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--fanous-player-pill-edge);
+  border-radius: 6px;
+  background: var(--fanous-player-hover);
+  color: var(--fanous-player-icon);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* The progress bar's hover tooltip: time, and the chapter above it when there is one */
+.vjs-fanous-layer.vjs-fanous-tip {
+  position: fixed;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--fanous-player-tip-bg);
+  color: var(--fanous-player-tip-text);
+  box-shadow: var(--fanous-player-tip-edge);
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.vjs-fanous-layer .vjs-fanous-tip-chapter {
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.vjs-fanous-layer .vjs-fanous-tip-time {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Settings panel ---------- */
+
+/* Placed over the frame in viewport coordinates by SettingsMenu (right, bottom, width, height) */
+/*
+  Scrolling layers (the menu in a short frame, the shortcuts list, the caption style dialog) get a
+  thin scrollbar in the theme's track colours instead of the browser's grey one
+*/
+.vjs-fanous-layer.vjs-fanous-menu,
+.vjs-fanous-shortcuts-body,
+.vjs-fanous-layer .vjs-fanous-caption-dialog {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fanous-player-buffered) transparent;
+}
+
+.vjs-fanous-layer.vjs-fanous-menu {
+  position: fixed;
+  box-sizing: border-box;
+  padding: 6px;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  border-radius: 12px;
+  background: var(--fanous-player-menu);
+  box-shadow: var(--fanous-player-menu-edge);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(16px) saturate(1.2);
+  color: var(--fanous-player-icon);
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: start;
+  transition: height 160ms ease;
+  cursor: default;
+}
+
+.vjs-fanous-menu .vjs-fanous-menu-view {
+  animation: vjs-fanous-in-end 180ms ease both;
+}
+
+.vjs-fanous-menu .vjs-fanous-menu-view[data-direction="back"] {
+  animation-name: vjs-fanous-in-start;
+}
+
+.vjs-fanous-layer.vjs-fanous-menu[dir="rtl"] .vjs-fanous-menu-view {
+  animation-name: vjs-fanous-in-start;
+}
+
+.vjs-fanous-layer.vjs-fanous-menu[dir="rtl"] .vjs-fanous-menu-view[data-direction="back"] {
+  animation-name: vjs-fanous-in-end;
+}
+
+/*
+  Rows (owner review of the prototype menu): one fixed height, one line, everything centred on
+  the row's middle. Every row is [icon] label ... muted value >, and the leading slot is the same
+  20px column for row icons, check marks and the back chevron, so labels line up down the panel.
+  The flex row follows the panel's dir, so Arabic mirrors it with no extra rules.
+*/
+.vjs-fanous-menu .vjs-fanous-mi {
+  --vjs-fanous-mi-h: 44px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--vjs-fanous-mi-h);
+  min-height: var(--vjs-fanous-mi-h);
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: start;
+  text-shadow: none;
+  white-space: nowrap;
+  outline: 0;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .vjs-fanous-menu .vjs-fanous-mi:hover {
+    background: var(--fanous-player-menu-hover);
+  }
+}
+
+.vjs-fanous-menu .vjs-fanous-mi:active {
+  background: var(--fanous-player-press);
+}
+
+.vjs-fanous-menu .vjs-fanous-mi:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--fanous-player-accent);
+}
+
+.vjs-fanous-menu .vjs-fanous-mi-icon,
+.vjs-fanous-menu .vjs-fanous-mi-end {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.vjs-fanous-menu .vjs-fanous-mi-end {
+  width: 16px;
+  color: var(--fanous-player-dim);
+}
+
+.vjs-fanous-menu .vjs-fanous-mi-icon svg,
+.vjs-fanous-menu .vjs-fanous-mi-end svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+
+.vjs-fanous-menu .vjs-fanous-mi-end svg {
+  width: 16px;
+  height: 16px;
+}
+
+.vjs-fanous-menu .vjs-fanous-mi-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Kept apart from the label by the row gap plus this margin: never "QualityAuto" */
+.vjs-fanous-menu .vjs-fanous-mi-value {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  margin-inline-start: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fanous-player-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.vjs-fanous-menu .vjs-fanous-mi-back {
+  margin-bottom: 4px;
+  border-radius: 8px 8px 0 0;
+  box-shadow: inset 0 -1px 0 var(--fanous-player-track);
+  font-weight: 600;
+}
+
+.vjs-fanous-menu .vjs-fanous-mi-check {
+  color: var(--fanous-player-accent);
+}
+
+.vjs-fanous-menu .vjs-fanous-mi-option[aria-checked="true"] {
+  background: var(--fanous-player-menu-selected);
+  font-weight: 600;
+}
+
+/* ---------- Overlays: start over, end screen, mini player ---------- */
+
+.video-js.vjs-fanous .vjs-start-over {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  inset-inline-start: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--fanous-player-pill-edge);
+  border-radius: 999px;
+  background: var(--fanous-player-pill);
+  color: var(--fanous-player-icon);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.video-js.vjs-fanous .vjs-start-over svg {
+  width: 15px;
+  height: 15px;
+  color: var(--fanous-player-accent);
+}
+
+@media (hover: hover) {
+  .video-js.vjs-fanous .vjs-start-over:hover {
+    border-color: var(--fanous-player-accent);
+  }
+}
+
+.video-js.vjs-fanous .vjs-start-over:focus-visible {
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 2px;
+}
+
+/*
+  End screen (theme-demo design agent's spec, from the owner's review). One scrim, tinted by the
+  theme and blurred, so nothing in the last frame competes with the card. A centred block at most
+  640px wide: a muted "Up next" over the text column, then the thumbnail (42%) beside a text column
+  of the same height, title on the thumbnail's top and the buttons on its bottom. Under 660px of
+  width the buttons take a full-width row below; under 480px, when the frame is also tall enough
+  (portrait, fullscreen on a phone), the thumbnail stacks above the text. Every selector is scoped under
+  `.video-js.vjs-fanous`: Video.js's `.video-js button` reset outranks single-class rules.
+*/
+.video-js.vjs-fanous .vjs-fanous-end {
+  container: fanous-end / size;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: clamp(12px, 3cqi, 32px);
+  overflow: auto;
+  background: var(--fanous-player-scrim);
+  -webkit-backdrop-filter: blur(16px) saturate(0.9);
+  backdrop-filter: blur(16px) saturate(0.9);
+  color: var(--fanous-player-icon);
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-card {
+  --vjs-fanous-next-gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+  grid-template-rows: auto auto;
+  grid-template-areas: ". kicker" "thumb text";
+  column-gap: var(--vjs-fanous-next-gap);
+  width: 100%;
+  max-width: 640px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-kicker {
+  grid-area: kicker;
+  margin: 0 0 8px;
+  color: var(--fanous-player-dim);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-thumb {
+  grid-area: thumb;
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-self: start;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--fanous-player-track) center / cover no-repeat;
+  box-shadow: 0 0 0 1px var(--fanous-player-pill-edge);
+  color: var(--fanous-player-icon);
+  cursor: pointer;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-thumb:focus-visible {
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 3px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-thumb-play {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--fanous-player-scrim);
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-thumb-play svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  /* The same optical nudge as every play triangle */
+  transform: translateX(var(--vjs-fanous-play-nudge));
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-text {
+  grid-area: text;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-channel {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--fanous-player-dim);
+  font-size: 13px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Inline [icon] label on one line: one height, one radius, symmetric padding */
+.video-js.vjs-fanous .vjs-fanous-btn {
+  position: relative;
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 36px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fanous-player-icon);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.video-js.vjs-fanous .vjs-fanous-btn svg {
+  display: block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.video-js.vjs-fanous [dir="rtl"] .vjs-fanous-icon-dir {
+  transform: scaleX(-1);
+}
+
+.video-js.vjs-fanous .vjs-fanous-btn-primary {
+  background: var(--fanous-player-accent);
+  color: var(--fanous-player-tip-text);
+}
+
+.video-js.vjs-fanous .vjs-fanous-btn-secondary {
+  border-color: var(--fanous-player-pill-edge);
+  background: var(--fanous-player-hover);
+}
+
+.video-js.vjs-fanous .vjs-fanous-btn-ghost {
+  color: var(--fanous-player-dim);
+}
+
+@media (hover: hover) {
+  .video-js.vjs-fanous .vjs-fanous-btn-primary:hover {
+    box-shadow: var(--fanous-player-glow);
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-btn-secondary:hover,
+  .video-js.vjs-fanous .vjs-fanous-btn-ghost:hover {
+    background: var(--fanous-player-press);
+    color: var(--fanous-player-icon);
+  }
+}
+
+.video-js.vjs-fanous .vjs-fanous-btn:focus-visible {
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 2px;
+}
+
+/* Countdown ring with the seconds left, in Play now's icon slot */
+.video-js.vjs-fanous .vjs-fanous-next-ring {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-btn .vjs-fanous-next-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.video-js.vjs-fanous [dir="rtl"] .vjs-fanous-btn .vjs-fanous-next-ring svg {
+  transform: rotate(-90deg) scaleY(-1);
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-ring-track {
+  opacity: 0.3;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-ring-fill {
+  stroke-linecap: round;
+  transition: stroke-dashoffset 100ms linear;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-count {
+  position: relative;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  /* Trim the line box to the cap height so centring the box centres the digit; the rounded
+     figures overshoot the baseline more than the cap line, so their ink sits a little low in the
+     trimmed box (0.6 to 1.1px across browsers): lift them half a pixel */
+  text-box: trim-both cap alphabetic;
+  top: -0.5px;
+}
+
+/* Without text-box the untrimmed line box leaves the figures 1.1px low (measured in Chrome) */
+@supports not (text-box: trim-both cap alphabetic) {
+  .video-js.vjs-fanous .vjs-fanous-next-count {
+    top: -1px;
+  }
+}
+
+/* Reduced motion: the seconds alone, no moving ring */
+@media (prefers-reduced-motion: reduce) {
+  .video-js.vjs-fanous .vjs-fanous-next-ring-fill {
+    display: none;
+  }
+}
+
+/*
+  Narrow: buttons in a full-width row below the thumbnail and text. The three labelled buttons
+  need about 340px, which the text column only has once the card is near its 640px maximum.
+*/
+@container fanous-end (max-width: 659px) {
+  .video-js.vjs-fanous .vjs-fanous-next-card {
+    --vjs-fanous-next-gap: 12px;
+    grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas: ". kicker" "thumb text" "actions actions";
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-next-text {
+    display: contents;
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-next-meta {
+    grid-area: text;
+    min-width: 0;
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-next-actions {
+    grid-area: actions;
+    margin-top: 12px;
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-next-actions .vjs-fanous-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-next-title {
+    font-size: 15px;
+    line-height: 20px;
+  }
+}
+
+/* Narrow and tall: the thumbnail stacks above the text */
+@container fanous-end (max-width: 479px) and (min-height: 400px) {
+  .video-js.vjs-fanous .vjs-fanous-next-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "kicker" "thumb" "text" "actions";
+    grid-template-rows: auto auto auto auto;
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-next-meta {
+    margin-top: 12px;
+  }
+}
+
+/* Phones: Cancel keeps its accessible name; only the visible label goes */
+@container fanous-end (max-width: 379px) {
+  .video-js.vjs-fanous .vjs-fanous-next-actions .vjs-fanous-btn-ghost {
+    flex: none;
+    width: 36px;
+    padding: 0;
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-btn-ghost .vjs-fanous-btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.custom-video-player[data-mini] .video-js.vjs-fanous {
+  position: fixed !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  inset-block-end: 16px !important;
+  inset-inline-end: 16px !important;
+  width: min(360px, 70vw) !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9;
+  z-index: 60;
+  box-shadow: var(--fanous-player-menu-edge);
+}
+
+.video-js.vjs-fanous .vjs-fanous-mini-actions {
+  position: absolute;
+  z-index: 6;
+  top: 6px;
+  inset-inline-end: 6px;
+  display: flex;
+  gap: 4px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-mini-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fanous-player-scrim);
+  color: var(--fanous-player-icon);
+  cursor: pointer;
+}
+
+.video-js.vjs-fanous .vjs-fanous-mini-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-mini-btn:focus-visible {
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 1px;
+}
+
+/* Current-chapter toast (VideoPagePlayer/CurrentChapter.tsx): top end of the frame, clear of the
+   bar, the settings panel and the start-over pill */
+.vjs-fanous-chapter-toast {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  inset-inline-end: 12px;
+  max-width: min(320px, calc(100% - 24px));
+  pointer-events: none;
+}
+
+.vjs-fanous-chapter-toast-body {
+  padding: 8px 14px;
+  border: 1px solid var(--fanous-player-pill-edge);
+  border-radius: 12px;
+  background: var(--fanous-player-menu);
+  box-shadow: var(--fanous-player-menu-edge);
+  color: var(--fanous-player-icon);
+}
+
+.vjs-fanous-chapter-toast-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fanous-player-dim);
+  font-size: 12px;
+}
+
+.vjs-fanous-chapter-toast-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fanous-player-accent);
+}
+
+.vjs-fanous-chapter-toast-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- Error panel ---------- */
+
+.vjs-fanous-error {
+  min-height: 100%;
+  border-radius: var(--fanous-radius-lg, 12px);
+  background: var(--fanous-player-err);
+  color: var(--fanous-player-icon);
+  text-align: center;
+}
+
+.vjs-fanous-error-icon {
+  color: var(--fanous-player-accent);
+}
+
+.vjs-fanous-error-text {
+  color: var(--fanous-player-dim);
+}
+
+/* ---------- Surfaces ---------- */
+
+[data-theatre] .custom-video-player .video-js.vjs-fanous,
+.video-js.vjs-fanous.vjs-fullscreen {
+  border-radius: 0;
+}
+
+.video-js.vjs-fanous.vjs-fullscreen .vjs-control-bar {
+  padding-bottom: max(env(safe-area-inset-bottom), 2px);
+  padding-left: max(env(safe-area-inset-left), 12px);
+  padding-right: max(env(safe-area-inset-right), 12px);
+}
+
+.custom-video-player[data-portrait] {
+  width: min(100%, calc(80vh * 9 / 16));
+  margin-inline: auto;
+  position: relative;
+}
+
+.custom-video-player[data-portrait] .video-js.vjs-fanous .vjs-fanous-theatre {
+  display: none;
+}
+
+/* Narrow players: phones have hardware volume; picture in picture and theatre make no sense */
+@container fanous-player (max-width: 479px) {
+  .video-js.vjs-fanous .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal {
+    display: none;
+  }
+
+  .video-js.vjs-fanous .vjs-control-bar .vjs-picture-in-picture-control,
+  .video-js.vjs-fanous .vjs-control-bar .vjs-fanous-theatre {
+    display: none;
+  }
+
+  .video-js.vjs-fanous .vjs-big-play-button,
+  .video-js.vjs-fanous.vjs-big-play-centered .vjs-big-play-button {
+    width: 60px;
+    height: 60px;
+    margin: -30px 0 0 -30px;
+  }
+}
+
+@container fanous-player (max-width: 359px) {
+  .video-js.vjs-fanous .vjs-control-bar .vjs-fanous-next {
+    display: none;
+  }
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-hidden,
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-hidden {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .video-js.vjs-fanous .vjs-progress-control {
+    height: 44px;
+    margin-block: -12px;
+  }
+}
+
+/* Viewers who ask for more contrast get an opaque bar and menu and outlined controls */
+@media (prefers-contrast: more) {
+  .video-js.vjs-fanous .vjs-control-bar,
+  .vjs-fanous-layer.vjs-fanous-menu {
+    background: var(--fanous-player-err);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 0 0 0 2px var(--fanous-player-icon);
+  }
+
+  .video-js.vjs-fanous .vjs-progress-control .vjs-progress-holder,
+  .video-js.vjs-fanous .vjs-volume-bar.vjs-slider-horizontal {
+    box-shadow: 0 0 0 1px var(--fanous-player-icon);
+  }
+}
+
+/* Windows high contrast: system colours, and the focus ring must survive */
+@media (forced-colors: active) {
+  .video-js.vjs-fanous .vjs-control-bar,
+  .vjs-fanous-layer.vjs-fanous-menu {
+    border: 1px solid CanvasText;
+  }
+
+  .video-js.vjs-fanous .vjs-progress-holder .vjs-play-progress,
+  .video-js.vjs-fanous .vjs-volume-bar .vjs-volume-level,
+  .vjs-fanous-menu .vjs-fanous-mi-option[aria-checked="true"] {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button:focus-visible,
+  .vjs-fanous-menu .vjs-fanous-mi:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
+
+@keyframes vjs-fanous-in-end {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes vjs-fanous-in-start {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes vjs-fanous-pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-js.vjs-fanous *,
+  .video-js.vjs-fanous *::before,
+  .video-js.vjs-fanous *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .video-js.vjs-fanous .vjs-loading-spinner::before {
+    animation: vjs-spinner-spin 1.1s linear infinite !important;
+  }
+}

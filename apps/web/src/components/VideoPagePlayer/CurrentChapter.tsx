@@ -75,19 +75,8 @@ export function CurrentChapter({
 
   return (
     <div
-      className={`
-        absolute
-        bottom-16
-        ${isRTL ? 'right-4' : 'left-4'}
-        z-30
-        max-w-[calc(100%-2rem)]
-        md:max-w-md
-        pointer-events-none
-        transition-all
-        duration-300
-        ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}
-        ${className}
-      `}
+      // Top end of the frame, clear of the control bar and the start-over pill (player-skin.css)
+      className={`vjs-fanous-chapter-toast transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'} ${className}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       role="status"
@@ -95,49 +84,17 @@ export function CurrentChapter({
       aria-atomic="true"
     >
       <div
-        className="
-          bg-black/90
-          backdrop-blur-sm
-          text-white
-          px-4
-          py-3
-          md:px-5
-          md:py-4
-          rounded-lg
-          shadow-2xl
-          border
-          border-white/10
-        "
+        className="vjs-fanous-chapter-toast-body"
         dir={isRTL ? 'rtl' : 'ltr'}
       >
         {/* Label */}
-        <div className="
-          text-xs
-          md:text-sm
-          text-gray-300
-          mb-1
-          flex
-          items-center
-          gap-2
-        ">
-          <span className="
-            w-2
-            h-2
-            bg-primary
-            rounded-full
-            animate-pulse
-          " />
+        <div className="vjs-fanous-chapter-toast-label">
+          <span className="vjs-fanous-chapter-toast-dot" aria-hidden="true" />
           {t.video.currentChapter}
         </div>
 
         {/* Chapter Title */}
-        <div className="
-          text-sm
-          md:text-base
-          font-semibold
-          line-clamp-2
-          leading-snug
-        ">
+        <div className="vjs-fanous-chapter-toast-title">
           {getChapterTitle(chapter, lang)}
         </div>
       </div>

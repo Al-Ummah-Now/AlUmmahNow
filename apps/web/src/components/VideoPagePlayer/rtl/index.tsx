@@ -52,7 +52,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
 
   return (
     <>
-      <div className="flex w-full mt-0 relative dark:bg-gray-900" dir="rtl">
+      <div className="flex w-full mt-0 relative" dir="rtl">
         <div className="w-full rounded-lg overflow-visible 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
           {/* New Custom Video.js Player with Arabic/RTL support */}
           <VideoPlayerWithChapters

@@ -98,6 +98,9 @@ jest.mock('@/lib/video/fallback-strategy', () => ({
 }));
 
 // Mock ErrorDisplay
+// The settings panel has its own tests and needs a full Video.js player
+jest.mock('../SettingsMenu', () => ({ SettingsMenu: () => null }));
+
 jest.mock('../ErrorDisplay', () => ({
   ErrorDisplay: ({ error }: { error: VideoError }) => (
     <div data-testid="error-display">{error.message}</div>
@@ -571,6 +574,26 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
       const video = document.querySelector('video');
       expect(video).toHaveAttribute('aria-label', 'My Custom Label');
+    });
+  });
+
+  describe('Subtitle tracks', () => {
+    it('owns the tracks it adds, so setting the source again does not drop them', async () => {
+      const addRemoteTextTrack = jest.fn(() => ({ track: {} }));
+      const removeRemoteTextTrack = jest.fn();
+      mockCreateVideoPlayer.mockReturnValue({ ...mockPlayer, addRemoteTextTrack, removeRemoteTextTrack });
+      const tracks = [
+        { kind: 'subtitles' as const, src: '/en.vtt', srclang: 'en', label: 'English', default: false },
+        { kind: 'subtitles' as const, src: '/ar.vtt', srclang: 'ar', label: 'العربية', default: false },
+      ];
+      const { rerender } = render(<CustomVideoPlayer {...defaultProps} textTracks={tracks} />);
+      await waitFor(() => expect(addRemoteTextTrack).toHaveBeenCalledTimes(2));
+      // manualCleanup: Video.js must not remove them on its own when the source is reset
+      for (const call of addRemoteTextTrack.mock.calls as unknown as [unknown, boolean][]) expect(call[1]).toBe(true);
+      // A new list replaces the old tracks rather than adding to them
+      rerender(<CustomVideoPlayer {...defaultProps} textTracks={tracks.slice(0, 1)} />);
+      await waitFor(() => expect(removeRemoteTextTrack).toHaveBeenCalledTimes(2));
+      expect(addRemoteTextTrack).toHaveBeenCalledTimes(3);
     });
   });
 });

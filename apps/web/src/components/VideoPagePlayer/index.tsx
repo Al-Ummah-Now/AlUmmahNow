@@ -56,7 +56,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
 
   return (
     <>
-      <div className="flex w-full mt-0 relative dark:bg-gray-900">
+      <div className="flex w-full mt-0 relative">
         <div className="w-full rounded-lg overflow-visible 2xl:max-w-[1920px] 2xl:max-h-[1080px]">
           {/* Video.js player with chapters and subtitles */}
           <VideoPlayerWithChapters
