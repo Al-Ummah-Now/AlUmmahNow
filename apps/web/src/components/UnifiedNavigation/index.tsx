@@ -228,7 +228,7 @@ export function UnifiedNavigation() {
                 <form action={login.bind(null, lang)}>
                   <button
                     type="submit"
-                    className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-brand to-brand hover:from-brand hover:to-brand text-gray-900 font-semibold transition-all shadow-md hover:shadow-lg"
+                    className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-brand hover:bg-brand-hover text-on-brand font-semibold transition-all shadow-md hover:shadow-lg"
                     role="menuitem"
                   >
                     <User className="h-5 w-5" />
