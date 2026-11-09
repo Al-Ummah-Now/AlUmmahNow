@@ -9,8 +9,8 @@ import { ANONYMOUS_STATE } from './test-utils/auth-state';
 const EMBED_VIDEO = process.env.E2E_PLAYBACK_VIDEO_ID || '443418c1-dc70-43d9-944d-5388ab7dc4c3';
 const PAGES = ['/en', '/ar', '/en/explore', '/en/search?q=mosque', '/en/settings', '/en/community-guidelines', `/embed/v/${EMBED_VIDEO}`, `/embed/comments/${EMBED_VIDEO}`];
 
-/** Network failures are reported by the resource and are not script faults. */
-const NETWORK_NOISE = /Failed to load resource|net::ERR_/;
+/** Connection failures say nothing about the page; a 4xx or 5xx on a normal page does. */
+const NETWORK_NOISE = /net::ERR_/;
 
 test.describe('Console stays clean', () => {
   test.use({ storageState: ANONYMOUS_STATE });
