@@ -6,9 +6,11 @@ import { VideoObject, getLocalizedValue } from "@al-ummah/shared-types";
 import { removeUnwantedChars } from "@/lib/utility";
 import { useLanguage } from "@/hooks/useLanguage";
 import { VideoCardMenu } from "@/components/library/VideoCardMenu";
+import { formatViews } from '@/lib/format/videoMeta';
+import { RelativeDate } from '@/components/RelativeDate';
 
 const VideoCard: React.FC<VideoObject> = (video) => {
-    const { t, lang } = useLanguage();
+    const { lang } = useLanguage();
     const locale = lang;
 
     const title = getLocalizedValue(video.titleLocalized, video.title, locale);
@@ -33,7 +35,7 @@ const VideoCard: React.FC<VideoObject> = (video) => {
                     </h3>
                     <p className="text-sm truncate">{video.channelName || video.channel}</p>
                     <p className="text-sm">
-                        {video.views} {t.video.videoViews.toLowerCase()} • {new Date(video.dateCreated).toLocaleDateString()}
+                        {formatViews(video.views, lang)} • <RelativeDate value={video.dateCreated} lang={lang} />
                     </p>
                 </div>
             </Link>

@@ -5,9 +5,11 @@ import { VideoInfo } from "@/interfaces";
 import Link from "next/link";
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
 import { useLanguage } from "@/hooks/useLanguage";
+import { formatViews } from '@/lib/format/videoMeta';
+import { RelativeDate } from '@/components/RelativeDate';
 
 const RelatedVideo: React.FC<VideoInfo> = (info) => {
-  const { t } = useLanguage();
+  const { lang } = useLanguage();
 
   return (
     <Link
@@ -34,7 +36,7 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
         </h3>
         <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{info.channelName || info.channel}</p>
         <p className="text-xs text-gray-600 dark:text-gray-400">
-          {info.views} {t.video.videoViews.toLowerCase()} • {info?.dateModified?.toLocaleDateString()}
+          {formatViews(info.views, lang)} • <RelativeDate value={info?.dateModified} lang={lang} />
         </p>
       </div>
     </Link>

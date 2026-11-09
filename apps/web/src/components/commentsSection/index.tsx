@@ -13,6 +13,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { User } from "@/interfaces";
+import { formatRelativeTime } from '@/lib/format/videoMeta';
 
 export interface CommentsSectionProps {
   videoId: string;
@@ -129,7 +130,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
     return {
       author: authorName,
       text: comment.text,
-      time: new Date(comment.dateCreated).toLocaleDateString(lang === 'ar' ? 'ar' : 'en'),
+      time: formatRelativeTime(comment.dateCreated, lang),
       avatar: authorAvatar,
       isEdited: comment.isEdited,
       isHeld: comment.isHeld,
