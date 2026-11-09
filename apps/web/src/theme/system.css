@@ -184,3 +184,18 @@ button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{
 [class*="bg-"]:has(.custom-video-player):not(.custom-video-player):not(body):not(html){background:transparent!important;box-shadow:none!important}
 .custom-video-player.aspect-video.aspect-video{overflow:hidden!important}
 .custom-video-player .vjs-poster,.custom-video-player .vjs-tech,.custom-video-player .vjs-poster img{border-radius:inherit}
+/* Cross-browser: Firefox and WebKit defaults, and pressed states that win over hover. */
+.pc button,.pc input{-webkit-appearance:none;appearance:none}.pc button{padding:0;font:inherit}.pc-mi{padding-inline:12px}
+.pc button::-moz-focus-inner{border:0;padding:0}.pc button:-moz-focusring{outline:0}
+.pc-hit{outline:0!important}
+.pc-vol input::-moz-range-track{height:4px;border:0;border-radius:3px;background:rgb(255 255 255/.3)}.pc-vol input::-moz-range-progress{height:4px;border-radius:3px;background:#fff}.pc-vol input::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:#fff}
+.pc-vol input{cursor:pointer}
+.nv-scroll{scrollbar-width:none}.nv-scroll::-webkit-scrollbar{display:none}
+.custom-video-player [data-vjs-player],.custom-video-player .video-js{clip-path:inset(0 round var(--r-lg));-webkit-mask-image:-webkit-radial-gradient(white,black);transform:translateZ(0)}
+html[data-theatre] .custom-video-player [data-vjs-player],html[data-theatre] .custom-video-player .video-js{clip-path:none;-webkit-mask-image:none}
+.custom-video-player[data-mini] [data-vjs-player]{clip-path:none}
+@media(hover:hover){.pc-mi:active{background:color-mix(in srgb,var(--pc-accent) 40%,transparent)}.pc-big:active{transform:scale(.95)}.pc-txt:active{background:color-mix(in srgb,var(--pc-accent) 40%,transparent)}.pe .b-secondary:active{background:rgb(255 255 255/.26)!important}.b-secondary:active{background:var(--m-active)!important}}
+[class*="bg-black/"]:not(button):not(.fixed){background:rgb(9 21 30/.94)!important;color:#fff!important}
+[data-testid=channel-header] button[class*="rounded-lg"][class*="font-semibold"]{background:var(--m-primary)!important;color:var(--fanous-c-button-primary-text)!important;border:1px solid var(--fanous-c-button-primary-border)!important;box-shadow:var(--m-primary-edge);border-radius:var(--r-pill)!important;min-height:40px}
+html:has(video) .ti-left,html:has(video) .ti-right{display:none}
+[data-testid=channel-header] button[aria-pressed=true][class*="font-semibold"]{background:var(--m-card) padding-box,var(--m-border) border-box!important;color:var(--fanous-c-button-secondary-text)!important;border:1px solid transparent!important;box-shadow:var(--m-card-edge)}

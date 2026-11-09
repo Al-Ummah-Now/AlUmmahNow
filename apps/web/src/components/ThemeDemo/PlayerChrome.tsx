@@ -53,6 +53,15 @@ export function PlayerChrome({ player, lang, onShortcuts }: { player: Player; la
   }, [p]);
   useEffect(() => { root.current?.closest('.custom-video-player')?.toggleAttribute('data-mini', mini); }, [mini]);
 
+  // A fractional height antialiases the bottom edge differently from the top, so keep the frame on whole pixels.
+  useEffect(() => {
+    const el = root.current?.closest('.custom-video-player') as HTMLElement | null;
+    if (!el || !('ResizeObserver' in window)) return;
+    const ro = new ResizeObserver(() => { el.style.setProperty('height', `${Math.round(el.getBoundingClientRect().width * 9 / 16)}px`, 'important'); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const levels = p.qualityLevels?.();
   const qualities = useMemo<Option[]>(() => [], []);
   qualities.length = 0;

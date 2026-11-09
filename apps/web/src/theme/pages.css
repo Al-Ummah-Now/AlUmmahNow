@@ -26,7 +26,7 @@ a[class*="bg-white"][class*="rounded"]{border:1px solid transparent;background:v
 [data-testid=consent-banner] .mt-4.flex{flex-direction:row;flex-wrap:wrap;justify-content:flex-end}[data-testid=consent-banner] button{min-height:44px}
 /* Channel sections */
 .space-y-8>section,section[data-section]{margin-block-start:var(--fanous-spacing-xxl)}
-section[data-section]>.flex.items-center.justify-between.mb-4{gap:var(--fanous-spacing-md);padding-block-end:10px;margin-block-end:var(--fanous-spacing-lg);background:linear-gradient(var(--to-end),var(--fanous-color-primary-edge),color-mix(in srgb,var(--fanous-color-divider) 70%,transparent) 22%,transparent) bottom/100% 1px no-repeat}
+section[data-section]>.flex.items-center.justify-between.mb-4{gap:var(--fanous-spacing-md);padding-block-end:10px;margin-block-end:var(--fanous-spacing-lg);position:relative}section[data-section]>.flex.items-center.justify-between.mb-4::after{content:"";position:absolute;inset-inline:0;inset-block-end:0;height:1px;background:linear-gradient(var(--to-end),var(--fanous-color-primary-edge),color-mix(in srgb,var(--fanous-color-divider) 70%,transparent) 22%,transparent)}
 section[data-section] h2{font-size:20px;font-weight:700;color:var(--fanous-color-text-primary)!important}
 section[data-section] a[class*="text-blue"]{font-weight:600;border-radius:var(--r-sm)}
 .overflow-x-auto.scrollbar-hide{-webkit-mask:linear-gradient(var(--to-end),#000 calc(100% - 48px),transparent);mask:linear-gradient(var(--to-end),#000 calc(100% - 48px),transparent);padding-block-start:4px;padding-inline-start:2px}
