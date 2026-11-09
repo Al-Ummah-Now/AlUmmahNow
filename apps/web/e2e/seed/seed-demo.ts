@@ -711,7 +711,7 @@ async function ensureSections(sessions: Sessions, channels: Map<string, ChannelR
 }
 
 interface TabsResponse {
-  result?: { config?: { tabs?: Array<{ id: string; visible: boolean }> } };
+  tabs?: Array<{ id: string; visible: boolean }>;
 }
 
 async function ensureTabs(sessions: Sessions, channels: Map<string, ChannelRecord>): Promise<void> {
@@ -723,7 +723,7 @@ async function ensureTabs(sessions: Sessions, channels: Map<string, ChannelRecor
     if (!session || !channel) continue;
     const wanted = new Set(visibleTabs(hasShorts(def.key)));
     const res = await api.get<TabsResponse>(`/api/channels/${channel.id}/tabs`, { token: session.accessToken, allowStatus: [404] });
-    const tabs = res.data.result?.config?.tabs ?? [];
+    const tabs = res.data.tabs ?? [];
     const correct = tabs.length > 0 && tabs.every((t) => t.visible === wanted.has(t.id));
     if (correct) continue;
     if (MODE === 'check') {
@@ -827,7 +827,7 @@ async function verifyChannelPages(channels: Map<string, ChannelRecord>): Promise
       if (items === 0) failures.push(`${def.key}: section "${section.title}" has no items`);
     }
     const tabs = await api.get<TabsResponse>(`/api/channels/${channel.id}/tabs`);
-    const shown = (tabs.data.result?.config?.tabs ?? []).filter((t) => t.visible).map((t) => t.id).sort();
+    const shown = (tabs.data.tabs ?? []).filter((t) => t.visible).map((t) => t.id).sort();
     const expected = visibleTabs(hasShorts(def.key)).sort();
     rows.push(`${def.key} | tabs | ${shown.join(',')}`);
     if (JSON.stringify(shown) !== JSON.stringify(expected)) failures.push(`${def.key}: tabs ${shown.join(',')}, expected ${expected.join(',')}`);
