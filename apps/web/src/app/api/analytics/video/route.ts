@@ -11,7 +11,9 @@ import { logger } from '@/lib/logger-client';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { watchTimeReports, type WatchTimeEvent } from '@/lib/video/watch-time';
+import { retentionReports, type RetentionEvent } from '@/lib/video/retention';
 import { viewContextFromBatch } from '@/lib/embed/view-context';
+import { trafficFromBatch } from '@/lib/analytics/traffic-source';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +21,7 @@ export async function POST(request: NextRequest) {
     const events = body.events || [];
     // Embed frames tag their views (docs/embeds §6); anything invalid counts as a watch-page view
     const viewContext = viewContextFromBatch(body.context);
+    const traffic = trafficFromBatch(body.context);
 
     // Log analytics event in development with detailed error information
     if (process.env.NODE_ENV === 'development') {
@@ -67,6 +70,7 @@ export async function POST(request: NextRequest) {
               referrer: viewContext.source === 'embed' ? 'embed' : 'direct',
               deviceType: 'desktop',
               ...viewContext,
+              ...traffic,
             }),
           });
 
@@ -85,6 +89,7 @@ export async function POST(request: NextRequest) {
 
     // #235: played-seconds reports → POST /api/videos/:id/watch-time
     const watchTime = await forwardWatchTime(events);
+    const retention = await forwardRetention(events);
 
     return NextResponse.json({
       success: true,
@@ -93,6 +98,7 @@ export async function POST(request: NextRequest) {
         total: events.length,
         views: readyEvents.length,
         watchTime,
+        retention,
       }
     });
   } catch (error) {
@@ -125,6 +131,30 @@ async function forwardWatchTime(events: WatchTimeEvent[]): Promise<number> {
         return response.ok;
       } catch (error) {
         logger.error('[Analytics] Error forwarding watch time:', error);
+        return false;
+      }
+    })
+  );
+  return results.filter(Boolean).length;
+}
+
+/** Forward retention reports (docs/specs/CREATOR-STUDIO.md §8.4); returns how many api-videos accepted. Never throws. */
+async function forwardRetention(events: RetentionEvent[]): Promise<number> {
+  const reports = retentionReports(events);
+  if (reports.length === 0) return 0;
+  const apiUrl = process.env.API_URL || '';
+  const results = await Promise.all(
+    reports.map(async ({ videoId, sessionId, buckets }) => {
+      try {
+        const response = await fetch(`${apiUrl}/api/videos/${encodeURIComponent(videoId)}/retention`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ buckets, sessionId }),
+        });
+        if (!response.ok) logger.warn(`[Analytics] retention not accepted: ${response.status}`, { videoId });
+        return response.ok;
+      } catch (error) {
+        logger.error('[Analytics] Error forwarding retention:', error);
         return false;
       }
     })

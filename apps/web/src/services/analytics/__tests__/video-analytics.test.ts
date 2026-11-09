@@ -1215,3 +1215,61 @@ describe('VideoAnalytics watch time (#235)', () => {
   });
 });
 });
+
+describe('VideoAnalytics retention and traffic', () => {
+  const sent = () => (global.fetch as jest.Mock).mock.calls.map(([, init]) => JSON.parse(init.body));
+  const events = () => sent().flatMap((b) => b.events);
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
+  });
+  afterEach(() => jest.useRealTimers());
+
+  const context = { source: 'watch' as const, trafficSource: 'search' as const };
+
+  function played(a: VideoAnalytics, to = 21) {
+    for (let t = 0; t <= to; t++) a.trackRetention(t, 100, t * 1000);
+  }
+
+  it('reports retention buckets at the next flush', async () => {
+    const a = new VideoAnalytics('v1', undefined, { consentCheck: () => true });
+    played(a, 6);
+    a.destroy();
+    await Promise.resolve();
+    expect(events().find((e) => e.eventType === 'retention').data.buckets).toEqual([0, 1]);
+  });
+
+  it('flushes early with four new buckets, no more than once in 15 s', async () => {
+    const a = new VideoAnalytics('v1', undefined, { consentCheck: () => true });
+    played(a, 21);
+    await Promise.resolve();
+    expect(sent()).toHaveLength(1);
+    a.destroy();
+  });
+
+  it('sends nothing about retention without consent', async () => {
+    const a = new VideoAnalytics('v1', undefined, { consentCheck: () => false });
+    played(a, 21);
+    a.destroy();
+    await Promise.resolve();
+    expect(events().some((e) => e.eventType === 'retention')).toBe(false);
+  });
+
+  it('sends the traffic context with consent', async () => {
+    const a = new VideoAnalytics('v1', undefined, { consentCheck: () => true, context });
+    a.trackReady();
+    a.destroy();
+    await Promise.resolve();
+    expect(sent()[0].context).toMatchObject({ trafficSource: 'search' });
+  });
+
+  it('strips the traffic context without consent, and keeps the view', async () => {
+    const a = new VideoAnalytics('v1', undefined, { consentCheck: () => false, context: { ...context, referrerHost: 'a.org' } });
+    a.trackReady();
+    a.destroy();
+    await Promise.resolve();
+    expect(sent()[0].context).toEqual({ source: 'watch' });
+    expect(sent()[0].events[0].eventType).toBe('ready');
+  });
+});

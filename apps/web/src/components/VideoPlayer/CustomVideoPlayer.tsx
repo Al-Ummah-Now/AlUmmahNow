@@ -47,6 +47,7 @@ import { logger } from '@/lib/logger-client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
+import { playerAnalyticsContext } from '@/lib/analytics/traffic-source';
 import { VideoAnalytics } from '@/services/analytics/video-analytics';
 import {
   createVideoErrorHandler,
@@ -472,9 +473,7 @@ export default function CustomVideoPlayer({
 
       // Initialize analytics (Phase 1.5)
       if (enableAnalytics) {
-        analyticsRef.current = (analyticsContext
-          ? new VideoAnalytics(videoId, userId, { context: analyticsContext })
-          : new VideoAnalytics(videoId, userId));
+        analyticsRef.current = new VideoAnalytics(videoId, userId, { context: playerAnalyticsContext(analyticsContext, videoId) });
       }
 
       // Initialize Video.js player with the DOM element
@@ -660,7 +659,10 @@ export default function CustomVideoPlayer({
           const duration = player.duration();
 
           // #235: real watch time (seeks/pauses break the run inside)
-          if (!player.paused()) analyticsRef.current?.trackPlayback(currentTime);
+          if (!player.paused()) {
+            analyticsRef.current?.trackPlayback(currentTime);
+            analyticsRef.current?.trackRetention(currentTime, duration);
+          }
 
           // Skip if duration not available yet
           if (!duration || isNaN(duration) || duration === 0) {
@@ -819,9 +821,7 @@ export default function CustomVideoPlayer({
       if (analyticsRef.current) {
         analyticsRef.current.destroy();
         if (enableAnalytics) {
-          analyticsRef.current = (analyticsContext
-          ? new VideoAnalytics(videoId, userId, { context: analyticsContext })
-          : new VideoAnalytics(videoId, userId));
+          analyticsRef.current = new VideoAnalytics(videoId, userId, { context: playerAnalyticsContext(analyticsContext, videoId) });
         }
       }
 

@@ -22,6 +22,8 @@ import {
 } from './types';
 import { hasConsent } from '@/lib/consent/ConsentManager';
 import { PlayedTimeAccumulator } from '@/lib/video/watch-time';
+import { RetentionTracker } from '@/lib/video/retention';
+import type { AnalyticsContext } from '@al-ummah/shared-types';
 
 /** Legacy localStorage backup key; no longer written, purged on start. */
 const LEGACY_PENDING_KEY = 'pendingVideoAnalytics';
@@ -29,6 +31,11 @@ const LEGACY_PENDING_KEY = 'pendingVideoAnalytics';
 const VOLUME_SETTLE_MS = 500;
 /** Cap on events retried in memory after failed flushes. */
 const MAX_QUEUED_EVENTS = 500;
+
+/** Send retention early once this many buckets are waiting. */
+const RETENTION_EARLY_FLUSH_BUCKETS = 4;
+/** Keeps a session inside the API's limit of 6 reports a minute, also on very short videos. */
+const RETENTION_MIN_FLUSH_GAP_MS = 15000;
 
 /**
  * Main VideoAnalytics class for tracking video events
@@ -53,6 +60,10 @@ export class VideoAnalytics {
 
   // #235: played seconds, reported as watch_time events at every flush
   private played = new PlayedTimeAccumulator();
+
+  // Retention buckets (docs/specs/CREATOR-STUDIO.md §8.4)
+  private retention = new RetentionTracker();
+  private lastRetentionFlushMs = Number.NEGATIVE_INFINITY;
 
   // #79: a slider drag fires many volumechange events; only where it ends is reported
   private pendingVolume?: { volume: number; muted: boolean };
@@ -111,6 +122,8 @@ export class VideoAnalytics {
    */
   trackPause(): void {
     this.played.break();
+    this.retention.break();
+    this.flushRetention();
     this.addEvent({
       eventType: VideoEventType.PAUSE,
       relativeTime: Date.now() - this.startTime
@@ -122,6 +135,7 @@ export class VideoAnalytics {
    */
   trackComplete(): void {
     this.played.break();
+    this.retention.break();
     this.addEvent({
       eventType: VideoEventType.ENDED,
       relativeTime: Date.now() - this.startTime,
@@ -254,6 +268,7 @@ export class VideoAnalytics {
    */
   trackSeek(fromTime: number, toTime: number): void {
     this.played.break();
+    this.retention.break();
     this.addEvent({
       eventType: VideoEventType.SEEK,
       relativeTime: Date.now() - this.startTime,
@@ -540,6 +555,46 @@ export class VideoAnalytics {
     this.played.tick(currentTime, nowMs);
   }
 
+  /**
+   * Feed the retention tracker from timeupdate while the video plays. Sends
+   * early once enough buckets are waiting, at a pace the API's limit allows.
+   */
+  trackRetention(currentTime: number, duration: number, nowMs: number = Date.now()): void {
+    this.retention.tick(currentTime, duration, nowMs);
+    if (this.retention.pending >= RETENTION_EARLY_FLUSH_BUCKETS) this.flushRetention(nowMs);
+  }
+
+  private flushRetention(nowMs: number = Date.now()): void {
+    if (this.retention.pending === 0 || !this.consentCheck()) return;
+    if (nowMs - this.lastRetentionFlushMs < RETENTION_MIN_FLUSH_GAP_MS) return;
+    this.lastRetentionFlushMs = nowMs;
+    void this.flush();
+  }
+
+  /** Move buckets waiting to be reported into the queue as one retention event. */
+  private drainRetention(): void {
+    const buckets = this.retention.drain();
+    if (buckets.length === 0 || !this.consentCheck()) return;
+    this.eventQueue.push({
+      videoId: this.videoId,
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      relativeTime: Date.now() - this.startTime,
+      eventType: VideoEventType.RETENTION,
+      data: { buckets },
+    } as AnalyticsEvent);
+  }
+
+  /** The batch context: without consent, where the viewer came from is left out. */
+  private batchContext(): AnalyticsContext | undefined {
+    const context = this.config.context;
+    if (!context || this.consentCheck()) return context;
+    const anonymous = { ...context };
+    delete anonymous.trafficSource;
+    delete anonymous.referrerHost;
+    return anonymous;
+  }
+
   /** Move accumulated played seconds into the queue as watch_time events. */
   private drainWatchTime(): void {
     const chunks = this.played.drain();
@@ -562,6 +617,7 @@ export class VideoAnalytics {
    */
   private async flush(): Promise<void> {
     this.drainWatchTime();
+    this.drainRetention();
     if (this.eventQueue.length === 0) {
       return;
     }
@@ -583,7 +639,8 @@ export class VideoAnalytics {
 
     const flushPromise = (async () => {
       try {
-        const batch: AnalyticsBatch = this.config.context ? { events, context: this.config.context } : { events };
+        const context = this.batchContext();
+        const batch: AnalyticsBatch = context ? { events, context } : { events };
 
         const response = await fetch(this.config.endpoint, {
           method: 'POST',
