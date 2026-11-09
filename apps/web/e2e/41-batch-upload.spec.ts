@@ -8,21 +8,36 @@ import { ARABIC, deleteVideosTitled, expectDarkSurface, tempName } from './test-
 /**
  * Batch upload mode on /[locale]/upload (BatchUploadQueue / FileQueueItem /
  * useBatchUpload). Adding files already creates the video records on QA
- * (batch initiate), so every test names its files with a unique "E2E Temp"
- * prefix and deletes the single-channel user's videos with that prefix
- * afterwards, whatever state the queue ended in.
+ * (batch initiate), and batch mode has no visibility setting, so they are
+ * public. Every test names its files with a unique "E2E Temp" prefix and
+ * deletes the single-channel user's videos with that prefix afterwards,
+ * whatever state the queue ended in (#464):
+ * - afterEach closes the page first, so no further initiate or upload runs,
+ *   then lists and deletes until a listing comes back empty (a record created
+ *   just before the page closed shows up a moment later);
+ * - afterAll sweeps every prefix of this file once more, in case an afterEach
+ *   timed out or its listing failed.
+ * scripts/qa/cleanup-e2e-leftovers.ts (scheduled QA sweep) removes anything
+ * that still slips through.
  */
 
 test.use({ storageState: AUTH_STATE.single });
 
 let prefix = '';
+const prefixes: string[] = [];
 
 test.beforeEach(() => {
   prefix = tempName('batch');
+  prefixes.push(prefix);
 });
 
-test.afterEach(async () => {
-  await deleteVideosTitled('single', prefix);
+test.afterEach(async ({ page }) => {
+  await page.close().catch(() => undefined);
+  await deleteVideosTitled('single', prefix, { passes: 3, waitMs: 3000 });
+});
+
+test.afterAll(async () => {
+  for (const p of prefixes) await deleteVideosTitled('single', p);
 });
 
 async function openBatch(page: Page, locale: 'en' | 'ar' = 'en') {
