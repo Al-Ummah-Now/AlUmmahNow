@@ -1,11 +1,12 @@
 # @al-ummah/fanous-tokens
 
 Design tokens for Fanous, the Al Ummah Now design system.
-`tokens/fanous.tokens.json` (W3C design-tokens format) is the only file to edit.
+Shared scales and colour roles are in `tokens/fanous.tokens.json`. Each theme is data in `themes/<id>/theme.json`, listed in
+`themes/registry.json`. See `docs/design/THEMES.md`.
 
 ```bash
 pnpm tokens:generate   # rewrite generated/
-pnpm check:tokens      # CI gate: WCAG AA contrast, generated/ is current
+pnpm check:tokens      # CI gate: slots, assets, WCAG AA, logo hues, generated/ is current
 pnpm test:tokens       # unit and snapshot tests
 ```
 
@@ -13,7 +14,7 @@ No dependencies: it runs on Node 22.
 
 ## Generated outputs
 
-| Platform | Files under `generated/` | How to consume |
+| Platform | Files under `generated/<theme>/` | How to consume |
 |---|---|---|
 | SwiftUI | `swift/` | Add as a local Swift package, use `Fanous.dark` / `Fanous.light` |
 | Jetpack Compose | `kotlin/.../FanousTokens.kt` | Copy into a module, wrap with `FanousTheme { }`, read `LocalFanousColors.current` |
