@@ -57,6 +57,23 @@ describe('WatchHistoryService', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({ videoId: 'v1', progress: 5, duration: 100 });
   });
 
+  it('records the watch when the API says nothing was recorded', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockResponse(200, { videoId: 'v1', recorded: false }))
+      .mockResolvedValueOnce(mockResponse(201));
+    const result = await WatchHistoryService.saveProgress(
+      { videoId: 'v1', currentTime: 5, duration: 100, completed: false, timestamp: '2026-01-01T00:00:00Z' },
+      'token'
+    );
+    expect(result.success).toBe(true);
+    expect(fetchMock.mock.calls[1][0]).toBe('https://api.test/api/watch-history');
+  });
+
+  it('returns null when the video has never been watched', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { videoId: 'v1', progress: null }));
+    expect(await WatchHistoryService.getProgress('v1', 'token')).toBeNull();
+  });
+
   it('maps GET /api/watch-history/:videoId/progress to WatchProgress', async () => {
     fetchMock.mockResolvedValueOnce(mockResponse(200, { videoId: 'v1', progress: 30, duration: 60, completed: false, lastWatchedAt: '2026-01-02T00:00:00Z' }));
     const progress = await WatchHistoryService.getProgress('v1', 'token');
