@@ -861,6 +861,7 @@ export async function initiateVideoUploadApi(
     description?: string;
     descriptionLocalized?: Record<string, string>;
     isPublic?: boolean;
+    isDraft?: boolean;
     tags?: string;
     fileSize: number;
     mimeType: string;

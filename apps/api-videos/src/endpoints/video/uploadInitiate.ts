@@ -26,6 +26,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							fileSize: Num({ description: "File size in bytes", required: true }),
 							mimeType: Str({ description: "MIME type of the video file", required: true }),
 							isPublic: z.boolean().optional().default(true),
+							isDraft: z.boolean().optional().describe("Save without publishing. A draft is always private"),
 							tags: z.string().optional().describe("Comma-separated tags"),
 							// The web uploader sends these; they were stripped by the schema, so the
 							// Arabic title/description and the category chosen on upload were lost
@@ -101,7 +102,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, isDraft, tags, thumbnail, titleLocalized, descriptionLocalized, category } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -300,7 +301,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				comments: [],
 				likes: [],
 				dislikes: [],
-				isPublic: isPublic ?? true,
+				isPublic: isDraft ? false : isPublic ?? true,
+				...(isDraft ? { isDraft: true } : {}),
 				isLive: false,
 				tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
 				...(titleLocalized && { titleLocalized }),

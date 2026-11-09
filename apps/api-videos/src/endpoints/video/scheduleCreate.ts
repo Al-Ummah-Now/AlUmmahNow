@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
 import R2Repository from '../../lib/r2Repo';
-import Queue, { MessageType } from '../../lib/queue';
-import type { VideoObject, ScheduledVideoMetadata, VideoScheduleResponse } from '@al-ummah/shared-types';
+import { formatLocalDate, writeSchedule } from '../../lib/videoSchedule';
+import type { VideoObject, VideoScheduleResponse } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 
 const VideoScheduleResponseSchema = z.object({
@@ -218,59 +218,7 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
         );
       }
 
-      // Update video with scheduling information
-      video.scheduledPublishDate = scheduledDate.toISOString();
-      video.scheduledPublishTimezone = timezone;
-      video.scheduledPublishStatus = 'scheduled';
-      video.scheduledBy = userId;
-      video.scheduledAt = now.toISOString();
-
-      await videoRepo.putObject(videoId, video);
-
-      // Create scheduled metadata for scheduler worker
-      const scheduledMetadata: ScheduledVideoMetadata = {
-        videoId: video.id,
-        title: video.title,
-        channelId: video.channelId || '',
-        userId: video.userId,
-        scheduledPublishDate: scheduledDate.toISOString(),
-        timezone,
-        localScheduledDate: formatLocalDate(scheduledDate, timezone),
-        notifyOnPublish,
-        retryCount: 0,
-      };
-
-      // Save to scheduled videos bucket
-      const scheduledBucket = c.env.SCHEDULED_VIDEOS || c.env['scheduled-videos'];
-      if (!scheduledBucket) {
-        throw new Error('Scheduled videos bucket not configured');
-      }
-
-      const year = scheduledDate.getUTCFullYear();
-      const month = String(scheduledDate.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(scheduledDate.getUTCDate()).padStart(2, '0');
-      const hour = String(scheduledDate.getUTCHours()).padStart(2, '0');
-
-      const scheduleKey = `${year}-${month}-${day}/${hour}/${videoId}.json`;
-
-      await scheduledBucket.put(scheduleKey, JSON.stringify(scheduledMetadata), {
-        httpMetadata: {
-          contentType: 'application/json',
-        },
-      });
-
-      logger.info(`Scheduled video ${videoId} for ${scheduledDate.toISOString()}`);
-
-      // Send queue message for video scheduling
-      const queue = new Queue(c.env.queue);
-      await queue.send(MessageType.VideoEdit, {
-        videoId,
-        userId,
-        channelId: video.channelId,
-        timestamp: new Date().toISOString(),
-        action: 'schedule',
-        scheduledDate: scheduledDate.toISOString(),
-      });
+      await writeSchedule(c.env as never, videoRepo, video, { date: scheduledDate, timezone, notifyOnPublish, userId, now });
 
       // Return response
       const response: VideoScheduleResponse = {
@@ -296,17 +244,5 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
         500
       );
     }
-  }
-}
-
-/**
- * Format date in local timezone
- * Note: This is a simplified implementation. In production, use a library like date-fns-tz
- */
-function formatLocalDate(date: Date, timezone: string): string {
-  try {
-    return date.toLocaleString('en-US', { timeZone: timezone });
-  } catch {
-    return date.toISOString();
   }
 }

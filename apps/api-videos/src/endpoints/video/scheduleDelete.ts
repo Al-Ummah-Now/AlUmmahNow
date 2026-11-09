@@ -152,6 +152,8 @@ export class VideoScheduleDelete extends AuthenticatedRoute {
 
       // Update video status
       video.scheduledPublishStatus = 'cancelled';
+      // Back to being unpublished work (docs/specs/CREATOR-STUDIO.md §4.4.1)
+      video.isDraft = true;
 
       await videoRepo.putObject(videoId, video);
 

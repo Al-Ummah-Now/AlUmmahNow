@@ -22,6 +22,7 @@ interface Editable {
   tags?: string[];
   dateModified?: string;
   scheduledPublishStatus?: string;
+  isDraft?: boolean;
 }
 
 /** True when the request changes nothing. */
@@ -65,6 +66,7 @@ export function applyBulkChanges<T extends Editable>(
 
   const next: T = { ...video };
   if (changes.isPublic !== undefined) next.isPublic = changes.isPublic;
+  if (next.isDraft && next.isPublic !== false) next.isDraft = false;
   if (changes.category !== undefined) next.category = changes.category ?? undefined;
   if (changes.addTags?.length || changes.removeTags?.length) next.tags = tags;
 

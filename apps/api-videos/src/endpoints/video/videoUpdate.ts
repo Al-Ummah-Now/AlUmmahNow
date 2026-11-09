@@ -167,6 +167,9 @@ export class VideoUpdate extends AuthenticatedRoute {
 			}
 		}
 
+		// A draft made public is no longer a draft
+		if (existingVideo.isDraft && updatedVideo.isPublic !== false) updatedVideo.isDraft = false;
+
 		// Save the updated video to the repository
 		await repository.putObject(id, updatedVideo);
 

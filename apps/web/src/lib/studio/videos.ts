@@ -59,13 +59,13 @@ export function videosQueryString(query: VideosQuery): string {
 export type VideoRowAction = 'edit' | 'view' | 'analytics' | 'copyLink' | 'schedule' | 'reschedule' | 'publishNow' | 'cancelSchedule' | 'delete';
 
 /** Row actions in display order. The server still decides, per video. */
-export function rowActions(status: StudioVideoStatus, role: StudioRole): VideoRowAction[] {
+export function rowActions(status: StudioVideoStatus, role: StudioRole, isPublic = false): VideoRowAction[] {
   const edit: VideoRowAction[] = can(role, 'video.edit') ? ['edit'] : [];
   const schedule = can(role, 'video.schedule');
   const remove: VideoRowAction[] = can(role, 'video.delete') ? ['delete'] : [];
   switch (status) {
     case 'published':
-      return [...edit, 'view', ...(can(role, 'analytics.view') ? ['analytics' as const] : []), 'copyLink', ...(schedule ? ['schedule' as const] : []), ...remove];
+      return [...edit, 'view', ...(can(role, 'analytics.view') ? ['analytics' as const] : []), 'copyLink', ...(schedule && !isPublic ? ['schedule' as const] : []), ...remove];
     case 'scheduled':
       return [...edit, ...(schedule ? ['reschedule' as const, 'publishNow' as const, 'cancelSchedule' as const] : []), ...remove];
     case 'drafts':

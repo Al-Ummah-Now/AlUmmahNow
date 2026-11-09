@@ -133,6 +133,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
       const updatedVideo: VideoObject = {
         ...video,
         isPublic: true,
+        isDraft: false,
         dateModified: now,
         // Update scheduling status if video was scheduled
         ...(video.scheduledPublishStatus && {

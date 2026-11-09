@@ -33,6 +33,7 @@ export async function publishVideo(
 
   // 3. Update video status
   videoData.isPublic = true;
+  videoData.isDraft = false;
   videoData.publishedAt = new Date().toISOString();
   videoData.publishedViaSchedule = true;
   videoData.scheduledPublishStatus = 'published';
