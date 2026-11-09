@@ -1,6 +1,7 @@
 # Web Creator Studio
 
-**Status:** Draft for owner review. Not implemented.
+**Status:** Owner decisions applied 2026-11-09 (§10). Not implemented.
+**Plan:** [CREATOR-STUDIO-PLAN.md](CREATOR-STUDIO-PLAN.md)
 **Date:** 2026-11-09
 **Supersedes:** [ADR-001, channel settings navigation](../adr/0001-channel-settings-refactor.md) (never implemented, status was Proposed), and the component layout in [channel-settings-component-architecture.md](../channel-settings-component-architecture.md).
 **Related:** `docs/native-apps/EPICS.md` Epic 18 and 19.8; channel roles spec ([PR #462](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/462)); channel claim and transfer spec ([PR #460](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/460)); `docs/analytics/README.md`; `docs/design/THEMES.md`.
@@ -32,11 +33,12 @@ The account menu links My Videos, Scheduled Videos and Analytics directly (`comp
 4. Every page and action follows the per-channel roles in #462. The navigation hides what a role can't reach, and the server refuses it anyway.
 5. Every old URL keeps working through a permanent redirect.
 6. English and Arabic, accessible, and themed only through semantic tokens.
+7. Retention curves and traffic sources work in the first build, including collecting the data (§8.4).
 
 ### Non-goals
 
 - **Mobile and desktop native Studio.** See Epics 18 and 19. Web doesn't take on local encoding, batch import, transcription or the video editor (19.2 to 19.5, 18.9).
-- **Live control room and going live** (18.7, 19.7). They depend on decision D3. Today web has only the live routes in `live.router.ts` and no creator page. Live videos appear in Content like any other video. A Live page can be added to the navigation later.
+- **Provider-specific live work.** Stream keys, ingest URLs, OBS export and the source of stream health data wait on decisions D2 and D3. The provider-independent Live page is in scope (§4.14). Going live from a phone or from desktop stays in Epics 18.7 and 19.7.
 - **Ownership transfer.** Only a super admin can transfer a channel, on the admin site (#460). Studio has no control that does it, for any channel role.
 - **Site roles.** Channel roles are stored on the videos side and are never in AlUmmahNowAuth RBAC or tokens. Studio never reads a token's `roles` to decide channel access. A site admin gets no Studio access to someone else's channel.
 - **Monetisation, copyright, audio library.** YouTube Studio has these areas, but this product has no backend for them.
@@ -75,7 +77,7 @@ These links exist today and must point straight at the new URLs:
 
 The channel page's owner actions are shown only to people who hold the matching capability (§5).
 
-`/[locale]/upload` stays where it is (open question 5). Studio's **Upload** button links to it with the Studio channel selected, and a finished upload offers a link back to Content. `/[locale]/settings/upload-defaults` and `/[locale]/settings/privacy` are account settings and stay in Settings.
+`/[locale]/upload` stays where it is (decision 5). Studio's **Upload** button links to it with the Studio channel selected, and a finished upload offers a link back to Content. `/[locale]/settings/upload-defaults` and `/[locale]/settings/privacy` are account settings and stay in Settings.
 
 ## 3. URLs and the channel switcher
 
@@ -100,6 +102,8 @@ Every Studio page has the channel in its path, so a link always opens the same c
 /studio/{channelId}/community                 ?tab=published|scheduled|drafts
 /studio/{channelId}/community/new
 /studio/{channelId}/community/{postId}/edit
+/studio/{channelId}/live                      ?tab=streams|chat
+/studio/{channelId}/live/{streamId}
 /studio/{channelId}/customisation
 /studio/{channelId}/members                   ?tab=team|activity
 /studio/{channelId}/settings
@@ -169,6 +173,7 @@ YouTube Studio is the reference: a left rail with the channel at the top and an 
 | Playlists | `playlists` | 18.6 | Tab in Content |
 | Layout | `layout` | 18.6 (sections, tabs) | Customisation, Layout |
 | Community | `community` | 18.4 (updates, polls) | Tab in Content, Posts |
+| Live | `live` | 18.7, 19.7 (provider-independent parts) | Tab in Content, Live |
 | Customisation | `customisation` | 18.6 (avatar, banner, about) | Customisation, Profile |
 | Members & roles | `members` | 18.6, 19.8 | Settings, Permissions |
 | Settings (pinned to the bottom) | `settings` | 18.6 | Settings |
@@ -178,6 +183,8 @@ Not separate pages:
 - **Upload** (18.2) is a button at the top of the rail.
 - **Edit details, chapters, subtitles** (18.3) are in the video editor under Content.
 - **Notifications** (18.8) stay in the site's notification centre.
+
+Dashboard, Content, Analytics, Comments, Playlists, Customisation and Settings use YouTube Studio's names (decision 9). Layout, Community, Live and Members & roles keep the names used for those pages in the owner's brief and decisions.
 
 The rail is in the order above. An item a role can't reach is removed, not greyed out (§5.3).
 
@@ -198,7 +205,7 @@ So the page sections below only list what's different:
 
 | Card | Contents | Needs | Data |
 |---|---|---|---|
-| Latest video | Thumbnail, title, views, likes, comments, watch time since publishing | `video.view_private` or `analytics.view` | Content list, `GET /api/analytics/videos/:id` |
+| Latest video | Thumbnail, title, views, likes, comments. Watch time only with `analytics.view` | `video.view_private` | Content list, `GET /api/analytics/videos/:id` |
 | Channel totals | Lifetime views, subscribers, videos, plus views over the last 28 days and the change from the 28 before | `analytics.view` | `GET /api/analytics/channels/:id` |
 | Tasks | Counts of processing and failed uploads, failed schedules, comments held for review. Each links to the right tab | `video.view_private` or `comment.moderate`, per count | New summary endpoint (§8.1) |
 | Recent comments | The latest five, with approve and reply | `comment.moderate` | New comments endpoint (§8.1) |
@@ -206,7 +213,7 @@ So the page sections below only list what's different:
 | Quick links | Upload, New post, Customise | The action's capability | |
 
 - **Empty, new channel:** a welcome with **Upload your first video**. Cards with only zeros are replaced by one line, not a row of 0s.
-- **Empty, role with little to show:** the analytics viewer sees only the totals and a link to Analytics. A moderator sees only recent comments and the held count.
+- **Roles with less to show:** a moderator sees only recent comments and the held count. An editor sees the latest video, tasks and next scheduled, with public counters only.
 - **Phone:** one column, Tasks first.
 
 ### 4.4 Content
@@ -223,11 +230,13 @@ So the page sections below only list what's different:
 | Drafts | New `isDraft = true` | **New work.** See below |
 | Published | Everything else, public or private | A Private badge on `isPublic = false` |
 
-**Drafts don't exist for videos today.** There's no draft state in `packages/shared-types/src/video.ts`. Community posts have one, videos don't. Today, a cancelled schedule only sets `scheduledPublishStatus = 'cancelled'`. This spec adds an optional `isDraft` on the video: upload offers **Save as draft**, a cancelled schedule becomes a draft, and publishing clears it. Existing videos are unchanged, with no backfill (open question 2).
+**Drafts don't exist for videos today.** There's no draft state in `packages/shared-types/src/video.ts`. Community posts have one, videos don't. Today, a cancelled schedule only sets `scheduledPublishStatus = 'cancelled'`. This spec adds an optional `isDraft` on the video: upload offers **Save as draft**, a cancelled schedule becomes a draft, and publishing clears it. Existing videos are unchanged, with no backfill (decision 2).
 
 Tabs show a count. An empty tab stays visible, so people can learn where things go.
 
 **Row.** Selection box, thumbnail with duration, title, badges (Private, Live, Short, Scheduled time in the viewer's zone), date, views, comments, likes. Owners and admins also see who uploaded it (`uploadedBy`, from #462, visible only to `members.view` holders per #462 §8).
+
+Views, comments and likes in a row are the video's public counters, so editors see them without `analytics.view`.
 
 **Filters and search.**
 
@@ -292,7 +301,13 @@ Playlist assignment from this page is new. Everything else exists. It has tabs a
 
 **Per-video** (`content/{videoId}/analytics`). Reached from a row in Content, the Top content table, or the editor's Analytics tab. Reuses `VideoAnalyticsView`.
 
-An analytics viewer has no access to Content, so they reach it through Top content. Their breadcrumb goes back to Analytics, not Content.
+**Who can see stats (decision 6).** Owner and admin. Editors and moderators have no Analytics page, no per-video analytics and no analytics cards. This is #462's matrix with the analytics viewer role removed. Someone who needs stats is made a channel admin.
+
+**Retention, on the per-video page.** A line chart of the share of viewers still watching at each 5% of the video, with the time shown for each point. It has a table alternative. Below 10 starts in the range, the chart is replaced by "Not enough data yet".
+
+**Traffic sources, on the overview and per-video pages.** A ranked bar list of the sources in §8.4, with counts and shares, and a list of the top external sites. Viewers who didn't allow analytics are shown as one "Not shared" row, so the rows add up to total views.
+
+Both note that they start from the date collection began, and that retention covers only viewers who allowed analytics.
 
 **What the backend has** (`docs/analytics/README.md`):
 
@@ -301,11 +316,11 @@ An analytics viewer has no access to Content, so they reach it through Top conte
 | Lifetime views, likes, comments | Exists |
 | Daily views, watch time, average view duration | Exists. Watch time is real only from #235 on, so the page notes when a range starts before that |
 | New subscribers per day | Exists. Gains only, no unsubscribes, and labelled "New subscribers" |
-| Retention curve (18.5) | **New work.** Not collected. The section stays out of the page until it has real data |
-| Traffic sources (18.5) | **New work.** Only embed against watch is rolled up, and the API doesn't return it. The rest is hardcoded (#237) |
-| Devices, geography, unique viewers, impressions, click-through, realtime | **New work.** Not shown |
+| Retention curve (18.5) | **New, in the first build** (§8.4) |
+| Traffic sources (18.5) | **New, in the first build** (§8.4) |
+| Devices, geography, unique viewers, impressions, click-through, realtime | Not collected, not in decision 10, and not shown |
 
-Nothing is shown with placeholder or zero values for data the backend doesn't collect. The existing "retention coming soon" line in `VideoAnalyticsView` stays until then.
+Nothing is shown with placeholder or zero values for data the backend doesn't collect. The "retention coming soon" line in `VideoAnalyticsView` is removed.
 
 **Empty.** "No views yet in this period." with the option to widen the range. Prod's imported videos have `channelId: null` and a placeholder owner, so they appear in no channel's Studio until the data migration issue is done.
 
@@ -313,7 +328,7 @@ Nothing is shown with placeholder or zero values for data the backend doesn't co
 
 **Phone.** Cards in two columns, the chart full width, the table as a ranked list.
 
-**Across channels.** The old page included an account-wide summary. Studio is per channel. `GET /api/analytics/summary` stays, as an owned-channels-only read (#462 plan step 4), but no Studio page uses it (open question 3).
+**Across channels (decision 3).** Studio is per channel. The combined analytics view is dropped. `GET /api/analytics/summary` stays as an API for now, but no Studio page uses it.
 
 ### 4.7 Comments
 
@@ -325,7 +340,7 @@ Nothing is shown with placeholder or zero values for data the backend doesn't co
 |---|---|
 | Inbox | Published comments, newest first |
 | Held for review | `status = held`. Held by platform moderation (`heldBy = 'moderation'`) is shown read-only with a note: the API refuses creator approval with `held_by_moderation`, and that stays |
-| Removed | **New:** there's no way to list soft-deleted comments today. Open question 4 |
+| Removed | **New, in the first build (decision 4).** Comments the channel removed in the last 90 days, with who removed them and when. **Restore** puts a comment back, with its replies |
 
 **Filters.** Search text, a specific video or post, comments with no channel reply, has a link.
 
@@ -338,17 +353,26 @@ Nothing is shown with placeholder or zero values for data the backend doesn't co
 | Reply as the channel | `channel.speak` | Exists (`commentCreate`) | Exists |
 | Pin | `comment.moderate` | **New.** The field exists, but no route sets it, and `CommentUpdateInput.isPinned` isn't used | Exists |
 | Heart | `comment.moderate` | **New.** No field or route | Exists |
+| Restore a removed comment | `comment.moderate` | **New** | **New** |
 | Hide (hold a published comment) | `comment.moderate` | **New** | **New** |
 | Report | Any signed-in role | Exists (`POST /api/moderation/reports`) | Exists |
 | Block from channel | `comment.moderate` | **New** | **New** |
 
-Blocking is per channel: the blocked account can't comment on or reply to that channel's content. Storage is new, on the videos side, and enforcement goes in the comment create routes. It isn't a site ban.
+Blocking is per channel and silent (decision 8). The blocked person isn't told. Their new comments and replies on that channel are accepted and stay visible only to them, using the existing `held` visibility with a new `heldBy: 'channel_block'`. They don't appear in the Held tab. Storage is new, on the videos side, and enforcement goes in the comment create routes. It isn't a site ban.
 
-**Bulk.** Approve or remove up to 50. New route.
+**How removal changes.** Today `DELETE` on a video comment takes it out of the video for good (`removeStoredComment` in `commentDelete.ts`). Post comments are soft-deleted with `deletedAt`, with no record of who did it. So:
+
+- A removal by someone with `comment.moderate` becomes a soft removal: the comment and its replies stay on the record, with `isDeleted`, `removedBy: 'channel'`, `removedAt` and the actor's id. Public lists already leave out `isDeleted` comments. `commentsCount` drops on removal and comes back on restore.
+- A person deleting their own comment stays a real deletion and never appears in Removed.
+- Comments removed or held by platform moderation never appear in Removed and can't be restored here.
+- After 90 days a daily job deletes the comment for good. Account erasure deletes a person's removed comments immediately, so `eraseUserData` must cover them.
+- Comments removed before launch can't be restored. The tab starts empty.
+
+**Bulk.** Approve, remove or restore up to 50. New route.
 
 **Backend constraint.** Video comments are stored inside each video's R2 object (`video.comments`). There's no way to read across a channel, so this page needs a new index (§8.1).
 
-**Empty.** "No comments yet", and for Held, "Nothing waiting for review".
+**Empty.** "No comments yet". For Held, "Nothing waiting for review". For Removed, "Comments you remove stay here for 90 days".
 
 **Phone.** Cards, with Approve and Remove visible, and the rest in overflow.
 
@@ -410,7 +434,7 @@ The page shows, in plain words: "Ownership can't be changed here. Contact the Al
 
 **States.** As #462 §14: empty, loading, member limit reached, sending, invitation sent, already invited, role saving, removed, forbidden. **Phone.** Cards, and the invite form in a sheet.
 
-**Until #462 ships,** this item doesn't appear in the navigation.
+**Until #462 ships,** this item doesn't appear in the navigation (decision 1).
 
 ### 4.13 Settings
 
@@ -429,46 +453,68 @@ Leave isn't here: it's in the switcher (§3.3).
 
 **Phone.** One column.
 
+### 4.14 Live
+
+**Purpose.** Plan and watch over the channel's streams, and moderate their chat. Decision 11 specs the parts that don't depend on the provider. The provider is blocked on D2 (Bunny or R2 plus Cloudflare CDN), and D3 follows from it.
+
+**Today.** `/[locale]/live` is the public list. `api-videos` has `GET`, `POST` and `PATCH` on `/api/live-streams`, and streams have `status` (`scheduled`, `live`, `ended`, `cancelled`), `scheduledStartTime`, `allowChat` and `isPrivate`. `liveStreamCreate.ts` hard-codes a Bunny ingest URL. Chat exists only as a `live_chat` websocket message (`notify-helpers.ts`). No API stores or moderates chat.
+
+| Surface | Contents | Needs | State |
+|---|---|---|---|
+| Streams | List with tabs Upcoming, Live, Ended. Title, thumbnail, scheduled or actual time, viewer count, status | `live.manage` | Exists, `channelId` and `status` filters |
+| Schedule | Create and edit: title, description, time with zone, private, allow chat, tags. Cancel | `live.manage` | Exists. A stream with no ingest details says "Streaming setup isn't available yet" |
+| Stream health (`live/{streamId}`) | State, bitrate, dropped frames, last update, from one provider-neutral response | `live.manage` | Page and response shape are specified now. Until an adapter exists after D2/D3, the panel says "Health data isn't available yet" and shows no numbers |
+| Chat moderation (`?tab=chat`) | Live message feed, remove a message, block from the channel (shared with §4.7), turn chat on or off for a stream | `live.moderate` | **New.** Chat runs on our own websocket server, so this doesn't depend on the provider |
+
+**Waiting on D2/D3:** stream keys and rotation, ingest URLs, OBS profile export, start and stop signals from the provider, and health data. Studio shows no key or ingest field until then, and the hard-coded Bunny URL isn't displayed.
+
+**Empty.** "No streams yet", with **Schedule a stream**. For chat, "Chat appears here while a stream is live". **Phone.** Cards, and the chat feed takes the full screen.
+
 ## 5. Permissions matrix
 
 ### 5.1 Pages
 
-The roles and capability names are from #462 §4, which stays the source of truth. If the owner changes #462's open questions, this table follows.
+The roles and capability names are from #462 §4, which stays the source of truth. If #462's matrix changes, this table follows.
 
-| Page | Needs | Owner | Admin | Editor | Moderator | Analytics viewer |
-|---|---|:-:|:-:|:-:|:-:|:-:|
-| Dashboard | Any role, cards filtered | Yes | Yes | Yes | Yes | Yes |
-| Content | `video.view_private` | Yes | Yes | Yes | No | No |
-| Video editor | `video.edit` | Yes | Yes | Yes | No | No |
-| Analytics, per-video analytics | `analytics.view` | Yes | Yes | No | No | Yes |
-| Comments | `comment.moderate` | Yes | Yes | No | Yes | No |
-| Playlists | `post.manage` | Yes | Yes | Yes | No | No |
-| Community | `post.manage` | Yes | Yes | Yes | No | No |
-| Layout | `channel.edit` | Yes | Yes | No | No | No |
-| Customisation | `channel.edit` | Yes | Yes | No | No | No |
-| Members & roles | `members.view` | Yes | Yes | No | No | No |
-| Settings | `channel.view_private` | Yes | Yes | No | No | No |
+| Page | Needs | Owner | Admin | Editor | Moderator |
+|---|---|:-:|:-:|:-:|:-:|
+| Dashboard | Any role, cards filtered | Yes | Yes | Yes | Yes |
+| Content | `video.view_private` | Yes | Yes | Yes | No |
+| Video editor | `video.edit` | Yes | Yes | Yes | No |
+| Analytics, per-video analytics | `analytics.view` | Yes | Yes | No | No |
+| Comments | `comment.moderate` | Yes | Yes | No | Yes |
+| Live: streams, schedule, health | `live.manage` | Yes | Yes | No | No |
+| Live: chat moderation | `live.moderate` | Yes | Yes | No | Yes |
+| Playlists | `post.manage` | Yes | Yes | Yes | No |
+| Community | `post.manage` | Yes | Yes | Yes | No |
+| Layout | `channel.edit` | Yes | Yes | No | No |
+| Customisation | `channel.edit` | Yes | Yes | No | No |
+| Members & roles | `members.view` | Yes | Yes | No | No |
+| Settings | `channel.view_private` | Yes | Yes | No | No |
 
 ### 5.2 Actions
 
-| Action | Capability | Owner | Admin | Editor | Moderator | Analytics viewer |
-|---|---|:-:|:-:|:-:|:-:|:-:|
-| Upload | `video.upload` | Yes | Yes | Yes | No | No |
-| Edit video details, chapters, subtitles, thumbnail | `video.edit` | Yes | Yes | Yes | No | No |
-| Bulk change visibility, category, tags | `video.edit` | Yes | Yes | Yes | No | No |
-| Delete video, single or bulk | `video.delete` | Yes | Yes | Own uploads | No | No |
-| Schedule, reschedule, publish now, bulk schedule | `video.schedule` | Yes | Yes | Yes | No | No |
-| Add to playlist, manage playlists, posts | `post.manage` | Yes | Yes | Yes | No | No |
-| Approve, remove, pin, heart, hide, block | `comment.moderate` | Yes | Yes | No | Yes | No |
-| Reply as the channel | `channel.speak` | Yes | Yes | Yes, on the watch page (editors can't open Comments) | Yes | No |
-| Edit name, avatar, banner, about, links, sections, tabs | `channel.edit` | Yes | Yes | No | No | No |
-| Change handle | `channel.handle` | Yes | No | No | No | No |
-| Delete channel | `channel.delete` | Yes | No | No | No | No |
-| Invite or change editors, moderators, analytics viewers | `members.manage` | Yes | Yes | No | No | No |
-| Invite or change admins | `members.manage_admins` | Yes | No | No | No | No |
-| See activity log | `members.view` | Yes | Yes | No | No | No |
-| Leave channel | Non-owner | No | Yes | Yes | Yes | Yes |
-| Transfer ownership | **Super admin, admin site only** | No | No | No | No | No |
+| Action | Capability | Owner | Admin | Editor | Moderator |
+|---|---|:-:|:-:|:-:|:-:|
+| Upload | `video.upload` | Yes | Yes | Yes | No |
+| Edit video details, chapters, subtitles, thumbnail | `video.edit` | Yes | Yes | Yes | No |
+| Bulk change visibility, category, tags | `video.edit` | Yes | Yes | Yes | No |
+| Delete video, single or bulk | `video.delete` | Yes | Yes | Own uploads | No |
+| Schedule, reschedule, publish now, bulk schedule | `video.schedule` | Yes | Yes | Yes | No |
+| Add to playlist, manage playlists, posts | `post.manage` | Yes | Yes | Yes | No |
+| Approve, remove, restore, pin, heart, hide, block | `comment.moderate` | Yes | Yes | No | Yes |
+| Reply as the channel | `channel.speak` | Yes | Yes | Yes, on the watch page (editors can't open Comments) | Yes |
+| Edit name, avatar, banner, about, links, sections, tabs | `channel.edit` | Yes | Yes | No | No |
+| Change handle | `channel.handle` | Yes | No | No | No |
+| Delete channel | `channel.delete` | Yes | No | No | No |
+| Invite or change editors, moderators | `members.manage` | Yes | Yes | No | No |
+| Invite or change admins | `members.manage_admins` | Yes | No | No | No |
+| Create, schedule, cancel a stream | `live.manage` | Yes | Yes | No | No |
+| Remove a chat message, turn chat off, block | `live.moderate` | Yes | Yes | No | Yes |
+| See stream keys, rotate them (waits on D2/D3) | `live.manage` | Yes | Yes | No | No |
+| See activity log | `members.view` | Yes | Yes | No | No |
+| Leave channel | Non-owner | No | Yes | Yes | Yes |
+| Transfer ownership | **Super admin, admin site only** | No | No | No | No |
 
 ### 5.3 Enforcement
 
@@ -476,7 +522,7 @@ The roles and capability names are from #462 §4, which stays the source of trut
 - **Page guard.** `[channelId]/layout.tsx` checks the page's capability on the server before rendering. It replaces `isChannelOwner` (`lib/channel-utils.ts`) and the client-side checks that redirect after load.
 - **API.** Every route used by Studio calls `requireChannelAccess` with its capability. A route with no declaration stays owner-only (#462 §6.3). A hidden button is never the protection.
 - **Until #462 ships,** the role is `owner` or none, from `channel.userId`, through the same helper shape, so pages need no rewrite.
-- **Private video titles for analytics viewers.** `analytics.view` doesn't include `video.view_private`. In Top content, a private video is counted and shown as "Private video" with no title, thumbnail or link (open question 6).
+- **Analytics (decision 6).** There is no analytics viewer role. `analytics.view` is held by owner and admin only, so Top content can show private titles without masking.
 - **Moderators and private videos.** A moderator has no `video.view_private`, and `commentDelete.ts:74` refuses comment actions on private videos for anyone but the owner. Comments on private videos are therefore left out of a moderator's inbox.
 - **Site roles.** Studio has no check for site roles. The separation tests in #462 §15 cover it, and §9.3 adds a Studio case.
 
@@ -574,13 +620,17 @@ All `api-videos`. Paths are as registered in `apps/api-videos/src/routers/`.
 | Analytics | `GET /api/analytics/channels/:channelId` | Exists, #462 | |
 | | `GET /api/analytics/metrics` | Exists, #462 | Daily series |
 | | `GET /api/analytics/videos/:videoId` | Exists, #462 | |
-| | `GET /api/channels/:id/analytics/top-content` | **New** | Sortable, paged, private titles masked per §5.3. Today's top list is five videos in `/api/analytics` |
+| | `GET /api/channels/:id/analytics/top-content` | **New** | Sortable, paged. Today's top list is five videos in `/api/analytics` |
+| | `GET /api/analytics/videos/:videoId/retention` | **New** | §8.4 |
+| | `traffic` on the channel and video analytics responses | **New** field | §8.4 |
 | Comments | `GET /api/channels/:id/comments`, `/comments/summary` | **New** | Across videos and posts |
 | | `POST /api/videos/:id/comments/:cid/approve`, `DELETE .../:cid` | Exists, #462 | |
 | | `POST /api/videos/:id/comments` | Exists, #462 | Reply as channel |
 | | Post comment list, delete, pin, heart | Exists, #462 | `community.router.ts` |
 | | Video comment pin and heart | **New** | |
 | | Hold (video and post), approve (post) | **New** | |
+| | Restore: `POST /api/videos/:id/comments/:cid/restore` and the post comment equivalent | **New** | §4.7 |
+| | Soft removal in the video and post comment `DELETE` routes | **New behaviour** | §4.7 |
 | | `POST /api/channels/:id/comments/bulk` | **New** | |
 | | `GET`, `POST`, `DELETE /api/channels/:id/blocks` | **New** | |
 | | `POST /api/moderation/reports` | Exists | |
@@ -591,6 +641,9 @@ All `api-videos`. Paths are as registered in `apps/api-videos/src/routers/`.
 | Community | `GET`, `POST`, `PUT`, `DELETE /api/channels/:channelId/posts...` | Exists, #462 | Mount per `community.router.ts`. Media upload routes too |
 | Customisation | `PUT /api/channels/:id`, `PUT .../avatar`, `.../cover` | Exists, #462 | The handle needs a separate owner-only check within `PUT` |
 | | `GET /api/channels/handles/:handle/availability` | Exists | |
+| Live | `GET`, `POST /api/live-streams`, `PATCH /api/live-streams/:id` | Exists, #462 | Create stops returning ingest details to Studio |
+| | `GET /api/live-streams/:id/health` | **New** | Provider-neutral shape. Returns "unavailable" until D2/D3 |
+| | `GET`, `DELETE` chat messages, `PATCH` chat on or off under `/api/live-streams/:id/chat` | **New** | Needs chat messages to be stored |
 | Members | All of §14 of #462 | #462 | |
 | Settings | `DELETE /api/channels/:id` | Exists | Stays owner only |
 | | `GET /api/entitlements` | Open PR #390 | |
@@ -599,7 +652,8 @@ All `api-videos`. Paths are as registered in `apps/api-videos/src/routers/`.
 
 - **Content list.** The `content_ownership` table in `SEARCH_DB` already has channel, public, live, duration, `scheduleStatus`, `uploadStatus`, views and dates (`packages/shared-types/src/search/ownership.ts`). It doesn't have `processingStatus`, `isDraft`, the failure reason or `uploadedBy`. Adding those columns gets the list and counts from one D1 query, instead of loading objects from R2 and filtering them. Title search stays on the search index.
 - **Comments.** A new `channel_comments` table in `SEARCH_DB`: one row per comment, on a video or post, with channel, status, author, and time. Like `content_ownership`, R2 stays the source of truth, it's written when R2 changes, and can be rebuilt. It holds ids and status, and text is read from the source.
-- **Blocks.** A `channel_blocks` table in `CHANNEL_ROLES_DB` (#462 open question 8), since it's the only copy and can't be rebuilt.
+- **Live chat.** A `live_chat_messages` table in `SEARCH_DB`, written when a message is sent, kept for 30 days after the stream ends.
+- **Blocks.** A `channel_blocks` table in `CHANNEL_ROLES_DB` (#462 open question 8), since it's the only copy and can't be rebuilt. Studio ships before #462 finishes (decision 1), so that database must be created for this table first.
 
 ### 8.2 Studio usage events
 
@@ -628,15 +682,53 @@ Every feature is tiered and managed by admins through Epic 27, so each new capab
 | `channel.handle`, `channel.about.links.max` | Exists | Customisation |
 | `comments.settings`, `comments.heldForReview` | Exists | Editor, Comments |
 | `upload.*`, `storage.gb` | Exists | Upload, Settings |
-| `studio.teamSeats`, or `channel.members_max` | Conflict, open question 7 | Members |
+| `studio.teamSeats` | Exists, the seat limit per decision 7 | Members |
+| `analytics.retentionCurve` (boolean) | **New** | Retention chart |
+| `analytics.trafficSources` (boolean) | **New** | Traffic sources |
 | `studio.commentsInbox` (boolean) | **New** | Comments page |
 | `comments.blockUsers` (boolean) | **New** | Block |
+| `comments.restoreRemoved` (boolean) | **New** | Removed tab |
 | `studio.bulkSchedule` (boolean) | **New** | Bulk schedule |
 | `studio.drafts.max` (number) | **New** | Drafts |
 
 All new keys have a permissive fallback, following the catalogue's rule that an outage must not lock creators out. A hit limit explains the limit and which plan setting it comes from, and offers no payment link.
 
 Cost: the new reads are D1 and replace many R2 reads per list. This is well within the $500 per month cap.
+
+### 8.4 Retention and traffic data collection
+
+Part of the first build (decision 10).
+
+**What exists.** `VideoAnalytics` (`services/analytics/video-analytics.ts`) already batches player events, only with analytics consent, and sends a bare `ready` without it. The Next route `app/api/analytics/video/route.ts` drops everything except `ready` and watch-time reports, and hard-codes `referrer` and `deviceType`. Rollups (`apps/processor/src/lib/analytics-rollup.ts`) keep `views`, `watchTime`, `sources` (`watch` or `embed`) and `embedOrigins`.
+
+**Retention.**
+
+| Stage | Behaviour |
+|---|---|
+| Player | Splits the video into 20 buckets of 5%. A bucket counts when real playback passes through it. Seeking doesn't fill skipped buckets, and watching twice counts once per session. Skips videos with no valid duration and live streams |
+| Report | A `retention` event with `sessionId` and the newly reached buckets. Sent when four or more are new, and on pause, end, tab hide and unload |
+| Next route | Forwards to `POST /api/videos/:id/retention` |
+| api-videos (**new route**) | Validates bucket numbers, rate-limits per session and video with the `WATCH_TIME_LIMITER` binding under its own key, and queues the new `MessageType.VideoRetention`. No counts for deleted or hidden videos |
+| Processor | Folds into `analytics/retention/video/<id>/<YYYY-MM>.json`: `{ days: { day: { starts, buckets[20] } } }`. `starts` increases when bucket 0 first arrives in a session. Uses the same per-key chaining as the rollups, with the same small risk of losing an increment between isolates |
+| Read | `GET /api/analytics/videos/:videoId/retention` sums the days in range. Each point is `buckets[i] / starts`. Under 10 starts it returns no curve |
+
+**Traffic sources.**
+
+| Source | How it's decided |
+|---|---|
+| `home`, `search`, `subscriptions`, `channel`, `playlist`, `up_next`, `explore`, `library`, `notification` | The previous page within the site, tracked in memory by a small client helper, because `document.referrer` doesn't change on in-app navigation |
+| `embed` | The existing embed context |
+| `external` | First page of the visit, and `document.referrer` is another site. Only the host is kept, never the path or query |
+| `direct` | First page of the visit, with no referrer |
+| `unknown` | No analytics consent, or an old client. Shown as "Not shared" |
+
+The batch `context` carries `trafficSource` and `referrerHost`. The route forwards them instead of the hard-coded values, and `POST /api/videos/:id/view` accepts them, validated against the list above and with a length limit. Rollups gain `traffic` (a count per source) and `externalHosts` (top 50 per day, the rest under `other`, using `incrementBounded`), for both video and channel. The existing `sources` and `embedOrigins` are unchanged.
+
+**Privacy.** Stored data is aggregate counts and hostnames, with no user id or session id. `sessionId` is used only for the rate limit and within the processor's message. Everything except the anonymous view count needs analytics consent. `docs/compliance/GDPR.md` and `docs/analytics/README.md` are updated with the work.
+
+**History.** There's no backfill, because the events were never kept. Charts start on the day collection is deployed.
+
+**Cost.** At most a handful of retention messages per session, each one R2 read and write on a per-video monthly document. Well within the $500 per month cap.
 
 ## 9. Testing requirements
 
@@ -650,7 +742,10 @@ Tests are written first (`BEFORE_YOU_CODE.md`). E2E specs follow the release sui
 - Bulk: partial success per video, the limit of 50, and an editor's mixed delete.
 - Resolver: every branch in §3.2.
 - Index sync for the new columns and `channel_comments`, including rebuild.
-- Masked titles: an analytics viewer's response has no private title or thumbnail.
+- Retention: buckets from seeks and rewatches, invalid duration, no consent, the 10-start minimum, and the sum across months.
+- Traffic: every row of the source table, host only and never a path, unknown values refused, and the top-50 limit.
+- Comment removal: moderator removal is soft and restorable with replies and counts correct, the author's own deletion is permanent, platform-moderated comments can't be restored, the 90-day purge, and erasure.
+- Processor: a case exists for `VideoRetention`.
 
 ### 9.2 E2E per page
 
@@ -663,18 +758,19 @@ New specs under `apps/web/e2e/release/studio-*.spec.ts`, each added to the Relea
 | Dashboard | New channel welcome, cards after an upload, cards per role |
 | Content | A video through Processing to Published. Each tab. Filters. Bulk edit and delete. Schedule, reschedule, cancel, publish now. Calendar and list. Draft to publish |
 | Editor | Save details and return to the same tab |
-| Analytics | Real view count after a played video. Range limit. Per-video page from Content and from Top content |
-| Comments | Held comment approved. Remove, reply, pin, block. Platform-held comment is read-only |
+| Analytics | Real view count after a played video. Range limit. Per-video page from Content and from Top content. After real playback with consent, the retention chart and the right traffic source appear. Without consent, "Not shared" |
+| Comments | Held comment approved. Remove then restore, and it reappears on the watch page. Reply, pin, block. Platform-held comment is read-only |
 | Playlists | Create, add from Content, reorder with buttons, delete |
 | Layout | Add and reorder a section. Hide a tab. Check the public channel page |
 | Community | Create a text post and a poll. Edit. Delete |
 | Customisation | Each field. Handle is refused for an admin, in the UI and at the API |
+| Live | Schedule, edit and cancel a stream. Health shows its unavailable state and no numbers. No key or ingest field exists. Chat removal and block as a moderator |
 | Members | From #462 §15, moved to the new URL. No transfer control exists |
 | Settings | Delete channel with typed confirmation. Refused for an admin |
 
 ### 9.3 Roles
 
-For each of the five roles and a user with no role: open every Studio URL, assert the navigation items exactly match §5.1, and call a sample write per page directly at the API, expecting the server's result, with the UI bypassed.
+For each of the four roles and a user with no role: open every Studio URL, assert the navigation items exactly match §5.1, and call a sample write per page directly at the API, expecting the server's result, with the UI bypassed.
 
 Separation: a token with `Super Admin` and no channel role gets the 404 of §3.5 on someone else's Studio, and no ownership transfer control exists anywhere in Studio.
 
@@ -689,18 +785,18 @@ For each row in §6.2, in both locales: the status is exactly 308, the destinati
 - **Themes:** visual checks of every page in all four themes, light and dark (the `visual` project), and `check:theme-colors` passes.
 - **Browsers:** Chromium, Firefox and WebKit, plus Mobile Chrome and Mobile Safari for the phone layouts. `playwright.config.ts` has these projects, but `playwright.release.config.ts` has only `auth-flows` and `player`, so the release config needs Firefox and WebKit projects for the Studio specs. The Firefox no-referrer case for signed Bunny thumbnails is included.
 
-## 10. Open questions for the owner
+## 10. Owner decisions
 
-Each has a recommended answer. The spec above assumes these.
+All decided 2026-11-09. There are no open questions left.
 
-1. **Roles before Studio, or Studio before roles?** #462 isn't built. *Recommended: Studio doesn't wait. It ships with the owner role only, through the same capability helper, and Members & roles appears when #462 lands.*
-2. **Video drafts.** No draft state exists. A new `isDraft` field is real work across upload, edit, schedule and search. The alternative is showing private, never-published videos as drafts, which guesses wrong for videos that are private on purpose. *Recommended: add `isDraft`, and leave existing videos as they are.*
-3. **Lose the view across all channels?** `/dashboard/videos` and the Analytics summary span every channel today. Studio is per channel, as YouTube Studio is. *Recommended: yes, drop both. An account with many channels uses the switcher. Revisit with Institution mode (19.9).*
-4. **Removed tab in Comments.** Showing soft-deleted comments lets a mistake be undone, but needs restore work and a retention rule. *Recommended: leave it out of the first release, and treat the tab in §4.7 as later.*
-5. **Keep `/upload` outside Studio?** It's linked from the wider site and has a working batch flow. *Recommended: keep it at its URL and link from Studio, unlike the video editor, which moves in.*
-6. **Private videos for analytics viewers.** #462 gives this role `analytics.view` without `video.view_private`. *Recommended: count them in totals and show "Private video" with no title or link.*
-7. **Team seat limit name.** The catalogue already has `studio.teamSeats`, and #462 proposes a new `channel.members_max`. They'd be the same limit. *Recommended: use the existing `studio.teamSeats`, on the channel owner's plan, and update #462.*
-8. **Blocking from a channel.** Epic 18.4 lists it, but nothing exists. *Recommended: per channel only, the blocked person isn't told, and `comment.moderate` holders can block. Not a site ban.*
-9. **Spelling and name in the UI.** The brief uses "Customisation" and "Channel settings". *Recommended: British spelling for the English UI, as Epics does: "Customisation", and "Settings" in the rail with "Channel settings" as the page title. Arabic: الاستوديو، لوحة التحكم، المحتوى، التحليلات، التعليقات، قوائم التشغيل، التخطيط، المجتمع، التخصيص، الأعضاء والأدوار، الإعدادات, for a native speaker to confirm.*
-10. **Retention and traffic in Analytics.** Epic 18.5 includes both, and the backend collects neither (`docs/analytics/README.md` §4). *Recommended: launch Studio without them, keep them out of the page until real data exists, and do the pipeline work in its own issues so web and native get it together.*
-11. **Live page.** YouTube Studio has live under Content. Decision D3 is still open. *Recommended: no Live page for now, with live videos listed in Content.*
+1. **Roles and Studio.** Decided 2026-11-09: ship owner-only first. Members & roles arrives when #462 lands.
+2. **Video drafts.** Decided 2026-11-09: add a real draft state, `isDraft`. Existing videos stay as they are.
+3. **All-channels views.** Decided 2026-11-09: per-channel only. The all-channels list and the combined analytics are dropped.
+4. **Removed comments tab.** Decided 2026-11-09: yes, in v1. Creators can see and restore removed comments (§4.7).
+5. **Upload.** Decided 2026-11-09: `/upload` stays outside Studio and is linked from it. The video editor moves into Studio.
+6. **Analytics viewer role.** Decided 2026-11-09: the role is dropped, so the question about private videos is moot. Channel roles are owner, admin, editor and moderator. Stats are visible to owner and admin. Editors and moderators have no Analytics access, following #462's matrix (§4.6).
+7. **Team seat limit.** Decided 2026-11-09: keep the existing `studio.teamSeats`.
+8. **Blocking.** Decided 2026-11-09: per channel, silent, and not a site ban.
+9. **Names.** Decided 2026-11-09: YouTube Studio's names: Dashboard, Content, Analytics, Comments, Playlists, Customisation, Settings.
+10. **Retention and traffic sources.** Decided 2026-11-09: in v1, with data collection and the Analytics UI part of the first build (§8.4, §4.6).
+11. **Live page.** Decided 2026-11-09: spec and build the provider-independent parts now (§4.14). Stream keys, ingest URLs and OBS export wait on D2/D3. D2 is waiting on a reply from Cloudflare.
