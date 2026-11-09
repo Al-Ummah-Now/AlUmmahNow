@@ -38,5 +38,7 @@ describe('addUserAccount', () => {
     expect(url.searchParams.get('lang')).toBe('ar');
     // redirect_uri must stay exactly what /token is called with
     expect(url.searchParams.get('redirect_uri')).toBe('https://videos.qa.alummahnow.net/api/callback/multi-account');
+    // A fresh nonce bound to this browser (the callback checks it against the auth_state cookie)
+    expect(url.searchParams.get('state')).toMatch(/^[a-f0-9]{64}$/);
   });
 });

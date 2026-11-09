@@ -20,10 +20,49 @@ describe('safeReturnPath', () => {
     assert.equal(safeReturnPath('/moderation/ai?status=pending'), '/moderation/ai?status=pending');
     assert.equal(safeReturnPath('/'), '/');
   });
-  it('rejects absolute, protocol-relative and backslash URLs (no open redirect)', () => {
-    for (const bad of ['https://evil.example/', '//evil.example/x', '/\\evil.example', 'javascript:alert(1)', '', null, undefined]) {
-      assert.equal(safeReturnPath(bad as string), null, String(bad));
+  it('rejects hostile inputs, including ones that only normalise off-site (no open redirect)', () => {
+    const hostile = [
+      '//evil',
+      '//evil.example/x',
+      '/\\evil',
+      '/\\/evil.com',
+      '/.//evil.com',
+      '/%2e//evil.com',
+      '/%2E%2E//evil.com',
+      '/%2f/evil.com',
+      '/%5Cevil',
+      '/%5c%5cevil.com',
+      'https://evil',
+      'https://evil.example/',
+      '/\t/evil',
+      '/\t//evil.com',
+      '/%09/evil',
+      '/%0a/evil',
+      '/%0D%0ALocation:%20https://evil',
+      '/\n//evil.com',
+      '/x\u0000',
+      'javascript:alert(1)',
+      '',
+      null,
+      undefined,
+    ];
+    for (const bad of hostile) {
+      const out = safeReturnPath(bad as string);
+      assert.equal(out, null, `${JSON.stringify(bad)} -> ${out}`);
     }
+  });
+  it('whatever it returns stays on this origin', () => {
+    for (const input of ['/a/../..//evil.com', '/./evil', '/a/./b', '/%7E/x']) {
+      const out = safeReturnPath(input);
+      if (out !== null) {
+        assert.ok(!out.startsWith('//'), out);
+        assert.equal(new URL(out, 'https://admin.example').origin, 'https://admin.example', out);
+      }
+    }
+  });
+  it('keeps normal paths with queries, including encoded query values', () => {
+    assert.equal(safeReturnPath('/moderation/reports/r1?tab=ai&next=%2Fx'), '/moderation/reports/r1?tab=ai&next=%2Fx');
+    assert.equal(safeReturnPath('/indices?q=a%20b'), '/indices?q=a%20b');
   });
   it('rejects the sign-in routes themselves (no loop)', () => {
     for (const loop of ['/login', '/login?prompt=none', '/api/callback?code=x', '/access-denied']) {
@@ -68,17 +107,17 @@ describe('loginDecision (/login)', () => {
 });
 
 describe('authorize URL and state', () => {
-  it('adds no prompt on the normal path and keeps the return path in state', () => {
-    const url = new URL(withLoginParams(AUTHORIZE, undefined, '/translations?lang=ar'));
+  it('adds no prompt on the normal path and puts the nonce and return path in state', () => {
+    const url = new URL(withLoginParams(AUTHORIZE, undefined, '/translations?lang=ar', 'n'.repeat(32)));
     assert.equal(url.searchParams.get('prompt'), null);
     assert.equal(url.searchParams.get('redirect_uri'), 'https://admin.qa.alummahnow.net/api/callback');
     const state = url.searchParams.get('state')!;
-    assert.ok(state.startsWith('abc.'), state);
+    assert.ok(state.startsWith(`${'n'.repeat(32)}.`), state);
     assert.equal(returnPathFromState(state), '/translations?lang=ar');
   });
   it('adds prompt=none / prompt=login when asked', () => {
-    assert.equal(new URL(withLoginParams(AUTHORIZE, 'none', '/')).searchParams.get('prompt'), 'none');
-    assert.equal(new URL(withLoginParams(AUTHORIZE, 'login', '/')).searchParams.get('prompt'), 'login');
+    assert.equal(new URL(withLoginParams(AUTHORIZE, 'none', '/', 'n'.repeat(32))).searchParams.get('prompt'), 'none');
+    assert.equal(new URL(withLoginParams(AUTHORIZE, 'login', '/', 'n'.repeat(32))).searchParams.get('prompt'), 'login');
   });
   it('falls back to the dashboard for a missing, malformed or forged state', () => {
     assert.equal(returnPathFromState(null), '/dashboard');

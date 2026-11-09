@@ -6,6 +6,7 @@ import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 import { startSingleSignOut } from "./auth/single-sign-out"
+import { newStateNonce, stateCookieOptions, withState, STATE_COOKIE } from "./auth/oauth-state"
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -138,7 +139,10 @@ export async function login(locale: string = 'en') {
     `${protocol}://${host}/api/callback`,
     "code",
   )
-  redirect(withAuthorizeLocale(url, locale))
+  // Bind the callback to this browser (login CSRF)
+  const nonce = newStateNonce()
+  cookieStore.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === "https"))
+  redirect(withAuthorizeLocale(withState(url, nonce), locale))
 }
 
 export async function logout(locale: string = 'en') {

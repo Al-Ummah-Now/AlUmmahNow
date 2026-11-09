@@ -15,7 +15,10 @@ jest.mock('next/server', () => ({
 }));
 jest.mock('@al-ummah-now/openauth/error', () => ({ InvalidAccessTokenError: class extends Error {} }));
 jest.mock('@/lib/actions', () => ({ getClient: async () => ({ exchange }) }));
-jest.mock('@/lib/auth/session-manager', () => ({ SessionManager: { addAccount: jest.fn(), getActiveSession: jest.fn() } }));
+const addAccount = jest.fn();
+jest.mock('@/lib/auth/session-manager', () => ({
+  SessionManager: { addAccount: (...a: unknown[]) => addAccount(...a), getActiveSession: jest.fn() },
+}));
 jest.mock('@/lib/logger-server', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 import { GET } from '../route';
@@ -27,8 +30,13 @@ function request(url: string, cookies: Record<string, string> = {}): NextRequest
   } as unknown as NextRequest;
 }
 
+const NONCE = 'f'.repeat(64);
+
 describe('GET /api/callback/multi-account', () => {
-  beforeEach(() => exchange.mockReset());
+  beforeEach(() => {
+    exchange.mockReset();
+    addAccount.mockReset();
+  });
 
   it('sends an auth server error to the localized error page without exchanging', async () => {
     const res = await GET(request('https://videos.example/api/callback/multi-account?locale=en&error=access_denied'));
@@ -49,8 +57,21 @@ describe('GET /api/callback/multi-account', () => {
 
   it('redirects to the error page (not {} JSON) when the code exchange fails', async () => {
     exchange.mockResolvedValue({ err: new Error('invalid_grant') });
-    const res = await GET(request('https://videos.example/api/callback/multi-account?code=abc&locale=ar'));
+    const res = await GET(request(`https://videos.example/api/callback/multi-account?code=abc&locale=ar&state=${NONCE}`, { auth_state: NONCE }));
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/ar/auth/error' });
     expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback/multi-account');
+  });
+
+  it('refuses an add-account callback this browser did not start: no exchange, no account added', async () => {
+    exchange.mockResolvedValue({ err: false, tokens: { access: 'a.b.c', refresh: 'r' } });
+    for (const [url, cookies] of [
+      ['https://videos.example/api/callback/multi-account?code=attacker&locale=en', { auth_state: NONCE }],
+      [`https://videos.example/api/callback/multi-account?code=attacker&locale=en&state=${NONCE}`, {}],
+      [`https://videos.example/api/callback/multi-account?code=attacker&locale=en&state=${'e'.repeat(64)}`, { auth_state: NONCE }],
+    ] as Array<[string, Record<string, string>]>) {
+      expect(await GET(request(url, cookies))).toEqual({ kind: 'redirect', url: 'https://videos.example/en/auth/error' });
+    }
+    expect(exchange).not.toHaveBeenCalled();
+    expect(addAccount).not.toHaveBeenCalled();
   });
 });

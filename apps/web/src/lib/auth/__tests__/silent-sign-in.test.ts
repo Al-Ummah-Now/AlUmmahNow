@@ -12,6 +12,7 @@ import {
   probeOutcome,
   safeReturnPath,
   shouldProbe,
+  sameOriginUrl,
   successDestination,
 } from '../silent-sign-in';
 
@@ -71,9 +72,51 @@ describe('safeReturnPath', () => {
   it('keeps same-origin pages and drops session_updated', () => {
     expect(safeReturnPath('/en/watch?v=1&session_updated=true')).toBe('/en/watch?v=1');
   });
-  it('rejects other origins and API routes', () => {
-    for (const bad of ['https://evil.example', '//evil.example', '/\\evil', '/api/callback', 'en', '', null]) {
-      expect(safeReturnPath(bad)).toBeNull();
+  it.each([
+    '//evil',
+    '//evil.example',
+    '/\\evil',
+    '/\\/evil.com',
+    '/.//evil.com',
+    '/%2e//evil.com',
+    '/%2E%2E//evil.com',
+    '/%2f/evil.com',
+    '/%5Cevil',
+    '/%5c%5cevil.com',
+    'https://evil',
+    'https://evil.example',
+    '/\t/evil',
+    '/\t//evil.com',
+    '/%09/evil',
+    '/%0a/evil',
+    '/%0D%0ALocation:%20https://evil',
+    '/\n//evil.com',
+    '/api/callback',
+    'en',
+    '',
+  ])('rejects hostile input %j (including ones that only normalise off-site)', (bad) => {
+    expect(safeReturnPath(bad)).toBeNull();
+  });
+  it('rejects null', () => {
+    expect(safeReturnPath(null)).toBeNull();
+  });
+  it('whatever it returns stays on this origin', () => {
+    for (const input of ['/a/../..//evil.com', '/./evil', '/a/./b']) {
+      const out = safeReturnPath(input);
+      if (out !== null) {
+        expect(out.startsWith('//')).toBe(false);
+        expect(new URL(out, 'https://videos.example').origin).toBe('https://videos.example');
+      }
+    }
+  });
+  it('keeps normal paths with queries, including encoded query values', () => {
+    expect(safeReturnPath('/en/search?q=a%2Fb&page=2')).toBe('/en/search?q=a%2Fb&page=2');
+    expect(safeReturnPath('/ar/video/x?t=3')).toBe('/ar/video/x?t=3');
+  });
+  it('sameOriginUrl falls back to the origin root for anything off-site', () => {
+    expect(sameOriginUrl('/en/x?y=1', 'https://videos.example')).toBe('https://videos.example/en/x?y=1');
+    for (const bad of ['//evil.example/x', 'https://evil.example', '/\\evil.example']) {
+      expect(sameOriginUrl(bad, 'https://videos.example')).toBe('https://videos.example/');
     }
   });
 });

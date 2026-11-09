@@ -45,7 +45,11 @@ describe('GET /api/auth/login', () => {
     expect(url.searchParams.get('lang')).toBe('ar');
     // redirect_uri stays exactly what /token is called with
     expect(url.searchParams.get('redirect_uri')).toBe('https://videos.qa.alummahnow.net/api/callback');
-    expect(res.set).toEqual({ auth_locale: 'ar', auth_return: '/ar/video/x', auth_silent: '1' });
+    const { auth_state: state, ...rest } = res.set;
+    expect(rest).toEqual({ auth_locale: 'ar', auth_return: '/ar/video/x', auth_silent: '1' });
+    // The callback only accepts a state equal to this browser's cookie
+    expect(state).toMatch(/^[a-f0-9]{64}$/);
+    expect(url.searchParams.get('state')).toBe(state);
   });
 
   it('prompt=login (add account) is not silent', async () => {

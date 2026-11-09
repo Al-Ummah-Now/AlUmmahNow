@@ -1,11 +1,10 @@
 import { redirect } from 'next/navigation';
-import { headers as getHeaders } from 'next/headers';
-import { isAuthenticated, getAuthClient } from '@/lib/auth';
+import { isAuthenticated } from '@/lib/auth';
 import { getI18n } from '@/i18n/server';
 import { PublicShell } from '@/components/PublicShell';
 import { ErrorAlert, primaryButtonClass } from '@/components/ui';
 import type { MessageKey } from '@/i18n/translate';
-import { loginDecision, parsePrompt, withLoginParams } from '@/lib/login-flow';
+import { loginDecision, parsePrompt, startPath } from '@/lib/login-flow';
 
 interface PageProps {
   searchParams: Promise<{ error?: string; return?: string; prompt?: string }>;
@@ -55,12 +54,6 @@ export default async function LoginPage({ searchParams }: PageProps) {
     redirect(decision.to);
   }
 
-  const headersData = await getHeaders();
-  const host = headersData.get('host');
-  const protocol = host?.includes('localhost') ? 'http' : 'https';
-
-  const client = await getAuthClient();
-  const { url } = await client.authorize(`${protocol}://${host}/api/callback`, 'code');
-
-  redirect(withLoginParams(url, decision.prompt, decision.returnTo));
+  // /api/auth/start binds the OAuth state to this browser (a page cannot set cookies)
+  redirect(startPath(decision.prompt, decision.returnTo));
 }
