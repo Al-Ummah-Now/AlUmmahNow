@@ -13,7 +13,7 @@ Status: spec, 2026-11-08. Lantern is the first theme and the one deployed.
 | When a theme changes | With a deploy. One config value per app and environment: `ACTIVE_THEME`. |
 | User choice of theme | None. No picker, no per-user preference, no profile sync. |
 | Date-based switching | None. An event theme goes live and comes down through a deploy. |
-| Light and dark | Works as it does today in each app, inside the deployed theme. |
+| Light and dark | Every surface supports both, in every theme, unless listed under exceptions. Mode follows the system preference, and an existing toggle stays. |
 | What ships | Only the active theme's CSS and assets, resolved at build time. |
 | Page code | Refers to semantic tokens and named slots, never to a theme's files. |
 
@@ -137,8 +137,26 @@ release. The CI matrix overrides it with the `ACTIVE_THEME` environment variable
 | Desktop and TV | AlUmmahNowDesktop | WinUI, GTK, Tizen NUI | `Directory.Build.props`: `ActiveTheme` | synced generated files | per platform |
 | Importer | AlUmmahNowTools Uno app | Uno, XAML | MSBuild property | `Fanous.Colors.xaml` | per platform |
 
-`AlUmmahNowCore` renders no UI and is out of scope. The bknd admin screens are third-party UI and keep
-their own styling.
+`AlUmmahNowCore` renders no UI and is out of scope.
+
+### Light and dark on every surface
+
+The last column above is the starting point. Surfaces with no mode handling, or with only one mode,
+gain both: Profile, the auth custom pages, Auth admin, the CMS pages and the marketing site. Any other
+surface found during migration is held to the same rule.
+
+These surfaces have no toggle, so their mode follows `prefers-color-scheme` in the generated CSS. Using
+CSS alone means no script and no flash on load. Videos, Admin and the native apps keep their existing
+toggles and settings.
+
+**Exceptions**
+
+| Surface | Why it has one mode | What it does instead |
+|---|---|---|
+| bknd admin screens in AlUmmahNowCMS | Third-party UI rendered by bknd, which the themes can't reach | Keeps its own styling |
+| Transactional emails | Mail clients control rendering and support for dark styles is unreliable | One light layout, using the theme's `email` slots |
+
+A new exception needs a row here and a reason.
 
 **Across repos:** the monorepo publishes `@al-ummah-now/fanous-themes` to GitHub Packages for JavaScript
 repos and attaches the same files to a tagged release for native repos. Each native repo pins a version
@@ -187,7 +205,8 @@ Validation runs for every registered theme and fails with a message naming theme
 Optional slots may resolve to `none`.
 
 **Matrix:** each app builds once per registered theme and runs the token lint plus a smoke check per
-theme and mode. Web apps open key pages in English and Arabic and assert that the primary button
+theme and mode. Both modes are required on every surface except the listed exceptions, including those
+that gain modes in this work. Web apps open key pages in English and Arabic and assert that the primary button
 computes to the theme's token and that axe passes. Native apps generate and compile for each theme. A
 broken theme fails CI even when Lantern is deployed.
 
@@ -221,12 +240,6 @@ approval of the screenshots.
 
 1. Registry, parent resolution, validation and flat output, with Lantern moved into `themes/lantern`. Infrastructure.
 2. `check:theme-colors` with allowlists in each repo. Infrastructure.
-3. `ACTIVE_THEME` wiring and the CI matrix per app, starting from Lantern output. Infrastructure.
-4. One pull request per app: map variables to tokens and migrate colours. Visual, starting with `apps/web`.
+3. `ACTIVE_THEME` wiring, `prefers-color-scheme` output for surfaces without a toggle, and the theme and mode CI matrix per app, starting from Lantern output. Infrastructure, except that a surface gaining a mode changes visually for people on the other system setting, so that part ships with step 4.
+4. One pull request per app: map variables to tokens, migrate colours and turn on both modes. Visual, starting with `apps/web`. Screenshots cover every theme in both modes.
 5. Build the owner's chosen theme 2, and theme 3 if one is picked, as data. Visual.
-
-## Open product question
-
-Profile, the auth custom pages, auth admin, the CMS pages and the marketing site have no light and dark
-switching today. They will render their current single mode from the deployed theme's tokens, so a mode
-is not added by this work. Adding one to those surfaces is a separate owner decision.
