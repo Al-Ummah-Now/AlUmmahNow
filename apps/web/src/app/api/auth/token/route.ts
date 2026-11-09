@@ -20,9 +20,10 @@ export async function GET(req: NextRequest) {
   // The middleware does not run for /api routes: refresh here, so the
   // browser (TUS uploads, direct API calls) never gets a token about to expire
   const session = await SessionManager.ensureFreshActiveSession();
+  // Signed out is an answer, not an error: a 401 here logs a console error on
+  // every anonymous page that asks (watch progress, uploads)
   if (!session?.accessToken) {
     return NextResponse.json({ accessToken: null, channelId: null }, {
-      status: 401,
       headers: { "Cache-Control": "no-store" },
     });
   }
