@@ -7,7 +7,42 @@
       "description": "Great mosques and Islamic architecture from across the Muslim world.",
       "descriptionAr": "مساجد كبرى وعمارة إسلامية من أنحاء العالم الإسلامي.",
       "artClip": "putra-mosque",
-      "artAttribution": "\"Masjidputra4k.webm\" by Gaodanielbo, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Masjidputra4k.webm). Trimmed and re-encoded for this demo."
+      "artAttribution": "\"Masjidputra4k.webm\" by Gaodanielbo, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Masjidputra4k.webm). Trimmed and re-encoded for this demo.",
+      "sections": [
+        {
+          "type": "featured_videos",
+          "title": "Featured Mosques",
+          "titleAr": "مساجد مختارة",
+          "clips": [
+            "putra-mosque",
+            "umayyad-mosque",
+            "great-mosque-mecca",
+            "dome-of-the-rock"
+          ]
+        },
+        {
+          "type": "popular_uploads",
+          "title": "Most Watched",
+          "titleAr": "الأكثر مشاهدة"
+        },
+        {
+          "type": "multiple_playlists",
+          "title": "Collections",
+          "titleAr": "مجموعات",
+          "playlists": [
+            "great",
+            "sacred"
+          ]
+        },
+        {
+          "type": "featured_videos",
+          "title": "Shorts",
+          "titleAr": "مقاطع قصيرة",
+          "clips": [
+            "floating-mosque-bontang"
+          ]
+        }
+      ]
     },
     {
       "key": "nidaa",
@@ -16,7 +51,30 @@
       "description": "The adhan, congregational prayer and Quran recitation.",
       "descriptionAr": "الأذان وصلاة الجماعة وتلاوة القرآن.",
       "artClip": "adhan-istanbul",
-      "artAttribution": "\"Adhan in Istanbul.webm\" by Viceskeeni2, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Adhan_in_Istanbul.webm). Trimmed and re-encoded for this demo."
+      "artAttribution": "\"Adhan in Istanbul.webm\" by Viceskeeni2, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Adhan_in_Istanbul.webm). Trimmed and re-encoded for this demo.",
+      "sections": [
+        {
+          "type": "recent_uploads",
+          "title": "Latest",
+          "titleAr": "الأحدث"
+        },
+        {
+          "type": "single_playlist",
+          "title": "Adhan around the World",
+          "titleAr": "الأذان حول العالم",
+          "playlists": [
+            "adhan"
+          ]
+        },
+        {
+          "type": "featured_videos",
+          "title": "Shorts",
+          "titleAr": "مقاطع قصيرة",
+          "clips": [
+            "adhan-istanbul"
+          ]
+        }
+      ]
     },
     {
       "key": "aswaq",
@@ -25,7 +83,40 @@
       "description": "Old cities, bazaars, rivers and streets.",
       "descriptionAr": "مدن عتيقة وأسواق وأنهار وشوارع.",
       "artClip": "spice-bazaar",
-      "artAttribution": "\"İstanbul - Mısır Çarşısı girişi - Şubat 2013.ogv\" by VikiPicture, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_M%C4%B1s%C4%B1r_%C3%87ar%C5%9F%C4%B1s%C4%B1_giri%C5%9Fi_-_%C5%9Eubat_2013.ogv). Trimmed and re-encoded for this demo."
+      "artAttribution": "\"İstanbul - Mısır Çarşısı girişi - Şubat 2013.ogv\" by VikiPicture, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_M%C4%B1s%C4%B1r_%C3%87ar%C5%9F%C4%B1s%C4%B1_giri%C5%9Fi_-_%C5%9Eubat_2013.ogv). Trimmed and re-encoded for this demo.",
+      "sections": [
+        {
+          "type": "featured_videos",
+          "title": "Featured Walks",
+          "titleAr": "جولات مختارة",
+          "clips": [
+            "fes-medina",
+            "spice-bazaar",
+            "generalife-water-stairs"
+          ]
+        },
+        {
+          "type": "recent_uploads",
+          "title": "Latest",
+          "titleAr": "الأحدث"
+        },
+        {
+          "type": "featured_videos",
+          "title": "Shorts",
+          "titleAr": "مقاطع قصيرة",
+          "clips": [
+            "ramadan-lanterns"
+          ]
+        },
+        {
+          "type": "single_playlist",
+          "title": "Old Cities and Rivers",
+          "titleAr": "مدن عتيقة وأنهار",
+          "playlists": [
+            "cities"
+          ]
+        }
+      ]
     },
     {
       "key": "sahra",
@@ -34,7 +125,27 @@
       "description": "Dunes, camels and life at the edge of the sand.",
       "descriptionAr": "كثبان وجمال وحياة على تخوم الرمال.",
       "artClip": "dromedaries",
-      "artAttribution": "\"Camelus dromedarius - 2016-01-18.webm\" by Pristurus, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Camelus_dromedarius_-_2016-01-18.webm). Trimmed and re-encoded for this demo."
+      "artAttribution": "\"Camelus dromedarius - 2016-01-18.webm\" by Pristurus, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Camelus_dromedarius_-_2016-01-18.webm). Trimmed and re-encoded for this demo.",
+      "sections": [
+        {
+          "type": "recent_uploads",
+          "title": "Latest",
+          "titleAr": "الأحدث"
+        },
+        {
+          "type": "single_playlist",
+          "title": "Life on the Sand",
+          "titleAr": "الحياة على الرمال",
+          "playlists": [
+            "sand"
+          ]
+        },
+        {
+          "type": "subscribed_channels",
+          "title": "Channels We Follow",
+          "titleAr": "قنوات نتابعها"
+        }
+      ]
     },
     {
       "key": "miyah",
@@ -43,7 +154,31 @@
       "description": "Seas, waterfalls, streams and woodland.",
       "descriptionAr": "بحار وشلالات وجداول وغابات.",
       "artClip": "krimml-falls",
-      "artAttribution": "\"Krimmler Wasserfaelle Waterfall in Austria Biggest from Europe 380m at the top.webm\" by Erwin Lindsen, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Krimmler_Wasserfaelle_Waterfall_in_Austria_Biggest_from_Europe_380m_at_the_top.webm). Trimmed and re-encoded for this demo."
+      "artAttribution": "\"Krimmler Wasserfaelle Waterfall in Austria Biggest from Europe 380m at the top.webm\" by Erwin Lindsen, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Krimmler_Wasserfaelle_Waterfall_in_Austria_Biggest_from_Europe_380m_at_the_top.webm). Trimmed and re-encoded for this demo.",
+      "sections": [
+        {
+          "type": "popular_uploads",
+          "title": "Most Watched",
+          "titleAr": "الأكثر مشاهدة"
+        },
+        {
+          "type": "single_playlist",
+          "title": "Sea and Falls",
+          "titleAr": "بحر وشلالات",
+          "playlists": [
+            "seafalls"
+          ]
+        },
+        {
+          "type": "featured_videos",
+          "title": "Shorts",
+          "titleAr": "مقاطع قصيرة",
+          "clips": [
+            "sikkim-stream",
+            "karura-forest"
+          ]
+        }
+      ]
     },
     {
       "key": "sama",
@@ -52,7 +187,28 @@
       "description": "Clouds, sunsets and stars in time-lapse.",
       "descriptionAr": "غيوم وغروب ونجوم بالتصوير المتسارع.",
       "artClip": "algonquin-sunset",
-      "artAttribution": "\"Algonquin Sunset 4k.webm\" by Alexander Kondratskiy, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Algonquin_Sunset_4k.webm). Trimmed and re-encoded for this demo."
+      "artAttribution": "\"Algonquin Sunset 4k.webm\" by Alexander Kondratskiy, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Algonquin_Sunset_4k.webm). Trimmed and re-encoded for this demo.",
+      "sections": [
+        {
+          "type": "recent_uploads",
+          "title": "Latest",
+          "titleAr": "الأحدث"
+        },
+        {
+          "type": "multiple_playlists",
+          "title": "Collections",
+          "titleAr": "مجموعات",
+          "playlists": [
+            "timelapse",
+            "dusk"
+          ]
+        },
+        {
+          "type": "liked_videos",
+          "title": "Our Favourites",
+          "titleAr": "المفضلة لدينا"
+        }
+      ]
     },
     {
       "key": "sunaa",
@@ -61,7 +217,39 @@
       "description": "Handwork, bread and the fruits of the land.",
       "descriptionAr": "أعمال يدوية وخبز وثمار الأرض.",
       "artClip": "date-palm",
-      "artAttribution": "\"Palm 1 2013-07-10.ogv\" by FASTILY, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Palm_1_2013-07-10.ogv). Trimmed and re-encoded for this demo."
+      "artAttribution": "\"Palm 1 2013-07-10.ogv\" by FASTILY, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Palm_1_2013-07-10.ogv). Trimmed and re-encoded for this demo.",
+      "sections": [
+        {
+          "type": "featured_videos",
+          "title": "Featured",
+          "titleAr": "مختارات",
+          "clips": [
+            "clay-pots",
+            "sourdough"
+          ]
+        },
+        {
+          "type": "featured_videos",
+          "title": "Shorts",
+          "titleAr": "مقاطع قصيرة",
+          "clips": [
+            "copper-vessel"
+          ]
+        },
+        {
+          "type": "single_playlist",
+          "title": "Hands at Work",
+          "titleAr": "أيدٍ تعمل",
+          "playlists": [
+            "hands"
+          ]
+        },
+        {
+          "type": "subscribed_channels",
+          "title": "Channels We Follow",
+          "titleAr": "قنوات نتابعها"
+        }
+      ]
     }
   ],
   "clips": [
@@ -1205,6 +1393,7 @@
   ],
   "playlists": [
     {
+      "key": "great",
       "channel": "masajid",
       "title": "Great Mosques | مساجد كبرى",
       "description": "A tour of great mosques. جولة في المساجد الكبرى.",
@@ -1218,6 +1407,7 @@
       ]
     },
     {
+      "key": "adhan",
       "channel": "nidaa",
       "title": "Adhan from Around the World | الأذان حول العالم",
       "description": "The call to prayer from many cities. الأذان من مدن شتى.",
@@ -1229,6 +1419,7 @@
       ]
     },
     {
+      "key": "timelapse",
       "channel": "sama",
       "title": "Time-lapse Skies | سماء متسارعة",
       "description": "Clouds and stars. غيوم ونجوم.",
@@ -1242,6 +1433,7 @@
       ]
     },
     {
+      "key": "seafalls",
       "channel": "miyah",
       "title": "Sea and Falls | بحر وشلالات",
       "description": "Water in motion. ماء في حركة.",
@@ -1250,6 +1442,63 @@
         "good-fortune-cove",
         "seto-inland-sea",
         "krimml-falls"
+      ]
+    },
+    {
+      "key": "sacred",
+      "channel": "masajid",
+      "title": "Sacred Mosques | المساجد المقدسة",
+      "description": "The great sanctuaries. الحرم والمساجد العظيمة.",
+      "clips": [
+        "great-mosque-mecca",
+        "tawaf",
+        "dome-of-the-rock"
+      ]
+    },
+    {
+      "key": "dusk",
+      "channel": "sama",
+      "title": "Dusk and Night | الغسق والليل",
+      "description": "From sunset to the stars. من الغروب إلى النجوم.",
+      "clips": [
+        "algonquin-sunset",
+        "milky-way",
+        "la-silla-cloudscape"
+      ]
+    },
+    {
+      "key": "cities",
+      "channel": "aswaq",
+      "title": "Old Cities and Rivers | مدن عتيقة وأنهار",
+      "description": "Streets, bazaars and water. شوارع وأسواق وماء.",
+      "clips": [
+        "fes-medina",
+        "spice-bazaar",
+        "nile-desouk",
+        "kl-thunderstorm"
+      ]
+    },
+    {
+      "key": "sand",
+      "channel": "sahra",
+      "title": "Life on the Sand | الحياة على الرمال",
+      "description": "Camels, birds and dunes. جمال وطيور وكثبان.",
+      "clips": [
+        "dromedaries",
+        "kavir-camels",
+        "flamingos",
+        "tottori-dunes"
+      ]
+    },
+    {
+      "key": "hands",
+      "channel": "sunaa",
+      "title": "Hands at Work | أيدٍ تعمل",
+      "description": "Craft and food made by hand. حرف وطعام بصنع اليد.",
+      "clips": [
+        "date-palm",
+        "sourdough",
+        "clay-pots"
       ]
     }
   ],
@@ -1270,5 +1519,474 @@
   },
   "keep": [
     "443418c1-dc70-43d9-944d-5388ab7dc4c3"
-  ]
+  ],
+  "engagement": {
+    "subscriptions": [
+      {
+        "by": "masajid",
+        "to": [
+          "nidaa",
+          "aswaq",
+          "sahra"
+        ]
+      },
+      {
+        "by": "nidaa",
+        "to": [
+          "aswaq",
+          "sahra",
+          "miyah"
+        ]
+      },
+      {
+        "by": "aswaq",
+        "to": [
+          "sahra",
+          "miyah",
+          "sama"
+        ]
+      },
+      {
+        "by": "sahra",
+        "to": [
+          "miyah",
+          "sama",
+          "sunaa"
+        ]
+      },
+      {
+        "by": "miyah",
+        "to": [
+          "sama",
+          "sunaa",
+          "masajid"
+        ]
+      },
+      {
+        "by": "sama",
+        "to": [
+          "sunaa",
+          "masajid",
+          "nidaa"
+        ]
+      },
+      {
+        "by": "sunaa",
+        "to": [
+          "masajid",
+          "nidaa",
+          "aswaq"
+        ]
+      }
+    ],
+    "comments": [
+      {
+        "clip": "putra-mosque",
+        "by": "nidaa",
+        "text": "Beautiful, thank you for sharing."
+      },
+      {
+        "clip": "umayyad-mosque",
+        "by": "aswaq",
+        "text": "ما شاء الله، مشهد جميل."
+      },
+      {
+        "clip": "umayyad-mosque",
+        "by": "sahra",
+        "text": "JazakAllahu khairan for this."
+      },
+      {
+        "clip": "great-mosque-mecca",
+        "by": "sahra",
+        "text": "جزاكم الله خيراً على هذا المقطع."
+      },
+      {
+        "clip": "jaffa-muezzin",
+        "by": "miyah",
+        "text": "What a peaceful place."
+      },
+      {
+        "clip": "jaffa-muezzin",
+        "by": "sama",
+        "text": "مكان يبعث على السكينة."
+      },
+      {
+        "clip": "adhan-hargeisa",
+        "by": "sama",
+        "text": "Subhan Allah, such beauty."
+      },
+      {
+        "clip": "qirat-al-sharqawi",
+        "by": "sunaa",
+        "text": "سبحان الله، ما أجمل الخلق."
+      },
+      {
+        "clip": "qirat-al-sharqawi",
+        "by": "masajid",
+        "text": "Beautiful, thank you for sharing."
+      },
+      {
+        "clip": "fes-medina",
+        "by": "masajid",
+        "text": "ما شاء الله، مشهد جميل."
+      },
+      {
+        "clip": "spice-bazaar",
+        "by": "nidaa",
+        "text": "JazakAllahu khairan for this."
+      },
+      {
+        "clip": "spice-bazaar",
+        "by": "sahra",
+        "text": "جزاكم الله خيراً على هذا المقطع."
+      },
+      {
+        "clip": "dromedaries",
+        "by": "aswaq",
+        "text": "What a peaceful place."
+      },
+      {
+        "clip": "krimml-falls",
+        "by": "sahra",
+        "text": "مكان يبعث على السكينة."
+      },
+      {
+        "clip": "krimml-falls",
+        "by": "sama",
+        "text": "Subhan Allah, such beauty."
+      },
+      {
+        "clip": "milky-way",
+        "by": "miyah",
+        "text": "سبحان الله، ما أجمل الخلق."
+      },
+      {
+        "clip": "clay-pots",
+        "by": "sama",
+        "text": "Beautiful, thank you for sharing."
+      },
+      {
+        "clip": "clay-pots",
+        "by": "masajid",
+        "text": "ما شاء الله، مشهد جميل."
+      }
+    ],
+    "likes": [
+      {
+        "clip": "dome-of-the-rock",
+        "by": [
+          "nidaa"
+        ]
+      },
+      {
+        "clip": "dolmabahce-mosque",
+        "by": [
+          "aswaq",
+          "sahra"
+        ]
+      },
+      {
+        "clip": "yeni-cami",
+        "by": [
+          "sahra",
+          "miyah",
+          "sama"
+        ]
+      },
+      {
+        "clip": "putra-mosque",
+        "by": [
+          "miyah"
+        ]
+      },
+      {
+        "clip": "umayyad-mosque",
+        "by": [
+          "sama",
+          "sunaa"
+        ]
+      },
+      {
+        "clip": "hassan-tower",
+        "by": [
+          "sunaa",
+          "nidaa",
+          "aswaq"
+        ]
+      },
+      {
+        "clip": "mansourah-tlemcen",
+        "by": [
+          "nidaa"
+        ]
+      },
+      {
+        "clip": "great-mosque-mecca",
+        "by": [
+          "aswaq",
+          "sahra"
+        ]
+      },
+      {
+        "clip": "minar-jonban",
+        "by": [
+          "sahra",
+          "miyah",
+          "sama"
+        ]
+      },
+      {
+        "clip": "tawaf",
+        "by": [
+          "miyah"
+        ]
+      },
+      {
+        "clip": "floating-mosque-bontang",
+        "by": [
+          "sama",
+          "sunaa"
+        ]
+      },
+      {
+        "clip": "jaffa-muezzin",
+        "by": [
+          "sunaa",
+          "masajid",
+          "aswaq"
+        ]
+      },
+      {
+        "clip": "adhan-hargeisa",
+        "by": [
+          "masajid"
+        ]
+      },
+      {
+        "clip": "maghrib-cumilla",
+        "by": [
+          "aswaq",
+          "sahra"
+        ]
+      },
+      {
+        "clip": "qirat-al-sharqawi",
+        "by": [
+          "sahra",
+          "miyah",
+          "sama"
+        ]
+      },
+      {
+        "clip": "qirat-ahmadi-wafa",
+        "by": [
+          "miyah"
+        ]
+      },
+      {
+        "clip": "adhan-istanbul",
+        "by": [
+          "sama",
+          "sunaa"
+        ]
+      },
+      {
+        "clip": "generalife-water-stairs",
+        "by": [
+          "sunaa",
+          "masajid",
+          "nidaa"
+        ]
+      },
+      {
+        "clip": "fes-medina",
+        "by": [
+          "masajid"
+        ]
+      },
+      {
+        "clip": "spice-bazaar",
+        "by": [
+          "nidaa",
+          "sahra"
+        ]
+      },
+      {
+        "clip": "nile-desouk",
+        "by": [
+          "sahra",
+          "miyah",
+          "sama"
+        ]
+      },
+      {
+        "clip": "kl-thunderstorm",
+        "by": [
+          "miyah"
+        ]
+      },
+      {
+        "clip": "ramadan-lanterns",
+        "by": [
+          "sama",
+          "sunaa"
+        ]
+      },
+      {
+        "clip": "dromedaries",
+        "by": [
+          "sunaa",
+          "masajid",
+          "nidaa"
+        ]
+      },
+      {
+        "clip": "kavir-camels",
+        "by": [
+          "masajid"
+        ]
+      },
+      {
+        "clip": "flamingos",
+        "by": [
+          "nidaa",
+          "aswaq"
+        ]
+      },
+      {
+        "clip": "tottori-dunes",
+        "by": [
+          "aswaq",
+          "miyah",
+          "sama"
+        ]
+      },
+      {
+        "clip": "open-sea",
+        "by": [
+          "sahra"
+        ]
+      },
+      {
+        "clip": "good-fortune-cove",
+        "by": [
+          "sama",
+          "sunaa"
+        ]
+      },
+      {
+        "clip": "seto-inland-sea",
+        "by": [
+          "sunaa",
+          "masajid",
+          "nidaa"
+        ]
+      },
+      {
+        "clip": "krimml-falls",
+        "by": [
+          "masajid"
+        ]
+      },
+      {
+        "clip": "hyrcanian-forest",
+        "by": [
+          "nidaa",
+          "aswaq"
+        ]
+      },
+      {
+        "clip": "sikkim-stream",
+        "by": [
+          "aswaq",
+          "sahra",
+          "sama"
+        ]
+      },
+      {
+        "clip": "karura-forest",
+        "by": [
+          "sahra"
+        ]
+      },
+      {
+        "clip": "bellevue-clouds",
+        "by": [
+          "miyah",
+          "sunaa"
+        ]
+      },
+      {
+        "clip": "swiss-mountains",
+        "by": [
+          "sunaa",
+          "masajid",
+          "nidaa"
+        ]
+      },
+      {
+        "clip": "matterhorn",
+        "by": [
+          "masajid"
+        ]
+      },
+      {
+        "clip": "fog-mountain",
+        "by": [
+          "nidaa",
+          "aswaq"
+        ]
+      },
+      {
+        "clip": "algonquin-sunset",
+        "by": [
+          "aswaq",
+          "sahra",
+          "miyah"
+        ]
+      },
+      {
+        "clip": "milky-way",
+        "by": [
+          "sahra"
+        ]
+      },
+      {
+        "clip": "la-silla-cloudscape",
+        "by": [
+          "miyah",
+          "sunaa"
+        ]
+      },
+      {
+        "clip": "date-palm",
+        "by": [
+          "sama",
+          "masajid",
+          "nidaa"
+        ]
+      },
+      {
+        "clip": "sourdough",
+        "by": [
+          "masajid"
+        ]
+      },
+      {
+        "clip": "clay-pots",
+        "by": [
+          "nidaa",
+          "aswaq"
+        ]
+      },
+      {
+        "clip": "copper-vessel",
+        "by": [
+          "aswaq",
+          "sahra",
+          "miyah"
+        ]
+      }
+    ]
+  }
 }
