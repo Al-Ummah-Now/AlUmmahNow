@@ -244,12 +244,8 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
   },
 
   resume: {
-    title: 'Continue watching?',
-    description: 'You previously watched this video',
-    resumeButton: 'Resume from',
     startOverButton: 'Start from beginning',
-    autoResumeMessage: 'Auto-resuming in',
-    dismissHint: 'Press ESC or click outside to dismiss',
+    resumingAt: 'Resuming at {time}',
   },
 
   pluralization: {

@@ -33,7 +33,8 @@ test.describe('Release: watch history', () => {
     await createProfile(user);
 
     await page.goto(watchUrl(video!.id));
-    await playFor(page, 3);
+    // Nothing is saved before 10s of real playback (#242, RESUME_MIN_WATCHED_SECONDS)
+    await playFor(page, 12);
     // Pausing saves the progress right away (otherwise every 10s)
     await pause(page);
 

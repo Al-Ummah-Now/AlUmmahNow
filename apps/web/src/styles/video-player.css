@@ -815,7 +815,6 @@
   will-change: opacity;
 }
 
-.vjs-resume-prompt-modal,
 .vjs-keyboard-help-modal {
   will-change: transform, opacity;
 }
@@ -823,7 +822,6 @@
 /* Optimize animations for better performance */
 .video-js .vjs-big-play-button,
 .video-js .vjs-control-bar button,
-.vjs-resume-prompt-modal,
 .vjs-keyboard-help-modal {
   backface-visibility: hidden;
   transform: translateZ(0); /* Force hardware acceleration */
@@ -856,7 +854,6 @@
 }
 
 /* Additional containment optimizations */
-.vjs-resume-prompt-content,
 .vjs-keyboard-help-content {
   contain: layout style paint;
 }
@@ -947,364 +944,47 @@
 }
 
 /* ========================================
-   Resume Playback Prompt (Issue #58)
+   Start from beginning (#242)
+   Scoped under .video-js to beat Video.js's own button reset.
+   Shown when the player opened at a saved position. Sits above the control
+   bar at the inline start (right in RTL). Minimal on purpose: restyled with
+   the rest of the controls later; keep the class and data-testid stable.
    ======================================== */
-
-/* Backdrop overlay */
-.vjs-resume-prompt-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  animation: vjs-resume-fade-in 0.2s ease-out;
-}
-
-@keyframes vjs-resume-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* Modal container */
-.vjs-resume-prompt-modal {
-  position: relative;
-  max-width: 28rem;
-  width: 90%;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  animation: vjs-resume-scale-in 0.2s ease-out;
-  overflow: hidden;
-}
-
-@keyframes vjs-resume-scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Close button */
-.vjs-resume-prompt-close {
+.video-js .vjs-start-over {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
-  padding: 0.5rem;
-  background: color-mix(in oklch, var(--background) 50%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
+  bottom: calc(4rem + 0.5rem); /* clear of the 4rem control bar */
+  inset-inline-start: 1rem;
+  z-index: calc(var(--video-z-control-bar) + 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: var(--vp-button-size);
+  padding: 0 0.875rem;
+  border: 1px solid var(--vp-surface-border);
+  border-radius: 9999px;
+  background: var(--vp-menu-bg);
+  color: var(--vp-fg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  transition: background-color var(--video-transition-fast);
 }
 
-.vjs-resume-prompt-close:hover {
-  background: color-mix(in oklch, var(--background) 80%, transparent);
-  transform: scale(1.1);
+.video-js .vjs-start-over:hover {
+  background: var(--vp-surface);
 }
 
-.vjs-resume-prompt-close:focus-visible {
-  outline: 2px solid var(--ring);
+.video-js .vjs-start-over:focus-visible {
+  outline: 3px solid var(--vp-focus);
   outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--vp-focus-halo);
 }
 
-/* Content container */
-.vjs-resume-prompt-content {
-  padding: 1.5rem;
-}
-
-/* Header with thumbnail and title */
-.vjs-resume-prompt-header {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  align-items: flex-start;
-}
-
-/* Thumbnail container */
-.vjs-resume-prompt-thumbnail {
-  position: relative;
-  width: 120px;
-  min-width: 120px;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  background: var(--muted);
-}
-
-.vjs-resume-prompt-thumbnail img {
-  width: 100%;
-  height: auto;
-  display: block;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-}
-
-/* Progress indicator on thumbnail */
-.vjs-resume-prompt-thumbnail-progress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: color-mix(in oklch, var(--muted) 40%, transparent);
-}
-
-.vjs-resume-prompt-thumbnail-progress-bar {
-  height: 100%;
-  background: var(--primary);
-  transition: width 0.3s ease;
-}
-
-/* Title container */
-.vjs-resume-prompt-title-container {
-  flex: 1;
-  min-width: 0;
-}
-
-.vjs-resume-prompt-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0 0 0.25rem 0;
-  color: var(--card-foreground);
-}
-
-.vjs-resume-prompt-subtitle {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-  margin: 0 0 0.5rem 0;
-}
-
-.vjs-resume-prompt-video-title {
-  font-size: 0.875rem;
-  color: var(--card-foreground);
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-height: 1.4;
-}
-
-/* Saved time display */
-.vjs-resume-prompt-time {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: color-mix(in oklch, var(--muted) 50%, transparent);
-  border-radius: 0.5rem;
-  margin-bottom: 1.5rem;
-  justify-content: center;
-}
-
-.vjs-resume-prompt-time-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--primary);
-  flex-shrink: 0;
-}
-
-.vjs-resume-prompt-time-text {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--card-foreground);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-/* Action buttons */
-.vjs-resume-prompt-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.vjs-resume-prompt-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.5rem;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  width: 100%;
-  min-height: 3rem;
-}
-
-/* Primary button (Resume) */
-.vjs-resume-prompt-button-primary {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-
-.vjs-resume-prompt-button-primary:hover {
-  background: color-mix(in oklch, var(--primary) 90%, transparent);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-}
-
-.vjs-resume-prompt-button-primary:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-.vjs-resume-prompt-button-primary:active {
-  transform: translateY(0);
-}
-
-/* Secondary button (Start Over) */
-.vjs-resume-prompt-button-secondary {
-  background: transparent;
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-}
-
-.vjs-resume-prompt-button-secondary:hover {
-  background: var(--muted);
-  border-color: var(--border);
-}
-
-.vjs-resume-prompt-button-secondary:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-/* Countdown display */
-.vjs-resume-prompt-countdown {
-  text-align: center;
-  margin-bottom: 0.75rem;
-}
-
-.vjs-resume-prompt-countdown-text {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-  margin: 0;
-}
-
-.vjs-resume-prompt-countdown-number {
-  font-weight: 700;
-  color: var(--primary);
-  font-size: 1rem;
-}
-
-/* Dismiss hint */
-.vjs-resume-prompt-hint {
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-  margin: 0;
-}
-
-/* Enhanced RTL resume prompt support */
-[dir="rtl"] .vjs-resume-prompt-close {
-  right: auto;
-  left: 1rem;
-}
-
-[dir="rtl"] .vjs-resume-prompt-header {
-  flex-direction: row-reverse;
-}
-
-[dir="rtl"] .vjs-resume-prompt-time {
-  flex-direction: row-reverse;
-}
-
-/* Fix text alignment in RTL */
-[dir="rtl"] .vjs-resume-prompt-title,
-[dir="rtl"] .vjs-resume-prompt-subtitle,
-[dir="rtl"] .vjs-resume-prompt-video-title {
-  text-align: right;
-}
-
-[dir="rtl"] .vjs-resume-prompt-time-text {
-  direction: ltr; /* Keep time display LTR for readability */
-  text-align: center;
-}
-
-/* Ensure buttons display properly in RTL */
-[dir="rtl"] .vjs-resume-prompt-actions {
-  direction: rtl;
-}
-
-
-
-/* Dark mode adjustments */
-.dark .vjs-resume-prompt-backdrop {
-  background: rgba(0, 0, 0, 0.85);
-}
-
-.dark .vjs-resume-prompt-close {
-  background: color-mix(in oklch, var(--background) 60%, transparent);
-}
-
-.dark .vjs-resume-prompt-close:hover {
-  background: color-mix(in oklch, var(--background) 90%, transparent);
-}
-
-/* Accessibility: High contrast mode */
-@media (prefers-contrast: high) {
-  .vjs-resume-prompt-modal {
-    border: 2px solid var(--foreground);
-  }
-
-  .vjs-resume-prompt-button-primary {
-    border: 2px solid var(--primary);
-  }
-
-  .vjs-resume-prompt-button-secondary {
-    border: 2px solid var(--border);
-  }
-
-  .vjs-resume-prompt-close {
-    border: 2px solid var(--border);
-  }
-}
-
-/* Accessibility: Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .vjs-resume-prompt-backdrop,
-  .vjs-resume-prompt-modal,
-  .vjs-resume-prompt-button,
-  .vjs-resume-prompt-close,
-  .vjs-resume-prompt-thumbnail-progress-bar {
-    animation: none;
+  .video-js .vjs-start-over {
     transition: none;
   }
-
-  .vjs-resume-prompt-button-primary:hover,
-  .vjs-resume-prompt-close:hover {
-    transform: none;
-  }
-}
-
-/* Focus trap helper for accessibility */
-.vjs-resume-prompt-modal:focus {
-  outline: none;
 }
 
 /* ========================================
@@ -1589,46 +1269,6 @@
     border-width: 3px;
   }
 
-  /* Resume prompt mobile optimizations */
-  .vjs-resume-prompt-modal {
-    max-width: 100%;
-    width: 95%;
-    margin: 1rem;
-  }
-
-  .vjs-resume-prompt-content {
-    padding: 1rem;
-  }
-
-  .vjs-resume-prompt-header {
-    flex-direction: column;
-  }
-
-  .vjs-resume-prompt-thumbnail {
-    width: 100%;
-  }
-
-  .vjs-resume-prompt-title {
-    font-size: 1.125rem;
-  }
-
-  .vjs-resume-prompt-time-text {
-    font-size: 1.25rem;
-  }
-
-  .vjs-resume-prompt-button {
-    padding: 0.75rem 1.25rem;
-    font-size: 0.9375rem;
-    min-height: 2.75rem;
-    touch-action: manipulation; /* Prevent double-tap zoom */
-  }
-
-  /* RTL mobile adjustments */
-  [dir="rtl"] .vjs-resume-prompt-header {
-    flex-direction: column;
-    text-align: right;
-  }
-
   /* Enhanced mobile RTL control bar */
   [dir="rtl"] .video-js .vjs-control-bar {
     padding: 0.75rem 0.5rem;
@@ -1680,7 +1320,7 @@
   /* Prevent accidental zoom on double-tap for controls */
   .video-js .vjs-control-bar,
   .video-js .vjs-big-play-button,
-  .vjs-resume-prompt-button {
+  .video-js .vjs-start-over {
     touch-action: manipulation;
   }
 

@@ -12,7 +12,7 @@ regression guard is `apps/web/src/lib/security/__tests__/event-listener-audit.te
 |---|---|---|---|
 | document:keydown | `lib/video/keyboard-shortcuts.ts` | Player shortcuts while focus is on the page or in fullscreen | **Fixed:** previously ran for every key on the page and handled events twice (element + document listener). It is now wrapped in `shouldHandleGlobalPlayerShortcut` (ignores inputs, dialogs, menus, other players, and events already handled by the player element). Removed in the returned cleanup |
 | document:keydown | `lib/video/playback-speed.ts` | Shift+< / Shift+> speed | **Fixed:** now scoped to its own player (`handleEventsInsidePlayer`). Removed by `cleanupPlaybackSpeedKeyboardShortcuts` |
-| document:keydown | `components/VideoPlayer/KeyboardHelpModal.tsx`, `ResumePrompt.tsx`, `components/video/VideoKeyboardHelp.tsx`, `videoPreview` (LTR/RTL), `UnifiedNavigation`, `SaveToPlaylist`, `hooks/useFocusTrap.ts` | Escape / focus trap for open modals and menus | Added while open, removed in effect cleanup |
+| document:keydown | `components/VideoPlayer/KeyboardHelpModal.tsx`, `components/video/VideoKeyboardHelp.tsx`, `videoPreview` (LTR/RTL), `UnifiedNavigation`, `SaveToPlaylist`, `hooks/useFocusTrap.ts` | Escape / focus trap for open modals and menus | Added while open, removed in effect cleanup |
 | document:mousedown | `ChannelSwitcher` (LTR/RTL), `SaveToPlaylist` | Click-outside to close | Effect cleanup |
 | window:resize | `ChannelTabs` (LTR/RTL) | Tab overflow layout | Effect cleanup |
 | window:popstate, window:session-login | `hooks/useMultiAccount.tsx` | Multi-account session switching | Effect cleanup |

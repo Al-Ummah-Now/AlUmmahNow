@@ -38,6 +38,8 @@
  *   - Save on pause, seek, and video end
  *   - localStorage fallback for unauthenticated users
  *   - Load saved progress on player mount for resume functionality
+ * #242: Resume - the player opens already at the saved position, with a
+ *   persistent "Start from beginning" pill; no prompt or countdown
  */
 
 'use client';
@@ -74,8 +76,7 @@ import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
 import { useWatchProgress } from '@/hooks/useWatchProgress';
-import { ResumePrompt } from './ResumePrompt';
-import { resumePosition } from '@/lib/video/resume';
+import { formatResumeTime, resumePosition, startOverStillRelevant } from '@/lib/video/resume';
 import '@/styles/video-player.css';
 import '@/styles/keyboard-feedback.css';
 import type { Player } from 'video.js';
@@ -99,7 +100,7 @@ export interface CustomVideoPlayerProps {
   isLive?: boolean;
   className?: string;
   ariaLabel?: string;
-  /** Video title, shown in the resume prompt */
+  /** Video title (kept for callers; the resume prompt that showed it is gone, #242) */
   title?: string;
   lang?: 'en' | 'ar';
   onError?: (error: VideoError) => void;
@@ -132,7 +133,6 @@ export default function CustomVideoPlayer({
   isLive = false,
   className = '',
   ariaLabel,
-  title,
   lang = 'en',
   onError,
   onSourceChange,
@@ -201,27 +201,68 @@ export default function CustomVideoPlayer({
     }
   );
 
-  // #242: offer to resume from the position stored before this watch (API for
-  // signed-in users, device storage otherwise). Decided once per video, so the
-  // saves of the current watch never bring the prompt back.
+  // #242: open at the position stored before this watch (API for signed-in
+  // users, device storage otherwise). Decided once per video, so the saves of
+  // the current watch never move the player. A `t=`/start= position wins, and
+  // a viewer who already pressed play is never moved.
   const [resumeAt, setResumeAt] = useState<number | null>(null);
+  const [showStartOver, setShowStartOver] = useState(false);
+  const [resumeAnnouncement, setResumeAnnouncement] = useState('');
   const resumeDecidedForRef = useRef<string | null>(null);
   useEffect(() => {
     if (!playerReady || !loadedProgress || loadedProgress.videoId !== videoId) return;
     if (resumeDecidedForRef.current === videoId) return;
     resumeDecidedForRef.current = videoId;
-    setResumeAt(resumePosition(loadedProgress, isLive));
-  }, [playerReady, loadedProgress, videoId, isLive]);
+    const player = playerRef.current as ExtendedPlayer | null;
+    if (!player || (startTime && startTime > 0)) return;
+    const position = resumePosition(loadedProgress, isLive);
+    if (position === null) return;
 
-  const handleResume = useCallback(() => {
-    if (resumeAt !== null) playerRef.current?.currentTime(resumeAt);
-    setResumeAt(null);
-  }, [resumeAt]);
+    const seekToResume = () => {
+      try {
+        // Pressed play (or sought) before the saved position arrived: leave it
+        if (player.hasStarted() || (player.currentTime() ?? 0) >= 1) return;
+        const duration = player.duration();
+        if (duration && Number.isFinite(duration) && position >= duration) return;
+        player.currentTime(position);
+      } catch {
+        return; // player disposed
+      }
+      setResumeAt(position);
+      setShowStartOver(true);
+      setResumeAnnouncement(t.resume.resumingAt.replace('{time}', formatResumeTime(position)));
+    };
+    if ((player.readyState?.() ?? 0) >= 1) seekToResume();
+    else player.one('loadedmetadata', seekToResume);
+  }, [playerReady, loadedProgress, videoId, isLive, startTime, t]);
+
+  // The pill goes once playback is well past the resume point or back at 0
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!showStartOver || resumeAt === null || !player) return undefined;
+    const onTimeUpdate = () => {
+      let time: number;
+      try {
+        time = player.currentTime() ?? 0;
+      } catch {
+        return;
+      }
+      if (!startOverStillRelevant(resumeAt, time)) setShowStartOver(false);
+    };
+    player.on('timeupdate', onTimeUpdate);
+    return () => {
+      player.off('timeupdate', onTimeUpdate);
+    };
+  }, [showStartOver, resumeAt]);
+
   const handleStartOver = useCallback(() => {
-    playerRef.current?.currentTime(0);
-    setResumeAt(null);
+    const player = playerRef.current;
+    setShowStartOver(false);
+    if (!player) return;
+    player.currentTime(0);
+    // The pill had focus; keep keyboard users on the player
+    (player.el() as HTMLElement | null)?.focus?.();
   }, []);
-  const handleResumeDismiss = useCallback(() => setResumeAt(null), []);
 
   // Log saved progress for debugging
   useEffect(() => {
@@ -909,6 +950,10 @@ export default function CustomVideoPlayer({
       >
         {playerReady ? t.player.ready : t.player.loading}
       </div>
+      {/* #242: "Resuming at 3:42", announced once when the player opens there */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="player-resume-announcement">
+        {resumeAnnouncement}
+      </div>
 
       {/* Video player container */}
       <div data-vjs-player className="relative">
@@ -919,6 +964,21 @@ export default function CustomVideoPlayer({
           aria-label={ariaLabel || t.accessibility.videoPlayer}
           tabIndex={0}
         />
+
+        {/* #242: persistent while it applies; no timer hides it */}
+        {showStartOver && (
+          <button
+            type="button"
+            className="vjs-start-over"
+            data-testid="player-start-over"
+            onClick={handleStartOver}
+          >
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" className="vjs-start-over-icon">
+              <path fill="currentColor" d="M6 6h2v12H6zm3.5 6 8.5 6V6z" />
+            </svg>
+            <span>{t.resume.startOverButton}</span>
+          </button>
+        )}
 
         {/* Phase 4.20: Buffering indicator */}
         {isBuffering && playerReady && (
@@ -937,19 +997,6 @@ export default function CustomVideoPlayer({
           />
         )}
       </div>
-
-      {resumeAt !== null && loadedProgress && (
-        <ResumePrompt
-          videoTitle={title ?? ''}
-          savedTime={resumeAt}
-          duration={loadedProgress.duration}
-          thumbnailUrl={poster}
-          onResume={handleResume}
-          onStartFromBeginning={handleStartOver}
-          onDismiss={handleResumeDismiss}
-          lang={lang}
-        />
-      )}
 
       <KeyboardHelpModal
         isOpen={isKeyboardHelpOpen}

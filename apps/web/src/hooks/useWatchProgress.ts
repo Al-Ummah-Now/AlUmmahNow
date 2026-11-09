@@ -4,7 +4,11 @@
  * React hook for managing video watch progress with:
  * - Automatic progress saving (throttled to 10 seconds)
  * - Save on pause, seek, and video end events
- * - localStorage fallback for unauthenticated users
+ * - Nothing is saved until the viewer has really played the video for
+ *   RESUME_MIN_WATCHED_SECONDS in this page: opening the page, a `t=` link,
+ *   scrubbing without playing or a preview that never plays record nothing
+ * - Device storage for signed-out users only (it is not tied to an account,
+ *   so a signed-in user never resumes from another account's or a guest watch)
  * - Load saved progress on mount for resume functionality
  * - Efficient debouncing to prevent API spam
  *
@@ -24,6 +28,7 @@ import type { ExtendedPlayer } from '@/lib/video/videojs';
 import { WatchHistoryService, WatchProgress } from '@/services/api/watch-history';
 import { logger } from '@/lib/logger-client';
 import { fetchClientAuthToken } from '@/lib/auth/client-token';
+import { hasWatchedEnough, playbackStep } from '@/lib/video/resume';
 
 
 interface UseWatchProgressOptions {
@@ -77,6 +82,9 @@ export function useWatchProgress(
   const lastSaveTimeRef = useRef<number>(0);
   const lastSavedPositionRef = useRef<number>(0);
   const isMountedRef = useRef(true);
+  // Seconds of media actually played in this page, and the last position seen
+  const watchedSecondsRef = useRef<number>(0);
+  const lastPlaybackTimeRef = useRef<number | null>(null);
 
   // Mutex pattern to prevent race conditions
   const saveMutexRef = useRef<boolean>(false);
@@ -187,6 +195,11 @@ export function useWatchProgress(
       return;
     }
 
+    if (!hasWatchedEnough(watchedSecondsRef.current)) {
+      debugLog('Not played long enough yet, skipping save:', watchedSecondsRef.current);
+      return;
+    }
+
     const now = Date.now();
     const timeSinceLastSave = now - lastSaveTimeRef.current;
     const positionChange = Math.abs(currentTime - lastSavedPositionRef.current);
@@ -268,18 +281,22 @@ export function useWatchProgress(
     const loadProgress = async () => {
       if (!videoId) return;
       setLoadedProgress(null);
+      watchedSecondsRef.current = 0;
+      lastPlaybackTimeRef.current = null;
 
       let progress: WatchProgress | null = null;
 
-      const token = await resolveAuthToken();
-      if (token) {
-        progress = await WatchHistoryService.getProgress(videoId, token);
-        debugLog('Loaded progress from API:', progress);
-      }
-
-      if (!progress) {
+      if (userId) {
+        // Signed in: the account's progress only. Device storage holds no
+        // user id, so it could be a guest watch or another account's.
+        const token = await resolveAuthToken();
+        if (token) {
+          progress = await WatchHistoryService.getProgress(videoId, token);
+          debugLog('Loaded progress from API:', progress);
+        }
+      } else {
         progress = await WatchHistoryService.getLocal(videoId);
-        debugLog('Loaded progress from localStorage:', progress);
+        debugLog('Loaded progress from device storage:', progress);
       }
 
       if (mounted && progress) {
@@ -293,7 +310,7 @@ export function useWatchProgress(
     return () => {
       mounted = false;
     };
-  }, [videoId, resolveAuthToken, debugLog]);
+  }, [videoId, userId, resolveAuthToken, debugLog]);
 
   /**
    * Setup player event listeners for automatic progress saving
@@ -326,9 +343,25 @@ export function useWatchProgress(
       void saveProgress(true);
     };
 
+    // Count only media that actually plays: seeks, rewinds and paused
+    // timeupdates (e.g. a programmatic seek before play) add nothing.
+    const handleTimeUpdate = () => {
+      let time: number;
+      let playing: boolean;
+      try {
+        time = player.currentTime() ?? NaN;
+        playing = !player.paused() && !player.seeking();
+      } catch {
+        return;
+      }
+      if (playing) watchedSecondsRef.current += playbackStep(lastPlaybackTimeRef.current, time);
+      lastPlaybackTimeRef.current = Number.isFinite(time) ? time : null;
+    };
+
     player.on('pause', handlePause);
     player.on('ended', handleEnded);
     player.on('seeked', handleSeeked);
+    player.on('timeupdate', handleTimeUpdate);
 
     return () => {
       clearInterval(timeUpdateInterval);
@@ -336,6 +369,7 @@ export function useWatchProgress(
       player.off('pause', handlePause);
       player.off('ended', handleEnded);
       player.off('seeked', handleSeeked);
+      player.off('timeupdate', handleTimeUpdate);
 
       // Save final progress on cleanup, but only if not already saving
       if (!saveMutexRef.current) {

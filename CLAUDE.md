@@ -614,6 +614,7 @@ global setup. Passwords are random per run, so the accounts left behind
 | `single-sign-out.spec.ts` | the videos header's "Sign out" (#291) and admin-web's "Log out" (#295) go through the auth server's `/logout`: after a reload the site is still signed out, the profile app is signed out, and the next sign-in shows the password form (no silent SSO) |
 | `player.spec.ts` | an anonymous watch page really plays (media `currentTime` advances), en and ar |
 | `watch-history.player.spec.ts` | a signed-in watch reaches `GET /api/watch-history` and the `/history` page (#234) |
+| `watch-history-periodic.player.spec.ts` | a watch is saved while it plays without pausing; a watched video reopens at the saved time with the "Start from beginning" pill, which goes back to 0; a video opened (even at `?t=`) but never played saves nothing and shows no pill (#242) |
 | `uploads.spec.ts` | profile and channel avatar uploads store a served image (#229); a channel created in the account menu, then a video uploaded on `/upload` (TUS through the api-videos proxy), is listed in the owner's search and dashboard, then deleted. Encoding is not awaited |
 
 Playback specs (`*player.spec.ts`) run in the `player` project on branded

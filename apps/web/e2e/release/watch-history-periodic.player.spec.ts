@@ -9,11 +9,25 @@
  * branded-Chrome "player" project.
  */
 import { test, expect } from '@playwright/test';
-import { findPlayableVideo, HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, playFor, watchUrl } from './videos';
-import { apiFetch, createProfile, signUpOnWeb } from './web-session';
+import type { Page } from '@playwright/test';
+import { findPlayableVideo, HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, RESUME_MIN_VIDEO_SECONDS, watchUrl } from './videos';
+import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 
-/** ResumePrompt's heading (lib/video/i18n translations, resume.title, en). */
-const RESUME_TITLE = 'Continue watching?';
+/** Saved resume position for the user, 0 when nothing is stored. */
+async function savedProgress(user: WebUser, videoId: string): Promise<number> {
+  const res = await apiFetch(user, `/api/watch-history/${videoId}/progress`);
+  return res.ok ? ((await res.json()) as { progress?: number }).progress ?? 0 : 0;
+}
+
+function videoTime(page: Page): Promise<number> {
+  return page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0);
+}
+
+/** The consent banner can cover the player controls. */
+async function dismissConsent(page: Page): Promise<void> {
+  const reject = page.getByRole('button', { name: 'Reject all' });
+  if (await reject.isVisible().catch(() => false)) await reject.click();
+}
 
 interface HistoryEntry {
   videoId: string;
@@ -37,8 +51,9 @@ test.describe('Release: periodic watch progress', () => {
     });
 
     await page.goto(watchUrl(video!.id));
-    // Longer than the 10s save interval; the video is never paused or sought
-    await playFor(page, 15);
+    // Two 10s save intervals: the first tick can land before the 10s of real
+    // playback a save needs (#242); the video is never paused or sought
+    await playFor(page, 22);
     console.log(`[watch-history-periodic] calls while playing:\n  ${calls.join('\n  ') || '(none)'}`);
 
     const saves = calls.filter((c) => c.startsWith('POST') && /\/api\/watch-history/.test(c));
@@ -53,38 +68,61 @@ test.describe('Release: periodic watch progress', () => {
     expect(entry!.progress ?? 0).toBeGreaterThan(5);
   });
 
-  test('a signed-in watch offers to resume from the saved position (#242)', async ({ page }) => {
-    const video = await findPlayableVideo(HISTORY_MIN_SECONDS);
+  test('a watched video reopens at the saved time with Start from beginning (#242)', async ({ page }) => {
+    const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS);
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     const user = await signUpOnWeb(page, 'rel-resume');
     await createProfile(user);
 
     await page.goto(watchUrl(video!.id));
-    await playFor(page, 2);
-    // Seek to 30% (inside the 5-95% resume window for any length); 'seeked' saves
-    const target = await page.evaluate(() => {
-      const v = document.querySelector<HTMLVideoElement>('.video-js video')!;
-      v.currentTime = Math.floor(v.duration * 0.3);
-      return v.currentTime;
-    });
+    // Past the 10s of real playback that a resume point needs; pausing saves
+    const played = await playFor(page, 13);
+    await pause(page);
     await expect
-      .poll(async () => {
-        const res = await apiFetch(user, `/api/watch-history/${video!.id}/progress`);
-        return res.ok ? ((await res.json()) as { progress?: number }).progress ?? 0 : 0;
-      }, { message: 'the seek position was never saved', timeout: 30000 })
-      .toBeGreaterThan(target - 5);
+      .poll(() => savedProgress(user, video!.id), { message: 'the watched position was never saved', timeout: 30000 })
+      .toBeGreaterThan(played - 3);
+    const saved = await savedProgress(user, video!.id);
 
     await page.reload();
-    // The consent banner (also a dialog) can cover the prompt's buttons
-    const reject = page.getByRole('button', { name: 'Reject all' });
-    if (await reject.isVisible().catch(() => false)) await reject.click();
-    // By name: the consent banner is a dialog too
-    const dialog = page.getByRole('dialog', { name: RESUME_TITLE });
-    await expect(dialog).toBeVisible({ timeout: 45000 });
-    await dialog.getByRole('button', { name: /Resume from/ }).click();
-    await expect
-      .poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0))
-      .toBeGreaterThan(target - 5);
+    await dismissConsent(page);
+    // Opens already at the saved time: no dialog, a persistent pill on the player
+    const startOver = page.getByTestId('player-start-over');
+    await expect(startOver).toBeVisible({ timeout: 45000 });
+    await expect(startOver).toHaveAccessibleName('Start from beginning');
+    await expect(page.getByRole('dialog', { name: /continue watching/i })).toHaveCount(0);
+    await expect.poll(() => videoTime(page)).toBeGreaterThan(saved - 2);
+    expect(await videoTime(page)).toBeLessThan(saved + 2);
+    await expect(page.getByTestId('player-resume-announcement')).toContainText('Resuming at');
+    // Nothing hides it on a timer
+    await page.waitForTimeout(5000);
+    await expect(startOver).toBeVisible();
+
+    await startOver.click();
+    await expect.poll(() => videoTime(page)).toBeLessThan(1);
+    await expect(startOver).toBeHidden();
+  });
+
+  test('a video that was opened but never played has no Start from beginning (#242)', async ({ page }) => {
+    const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS);
+    test.skip(!video, NO_PLAYABLE_VIDEO);
+
+    const user = await signUpOnWeb(page, 'rel-resume-none');
+    await createProfile(user);
+
+    // Opened at ?t=30 (a share or comment link) and left open past the 10s
+    // save interval without pressing play: this used to save 0:30.
+    await page.goto(`${watchUrl(video!.id)}?t=30`);
+    await dismissConsent(page);
+    await expect.poll(() => videoTime(page), { timeout: 45000 }).toBeGreaterThan(29);
+    await page.waitForTimeout(12000);
+
+    await page.goto(watchUrl(video!.id));
+    await dismissConsent(page);
+    await page.waitForFunction(() => (document.querySelector<HTMLVideoElement>('.video-js video')?.readyState ?? 0) >= 1, null, { timeout: 45000 });
+    await page.waitForTimeout(3000);
+    await expect(page.getByTestId('player-start-over')).toHaveCount(0);
+    expect(await videoTime(page)).toBeLessThan(1);
+    expect(await savedProgress(user, video!.id), 'progress saved without playback').toBe(0);
   });
 });
