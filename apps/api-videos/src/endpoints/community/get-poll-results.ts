@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CommunityPost, PostType, VoteResults } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from '../../base';
+import { readPostCounts, pollResultsFromCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 
 export class GetPollResults extends OptionalAuthRoute {
@@ -90,12 +91,14 @@ export class GetPollResults extends OptionalAuthRoute {
       }
 
       // Get results
-      const resultsKey = `votes/${postId}/results.json`;
-      const resultsData = await c.env.community_posts.get(resultsKey);
-
+      // D1 totals once the poll's votes are in D1; until then the legacy results file
       let results: VoteResults | null = null;
-      if (resultsData) {
-        results = await resultsData.json();
+      const counts = (await readPostCounts(c.env.NOTIFICATIONS_DB, [postId]).catch(() => new Map())).get(postId);
+      if (counts?.poll) {
+        results = pollResultsFromCounts(postId, counts.poll);
+      } else {
+        const resultsData = await c.env.community_posts.get(`votes/${postId}/results.json`);
+        if (resultsData) results = await resultsData.json();
       }
 
       // Combine poll options with results

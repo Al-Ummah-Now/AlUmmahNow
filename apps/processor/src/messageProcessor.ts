@@ -3,6 +3,7 @@ import { Logger } from '@al-ummah/logger';
 import { handleChannelSectionEvent } from './handlers/channel-section';
 import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
+import { eraseUserPostInteractions } from './lib/post-counters';
 import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
 import { recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
 import { CounterBatch } from './lib/analytics-counters';
@@ -804,6 +805,8 @@ export class MessageProcessor {
     await eraseUserModerationData(env.REPORTS_DB, userId, DELETED_USER_ID);
     if (env.NOTIFICATIONS_DB) {
       await eraseUserNotifications(env.NOTIFICATIONS_DB, userId);
+      // Their community post likes and poll votes come off the counters (PR-2/3/4)
+      await eraseUserPostInteractions(env.NOTIFICATIONS_DB, userId);
     }
     this.logger.info('Anonymised moderation reports after user data erasure', {
       userId,

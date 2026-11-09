@@ -25,7 +25,10 @@ import type { D1Database, D1PreparedStatement } from '../types';
 export const ANALYTICS_TABLE = 'analytics_daily';
 export const OTHER_DIM = 'other';
 
-export type EntityType = 'video' | 'channel';
+export type EntityType = 'video' | 'channel' | 'post';
+
+/** Conflict clause of every counter write: the database adds, never the caller. */
+export const ADD_ON_CONFLICT = 'ON CONFLICT (entity_type, entity_id, day, metric, dim) DO UPDATE SET value = value + excluded.value';
 
 export interface CounterIncrement {
 	entityType: EntityType;
@@ -54,7 +57,7 @@ SELECT json_extract(j.value, '$[0]'), json_extract(j.value, '$[1]'), json_extrac
        json_extract(j.value, '$[3]'), json_extract(j.value, '$[4]'), json_extract(j.value, '$[5]')
 FROM json_each(?1) AS j
 WHERE true
-ON CONFLICT (entity_type, entity_id, day, metric, dim) DO UPDATE SET value = value + excluded.value`;
+${ADD_ON_CONFLICT}`;
 
 // ?5 dim, ?6 cap, ?7 OTHER_DIM, ?8 value. WHERE true: SQLite needs it before ON CONFLICT after a SELECT.
 const BOUNDED_UPSERT = `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value)
@@ -64,7 +67,7 @@ SELECT ?1, ?2, ?3, ?4,
        THEN ?5 ELSE ?7 END,
   ?8
 WHERE true
-ON CONFLICT (entity_type, entity_id, day, metric, dim) DO UPDATE SET value = value + excluded.value`;
+${ADD_ON_CONFLICT}`;
 
 /** Statements adding unbounded rows: one per ROWS_PER_STATEMENT rows. */
 export function bulkUpsertStatements(db: D1Database, rows: CounterIncrement[]): D1PreparedStatement[] {
@@ -85,7 +88,7 @@ export class CounterBatch {
 
 	/** Queues an increment; invalid or zero increments are ignored. */
 	add(inc: CounterIncrement): void {
-		if (inc.entityType !== 'video' && inc.entityType !== 'channel') return;
+		if (inc.entityType !== 'video' && inc.entityType !== 'channel' && inc.entityType !== 'post') return;
 		if (!inc.entityId || !DAY.test(inc.day) || !inc.metric) return;
 		if (!Number.isFinite(inc.value) || inc.value === 0) return;
 		const key = rowKey(inc);

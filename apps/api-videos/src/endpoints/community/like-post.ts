@@ -3,6 +3,7 @@ import { CommunityPost, LikePostResponse } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
+import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 
 export class LikeCommunityPost extends AuthenticatedRoute {
@@ -59,7 +60,7 @@ export class LikeCommunityPost extends AuthenticatedRoute {
         return c.json({ error: 'Post not found' }, 404);
       }
 
-      const post: CommunityPost = await postData.json();
+      const post: CommunityPost = await withPostCounts(c.env.NOTIFICATIONS_DB, [await postData.json<CommunityPost>()]).then(([p]) => p);
 
       // Check if user already liked
       const likeKey = `likes/${postId}/${userId}.json`;
