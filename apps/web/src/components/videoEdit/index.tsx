@@ -235,11 +235,7 @@ export default function VideoEdit({
               aria-selected={activeTab === 'en'}
               data-testid="video-edit-tab-en"
               onClick={() => setActiveTab('en')}
-              className={`px-4 py-2 font-medium transition-colors ${
-                activeTab === 'en'
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-              }`}
+              className="tab-item"
             >
               {t.languages.english}
             </button>
@@ -249,11 +245,7 @@ export default function VideoEdit({
               aria-selected={activeTab === 'ar'}
               data-testid="video-edit-tab-ar"
               onClick={() => setActiveTab('ar')}
-              className={`px-4 py-2 font-medium transition-colors ${
-                activeTab === 'ar'
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-              }`}
+              className="tab-item"
             >
               {t.languages.arabic}
             </button>
