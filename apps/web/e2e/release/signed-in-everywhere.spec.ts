@@ -120,8 +120,14 @@ async function addConsent(context: BrowserContext): Promise<void> {
 /** Opens the videos header's account menu (retried until the header has hydrated). */
 async function openVideosMenu(page: Page): Promise<void> {
   const rows = page.locator('[data-testid="nav-account"]:visible');
+  // Accounts live in a submenu; builds before it list them on the first level
+  const submenu = page.locator('[data-testid="nav-switch-account"]:visible');
   await expect(async () => {
-    if (!(await rows.first().isVisible())) await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
+    if (!(await rows.first().isVisible())) {
+      if (!(await submenu.first().isVisible())) await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
+      await rows.or(submenu).first().waitFor({ timeout: 3000 });
+      if (await submenu.first().isVisible()) await submenu.first().click();
+    }
     await expect(rows.first()).toBeVisible({ timeout: 3000 });
   }).toPass({ timeout: 30000 });
 }
