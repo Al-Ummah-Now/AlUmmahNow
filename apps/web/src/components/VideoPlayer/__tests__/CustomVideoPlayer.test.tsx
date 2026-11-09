@@ -245,7 +245,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
       );
 
       await waitFor(() => {
-        expect(mockVideoAnalytics).toHaveBeenCalledWith('test-video-123', 'user-456');
+        expect(mockVideoAnalytics).toHaveBeenCalledWith('test-video-123', 'user-456', { context: expect.objectContaining({ source: 'watch' }) });
       });
     });
 
@@ -254,7 +254,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
       const context = { source: 'embed' as const, embedOrigin: 'https://www.alummahnow.net' };
       render(<CustomVideoPlayer {...defaultProps} userId="user-456" enableAnalytics={true} analyticsContext={context} />);
       await waitFor(() => {
-        expect(mockVideoAnalytics).toHaveBeenCalledWith('test-video-123', 'user-456', { context });
+        expect(mockVideoAnalytics).toHaveBeenCalledWith('test-video-123', 'user-456', { context: { ...context, trafficSource: 'embed' } });
       });
     });
 

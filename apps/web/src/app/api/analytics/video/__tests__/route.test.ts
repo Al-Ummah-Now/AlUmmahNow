@@ -33,6 +33,27 @@ function forwarded(): Record<string, unknown> {
 }
 
 describe('POST /api/analytics/video', () => {
+  it('forwards the traffic source and external host of a view', async () => {
+    await POST(request({
+      events: [{ videoId: 'v1', eventType: 'ready' }],
+      context: { source: 'watch', trafficSource: 'external', referrerHost: 'Example.org' },
+    }));
+    expect(forwarded()).toMatchObject({ trafficSource: 'external', referrerHost: 'example.org' });
+  });
+
+  it('sends no source without consent context', async () => {
+    await POST(request({ events: [{ videoId: 'v1', eventType: 'ready' }] }));
+    expect(forwarded()).not.toHaveProperty('trafficSource');
+  });
+
+  it('forwards retention reports without counting a view', async () => {
+    await POST(request({ events: [{ videoId: 'v1', eventType: 'retention', sessionId: 'session-1234', data: { buckets: [0, 1] } }] }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://videos.api.qa.alummahnow.net/api/videos/v1/retention');
+    expect(JSON.parse((init as { body: string }).body)).toEqual({ buckets: [0, 1], sessionId: 'session-1234' });
+  });
+
   it('forwards an embed view with its origin', async () => {
     await POST(request({
       events: [{ videoId: 'v1', eventType: 'ready' }, { videoId: 'v1', eventType: 'play' }],
