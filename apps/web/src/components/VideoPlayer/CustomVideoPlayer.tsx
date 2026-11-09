@@ -244,8 +244,20 @@ export default function CustomVideoPlayer({
       setShowStartOver(true);
       setResumeAnnouncement(t.resume.resumingAt.replace('{time}', formatResumeTime(position)));
     };
-    if ((player.readyState?.() ?? 0) >= 1) seekToResume();
-    else player.one('loadedmetadata', seekToResume);
+    // Through MSE (VHS), once the first frame is buffered: WebKitGTK's MSE (GStreamer) fails a
+    // seek made while nothing is buffered yet ("Failed to push buffer", a code 4 media error), and
+    // that error replaced the player with the error screen. Native HLS (Safari, iOS) stays on
+    // metadata: iOS buffers no frame before the first play, so loadeddata would come too late
+    let viaMse = false;
+    try {
+      viaMse = !!(player as unknown as { tech?: (opts: object) => { vhs?: unknown } | undefined })
+        .tech?.({ IWillNotUseThisInPlugins: true })?.vhs;
+    } catch {
+      viaMse = false;
+    }
+    const needed = viaMse ? 2 : 1;
+    if ((player.readyState?.() ?? 0) >= needed) seekToResume();
+    else player.one(viaMse ? 'loadeddata' : 'loadedmetadata', seekToResume);
   }, [playerReady, loadedProgress, videoId, isLive, startTime, t]);
 
   // The pill goes once playback is well past the resume point or back at 0
