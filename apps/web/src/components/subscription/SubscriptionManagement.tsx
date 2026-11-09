@@ -9,13 +9,14 @@ import { unsubscribeFromChannel, getUserSubscriptions } from '@/lib/api/channels
 import { Button } from '@/components/ui/button';
 import { X, RefreshCw, Users } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { resolveUrl } from '@/lib/utility';
 import { Channel } from '@al-ummah/shared-types';
 
 export const SubscriptionManagement: React.FC = () => {
   const { user } = useAuth();
   const { profile } = useProfile(user);
-  const { t, dir } = useLanguage();
+  const { t, dir, lang } = useLanguage();
   const s = t.subscriptions;
   const isAuthenticated = !!user;
   const [subscriptions, setSubscriptions] = useState<Channel[]>([]);
@@ -74,7 +75,10 @@ export const SubscriptionManagement: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto p-6" dir={dir}>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">{s.mySubscriptions}</h1>
+        <div>
+          <h1 className="text-3xl font-bold">{s.mySubscriptions}</h1>
+          <Link href={`/${lang}/feed`} data-testid="subscriptions-feed-link" className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">{t.subscriptions.subscriptionFeed}</Link>
+        </div>
         <Button
           variant="outline"
           size="sm"

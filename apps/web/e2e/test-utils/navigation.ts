@@ -36,3 +36,17 @@ export async function openSideDrawer(page: Page): Promise<Locator> {
   }).toPass();
   return drawer;
 }
+
+/** Moves the open account menu to its main list, or its channel or account switcher. */
+export async function showMenuView(menu: Locator, view: 'main' | 'channel' | 'account'): Promise<void> {
+  const back = menu.getByTestId('nav-menu-back');
+  if (view === 'main') {
+    if (await back.isVisible()) await back.click();
+    return;
+  }
+  const marker = menu.getByTestId(view === 'channel' ? 'nav-channel-option-none' : 'nav-account').first();
+  if (await marker.isVisible()) return;
+  if (await back.isVisible()) await back.click();
+  await menu.getByTestId(`nav-switch-${view}`).click();
+  await marker.waitFor();
+}

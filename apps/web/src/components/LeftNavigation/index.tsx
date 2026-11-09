@@ -1,4 +1,5 @@
 "use client";
+import { SIDEBAR_PATHS } from '@/lib/navigation/destinations';
 import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
 import Link from 'next/link';
@@ -31,25 +32,23 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
     const searchParams = useSearchParams();
     const router = useRouter();
     const { user } = useMultiAccount();
-    const activeChannel = user?.channel;
     // resolvedTheme: with the default "system" theme, `theme` is never 'dark',
     // so toggling from a dark system preference would be a no-op
     const { resolvedTheme: theme, setTheme } = useTheme();
     const { t, lang, oppositeLanguage, languages } = useLanguage();
 
     const allNavItems: NavItems[] = [
-        { label: t.navigation.homeLink, icon: "fa-house", href: `/${lang}/` },
-        { label: t.navigation.search, icon: "fa-magnifying-glass", href: `/${lang}/search` },
-        { label: t.navigation.explore, icon: "fa-compass", href: `/${lang}/explore` },
-        { label: t.navigation.upload, icon: "fa-upload", href: `/${lang}/upload` },
-        { label: t.navigation.subscriptions, icon: "fa-tv", href: `/${lang}/subscriptions` },
-        { label: t.navigation.library, icon: "fa-bookmark", href: `/${lang}/library` },
+        { label: t.navigation.homeLink, icon: "fa-house", href: `/${lang}${SIDEBAR_PATHS.home}` },
+        { label: t.navigation.search, icon: "fa-magnifying-glass", href: `/${lang}${SIDEBAR_PATHS.search}` },
+        { label: t.navigation.explore, icon: "fa-compass", href: `/${lang}${SIDEBAR_PATHS.explore}` },
+        { label: t.navigation.subscriptions, icon: "fa-tv", href: `/${lang}${SIDEBAR_PATHS.subscriptions}` },
+        { label: t.navigation.library, icon: "fa-bookmark", href: `/${lang}${SIDEBAR_PATHS.library}` },
+        { label: t.feed.history, icon: "fa-clock-rotate-left", href: `/${lang}${SIDEBAR_PATHS.history}` },
+        { label: t.library.watchLater, icon: "fa-clock", href: `/${lang}${SIDEBAR_PATHS.watchLater}` },
+        { label: t.library.likedVideos, icon: "fa-heart", href: `/${lang}${SIDEBAR_PATHS.liked}` },
     ];
 
-    // Filter out Upload if user has no active channel
-    const navItems = activeChannel
-        ? allNavItems
-        : allNavItems.filter(item => item.icon !== "fa-upload");
+    const navItems = allNavItems;
 
     const toggleTheme = () => {
         setTheme(theme === 'dark' ? 'light' : 'dark');
