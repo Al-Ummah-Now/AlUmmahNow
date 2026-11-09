@@ -13,7 +13,7 @@ export function DemoBanner() {
     <div className="demo-banner">
       <strong>Theme demo, QA data</strong>
       <span>Theme: {THEME}</span>
-      <Link href={`/${lang}/demo/sign-in`}>Sign-in page</Link>
+      <Link href={`/${lang}/demo/sign-in`}>Sign-in design</Link>
       <DemoBar />
     </div>
   );

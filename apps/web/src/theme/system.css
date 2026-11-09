@@ -426,3 +426,4 @@ html[data-active-theme=zujaj] .pc .pc-menu{inset-block-end:84px;right:20px}
 /* Lucide's triangle: centroid at x=10.67 of 24, so +1.33 units (5.55% of the icon box) puts it on the
    circle centre and leaves its bounding box w/6 to the right */
 .pc .pc-b svg.lucide-play{transform:translateX(5.55%)}
+.demo-preview-tag{justify-self:center;margin:0;padding:2px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:600;background:color-mix(in srgb,var(--fanous-color-primary) 24%,transparent);color:var(--fanous-color-text-primary)}

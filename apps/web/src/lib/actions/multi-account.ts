@@ -314,7 +314,9 @@ export interface SignOutResult {
 }
 
 /** Single sign-out URL back to this app's home page in `locale`. */
-async function singleSignOutUrl(locale: string): Promise<string> {
+async function singleSignOutUrl(locale: string): Promise<string | null> {
+  // Demo hosts are not on the auth server's return list, so its chain would strand the viewer on QA
+  if (process.env.NEXT_PUBLIC_DEMO_CONTENT === '1') return null;
   const host = (await getHeaders()).get('host') ?? new URL(process.env.Issuer!).host;
   return singleSignOutToHome(process.env.Issuer!, host, locale);
 }
