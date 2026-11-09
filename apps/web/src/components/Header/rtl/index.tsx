@@ -25,7 +25,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
         <IcoButton
           style="fa-bars"
           size="text-lg"
-          color="text-[#ffa037] bg-transparent"
+          color="text-[var(--fanous-color-accent)] bg-transparent"
           onClick={toggleCollapse}
           ariaLabel={isNavOpen ? t.a11y.closeNavigationMenu : t.a11y.openNavigationMenu}
           ariaExpanded={isNavOpen}

@@ -74,7 +74,7 @@ export default function SettingsPage() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <Settings className="h-8 w-8 text-[#ffa037]" />
+            <Settings className="h-8 w-8 text-[var(--fanous-color-accent)]" />
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               {t.header?.settings || 'Settings'}
             </h1>
@@ -123,21 +123,21 @@ export default function SettingsPage() {
                 href={section.href!}
                 data-testid="settings-section"
                 data-available="true"
-                className="block bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-[#ffa037] dark:hover:border-[#ffa037] transition-all hover:shadow-lg group"
+                className="block bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-[var(--fanous-color-accent)] dark:hover:border-[var(--fanous-color-accent)] transition-all hover:shadow-lg group"
               >
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-gradient-to-br from-[#ffa037] to-[#ff8c00] rounded-lg group-hover:scale-110 transition-transform">
+                  <div className="p-3 bg-gradient-to-br from-[var(--fanous-color-accent)] to-[#ff8c00] rounded-lg group-hover:scale-110 transition-transform">
                     <Icon className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 group-hover:text-[#ffa037] transition-colors">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 group-hover:text-[var(--fanous-color-accent)] transition-colors">
                       {section.title}
                     </h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {section.description}
                     </p>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[#ffa037] group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1 transition-all" />
+                  <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[var(--fanous-color-accent)] group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1 transition-all" />
                 </div>
               </Link>
             );

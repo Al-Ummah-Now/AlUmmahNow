@@ -59,7 +59,7 @@ export function SavePostButton({ postId, postChannelId, userId }: SavePostButton
         data-testid="save-post-button"
         className="flex items-center gap-2 rounded-full px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-60 dark:text-gray-400 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >
-        <Icon className={`h-5 w-5 ${saved ? 'text-[#ffa037]' : ''}`} aria-hidden="true" />
+        <Icon className={`h-5 w-5 ${saved ? 'text-[var(--fanous-color-accent)]' : ''}`} aria-hidden="true" />
       </button>
       <span className="sr-only" role="status" aria-live="polite">{message}</span>
     </>

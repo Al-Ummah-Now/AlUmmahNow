@@ -25,7 +25,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
         <IcoButton
           style="fa-bars"
           size="text-lg"
-          color="text-[#ffa037]  bg-transparent"
+          color="text-[var(--fanous-color-accent)]  bg-transparent"
           onClick={toggleCollapse}
           ariaLabel={isNavOpen ? t.a11y.closeNavigationMenu : t.a11y.openNavigationMenu}
           ariaExpanded={isNavOpen}
@@ -39,7 +39,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
           {/* <div className="relative left-0 w-13 h-13 rounded-full overflow-hidden">
             <Image src="/logo.png" alt="Logo" sizes="10vw" fill />
           </div> */}
-          <h2 className="text-lg font-semibold text-[#ffa037] cursor-pointer">
+          <h2 className="text-lg font-semibold text-[var(--fanous-color-accent)] cursor-pointer">
             {t.common.appName}
           </h2>
         </Link>

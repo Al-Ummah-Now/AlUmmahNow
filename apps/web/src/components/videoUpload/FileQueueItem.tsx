@@ -55,7 +55,7 @@ export function FileQueueItem({
       case 'uploading':
         return 'text-blue-600 dark:text-blue-400';
       case 'paused':
-        return 'text-yellow-600 dark:text-yellow-400';
+        return 'text-brand-ink dark:text-brand-ink';
       case 'processing':
         return 'text-purple-600 dark:text-purple-400';
       case 'cancelled':
@@ -162,7 +162,7 @@ export function FileQueueItem({
                 <div
                   className={`
                     h-1.5 rounded-full transition-all duration-300
-                    ${file.status === 'paused' ? 'bg-yellow-600' : 'bg-blue-600'}
+                    ${file.status === 'paused' ? 'bg-brand' : 'bg-blue-600'}
                   `}
                   style={{ width: `${file.progress}%` }}
                 ></div>
@@ -202,12 +202,12 @@ export function FileQueueItem({
                   flex items-center gap-1
                   px-2 py-1
                   text-xs font-medium
-                  text-yellow-700 dark:text-yellow-300
-                  bg-yellow-50 dark:bg-yellow-900/20
-                  border border-yellow-200 dark:border-yellow-800
+                  text-brand-ink dark:text-brand
+                  bg-brand-soft dark:bg-brand-soft
+                  border border-brand-edge dark:border-brand-edge
                   rounded
-                  hover:bg-yellow-100 dark:hover:bg-yellow-900/30
-                  focus:outline-none focus:ring-2 focus:ring-yellow-500
+                  hover:bg-brand-soft dark:hover:bg-brand-soft
+                  focus:outline-none focus:ring-2 focus:ring-brand
                   transition-colors
                 "
                 aria-label={t.upload.pause}

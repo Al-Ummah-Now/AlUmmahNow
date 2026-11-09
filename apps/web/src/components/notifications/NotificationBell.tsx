@@ -63,7 +63,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-full p-2 text-[#ffa037] hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffa037]"
+        className="relative rounded-full p-2 text-[var(--fanous-color-accent)] hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-accent)]"
         aria-label={label}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}

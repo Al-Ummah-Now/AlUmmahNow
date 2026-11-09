@@ -82,7 +82,7 @@ export default function ChannelSelectorRTL() {
           <>
             {channel.isMain && (
               <span title="القناة الرئيسية">
-                <Crown className="h-3 w-3 text-yellow-500" />
+                <Crown className="h-3 w-3 text-brand-ink" />
               </span>
             )}
             <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -189,7 +189,7 @@ export default function ChannelSelectorRTL() {
                       </div>
                     )}
                     {ch.isMain && (
-                      <Crown className="absolute -bottom-1 -left-1 h-3 w-3 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
+                      <Crown className="absolute -bottom-1 -left-1 h-3 w-3 text-brand-ink bg-white dark:bg-gray-900 rounded-full" />
                     )}
                   </div>
                 </button>

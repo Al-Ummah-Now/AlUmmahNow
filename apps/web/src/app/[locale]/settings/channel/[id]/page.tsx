@@ -244,9 +244,9 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
             <div className={`flex items-start gap-4`}>
-              <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+              <div className="p-3 bg-brand-soft dark:bg-brand-soft rounded-lg">
                 <svg
-                  className="w-6 h-6 text-amber-600 dark:text-amber-400"
+                  className="w-6 h-6 text-brand-ink dark:text-brand-ink"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"

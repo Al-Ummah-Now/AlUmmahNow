@@ -74,7 +74,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
                 title={`${dayLabel(metric.date)}: ${d.likes} ${fmt(metric.likes)}`}
               />
               <div
-                className="bg-yellow-500 dark:bg-yellow-400 rounded w-full min-h-[2px]"
+                className="bg-brand dark:bg-brand rounded w-full min-h-[2px]"
                 style={{ height: scale(metric.comments, maxComments, 45) }}
                 title={`${dayLabel(metric.date)}: ${d.comments} ${fmt(metric.comments)}`}
               />
@@ -87,7 +87,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
             <span className="text-xs text-gray-600 dark:text-gray-300">{d.likes}</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+            <div className="w-3 h-3 bg-brand rounded"></div>
             <span className="text-xs text-gray-600 dark:text-gray-300">{d.comments}</span>
           </div>
         </div>

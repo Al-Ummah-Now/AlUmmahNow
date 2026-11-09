@@ -45,7 +45,7 @@ const EMPTY_STATE_CONFIGS: Record<
       label: 'Browse Channels',
       href: '/en/channels'
     },
-    iconColor: 'text-amber-400 dark:text-amber-600'
+    iconColor: 'text-brand-ink dark:text-brand-ink'
   },
   'no-ended': {
     icon: Clock,
