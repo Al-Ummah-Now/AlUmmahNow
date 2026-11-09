@@ -147,7 +147,6 @@ export const APPS: AppRule[] = [
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'durable_objects', name: 'WEBSOCKET_DO' },
-				{ kind: 'kv_namespaces', name: 'PRESENCE_KV' },
 				// The view counter flushes into the video JSON (SCALABILITY-AUDIT AV-1)
 				{ kind: 'r2_buckets', name: 'VIDEOS' },
 			],

@@ -180,8 +180,8 @@ pnpm wrangler deploy
 ```
 
 **Configuration:**
-- Durable Object: WebSocketDurableObject
-- KV namespace: PRESENCE_KV
+- Durable Object: WebSocketDurableObject (socket shards `sockets:<n>`, view counters `views:<id>:<n>`)
+- Rate limiting: WS_CONNECT_LIMITER, WS_MESSAGE_LIMITER
 
 ## Environment Configuration
 

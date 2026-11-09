@@ -11,7 +11,7 @@ that product/legal should confirm.
 | AlUmmahNowAuth (separate service) | Sign-in account: email, password hash, sessions, multi-account links | Auth service. Not part of this repo. Managed at the account app (`profile.auth.<env>.alummahnow.net`) |
 | api-videos (R2) | Profiles, channels, videos, comments, reactions, subscriptions, watch history, community content, playlists, templates, reports | This repo |
 | processor (R2 + D1) | Raw event archive (`al-ummah-now-messages`), aggregated rollups, D1 moderation reports | This repo |
-| websocket-server (KV) | Presence `presence:{userId}` (TTL 5 min) | This repo |
+| websocket-server (Durable Object, memory only) | Presence: the open sockets of a signed-in user; gone when the socket closes | This repo |
 | Browser (web app) | Preferences, consent cookie, encrypted on-device watch progress | This repo |
 | Bunny.net | Video files, thumbnails, avatars, community images | Processor (sub-processor) |
 | Cloudflare | Hosting, Workers logs | Processor (sub-processor) |
