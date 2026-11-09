@@ -95,6 +95,11 @@ export interface NotificationFanoutPayload {
   params?: NotificationParams;
   actionUrl?: string;
   actorUserId?: string;
+  /**
+   * Paging (processor only): the fan-out covers subscribers with user_id
+   * greater than this, one page per message; producers leave it unset.
+   */
+  afterUserId?: string;
 }
 
 /** One recipient of a push dispatch: the stored notification row it delivers. */

@@ -50,6 +50,8 @@ describe('notification center (processor)', () => {
   function pushedTo(): string[] {
     return fetchMock.mock.calls
       .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+      // A body is one event or a batch of them ({ items })
+      .flatMap((b) => (Array.isArray(b.items) ? b.items : [b]))
       .filter((b) => b.message.type === 'notification')
       .map((b) => b.channel);
   }
@@ -165,6 +167,7 @@ describe('notification center (processor)', () => {
 
     const notificationBodies = fetchMock.mock.calls
       .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+      .flatMap((b) => (Array.isArray(b.items) ? b.items : [b]))
       .filter((b) => b.message.type === 'notification');
     expect(notificationBodies[0].message.data.notificationId).toBe(stored[0].id);
     // the duplicate status event is not stored and therefore not pushed as a notification

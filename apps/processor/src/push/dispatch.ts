@@ -19,7 +19,13 @@ import {
   type NotificationParams,
   type PushDispatchPayload,
 } from '@al-ummah/shared-types';
-import type { D1Database, QueueEnvironment } from '../types';
+import type { AlUmmahMessage, D1Database, QueueEnvironment } from '../types';
+
+/**
+ * Messages per sendBatch call. The limit is 100 messages and 256 KB; a
+ * dispatch message of 100 recipients is ~8 KB, so 25 stay well under it.
+ */
+export const SEND_BATCH = 25;
 import type { StoredNotification } from '../lib/notifications-store';
 import { logger } from '../lib/logger';
 import type { PushProviderName, PushProviders, PushTarget } from './provider';
@@ -34,7 +40,7 @@ export async function enqueuePush(
     logger.warn('MESSAGE_QUEUE not bound; push skipped', { recipients: rows.length });
     return 0;
   }
-  let messages = 0;
+  const messages: AlUmmahMessage[] = [];
   for (let i = 0; i < rows.length; i += PUSH_DISPATCH_BATCH) {
     const payload: PushDispatchPayload = {
       recipients: rows.slice(i, i + PUSH_DISPATCH_BATCH).map((r) => ({ userId: r.user_id, notificationId: r.id })),
@@ -42,16 +48,25 @@ export async function enqueuePush(
       ...(data.params ? { params: data.params } : {}),
       ...(data.actionUrl ? { actionUrl: data.actionUrl } : {}),
     };
-    await env.MESSAGE_QUEUE.send({
+    messages.push({
       id: `push-${payload.recipients[0]?.notificationId ?? i}`,
       type: MessageType.PushDispatch,
       timestamp: Date.now(),
       payload: payload as unknown as Record<string, unknown>,
     });
-    messages++;
   }
-  return messages;
+  // One subrequest per SEND_BATCH messages (SCALABILITY-AUDIT PR-7), not one per message
+  const queue = env.MESSAGE_QUEUE;
+  if (queue.sendBatch) {
+    for (let i = 0; i < messages.length; i += SEND_BATCH) {
+      await queue.sendBatch(messages.slice(i, i + SEND_BATCH).map((body) => ({ body })));
+    }
+  } else {
+    for (const m of messages) await queue.send(m);
+  }
+  return messages.length;
 }
+
 
 interface DeviceRow {
   install_id: string;
