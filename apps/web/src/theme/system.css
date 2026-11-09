@@ -252,3 +252,28 @@ html[dir=rtl] .custom-video-player.aspect-video[data-mini] [data-vjs-player]{rig
 @media(hover:hover){.ts-trigger:hover{background:color-mix(in srgb,var(--fanous-color-text-primary) 10%,transparent)}}
 .ts-trigger:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 .ts-item{display:flex;align-items:center;gap:8px;min-height:36px;padding-inline:10px;font-size:14px}
+
+/* Related: compact rows in the side column, full card grid anywhere below the player */
+[data-testid=related-videos-list]{display:grid;gap:4px;margin-inline:0!important}[data-testid=related-videos-list]>*{margin:0!important}
+.rv{display:grid;grid-template-columns:42% minmax(0,1fr);gap:10px;align-items:start;padding:6px;border-radius:var(--r-lg);text-decoration:none;color:inherit;transition:background-color 140ms}
+@media(hover:hover){.related-videos a.rv:hover{background:var(--m-hover)}}
+.rv:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
+.rv-t{position:relative;aspect-ratio:16/9;border-radius:var(--r-md);overflow:hidden;background:var(--m-card)}
+.rv-d{position:absolute;inset-block-end:4px;inset-inline-end:4px;padding:1px 5px;border-radius:4px;background:rgb(0 0 0/.78);color:#fff;font-size:12px;line-height:16px;font-variant-numeric:tabular-nums;direction:ltr}
+.rv-b{display:grid;gap:2px;min-width:0}
+.related-videos .rv-title{margin:0 0 2px;font-size:14px;line-height:20px;font-weight:600;color:var(--fanous-color-text-primary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.related-videos .rv-sub{margin:0;font-size:12px;line-height:16px;color:var(--fanous-color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:1023px){[data-testid=related-videos-list]{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}.rv{grid-template-columns:1fr;padding:0 0 8px}}
+html[data-theatre] [data-testid=related-videos-list]{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+html[data-theatre] .rv{grid-template-columns:1fr;padding:0 0 8px}
+html[data-theatre] .related-videos .rv-title{font-size:15px;line-height:21px}
+
+/* Consent: opaque compact card in the corner, never over the title or actions */
+[data-testid=consent-banner]{left:auto!important;right:0!important;width:min(420px,100vw);padding:16px!important}
+html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important}
+[data-testid=consent-banner]>div{background:var(--fanous-c-dialog-bg) padding-box,var(--m-border) border-box!important;-webkit-backdrop-filter:none;backdrop-filter:none;max-width:none;padding:16px}
+[data-testid=consent-banner] h2{font-size:15px;line-height:20px}[data-testid=consent-banner] p{font-size:13px;line-height:18px}
+[data-testid=consent-banner] .mt-4.flex{margin-top:12px;gap:8px;flex-direction:row;flex-wrap:nowrap;justify-content:flex-end}
+[data-testid=consent-banner] .mt-4.flex button{flex:0 1 auto;min-height:36px;padding-block:0;padding-inline:12px;font-size:14px;border-radius:var(--r-pill);white-space:nowrap}
+@media(max-width:639px){[data-testid=consent-banner]{left:0!important;right:0!important;width:100%;padding:8px!important}[data-testid=consent-banner] p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}[data-testid=consent-banner]>div{padding:12px}[data-testid=consent-banner] .mt-4.flex button{flex:1 1 0;padding-inline:8px}}
+.custom-video-player.aspect-video{max-height:calc(100dvh - 148px)}
