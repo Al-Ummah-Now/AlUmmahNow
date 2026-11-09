@@ -199,6 +199,7 @@ describe('demo set contents', () => {
     const demoSet = require('../../../../demo-content/demo-set.json') as DemoSet;
     const excluded = '443418c1-dc70-43d9-944d-5388ab7dc4c3';
     expect(demoSet.videos).not.toContain(excluded);
+    expect(demoSet.videos).not.toContain('e42e5deb-c86a-40b0-b8ec-6072fc550dba');
     expect(demoSet.extraVideos).not.toContain(excluded);
     expect(buildPoolVideos(demoSet, [[{ id: excluded, title: 'x' }]])).toEqual([]);
   });

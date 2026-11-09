@@ -56,13 +56,3 @@ export function formatAbsoluteDate(value: Date | string | number | null | undefi
   const date = toDate(value);
   return date ? new Intl.DateTimeFormat(lang, { dateStyle: 'long' }).format(date) : '';
 }
-
-const ARABIC = /[؀-ۿ]/;
-
-/** Picks the current language out of bilingual text such as "Great Mosques | مساجد كبرى". */
-export function pickLanguage(text: string, lang: MetaLang): string {
-  const parts = text.includes(' | ') ? text.split(' | ') : text.split(/(?<=[.!؟?])\s+/);
-  if (parts.length < 2) return text;
-  const wanted = parts.filter((p) => ARABIC.test(p) === (lang === 'ar'));
-  return wanted.length > 0 ? wanted.join(' ') : text;
-}
