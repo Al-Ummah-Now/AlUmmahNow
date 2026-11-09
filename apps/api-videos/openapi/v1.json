@@ -25,6 +25,160 @@
     }
   ],
   "paths": {
+    "/api/v1/account/deletion": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Delete my account (content, then identity)",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires a sign-in at most 10 minutes old (the token's `auth_time`); otherwise `401 insufficient_user_authentication`: sign in again with `prompt=login` and retry. Erases content in resumable passes (`status: \"erasing\"` → call again with `resumeToken`), then deletes the sign-in account. `502 code: auth_unavailable` is retryable: content erasure is idempotent. Body: `{ \"confirm\": \"DELETE\" }`.",
+        "operationId": "post_AccountDeletionPost",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "enum": [
+                      "DELETE"
+                    ]
+                  },
+                  "resumeToken": {
+                    "type": "string",
+                    "maxLength": 8192
+                  }
+                },
+                "required": [
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Progress or done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "erasing",
+                        "deleted"
+                      ],
+                      "description": "erasing: call again with resumeToken; deleted: done, sign the user out"
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "resumeToken": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "anonymized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "status",
+                    "complete"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing confirmation (code: confirmation_required)"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Content erased; the identity service could not be reached (code: auth_unavailable, retry)"
+          }
+        }
+      }
+    },
+    "/api/v1/account/export": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Export my data (content and account) as one download",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication. `content` is the same as `/api/privacy/export` (paged: while `content.complete` is false call again with `?resume=`; later pages carry only `content`). `account` is the sign-in account (profile, roles, sessions, audit trail) from the identity service, on the first page.",
+        "operationId": "get_AccountExportGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "required": false,
+            "name": "resume",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON attachment: { formatVersion, exportedAt, content, account }"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/analytics": {
       "get": {
         "tags": [
@@ -18181,6 +18335,245 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry/events": {
+      "post": {
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "Send a batch of client telemetry events",
+        "description": "🌐 Public, no user id. Up to 50 events and 64 KB per batch. Accepted only with `consent.analytics: true`; otherwise the batch is dropped (still 202, do not retry). Event types: `qoe`, `crash_breadcrumb`, `app_event` (allow-listed names). Rate limited per install id.",
+        "operationId": "post_TelemetryEventsPost",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "installId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "app": {
+                    "type": "string",
+                    "enum": [
+                      "viewer",
+                      "studio",
+                      "kids"
+                    ]
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "ios",
+                      "ipados",
+                      "tvos",
+                      "macos",
+                      "android",
+                      "androidtv",
+                      "firetv",
+                      "windows",
+                      "linux",
+                      "tizen",
+                      "webos",
+                      "web"
+                    ]
+                  },
+                  "appVersion": {
+                    "type": "string",
+                    "pattern": "^(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})(?:[-+][0-9A-Za-z.-]+)?$"
+                  },
+                  "consent": {
+                    "type": "object",
+                    "properties": {
+                      "analytics": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "analytics"
+                    ]
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "qoe"
+                              ]
+                            },
+                            "ts": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "description": "Client time, ms since epoch"
+                            },
+                            "videoId": {
+                              "type": "string",
+                              "maxLength": 64,
+                              "pattern": "^[A-Za-z0-9_-]+$"
+                            },
+                            "startupMs": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 600000
+                            },
+                            "rebufferRatio": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            },
+                            "bitrateSwitches": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10000
+                            },
+                            "fatalErrorCode": {
+                              "type": "string",
+                              "maxLength": 64,
+                              "pattern": "^[A-Za-z0-9_.:-]+$"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "crash_breadcrumb"
+                              ]
+                            },
+                            "ts": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "description": "Client time, ms since epoch"
+                            },
+                            "errorCode": {
+                              "type": "string",
+                              "maxLength": 64,
+                              "pattern": "^[A-Za-z0-9_.:-]+$"
+                            },
+                            "breadcrumbs": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "maxLength": 2000
+                              },
+                              "maxItems": 20
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "breadcrumbs"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "app_event"
+                              ]
+                            },
+                            "ts": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "description": "Client time, ms since epoch"
+                            },
+                            "name": {
+                              "type": "string",
+                              "enum": [
+                                "app_open",
+                                "app_background",
+                                "sign_in",
+                                "sign_out",
+                                "playback_start",
+                                "playback_complete",
+                                "download_start",
+                                "download_complete",
+                                "cast_start",
+                                "search",
+                                "share",
+                                "subscribe",
+                                "update_prompt_shown",
+                                "update_prompt_accepted"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "installId",
+                  "app",
+                  "platform",
+                  "appVersion",
+                  "consent",
+                  "events"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Received",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "number",
+                      "description": "Events written"
+                    },
+                    "dropped": {
+                      "type": "number",
+                      "description": "Events not written (no consent, sampled out, or ingest unavailable)"
+                    }
+                  },
+                  "required": [
+                    "accepted",
+                    "dropped"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid batch"
+          },
+          "413": {
+            "description": "Batch larger than 64 KB"
+          },
+          "429": {
+            "description": "Too many batches from this install"
           }
         }
       }
