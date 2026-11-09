@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import type { VideoReaction } from '@/components/VideoPagePlayer/interface';
+import { formatViews } from '@/lib/format/videoMeta';
 
 interface VideoMetricsDisplayProps {
   videoId: string;
@@ -34,7 +35,7 @@ export function VideoMetricsDisplay({
   onMetricsUpdate
 }: VideoMetricsDisplayProps) {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { user: account, loading: accountLoading } = useMultiAccount();
   // Reactions are made as the active channel (accounts without one react as the
   // user). Wait for the account to load: reacting earlier would use the user id
@@ -143,7 +144,7 @@ export function VideoMetricsDisplay({
       <div className="flex items-center gap-1" data-testid="video-metrics-views">
         <Eye className="w-4 h-4" aria-hidden="true" />
         <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
-          {formatNumber(metrics.viewCount)} {t.video.views}
+          {formatViews(metrics.viewCount, lang)}
         </span>
       </div>
 

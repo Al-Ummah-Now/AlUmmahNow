@@ -17,6 +17,7 @@ import { PlaylistCard } from '@/components/PlaylistCard';
 import { useLanguage } from '@/hooks/useLanguage';
 import { resolveUrl } from '@/lib/utility';
 import { formatCount } from './labels';
+import { RelativeDate } from '@/components/RelativeDate';
 
 function PostResultCard({ post }: { post: SearchPostPayload }) {
   const { t, lang } = useLanguage();
@@ -38,7 +39,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {t.search.communityPost}
-            {date && !Number.isNaN(date.getTime()) && <> · {date.toLocaleDateString(lang === 'ar' ? 'ar' : 'en')}</>}
+            {date && !Number.isNaN(date.getTime()) && <> · <RelativeDate value={date} lang={lang} /></>}
           </p>
         </div>
       </div>
