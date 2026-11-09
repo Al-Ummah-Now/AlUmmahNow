@@ -9,16 +9,21 @@
  *
  * QA runs whichever AlUmmahNowAuth build its CI deployed last (a PR's or
  * main's), so these helpers accept both and check the same outcome.
+ *
+ * Both builds keep #loggedInView and #loggedOutView in the page and hide one,
+ * so every "either" locator matches visible elements only (strict mode counts
+ * hidden matches too).
  */
 import { expect, type Page } from '@playwright/test';
 import { target } from './targets';
 
-const landingSignIn = (page: Page) => page.locator('#loggedOutView button:has-text("Sign In")');
+const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true });
+const landingSignIn = (page: Page) => visible(page, '#loggedOutView button:has-text("Sign In")');
 
 /** Opens the signed-out profile app and gets to the auth server's sign-in. */
 export async function openProfileSignIn(page: Page): Promise<void> {
   await page.goto(target().profile);
-  await expect(landingSignIn(page).or(page.locator('input[name="email"]'))).toBeVisible({ timeout: 30000 });
+  await expect(landingSignIn(page).or(visible(page, 'input[name="email"]')).first()).toBeVisible({ timeout: 30000 });
   if (await landingSignIn(page).isVisible()) await landingSignIn(page).click();
   await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
 }
@@ -27,7 +32,7 @@ export async function openProfileSignIn(page: Page): Promise<void> {
 export async function signInToProfileSilently(page: Page): Promise<void> {
   await page.goto(target().profile);
   const signedIn = page.locator('#loggedInView');
-  await expect(signedIn.or(landingSignIn(page))).toBeVisible({ timeout: 30000 });
+  await expect(visible(page, '#loggedInView').or(landingSignIn(page)).first()).toBeVisible({ timeout: 30000 });
   if (await landingSignIn(page).isVisible()) await landingSignIn(page).click();
   await expect(signedIn).toBeVisible({ timeout: 30000 });
   expect(new URL(page.url()).origin).toBe(target().profile);
@@ -36,7 +41,7 @@ export async function signInToProfileSilently(page: Page): Promise<void> {
 /** The profile app is signed out: its landing page, or the auth server's password form. */
 export async function expectProfileSignedOut(page: Page): Promise<void> {
   await page.goto(target().profile);
-  await expect(page.locator('#loggedOutView').or(page.locator('input[name="password"]'))).toBeVisible({ timeout: 20000 });
+  await expect(visible(page, '#loggedOutView').or(visible(page, 'input[name="password"]')).first()).toBeVisible({ timeout: 20000 });
   if (new URL(page.url()).origin !== target().profile) {
     await expect(page).toHaveURL(new RegExp(`^${target().auth}/`));
   }
