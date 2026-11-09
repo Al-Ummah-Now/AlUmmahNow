@@ -87,8 +87,9 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   // Signed out it shows a "Sign In" landing page (before AlUmmahNowAuth#254) or goes
   // straight to the auth server's form (from #254); accept either build.
   await page.goto(H.profile);
-  const landingSignIn = page.locator('#loggedOutView button:has-text("Sign In")');
-  await expect(landingSignIn.or(page.locator('input[name="email"]'))).toBeVisible({ timeout: 30000 });
+  // Only visible matches: the page keeps both views and hides one (strict mode counts hidden ones)
+  const landingSignIn = page.locator('#loggedOutView button:has-text("Sign In")').filter({ visible: true });
+  await expect(landingSignIn.or(page.locator('input[name="email"]').filter({ visible: true })).first()).toBeVisible({ timeout: 30000 });
   if (await landingSignIn.isVisible()) await landingSignIn.click();
   await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 30000 });
   await password(page);
