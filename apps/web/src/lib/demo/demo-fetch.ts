@@ -96,6 +96,13 @@ async function withFallbackCovers(fetcher: Fetch, rawUrl: string, body: unknown)
   const items: DemoPlaylist[] = Array.isArray(data) ? data : [(body as DemoPlaylist)];
   const at = rawUrl.indexOf('/api/qa-proxy/') >= 0 ? rawUrl.indexOf('/api/qa-proxy/') + '/api/qa-proxy'.length : rawUrl.indexOf('/api/');
   const base = rawUrl.slice(0, at);
+  const ar = typeof document !== 'undefined' && document.documentElement.lang === 'ar';
+  for (const p of items as (DemoPlaylist & { name?: string; title?: string })[]) {
+    for (const k of ['name', 'title'] as const) {
+      const v = p?.[k];
+      if (typeof v === 'string' && v.includes(' | ')) p[k] = v.split(' | ')[ar ? 1 : 0];
+    }
+  }
   await Promise.all(items.map(async (p) => {
     if (!p?.id || p.thumbnailUrl || p.cover) return;
     const full = await getJson<{ videoItems?: { id?: string; thumbnailUrl?: string }[]; result?: { videoItems?: { id?: string; thumbnailUrl?: string }[] } }>(fetcher, `${base}/api/playlists/${encodeURIComponent(p.id)}?includeVideos=true`);

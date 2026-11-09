@@ -82,7 +82,7 @@ const VideosPage: React.FC = () => {
           style={{ direction: isRTL ? "rtl" : "ltr" }}
         >
 <ContinueWatchingShelf />
-{videos[0] && <HomeHero video={videos[0]} />}
+{videos.find((v) => v.id !== 'e42e5deb-c86a-40b0-b8ec-6072fc550dba') && <HomeHero video={videos.find((v) => v.id !== 'e42e5deb-c86a-40b0-b8ec-6072fc550dba')!} />}
 <h1 className="home-h text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
             // Card-sized placeholders reserve the grid's space so the cards

@@ -36,3 +36,6 @@ section[data-section=playlist] a,section[data-section=playlists] a.group{border-
 section[data-section=playlists] [class*="bg-black/80"],section[data-section=playlist] [class*="bg-black/80"]{background:rgb(9 21 30/.95)!important;color:#fff!important;border-radius:var(--r-sm)}
 section[data-section=channels] [class*="rounded-full"]{box-shadow:0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 34%,transparent)}
 section[data-section] [class*="border-dashed"]{min-height:120px}
+
+/* Shorts shelf */
+section[data-section=shorts] .flex.gap-4>div{width:178px}section[data-section=shorts] .video-card>:first-child{height:auto!important;aspect-ratio:9/16;border-radius:var(--r-xl)}section[data-section=shorts] .video-card>:first-child *{height:100%!important}section[data-section=shorts] .video-card>:first-child img{object-fit:cover}section[data-section=shorts] .video-card h3{font-size:14px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}

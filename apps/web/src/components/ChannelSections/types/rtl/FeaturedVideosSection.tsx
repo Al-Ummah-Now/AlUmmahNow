@@ -1,10 +1,13 @@
 'use client';
 
+import demoSet from '@/../demo-content/demo-set.json';
 import { useEffect, useState } from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import VideoCard from '../../../videoCard/rtl';
 import { SectionHeader } from '../../SectionHeader';
 import { logger } from '@/lib/logger-client';
+
+const demoShorts = new Set<string>((demoSet as { shorts: string[] }).shorts);
 
 interface FeaturedVideosSectionProps {
   videoIds: string[];
@@ -68,7 +71,7 @@ export function FeaturedVideosSection({ videoIds, title, channelId }: FeaturedVi
   }
 
   return (
-    <section data-section="featured" className="space-y-4" dir="rtl">
+    <section data-section={videos.length > 0 && videos.every((v) => demoShorts.has(v.id)) ? 'shorts' : 'featured'} className="space-y-4" dir="rtl">
       <SectionHeader
         title={title || 'الفيديوهات المميزة'}
         viewAllHref={channelId ? `/ar/channels/${channelId}` : undefined}
