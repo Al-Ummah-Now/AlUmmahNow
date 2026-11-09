@@ -4,7 +4,6 @@ import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useTheme } from 'next-themes';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NavPrefs } from '@/components/ThemeDemo/NavPrefs';
@@ -33,7 +32,6 @@ const LeftNavigationWithOverlayRTL: React.FC<LeftNavigationWithOverlayProps> = (
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { user } = useMultiAccount();
     // resolvedTheme: with the default "system" theme, `theme` is never 'dark',
     // so toggling from a dark system preference would be a no-op
     const { resolvedTheme: theme, setTheme } = useTheme();
