@@ -1,11 +1,12 @@
 'use client';
 // Prototype only: the redesigned application shell. One component for both directions.
-import { useEffect, useState, type FormEvent } from 'react';
+import { HeaderSearch } from '@/components/Header/HeaderSearch';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, Search, ShieldCheck, Sun, Tv, BookOpen, X, type LucideIcon } from 'lucide-react';
+import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -72,12 +73,6 @@ export function AppShell() {
     router.push(qs ? `${next}?${qs}` : next);
   };
 
-  const onSearch = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const q = String(new FormData(e.currentTarget).get('q') ?? '').trim();
-    if (q) router.push(`${base}/search?q=${encodeURIComponent(q)}`);
-  };
-
   const dark = mounted && resolvedTheme === 'dark';
   const tabs = groups.flatMap((g) => g.items).filter((i) => i.tab);
 
@@ -92,12 +87,8 @@ export function AppShell() {
           </Link>
           <DemoUpload place="start" />
         </div>
-        <form className="ah-search" role="search" onSubmit={onSearch}>
-          <input name="q" type="search" placeholder={c.search} aria-label={c.search} />
-          <button type="submit" aria-label={c.search}><Search aria-hidden="true" /></button>
-        </form>
+        <HeaderSearch />
         <div className="ah-end">
-          <Link href={`${base}/search`} className="ic ah-search-phone" aria-label={c.search}><Search aria-hidden="true" /></Link>
           <DemoUpload place="end" />
           <NotificationBell dir={rtl ? 'rtl' : 'ltr'} />
           {rtl ? <UnifiedNavigationRTL /> : <UnifiedNavigation />}

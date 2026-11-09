@@ -355,7 +355,6 @@ a.group svg.lucide-chevron-right{align-self:center}
 
 /* Search */
 [data-testid=search-input-clear]{position:absolute!important;inset-inline-end:8px;top:50%;transform:translateY(-50%);width:28px;height:28px;min-width:0;min-height:0;display:grid;place-items:center;padding:0}
-@media(min-width:640px){[data-testid=search-page]>:is(h1){display:none}[data-testid=search-page] form.flex.items-stretch{display:none}}
 
 /* Sign-in */
 main:has(.demo-gfx){min-height:calc(100dvh - 140px)}
@@ -443,3 +442,14 @@ main:has(.pc-menu) .absolute:not(.custom-video-player *):not(:has(.custom-video-
 /* End screen and start-over states */
 @media(hover:hover){.pc .pc-end-b.b-secondary:hover{background:rgb(255 255 255/.22)!important}.pc .pc-end-b.b-ghost:hover{background:rgb(255 255 255/.12)!important}.pc .pc-startover:hover{filter:brightness(1.14)}}
 .pc .pc-end-b.b-secondary:active{background:rgb(255 255 255/.3)!important}.pc .pc-end-b.b-ghost:active{background:rgb(255 255 255/.2)!important}.pc .pc-end-b.b-primary:active{filter:brightness(.92)}
+
+/* Header search: shared box, themed dropdown */
+.ah-search-wrap{justify-self:center;width:100%;max-width:640px;min-width:0}
+.ah-search-wrap>div{width:100%}
+.ah .ah-search{height:44px}.ah .ah-search>div{min-width:0}.ah .ah-search input{height:100%}
+.ah .ah-search [data-testid=header-search-clear]{width:28px;height:28px;border:0;inset-inline-end:6px}
+.search-dd{background:linear-gradient(var(--fanous-c-dialog-bg),var(--fanous-c-dialog-bg)) padding-box,var(--m-border) border-box!important;border:1px solid transparent!important;box-shadow:var(--m-raised-edge)!important;border-radius:var(--r-lg)!important;color:var(--fanous-color-text-primary)}
+.search-dd [role=option]{min-height:40px}.search-dd [role=option][aria-selected=true],.search-dd [role=option]:hover{background:var(--m-hover)!important}
+.search-dd :is(span,p,button){color:var(--fanous-color-text-primary)}.search-dd p,.search-dd .text-xs{color:var(--fanous-color-text-secondary)}
+.ah-search-sheet{background:var(--fanous-c-nav-bg,var(--m-rail))!important;height:56px}.ah-search-sheet>div{flex:1 1 auto}
+@media(max-width:639px){.ah-search-wrap{display:none}.ah .ah-search-phone{display:inline-grid;justify-self:end}}
