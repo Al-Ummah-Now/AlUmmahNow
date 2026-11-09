@@ -2,6 +2,9 @@
 import { logger } from '@/lib/logger-client';
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import * as tus from "tus-js-client";
+import { retryMetadata } from "@/lib/studio/retry";
+import { limitRefusalMessage } from "@/lib/studio/limits";
+import { bulkDeleteVideos, getVideoById } from "@/lib/api/videos";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -90,6 +93,23 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const auth = useAuth();
   const { user: multiAccountUser } = useMultiAccount();
   const activeChannel = multiAccountUser?.channel;
+  // Uploading again after a failure: the failed record is replaced on success
+  const retryOfRef = useRef<string | null>(null);
+  const [retryTitle, setRetryTitle] = useState('');
+  const retryChannelId = activeChannel?.id;
+
+  useEffect(() => {
+    const retryId = new URLSearchParams(window.location.search).get('retry');
+    if (!retryId || !retryChannelId || retryOfRef.current === retryId) return;
+    void getVideoById(retryId)
+      .then((video) => {
+        if (!video || video.channelId !== retryChannelId) return;
+        retryOfRef.current = retryId;
+        setRetryTitle(video.title);
+        setMetadata((previous) => ({ ...previous, ...(retryMetadata(video) as Partial<VideoMetadata>) }));
+      })
+      .catch((error) => logger.error('[VideoUpload] Could not load the video to retry', { retryId, error }));
+  }, [retryChannelId]);
 
   // Ask for confirmation before leaving while a transfer or processing is in
   // progress (leaving would abandon the upload)
@@ -140,7 +160,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
     setSelectedFile(file);
     const defaultTitle = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
-    setMetadata(prev => ({
+    // Uploading again keeps the details of the failed upload
+    setMetadata(prev => retryOfRef.current ? prev : ({
       ...prev,
       title: defaultTitle,
       titleEn: defaultTitle,
@@ -247,7 +268,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       );
 
       if (!initiateResult.success || !initiateResult.result) {
-        throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
+        throw new Error(initiateResult.limit
+          ? limitRefusalMessage(t.studio.limits, initiateResult.limit)
+          : initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
       }
 
       const { videoId, tusSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl } = initiateResult.result;
@@ -352,6 +375,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
           if (!completeResult.success) {
             throw new Error(completeResult.error || t.upload.completeFailed);
+          }
+
+          if (retryOfRef.current) {
+            const failedId = retryOfRef.current;
+            retryOfRef.current = null;
+            void bulkDeleteVideos([failedId], { channelId })
+              .catch((error) => logger.error('[VideoUpload] Could not remove the failed upload', { failedId, error }));
           }
 
           // Step 4: Poll for processing status
@@ -911,6 +941,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   return (
     <div className={className}>
+      {retryTitle && (
+        <p role="status" className="mb-3 text-sm" data-testid="upload-retry-notice">
+          {t.studio.videos.retryUploadNotice.replace('{title}', retryTitle)}
+        </p>
+      )}
       <div
         className={`relative border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
           isDragOver

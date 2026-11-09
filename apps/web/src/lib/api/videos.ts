@@ -1,6 +1,7 @@
 'use server';
 
 import { VideoObject, VideoInfo } from "@/interfaces";
+import { parseLimitRefusal, type LimitRefusal } from '@/lib/studio/limits';
 import { loadRelated, readLastGoodShelf, RELATED_LIMIT, saveLastGoodShelf, toVideoInfo } from "@/lib/video/related";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import {
@@ -887,8 +888,10 @@ export async function initiateVideoUploadApi(
     message?: string;
   };
   error?: string;
+  limit?: LimitRefusal;
 } | null> {
-  return apiRequestServer<{
+  let refusal: LimitRefusal | null = null;
+  const result = await apiRequestServer<{
     success: boolean;
     result?: {
       videoId: string;
@@ -912,12 +915,14 @@ export async function initiateVideoUploadApi(
     method: 'POST',
     url: buildApiUrl('/api/videos/upload/initiate'),
     body: metadata,
-    functionName: 'initiateVideoUploadApi'
+    functionName: 'initiateVideoUploadApi',
+    onFailure: (status, text) => { refusal = parseLimitRefusal(status, text); },
   }, async () => ({
     
     channelId: headers.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), true);
+  return result ?? (refusal ? { success: false, limit: refusal } : null);
 }
 
 /**

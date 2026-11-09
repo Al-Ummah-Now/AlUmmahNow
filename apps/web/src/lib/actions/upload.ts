@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/videos";
 import { getServerAuthContext } from "@/lib/api/server-auth-v2";
 import type { BatchUploadInitiateResponse } from "@al-ummah/shared-types";
+import type { LimitRefusal } from "@/lib/studio/limits";
 
 /**
  * Initiate video upload - Server action with TUS support
@@ -19,6 +20,7 @@ export async function initiateVideoUpload(
     description?: string;
     descriptionLocalized?: Record<string, string>;
     isPublic?: boolean;
+    isDraft?: boolean;
     tags?: string;
     category?: string;
     fileSize: number;
@@ -47,6 +49,7 @@ export async function initiateVideoUpload(
     authToken?: string; // JWT token for TUS authentication
   };
   error?: string;
+  limit?: LimitRefusal;
 }> {
   const result = await initiateVideoUploadApi(metadata, {  channelId });
 

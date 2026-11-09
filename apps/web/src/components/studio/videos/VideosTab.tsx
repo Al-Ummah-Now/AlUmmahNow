@@ -33,6 +33,7 @@ import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import { bulkDeleteVideos, bulkUpdateVideos } from '@/lib/api/videos';
 import type { BulkVideoChanges } from '@/lib/dashboard/bulk-edit';
 import { logger } from '@/lib/logger-client';
+import { isLimitRefusal, limitRefusalMessage, type LimitRefusal } from '@/lib/studio/limits';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { MAX_BULK_SELECTION, parseVideosQuery, rowActions, videosQueryString, type VideoRowAction, type VideosQuery } from '@/lib/studio/videos';
 
@@ -188,8 +189,12 @@ export function VideosTab({ locale, channelId, role }: Props) {
     return succeeded > 0;
   };
 
-  const finishBulk = async (summary: BulkSummary | null) => {
+  const finishBulk = async (summary: BulkSummary | LimitRefusal | null) => {
     setBulkDialog(null);
+    if (isLimitRefusal(summary)) {
+      setNotice(limitRefusalMessage(t.studio.limits, summary));
+      return;
+    }
     if (!summary) setNotice(text.actionFailed);
     else if (summary.failed > 0) setNotice(text.bulk.partialDone.replace('{succeeded}', String(summary.succeeded)).replace('{failed}', String(summary.failed)));
     else setNotice(text.bulk.done.replace('{count}', String(summary.succeeded)));
@@ -203,7 +208,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const onAction = (action: VideoRowAction, video: StudioVideo) => {
     if (action === 'copyLink') {
       void navigator.clipboard.writeText(`${window.location.origin}${watchHref(video.id)}`).then(() => setNotice(text.done.copied));
-    } else if (action === 'publishNow') {
+    } else if (action === 'publishNow' || action === 'retryPublish') {
       void run(() => publishNow(video.id, { channelId }), text.done.published);
     } else if (action === 'cancelSchedule') {
       void run(() => cancelSchedule(video.id, { channelId }), text.done.scheduleCancelled);
@@ -217,6 +222,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
     if (action === 'edit' || action === 'schedule' || action === 'reschedule') return `${base}/${id}/edit`;
     if (action === 'analytics') return `${base}/${id}/analytics`;
     if (action === 'view') return watchHref(video.id);
+    if (action === 'retryUpload') return `/${locale}/upload?retry=${id}`;
     return null;
   };
 
@@ -376,7 +382,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
             </thead>
             <tbody className="block md:table-row-group">
               {items.map((video) => {
-                const actions = rowActions(query.status, role, video.isPublic !== false);
+                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null);
                 const edit = actionHref('edit', video);
                 const shown = video.scheduledPublishDate && query.status === 'scheduled' ? video.scheduledPublishDate : video.dateCreated;
                 return (

@@ -46,6 +46,11 @@ export const STUDIO_EN = {
     title: 'This page is on its way',
     body: 'It will appear here soon.',
   },
+  limits: {
+    draftsMax: 'Your plan allows {limit} drafts per channel. Publish or delete one to save another.',
+    bulkSchedule: 'Your plan doesn\'t include scheduling several videos at once. Schedule them one at a time.',
+    other: 'Your plan doesn\'t include this.',
+  },
   videos: {
     statusLabel: 'Status',
     statuses: { published: 'Published', scheduled: 'Scheduled', drafts: 'Drafts', processing: 'Processing', failed: 'Failed' },
@@ -85,6 +90,8 @@ export const STUDIO_EN = {
       reschedule: 'Reschedule',
       publishNow: 'Publish now',
       cancelSchedule: 'Cancel schedule',
+      retryUpload: 'Upload again',
+      retryPublish: 'Try publishing again',
       delete: 'Delete',
     },
     empty: {
@@ -116,6 +123,7 @@ export const STUDIO_EN = {
     actionFailed: 'That didn\'t work. Please try again.',
     loadFailed: 'Could not load your videos.',
     retry: 'Try again',
+    retryUploadNotice: 'Choose the file again to replace the failed upload of "{title}".',
     loadMore: 'Load more',
   },
   signIn: {
@@ -172,6 +180,11 @@ export const STUDIO_AR: StudioTranslations = {
     title: 'هذه الصفحة قيد الإعداد',
     body: 'ستظهر هنا قريبًا.',
   },
+  limits: {
+    draftsMax: 'تتيح خطتك {limit} مسودة لكل قناة. انشر مسودة أو احذفها لحفظ أخرى.',
+    bulkSchedule: 'لا تشمل خطتك جدولة عدة فيديوهات دفعة واحدة. يمكنك جدولتها واحدًا تلو الآخر.',
+    other: 'لا تشمل خطتك هذا.',
+  },
   videos: {
     statusLabel: 'الحالة',
     statuses: { published: 'منشور', scheduled: 'مجدول', drafts: 'مسودات', processing: 'قيد المعالجة', failed: 'فشل' },
@@ -211,6 +224,8 @@ export const STUDIO_AR: StudioTranslations = {
       reschedule: 'إعادة الجدولة',
       publishNow: 'نشر الآن',
       cancelSchedule: 'إلغاء الجدولة',
+      retryUpload: 'الرفع مرة أخرى',
+      retryPublish: 'إعادة محاولة النشر',
       delete: 'حذف',
     },
     empty: {
@@ -242,6 +257,7 @@ export const STUDIO_AR: StudioTranslations = {
     actionFailed: 'لم تنجح العملية. حاول مرة أخرى.',
     loadFailed: 'تعذّر تحميل فيديوهاتك.',
     retry: 'حاول مرة أخرى',
+    retryUploadNotice: 'اختر الملف مرة أخرى ليحل محل الرفع الفاشل لـ "{title}".',
     loadMore: 'تحميل المزيد',
   },
   signIn: {

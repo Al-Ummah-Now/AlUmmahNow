@@ -56,10 +56,10 @@ export function videosQueryString(query: VideosQuery): string {
   return params.toString();
 }
 
-export type VideoRowAction = 'edit' | 'view' | 'analytics' | 'copyLink' | 'schedule' | 'reschedule' | 'publishNow' | 'cancelSchedule' | 'delete';
+export type VideoRowAction = 'edit' | 'view' | 'analytics' | 'copyLink' | 'schedule' | 'reschedule' | 'publishNow' | 'cancelSchedule' | 'retryUpload' | 'retryPublish' | 'delete';
 
 /** Row actions in display order. The server still decides, per video. */
-export function rowActions(status: StudioVideoStatus, role: StudioRole, isPublic = false): VideoRowAction[] {
+export function rowActions(status: StudioVideoStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null): VideoRowAction[] {
   const edit: VideoRowAction[] = can(role, 'video.edit') ? ['edit'] : [];
   const schedule = can(role, 'video.schedule');
   const remove: VideoRowAction[] = can(role, 'video.delete') ? ['delete'] : [];
@@ -70,8 +70,10 @@ export function rowActions(status: StudioVideoStatus, role: StudioRole, isPublic
       return [...edit, ...(schedule ? ['reschedule' as const, 'publishNow' as const, 'cancelSchedule' as const] : []), ...remove];
     case 'drafts':
       return [...edit, ...(schedule ? ['publishNow' as const, 'schedule' as const] : []), ...remove];
-    case 'failed':
-      return [...edit, ...remove];
+    case 'failed': {
+      const retry: VideoRowAction[] = failure === 'publish' ? (schedule ? ['retryPublish'] : []) : can(role, 'video.upload') ? ['retryUpload'] : [];
+      return [...retry, ...edit, ...remove];
+    }
     case 'processing':
       return remove;
   }

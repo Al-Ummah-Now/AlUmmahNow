@@ -1,5 +1,7 @@
 import { Str, Num } from "chanfana";
 import { z } from "zod";
+import { channelContentCounts } from "../../lib/search/ownership";
+import { checkDraftAllowed } from "../../lib/studioLimits";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { Channel, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
@@ -120,6 +122,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			}
 
 			const channelId = c.req.header('channelId') || userId;
+
+			if (isDraft && channelId !== userId) {
+				const counts = await channelContentCounts(c.env as never, channelId);
+				const limit = await checkDraftAllowed(c.env, { userId, channelId, drafts: counts?.drafts ?? 0 });
+				if (limit) return c.json(limit, 402);
+			}
 
 			// Create video in Bunny Stream first to get video ID
 			logger.info('[DEBUG] Extracting Bunny secrets...', {

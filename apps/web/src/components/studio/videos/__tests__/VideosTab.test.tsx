@@ -28,6 +28,11 @@ jest.mock('@/lib/api/videos', () => ({ bulkDeleteVideos: (...args: unknown[]) =>
 jest.mock('@/lib/api/scheduling', () => ({ cancelSchedule: jest.fn(), publishNow: jest.fn() }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), info: jest.fn() } }));
 jest.mock('@/components/bulkEdit/BulkEditDialog', () => ({ BulkEditDialog: () => null }));
+jest.mock('../BulkDialogs', () => ({
+  BulkPlaylistDialog: () => null,
+  BulkScheduleDialog: ({ open, onDone }: { open: boolean; onDone: (result: unknown) => void }) =>
+    open ? <button onClick={() => onDone({ entitlement: 'studio.bulkSchedule', limit: null, current: null })}>refused</button> : null,
+}));
 jest.mock('@/components/calendar/ViewSwitcher', () => ({ ViewSwitcher: () => <div data-testid="view-switcher" /> }));
 jest.mock('@/components/calendar/CalendarControls', () => ({ CalendarControls: () => null }));
 jest.mock('@/components/calendar/utils/dateFormatters', () => ({ navigateNext: jest.fn(), navigatePrevious: jest.fn() }));
@@ -104,6 +109,16 @@ describe('VideosTab', () => {
     fireEvent.click(within(screen.getByTestId('studio-bulk-bar')).getByRole('button', { name: STUDIO_EN.videos.bulk.delete }));
     fireEvent.click(await screen.findByTestId('studio-confirm-delete'));
     expect(await screen.findByText('1 deleted, 1 could not be deleted.')).toBeInTheDocument();
+  });
+
+  it('says which plan limit refused a bulk action', async () => {
+    renderTab();
+    const rows = await screen.findAllByTestId('studio-video-row');
+    fireEvent.click(within(rows[0]).getByRole('checkbox'));
+    fireEvent.click(within(screen.getByTestId('studio-bulk-bar')).getByRole('button', { name: STUDIO_EN.videos.bulk.schedule }));
+    fireEvent.click(await screen.findByText('refused'));
+    expect(await screen.findByRole('status')).toHaveTextContent(STUDIO_EN.limits.bulkSchedule);
+    expect(screen.getByRole('status')).not.toHaveTextContent(STUDIO_EN.videos.actionFailed);
   });
 
   it('marks private videos', async () => {
