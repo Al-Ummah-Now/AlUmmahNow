@@ -60,3 +60,4 @@ export * from './search';
 
 // Plans & entitlements catalogue and resolver (Epic 27)
 export * from './entitlements';
+export * from './site-theme';

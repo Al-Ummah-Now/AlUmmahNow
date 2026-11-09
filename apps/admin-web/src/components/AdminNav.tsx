@@ -19,6 +19,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/moderation/ai', label: 'nav.aiModeration' },
   { href: '/translations', label: 'nav.translations' },
   { href: '/indices', label: 'nav.indices' },
+  { href: '/site-theme', label: 'nav.siteTheme' },
 ];
 
 export function AdminNav({ userEmail, authIssuer }: AdminNavProps) {
