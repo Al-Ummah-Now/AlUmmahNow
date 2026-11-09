@@ -13,6 +13,11 @@ export interface Target {
   adminApi: string;
   auth: string;
   profile: string;
+  /** Auth server admin app. */
+  authAdmin: string;
+  /** Public website (AlUmmahNowUI). */
+  www: string;
+  cms: string;
 }
 
 const TARGETS: Record<ReleaseEnv, Target> = {
@@ -23,6 +28,9 @@ const TARGETS: Record<ReleaseEnv, Target> = {
     adminApi: 'https://admin.api.qa.alummahnow.net',
     auth: 'https://auth.qa.alummahnow.net',
     profile: 'https://profile.auth.qa.alummahnow.net',
+    authAdmin: 'https://admin.auth.qa.alummahnow.net',
+    www: 'https://www.qa.alummahnow.net',
+    cms: 'https://cms.qa.alummahnow.net',
   },
   stage: {
     web: 'https://videos.stage.alummahnow.net',
@@ -31,6 +39,9 @@ const TARGETS: Record<ReleaseEnv, Target> = {
     adminApi: 'https://admin.api.stage.alummahnow.net',
     auth: 'https://auth.stage.alummahnow.net',
     profile: 'https://profile.auth.stage.alummahnow.net',
+    authAdmin: 'https://admin.auth.stage.alummahnow.net',
+    www: 'https://www.stage.alummahnow.net',
+    cms: 'https://cms.stage.alummahnow.net',
   },
 };
 

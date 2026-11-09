@@ -68,4 +68,38 @@ describe('GET /api/callback', () => {
     await GET(request('https://videos.example/api/callback?code=abc', { auth_locale: 'ar' }));
     expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback');
   });
+
+  describe('silent sign-in (prompt=none from the client probe or an account switch)', () => {
+    it('login_required goes back to the page, anonymous, without an error page', async () => {
+      const res = await GET(
+        request('https://videos.example/api/callback?error=login_required&state=s', {
+          auth_locale: 'en',
+          auth_silent: '1',
+          auth_return: '/en/video/abc?t=10',
+        }),
+      );
+      expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/en/video/abc?t=10' });
+      expect(exchange).not.toHaveBeenCalled();
+    });
+
+    it('any other error of a silent attempt goes back too (locale home without a return path)', async () => {
+      const res = await GET(request('https://videos.example/api/callback?error=server_error', { auth_locale: 'ar', auth_silent: '1' }));
+      expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/ar' });
+    });
+
+    it('a failed code exchange of a silent attempt goes back to the page too', async () => {
+      exchange.mockResolvedValue({ err: new Error('invalid_grant') });
+      const res = await GET(
+        request('https://videos.example/api/callback?code=abc', { auth_locale: 'en', auth_silent: '1', auth_return: '/en/explore' }),
+      );
+      expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/en/explore' });
+    });
+
+    it('never follows an unsafe return path', async () => {
+      const res = await GET(
+        request('https://videos.example/api/callback?error=login_required', { auth_silent: '1', auth_return: '//evil.example/x' }),
+      );
+      expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/en' });
+    });
+  });
 });
