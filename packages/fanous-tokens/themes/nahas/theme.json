@@ -176,5 +176,25 @@
     "buttonBackground": "#ffa037",
     "buttonText": "#290d06",
     "buttonRadius": "12px"
+  },
+  "component": {
+    "dark": {
+      "nav.bg": "#331c0f"
+    },
+    "light": {
+      "nav.bg": "#572a13",
+      "nav.border": "#412010",
+      "nav.text": "#fdf3e3",
+      "nav.icon": "#ffc98e",
+      "nav.hover": "#412010",
+      "nav.activeBg": "#412010",
+      "nav.activeText": "#ffc98e",
+      "nav.indicator": "#ffa037",
+      "nav.searchBg": "#412010",
+      "nav.searchBorder": "#c79a78",
+      "nav.searchText": "#fdf3e3",
+      "nav.searchPlaceholder": "#ecd6bd",
+      "upload.focus": "#ffc98e"
+    }
   }
 }

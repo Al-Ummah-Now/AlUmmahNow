@@ -50,3 +50,17 @@ export const contrastFailures = (model: Model) => contrastPairs(model).filter((p
 
 /** Text on the primary action is held to 7:1 in every state a person can press. */
 export const primaryTextFailures = (model: Model) => contrastPairs(model).filter((p) => ['onPrimary', 'onPrimaryHover', 'onPrimaryPressed'].includes(p.fg) && p.ratio < AA_TEXT_ON_PRIMARY);
+
+/** Every part of the interface, in each mode, against the background it sits on. */
+export function componentFailures(model: Model): string[] {
+  const out: string[] = [];
+  for (const mode of ['dark', 'light'] as const) {
+    const c = model.components[mode];
+    for (const [fg, bg, min] of model.componentPairs) {
+      if (!c[fg] || !c[bg] || !c[fg].startsWith('#') || !c[bg].startsWith('#')) { out.push(`component ${mode}: ${fg} on ${bg} did not resolve`); continue; }
+      const r = contrastRatio(c[fg], c[bg]);
+      if (r < min) out.push(`component ${mode}: ${fg} ${c[fg]} on ${bg} ${c[bg]} = ${r.toFixed(2)} (needs ${min})`);
+    }
+  }
+  return out;
+}

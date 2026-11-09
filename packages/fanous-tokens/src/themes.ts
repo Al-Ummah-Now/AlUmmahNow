@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AA_TEXT_ON_PRIMARY, contrastFailures, primaryTextFailures } from './contrast.ts';
+import { AA_TEXT_ON_PRIMARY, componentFailures, contrastFailures, primaryTextFailures } from './contrast.ts';
 import { buildModel, TOKENS_URL, type Model } from './model.ts';
 
 type Node = Record<string, any>;
@@ -14,7 +14,7 @@ const MODES = ['light', 'dark'] as const;
 const isObject = (v: unknown): v is Node => typeof v === 'object' && v !== null && !Array.isArray(v);
 const readJson = (path: string) => JSON.parse(readFileSync(path, 'utf8'));
 
-export const loadTokens = (): Node => JSON.parse(readFileSync(TOKENS_URL, 'utf8'));
+export const loadTokens = (): Node => ({ ...JSON.parse(readFileSync(TOKENS_URL, 'utf8')), components: JSON.parse(readFileSync(new URL('../tokens/components.json', import.meta.url), 'utf8')) });
 
 /** A relative asset path becomes `<owner>/assets/...`, so an inherited slot still finds its file. */
 function ownPaths(value: any, owner: string): any {
@@ -147,6 +147,17 @@ export function composeTokens(tokens: Node, theme: Node): Node {
   const mode = (m: 'light' | 'dark') => Object.fromEntries(Object.entries<Node>(roles).map(([name, role]) => [name, { $value: theme.color[m][name], ...role }]));
   out.color.theme = { dark: mode('dark'), light: mode('light') };
   delete out.color.roles;
+  const components = out.components;
+  const hexes = (m: 'light' | 'dark') => {
+    const base = buildSemantic(out, m);
+    return Object.fromEntries(Object.entries<string>(components.parts).map(([part, ref]) => {
+      const override = theme.component?.[m]?.[part] ?? ref;
+      return [part, override.startsWith('#') ? override : (base[override] ?? override)];
+    }));
+  };
+  out.componentColors = { dark: hexes('dark'), light: hexes('light') };
+  out.componentPairs = components.pairs;
+  delete out.components;
   for (const [name, value] of Object.entries(theme.brandColor)) out.color.brand[name].$value = value;
   out.font.family.latin.$value = `{font.pair.${theme.font}.latin}`;
   out.font.family.arabic.$value = `{font.pair.${theme.font}.arabic}`;
@@ -165,6 +176,8 @@ function hueOf(hex: string) {
   return { h, sat };
 }
 
+const inLogoHues = (h: number, sat: number) => sat < 0.08 || (h >= 5 && h <= 48) || (h >= 172 && h <= 212);
+
 /** Every theme stays in the logo's teal and navy or ember and gold hues. Status colours are shared meanings. */
 export function offLogoColors(model: Model): string[] {
   const off: string[] = [];
@@ -172,10 +185,23 @@ export function offLogoColors(model: Model): string[] {
     for (const c of colors) {
       if (EXEMPT_HUE.test(c.name)) continue;
       const { h, sat } = hueOf(c.hex);
-      if (!(sat < 0.08 || (h >= 5 && h <= 48) || (h >= 172 && h <= 212))) off.push(`${mode}.${c.name} ${c.hex} is outside the logo's hues (H${Math.round(h)})`);
+      if (!inLogoHues(h, sat)) off.push(`${mode}.${c.name} ${c.hex} is outside the logo's hues (H${Math.round(h)})`);
+    }
+    for (const [part, hex] of Object.entries(model.components[mode as 'dark' | 'light'])) {
+      if (/error|success|destructive|badge\.status/.test(part)) continue;
+      const { h, sat } = hueOf(hex);
+      if (!inLogoHues(h, sat)) off.push(`${mode}.${part} ${hex} is outside the logo's hues (H${Math.round(h)})`);
     }
   }
   return off;
+}
+
+function buildSemantic(tree: Node, m: 'light' | 'dark'): Record<string, string> {
+  return Object.fromEntries(Object.entries<Node>(tree.color.theme[m]).map(([name, t]) => {
+    let v: string = t.$value;
+    for (let guard = 0; v.startsWith('{') && guard < 8; guard++) v = v.slice(1, -1).split('.').reduce<any>((n, k) => n[k], tree).$value;
+    return [name, v];
+  }));
 }
 
 export const themeModel = (id: string, themes: Themes, tokens: Node): Model => buildModel(composeTokens(tokens, resolveTheme(id, themes)));
@@ -212,6 +238,7 @@ export function validateThemes(themes: Themes, tokens: Node, dir: string = THEME
     for (const p of contrastFailures(model)) errors.push(`${id}: AA failure in ${p.theme}: ${p.fg} ${p.fgHex} on ${p.bg} ${p.bgHex} = ${p.ratio.toFixed(2)} (needs ${p.required})`);
     for (const p of primaryTextFailures(model)) errors.push(`${id}: text on primary in ${p.theme}: ${p.fg} on ${p.bg} = ${p.ratio.toFixed(2)} (needs ${AA_TEXT_ON_PRIMARY})`);
     for (const c of offLogoColors(model)) errors.push(`${id}: ${c}`);
+    for (const f of componentFailures(model)) errors.push(`${id}: ${f}`);
   }
   return errors;
 }
