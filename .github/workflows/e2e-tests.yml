@@ -36,79 +36,6 @@ env:
   OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
 
 jobs:
-  # Centralized auth setup - runs once, shares auth state with all test jobs
-  auth-setup:
-    name: Auth Setup
-    # Only the a11y/visual jobs use the shared auth state
-    if: ${{ github.event_name != 'pull_request' }}
-    runs-on: ubuntu-24.04  # Playwright 1.56 has no browser builds for ubuntu-latest (26.04)
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
-        with:
-          version: 9.15.4
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build shared packages
-        run: |
-          pnpm --filter @al-ummah/shared-types build
-          pnpm --filter @al-ummah/logger build
-
-      - name: Install Playwright (chromium only for auth)
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Create auth directory
-        working-directory: apps/web
-        run: mkdir -p e2e/.auth
-
-      - name: Run auth setup
-        working-directory: apps/web
-        run: npx tsx e2e/run-auth-setup.ts
-        env:
-          # New users are code-sink addresses (@e2e.alummahnow.net); see #185
-          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
-
-      - name: List auth files
-        run: ls -la apps/web/e2e/.auth/
-
-      - name: Upload auth state
-        uses: actions/upload-artifact@v4
-        with:
-          name: auth-state
-          path: apps/web/e2e/.auth/
-          retention-days: 1
-          if-no-files-found: error
-          include-hidden-files: true
-
   # Every UI spec on every browser/device project. One job per project, each
   # with its own pinned QA users (E2E_USERS_TIMESTAMP): the specs mutate their
   # users' channels, subscriptions and videos, so jobs running in parallel must
@@ -214,6 +141,18 @@ jobs:
         shell: bash
         run: echo "name=$(echo '${{ matrix.project }}' | tr ' ' '-')" >> $GITHUB_OUTPUT
 
+      # Artifacts of this public repo are downloadable by anyone signed in to
+      # GitHub: drop any output that holds a secret or a storage state, then fail.
+      - name: Scan test output for secrets
+        if: always()
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          python3 scripts/ci/scan-artifacts-for-secrets.py
+          --env E2E_CODE_SINK_SECRET --env CLOUDFLARE_API_TOKEN
+          --remove apps/web/playwright-report apps/web/test-results
+
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -240,9 +179,11 @@ jobs:
 
   # axe-core WCAG 2.1 AA on every page, en/ar x light/dark (project "a11y")
   # and visual snapshots of key pages (project "visual").
+  # Each job registers its own users in Playwright's global setup: storage
+  # state (live QA session cookies) is never passed between jobs as an
+  # artifact, since anyone signed in to GitHub can download artifacts here.
   dedicated:
     name: E2E - ${{ matrix.project }}
-    needs: auth-setup
     if: ${{ github.event_name != 'pull_request' && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -280,19 +221,22 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Download auth state
-        uses: actions/download-artifact@v4
-        with:
-          name: auth-state
-          path: apps/web/e2e/.auth/
-
       - name: Run ${{ matrix.project }} project
         working-directory: apps/web
         run: pnpm exec playwright test --project=${{ matrix.project }}
         env:
           CI: true
-          SKIP_AUTH_SETUP: 'true'
           E2E_MAX_FAILURES: '0'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+
+      - name: Scan test output for secrets
+        if: always()
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+        run: >-
+          python3 scripts/ci/scan-artifacts-for-secrets.py
+          --env E2E_CODE_SINK_SECRET
+          --remove apps/web/playwright-report apps/web/test-results
 
       - name: Upload report
         if: always()
@@ -308,7 +252,6 @@ jobs:
   # baselines in e2e/visual/__screenshots__ and commit them to the branch.
   update-visual-snapshots:
     name: Update visual snapshots
-    needs: auth-setup
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_snapshots }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -346,19 +289,13 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Download auth state
-        uses: actions/download-artifact@v4
-        with:
-          name: auth-state
-          path: apps/web/e2e/.auth/
-
       - name: Regenerate snapshots
         working-directory: apps/web
         run: pnpm exec playwright test --project=visual --update-snapshots=all
         env:
           CI: true
-          SKIP_AUTH_SETUP: 'true'
           E2E_MAX_FAILURES: '0'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
 
       - name: Commit snapshots
         run: |
@@ -405,6 +342,10 @@ jobs:
         run: npx --yes @lhci/cli@0.14.0 autorun --config=./lighthouserc.js
         env:
           LHCI_BASE_URL: ${{ env.WEB_APP_URL }}
+
+      - name: Scan Lighthouse reports for secrets
+        if: always()
+        run: python3 scripts/ci/scan-artifacts-for-secrets.py --remove apps/web/.lighthouseci
 
       - name: Upload Lighthouse reports
         if: always()

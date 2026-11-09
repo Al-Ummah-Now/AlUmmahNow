@@ -9,6 +9,11 @@ import { test, expect, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 import { completeRegistration, expectNoErrorHop, recordNavigations } from './web-session';
+import { fillSecret } from './secret-fill';
+
+// This file signs users in through the auth server: its traces would hold the
+// typed password and email code (fillSecret args, form POST bodies). Trace off.
+test.use({ trace: 'off' });
 
 async function openAdminSignIn(page: Page): Promise<void> {
   await page.goto(`${target().adminWeb}/login`);
@@ -43,7 +48,7 @@ test.describe('Release: admin-web access', () => {
     const navigations = recordNavigations(page);
     await openAdminSignIn(page);
     await page.fill('input[name="email"]', email);
-    await page.fill('input[name="password"]', TEST_PASSWORD);
+    await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
     await page.click('button[data-component="button"]');
     await expect(page).toHaveURL(`${target().adminWeb}/dashboard`, { timeout: 30000 });
     await page.reload();

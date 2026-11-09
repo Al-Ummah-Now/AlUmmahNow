@@ -6,7 +6,12 @@
 import { test, expect } from '@playwright/test';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 import { completeRegistration, expectNoErrorHop, recordNavigations } from './web-session';
+import { fillSecret } from './secret-fill';
 import { openProfileSignIn } from './profile-app';
+
+// This file signs users in through the auth server: its traces would hold the
+// typed password and email code (fillSecret args, form POST bodies). Trace off.
+test.use({ trace: 'off' });
 
 test.describe('Release: profile app sign-up and sign-in', () => {
   test('register, then sign in again from a fresh session', async ({ page, context }) => {
@@ -22,7 +27,7 @@ test.describe('Release: profile app sign-up and sign-in', () => {
     await context.clearCookies();
     await openProfileSignIn(page);
     await page.fill('input[name="email"]', email);
-    await page.fill('input[name="password"]', TEST_PASSWORD);
+    await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
     await page.click('button[data-component="button"]');
     await expect(loggedIn).toBeVisible({ timeout: 30000 });
     await expect(loggedIn).toContainText(email);

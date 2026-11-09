@@ -62,9 +62,11 @@ export function sinkEmail(prefix: string): string {
 }
 
 /**
- * Random per worker process: every user is created and used inside one test,
- * so nothing needs it later, and the accounts left behind on QA/stage
- * (including promoted admins; the auth server has no demote route) cannot be
- * signed into with a password from the repo.
+ * Random per run: every user is created and used inside one test, so nothing
+ * needs it later, and the accounts left behind on QA/stage (including promoted
+ * admins; the auth server has no demote route) cannot be signed into with a
+ * password from the repo. CI generates E2E_TEST_PASSWORD so the artifact scan
+ * (scripts/ci/scan-artifacts-for-secrets.py) can look for it; otherwise it is
+ * random per worker process.
  */
-export const TEST_PASSWORD = `Rel-${randomBytes(12).toString('base64url')}-1!`;
+export const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD || `Rel-${randomBytes(12).toString('base64url')}-1!`;
