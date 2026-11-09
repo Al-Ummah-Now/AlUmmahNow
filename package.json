@@ -37,6 +37,7 @@
     "schema:snapshot": "node --experimental-strip-types --no-warnings scripts/release/schema-snapshot.ts --write",
     "check:schema": "node --experimental-strip-types --no-warnings scripts/release/schema-snapshot.ts --check",
     "smoke": "node --experimental-strip-types --no-warnings scripts/release/smoke.ts",
+    "release:content-columns": "node --experimental-strip-types --no-warnings scripts/release/content-columns.ts",
     "release:migrate": "node --experimental-strip-types --no-warnings scripts/release/d1-migrate.ts",
     "release:promote": "node --experimental-strip-types --no-warnings scripts/release/promote.ts",
     "release:queue-consumers": "node --experimental-strip-types --no-warnings scripts/release/queue-consumers.ts",

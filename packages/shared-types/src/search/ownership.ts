@@ -93,6 +93,25 @@ export function ownershipInvalidatedKey(kind: OwnershipKind): string {
   return `ownership:invalidated:${kind}`;
 }
 
+export type StudioVideoStatus = 'published' | 'scheduled' | 'drafts' | 'processing' | 'failed';
+
+export const STUDIO_VIDEO_STATUSES: readonly StudioVideoStatus[] = ['published', 'scheduled', 'drafts', 'processing', 'failed'];
+
+/** The one status a video has in Studio. The first match wins. */
+export function studioVideoStatus(video: {
+  uploadStatus?: unknown;
+  processingStatus?: unknown;
+  scheduledPublishStatus?: unknown;
+  isDraft?: unknown;
+}): StudioVideoStatus {
+  const { uploadStatus, processingStatus, scheduledPublishStatus, isDraft } = video;
+  if (uploadStatus === 'failed' || processingStatus === 'failed' || scheduledPublishStatus === 'failed') return 'failed';
+  if (uploadStatus === 'initiated' || uploadStatus === 'uploading' || uploadStatus === 'processing') return 'processing';
+  if (processingStatus === 'pending' || processingStatus === 'processing' || processingStatus === 'transcoding') return 'processing';
+  if (scheduledPublishStatus === 'scheduled' || scheduledPublishStatus === 'publishing') return 'scheduled';
+  return isDraft === true ? 'drafts' : 'published';
+}
+
 export interface OwnershipRow {
   kind: OwnershipKind;
   id: string;
@@ -109,6 +128,10 @@ export interface OwnershipRow {
   duration: number | null;
   scheduleStatus: string | null;
   uploadStatus: string | null;
+  /** Studio Videos tab columns (migrations/search/0017_content_studio_columns.sql); videos only. */
+  studioStatus: StudioVideoStatus | null;
+  category: string | null;
+  language: string | null;
   views: number;
   createdAt: number | null;
   updatedAt: number | null;
@@ -189,6 +212,9 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       duration: null,
       scheduleStatus: null,
       uploadStatus: null,
+      studioStatus: null,
+      category: null,
+      language: null,
       title: name,
       handle: text(obj.userName),
       email: text(obj.email),
@@ -208,6 +234,9 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       duration: null,
       scheduleStatus: null,
       uploadStatus: null,
+      studioStatus: null,
+      category: null,
+      language: null,
       title: text(obj.name),
       handle: text(obj.handle),
       email: text(obj.email),
@@ -226,6 +255,9 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
     duration: finite(obj.duration),
     scheduleStatus: text(obj.scheduledPublishStatus),
     uploadStatus: text(obj.uploadStatus),
+    studioStatus: studioVideoStatus(obj),
+    category: text(obj.category),
+    language: text(obj.language),
     title: text(obj.title),
     handle: null,
     email: null,
@@ -251,8 +283,9 @@ export function ownershipTombstone(kind: OwnershipKind): string {
 export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number, version = now): SearchStatement {
   return db.prepare(
     `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version,
-       admin_title, handle, email, is_verified, is_suspended, subscribers, admin_cols, is_short, needs_format)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       admin_title, handle, email, is_verified, is_suspended, subscribers, admin_cols, is_short, needs_format,
+       studio_status, category, language)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
      WHERE ${NOT_TOMBSTONED}
      ON CONFLICT(kind, id) DO UPDATE SET
        owner_id = excluded.owner_id, channel_id = excluded.channel_id, is_public = excluded.is_public,
@@ -261,13 +294,15 @@ export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: n
        views = excluded.views, created_at = excluded.created_at, updated_at = excluded.updated_at,
        indexed_at = excluded.indexed_at, source_version = excluded.source_version,
        admin_title = excluded.admin_title, handle = excluded.handle, email = excluded.email, is_verified = excluded.is_verified,
-       is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols, is_short = excluded.is_short, needs_format = excluded.needs_format
+       is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols, is_short = excluded.is_short, needs_format = excluded.needs_format,
+       studio_status = excluded.studio_status, category = excluded.category, language = excluded.language
      WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version`,
   ).bind(
     row.kind, row.id, row.ownerId, row.channelId, int(row.isPublic), int(row.isHidden), int(row.isDeleted),
     int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now, version,
     row.title ?? null, row.handle ?? null, row.email ?? null, int(row.isVerified === true), int(row.isSuspended === true),
     row.subscribers ?? 0, OWNERSHIP_ADMIN_COLS_VERSION, int(row.isShort), int(row.needsFormat),
+    row.studioStatus, row.category, row.language,
     ownershipTombstone(row.kind), row.id, version,
   );
 }

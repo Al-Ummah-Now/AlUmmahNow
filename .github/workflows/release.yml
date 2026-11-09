@@ -252,6 +252,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/admin-api/wrangler.jsonc --env stage
+      # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
+      - name: Backfill and verify Studio columns (stage)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm release:content-columns --env stage
+          pnpm release:content-columns --env stage --check
 
       - name: Stage result
         if: always()
@@ -443,6 +451,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/admin-api/wrangler.jsonc
+      # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
+      - name: Backfill and verify Studio columns (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm release:content-columns --env production
+          pnpm release:content-columns --env production --check
 
       - name: Install Chromium
         run: (cd apps/web && pnpm exec playwright install --with-deps chromium)
