@@ -121,6 +121,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     isPublic: true,
     format: 'auto',
   });
+  const [saveAsDraft, setSaveAsDraft] = useState(false);
   const [showMetadataForm, setShowMetadataForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
@@ -372,7 +373,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               ar: metadata.descriptionAr || ''
             },
             // When scheduling is enabled, video must be private until scheduled publish date
-            isPublic: scheduleData ? false : metadata.isPublic,
+            isPublic: scheduleData || saveAsDraft ? false : metadata.isPublic,
+            ...(saveAsDraft && !scheduleData ? { isDraft: true } : {}),
             tags: tagsString,
             category: categoryState.category,
             // The video adopts this form's suggestion and records whether the uploader kept it
@@ -594,7 +596,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             likes: [],
             dislikes: [],
             // When scheduled, video is private until scheduled publish date
-            isPublic: scheduleData ? false : metadata.isPublic,
+            isPublic: scheduleData || saveAsDraft ? false : metadata.isPublic,
             isLive: false,
             // Include scheduling fields if video was scheduled
             ...(schedulingInfo.scheduledPublishDate && {
@@ -963,6 +965,20 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               <p className="text-xs text-blue-600 dark:text-blue-400 ms-6">
                 {t.upload.privateUntilScheduled}
               </p>
+            )}
+            {!scheduleData && (
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="saveAsDraft"
+                  checked={saveAsDraft}
+                  onChange={(e) => setSaveAsDraft(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-[var(--fanous-color-primary)] disabled:opacity-50"
+                  disabled={uploadProgress?.state === 'uploading'}
+                  data-testid="upload-save-draft"
+                />
+                <label htmlFor="saveAsDraft" className="ms-2 block text-sm">{t.studio.saveAsDraft}</label>
+              </div>
             )}
           </div>
 

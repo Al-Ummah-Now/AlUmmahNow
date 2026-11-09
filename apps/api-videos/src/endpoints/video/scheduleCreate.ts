@@ -196,6 +196,8 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
         fresh.scheduledPublishStatus = 'scheduled';
         fresh.scheduledBy = userId;
         fresh.scheduledAt = now.toISOString();
+        // Scheduled work is no longer a draft (docs/specs/CREATOR-STUDIO.md §4.4.1)
+        fresh.isDraft = false;
         return true;
       });
 

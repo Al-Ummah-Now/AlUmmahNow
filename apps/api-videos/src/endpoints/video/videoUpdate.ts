@@ -218,6 +218,8 @@ export class VideoUpdate extends AuthenticatedRoute {
 				if (!(key in next)) delete (fresh as Record<string, unknown>)[key];
 			}
 			Object.assign(fresh, next);
+			// A draft made public is no longer a draft
+			if (previous.isDraft && fresh.isPublic !== false) delete (fresh as { isDraft?: boolean }).isDraft;
 			return true;
 		});
 		if (!updatedVideo) {

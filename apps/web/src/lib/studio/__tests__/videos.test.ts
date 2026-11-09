@@ -39,6 +39,10 @@ describe('rowActions', () => {
     expect(rowActions('published', 'owner')).toEqual(['edit', 'view', 'analytics', 'copyLink', 'schedule', 'delete']);
   });
 
+  it('does not offer to schedule a public video, which the API refuses', () => {
+    expect(rowActions('published', 'owner', true)).toEqual(['edit', 'view', 'analytics', 'copyLink', 'delete']);
+  });
+
   it('gives an editor no analytics', () => {
     expect(rowActions('published', 'editor')).toEqual(['edit', 'view', 'copyLink', 'schedule', 'delete']);
   });

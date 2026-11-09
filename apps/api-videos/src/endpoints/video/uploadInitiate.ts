@@ -34,6 +34,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							fileSize: Num({ description: "File size in bytes", required: true }),
 							mimeType: Str({ description: "MIME type of the video file", required: true }),
 							isPublic: z.boolean().optional().default(true),
+							isDraft: z.boolean().optional().describe("Save without publishing. A draft is always private"),
 							tags: z.string().optional().describe("Comma-separated tags"),
 							// The web uploader sends these; they were stripped by the schema, so the
 							// Arabic title/description and the category chosen on upload were lost
@@ -127,7 +128,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		// issues (chanfana), not a 500
 		const request = await this.getValidatedData<typeof this.schema>();
 		try {
-			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint, categorySuggestionKey } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, isDraft, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint, categorySuggestionKey } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -176,7 +177,9 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			const metadata = {
 				title,
 				description: description || '',
-				isPublic: isPublic ?? true,
+				// A draft is always private (docs/specs/CREATOR-STUDIO.md §4.4.1)
+				isPublic: isDraft ? false : isPublic ?? true,
+				...(isDraft ? { isDraft: true } : {}),
 				tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
 				...(titleLocalized && { titleLocalized }),
 				...(descriptionLocalized && { descriptionLocalized }),
@@ -212,7 +215,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 						userId: ownerId,
 						uploadedBy,
 						channelId,
-						isPublic: isPublic ?? true,
+						isPublic: isDraft ? false : isPublic ?? true,
 						tags,
 						titleLocalized,
 						descriptionLocalized,
@@ -226,6 +229,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 						now: new Date(now),
 					}),
 					...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
+					...(isDraft ? { isDraft: true } : {}),
 				};
 				try {
 					await repository.putObject(videoId, video as VideoType);

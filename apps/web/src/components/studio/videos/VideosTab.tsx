@@ -27,7 +27,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getChannelContentCounts, listChannelContent, type StudioVideo } from '@/lib/api/studio-content';
+import { getChannelContentCounts, listChannelContent, type BulkSummary, type StudioVideo } from '@/lib/api/studio-content';
+import { BulkPlaylistDialog, BulkScheduleDialog } from './BulkDialogs';
 import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import { bulkDeleteVideos, bulkUpdateVideos } from '@/lib/api/videos';
 import type { BulkVideoChanges } from '@/lib/dashboard/bulk-edit';
@@ -72,6 +73,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const [notice, setNotice] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Pending>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkDialog, setBulkDialog] = useState<'playlist' | 'schedule' | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [search, setSearch] = useState(query.q);
   const requestRef = useRef(0);
@@ -184,6 +186,15 @@ export function VideosTab({ locale, channelId, role }: Props) {
       : t.bulkEdit.partial.replace('{succeeded}', String(succeeded)).replace('{failed}', String(failedCount)));
     await load();
     return succeeded > 0;
+  };
+
+  const finishBulk = async (summary: BulkSummary | null) => {
+    setBulkDialog(null);
+    if (!summary) setNotice(text.actionFailed);
+    else if (summary.failed > 0) setNotice(text.bulk.partialDone.replace('{succeeded}', String(summary.succeeded)).replace('{failed}', String(summary.failed)));
+    else setNotice(text.bulk.done.replace('{count}', String(summary.succeeded)));
+    setSelected(new Set());
+    await load();
   };
 
   const base = `/${locale}/studio/${encodeURIComponent(channelId)}/content/videos`;
@@ -308,6 +319,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
         <div className="sticky bottom-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-2 md:static" data-testid="studio-bulk-bar">
           <span className="text-sm font-medium">{text.bulk.selected.replace('{count}', numberFormat.format(selected.size))}</span>
           {canBulkEdit && <Button variant="outline" onClick={() => setBulkEditOpen(true)} className="min-h-11">{text.bulk.edit}</Button>}
+          {can(role, 'post.manage') && <Button variant="outline" onClick={() => setBulkDialog('playlist')} className="min-h-11">{text.bulk.addToPlaylist}</Button>}
+          {can(role, 'video.schedule') && <Button variant="outline" onClick={() => setBulkDialog('schedule')} className="min-h-11">{text.bulk.schedule}</Button>}
           {canBulkDelete && <Button variant="outline" onClick={() => setPendingDelete({ ids: [...selected] })} className="min-h-11">{text.bulk.delete}</Button>}
           <Button variant="ghost" onClick={() => setSelected(new Set())} className="min-h-11">{text.bulk.clear}</Button>
           {selected.size >= MAX_BULK_SELECTION && <span className="text-sm text-muted-foreground">{text.bulk.limit.replace('{max}', String(MAX_BULK_SELECTION))}</span>}
@@ -363,7 +376,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
             </thead>
             <tbody className="block md:table-row-group">
               {items.map((video) => {
-                const actions = rowActions(query.status, role);
+                const actions = rowActions(query.status, role, video.isPublic !== false);
                 const edit = actionHref('edit', video);
                 const shown = video.scheduledPublishDate && query.status === 'scheduled' ? video.scheduledPublishDate : video.dateCreated;
                 return (
@@ -435,6 +448,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
       )}
 
       <BulkEditDialog open={bulkEditOpen} count={selected.size} onOpenChange={setBulkEditOpen} onApply={applyBulkEdit} />
+      <BulkPlaylistDialog open={bulkDialog === 'playlist'} channelId={channelId} videoIds={[...selected]} onOpenChange={(open) => setBulkDialog(open ? 'playlist' : null)} onDone={finishBulk} />
+      <BulkScheduleDialog open={bulkDialog === 'schedule'} videoIds={[...selected]} onOpenChange={(open) => setBulkDialog(open ? 'schedule' : null)} onDone={finishBulk} />
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
         <AlertDialogContent>

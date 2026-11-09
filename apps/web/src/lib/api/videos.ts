@@ -835,6 +835,7 @@ export async function initiateVideoUploadApi(
     description?: string;
     descriptionLocalized?: Record<string, string>;
     isPublic?: boolean;
+    isDraft?: boolean;
     tags?: string;
     /** Upload as Short / as video; 'auto' detects it */
     format?: 'auto' | 'short' | 'video';
