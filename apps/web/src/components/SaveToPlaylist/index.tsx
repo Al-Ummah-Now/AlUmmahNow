@@ -8,6 +8,7 @@
  * the user create a new playlist that the video is added to immediately.
  */
 
+import { pickLanguage } from '@/lib/format/pick-language';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ListPlus, Lock, Plus, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -208,7 +209,7 @@ export default function SaveToPlaylist({ videoId, className = '' }: SaveToPlayli
                           onChange={() => toggle(playlist)}
                         />
                         <span className="flex-1 min-w-0 truncate text-sm text-gray-900 dark:text-white">
-                          {playlist.name || playlist.title}
+                          {pickLanguage(playlist.name || playlist.title || '', isRTL ? 'ar' : 'en')}
                         </span>
                         {playlist.isPublic === false && (
                           <Lock className="w-3.5 h-3.5 text-gray-400" aria-label={t.playlist.privateLabel} />
