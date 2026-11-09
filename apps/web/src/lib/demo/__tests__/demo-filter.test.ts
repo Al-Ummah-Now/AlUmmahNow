@@ -1,3 +1,4 @@
+/** @jest-environment node */
 import { buildPoolVideos, isTestComment, routeDemoRequest, type DemoPool, type DemoRequest, type DemoSet } from '../demo-filter';
 import { apiPathOf, createDemoFetch } from '../demo-fetch';
 

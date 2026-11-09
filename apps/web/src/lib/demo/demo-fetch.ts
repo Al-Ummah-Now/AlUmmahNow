@@ -128,7 +128,7 @@ async function withVisibleCommentCount(fetcher: Fetch, rawUrl: string, response:
 export function createDemoFetch(original: Fetch, set: DemoSet, apiUrl: () => string | undefined): Fetch {
   const readPool = poolReader(original, set);
   return async (input, init) => {
-    const request = input instanceof Request ? input : null;
+    const request = typeof Request !== 'undefined' && input instanceof Request ? input : null;
     const rawUrl = request ? request.url : String(input);
     const target = apiPathOf(rawUrl, apiUrl());
     if (!target) return original(input, init);
