@@ -17,6 +17,7 @@ jobs:
     env:
       ACTIVE_THEME: ${{ matrix.theme }}
       NEXT_PUBLIC_ACTIVE_THEME: ${{ matrix.theme }}
+      NEXT_PUBLIC_DEMO_CONTENT: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4

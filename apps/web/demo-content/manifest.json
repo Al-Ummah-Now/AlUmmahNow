@@ -1,0 +1,1274 @@
+{
+  "channels": [
+    {
+      "key": "masajid",
+      "name": "Masajid of the World",
+      "nameAr": "مساجد العالم",
+      "description": "Great mosques and Islamic architecture from across the Muslim world.",
+      "descriptionAr": "مساجد كبرى وعمارة إسلامية من أنحاء العالم الإسلامي.",
+      "artClip": "putra-mosque",
+      "artAttribution": "\"Masjidputra4k.webm\" by Gaodanielbo, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Masjidputra4k.webm). Trimmed and re-encoded for this demo."
+    },
+    {
+      "key": "nidaa",
+      "name": "Call and Recitation",
+      "nameAr": "نداء وتلاوة",
+      "description": "The adhan, congregational prayer and Quran recitation.",
+      "descriptionAr": "الأذان وصلاة الجماعة وتلاوة القرآن.",
+      "artClip": "adhan-istanbul",
+      "artAttribution": "\"Adhan in Istanbul.webm\" by Viceskeeni2, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Adhan_in_Istanbul.webm). Trimmed and re-encoded for this demo."
+    },
+    {
+      "key": "aswaq",
+      "name": "Lanes and Markets",
+      "nameAr": "أزقة وأسواق",
+      "description": "Old cities, bazaars, rivers and streets.",
+      "descriptionAr": "مدن عتيقة وأسواق وأنهار وشوارع.",
+      "artClip": "spice-bazaar",
+      "artAttribution": "\"İstanbul - Mısır Çarşısı girişi - Şubat 2013.ogv\" by VikiPicture, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_M%C4%B1s%C4%B1r_%C3%87ar%C5%9F%C4%B1s%C4%B1_giri%C5%9Fi_-_%C5%9Eubat_2013.ogv). Trimmed and re-encoded for this demo."
+    },
+    {
+      "key": "sahra",
+      "name": "Desert Trails",
+      "nameAr": "دروب الصحراء",
+      "description": "Dunes, camels and life at the edge of the sand.",
+      "descriptionAr": "كثبان وجمال وحياة على تخوم الرمال.",
+      "artClip": "dromedaries",
+      "artAttribution": "\"Camelus dromedarius - 2016-01-18.webm\" by Pristurus, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Camelus_dromedarius_-_2016-01-18.webm). Trimmed and re-encoded for this demo."
+    },
+    {
+      "key": "miyah",
+      "name": "Waters and Forests",
+      "nameAr": "مياه وغابات",
+      "description": "Seas, waterfalls, streams and woodland.",
+      "descriptionAr": "بحار وشلالات وجداول وغابات.",
+      "artClip": "krimml-falls",
+      "artAttribution": "\"Krimmler Wasserfaelle Waterfall in Austria Biggest from Europe 380m at the top.webm\" by Erwin Lindsen, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Krimmler_Wasserfaelle_Waterfall_in_Austria_Biggest_from_Europe_380m_at_the_top.webm). Trimmed and re-encoded for this demo."
+    },
+    {
+      "key": "sama",
+      "name": "Signs in the Sky",
+      "nameAr": "آيات السماء",
+      "description": "Clouds, sunsets and stars in time-lapse.",
+      "descriptionAr": "غيوم وغروب ونجوم بالتصوير المتسارع.",
+      "artClip": "algonquin-sunset",
+      "artAttribution": "\"Algonquin Sunset 4k.webm\" by Alexander Kondratskiy, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Algonquin_Sunset_4k.webm). Trimmed and re-encoded for this demo."
+    },
+    {
+      "key": "sunaa",
+      "name": "Craft and Harvest",
+      "nameAr": "صنعة وحصاد",
+      "description": "Handwork, bread and the fruits of the land.",
+      "descriptionAr": "أعمال يدوية وخبز وثمار الأرض.",
+      "artClip": "date-palm",
+      "artAttribution": "\"Palm 1 2013-07-10.ogv\" by FASTILY, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Palm_1_2013-07-10.ogv). Trimmed and re-encoded for this demo."
+    }
+  ],
+  "clips": [
+    {
+      "slug": "dome-of-the-rock",
+      "channel": "masajid",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Dome of the Rock December 2019.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Dome_of_the_Rock_December_2019.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Dome_of_the_Rock_December_2019.webm",
+        "author": "براء",
+        "licence": "CC BY-SA 2.5",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.5",
+        "attribution": "\"Dome of the Rock December 2019.webm\" by براء, CC BY-SA 2.5, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Dome_of_the_Rock_December_2019.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Dome of the Rock in Winter Light",
+      "titleAr": "قبة الصخرة في ضوء الشتاء",
+      "description": "A slow look across the esplanade to the golden dome and its blue tilework.",
+      "descriptionAr": "نظرة هادئة عبر الساحة إلى القبة الذهبية وبلاطها الأزرق."
+    },
+    {
+      "slug": "dolmabahce-mosque",
+      "channel": "masajid",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:İstanbul - Dolmabahçe (Bezmialem Valide Sultan) Camii - Şubat 2013.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/72/%C4%B0stanbul_-_Dolmabah%C3%A7e_%28Bezmialem_Valide_Sultan%29_Camii_-_%C5%9Eubat_2013.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_Dolmabah%C3%A7e_(Bezmialem_Valide_Sultan)_Camii_-_%C5%9Eubat_2013.ogv",
+        "author": "VikiPicture",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"İstanbul - Dolmabahçe (Bezmialem Valide Sultan) Camii - Şubat 2013.ogv\" by VikiPicture, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_Dolmabah%C3%A7e_(Bezmialem_Valide_Sultan)_Camii_-_%C5%9Eubat_2013.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Dolmabahçe Mosque from the Bosphorus",
+      "titleAr": "مسجد دولمة بهتشة من البوسفور",
+      "description": "The waterfront mosque seen from a passing ferry.",
+      "descriptionAr": "المسجد المطل على الماء كما يبدو من عبّارة عابرة."
+    },
+    {
+      "slug": "yeni-cami",
+      "channel": "masajid",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:İstanbul - Valide-i Cedid (Yeni) Camii video - Şub 2013.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/50/%C4%B0stanbul_-_Valide-i_Cedid_%28Yeni%29_Camii_video_-_%C5%9Eub_2013.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_Valide-i_Cedid_(Yeni)_Camii_video_-_%C5%9Eub_2013.webm",
+        "author": "VikiPicture",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"İstanbul - Valide-i Cedid (Yeni) Camii video - Şub 2013.webm\" by VikiPicture, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_Valide-i_Cedid_(Yeni)_Camii_video_-_%C5%9Eub_2013.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Yeni Cami at Eminönü",
+      "titleAr": "الجامع الجديد في إمينونو",
+      "description": "The minarets of the New Mosque above the Golden Horn.",
+      "descriptionAr": "مئذنتا الجامع الجديد فوق القرن الذهبي."
+    },
+    {
+      "slug": "putra-mosque",
+      "channel": "masajid",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Masjidputra4k.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f8/Masjidputra4k.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Masjidputra4k.webm",
+        "author": "Gaodanielbo",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "attribution": "\"Masjidputra4k.webm\" by Gaodanielbo, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Masjidputra4k.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Putra Mosque over the Lake",
+      "titleAr": "مسجد بوترا فوق البحيرة",
+      "description": "The rose-domed mosque of Putrajaya from the air.",
+      "descriptionAr": "مسجد بوتراجايا ذو القبة الوردية من الجو."
+    },
+    {
+      "slug": "umayyad-mosque",
+      "channel": "masajid",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Umayyad Mosque of Damascus, Syria (2009).webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/35/Umayyad_Mosque_of_Damascus%2C_Syria_%282009%29.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Umayyad_Mosque_of_Damascus,_Syria_(2009).webm",
+        "author": "Hans Otten",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "attribution": "\"Umayyad Mosque of Damascus, Syria (2009).webm\" by Hans Otten, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Umayyad_Mosque_of_Damascus,_Syria_(2009).webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Inside the Umayyad Mosque of Damascus",
+      "titleAr": "داخل الجامع الأموي بدمشق",
+      "description": "The courtyard, mosaics and prayer hall of one of the oldest great mosques.",
+      "descriptionAr": "الصحن والفسيفساء وبيت الصلاة في أحد أقدم الجوامع الكبرى.",
+      "trim": {
+        "start": 0,
+        "duration": 118
+      }
+    },
+    {
+      "slug": "hassan-tower",
+      "channel": "masajid",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:مسجد حسان و صومعته.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/a/ae/%D9%85%D8%B3%D8%AC%D8%AF_%D8%AD%D8%B3%D8%A7%D9%86_%D9%88_%D8%B5%D9%88%D9%85%D8%B9%D8%AA%D9%87.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:%D9%85%D8%B3%D8%AC%D8%AF_%D8%AD%D8%B3%D8%A7%D9%86_%D9%88_%D8%B5%D9%88%D9%85%D8%B9%D8%AA%D9%87.webm",
+        "author": "IsmailElabbassi",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"مسجد حسان و صومعته.webm\" by IsmailElabbassi, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:%D9%85%D8%B3%D8%AC%D8%AF_%D8%AD%D8%B3%D8%A7%D9%86_%D9%88_%D8%B5%D9%88%D9%85%D8%B9%D8%AA%D9%87.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Hassan Tower by Night",
+      "titleAr": "صومعة حسان ليلاً",
+      "description": "The unfinished minaret of Rabat and the columns around it.",
+      "descriptionAr": "مئذنة الرباط غير المكتملة والأعمدة من حولها."
+    },
+    {
+      "slug": "mansourah-tlemcen",
+      "channel": "masajid",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Visite de l'intérieur de la mosquée de Mansourah, Tlemcen.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/19/Visite_de_l%27int%C3%A9rieur_de_la_mosqu%C3%A9e_de_Mansourah%2C_Tlemcen.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Visite_de_l%27int%C3%A9rieur_de_la_mosqu%C3%A9e_de_Mansourah,_Tlemcen.webm",
+        "author": "Riad Salih",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Visite de l'intérieur de la mosquée de Mansourah, Tlemcen.webm\" by Riad Salih, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Visite_de_l%27int%C3%A9rieur_de_la_mosqu%C3%A9e_de_Mansourah,_Tlemcen.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Ruined Mosque of Mansourah",
+      "titleAr": "أطلال مسجد المنصورة",
+      "description": "Walking the walls of the medieval mosque at Tlemcen.",
+      "descriptionAr": "جولة بين جدران المسجد الوسيط في تلمسان."
+    },
+    {
+      "slug": "great-mosque-mecca",
+      "channel": "masajid",
+      "category": "hajj_umrah",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Great Mosque of Mecca (4k video) - May 27, 2014.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Great_Mosque_of_Mecca_%284k_video%29_-_May_27%2C_2014.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Great_Mosque_of_Mecca_(4k_video)_-_May_27,_2014.webm",
+        "author": "SHeGaRDeQ8i",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "attribution": "\"Great Mosque of Mecca (4k video) - May 27, 2014.webm\" by SHeGaRDeQ8i, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Great_Mosque_of_Mecca_(4k_video)_-_May_27,_2014.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Great Mosque of Mecca",
+      "titleAr": "المسجد الحرام",
+      "description": "Worshippers circling the Kaaba, seen from the upper floors.",
+      "descriptionAr": "الطائفون حول الكعبة كما يظهرون من الطوابق العليا."
+    },
+    {
+      "slug": "minar-jonban",
+      "channel": "masajid",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Minar Jonban, avec tremblement des minarets.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/16/Minar_Jonban%2C_avec_tremblement_des_minarets.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Minar_Jonban,_avec_tremblement_des_minarets.ogv",
+        "author": "Zythème",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "attribution": "\"Minar Jonban, avec tremblement des minarets.ogv\" by Zythème, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Minar_Jonban,_avec_tremblement_des_minarets.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Shaking Minarets of Isfahan",
+      "titleAr": "المنارتان المهتزتان في أصفهان",
+      "description": "Monar Jonban, whose two minarets sway together.",
+      "descriptionAr": "منار جنبان التي تهتز مئذنتاها معاً."
+    },
+    {
+      "slug": "tawaf",
+      "channel": "masajid",
+      "category": "hajj_umrah",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Hajj.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/6/67/Hajj.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Hajj.ogv",
+        "author": "Bluemangoa2z",
+        "licence": "CC BY-SA 2.5",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.5",
+        "attribution": "\"Hajj.ogv\" by Bluemangoa2z, CC BY-SA 2.5, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Hajj.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Tawaf around the Kaaba",
+      "titleAr": "الطواف حول الكعبة",
+      "description": "Pilgrims performing tawaf in the Sacred Mosque.",
+      "descriptionAr": "الحجاج يؤدون الطواف في المسجد الحرام."
+    },
+    {
+      "slug": "floating-mosque-bontang",
+      "channel": "masajid",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "masajid"
+      ],
+      "language": "en",
+      "orientation": "portrait",
+      "audio": false,
+      "source": {
+        "file": "File:Masjid Terapung Darul Irsyad Al Muhajirin Bontang (1).webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/74/Masjid_Terapung_Darul_Irsyad_Al_Muhajirin_Bontang_%281%29.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Masjid_Terapung_Darul_Irsyad_Al_Muhajirin_Bontang_(1).webm",
+        "author": "Sri Wahyuni Nur Indah Sari",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Masjid Terapung Darul Irsyad Al Muhajirin Bontang (1).webm\" by Sri Wahyuni Nur Indah Sari, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Masjid_Terapung_Darul_Irsyad_Al_Muhajirin_Bontang_(1).webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Floating Mosque of Bontang",
+      "titleAr": "المسجد العائم في بونتانغ",
+      "description": "A short walk along the mosque built over the water.",
+      "descriptionAr": "جولة قصيرة في المسجد المبني فوق الماء."
+    },
+    {
+      "slug": "jaffa-muezzin",
+      "channel": "nidaa",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "nidaa"
+      ],
+      "language": "ar",
+      "orientation": "landscape",
+      "audio": true,
+      "source": {
+        "file": "File:Jaffa Muezzin P1020417.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/00/Jaffa_Muezzin_P1020417.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Jaffa_Muezzin_P1020417.ogv",
+        "author": "Deror_avi",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"Jaffa Muezzin P1020417.ogv\" by Deror_avi, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Jaffa_Muezzin_P1020417.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Call to Prayer in Jaffa",
+      "titleAr": "الأذان في يافا",
+      "description": "The muezzin calling from the minaret of the Mahmoudiya Mosque.",
+      "descriptionAr": "المؤذن يرفع الأذان من مئذنة جامع المحمودية."
+    },
+    {
+      "slug": "adhan-hargeisa",
+      "channel": "nidaa",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "nidaa"
+      ],
+      "language": "ar",
+      "orientation": "landscape",
+      "audio": true,
+      "source": {
+        "file": "File:ASC Leiden - van de Bruinhorst Collection - Somaliland 2019 - 4412 - Oriental Hotel. Adhan (call to prayer) from the Ali Matan Mosque, Hargeisa.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/78/ASC_Leiden_-_van_de_Bruinhorst_Collection_-_Somaliland_2019_-_4412_-_Oriental_Hotel._Adhan_%28call_to_prayer%29_from_the_Ali_Matan_Mosque%2C_Hargeisa.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:ASC_Leiden_-_van_de_Bruinhorst_Collection_-_Somaliland_2019_-_4412_-_Oriental_Hotel._Adhan_(call_to_prayer)_from_the_Ali_Matan_Mosque,_Hargeisa.webm",
+        "author": "Gerard van de Bruinhorst",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"ASC Leiden - van de Bruinhorst Collection - Somaliland 2019 - 4412 - Oriental Hotel. Adhan (call to prayer) from the Ali Matan Mosque, Hargeisa.webm\" by Gerard van de Bruinhorst, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:ASC_Leiden_-_van_de_Bruinhorst_Collection_-_Somaliland_2019_-_4412_-_Oriental_Hotel._Adhan_(call_to_prayer)_from_the_Ali_Matan_Mosque,_Hargeisa.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Adhan over Hargeisa",
+      "titleAr": "الأذان في هرجيسا",
+      "description": "The call to prayer heard across the city from a hotel terrace.",
+      "descriptionAr": "الأذان يتردد في أرجاء المدينة من شرفة فندق."
+    },
+    {
+      "slug": "maghrib-cumilla",
+      "channel": "nidaa",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "nidaa"
+      ],
+      "language": "ar",
+      "orientation": "landscape",
+      "audio": true,
+      "source": {
+        "file": "File:Maghrib Salah, Cantonment Board Jame Masjid, Cumilla.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Maghrib_Salah%2C_Cantonment_Board_Jame_Masjid%2C_Cumilla.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Maghrib_Salah,_Cantonment_Board_Jame_Masjid,_Cumilla.webm",
+        "author": "Lightdn",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Maghrib Salah, Cantonment Board Jame Masjid, Cumilla.webm\" by Lightdn, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Maghrib_Salah,_Cantonment_Board_Jame_Masjid,_Cumilla.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Maghrib Prayer in Cumilla",
+      "titleAr": "صلاة المغرب في كوميلا",
+      "description": "The congregation at Maghrib in a large Bangladeshi mosque.",
+      "descriptionAr": "جموع المصلين في صلاة المغرب بمسجد كبير في بنغلاديش."
+    },
+    {
+      "slug": "qirat-al-sharqawi",
+      "channel": "nidaa",
+      "category": "quran_recitation",
+      "tags": [
+        "demo",
+        "nidaa"
+      ],
+      "language": "ar",
+      "orientation": "landscape",
+      "audio": true,
+      "source": {
+        "file": "File:Yasir al-Sharqawi Features at Jamiatul Falah's 23rd Qirat Program.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/5/52/Yasir_al-Sharqawi_Features_at_Jamiatul_Falah%27s_23rd_Qirat_Program.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Yasir_al-Sharqawi_Features_at_Jamiatul_Falah%27s_23rd_Qirat_Program.webm",
+        "author": "Owais Al Qarni",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Yasir al-Sharqawi Features at Jamiatul Falah's 23rd Qirat Program.webm\" by Owais Al Qarni, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Yasir_al-Sharqawi_Features_at_Jamiatul_Falah%27s_23rd_Qirat_Program.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Recitation by Yasir al-Sharqawi",
+      "titleAr": "تلاوة ياسر الشرقاوي",
+      "description": "Quran recitation at the 23rd Qirat Program of Jamiatul Falah.",
+      "descriptionAr": "تلاوة قرآنية في برنامج القراءات الثالث والعشرين بجامعة الفلاح."
+    },
+    {
+      "slug": "qirat-ahmadi-wafa",
+      "channel": "nidaa",
+      "category": "quran_recitation",
+      "tags": [
+        "demo",
+        "nidaa"
+      ],
+      "language": "ar",
+      "orientation": "landscape",
+      "audio": true,
+      "source": {
+        "file": "File:Hamid Reza Ahmadi Wafa Features at Jamiatul Falah's 23rd Qirat Program.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/92/Hamid_Reza_Ahmadi_Wafa_Features_at_Jamiatul_Falah%27s_23rd_Qirat_Program.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Hamid_Reza_Ahmadi_Wafa_Features_at_Jamiatul_Falah%27s_23rd_Qirat_Program.webm",
+        "author": "Owais Al Qarni",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Hamid Reza Ahmadi Wafa Features at Jamiatul Falah's 23rd Qirat Program.webm\" by Owais Al Qarni, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Hamid_Reza_Ahmadi_Wafa_Features_at_Jamiatul_Falah%27s_23rd_Qirat_Program.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Recitation by Hamid Reza Ahmadi Wafa",
+      "titleAr": "تلاوة حميد رضا أحمدي وفا",
+      "description": "Quran recitation at the same evening gathering in Chattogram.",
+      "descriptionAr": "تلاوة قرآنية في الأمسية نفسها بمدينة شيتاغونغ."
+    },
+    {
+      "slug": "adhan-istanbul",
+      "channel": "nidaa",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "nidaa"
+      ],
+      "language": "ar",
+      "orientation": "portrait",
+      "audio": true,
+      "source": {
+        "file": "File:Adhan in Istanbul.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/3d/Adhan_in_Istanbul.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Adhan_in_Istanbul.webm",
+        "author": "Viceskeeni2",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "attribution": "\"Adhan in Istanbul.webm\" by Viceskeeni2, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Adhan_in_Istanbul.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Adhan in Istanbul",
+      "titleAr": "الأذان في إسطنبول",
+      "description": "The call to prayer rising over the city at dusk.",
+      "descriptionAr": "الأذان يعلو فوق المدينة عند الغروب."
+    },
+    {
+      "slug": "generalife-water-stairs",
+      "channel": "aswaq",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "aswaq"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Water stairs in the gardens of Generalife, in the Alhambra of Granada.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/88/Water_stairs_in_the_gardens_of_Generalife%2C_in_the_Alhambra_of_Granada.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Water_stairs_in_the_gardens_of_Generalife,_in_the_Alhambra_of_Granada.ogv",
+        "author": "Eunostos",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Water stairs in the gardens of Generalife, in the Alhambra of Granada.ogv\" by Eunostos, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Water_stairs_in_the_gardens_of_Generalife,_in_the_Alhambra_of_Granada.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Water Stairs of the Generalife",
+      "titleAr": "درج الماء في جنة العريف",
+      "description": "Water running down the handrails of the Alhambra gardens.",
+      "descriptionAr": "الماء ينساب على حواف الدرج في حدائق الحمراء."
+    },
+    {
+      "slug": "fes-medina",
+      "channel": "aswaq",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "aswaq"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Going around in the Medina of Fes.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/9d/Going_around_in_the_Medina_of_Fes.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Going_around_in_the_Medina_of_Fes.webm",
+        "author": "Ideophagous",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Going around in the Medina of Fes.webm\" by Ideophagous, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Going_around_in_the_Medina_of_Fes.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "A Walk through the Medina of Fes",
+      "titleAr": "جولة في مدينة فاس القديمة",
+      "description": "Shopfronts and narrow lanes of the old town.",
+      "descriptionAr": "واجهات الدكاكين والأزقة الضيقة في المدينة القديمة."
+    },
+    {
+      "slug": "spice-bazaar",
+      "channel": "aswaq",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "aswaq"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:İstanbul - Mısır Çarşısı girişi - Şubat 2013.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/c7/%C4%B0stanbul_-_M%C4%B1s%C4%B1r_%C3%87ar%C5%9F%C4%B1s%C4%B1_giri%C5%9Fi_-_%C5%9Eubat_2013.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_M%C4%B1s%C4%B1r_%C3%87ar%C5%9F%C4%B1s%C4%B1_giri%C5%9Fi_-_%C5%9Eubat_2013.ogv",
+        "author": "VikiPicture",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"İstanbul - Mısır Çarşısı girişi - Şubat 2013.ogv\" by VikiPicture, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:%C4%B0stanbul_-_M%C4%B1s%C4%B1r_%C3%87ar%C5%9F%C4%B1s%C4%B1_giri%C5%9Fi_-_%C5%9Eubat_2013.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Spice Bazaar Gate",
+      "titleAr": "بوابة سوق التوابل",
+      "description": "Pigeons and shoppers before the old Egyptian Bazaar of Istanbul.",
+      "descriptionAr": "الحمام والمتسوقون أمام السوق المصري القديم في إسطنبول."
+    },
+    {
+      "slug": "nile-desouk",
+      "channel": "aswaq",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "aswaq"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Nile-River2.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/0b/Nile-River2.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Nile-River2.ogv",
+        "author": "Faris El-Gwely",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"Nile-River2.ogv\" by Faris El-Gwely, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Nile-River2.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Nile at Desouk",
+      "titleAr": "النيل عند دسوق",
+      "description": "A quiet panorama of the river in the Delta.",
+      "descriptionAr": "مشهد هادئ للنهر في الدلتا."
+    },
+    {
+      "slug": "kl-thunderstorm",
+      "channel": "aswaq",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "aswaq"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Thunderstorm Kuala Lumpur skyline.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/c6/Thunderstorm_Kuala_Lumpur_skyline.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Thunderstorm_Kuala_Lumpur_skyline.webm",
+        "author": "Pradana Aumars",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Thunderstorm Kuala Lumpur skyline.webm\" by Pradana Aumars, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Thunderstorm_Kuala_Lumpur_skyline.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Storm over Kuala Lumpur",
+      "titleAr": "عاصفة فوق كوالالمبور",
+      "description": "A thunderstorm rolling in across the city skyline.",
+      "descriptionAr": "عاصفة رعدية تزحف فوق أفق المدينة."
+    },
+    {
+      "slug": "ramadan-lanterns",
+      "channel": "aswaq",
+      "category": "ramadan",
+      "tags": [
+        "demo",
+        "aswaq"
+      ],
+      "language": "en",
+      "orientation": "portrait",
+      "audio": false,
+      "source": {
+        "file": "File:رمضان أهلاً.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/6/6e/%D8%B1%D9%85%D8%B6%D8%A7%D9%86_%D8%A3%D9%87%D9%84%D8%A7%D9%8B.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:%D8%B1%D9%85%D8%B6%D8%A7%D9%86_%D8%A3%D9%87%D9%84%D8%A7%D9%8B.webm",
+        "author": "Aya Eissa shehab",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"رمضان أهلاً.webm\" by Aya Eissa shehab, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:%D8%B1%D9%85%D8%B6%D8%A7%D9%86_%D8%A3%D9%87%D9%84%D8%A7%D9%8B.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Lanterns for Ramadan",
+      "titleAr": "فوانيس رمضان",
+      "description": "Lanterns and lights going up to welcome the month in Egypt.",
+      "descriptionAr": "تعليق الفوانيس والأضواء استقبالاً للشهر الكريم في مصر."
+    },
+    {
+      "slug": "dromedaries",
+      "channel": "sahra",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sahra"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Camelus dromedarius - 2016-01-18.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Camelus_dromedarius_-_2016-01-18.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Camelus_dromedarius_-_2016-01-18.webm",
+        "author": "Pristurus",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"Camelus dromedarius - 2016-01-18.webm\" by Pristurus, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Camelus_dromedarius_-_2016-01-18.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Dromedaries of Al Marmoum",
+      "titleAr": "جمال المرموم",
+      "description": "Camels crossing the dunes of the Dubai reserve.",
+      "descriptionAr": "جمال تعبر كثبان محمية دبي."
+    },
+    {
+      "slug": "kavir-camels",
+      "channel": "sahra",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sahra"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Iran country.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/fa/Iran_country.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Iran_country.ogv",
+        "author": "Mostafameraji",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Iran country.ogv\" by Mostafameraji, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Iran_country.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Camels of the Kavir",
+      "titleAr": "جمال صحراء كوير",
+      "description": "A herd grazing on the plains of Iran’s Kavir National Park.",
+      "descriptionAr": "قطيع يرعى في سهول حديقة كوير الوطنية بإيران."
+    },
+    {
+      "slug": "flamingos",
+      "channel": "sahra",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sahra"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Phoenicopterus roseus - 2017-02-19.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Phoenicopterus_roseus_-_2017-02-19.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Phoenicopterus_roseus_-_2017-02-19.webm",
+        "author": "Pristurus",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"Phoenicopterus roseus - 2017-02-19.webm\" by Pristurus, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Phoenicopterus_roseus_-_2017-02-19.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Flamingos at the Desert’s Edge",
+      "titleAr": "طيور الفلامنغو على تخوم الصحراء",
+      "description": "Greater flamingos feeding in the Al Marmoum reserve.",
+      "descriptionAr": "طيور الفلامنغو الكبيرة تتغذى في محمية المرموم."
+    },
+    {
+      "slug": "tottori-dunes",
+      "channel": "sahra",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sahra"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Tottorisanddunes 2019 1 6.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Tottorisanddunes_2019_1_6.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Tottorisanddunes_2019_1_6.webm",
+        "author": "Nesnad",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Tottorisanddunes 2019 1 6.webm\" by Nesnad, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Tottorisanddunes_2019_1_6.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Sea of Sand at Tottori",
+      "titleAr": "بحر الرمال في توتوري",
+      "description": "Wide dunes running down to the Sea of Japan.",
+      "descriptionAr": "كثبان واسعة تمتد حتى بحر اليابان."
+    },
+    {
+      "slug": "open-sea",
+      "channel": "miyah",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "miyah"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Ocean surface waves.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Ocean_surface_waves.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Ocean_surface_waves.ogv",
+        "author": "Mostafameraji",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "attribution": "\"Ocean surface waves.ogv\" by Mostafameraji, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Ocean_surface_waves.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Open Sea",
+      "titleAr": "البحر المفتوح",
+      "description": "Wind-driven waves rolling toward the shore.",
+      "descriptionAr": "أمواج تدفعها الرياح نحو الشاطئ."
+    },
+    {
+      "slug": "good-fortune-cove",
+      "channel": "miyah",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "miyah"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Ocean waves at Good Fortune Cove, Cooks Chasm 01.mov.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/21/Ocean_waves_at_Good_Fortune_Cove%2C_Cooks_Chasm_01.mov.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Ocean_waves_at_Good_Fortune_Cove,_Cooks_Chasm_01.mov.webm",
+        "author": "Joe Mabel",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Ocean waves at Good Fortune Cove, Cooks Chasm 01.mov.webm\" by Joe Mabel, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Ocean_waves_at_Good_Fortune_Cove,_Cooks_Chasm_01.mov.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Waves at Good Fortune Cove",
+      "titleAr": "أمواج خليج الحظ السعيد",
+      "description": "The Pacific breaking between black lava rocks.",
+      "descriptionAr": "المحيط الهادئ يتكسر بين صخور الحمم السوداء."
+    },
+    {
+      "slug": "seto-inland-sea",
+      "channel": "miyah",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "miyah"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Wind wave 3.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/16/Wind_wave_3.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Wind_wave_3.ogv",
+        "author": "Corpse Reviver",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"Wind wave 3.ogv\" by Corpse Reviver, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Wind_wave_3.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Wind on the Seto Inland Sea",
+      "titleAr": "الريح على بحر سيتو الداخلي",
+      "description": "Grey waves against a stony beach.",
+      "descriptionAr": "أمواج رمادية على شاطئ حجري."
+    },
+    {
+      "slug": "krimml-falls",
+      "channel": "miyah",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "miyah"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Krimmler Wasserfaelle Waterfall in Austria Biggest from Europe 380m at the top.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/4/43/Krimmler_Wasserfaelle_Waterfall_in_Austria_Biggest_from_Europe_380m_at_the_top.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Krimmler_Wasserfaelle_Waterfall_in_Austria_Biggest_from_Europe_380m_at_the_top.webm",
+        "author": "Erwin Lindsen",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "attribution": "\"Krimmler Wasserfaelle Waterfall in Austria Biggest from Europe 380m at the top.webm\" by Erwin Lindsen, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Krimmler_Wasserfaelle_Waterfall_in_Austria_Biggest_from_Europe_380m_at_the_top.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Krimml Falls",
+      "titleAr": "شلالات كريمل",
+      "description": "Europe’s tallest falls in full spring flow.",
+      "descriptionAr": "أعلى شلالات أوروبا في أوج تدفقها الربيعي."
+    },
+    {
+      "slug": "hyrcanian-forest",
+      "channel": "miyah",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "miyah"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Foggy day of hyrcanian forest of iran.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f3/Foggy_day_of_hyrcanian_forest_of_iran.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Foggy_day_of_hyrcanian_forest_of_iran.webm",
+        "author": "Reza Rafizadeh",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "attribution": "\"Foggy day of hyrcanian forest of iran.webm\" by Reza Rafizadeh, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Foggy_day_of_hyrcanian_forest_of_iran.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Fog in the Hyrcanian Forest",
+      "titleAr": "الضباب في غابات هيركانيا",
+      "description": "A cold, foggy morning among the ancient trees of northern Iran.",
+      "descriptionAr": "صباح بارد ضبابي بين الأشجار العتيقة في شمال إيران."
+    },
+    {
+      "slug": "sikkim-stream",
+      "channel": "miyah",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "miyah"
+      ],
+      "language": "en",
+      "orientation": "portrait",
+      "audio": false,
+      "source": {
+        "file": "File:Mountain Stream Flow in Sikkim, Inida.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/31/Mountain_Stream_Flow_in_Sikkim%2C_Inida.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Mountain_Stream_Flow_in_Sikkim,_Inida.webm",
+        "author": "Jayanta25",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Mountain Stream Flow in Sikkim, Inida.webm\" by Jayanta25, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Mountain_Stream_Flow_in_Sikkim,_Inida.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Mountain Stream",
+      "titleAr": "جدول جبلي",
+      "description": "Clear water tumbling over boulders in Sikkim.",
+      "descriptionAr": "مياه صافية تنساب فوق الصخور في سيكيم."
+    },
+    {
+      "slug": "karura-forest",
+      "channel": "miyah",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "miyah"
+      ],
+      "language": "en",
+      "orientation": "portrait",
+      "audio": false,
+      "source": {
+        "file": "File:Walks at Karura Forest.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Walks_at_Karura_Forest.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Walks_at_Karura_Forest.webm",
+        "author": "Queen Asali",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Walks at Karura Forest.webm\" by Queen Asali, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Walks_at_Karura_Forest.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "A Path through Karura",
+      "titleAr": "درب في غابة كارورا",
+      "description": "Looking up through the canopy of the Nairobi forest.",
+      "descriptionAr": "نظرة إلى الأعلى عبر أغصان غابة نيروبي."
+    },
+    {
+      "slug": "bellevue-clouds",
+      "channel": "sama",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sama"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Timelapse of Clouds over Bellevue Canyon.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Timelapse_of_Clouds_over_Bellevue_Canyon.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Timelapse_of_Clouds_over_Bellevue_Canyon.webm",
+        "author": "Extemporalist",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "attribution": "\"Timelapse of Clouds over Bellevue Canyon.webm\" by Extemporalist, CC0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Timelapse_of_Clouds_over_Bellevue_Canyon.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Clouds over Bellevue Canyon",
+      "titleAr": "غيوم فوق وادي بلفيو",
+      "description": "Time-lapse of high clouds crossing a blue sky.",
+      "descriptionAr": "تصوير متسارع لغيوم عالية تعبر سماء زرقاء."
+    },
+    {
+      "slug": "swiss-mountains",
+      "channel": "sama",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sama"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Timelapse of Swiss mountains.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/c4/Timelapse_of_Swiss_mountains.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Timelapse_of_Swiss_mountains.webm",
+        "author": "jendall",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "attribution": "\"Timelapse of Swiss mountains.webm\" by jendall, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Timelapse_of_Swiss_mountains.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Weather over the Alps",
+      "titleAr": "الطقس فوق جبال الألب",
+      "description": "Time-lapse of storm clouds moving across the peaks.",
+      "descriptionAr": "تصوير متسارع لغيوم العاصفة وهي تعبر القمم.",
+      "trim": {
+        "start": 30,
+        "duration": 36
+      }
+    },
+    {
+      "slug": "matterhorn",
+      "channel": "sama",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sama"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Timelapse of the Matterhorn viewed from Zermatt.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Timelapse_of_the_Matterhorn_viewed_from_Zermatt.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Timelapse_of_the_Matterhorn_viewed_from_Zermatt.webm",
+        "author": "Urs Zihlmann",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "attribution": "\"Timelapse of the Matterhorn viewed from Zermatt.webm\" by Urs Zihlmann, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Timelapse_of_the_Matterhorn_viewed_from_Zermatt.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Light over the Mountains",
+      "titleAr": "الضوء فوق الجبال",
+      "description": "Sunbeams falling through the clouds into the valley.",
+      "descriptionAr": "أشعة الشمس تنفذ من الغيوم إلى الوادي."
+    },
+    {
+      "slug": "fog-mountain",
+      "channel": "sama",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sama"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Fog covering mountain time lapse.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/06/Fog_covering_mountain_time_lapse.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Fog_covering_mountain_time_lapse.webm",
+        "author": "Athulvis",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Fog covering mountain time lapse.webm\" by Athulvis, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Fog_covering_mountain_time_lapse.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Fog Climbing the Mountain",
+      "titleAr": "ضباب يصعد الجبل",
+      "description": "Time-lapse of fog pouring over a green ridge.",
+      "descriptionAr": "تصوير متسارع لضباب يتدفق فوق سفح أخضر."
+    },
+    {
+      "slug": "algonquin-sunset",
+      "channel": "sama",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sama"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Algonquin Sunset 4k.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/34/Algonquin_Sunset_4k.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Algonquin_Sunset_4k.webm",
+        "author": "Alexander Kondratskiy",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "attribution": "\"Algonquin Sunset 4k.webm\" by Alexander Kondratskiy, CC BY 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Algonquin_Sunset_4k.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Sunset over Algonquin",
+      "titleAr": "الغروب فوق ألغونكوين",
+      "description": "The last of the light from the lookout.",
+      "descriptionAr": "آخر خيوط الضوء من نقطة المراقبة."
+    },
+    {
+      "slug": "milky-way",
+      "channel": "sama",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sama"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Timelapse of Milky way changing colors during Aurora.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/86/Timelapse_of_Milky_way_changing_colors_during_Aurora.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Timelapse_of_Milky_way_changing_colors_during_Aurora.webm",
+        "author": "paramsach (Flickr)",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "attribution": "\"Timelapse of Milky way changing colors during Aurora.webm\" by paramsach (Flickr), CC BY 2.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Timelapse_of_Milky_way_changing_colors_during_Aurora.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "The Milky Way",
+      "titleAr": "درب التبانة",
+      "description": "The night sky turning slowly above the horizon.",
+      "descriptionAr": "سماء الليل تدور ببطء فوق الأفق."
+    },
+    {
+      "slug": "la-silla-cloudscape",
+      "channel": "sama",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sama"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Timelapse of Unique Cloudscape over La Silla.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/ce/Timelapse_of_Unique_Cloudscape_over_La_Silla.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Timelapse_of_Unique_Cloudscape_over_La_Silla.ogv",
+        "author": "ESO/C.Malin",
+        "licence": "CC BY 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+        "attribution": "\"Timelapse of Unique Cloudscape over La Silla.ogv\" by ESO/C.Malin, CC BY 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Timelapse_of_Unique_Cloudscape_over_La_Silla.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Cloudscape over La Silla",
+      "titleAr": "سحب فوق لا سيا",
+      "description": "A rare cloudscape at dusk over the Chilean desert observatory.",
+      "descriptionAr": "مشهد سحب نادر عند الغسق فوق مرصد صحراء تشيلي."
+    },
+    {
+      "slug": "date-palm",
+      "channel": "sunaa",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sunaa"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Palm 1 2013-07-10.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/e3/Palm_1_2013-07-10.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Palm_1_2013-07-10.ogv",
+        "author": "FASTILY",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"Palm 1 2013-07-10.ogv\" by FASTILY, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Palm_1_2013-07-10.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Under the Date Palm",
+      "titleAr": "تحت النخلة",
+      "description": "Fronds and fruit stems seen up close.",
+      "descriptionAr": "السعف وعراجين التمر عن قرب."
+    },
+    {
+      "slug": "sourdough",
+      "channel": "sunaa",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sunaa"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Surdegar.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/9d/Surdegar.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Surdegar.ogv",
+        "author": "Solblomma5",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"Surdegar.ogv\" by Solblomma5, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Surdegar.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Feeding the Sourdough",
+      "titleAr": "تغذية خميرة العجين",
+      "description": "Mixing a starter for the day’s bread.",
+      "descriptionAr": "تحضير الخميرة لخبز اليوم."
+    },
+    {
+      "slug": "clay-pots",
+      "channel": "sunaa",
+      "category": "islamic_lifestyle",
+      "tags": [
+        "demo",
+        "sunaa"
+      ],
+      "language": "en",
+      "orientation": "landscape",
+      "audio": false,
+      "source": {
+        "file": "File:Aesthetic art of pot making.ogv",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/8b/Aesthetic_art_of_pot_making.ogv",
+        "page": "https://commons.wikimedia.org/wiki/File:Aesthetic_art_of_pot_making.ogv",
+        "author": "Thamizhpparithi Maari",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "attribution": "\"Aesthetic art of pot making.ogv\" by Thamizhpparithi Maari, CC BY-SA 3.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Aesthetic_art_of_pot_making.ogv). Trimmed and re-encoded for this demo."
+      },
+      "title": "Shaping Clay on the Wheel",
+      "titleAr": "تشكيل الطين على الدولاب",
+      "description": "A potter raising a vessel by hand.",
+      "descriptionAr": "خزّاف يرفع جرة بيديه.",
+      "trim": {
+        "start": 5,
+        "duration": 70
+      }
+    },
+    {
+      "slug": "copper-vessel",
+      "channel": "sunaa",
+      "category": "islamic_history",
+      "tags": [
+        "demo",
+        "sunaa"
+      ],
+      "language": "en",
+      "orientation": "portrait",
+      "audio": false,
+      "source": {
+        "file": "File:Central Asian copper vessel with engraved Qur'anic verses and supplications.webm",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Central_Asian_copper_vessel_with_engraved_Qur%27anic_verses_and_supplications.webm",
+        "page": "https://commons.wikimedia.org/wiki/File:Central_Asian_copper_vessel_with_engraved_Qur%27anic_verses_and_supplications.webm",
+        "author": "Rajani Gairshail",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "attribution": "\"Central Asian copper vessel with engraved Qur'anic verses and supplications.webm\" by Rajani Gairshail, CC BY-SA 4.0, via Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Central_Asian_copper_vessel_with_engraved_Qur%27anic_verses_and_supplications.webm). Trimmed and re-encoded for this demo."
+      },
+      "title": "Quranic Verses on Copper",
+      "titleAr": "آيات قرآنية على النحاس",
+      "description": "A Central Asian vessel engraved with Quranic verses and supplications.",
+      "descriptionAr": "إناء من آسيا الوسطى منقوش بآيات قرآنية وأدعية."
+    }
+  ],
+  "playlists": [
+    {
+      "channel": "masajid",
+      "title": "Great Mosques | مساجد كبرى",
+      "description": "A tour of great mosques. جولة في المساجد الكبرى.",
+      "clips": [
+        "putra-mosque",
+        "umayyad-mosque",
+        "dolmabahce-mosque",
+        "hassan-tower",
+        "minar-jonban",
+        "mansourah-tlemcen"
+      ]
+    },
+    {
+      "channel": "nidaa",
+      "title": "Adhan from Around the World | الأذان حول العالم",
+      "description": "The call to prayer from many cities. الأذان من مدن شتى.",
+      "clips": [
+        "jaffa-muezzin",
+        "adhan-hargeisa",
+        "adhan-istanbul",
+        "maghrib-cumilla"
+      ]
+    },
+    {
+      "channel": "sama",
+      "title": "Time-lapse Skies | سماء متسارعة",
+      "description": "Clouds and stars. غيوم ونجوم.",
+      "clips": [
+        "bellevue-clouds",
+        "matterhorn",
+        "fog-mountain",
+        "algonquin-sunset",
+        "milky-way",
+        "la-silla-cloudscape"
+      ]
+    },
+    {
+      "channel": "miyah",
+      "title": "Sea and Falls | بحر وشلالات",
+      "description": "Water in motion. ماء في حركة.",
+      "clips": [
+        "open-sea",
+        "good-fortune-cove",
+        "seto-inland-sea",
+        "krimml-falls"
+      ]
+    }
+  ],
+  "unplayable": {
+    "slug": "old-cairo-lanterns-unavailable",
+    "channel": "aswaq",
+    "category": "islamic_lifestyle",
+    "tags": [
+      "demo",
+      "aswaq"
+    ],
+    "language": "en",
+    "thumbnailClip": "nile-desouk",
+    "title": "Lantern Makers of Old Cairo",
+    "titleAr": "صنّاع الفوانيس في القاهرة القديمة",
+    "description": "Demo placeholder: this video is deliberately unplayable so the player error state can be reviewed.",
+    "descriptionAr": "عنصر تجريبي: هذا الفيديو غير قابل للتشغيل عمداً لمراجعة حالة الخطأ في المشغل."
+  },
+  "keep": [
+    "443418c1-dc70-43d9-944d-5388ab7dc4c3"
+  ]
+}

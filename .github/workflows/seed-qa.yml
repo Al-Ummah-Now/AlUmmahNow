@@ -30,6 +30,13 @@ on:
         description: 'Skip D1 role assignment (admin / moderator)'
         type: boolean
         default: false
+      dataset:
+        description: 'e2e = the QA seed; demo = theme demo content (QA only, prototype branch)'
+        type: choice
+        options:
+          - e2e
+          - demo
+        default: e2e
 
 permissions:
   contents: read
@@ -113,9 +120,16 @@ jobs:
         run: |
           if [ "$TARGET" = stage ]; then export QA_SEED_PASSWORD="$STAGE_SEED_PASSWORD"; else export QA_SEED_PASSWORD="$QA_SEED_PASSWORD_QA"; fi
           [ -n "$QA_SEED_PASSWORD" ] || { echo "::error::seed password for $TARGET is empty"; exit 1; }
-          npx tsx e2e/seed/seed-qa.ts
+          if [ "$DATASET" = demo ]; then
+            [ "$TARGET" = qa ] || { echo "::error::the demo dataset is QA only"; exit 1; }
+            npx tsx e2e/seed/seed-demo.ts
+          else
+            npx tsx e2e/seed/seed-qa.ts
+          fi
         env:
           CI: true
+          DATASET: ${{ inputs.dataset }}
+          SEED_DEMO_SET_OUT: ${{ runner.temp }}/demo-set.json
           SEED_MODE: ${{ inputs.mode }}
           SEED_STRICT: ${{ inputs.strict }}
           SEED_SKIP_ROLES: ${{ inputs.skip_roles }}
@@ -136,3 +150,11 @@ jobs:
           OPENAUTH_CLIENT_ID: ${{ inputs.target == 'stage' && 'f0de3c30-0304-4ac4-86d6-1e185dec0439' || 'e0de3c30-0304-4ac4-86d6-1e185dec0439' }}
           D1_DATABASE_NAME: al-ummah-now-d1-${{ inputs.target }}
           D1_DATABASE_ID: ${{ inputs.target == 'stage' && 'c7886ef6-c70b-4b7f-a65b-3df9f9aba9e2' || '28590f3c-dd92-4c26-a803-d73a9bbe2b58' }}
+
+      - name: Upload demo set
+        if: ${{ always() && inputs.dataset == 'demo' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-set
+          path: ${{ runner.temp }}/demo-set.json
+          if-no-files-found: warn
