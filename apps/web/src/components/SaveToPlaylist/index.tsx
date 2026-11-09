@@ -27,15 +27,17 @@ import { menuShift } from './menu-shift';
 
 interface SaveToPlaylistProps {
   videoId: string;
+  /** The channel whose playlists to use. Defaults to the active channel */
+  channelId?: string;
   className?: string;
 }
 
 const MAX_PLAYLISTS = 50;
-export default function SaveToPlaylist({ videoId, className = '' }: SaveToPlaylistProps) {
+export default function SaveToPlaylist({ videoId, channelId: channelIdProp, className = '' }: SaveToPlaylistProps) {
   const { t, isRTL } = useLanguage();
   const { user } = useAuth();
   const channel = useCurrentChannel();
-  const channelId = channel?.id;
+  const channelId = channelIdProp ?? channel?.id;
 
   const [open, setOpen] = useState(false);
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
