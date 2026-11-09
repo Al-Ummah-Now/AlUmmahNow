@@ -164,7 +164,7 @@ for (const lang of ['en', 'ar'] as const) {
       // Centred in the viewport
       const viewport = page.viewportSize()!;
       const box = await layoutBox(dialog);
-      near(box.cx, viewport.width / 2, 'dialog centred horizontally');
+      near(box.cx, await page.evaluate(() => document.documentElement.clientWidth) / 2, 'dialog centred horizontally');
       near(box.cy, viewport.height / 2, 'dialog centred vertically');
       // Two columns of groups at desktop width
       const starts = new Set<number>();
@@ -234,10 +234,13 @@ for (const lang of ['en', 'ar'] as const) {
       expect(await layer.evaluate((el) => el.closest('.video-js') === null)).toBe(true);
       await expectOnTop(dialog, 'caption style dialog');
       await expect.poll(() => coveredByLayer(page, page.locator('header').first())).toBe(true);
-      const viewport = page.viewportSize()!;
-      near((await layoutBox(dialog)).cx, viewport.width / 2, 'caption style centred');
+      // Centred in the visible area: a classic scrollbar (stock Linux Firefox) is not part of it
+      const visibleWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      near((await layoutBox(dialog)).cx, visibleWidth / 2, 'caption style centred');
+      expect(await page.evaluate(() => document.body.style.overflow), 'page scroll locked').toBe('hidden');
       await page.keyboard.press('Escape');
       await expect(layer).toHaveCount(0);
+      expect(await page.evaluate(() => document.body.style.overflow), 'page scroll restored').toBe('');
       expect(await player.evaluate((el) => !!el.querySelector('.vjs-text-track-settings'))).toBe(true);
     });
 

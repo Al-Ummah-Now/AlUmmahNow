@@ -274,6 +274,8 @@ export function layerCaptionSettings(player: CaptionDialogHost, doc: Document = 
   if (!settings?.on || !dialog) return;
   let layer: HTMLElement | null = null;
   let home: { parent: Node; next: Node | null } | null = null;
+  // The page behind does not scroll while the dialog is open, as with the shortcuts dialog
+  let bodyOverflow = '';
 
   const place = () => {
     if (layer) layerHostFor(player.el(), doc).appendChild(layer);
@@ -289,6 +291,8 @@ export function layerCaptionSettings(player: CaptionDialogHost, doc: Document = 
     dialog.classList.add('vjs-fanous-caption-dialog');
     layer.appendChild(dialog);
     place();
+    bodyOverflow = doc.body.style.overflow;
+    doc.body.style.overflow = 'hidden';
     for (const name of FULLSCREEN_EVENTS) doc.addEventListener(name, place);
   };
   // Video.js moves focus in only when it was inside the player, and listens for Escape on the dialog
@@ -303,6 +307,7 @@ export function layerCaptionSettings(player: CaptionDialogHost, doc: Document = 
     if (home) home.parent.insertBefore(dialog, home.next && home.next.parentNode === home.parent ? home.next : null);
     if (hadFocus) player.el().querySelector<HTMLElement>('.vjs-fanous-settings')?.focus();
     layer.remove();
+    doc.body.style.overflow = bodyOverflow;
     layer = null;
     home = null;
   };
