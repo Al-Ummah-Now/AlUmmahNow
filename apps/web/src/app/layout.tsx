@@ -6,6 +6,7 @@ import "@/theme/bridge.css";
 import "@/theme/demo-motion.css";
 import "@/theme/system.css";
 import "@/theme/pages.css";
+import "@/theme/player-themes.css";
 import { DemoBanner } from "@/components/ThemeDemo/DemoBar";
 import backdrops from "@/theme/demo-backdrops.json";
 import { authenticated } from "../lib/actions"
@@ -106,7 +107,7 @@ function RuntimeConfigScript({ nonce }: { nonce?: string }) {
  */
 function EmbedDocument({ locale, nonce, children }: { locale: string; nonce?: string; children: React.ReactNode }) {
   return (
-    <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} data-active-theme={process.env.NEXT_PUBLIC_ACTIVE_THEME ?? "lantern"} suppressHydrationWarning>
       <head>
         <RuntimeConfigScript nonce={nonce} />
       </head>
@@ -132,7 +133,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   const user = subject ? subject.properties : null;
 
   return (
-    <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} data-active-theme={process.env.NEXT_PUBLIC_ACTIVE_THEME ?? "lantern"} suppressHydrationWarning>
       <head>
         {/* Font Awesome - Consider self-hosting for better performance */}
         <link

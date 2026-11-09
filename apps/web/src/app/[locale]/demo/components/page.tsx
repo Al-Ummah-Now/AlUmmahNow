@@ -52,6 +52,14 @@ export default function ComponentsGallery() {
       </div></section>
       <section><h2>{t.emp}</h2><div className="gal-grid"><div className="c empty"><Inbox aria-hidden="true" /><h4>{t.et}</h4><p>{t.eb}</p><button type="button" className="b b-primary b-sm"><Search aria-hidden="true" />{t.ea}</button></div><div className="grid gap-2"><div className="sk" style={{ aspectRatio: '16/9' }} /><div className="sk" style={{ height: 14 }} /><div className="sk" style={{ height: 12, width: '60%' }} /></div></div></section>
       <section><h2>{t.player}</h2><div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,420px),1fr))' }}>
+        <div className="grid gap-3" style={{ gridColumn: '1 / -1' }}>
+          <span className="gal-note">{lang === 'ar' ? 'المشغّل في كل سمة، فوق إطار فاتح وآخر داكن' : 'The player in every theme, over a bright and a dark frame'}</span>
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,420px),1fr))' }}>
+            {(['lantern', 'zujaj', 'nahas', 'fawanees'] as const).flatMap((id) => ['#f4efe4,#d9d2c2', '#0a1016,#1b2b36'].map((bg, i) => (
+              <div key={`${id}${i}`} className={`grid gap-1 pt-${id}`}><span className="gal-note">{id}, {i ? 'dark frame' : 'bright frame'}</span><div className="gal-p" style={{ background: `linear-gradient(135deg,${bg})` }}><PlayerChromeView s={{ ...base, playing: false, started: i === 0 ? false : true }} a={A} hoverPct={41} /></div></div>
+            )))}
+          </div>
+        </div>
         <P title={t.pIdle}><PlayerChromeView s={{ ...base, playing: false, started: false, time: 0, buffered: 0 }} a={A} /></P>
         <P title={t.pHover}><PlayerChromeView s={base} a={A} hoverPct={41} /></P>
         <P title={lang === 'ar' ? 'استكمال المشاهدة' : 'Resumed'}><PlayerChromeView s={{ ...base, resumed: true, time: 1240 }} a={A} /></P>

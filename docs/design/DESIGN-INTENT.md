@@ -59,3 +59,16 @@ the theme's material.
 
 When playback opens at a saved time, a persistent "Start from beginning" control sits in the player's
 start corner (`data-testid="player-start-over"`), in a dark pane edged with the theme's primary colour.
+
+## Player, per theme
+
+The video has no frame. Each layer inside it is clipped to one radius, and the theme lives in the chrome.
+
+| Theme | Control bar | Played bar and handle | Big play | Menu |
+|---|---|---|---|---|
+| Lantern | Amber scrim with light falling off from the start side | Gold gradient with a glow | Glowing gold orb | Warm dark panel with a gold halo |
+| Zujaj | A floating frosted pane with a glass highlight | Teal to pale glass | A frosted glass disc | Frosted teal |
+| Nahas | A solid brass band with engraved edges | Metallic copper in an engraved groove, brass knob | A banded brass disc with a rim | Dark brass plate |
+| Fawanees | Deep night with a pool of gold light | Rich gold with a strong glow | A gold orb with a wide halo | Night panel, gold halo |
+
+Hover is a soft 38px fill behind the icon with no border. Focus is a ring on keyboard focus only.
