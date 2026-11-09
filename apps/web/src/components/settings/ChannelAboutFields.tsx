@@ -35,6 +35,8 @@ interface ChannelAboutFieldsProps {
   onChange: (value: ChannelAboutValues) => void;
   onHandleStatusChange?: (status: HandleStatus) => void;
   disabled?: boolean;
+  /** Most link rows allowed, from the channel's plan. */
+  maxLinks?: number;
 }
 
 const inputClass =
@@ -50,7 +52,7 @@ export function isValidContactEmail(email: string): boolean {
   return email.trim() === '' || EMAIL_PATTERN.test(email.trim());
 }
 
-export function ChannelAboutFields({ channelId, currentHandle, value, onChange, onHandleStatusChange, disabled }: ChannelAboutFieldsProps) {
+export function ChannelAboutFields({ channelId, currentHandle, value, onChange, onHandleStatusChange, disabled, maxLinks = MAX_CHANNEL_LINKS }: ChannelAboutFieldsProps) {
   const { t, lang } = useLanguage();
   const ids = { handle: useId(), handleHelp: useId(), handleStatus: useId(), email: useId(), emailHelp: useId(), location: useId(), links: useId() };
   const [status, setStatus] = useState<HandleStatus>({ state: 'idle' });
@@ -151,7 +153,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
       {/* Links */}
       <fieldset>
         <legend className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t.channel.links}</legend>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{t.channel.linksHelp.replace('{max}', String(MAX_CHANNEL_LINKS))}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{t.channel.linksHelp.replace('{max}', String(maxLinks))}</p>
         <ul className="space-y-2" id={ids.links}>
           {value.links.map((link, index) => {
             const invalid = (link.title.trim() !== '' || link.url.trim() !== '') && !isValidLink(link);
@@ -197,7 +199,10 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
         {value.links.some((l) => (l.title.trim() !== '' || l.url.trim() !== '') && !isValidLink(l)) && (
           <p className="hidden sm:block text-sm text-red-600 dark:text-red-400 mt-1" role="alert">{t.channel.invalidLinkUrl}</p>
         )}
-        {value.links.length < MAX_CHANNEL_LINKS && (
+        {value.links.length >= maxLinks && (
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400" data-testid="channel-links-limit">{t.plan.linksReached} {t.plan.higherPlan}</p>
+        )}
+        {value.links.length < maxLinks && (
           <button
             type="button"
             onClick={() => update({ links: [...value.links, { title: '', url: '' }] })}

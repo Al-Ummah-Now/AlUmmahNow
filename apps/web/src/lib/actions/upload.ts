@@ -22,6 +22,7 @@ export async function initiateVideoUpload(
     tags?: string;
     category?: string;
     fileSize: number;
+    durationSeconds?: number;
     mimeType: string;
     thumbnail?: {
       type: 'auto' | 'custom';
@@ -124,6 +125,7 @@ export async function initiateBatchUpload(
     title: string;
     description?: string;
     fileSize: number;
+    durationSeconds?: number;
     mimeType: string;
     isPublic: boolean;
     tags?: string;
