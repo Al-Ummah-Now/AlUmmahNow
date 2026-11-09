@@ -14,5 +14,6 @@
 --m-primary-edge:inset 0 1px 0 color-mix(in srgb,white 44%,transparent),inset 0 0 0 1px color-mix(in srgb,white 14%,transparent);
 --m-active:linear-gradient(135deg,color-mix(in srgb,white 18%,transparent),color-mix(in srgb,var(--fanous-color-motif) 22%,transparent));--m-active-edge:inset 0 0 0 1px color-mix(in srgb,white 28%,transparent);--m-hover:color-mix(in srgb,var(--fanous-color-motif) 16%,transparent);
 --m-ind:var(--fanous-color-focus-ring);--m-ind-w:3px;--m-ind-h:24px;--m-ind-shadow:0 0 10px var(--fanous-color-focus-ring);--m-ind-shape:inset(0 round 2px);
---m-hero:linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 42%),linear-gradient(120deg,var(--fanous-color-hero-start),var(--fanous-color-surface-raised));--m-thumb-edge:0 0 0 1px color-mix(in srgb,white 42%,transparent),0 16px 30px -14px var(--m-glow)}
+--m-hero:linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 42%),linear-gradient(120deg,var(--fanous-color-hero-start),var(--fanous-color-surface-raised));--m-thumb-edge:0 0 0 1px color-mix(in srgb,white 42%,transparent),0 0 26px -6px var(--m-glow)}
 :root{--m-sel:color-mix(in srgb,white 16%,transparent);--m-sel-edge:inset 0 0 0 1px color-mix(in srgb,white 24%,transparent);--m-sel-bar:var(--fanous-color-link);--m-sel-glow:none}
+:root{--m-player:0 0 0 1px color-mix(in srgb,white 34%,transparent);--m-player-inner:inset 0 0 0 1px color-mix(in srgb,white 16%,transparent)}

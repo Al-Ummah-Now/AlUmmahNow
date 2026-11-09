@@ -14,5 +14,6 @@
 --m-primary-edge:inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 90%,transparent),0 0 22px -4px var(--m-glow);
 --m-active:radial-gradient(120% 200% at var(--from) 50%,color-mix(in srgb,var(--fanous-color-primary) 34%,transparent),transparent 74%);--m-active-edge:none;--m-hover:color-mix(in srgb,var(--fanous-color-primary) 14%,transparent);
 --m-ind:var(--fanous-color-primary);--m-ind-w:10px;--m-ind-h:26px;--m-ind-shadow:0 0 16px var(--m-glow);--m-ind-shape:path("M5 0V5C8 6 10 8 10 11V22L8 26H2L0 22V11C0 8 2 6 5 5Z");
---m-hero:radial-gradient(50% 130% at 82% 0%,color-mix(in srgb,var(--fanous-color-primary) 34%,transparent),transparent 70%),linear-gradient(120deg,var(--fanous-color-surface-raised),var(--fanous-color-hero-start));--m-thumb-edge:0 0 0 1px var(--fanous-color-primary),0 14px 34px -10px var(--m-glow)}
+--m-hero:radial-gradient(50% 130% at 82% 0%,color-mix(in srgb,var(--fanous-color-primary) 34%,transparent),transparent 70%),linear-gradient(120deg,var(--fanous-color-surface-raised),var(--fanous-color-hero-start));--m-thumb-edge:0 0 0 1px var(--fanous-color-primary),0 0 30px -6px var(--m-glow)}
 :root{--m-sel:color-mix(in srgb,var(--fanous-color-primary) 14%,transparent);--m-sel-edge:none;--m-sel-bar:var(--fanous-color-primary-edge);--m-sel-glow:0 0 6px color-mix(in srgb,var(--fanous-color-primary) 40%,transparent)}
+:root{--m-player:0 0 0 1px var(--fanous-color-primary),0 0 36px -8px var(--m-glow);--m-player-inner:none}

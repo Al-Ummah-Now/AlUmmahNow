@@ -111,3 +111,10 @@ main [class*="justify-between"]{flex-wrap:wrap}
 .nv:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:-2px}
 .tb[aria-current=page] svg{fill:currentColor;fill-opacity:.22;stroke-width:2}.tb[aria-current=page]::before{inset-inline:calc(50% - 12px);height:3px;border-radius:0 0 3px 3px;background:var(--m-sel-bar);box-shadow:var(--m-sel-glow)}
 @media(hover:hover){.nv:hover{background:color-mix(in srgb,var(--fanous-color-text-primary) 8%,transparent)}.nv[aria-current=page]:hover{background:var(--m-sel)}}
+/* Player frame: even on every side, with the video clipped to the same corners. */
+.custom-video-player,.custom-video-player.aspect-video{overflow:hidden!important;border-radius:var(--r-lg);box-shadow:var(--m-player);isolation:isolate}
+.custom-video-player .video-js,.custom-video-player [data-vjs-player]{border-radius:inherit;overflow:hidden}
+.custom-video-player::after{content:"";position:absolute;inset:0;z-index:4;border-radius:inherit;box-shadow:var(--m-player-inner);pointer-events:none}
+html[data-theatre] .custom-video-player,html[data-theatre] .custom-video-player.aspect-video{border-radius:0;box-shadow:none}
+.custom-video-player[data-mini]{box-shadow:none}.custom-video-player[data-mini] [data-vjs-player]{box-shadow:var(--m-player),var(--m-raised-edge)}
+.vc-t,.video-card>:first-child{box-shadow:0 0 0 1px color-mix(in srgb,var(--fanous-color-divider) 60%,transparent)}
