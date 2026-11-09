@@ -1,11 +1,11 @@
 'use client';
 // Prototype only: the player's visual layer. Pure view, so the gallery can show every state.
-import { useState, type PointerEvent as RP } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as RP } from 'react';
 import { Captions, Check, ChevronLeft, ChevronRight, Keyboard, Maximize, Minimize, Pause, PictureInPicture2, Play, RectangleHorizontal, RotateCcw, Settings, SkipForward, Volume1, Volume2, VolumeX } from 'lucide-react';
 
 export const PLAYER_COPY = {
-  en: { play: 'Play', pause: 'Pause', next: 'Next video', mute: 'Mute', unmute: 'Unmute', volume: 'Volume', seek: 'Seek', captions: 'Captions', settings: 'Settings', pip: 'Picture in picture', theatre: 'Theatre mode', full: 'Full screen', exitFull: 'Exit full screen', quality: 'Quality', speed: 'Speed', audio: 'Audio track', shortcuts: 'Keyboard shortcuts', auto: 'Auto', off: 'Off', normal: 'Normal', back: 'Back', upNext: 'Up next', replay: 'Watch again', playNext: 'Play now', live: 'Live', goLive: 'Go to live', behind: 'behind', startOver: 'Start from beginning' },
-  ar: { play: 'تشغيل', pause: 'إيقاف مؤقت', next: 'المقطع التالي', mute: 'كتم الصوت', unmute: 'إلغاء الكتم', volume: 'مستوى الصوت', seek: 'التقديم', captions: 'الترجمة', settings: 'الإعدادات', pip: 'صورة داخل صورة', theatre: 'وضع المسرح', full: 'ملء الشاشة', exitFull: 'الخروج من ملء الشاشة', quality: 'الجودة', speed: 'السرعة', audio: 'المسار الصوتي', shortcuts: 'اختصارات لوحة المفاتيح', auto: 'تلقائي', off: 'إيقاف', normal: 'عادية', back: 'رجوع', upNext: 'التالي', replay: 'إعادة المشاهدة', playNext: 'شغّل الآن', live: 'مباشر', goLive: 'الانتقال إلى البث', behind: 'تأخير', startOver: 'ابدأ من البداية' },
+  en: { cancel: 'Cancel', play: 'Play', pause: 'Pause', next: 'Next video', mute: 'Mute', unmute: 'Unmute', volume: 'Volume', seek: 'Seek', captions: 'Captions', settings: 'Settings', pip: 'Picture in picture', theatre: 'Theatre mode', full: 'Full screen', exitFull: 'Exit full screen', quality: 'Quality', speed: 'Speed', audio: 'Audio track', shortcuts: 'Keyboard shortcuts', auto: 'Auto', off: 'Off', normal: 'Normal', back: 'Back', upNext: 'Up next', replay: 'Watch again', playNext: 'Play now', live: 'Live', goLive: 'Go to live', behind: 'behind', startOver: 'Start from beginning' },
+  ar: { cancel: 'إلغاء', play: 'تشغيل', pause: 'إيقاف مؤقت', next: 'المقطع التالي', mute: 'كتم الصوت', unmute: 'إلغاء الكتم', volume: 'مستوى الصوت', seek: 'التقديم', captions: 'الترجمة', settings: 'الإعدادات', pip: 'صورة داخل صورة', theatre: 'وضع المسرح', full: 'ملء الشاشة', exitFull: 'الخروج من ملء الشاشة', quality: 'الجودة', speed: 'السرعة', audio: 'المسار الصوتي', shortcuts: 'اختصارات لوحة المفاتيح', auto: 'تلقائي', off: 'إيقاف', normal: 'عادية', back: 'رجوع', upNext: 'التالي', replay: 'إعادة المشاهدة', playNext: 'شغّل الآن', live: 'مباشر', goLive: 'الانتقال إلى البث', behind: 'تأخير', startOver: 'ابدأ من البداية' },
 };
 
 export interface Option { id: string; label: string }
@@ -28,6 +28,42 @@ export const fmt = (s: number) => {
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 type Panel = null | 'root' | 'quality' | 'speed' | 'captions' | 'audio';
 
+const COUNTDOWN = 8;
+/** Auto first, then highest resolution first. */
+const byQuality = (q: Option[]) => [...q].sort((x, y) => (parseInt(y.label, 10) || Infinity) - (parseInt(x.label, 10) || Infinity));
+
+function EndNext({ next, c, onNext, onReplay }: { next: { title: string; channel: string; thumb?: string }; c: Record<string, string>; onNext(): void; onReplay(): void }) {
+  const [left, setLeft] = useState(COUNTDOWN);
+  const [held, setHeld] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const play = useRef<HTMLButtonElement>(null);
+  useEffect(() => { play.current?.focus({ preventScroll: true }); }, []);
+  useEffect(() => {
+    if (cancelled || held) return;
+    if (left <= 0) { onNext(); return; }
+    const id = setTimeout(() => setLeft((n) => n - 1), 1000);
+    return () => clearTimeout(id);
+  }, [left, held, cancelled, onNext]);
+  const counting = !cancelled;
+  return (
+    <div className="pc-next" onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setCancelled(true); } }}>
+      <small className="pc-next-l">{c.upNext}</small>
+      <div className="pc-next-t" style={next.thumb ? { backgroundImage: `url("${next.thumb}")` } : undefined} />
+      <div className="pc-next-b">
+        <div className="pc-next-m"><strong>{next.title}</strong><span>{next.channel}</span></div>
+        <div className="pc-next-a">
+          <button ref={play} type="button" className="b b-primary pc-end-b" onClick={onNext}>
+            {counting ? <i className="pc-ring" style={{ '--p': `${(left / COUNTDOWN) * 100}%` } as CSSProperties} aria-hidden="true">{left}</i> : <SkipForward aria-hidden="true" />}
+            <span>{c.playNext}</span>
+          </button>
+          <button type="button" className="b b-secondary pc-end-b" onClick={onReplay}><RotateCcw aria-hidden="true" /><span>{c.replay}</span></button>
+          {counting && <button type="button" className="b b-ghost pc-end-b" onClick={() => setCancelled(true)}>{c.cancel}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PlayerChromeView({ s, a, initialPanel = null, hoverPct }: { s: ChromeState; a: ChromeActions; initialPanel?: Panel; hoverPct?: number }) {
   const c = PLAYER_COPY[s.lang];
   const [panel, setPanel] = useState<Panel>(initialPanel);
@@ -38,10 +74,10 @@ export function PlayerChromeView({ s, a, initialPanel = null, hoverPct }: { s: C
   const VolIcon = s.muted || s.volume === 0 ? VolumeX : s.volume < 0.5 ? Volume1 : Volume2;
   const Back = s.lang === 'ar' ? ChevronRight : ChevronLeft; const More = s.lang === 'ar' ? ChevronLeft : ChevronRight;
   const showControls = s.active || !s.playing || panel !== null;
-  const row = (label: string, value: string, go: Panel) => <button type="button" className="pc-mi" onClick={() => setPanel(go)}><span>{label}</span><small>{value}</small><More aria-hidden="true" /></button>;
+  const row = (label: string, value: string, go: Panel) => <button type="button" className="pc-mi pc-mi-row" onClick={() => setPanel(go)}><span className="pc-mi-l">{label}</span><small className="pc-mi-v">{value}</small><More aria-hidden="true" /></button>;
   const list = (title: string, opts: Option[], cur: string, set: (id: string) => void) => (
-    <><button type="button" className="pc-mi pc-back" onClick={() => setPanel('root')}><Back aria-hidden="true" /><span>{title}</span></button>
-      {opts.map((o) => <button type="button" key={o.id} className="pc-mi" role="menuitemradio" aria-checked={o.id === cur} onClick={() => { set(o.id); setPanel('root'); }}><span>{o.label}</span>{o.id === cur && <Check aria-hidden="true" />}</button>)}</>
+    <><button type="button" className="pc-mi pc-back" onClick={() => setPanel('root')}><Back aria-hidden="true" /><span className="pc-mi-l">{title}</span></button>
+      {opts.map((o) => <button type="button" key={o.id} className="pc-mi" role="menuitemradio" aria-checked={o.id === cur} onClick={() => { set(o.id); setPanel('root'); }}><i className="pc-mi-c">{o.id === cur && <Check aria-hidden="true" />}</i><span className="pc-mi-l">{o.label}</span></button>)}</>
   );
   const qLabel = s.qualities.find((q) => q.id === s.quality)?.label ?? c.auto;
   const capLabel = s.captions.find((q) => q.id === s.caption)?.label ?? c.off;
@@ -53,14 +89,7 @@ export function PlayerChromeView({ s, a, initialPanel = null, hoverPct }: { s: C
       {s.resumed && !s.ended && <button type="button" className="pc-startover" data-testid="player-start-over" dir={s.lang === 'ar' ? 'rtl' : 'ltr'} onClick={a.startOver}><RotateCcw aria-hidden="true" />{c.startOver}</button>}
       {s.ended && (
         <div className="pc-end" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
-          {s.next ? (
-            <div className="pc-next">
-              <small>{c.upNext}</small>
-              <div className="pc-next-t" style={s.next.thumb ? { backgroundImage: `url("${s.next.thumb}")` } : undefined} />
-              <strong>{s.next.title}</strong><span>{s.next.channel}</span>
-              <div className="pc-next-a"><button type="button" className="b b-primary b-sm" onClick={a.onNext}><SkipForward aria-hidden="true" />{c.playNext}</button><button type="button" className="pc-txt" onClick={a.replay}><RotateCcw aria-hidden="true" />{c.replay}</button></div>
-            </div>
-          ) : <button type="button" className="b b-primary" onClick={a.replay}><RotateCcw aria-hidden="true" />{c.replay}</button>}
+          {s.next ? <EndNext next={s.next} c={c} onNext={a.onNext} onReplay={a.replay} /> : <button type="button" className="b b-primary" onClick={a.replay}><RotateCcw aria-hidden="true" />{c.replay}</button>}
         </div>
       )}
       <div className="pc-bar" hidden={!showControls || undefined}>
@@ -101,9 +130,9 @@ export function PlayerChromeView({ s, a, initialPanel = null, hoverPct }: { s: C
             {row(c.speed, s.rate === 1 ? c.normal : `${s.rate}×`, 'speed')}
             {s.captions.length > 0 && row(c.captions, capLabel, 'captions')}
             {s.audio.length > 1 && row(c.audio, s.audio.find((x) => x.id === s.audioId)?.label ?? '', 'audio')}
-            <button type="button" className="pc-mi" onClick={() => { setPanel(null); a.shortcuts(); }}><Keyboard aria-hidden="true" /><span>{c.shortcuts}</span></button>
+            <button type="button" className="pc-mi pc-mi-row" onClick={() => { setPanel(null); a.shortcuts(); }}><span className="pc-mi-l">{c.shortcuts}</span><Keyboard aria-hidden="true" /></button>
           </>}
-          {panel === 'quality' && list(c.quality, s.qualities, s.quality, a.setQuality)}
+          {panel === 'quality' && list(c.quality, byQuality(s.qualities), s.quality, a.setQuality)}
           {panel === 'speed' && list(c.speed, RATES.map((r) => ({ id: String(r), label: r === 1 ? c.normal : `${r}×` })), String(s.rate), (id) => a.setRate(Number(id)))}
           {panel === 'captions' && list(c.captions, s.captions, s.caption, a.setCaption)}
           {panel === 'audio' && list(c.audio, s.audio, s.audioId, a.setAudio)}

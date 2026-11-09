@@ -1,4 +1,6 @@
 'use client';
+import { ListFilter } from 'lucide-react';
+import { ThemedSelect } from '@/components/ui/ThemedSelect';
 import { logger } from '@/lib/logger-client';
 import React, { useId, useState } from "react";
 import Link from "next/link";
@@ -41,7 +43,6 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replySubmitting, setReplySubmitting] = useState(false);
-  const sortId = useId();
   const composerId = useId();
 
   const Comment = isRTL ? CommentRTL : CommentLTR;
@@ -256,19 +257,15 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
         </h2>
         <div className="flex items-center gap-3">
           {!commentsOff && (
-            <div className="flex items-center gap-2 text-sm">
-              <label htmlFor={sortId} className="text-gray-600 dark:text-gray-400">{t.comments.sortBy}</label>
-              <select
-                id={sortId}
-                value={sort}
-                onChange={(e) => setSort(e.target.value as CommentSort)}
-                className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 text-sm"
-                data-testid="comments-sort"
-              >
-                <option value="top">{t.comments.sortTop}</option>
-                <option value="newest">{t.comments.sortNewest}</option>
-              </select>
-            </div>
+            <ThemedSelect
+              label={t.comments.sortBy}
+              value={sort}
+              onChange={(v) => setSort(v as CommentSort)}
+              options={[{ value: 'top', label: t.comments.sortTop }, { value: 'newest', label: t.comments.sortNewest }]}
+              icon={<ListFilter aria-hidden="true" />}
+              dir={isRTL ? 'rtl' : 'ltr'}
+              testId="comments-sort"
+            />
           )}
           {/* Connection status - only show in development */}
           {process.env.NODE_ENV === 'development' && (

@@ -114,9 +114,11 @@ test.describe('Video comments - viewer', () => {
     await page.goto(`/en/video/${video.get().id}`);
     // Comments load after hydration; selecting earlier would be reset by React
     await expect(page.getByTestId('comment').first()).toBeVisible();
-    await page.getByTestId('comments-sort').selectOption('top');
+    await page.getByTestId('comments-sort').click();
+    await page.getByTestId('comments-sort-top').click();
     await expect(page.getByTestId('comment').first()).toContainText(liked);
-    await page.getByTestId('comments-sort').selectOption('newest');
+    await page.getByTestId('comments-sort').click();
+    await page.getByTestId('comments-sort-newest').click();
     await expect(page.getByTestId('comment').first()).not.toContainText(liked);
   });
 
@@ -134,7 +136,8 @@ test.describe('Video comments - viewer', () => {
     await page.goto(`/ar/video/${video.get().id}`);
     const section = page.getByTestId('comments-section');
     await expect(section).toHaveAttribute('dir', 'rtl');
-    await expect(section.getByTestId('comments-sort').locator('option[value="top"]')).toHaveText('أبرز التعليقات');
+    await section.getByTestId('comments-sort').click();
+    await expect(page.getByTestId('comments-sort-top')).toHaveText('أبرز التعليقات');
   });
 });
 
