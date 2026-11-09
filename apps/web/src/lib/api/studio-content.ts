@@ -43,3 +43,29 @@ export async function getChannelContentCounts(channelId: string): Promise<Record
   }, getServerAuthContext, true);
   return response?.result.counts ?? null;
 }
+
+export interface BulkSummary {
+  total: number;
+  succeeded: number;
+  failed: number;
+}
+
+async function postBulk(path: string, functionName: string, body: unknown): Promise<BulkSummary | null> {
+  const response = await apiRequestServer<{ summary: BulkSummary }>({
+    method: 'POST',
+    url: buildApiUrl(path),
+    body: body as Record<string, unknown>,
+    functionName,
+  }, getServerAuthContext, true);
+  return response?.summary ?? null;
+}
+
+/** POST /api/videos/bulk-playlist */
+export async function bulkAddToPlaylist(playlistId: string, videoIds: string[]): Promise<BulkSummary | null> {
+  return postBulk('/api/videos/bulk-playlist', 'bulkAddToPlaylist', { playlistId, videoIds });
+}
+
+/** POST /api/videos/bulk-schedule */
+export async function bulkScheduleVideos(input: { videoIds: string[]; startAt: string; intervalMinutes: number; timezone: string }): Promise<BulkSummary | null> {
+  return postBulk('/api/videos/bulk-schedule', 'bulkScheduleVideos', input);
+}

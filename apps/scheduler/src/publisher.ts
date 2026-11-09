@@ -63,6 +63,7 @@ export async function publishVideo(
 
     const at = now().toISOString();
     videoData.isPublic = true;
+    videoData.isDraft = false;
     videoData.publishedAt = at;
     videoData.publishedViaSchedule = true;
     videoData.scheduledPublishStatus = 'published';

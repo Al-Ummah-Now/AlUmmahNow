@@ -137,6 +137,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
         if (fresh.isPublic === true) return { reject: { status: 409, error: 'Video is already public' } };
         previousStatus = fresh.scheduledPublishStatus;
         fresh.isPublic = true;
+        fresh.isDraft = false;
         fresh.dateModified = now;
         // Update scheduling status if video was scheduled
         if (fresh.scheduledPublishStatus) {

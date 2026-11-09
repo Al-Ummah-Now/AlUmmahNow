@@ -162,6 +162,8 @@ export class VideoScheduleDelete extends AuthenticatedRoute {
         }
         previousSchedule = fresh.scheduledPublishDate;
         fresh.scheduledPublishStatus = 'cancelled';
+        // Back to being unpublished work (docs/specs/CREATOR-STUDIO.md §4.4.1)
+        fresh.isDraft = true;
         return true;
       });
       if (!saved) {
