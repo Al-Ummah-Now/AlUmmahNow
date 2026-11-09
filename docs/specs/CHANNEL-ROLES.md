@@ -148,7 +148,7 @@ An email invitee who turns out to be a member already gets the invitation closed
 ### 5.3 Change role, remove, leave
 
 - Changing a role or removing someone updates the row, and takes effect on the next request, because roles are read from D1 and never cached in a token.
-- Removing a member also cancels any pending invitations they sent. Cancelling invitations is not needed when someone changes role, unless they lose `members.manage`, which also cancels.
+- Removing a member, or changing them to a role without `members.manage`, cancels any pending invitations they sent.
 - Content a removed member uploaded stays with the channel (§8).
 - Live stream keys are rotated when a member with `live.manage` is removed or leaves, since they have seen them.
 - A member's active-channel selection falls back on the next refresh (§7).
@@ -428,7 +428,7 @@ One D1 read per request by a non-owner on a channel route, and none for owners o
 1. **Name of the second role.** Epics says "manager", you said "admins". *Recommended: "Channel admin" in the UI, `admin` in code.*
 2. **Can a channel admin add or remove other admins?** *Recommended: no, owner only, so one admin can't lock out the others.*
 3. **Can an editor delete videos?** *Recommended: only their own uploads. Admins and the owner can delete any.*
-4. **Do editors see analytics?** *Recommended: no. Add the analytics viewer role to them if it's needed. A person holds one role per channel, so this would be a new combined role later.*
+4. **Do editors see analytics?** *Recommended: no. A person holds one role per channel, so an editor who needs analytics would need the admin role, or a new combined role later.*
 5. **Live for editors.** Stream keys let someone broadcast as the channel. *Recommended: owner and admin only. Editors can't go live.*
 6. **Plan limit.** Every feature is tiered. *Recommended: `channel.members_max` seeded to 2 on Free and a higher number on paid plans, all editable by admins, with a hard cap of 50.*
 7. **An email with no account.** *Recommended: same response as any other, and nothing is sent. Telling the inviter would reveal who has an account.*
