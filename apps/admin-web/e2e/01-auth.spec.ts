@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { ADMIN_WEB_URL, OPENAUTH_URL, accounts, storageStatePath } from './support/env';
 import { uiLogin } from './support/ui';
+import { skipUntilSignInDeployed } from './support/deployed';
 
 const PROTECTED = ['/dashboard', '/moderation', '/translations', '/indices', '/moderation/reports/does-not-exist'];
 
@@ -21,10 +22,14 @@ test.describe('authentication - signed out', () => {
     });
   }
 
-  test('AUTH-02 home page offers a login link when signed out', async ({ page }) => {
+  test('AUTH-02 home page goes straight to sign-in when signed out (no "Please log in" page)', async ({ page }) => {
+    await skipUntilSignInDeployed();
+    const authorize = page.waitForRequest((req) => req.url().startsWith(`${OPENAUTH_URL}/authorize`));
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Al Ummah Now');
-    await expect(page.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
+    // No prompt: the auth server signs an existing browser session in silently
+    expect(new URL((await authorize).url()).searchParams.get('prompt')).toBeNull();
+    await page.waitForURL((u) => u.href.startsWith(OPENAUTH_URL));
+    await expect(page.locator('input[name="email"]')).toBeVisible();
   });
 
   test('AUTH-03 admin can log in through the auth server', async ({ page }) => {
@@ -72,16 +77,19 @@ test.describe('authentication - signed out', () => {
     await expect(page.getByTestId('login-error')).toHaveText('An error occurred');
   });
 
-  test('AUTH-08 callback without a code reports no_code', async ({ page }) => {
+  test('AUTH-08 a callback this browser did not start is refused (state not bound to it)', async ({ page }) => {
+    await skipUntilSignInDeployed();
     await page.goto('/api/callback');
-    await expect(page).toHaveURL(/\/login\?error=no_code$/);
-    await expect(page.getByTestId('login-error')).toHaveText('Authorization code not received');
+    await expect(page).toHaveURL(/\/login\?error=auth_failed$/);
+    await expect(page.getByTestId('login-error')).toHaveText('Authentication failed');
   });
 
-  test('AUTH-09 callback with an invalid code reports exchange_failed', async ({ page }) => {
-    await page.goto('/api/callback?code=not-a-real-code');
-    await expect(page).toHaveURL(/\/login\?error=(exchange_failed|auth_failed)$/);
+  test('AUTH-09 a forged callback with a code is refused without a session', async ({ page, context }) => {
+    await skipUntilSignInDeployed();
+    await page.goto('/api/callback?code=not-a-real-code&state=forged.Lw');
+    await expect(page).toHaveURL(/\/login\?error=auth_failed$/);
     await expect(page.getByTestId('login-error')).toBeVisible();
+    expect((await context.cookies()).find((c) => c.name === 'admin_session')).toBeUndefined();
   });
 });
 
@@ -91,10 +99,10 @@ test.describe('authentication - signed in', () => {
     await expect(page).toHaveURL(/\/dashboard$/);
   });
 
-  test('AUTH-11 home page greets the signed-in admin', async ({ page }) => {
+  test('AUTH-11 home page takes the signed-in admin to the dashboard', async ({ page }) => {
+    await skipUntilSignInDeployed();
     await page.goto('/');
-    await expect(page.getByTestId('welcome')).toContainText(accounts.admin.email);
-    await expect(page.getByRole('link', { name: 'Go to Dashboard' })).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard$/);
   });
 });
 
@@ -134,16 +142,20 @@ test.describe('access denied page', () => {
 test.describe('log out (single sign-out)', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  /** Clicks a log out control and follows the chain back to the public home page. */
+  /**
+   * Clicks a log out control and follows the chain back to the home page,
+   * which (signed out) goes straight on to the auth server's sign-in form.
+   */
   async function logOutThroughAuthServer(page: Page, click: () => Promise<void>) {
     const hops: string[] = [];
     page.on('request', (r) => {
       if (r.isNavigationRequest() && r.frame() === page.mainFrame()) hops.push(r.url());
     });
     await click();
-    await expect(page).toHaveURL(`${ADMIN_WEB_URL}/`, { timeout: 30_000 });
+    await page.waitForURL((u) => u.href.startsWith(OPENAUTH_URL) && !u.pathname.startsWith('/logout'), { timeout: 30_000 });
+    await expect(page.locator('input[name="password"]')).toBeVisible();
     expect(hops.some((u) => u.startsWith(`${OPENAUTH_URL}/logout`)), `no auth server sign-out: ${hops.join(' → ')}`).toBe(true);
-    await expect(page.getByRole('link', { name: 'Log in' })).toBeVisible();
+    expect(hops, `never came back to the home page: ${hops.join(' → ')}`).toContain(`${ADMIN_WEB_URL}/`);
 
     const cookies = await page.context().cookies([ADMIN_WEB_URL, OPENAUTH_URL]);
     expect(cookies.find((c) => c.name === 'admin_session')).toBeUndefined();
@@ -156,6 +168,7 @@ test.describe('log out (single sign-out)', () => {
   }
 
   test('AUTH-12 logout from the nav signs out everywhere', async ({ page }) => {
+    await skipUntilSignInDeployed();
     await uiLogin(page, accounts.admin);
     await logOutThroughAuthServer(page, () => page.getByTestId('logout-button').click());
   });
@@ -169,6 +182,7 @@ test.describe('log out (single sign-out)', () => {
   });
 
   test('AUTH-15 log out from access denied signs out everywhere and returns to the public home page', async ({ page }) => {
+    await skipUntilSignInDeployed();
     await uiLogin(page, accounts.nonadmin, /\/access-denied$/);
     await logOutThroughAuthServer(page, () => page.getByRole('button', { name: 'Log out' }).click());
   });

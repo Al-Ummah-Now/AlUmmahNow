@@ -282,6 +282,10 @@ jobs:
         run: pnpm --filter @al-ummah/websocket-server type-check
         timeout-minutes: 3
 
+      - name: websocket-server unit tests
+        run: pnpm --filter @al-ummah/websocket-server test
+        timeout-minutes: 3
+
       - name: Validate websocket-server deployment
         run: |
           cd apps/websocket-server

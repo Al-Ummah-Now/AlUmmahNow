@@ -101,10 +101,12 @@ export const APPS: AppRule[] = [
 				{ kind: 'queue_producer', name: 'queue' },
 				{ kind: 'queue_producer', name: 'MODERATION_QUEUE' },
 				{ kind: 'r2_buckets', name: 'videos' },
+				// Per-video view counter in the realtime worker (SCALABILITY-AUDIT AV-1)
+				{ kind: 'durable_objects', name: 'VIEW_COUNTER' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'd1_databases', name: 'SEARCH_DB' }] }),
+		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'd1_databases', name: 'SEARCH_DB' }, { kind: 'durable_objects', name: 'VIEW_COUNTER' }] }),
 	},
 	{
 		app: 'processor',
@@ -146,10 +148,12 @@ export const APPS: AppRule[] = [
 				INTERNAL_API_KEY,
 				{ kind: 'durable_objects', name: 'WEBSOCKET_DO' },
 				{ kind: 'kv_namespaces', name: 'PRESENCE_KV' },
+				// The view counter flushes into the video JSON (SCALABILITY-AUDIT AV-1)
+				{ kind: 'r2_buckets', name: 'VIDEOS' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-comms-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'durable_objects', name: 'WEBSOCKET_DO' }] }),
+		stage: stageRule({ name: 'al-ummah-now-comms-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'durable_objects', name: 'WEBSOCKET_DO' }, { kind: 'r2_buckets', name: 'VIDEOS' }] }),
 	},
 	{
 		app: 'scheduler',

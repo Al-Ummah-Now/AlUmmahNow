@@ -318,7 +318,11 @@ async function globalSetup(_config: FullConfig) {
         }
       }
       if (!loggedIn) {
-        await page.goto(authorizeUrl, { waitUntil: 'networkidle' });
+        // Start on the web app, which binds the OAuth state to this browser
+        // (the callback refuses a direct /authorize); older builds without
+        // /api/auth/login (404) take the direct authorize URL
+        const started = await page.goto(`${webAppUrl}/api/auth/login?locale=en`, { waitUntil: 'networkidle' });
+        if (started?.status() === 404) await page.goto(authorizeUrl, { waitUntil: 'networkidle' });
 
         // Click the "Register" link to go to registration page
         const registerLink = await page.$('a[href*="register"], a:has-text("Register")');

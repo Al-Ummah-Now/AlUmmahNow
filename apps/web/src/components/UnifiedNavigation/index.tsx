@@ -589,7 +589,7 @@ export function UnifiedNavigation() {
                   const name = account.displayName || account.email;
                   const count = account.channelsCount || 0;
                   return (
-                    <div key={account.userId} className="group relative" data-testid="nav-account" data-active={account.isActive ? 'true' : 'false'}>
+                    <div key={account.userId} className="group relative" data-testid="nav-account" data-active={account.isActive ? 'true' : 'false'} data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
                       <button type="button" onClick={() => { if (!account.isActive) { switchAccount(account.userId); setIsOpen(false); } }} disabled={account.isActive} className={ROW} role="menuitem">
                         {avatar ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -599,7 +599,7 @@ export function UnifiedNavigation() {
                         )}
                         <span className="min-w-0 flex-1">
                           <span className={`block truncate ${ROW_TEXT}`}>{name}</span>
-                          <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{count} {count === 1 ? t.navigation.channel : t.navigation.channels}</span>
+                          <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{/* Signed in to the browser but not here yet: its email (switching signs it in) */}{account.hasLocalSession === false ? account.email : <>{count} {count === 1 ? t.navigation.channel : t.navigation.channels}</>}</span>
                         </span>
                         {account.isActive && <Check className={ROW_ICON} aria-hidden="true" />}
                       </button>

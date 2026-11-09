@@ -5,6 +5,7 @@ import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
 import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
 import { recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
+import { CounterBatch } from './lib/analytics-counters';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
 import {
   eraseUserNotifications,
@@ -31,9 +32,40 @@ export class MessageProcessor {
   /** Push providers per service; injectable for tests. */
   private readonly pushProviders: PushProviders;
 
-  constructor(logger: Logger, pushProviders: PushProviders = resolvePushProviders()) {
+  /**
+   * Analytics increments of the messages processed by this instance. The queue
+   * handler creates one processor per batch and flushes once at the end
+   * (`batchCounters`), so a batch costs one D1 write transaction; otherwise
+   * each message flushes its own.
+   */
+  private readonly counters = new CounterBatch();
+  private readonly batchCounters: boolean;
+
+  constructor(logger: Logger, pushProviders: PushProviders = resolvePushProviders(), opts: { batchCounters?: boolean } = {}) {
     this.logger = logger;
     this.pushProviders = pushProviders;
+    this.batchCounters = opts.batchCounters ?? false;
+  }
+
+  /**
+   * Writes the queued analytics increments (one D1 transaction of atomic
+   * upserts). Rollups are derived data: a failure is logged, never retried
+   * through the queue (that would repeat the message's other effects).
+   */
+  async flushCounters(env: QueueEnvironment): Promise<void> {
+    if (this.counters.size === 0) return;
+    if (!env.NOTIFICATIONS_DB) {
+      this.logger.warn('NOTIFICATIONS_DB not bound; analytics increments dropped', { rows: this.counters.size });
+      this.counters.clear();
+      return;
+    }
+    const rows = this.counters.size;
+    try {
+      await this.counters.flush(env.NOTIFICATIONS_DB);
+      this.logger.debug('Analytics counters written', { rows });
+    } catch (error) {
+      this.logger.error('Failed to write analytics counters', { rows, error });
+    }
   }
 
   async processMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<ProcessingResult> {
@@ -51,6 +83,7 @@ export class MessageProcessor {
 
       // Process based on message type
       await this.processByType(message, env);
+      if (!this.batchCounters) await this.flushCounters(env);
 
       const processingTime = Date.now() - startTime;
       this.logger.info(`Successfully processed message ${message.id} in ${processingTime}ms`);
@@ -390,7 +423,7 @@ export class MessageProcessor {
     }
   }
 
-  private async processVideoViewMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+  private async processVideoViewMessage(message: AlUmmahMessage, _env: QueueEnvironment): Promise<void> {
     const payload = message.payload as { videoId?: string; searchQuery?: string };
 
     // Search telemetry is published with the VideoView type but has no videoId.
@@ -401,25 +434,15 @@ export class MessageProcessor {
 
     await this.processVideoMessage(message);
 
-    try {
-      const recorded = await recordViewRollup(env.MESSAGES_BUCKET, message.payload, message.timestamp);
-      if (recorded) {
-        this.logger.debug('View rollup updated', { videoId: payload.videoId });
-      }
-    } catch (error) {
-      // Rollups are derived data; never fail (and retry) the message because of them.
-      this.logger.warn('Failed to update view rollup', { videoId: payload.videoId, error });
+    if (recordViewRollup(this.counters, message.payload, message.timestamp)) {
+      this.logger.debug('View rollup queued', { videoId: payload.videoId });
     }
   }
 
-  private async processVideoWatchTimeMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+  private async processVideoWatchTimeMessage(message: AlUmmahMessage, _env: QueueEnvironment): Promise<void> {
     const payload = message.payload as { videoId?: string };
-    try {
-      const recorded = await recordWatchTimeRollup(env.MESSAGES_BUCKET, message.payload, message.timestamp);
-      if (!recorded) this.logger.warn('Invalid watch-time message ignored', { videoId: payload.videoId });
-    } catch (error) {
-      // Rollups are derived data; never fail (and retry) the message because of them.
-      this.logger.warn('Failed to update watch-time rollup', { videoId: payload.videoId, error });
+    if (!recordWatchTimeRollup(this.counters, message.payload, message.timestamp)) {
+      this.logger.warn('Invalid watch-time message ignored', { videoId: payload.videoId });
     }
   }
 

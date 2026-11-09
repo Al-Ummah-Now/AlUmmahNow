@@ -14176,6 +14176,21 @@
                             "name": {
                               "type": "string"
                             },
+                            "cover": {
+                              "type": "object",
+                              "properties": {
+                                "videoId": {
+                                  "type": "string"
+                                },
+                                "thumbnailUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "videoId",
+                                "thumbnailUrl"
+                              ]
+                            },
                             "videos": {
                               "type": "array",
                               "items": {
@@ -14712,6 +14727,21 @@
                             "name": {
                               "type": "string"
                             },
+                            "cover": {
+                              "type": "object",
+                              "properties": {
+                                "videoId": {
+                                  "type": "string"
+                                },
+                                "thumbnailUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "videoId",
+                                "thumbnailUrl"
+                              ]
+                            },
                             "videos": {
                               "type": "array",
                               "items": {
@@ -14952,6 +14982,21 @@
                             "name": {
                               "type": "string"
                             },
+                            "cover": {
+                              "type": "object",
+                              "properties": {
+                                "videoId": {
+                                  "type": "string"
+                                },
+                                "thumbnailUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "videoId",
+                                "thumbnailUrl"
+                              ]
+                            },
                             "videos": {
                               "type": "array",
                               "items": {
@@ -15183,6 +15228,21 @@
                             },
                             "name": {
                               "type": "string"
+                            },
+                            "cover": {
+                              "type": "object",
+                              "properties": {
+                                "videoId": {
+                                  "type": "string"
+                                },
+                                "thumbnailUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "videoId",
+                                "thumbnailUrl"
+                              ]
                             },
                             "videos": {
                               "type": "array",
@@ -29380,6 +29440,31 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The view could not be counted (counter and fallback both unavailable)",
             "content": {
               "application/json": {
                 "schema": {

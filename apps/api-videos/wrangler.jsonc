@@ -32,6 +32,12 @@
 	 * databases, object storage, AI inference, real-time communication and more.
 	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
 	 */
+	// Per-video view counter (realtime worker, apps/websocket-server/src/view-counter.ts). Cross-script binding: the class lives in the comms worker of the same environment.
+	"durable_objects": {
+		"bindings": [
+			{ "name": "VIEW_COUNTER", "class_name": "WebSocketDurableObject", "script_name": "al-ummah-now-comms" }
+		]
+	},
 	"r2_buckets": [
 		{
 			"binding": "videos",
@@ -257,6 +263,11 @@
 					"custom_domain": true
 				}
 			],
+			"durable_objects": {
+				"bindings": [
+					{ "name": "VIEW_COUNTER", "class_name": "WebSocketDurableObject", "script_name": "al-ummah-now-comms-stage" }
+				]
+			},
 			"r2_buckets": [
 				{
 					"binding": "videos",

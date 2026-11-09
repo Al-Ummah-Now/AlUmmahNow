@@ -16,6 +16,9 @@ test.describe('site theme', () => {
     test.setTimeout(240000);
     await page.goto('/site-theme');
     const options = page.getByTestId('site-theme-options');
+    // PR runs hit QA before this change is deployed there; it runs for real once QA has the page
+    const deployed = await options.waitFor({ timeout: 15000 }).then(() => true, () => false);
+    test.skip(!deployed, 'site theme page not deployed to QA yet');
     const current = await options.locator('section[aria-current="true"]').getAttribute('data-testid');
     const original = (current as string).replace('site-theme-', '');
     const target = original === 'nahas' ? 'zujaj' : 'nahas';

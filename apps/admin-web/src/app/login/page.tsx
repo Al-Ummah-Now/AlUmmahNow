@@ -1,24 +1,19 @@
 import { redirect } from 'next/navigation';
-import { headers as getHeaders } from 'next/headers';
-import { isAuthenticated, getAuthClient } from '@/lib/auth';
+import { isAuthenticated } from '@/lib/auth';
 import { getI18n } from '@/i18n/server';
 import { PublicShell } from '@/components/PublicShell';
 import { ErrorAlert, primaryButtonClass } from '@/components/ui';
 import type { MessageKey } from '@/i18n/translate';
+import { loginDecision, parsePrompt, startPath } from '@/lib/login-flow';
 
 interface PageProps {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; return?: string; prompt?: string }>;
 }
 
 const KNOWN_ERRORS = ['no_code', 'exchange_failed', 'verification_failed', 'auth_failed', 'unauthorized'] as const;
 
 export default async function LoginPage({ searchParams }: PageProps) {
   const params = await searchParams;
-
-  // If already authenticated, go straight to the dashboard
-  if (await isAuthenticated()) {
-    redirect('/dashboard');
-  }
 
   if (params.error) {
     const { t } = await getI18n();
@@ -46,13 +41,19 @@ export default async function LoginPage({ searchParams }: PageProps) {
     );
   }
 
-  // No error - redirect to auth server
-  const headersData = await getHeaders();
-  const host = headersData.get('host');
-  const protocol = host?.includes('localhost') ? 'http' : 'https';
+  // Already signed in (and no account change asked for): carry on. Otherwise
+  // to the auth server. No prompt on the normal path: the auth server signs
+  // the browser's active account in silently, or shows its form. prompt=none
+  // (switching account) and prompt=login (adding one) come from the account menu.
+  const decision = loginDecision({
+    authenticated: await isAuthenticated(),
+    prompt: parsePrompt(params.prompt),
+    returnTo: params.return,
+  });
+  if (decision.kind === 'continue') {
+    redirect(decision.to);
+  }
 
-  const client = await getAuthClient();
-  const { url } = await client.authorize(`${protocol}://${host}/api/callback`, 'code');
-
-  redirect(url);
+  // /api/auth/start binds the OAuth state to this browser (a page cannot set cookies)
+  redirect(startPath(decision.prompt, decision.returnTo));
 }

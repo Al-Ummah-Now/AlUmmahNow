@@ -184,7 +184,7 @@ export class AnalyticsChannelGet extends AuthenticatedRoute {
       const scope = await loadScope(c, userId, params.channelId);
       if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const range = parseRange(query.dateFrom, query.dateTo);
-      const rollups = await loadRollups(c.env.analytics_rollups, "channel", [params.channelId], range);
+      const rollups = await loadRollups(c.env, "channel", [params.channelId], range);
       const summary = buildSummary(scope.videos, scope.channels);
       return c.json({
         channelId: params.channelId,
@@ -235,7 +235,7 @@ export class AnalyticsVideoGet extends AuthenticatedRoute {
         return c.json({ success: false, error: "You can only view analytics for your own videos" }, 403);
       }
       const range = parseRange(query.dateFrom, query.dateTo);
-      const rollups = await loadRollups(c.env.analytics_rollups, "video", [video.id], range);
+      const rollups = await loadRollups(c.env, "video", [video.id], range);
       return c.json(videoAnalytics(video, rollups));
     } catch (error) {
       logger.error("[Analytics] Video analytics failed", { userId, videoId: params.videoId, error });
@@ -272,7 +272,7 @@ export class AnalyticsMetricsGet extends AuthenticatedRoute {
       const scope = await loadScope(c, userId, query.channelId);
       if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const range = parseRange(query.dateFrom, query.dateTo);
-      const rollups = await loadRollups(c.env.analytics_rollups, "channel", scope.channels.map(ch => ch.id), range);
+      const rollups = await loadRollups(c.env, "channel", scope.channels.map(ch => ch.id), range);
       let series = buildDailySeries(range, scope.videos, scope.channels, rollups);
       if (query.limit && query.limit > 0) series = series.slice(-Math.floor(query.limit));
       return c.json(series);

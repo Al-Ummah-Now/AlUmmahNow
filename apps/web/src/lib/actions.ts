@@ -6,6 +6,7 @@ import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 import { startSingleSignOut } from "./auth/single-sign-out"
+import { newStateNonce, stateCookieOptions, withState, STATE_COOKIE } from "./auth/oauth-state"
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -129,12 +130,19 @@ export async function login(locale: string = 'en') {
   const headers = await getHeaders()
   const host = headers.get("host")
   const protocol = host?.includes("localhost") ? "http" : "https"
-  ;(await getCookies()).set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 })
+  const cookieStore = await getCookies()
+  cookieStore.set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 })
+  // An interactive sign-in: not silent, back to the locale's home
+  cookieStore.delete("auth_silent")
+  cookieStore.delete("auth_return")
   const { url } = await client.authorize(
     `${protocol}://${host}/api/callback`,
     "code",
   )
-  redirect(withAuthorizeLocale(url, locale))
+  // Bind the callback to this browser (login CSRF)
+  const nonce = newStateNonce()
+  cookieStore.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === "https"))
+  redirect(withAuthorizeLocale(withState(url, nonce), locale))
 }
 
 export async function logout(locale: string = 'en') {

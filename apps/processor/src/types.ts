@@ -57,7 +57,7 @@ export interface R2ListOptions {
 }
 
 export interface R2Objects {
-  objects: Array<{ key: string }>;
+  objects: Array<{ key: string; uploaded?: Date | string }>;
   truncated: boolean;
   cursor?: string;
 }
@@ -66,6 +66,7 @@ export interface R2Bucket {
   put: (key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: R2PutOptions) => Promise<void>;
   get: (key: string) => Promise<R2Object | null>;
   list: (options?: R2ListOptions) => Promise<R2Objects>;
+  delete?: (key: string | string[]) => Promise<void>;
 }
 
 // D1 types are imported from @al-ummah/shared-types above

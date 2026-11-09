@@ -5,9 +5,12 @@ import { usePathname } from 'next/navigation';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { PreferencesControls } from './PreferencesControls';
+import { AccountMenu } from './AccountMenu';
 
 interface AdminNavProps {
   userEmail?: string;
+  /** Auth server origin, for the account menu. */
+  authIssuer?: string;
 }
 
 const NAV_ITEMS: { href: string; label: MessageKey }[] = [
@@ -19,7 +22,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/site-theme', label: 'nav.siteTheme' },
 ];
 
-export function AdminNav({ userEmail }: AdminNavProps) {
+export function AdminNav({ userEmail, authIssuer }: AdminNavProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
 
@@ -71,6 +74,7 @@ export function AdminNav({ userEmail }: AdminNavProps) {
               <span className="hidden md:inline text-fg-muted text-sm" data-testid="user-email">
                 {userEmail}
               </span>
+              {authIssuer && <AccountMenu issuer={authIssuer} currentEmail={userEmail} />}
               <form action="/api/logout" method="POST">
                 <button
                   type="submit"

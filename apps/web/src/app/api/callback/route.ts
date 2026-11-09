@@ -6,6 +6,27 @@ import { User } from "@/interfaces";
 import { logger } from '@/lib/logger-server';
 import { isLocaleSupported } from '@/lib/i18n/utils';
 import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
+import { cookies as getCookies } from "next/headers";
+import {
+  RETURN_COOKIE,
+  SILENT_COOKIE,
+  callbackErrorDestination,
+  sameOriginUrl,
+  successDestination,
+} from '@/lib/auth/silent-sign-in';
+import { CLEAR_STATE_COOKIE, STATE_COOKIE, stateMatches } from '@/lib/auth/oauth-state';
+
+/** The login route's one-shot cookies are spent once the callback ran. */
+async function clearSignInCookies(): Promise<void> {
+  try {
+    const store = await getCookies();
+    store.delete(RETURN_COOKIE);
+    store.delete(SILENT_COOKIE);
+    store.delete(CLEAR_STATE_COOKIE);
+  } catch {
+    // Outside a request context (tests): nothing to clear
+  }
+}
 
 
 // Discriminated union type for clearer type safety
@@ -89,19 +110,40 @@ export async function GET(req: NextRequest) {
   const localeParam = url.searchParams.get("locale") ?? req.cookies.get("auth_locale")?.value ?? null;
   const locale = localeParam && isLocaleSupported(localeParam) ? localeParam : DEFAULT_LOCALE;
 
+  // Set by /api/auth/login: where to go back to, and whether this was a
+  // silent attempt (prompt=none from the client probe or an account switch)
+  const returnPath = req.cookies.get(RETURN_COOKIE)?.value ?? null;
+  const silent = req.cookies.get(SILENT_COOKIE)?.value === "1";
+
+  // Only a sign-in this browser started (state = its state cookie) may
+  // continue: otherwise no code exchange and no session change (login CSRF)
+  if (!stateMatches(url.searchParams.get("state"), req.cookies.get(STATE_COOKIE)?.value)) {
+    logger.warn("[OAuth Callback] Refused: state does not match this browser", {
+      hasState: url.searchParams.has("state"),
+      silent,
+    });
+    await clearSignInCookies();
+    return NextResponse.redirect(sameOriginUrl(callbackErrorDestination({ error: "state_mismatch", silent, returnPath, locale }), url.origin));
+  }
+
   // The auth server reports failures (cancelled sign-in, failed password
   // reset, ...) as ?error=...; with no code there is nothing to exchange.
+  // A failed silent attempt (error=login_required) is not an error for the
+  // visitor: back to the page, anonymous, no error page.
   const authError = url.searchParams.get("error");
   if (authError || !code) {
     logger.warn("[OAuth Callback] Sign-in returned without a code", {
       error: authError,
+      silent,
       description: url.searchParams.get("error_description"),
     });
-    return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
+    await clearSignInCookies();
+    return NextResponse.redirect(sameOriginUrl(callbackErrorDestination({ error: authError, silent, returnPath, locale }), url.origin));
   }
 
   const result = await validate(code, url);
   logger.debug("[result]", result)
+  await clearSignInCookies();
 
   if (result.success) {
     // Check if user needs to create profile
@@ -119,14 +161,18 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Redirect to user's locale with session_updated param
-    logger.debug("[redirect]", `${url.origin}/${locale}`)
-    return NextResponse.redirect(`${url.origin}/${locale}?session_updated=true`);
+    // Back to the page the sign-in started from (or the locale's home), with
+    // session_updated so the header reloads the session
+    return NextResponse.redirect(sameOriginUrl(successDestination(returnPath, locale), url.origin));
   }
   // Error objects serialize to {}, so never answer with the raw error
   logger.error("[OAuth Callback] Code exchange failed", {
     error: result.error instanceof Error ? result.error.message : String(result.error),
   });
+  if (silent) {
+    // A silent attempt never shows an error page: back to the page, anonymous
+    return NextResponse.redirect(sameOriginUrl(callbackErrorDestination({ error: null, silent, returnPath, locale }), url.origin));
+  }
   return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
 
 }

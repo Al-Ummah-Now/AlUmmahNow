@@ -41,9 +41,14 @@ const en = {
     english: 'English',
     arabic: 'العربية',
   },
-  home: {
-    welcome: 'Welcome, {email}',
-    pleaseLogin: 'Please log in to access the admin panel',
+  accounts: {
+    menu: 'Accounts',
+    title: 'Signed-in accounts',
+    active: 'Active',
+    add: 'Add another account',
+    signOut: 'Sign out',
+    signOutOf: 'Sign out of {email}',
+    signOutAll: 'Sign out of all accounts',
   },
   login: {
     tryAgain: 'Try Again',

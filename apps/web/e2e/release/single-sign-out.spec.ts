@@ -11,6 +11,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, expectNoErrorHop, signUpOnWeb } from './web-session';
+import { expectProfileSignedOut, signInToProfileSilently } from './profile-app';
 
 /** The web app's same-origin token endpoint: 200 with a token only while signed in. */
 async function webSignedIn(page: Page): Promise<boolean> {
@@ -63,18 +64,6 @@ async function signOutThroughAuthServer(page: Page, home: string, start: () => P
   return hops;
 }
 
-/** Profile app sign-in; with a shared sign-in it completes without a form. */
-async function signInToProfileSilently(page: Page): Promise<void> {
-  await page.goto(target().profile);
-  await page.locator('#loggedOutView button:has-text("Sign In")').click();
-  await expect(page.locator('#loggedInView')).toBeVisible({ timeout: 30000 });
-}
-
-async function expectProfileSignedOut(page: Page): Promise<void> {
-  await page.goto(target().profile);
-  await expect(page.locator('#loggedOutView')).toBeVisible({ timeout: 20000 });
-}
-
 /** The auth server shows its password form and stays there (no silent sign-in). */
 async function expectCredentialsAsked(page: Page): Promise<void> {
   await expect(page).toHaveURL(new RegExp(`^${target().auth}/`), { timeout: 30000 });
@@ -83,6 +72,26 @@ async function expectCredentialsAsked(page: Page): Promise<void> {
   expect(new URL(page.url()).origin, 'signed back in without a form').toBe(target().auth);
   const authCookies = await page.context().cookies(target().auth);
   expect(authCookies.find((c) => c.name === '__session' && c.value)).toBeUndefined();
+}
+
+/**
+ * With a shared sign-in, opening the videos site signs it in by itself (#463:
+ * a silent /api/auth/login?prompt=none on load). It must reach its callback
+ * straight from /authorize, never through the auth server's sign-in form.
+ */
+async function expectWebSignsInSilently(page: Page): Promise<void> {
+  const forms: string[] = [];
+  const onNav = (frame: { url(): string }) => {
+    const u = new URL(frame.url());
+    if (u.origin === target().auth && u.pathname.startsWith('/password/')) forms.push(frame.url());
+  };
+  page.on('framenavigated', onNav);
+  const callback = page.waitForResponse((r) => r.url().startsWith(`${target().web}/api/callback`), { timeout: 30000 });
+  await page.goto(`${target().web}/en`);
+  await callback;
+  expect(await webSignedIn(page)).toBe(true);
+  page.off('framenavigated', onNav);
+  expect(forms, 'videos asked for credentials despite the shared sign-in').toEqual([]);
 }
 
 /** The web app's own Sign In (menu → Sign In), whatever happens next. */
@@ -131,10 +140,7 @@ test.describe('Release: single sign-out', () => {
     await expect(page).toHaveURL(`${target().adminWeb}/access-denied`, { timeout: 30000 });
 
     // The shared sign-in also signs the videos site in, without a form
-    const callback = page.waitForResponse((r) => r.url().startsWith(`${target().web}/api/callback`), { timeout: 30000 });
-    await clickWebSignIn(page);
-    await callback;
-    expect(await webSignedIn(page)).toBe(true);
+    await expectWebSignsInSilently(page);
 
     await page.goto(`${target().adminWeb}/access-denied`);
     await signOutThroughAuthServer(page, `${target().adminWeb}/`, () =>

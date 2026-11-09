@@ -6,6 +6,7 @@
 import { test, expect } from '@playwright/test';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 import { completeRegistration, expectNoErrorHop, recordNavigations } from './web-session';
+import { openProfileSignIn } from './profile-app';
 
 test.describe('Release: profile app sign-up and sign-in', () => {
   test('register, then sign in again from a fresh session', async ({ page, context }) => {
@@ -13,17 +14,13 @@ test.describe('Release: profile app sign-up and sign-in', () => {
     const navigations = recordNavigations(page);
     const loggedIn = page.locator('#loggedInView');
 
-    await page.goto(target().profile);
-    await page.locator('#loggedOutView button:has-text("Sign In")').click();
-    await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
+    await openProfileSignIn(page);
     await completeRegistration(page, email);
     await expect(loggedIn).toBeVisible({ timeout: 30000 });
     expect(new URL(page.url()).origin).toBe(target().profile);
 
     await context.clearCookies();
-    await page.goto(target().profile);
-    await page.locator('#loggedOutView button:has-text("Sign In")').click();
-    await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
+    await openProfileSignIn(page);
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', TEST_PASSWORD);
     await page.click('button[data-component="button"]');

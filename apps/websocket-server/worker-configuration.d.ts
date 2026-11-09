@@ -8,6 +8,8 @@ interface SecretStoreSecret {
 interface Env {
 	WEBSOCKET_DO: DurableObjectNamespace;
 	PRESENCE_KV: KVNamespace;
+	// Video JSON objects; the view counter flushes counts into them (view-counter.ts)
+	VIDEOS?: R2Bucket;
 	TOKEN_REVOCATIONS?: KVNamespace;
 
 	// Auth environment variables (from secrets/environment)

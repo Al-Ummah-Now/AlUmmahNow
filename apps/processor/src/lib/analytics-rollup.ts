@@ -1,28 +1,28 @@
 /**
- * Daily view / watch-time rollups.
+ * Daily view / watch-time rollups (docs/architecture/SCALABILITY-AUDIT.md, PR-1).
  *
- * Every tracked view (MessageType.VideoView sent by POST /api/videos/:id/view,
- * which is the only producer that also increments the video's `views` counter)
- * is folded into monthly documents in MESSAGES_BUCKET:
+ * Every tracked view (MessageType.VideoView sent by POST /api/videos/:id/view)
+ * and every watch-time report (MessageType.VideoWatchTime) becomes increments
+ * of the D1 daily counters (analytics-counters.ts, table analytics_daily), per
+ * video and per channel:
  *
- *   analytics/rollups/video/<videoId>/<YYYY-MM>.json
- *   analytics/rollups/channel/<channelId>/<YYYY-MM>.json
+ *   views +1, watch_time +seconds, source[watch|embed] +1, embed_origin[<origin>] +1
  *
- * Each document has the shape { days: { "YYYY-MM-DD": { views, watchTime } } }
- * (watchTime in seconds). api-videos reads these documents to build owner-scoped
- * analytics time series. Monthly documents keep reads to one or two objects per
- * entity for typical (<= 60 day) ranges.
+ * The queue handler collects the increments of a whole batch in one
+ * CounterBatch and writes them in one D1 transaction of atomic upserts.
+ * Nothing here reads before writing, so concurrent consumers in any number of
+ * isolates never lose an update.
  *
- * Rollups are read-modify-write updates. A queue batch is processed in parallel
- * (index.ts), and a view and the watch-time reports of one watch usually share a
- * batch, so updates of one document are chained per key within the isolate;
- * without that, both read the same document and the last write dropped the
- * other's increment. Two isolates updating the same document at the same instant
- * can still lose an increment. The lifetime `views` counter on the video object
- * remains the source of truth for totals.
+ * Before this, the processor read-modify-wrote monthly documents in
+ * MESSAGES_BUCKET (analytics/rollups/{video,channel}/<id>/<YYYY-MM>.json),
+ * serialised only inside one isolate. importLegacyRollups() moves those
+ * documents into D1, exactly once each, and readers add whatever has not been
+ * imported yet (api-videos lib/analytics.ts loadRollups).
  */
 
-import type { R2Bucket } from '../types';
+import type { D1Database, R2Bucket } from '../types';
+import { CounterBatch, bulkUpsertStatements, type CounterIncrement, type EntityType } from './analytics-counters';
+
 
 export const ROLLUP_PREFIX = 'analytics/rollups';
 
@@ -44,14 +44,7 @@ export interface ViewDimensions {
   embedOrigin?: string | null;
 }
 
-/** Pure: add one to a bounded counter map. */
-export function incrementBounded(map: Record<string, number> | undefined, key: string, maxKeys: number): Record<string, number> {
-  const next = { ...(map || {}) };
-  const target = key in next || Object.keys(next).filter((k) => k !== OTHER_ORIGIN).length < maxKeys ? key : OTHER_ORIGIN;
-  next[target] = (next[target] || 0) + 1;
-  return next;
-}
-
+/** Legacy monthly document in R2 (read only by the import). */
 export interface MonthlyRollup {
   entityType: 'video' | 'channel';
   entityId: string;
@@ -70,106 +63,8 @@ export function toUtcDay(timestamp: number | string | undefined): string {
   return valid.toISOString().slice(0, 10);
 }
 
-/**
- * Pure: add one view (and its watch time) to a monthly rollup document.
- */
-export function applyView(
-  doc: MonthlyRollup | null,
-  entityType: 'video' | 'channel',
-  entityId: string,
-  day: string,
-  watchTimeSeconds: number,
-  dimensions: ViewDimensions = {}
-): MonthlyRollup {
-  const month = day.slice(0, 7);
-  const next: MonthlyRollup = doc && doc.month === month
-    ? { ...doc, days: { ...doc.days } }
-    : { entityType, entityId, month, days: {} };
-  const current = next.days[day] || { views: 0, watchTime: 0 };
-  const watchTime = Number.isFinite(watchTimeSeconds) && watchTimeSeconds > 0 ? watchTimeSeconds : 0;
-  const entry: DailyRollupEntry = {
-    ...current,
-    views: current.views + 1,
-    watchTime: Math.round((current.watchTime + watchTime) * 100) / 100,
-  };
-  if (dimensions.source) {
-    entry.sources = incrementBounded(current.sources, dimensions.source, 10);
-    if (dimensions.source === 'embed') {
-      entry.embedOrigins = incrementBounded(current.embedOrigins, dimensions.embedOrigin || 'unknown', MAX_EMBED_ORIGINS);
-    }
-  }
-  next.days[day] = entry;
-  next.updatedAt = new Date().toISOString();
-  return next;
-}
-
-/**
- * Pure: add played seconds (#235 watch-time reports) to a monthly rollup
- * document without counting a view.
- */
-export function applyWatchTime(
-  doc: MonthlyRollup | null,
-  entityType: 'video' | 'channel',
-  entityId: string,
-  day: string,
-  seconds: number
-): MonthlyRollup {
-  const month = day.slice(0, 7);
-  const next: MonthlyRollup = doc && doc.month === month
-    ? { ...doc, days: { ...doc.days } }
-    : { entityType, entityId, month, days: {} };
-  const current = next.days[day] || { views: 0, watchTime: 0 };
-  const add = Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, MAX_WATCH_TIME_DELTA_SECONDS) : 0;
-  // Keep the day's other fields (views, sources, embedOrigins)
-  next.days[day] = { ...current, watchTime: Math.round((current.watchTime + add) * 100) / 100 };
-  next.updatedAt = new Date().toISOString();
-  return next;
-}
-
 /** Same cap as api-videos (videoWatchTime.ts): one report never adds more. */
 export const MAX_WATCH_TIME_DELTA_SECONDS = 60;
-
-type Apply = (doc: MonthlyRollup | null, entityType: 'video' | 'channel', entityId: string, day: string, amount: number) => MonthlyRollup;
-
-/** Tail of the pending updates per rollup key in this isolate. */
-const pendingByKey = new Map<string, Promise<void>>();
-
-function updateRollup(
-  bucket: R2Bucket,
-  entityType: 'video' | 'channel',
-  entityId: string,
-  day: string,
-  watchTime: number,
-  apply: Apply = applyView
-): Promise<void> {
-  const key = rollupKey(entityType, entityId, day.slice(0, 7));
-  const previous = pendingByKey.get(key) ?? Promise.resolve();
-  const run = previous
-    .catch(() => undefined)
-    .then(() => writeRollup(bucket, key, entityType, entityId, day, watchTime, apply));
-  pendingByKey.set(key, run);
-  void run.catch(() => undefined).then(() => {
-    if (pendingByKey.get(key) === run) pendingByKey.delete(key);
-  });
-  return run;
-}
-
-async function writeRollup(
-  bucket: R2Bucket,
-  key: string,
-  entityType: 'video' | 'channel',
-  entityId: string,
-  day: string,
-  watchTime: number,
-  apply: Apply
-): Promise<void> {
-  const existing = await bucket.get(key);
-  const doc = existing ? await existing.json<MonthlyRollup>() : null;
-  const updated = apply(doc, entityType, entityId, day, watchTime);
-  await bucket.put(key, JSON.stringify(updated), {
-    httpMetadata: { contentType: 'application/json' },
-  });
-}
 
 export interface ViewEventPayload {
   videoId?: unknown;
@@ -204,31 +99,47 @@ export function isTrackedView(payload: ViewEventPayload): boolean {
   return payload.trackedView === true || Object.prototype.hasOwnProperty.call(payload, 'videoChannelId');
 }
 
+/** Bound on distinct playback surfaces per day (only "watch" and "embed" exist). */
+export const MAX_SOURCES = 10;
+
+function entities(videoId: string, channelId: string): Array<[EntityType, string]> {
+  return channelId ? [['video', videoId], ['channel', channelId]] : [['video', videoId]];
+}
+
 /**
- * Record a tracked view: always the video rollup, plus the channel rollup when
- * the video belongs to a channel. Legacy (imported) videos have channelId null;
- * they used to be skipped entirely, so their creators' series stayed empty.
- * Returns false (and writes nothing) for events that are not tracked views.
+ * Pure: the counter increments of one tracked view (video, plus its channel
+ * when it has one; legacy imported videos have channelId null). Null for
+ * events that are not tracked views.
  */
-export async function recordViewRollup(
-  bucket: R2Bucket | undefined,
-  payload: ViewEventPayload,
-  messageTimestamp: number | string
-): Promise<boolean> {
-  if (!bucket || typeof bucket.get !== 'function' || typeof bucket.put !== 'function') return false;
-  if (!isTrackedView(payload)) return false;
+export function viewIncrements(payload: ViewEventPayload, messageTimestamp: number | string): CounterIncrement[] | null {
+  if (!isTrackedView(payload)) return null;
   const videoId = payload.videoId as string;
   const channelId = typeof payload.videoChannelId === 'string' ? payload.videoChannelId : '';
-
-  const watchTime = typeof payload.watchTime === 'number' ? payload.watchTime : Number(payload.watchTime) || 0;
+  const rawWatch = typeof payload.watchTime === 'number' ? payload.watchTime : Number(payload.watchTime) || 0;
+  const watchTime = Number.isFinite(rawWatch) && rawWatch > 0 ? rawWatch : 0;
   const day = toUtcDay(typeof payload.timestamp === 'string' ? payload.timestamp : messageTimestamp);
-
   const dimensions = viewDimensions(payload);
-  const withDimensions: Apply = (doc, entityType, entityId, d, amount) => applyView(doc, entityType, entityId, d, amount, dimensions);
-  await Promise.all([
-    updateRollup(bucket, 'video', videoId, day, watchTime, withDimensions),
-    channelId ? updateRollup(bucket, 'channel', channelId, day, watchTime, withDimensions) : Promise.resolve(),
-  ]);
+
+  const out: CounterIncrement[] = [];
+  for (const [entityType, entityId] of entities(videoId, channelId)) {
+    const base = { entityType, entityId, day };
+    out.push({ ...base, metric: 'views', value: 1 });
+    if (watchTime > 0) out.push({ ...base, metric: 'watch_time', value: watchTime });
+    if (dimensions.source) {
+      out.push({ ...base, metric: 'source', dim: dimensions.source, value: 1, maxDims: MAX_SOURCES });
+      if (dimensions.source === 'embed') {
+        out.push({ ...base, metric: 'embed_origin', dim: dimensions.embedOrigin || 'unknown', value: 1, maxDims: MAX_EMBED_ORIGINS });
+      }
+    }
+  }
+  return out;
+}
+
+/** Queues a tracked view in `counters`. False (nothing queued) for other events. */
+export function recordViewRollup(counters: CounterBatch, payload: ViewEventPayload, messageTimestamp: number | string): boolean {
+  const increments = viewIncrements(payload, messageTimestamp);
+  if (!increments) return false;
+  for (const inc of increments) counters.add(inc);
   return true;
 }
 
@@ -239,26 +150,121 @@ export interface WatchTimeEventPayload {
   timestamp?: unknown;
 }
 
-/**
- * Record a watch-time report (#235): the seconds go to the video rollup, and to
- * the channel rollup when the video has a channel. Views are not touched.
- * Returns false (and writes nothing) for an invalid payload.
- */
-export async function recordWatchTimeRollup(
-  bucket: R2Bucket | undefined,
-  payload: WatchTimeEventPayload,
-  messageTimestamp: number | string
-): Promise<boolean> {
-  if (!bucket || typeof bucket.get !== 'function' || typeof bucket.put !== 'function') return false;
-  if (!payload || typeof payload.videoId !== 'string' || !payload.videoId) return false;
+/** Pure: the increments of one watch-time report (#235); views are not touched. Null when invalid. */
+export function watchTimeIncrements(payload: WatchTimeEventPayload, messageTimestamp: number | string): CounterIncrement[] | null {
+  if (!payload || typeof payload.videoId !== 'string' || !payload.videoId) return null;
   const seconds = typeof payload.seconds === 'number' ? payload.seconds : Number(payload.seconds);
-  if (!Number.isFinite(seconds) || seconds <= 0) return false;
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
   const channelId = typeof payload.videoChannelId === 'string' ? payload.videoChannelId : '';
   const day = toUtcDay(typeof payload.timestamp === 'string' ? payload.timestamp : messageTimestamp);
+  const value = Math.min(seconds, MAX_WATCH_TIME_DELTA_SECONDS);
+  return entities(payload.videoId, channelId).map(([entityType, entityId]) => ({ entityType, entityId, day, metric: 'watch_time', value }));
+}
 
-  await Promise.all([
-    updateRollup(bucket, 'video', payload.videoId, day, seconds, applyWatchTime),
-    channelId ? updateRollup(bucket, 'channel', channelId, day, seconds, applyWatchTime) : Promise.resolve(),
-  ]);
+/** Queues a watch-time report in `counters`. False (nothing queued) for an invalid payload. */
+export function recordWatchTimeRollup(counters: CounterBatch, payload: WatchTimeEventPayload, messageTimestamp: number | string): boolean {
+  const increments = watchTimeIncrements(payload, messageTimestamp);
+  if (!increments) return false;
+  for (const inc of increments) counters.add(inc);
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Legacy R2 documents → D1 (one-time move, run by the hourly cron)
+// ---------------------------------------------------------------------------
+
+/** A document is imported only once nothing writes it any more (older processor versions during a rollout). */
+export const IMPORT_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+/** Documents per run: list + get + 1 D1 batch + delete each stays far below the subrequest limit. */
+export const IMPORT_BUDGET = 200;
+
+const LEGACY_KEY = /^analytics\/rollups\/(video|channel)\/(.+)\/(\d{4}-\d{2})\.json$/;
+
+export function parseRollupKey(key: string): { entityType: EntityType; entityId: string; month: string } | null {
+  const m = LEGACY_KEY.exec(key);
+  return m && m[2] && m[3] ? { entityType: m[1] as EntityType, entityId: m[2], month: m[3] } : null;
+}
+
+/** Pure: the counter rows a legacy monthly document holds. */
+export function docIncrements(doc: MonthlyRollup, entityType: EntityType, entityId: string, month: string): CounterIncrement[] {
+  const out: CounterIncrement[] = [];
+  for (const [day, entry] of Object.entries(doc?.days || {})) {
+    if (!day.startsWith(month) || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !entry) continue;
+    const base = { entityType, entityId, day };
+    if (entry.views > 0) out.push({ ...base, metric: 'views', value: entry.views });
+    if (entry.watchTime > 0) out.push({ ...base, metric: 'watch_time', value: entry.watchTime });
+    for (const [dim, n] of Object.entries(entry.sources || {})) if (n > 0) out.push({ ...base, metric: 'source', dim, value: n });
+    for (const [dim, n] of Object.entries(entry.embedOrigins || {})) if (n > 0) out.push({ ...base, metric: 'embed_origin', dim, value: n });
+  }
+  return out;
+}
+
+export interface ImportResult {
+  imported: number;
+  /** Already imported by an earlier (or concurrent) run: just deleted */
+  alreadyImported: number;
+  /** Still written to recently: left for a later run */
+  tooRecent: number;
+  failed: number;
+  /** More documents than the budget allowed */
+  more: boolean;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return /UNIQUE constraint failed|SQLITE_CONSTRAINT/i.test(String((error as Error)?.message ?? error));
+}
+
+/**
+ * Moves legacy rollup documents into D1. Each document's counts and its
+ * marker row commit in one transaction, so a document is added at most once
+ * even if two runs overlap; the document is deleted afterwards (readers skip
+ * marked documents in between).
+ */
+export async function importLegacyRollups(
+  bucket: R2Bucket,
+  db: D1Database,
+  opts: { now?: number; budget?: number; minAgeMs?: number } = {},
+): Promise<ImportResult> {
+  const now = opts.now ?? Date.now();
+  const budget = opts.budget ?? IMPORT_BUDGET;
+  const minAgeMs = opts.minAgeMs ?? IMPORT_MIN_AGE_MS;
+  const result: ImportResult = { imported: 0, alreadyImported: 0, tooRecent: 0, failed: 0, more: false };
+
+  let cursor: string | undefined;
+  let seen = 0;
+  do {
+    const page = await bucket.list({ prefix: `${ROLLUP_PREFIX}/`, limit: Math.min(100, budget - seen), ...(cursor ? { cursor } : {}) });
+    for (const object of page.objects) {
+      seen++;
+      const parsed = parseRollupKey(object.key);
+      if (!parsed) continue;
+      const uploaded = object.uploaded ? new Date(object.uploaded).getTime() : 0;
+      if (now - uploaded < minAgeMs) {
+        result.tooRecent++;
+        continue;
+      }
+      try {
+        const body = await bucket.get(object.key);
+        if (!body) continue;
+        const doc = await body.json<MonthlyRollup>();
+        const rows = docIncrements(doc, parsed.entityType, parsed.entityId, parsed.month);
+        try {
+          await db.batch([
+            db.prepare('INSERT INTO analytics_rollup_imports (r2_key, imported_at) VALUES (?, ?)').bind(object.key, new Date(now).toISOString()),
+            ...bulkUpsertStatements(db, rows),
+          ]);
+          result.imported++;
+        } catch (error) {
+          if (!isUniqueViolation(error)) throw error;
+          result.alreadyImported++;
+        }
+        await bucket.delete?.(object.key);
+      } catch {
+        result.failed++;
+      }
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor && seen < budget);
+  result.more = !!cursor;
+  return result;
 }
