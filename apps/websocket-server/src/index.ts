@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { WebSocketDurableObject } from './websocket';
+import { WebSocketDurableObject, SOCKETS_OBJECT_NAME } from './websocket';
 import { createLogger } from '@al-ummah/logger';
 
 // Create logger instance
@@ -47,7 +47,7 @@ app.get('/ws', async (c) => {
     logger.info('WebSocket connection request received');
 
     // Get Durable Object ID (use a single instance for now, can be sharded later)
-    const id = c.env.WEBSOCKET_DO.idFromName('websocket-instance');
+    const id = c.env.WEBSOCKET_DO.idFromName(SOCKETS_OBJECT_NAME);
     const stub = c.env.WEBSOCKET_DO.get(id);
 
     // Forward the request to the Durable Object
@@ -99,7 +99,7 @@ app.post('/broadcast', async (c) => {
     logger.info(`Broadcasting message to channel: ${channel}`);
 
     // Get Durable Object
-    const id = c.env.WEBSOCKET_DO.idFromName('websocket-instance');
+    const id = c.env.WEBSOCKET_DO.idFromName(SOCKETS_OBJECT_NAME);
     const stub = c.env.WEBSOCKET_DO.get(id);
 
     // Call broadcast method
@@ -134,7 +134,7 @@ app.get('/stats', async (c) => {
     logger.debug('Stats requested');
 
     // Get Durable Object
-    const id = c.env.WEBSOCKET_DO.idFromName('websocket-instance');
+    const id = c.env.WEBSOCKET_DO.idFromName(SOCKETS_OBJECT_NAME);
     const stub = c.env.WEBSOCKET_DO.get(id);
 
     // Request stats

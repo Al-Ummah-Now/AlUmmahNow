@@ -13,6 +13,12 @@
     "head_sampling_rate": 0.1,
     "logs": { "enabled": true, "head_sampling_rate": 0.1 }
   },
+  // Per-video view counter (realtime worker, apps/websocket-server/src/view-counter.ts). Cross-script binding: the class lives in the comms worker of the same environment.
+  "durable_objects": {
+    "bindings": [
+      { "name": "VIEW_COUNTER", "class_name": "WebSocketDurableObject", "script_name": "al-ummah-now-comms-qa" }
+    ]
+  },
   "r2_buckets": [
     {
       "binding": "videos",

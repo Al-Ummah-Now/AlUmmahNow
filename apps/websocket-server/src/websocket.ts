@@ -9,6 +9,10 @@ import { ChannelManager } from './channels';
 import { PresenceManager } from './presence';
 import { ClientMessageSchema, ServerMessage, RateLimitInfo } from './messages';
 import { logger } from './lib/logger';
+import { ViewCounter, type CounterStorage, type VideoBucket } from './view-counter';
+
+/** Name of the one object that holds the WebSocket connections (index.ts routes /ws and /broadcast to it). */
+export const SOCKETS_OBJECT_NAME = 'websocket-instance';
 
 interface WebSocketConnection {
   webSocket: WebSocket;
@@ -26,6 +30,7 @@ export class WebSocketDurableObject extends DurableObject {
   private channelManager: ChannelManager = new ChannelManager();
   private presenceManager: PresenceManager;
   private rateLimits: Map<string, RateLimitInfo> = new Map();
+  private viewCounter?: ViewCounter;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -37,6 +42,14 @@ export class WebSocketDurableObject extends DurableObject {
    */
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    // View counter role (objects named views:<videoId>:<shard>, see view-counter.ts).
+    // It lives in this class only because a new Durable Object class needs a
+    // migration, which the release's `wrangler versions upload` cannot apply.
+    // Reachable only through the DO binding: index.ts never forwards this path.
+    if (url.pathname === '/views/increment' && request.method === 'POST') {
+      return await this.handleViewIncrement(request);
+    }
 
     // Handle internal broadcast endpoint
     if (url.pathname === '/broadcast' && request.method === 'POST') {
@@ -544,6 +557,56 @@ export class WebSocketDurableObject extends DurableObject {
   /**
    * Handle internal broadcast request
    */
+  /** Only view-counter objects ever set an alarm. */
+  async alarm(): Promise<void> {
+    await this.getViewCounter().alarm();
+  }
+
+  private getViewCounter(): ViewCounter {
+    if (!this.viewCounter) {
+      const env = this.env as Env;
+      this.viewCounter = new ViewCounter(
+        this.ctx.storage as unknown as CounterStorage,
+        env.VIDEOS as unknown as VideoBucket | undefined,
+        { logger, onFlushed: (videoId, views) => this.pushViewCount(videoId, views) },
+      );
+    }
+    return this.viewCounter;
+  }
+
+  private async handleViewIncrement(request: Request): Promise<Response> {
+    let body: { videoId?: unknown; shard?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    const videoId = typeof body.videoId === 'string' ? body.videoId : '';
+    const shard = typeof body.shard === 'number' || typeof body.shard === 'string' ? String(body.shard) : '';
+    if (!videoId || videoId.length > 200 || !/^\d{1,3}$/.test(shard)) {
+      return Response.json({ error: 'videoId and shard are required' }, { status: 400 });
+    }
+    try {
+      return Response.json(await this.getViewCounter().increment(videoId, shard));
+    } catch (error) {
+      logger.error('View counter increment failed', { videoId, shard, error: String(error) });
+      return Response.json({ error: 'View not counted' }, { status: 500 });
+    }
+  }
+
+  /** Pushes a flushed count to everyone watching the video (via the sockets object). */
+  private async pushViewCount(videoId: string, viewCount: number): Promise<void> {
+    const env = this.env as Env;
+    const channel = `video:${videoId}`;
+    const message = { type: 'view_count_updated', channel, timestamp: Date.now(), data: { type: 'view_count_updated', videoId, viewCount } };
+    const stub = env.WEBSOCKET_DO.get(env.WEBSOCKET_DO.idFromName(SOCKETS_OBJECT_NAME));
+    await stub.fetch(new Request('http://internal/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, message }),
+    }));
+  }
+
   private async handleBroadcastRequest(request: Request): Promise<Response> {
     try {
       const { channel, message } = await request.json() as { channel: string; message: ServerMessage };

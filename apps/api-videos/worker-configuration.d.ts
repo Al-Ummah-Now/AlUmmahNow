@@ -6,6 +6,7 @@ interface __BaseEnv_Env {
 	TUS_SESSIONS: KVNamespace;
 	TOKEN_REVOCATIONS?: KVNamespace;
 	videos: R2Bucket;
+	VIEW_COUNTER?: DurableObjectNamespace;
 	profiles: R2Bucket;
 	channels: R2Bucket;
 	playlists: R2Bucket;
@@ -53,6 +54,7 @@ declare namespace Cloudflare {
 		TUS_SESSIONS: KVNamespace;
 		TOKEN_REVOCATIONS?: KVNamespace;
 		videos: R2Bucket;
+		VIEW_COUNTER?: DurableObjectNamespace;
 		profiles: R2Bucket;
 		channels: R2Bucket;
 		playlists: R2Bucket;
