@@ -7,11 +7,10 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Edit, ExternalLink, ListVideo, Lock, Plus, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
-import { resolveUrl } from '@/lib/utility';
+import { PlaylistCover } from '@/components/PlaylistCover';
 import {
   createPlaylist,
   deletePlaylist,
@@ -267,10 +266,8 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
             const count = playlist.videos?.length ?? playlist.videosCount ?? 0;
             return (
               <li key={playlist.id} className="flex items-center gap-4 p-4">
-                <div className="relative w-28 aspect-video flex-shrink-0 rounded overflow-hidden bg-gray-200 dark:bg-gray-700">
-                  {playlist.thumbnailUrl && (
-                    <Image src={resolveUrl(playlist.thumbnailUrl)} alt={title} fill className="object-cover" sizes="112px" />
-                  )}
+                <div className="w-28 flex-shrink-0 rounded overflow-hidden">
+                  <PlaylistCover playlist={playlist} alt={title} sizes="112px" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium text-gray-900 dark:text-white truncate">{title}</h3>

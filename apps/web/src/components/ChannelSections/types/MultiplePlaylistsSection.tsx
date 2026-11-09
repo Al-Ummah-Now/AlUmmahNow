@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { Playlist } from '@al-ummah/shared-types';
 import Link from 'next/link';
-import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
 import { useLanguage } from '@/hooks/useLanguage';
+import { PlaylistCover } from '@/components/PlaylistCover';
 import { logger } from '@/lib/logger-client';
 import { getPlaylistById } from '@/lib/api/playlists';
 
@@ -77,19 +77,11 @@ export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylis
                 className="flex-shrink-0 w-64 sm:w-72 md:w-80 group"
               >
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">
-                  <div className="relative aspect-video bg-gray-200 dark:bg-gray-700">
-                    {playlist.thumbnailUrl && (
-                      <Image
-                        src={playlist.thumbnailUrl}
-                        alt={playlist.name}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    )}
-                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
+                  <PlaylistCover playlist={playlist} alt={playlist.name}>
+                    <div className="absolute bottom-2 end-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
                       {playlist.videosCount || 0} {t.playlist.videosLabel}
                     </div>
-                  </div>
+                  </PlaylistCover>
                   <div className="p-3">
                     <h3 className="font-semibold line-clamp-2 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
                       {playlist.name}

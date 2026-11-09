@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import VideoThumbnail, { THUMBNAIL_16_9 } from '@/components/VideoThumbnail';
+import { PlaylistCover } from '@/components/PlaylistCover';
 import { Playlist } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getPlaylistDisplayName, getPlaylistVideoCount } from '@/lib/playlists/playlist-utils';
@@ -21,12 +21,12 @@ export function PlaylistCard(playlist: Playlist) {
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">
         {/* Thumbnail */}
-        <VideoThumbnail src={playlist.thumbnailUrl} alt={name} style={THUMBNAIL_16_9}>
+        <PlaylistCover playlist={playlist} alt={name}>
           {/* Video count badge */}
           <div className={`absolute bottom-2 ${isRTL ? 'left-2' : 'right-2'} bg-black/80 text-white text-xs px-2 py-1 rounded`}>
             {t.playlist.videoCount.replace('{count}', String(count))}
           </div>
-        </VideoThumbnail>
+        </PlaylistCover>
 
         {/* Playlist details */}
         <div className="p-4">

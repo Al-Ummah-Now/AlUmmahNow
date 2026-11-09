@@ -117,6 +117,7 @@ export interface Playlist {
     name: string; // Required for compatibility with shared-types
     description?: string;
     thumbnailUrl?: string;
+    cover?: { videoId: string; thumbnailUrl: string }; // Derived by the API when thumbnailUrl is not set
     userId: string; // Made required to match API spec
     channelId: string; // Made required to match API spec
     channelName?: string; // Added from API spec

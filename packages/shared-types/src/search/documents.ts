@@ -65,6 +65,10 @@ export interface SearchPlaylistPayload {
   name: string;
   description?: string;
   thumbnailUrl?: string;
+  /** Set on search responses when there is no custom thumbnailUrl */
+  cover?: { videoId: string; thumbnailUrl: string };
+  /** Index-only: first video ids, used to derive `cover`; removed from API responses */
+  coverVideoIds?: string[];
   videosCount: number;
   channelId?: string;
   userId?: string;
@@ -304,6 +308,9 @@ export function projectChannel(raw: unknown): SearchRow<'channel'> | null {
   };
 }
 
+/** Matches COVER_CANDIDATES in api-videos lib/playlistCovers.ts */
+const COVER_VIDEO_IDS = 5;
+
 export function projectPlaylist(raw: unknown): SearchRow<'playlist'> | null {
   const obj = asRecord(raw);
   const id = obj && str(obj.id);
@@ -338,6 +345,9 @@ export function projectPlaylist(raw: unknown): SearchRow<'playlist'> | null {
       name,
       description: truncate(description, DESCRIPTION_LIMIT),
       thumbnailUrl: str(obj.thumbnailUrl),
+      coverVideoIds: Array.isArray(obj.videos)
+        ? obj.videos.filter((video): video is string => typeof video === 'string').slice(0, COVER_VIDEO_IDS)
+        : undefined,
       videosCount,
       channelId: str(obj.channelId),
       userId: str(obj.userId),

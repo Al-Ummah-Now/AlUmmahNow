@@ -7,13 +7,14 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { logger } from '@/lib/logger-client';
-import { removeUnwantedChars, resolveUrl } from '@/lib/utility';
+import { removeUnwantedChars } from '@/lib/utility';
+import { PlaylistCover } from '@/components/PlaylistCover';
+import VideoThumbnail, { THUMBNAIL_16_9 } from '@/components/VideoThumbnail';
 import {
   getPlaylistById,
   removeVideoFromPlaylist,
@@ -135,7 +136,6 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
 
   const title = playlist.name || playlist.title;
   const playAllHref = getPlayAllHref(lang, videos);
-  const coverUrl = playlist.thumbnailUrl || videos[0]?.thumbnailUrl;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8" dir={isRTL ? 'rtl' : 'ltr'}>
@@ -143,11 +143,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
         {/* Playlist info */}
         <aside className="md:w-80 flex-shrink-0">
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden md:sticky md:top-20">
-            <div className="relative aspect-video bg-gray-200 dark:bg-gray-700">
-              {coverUrl && (
-                <Image src={resolveUrl(coverUrl)} alt={title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 320px" />
-              )}
-            </div>
+            <PlaylistCover playlist={playlist} videos={videos} alt={title} sizes="(max-width: 768px) 100vw, 320px" />
             <div className="p-4 space-y-3">
               <h1 className="text-xl font-bold text-gray-900 dark:text-white break-words">{title}</h1>
               {playlist.channelName && (
@@ -208,15 +204,14 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                   <li key={video.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/60">
                     <span className="w-6 text-center text-sm text-gray-500 flex-shrink-0">{index + 1}</span>
                     <Link href={getWatchHref(lang, video.id)} className="flex flex-1 min-w-0 items-center gap-3 group">
-                      <div className="relative w-32 sm:w-40 aspect-video flex-shrink-0 rounded overflow-hidden bg-gray-200 dark:bg-gray-700">
-                        {video.thumbnailUrl && (
-                          <Image src={resolveUrl(video.thumbnailUrl)} alt={videoTitle} fill className="object-cover" sizes="160px" />
-                        )}
-                        {duration && (
-                          <span className={`absolute bottom-1 ${isRTL ? 'left-1' : 'right-1'} bg-black/80 text-white text-xs px-1 rounded`}>
-                            {duration}
-                          </span>
-                        )}
+                      <div className="w-32 sm:w-40 flex-shrink-0 rounded overflow-hidden">
+                        <VideoThumbnail src={video.thumbnailUrl} alt={videoTitle} sizes="160px" style={THUMBNAIL_16_9}>
+                          {duration && (
+                            <span className={`absolute bottom-1 ${isRTL ? 'left-1' : 'right-1'} bg-black/80 text-white text-xs px-1 rounded`}>
+                              {duration}
+                            </span>
+                          )}
+                        </VideoThumbnail>
                       </div>
                       <div className="min-w-0">
                         <h2 className="text-sm sm:text-base font-medium text-gray-900 dark:text-white line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400">

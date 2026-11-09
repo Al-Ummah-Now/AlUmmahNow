@@ -4,6 +4,7 @@ import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { toPlaylistResponse, canViewPlaylist } from "../../lib/playlists";
+import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { isSystemPlaylist } from "../../lib/library";
 
@@ -93,7 +94,7 @@ export class PlaylistsList extends OptionalAuthRoute {
             return {
                 cursor: "",
                 limit,
-                data: matches.slice(0, limit).map(toPlaylistResponse),
+                data: await withPlaylistCovers(c.env, matches.slice(0, limit).map(toPlaylistResponse), userId),
             };
         }
 
@@ -101,10 +102,10 @@ export class PlaylistsList extends OptionalAuthRoute {
         // System playlists (Watch later) are listed in the Library, not with user playlists
         const visible = (playlists.items || []).filter((playlist) => canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist));
 
-        const response: PaginationResponse<ReturnType<typeof toPlaylistResponse>> = {
+        const response = {
             cursor: playlists.cursor || "",
             limit,
-            data: visible.map(toPlaylistResponse),
+            data: await withPlaylistCovers(c.env, visible.map(toPlaylistResponse), userId),
         };
 
         return response;
