@@ -37,6 +37,25 @@ export function ownershipInvalidatedKey(kind: OwnershipKind): string {
   return `ownership:invalidated:${kind}`;
 }
 
+export type StudioVideoStatus = 'published' | 'scheduled' | 'drafts' | 'processing' | 'failed';
+
+export const STUDIO_VIDEO_STATUSES: readonly StudioVideoStatus[] = ['published', 'scheduled', 'drafts', 'processing', 'failed'];
+
+/** The one status a video has in Studio. The first match wins. */
+export function studioVideoStatus(video: {
+  uploadStatus?: unknown;
+  processingStatus?: unknown;
+  scheduledPublishStatus?: unknown;
+  isDraft?: unknown;
+}): StudioVideoStatus {
+  const { uploadStatus, processingStatus, scheduledPublishStatus, isDraft } = video;
+  if (uploadStatus === 'failed' || processingStatus === 'failed' || scheduledPublishStatus === 'failed') return 'failed';
+  if (uploadStatus === 'initiated' || uploadStatus === 'uploading' || uploadStatus === 'processing') return 'processing';
+  if (processingStatus === 'pending' || processingStatus === 'processing' || processingStatus === 'transcoding') return 'processing';
+  if (scheduledPublishStatus === 'scheduled' || scheduledPublishStatus === 'publishing') return 'scheduled';
+  return isDraft === true ? 'drafts' : 'published';
+}
+
 export interface OwnershipRow {
   kind: OwnershipKind;
   id: string;
@@ -49,6 +68,10 @@ export interface OwnershipRow {
   duration: number | null;
   scheduleStatus: string | null;
   uploadStatus: string | null;
+  studioStatus: StudioVideoStatus | null;
+  title: string | null;
+  category: string | null;
+  language: string | null;
   views: number;
   createdAt: number | null;
   updatedAt: number | null;
@@ -110,6 +133,10 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       duration: null,
       scheduleStatus: null,
       uploadStatus: null,
+      studioStatus: null,
+      title: null,
+      category: null,
+      language: null,
     };
   }
   return {
@@ -120,6 +147,10 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
     duration: finite(obj.duration),
     scheduleStatus: text(obj.scheduledPublishStatus),
     uploadStatus: text(obj.uploadStatus),
+    studioStatus: studioVideoStatus(obj),
+    title: text(obj.title),
+    category: text(obj.category),
+    language: text(obj.language),
   };
 }
 
@@ -129,17 +160,18 @@ function int(value: boolean): number {
 
 export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number): SearchStatement {
   return db.prepare(
-    `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, studio_status, title, category, language, views, created_at, updated_at, indexed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(kind, id) DO UPDATE SET
        owner_id = excluded.owner_id, channel_id = excluded.channel_id, is_public = excluded.is_public,
        is_hidden = excluded.is_hidden, is_deleted = excluded.is_deleted, is_live = excluded.is_live,
-       duration = excluded.duration, schedule_status = excluded.schedule_status, upload_status = excluded.upload_status,
+       duration = excluded.duration, schedule_status = excluded.schedule_status, upload_status = excluded.upload_status, studio_status = excluded.studio_status, title = excluded.title,
+       category = excluded.category, language = excluded.language,
        views = excluded.views, created_at = excluded.created_at, updated_at = excluded.updated_at,
        indexed_at = excluded.indexed_at`,
   ).bind(
     row.kind, row.id, row.ownerId, row.channelId, int(row.isPublic), int(row.isHidden), int(row.isDeleted),
-    int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now,
+    int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.studioStatus, row.title, row.category, row.language, row.views, row.createdAt, row.updatedAt, now,
   );
 }
 

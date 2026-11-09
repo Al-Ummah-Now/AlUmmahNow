@@ -647,6 +647,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # Fills columns added by a migration, once every new worker writes them. Fails the deploy if any row is left.
+      - name: Backfill and verify Studio columns (qa)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm release:content-columns --env qa
+          pnpm release:content-columns --env qa --check
+
       - name: Notify QA deployment success
         if: success()
         run: |
@@ -725,6 +734,15 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Fills columns added by a migration, once the new api-videos writes them. Fails the deploy if any row is left.
+      - name: Backfill and verify Studio columns (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm release:content-columns --env production
+          pnpm release:content-columns --env production --check
 
       - name: Deploy Processor to Production
         run: |

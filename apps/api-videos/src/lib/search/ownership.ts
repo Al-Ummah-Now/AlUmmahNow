@@ -25,6 +25,8 @@ import {
   ownershipInvalidatedKey,
   ownershipUpsertStatement,
   projectOwnership,
+  STUDIO_VIDEO_STATUSES,
+  StudioVideoStatus,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 
@@ -436,4 +438,100 @@ export async function ownershipStats(db: SearchDb): Promise<Record<OwnershipKind
     };
   }
   return stats;
+}
+
+// ---------------------------------------------------------------------------
+// Studio Videos tab
+// ---------------------------------------------------------------------------
+
+export interface ChannelContentQuery {
+  channelId: string;
+  status: StudioVideoStatus;
+  q?: string;
+  visibility?: 'all' | 'public' | 'private';
+  type?: 'all' | 'videos' | 'shorts';
+  duration?: 'all' | 'short' | 'medium' | 'long';
+  category?: string;
+  language?: string;
+  sort?: 'newest' | 'oldest' | 'views' | 'title';
+  limit: number;
+  offset: number;
+}
+
+const CONTENT_ORDER: Record<NonNullable<ChannelContentQuery['sort']>, string> = {
+  newest: 'COALESCE(created_at, 0) DESC, id',
+  oldest: 'COALESCE(created_at, 0) ASC, id',
+  views: 'views DESC, id',
+  title: 'lower(title) ASC, id',
+};
+
+/** Shorts are 60 seconds or less. Bands are under 4, 4 to 20, and over 20 minutes. */
+const SHORT_MAX_SECONDS = 60;
+const MEDIUM_MIN_SECONDS = 240;
+const LONG_MIN_SECONDS = 1200;
+
+/** Ids of one page of a channel's videos in a status, or null while the index isn't usable. */
+export function channelContentIds(env: OwnershipEnv, query: ChannelContentQuery): Promise<string[] | null> {
+  return whenComplete(env, 'video', async db => {
+    const where = [`kind = 'video'`, 'channel_id = ?', 'is_deleted = 0', 'studio_status = ?'];
+    const values: unknown[] = [query.channelId, query.status];
+    if (query.q) { where.push('instr(lower(title), ?) > 0'); values.push(query.q.toLowerCase()); }
+    if (query.visibility === 'public') where.push('is_public = 1');
+    if (query.visibility === 'private') where.push('is_public = 0');
+    if (query.type === 'shorts') { where.push('duration <= ?'); values.push(SHORT_MAX_SECONDS); }
+    if (query.type === 'videos') { where.push('(duration IS NULL OR duration > ?)'); values.push(SHORT_MAX_SECONDS); }
+    if (query.duration === 'short') { where.push('duration < ?'); values.push(MEDIUM_MIN_SECONDS); }
+    if (query.duration === 'medium') { where.push('duration >= ? AND duration <= ?'); values.push(MEDIUM_MIN_SECONDS, LONG_MIN_SECONDS); }
+    if (query.duration === 'long') { where.push('duration > ?'); values.push(LONG_MIN_SECONDS); }
+    if (query.category) { where.push('category = ?'); values.push(query.category); }
+    if (query.language) { where.push('language = ?'); values.push(query.language); }
+    const { results } = await db.prepare(
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${CONTENT_ORDER[query.sort ?? 'newest']} LIMIT ? OFFSET ?`,
+    ).bind(...values, query.limit, query.offset).all<{ id: string }>();
+    return (results ?? []).map(r => r.id);
+  });
+}
+
+/** Videos per status in a channel, zero for empty ones, or null while the index isn't usable. */
+export function channelContentCounts(env: OwnershipEnv, channelId: string): Promise<Record<StudioVideoStatus, number> | null> {
+  return whenComplete(env, 'video', async db => {
+    const { results } = await db.prepare(
+      `SELECT studio_status AS status, COUNT(*) AS total FROM ${OWNERSHIP_TABLE}
+       WHERE kind = 'video' AND channel_id = ? AND is_deleted = 0 GROUP BY studio_status`,
+    ).bind(channelId).all<{ status: StudioVideoStatus; total: number }>();
+    const counts = Object.fromEntries(STUDIO_VIDEO_STATUSES.map(status => [status, 0])) as Record<StudioVideoStatus, number>;
+    for (const row of results ?? []) if (row.status in counts) counts[row.status] = row.total;
+    return counts;
+  });
+}
+
+/** Rows one request may fill, within a Worker's subrequest limit. */
+const CONTENT_HEAL_LIMIT = 200;
+
+/**
+ * Fills a channel's rows that predate the Studio columns, so the Videos tab
+ * is right before the deploy backfill has reached them. Returns false if rows
+ * are left or the index can't be read.
+ */
+export async function healChannelContentRows(
+  env: OwnershipEnv,
+  channelId: string,
+  load: (id: string) => Promise<unknown | null>,
+): Promise<boolean> {
+  const db = dbOf(env);
+  if (!db) return false;
+  try {
+    const select = `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND channel_id = ? AND studio_status IS NULL LIMIT ?`;
+    const { results } = await db.prepare(select).bind(channelId, CONTENT_HEAL_LIMIT).all<{ id: string }>();
+    await Promise.all((results ?? []).map(async ({ id }) => {
+      const object = await load(id);
+      const row = object == null ? null : projectOwnership('video', id, object);
+      await (row ? ownershipUpsertStatement(db, row, Date.now()) : ownershipDeleteStatement(db, 'video', id)).run();
+    }));
+    const left = await db.prepare(select).bind(channelId, 1).all<{ id: string }>();
+    return (left.results ?? []).length === 0;
+  } catch (error) {
+    logger.warn('[Ownership] Could not fill Studio columns', { channelId, error: errorText(error) });
+    return false;
+  }
 }

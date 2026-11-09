@@ -90,6 +90,8 @@ export const Video = z.object({
     fileSize: z.number().optional(),
     originalFormat: z.string().optional(),
     uploadStatus: z.enum(['initiated', 'uploading', 'processing', 'ready', 'failed']).optional(),
+    processingStatus: z.enum(['pending', 'processing', 'transcoding', 'completed', 'failed', 'archived']).optional(),
+    isDraft: z.boolean().optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),

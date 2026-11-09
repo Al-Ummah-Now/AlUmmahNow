@@ -2,8 +2,9 @@
 -- Schema after applying, in order:
 --   apps/api-videos/migrations/search/0001_search_index.sql
 --   apps/api-videos/migrations/search/0002_content_ownership.sql
+--   apps/api-videos/migrations/search/0003_content_studio_columns.sql
 
-CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
+CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, PRIMARY KEY (kind, id));
 CREATE TABLE search_channels (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_channels_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
 CREATE TABLE 'search_channels_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
@@ -34,6 +35,7 @@ CREATE TABLE 'search_videos_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_videos_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_videos_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
+CREATE INDEX idx_content_ownership_channel_status ON content_ownership (kind, channel_id, studio_status, created_at);
 CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
