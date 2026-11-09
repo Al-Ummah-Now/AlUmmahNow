@@ -60,8 +60,6 @@ html:has(video) .ti-top,html:has(video) .ti-lattice,html:has(video) .ti-dome,htm
 @media(max-width:639px){.ti-left,.ti-right{height:58vh}.ti-second,.ti-small{display:none}.ti-end{height:34vh}.ti-dome{width:92vw}}
 /* Player */
 .video-js{--vjs-primary-color:var(--fanous-c-player-progress);--vjs-progress-filled:var(--fanous-c-player-progress);--vjs-progress-bg:var(--fanous-c-player-track);--vjs-control-text:var(--fanous-c-player-control)}
-.video-js .vjs-big-play-button{background:var(--fanous-c-button-primary-bg)!important;color:var(--fanous-c-button-primary-text)!important;border-color:var(--fanous-c-button-primary-border)!important}@media(hover:hover){.video-js .vjs-big-play-button:hover{background:var(--fanous-c-button-primary-hover)!important;box-shadow:none!important}}
-.video-js .vjs-control-bar{color:#fff}
 .video-js .vjs-play-progress{background:var(--fanous-c-player-progress)!important;box-shadow:none!important}.video-js .vjs-load-progress div{background:var(--fanous-c-player-buffered)!important}.video-js .vjs-volume-level{background:var(--fanous-c-player-progress)!important}
 .video-js button:focus-visible,.video-js .vjs-control:focus-visible{outline:2px solid var(--fanous-c-player-progress)!important}
 .video-js .vjs-menu li.vjs-selected,.video-js .vjs-menu li.vjs-selected:focus{background:var(--fanous-c-player-progress)!important;color:var(--fanous-c-button-primary-text)!important}
