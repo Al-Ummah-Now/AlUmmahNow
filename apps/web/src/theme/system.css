@@ -118,3 +118,10 @@ main [class*="justify-between"]{flex-wrap:wrap}
 html[data-theatre] .custom-video-player,html[data-theatre] .custom-video-player.aspect-video{border-radius:0;box-shadow:none}
 .custom-video-player[data-mini]{box-shadow:none}.custom-video-player[data-mini] [data-vjs-player]{box-shadow:var(--m-player),var(--m-raised-edge)}
 .vc-t,.video-card>:first-child{box-shadow:0 0 0 1px color-mix(in srgb,var(--fanous-color-divider) 60%,transparent)}
+/* Overlays: only the card has a surface. A full-width positioning wrapper stays invisible. */
+[data-testid=consent-banner]{background:transparent!important;border:0!important;box-shadow:none!important;pointer-events:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+[data-testid=consent-banner]>div{pointer-events:auto;border:1px solid transparent!important;background:var(--m-raised) padding-box,var(--m-border) border-box!important;box-shadow:var(--m-raised-edge);border-radius:var(--r-xl)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);padding:var(--fanous-spacing-xl)}
+[data-testid=consent-banner] h2{font-size:17px;font-weight:700;color:var(--fanous-color-text-primary)!important}[data-testid=consent-banner] p{color:var(--fanous-color-text-secondary)!important}
+[data-testid=consent-banner] .mt-4.flex{align-items:center}[data-testid=consent-banner] .mt-4.flex button{flex:1 1 130px;min-height:44px}
+@media(min-width:640px){[data-testid=consent-banner] .mt-4.flex button{flex:0 1 auto}}
+@media(max-width:639px){[data-testid=consent-banner]{padding:8px;inset-block-end:64px}[data-testid=consent-banner]>div{padding:var(--fanous-spacing-lg)}}
