@@ -330,13 +330,18 @@ export async function deleteVideoQuietly(user: AuthUser, video: E2EVideo | null 
     const u = userApi(user);
     // bulk-delete rather than DELETE /api/videos/:id, which rejects every
     // request on API builds before the param-name fix in videoDelete.ts
-    await u.api.post('/api/videos/bulk-delete', { videoIds: [video.id] }, {
+    const res = await u.api.post<{ results?: Array<{ success: boolean; error?: string }> }>('/api/videos/bulk-delete', { videoIds: [video.id] }, {
       token: u.token,
       channelId: video.channelId,
-      allowStatus: [400, 403, 404],
+      allowStatus: [400, 401, 403, 404],
     });
-  } catch {
-    // cleanup must never fail a test
+    const result = res.data?.results?.[0];
+    if (res.status >= 300 || (result && !result.success && result.error !== 'Video not found')) {
+      console.warn(`[cleanup] could not delete video ${video.id} ("${video.title}"): ${res.status} ${result?.error ?? ''}`.trim());
+    }
+  } catch (error) {
+    // cleanup must never fail a test, but a leftover should be visible in the log
+    console.warn(`[cleanup] could not delete video ${video.id} ("${video.title}")`, error);
   }
 }
 

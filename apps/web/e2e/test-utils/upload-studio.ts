@@ -61,10 +61,32 @@ export async function deleteTemplatesNamed(user: AuthUser, prefix: string): Prom
 
 // ------------------------------------------------------------------- videos
 
-/** Deletes the user's videos whose title starts with `prefix` (videos a UI flow created) */
-export async function deleteVideosTitled(user: AuthUser, prefix: string): Promise<void> {
-  const videos = await listOwnVideos(userApi(user)).catch(() => [] as E2EVideo[]);
-  for (const v of videos.filter((x) => x.title.startsWith(prefix))) await deleteVideoQuietly(user, v);
+/**
+ * Deletes the user's videos whose title starts with `prefix` (videos a UI flow
+ * created). A UI flow can still be creating records when the test ends (batch
+ * initiate runs on the server), so it lists and deletes again until a listing
+ * comes back without matches, up to `passes` times. Returns how many matches
+ * the last listing still found (-1: the listing failed); never throws.
+ */
+export async function deleteVideosTitled(user: AuthUser, prefix: string, opts: { passes?: number; waitMs?: number } = {}): Promise<number> {
+  const passes = opts.passes ?? 1;
+  let left = -1;
+  for (let pass = 1; pass <= passes; pass++) {
+    let matches: E2EVideo[];
+    try {
+      matches = (await listOwnVideos(userApi(user))).filter((x) => x.title.startsWith(prefix));
+    } catch (error) {
+      console.warn(`[cleanup] listing ${user}'s videos failed; "${prefix}…" may be left on QA`, error);
+      left = -1;
+      continue;
+    }
+    left = matches.length;
+    if (matches.length === 0 && pass > 1) break;
+    for (const v of matches) await deleteVideoQuietly(user, v);
+    if (pass < passes) await new Promise((resolve) => setTimeout(resolve, opts.waitMs ?? 3000));
+  }
+  if (left !== 0) console.warn(`[cleanup] ${user}: videos titled "${prefix}…" may be left on QA (last listing: ${left < 0 ? 'failed' : `${left} found`})`);
+  return left;
 }
 
 /** Schedules a video through the API, `days` from now at 12:00 UTC */

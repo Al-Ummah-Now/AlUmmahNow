@@ -1,0 +1,81 @@
+# Daily sweep of E2E / release-suite leftovers on QA (#464, #465):
+# scripts/qa/cleanup-e2e-leftovers.ts. The specs clean up after themselves; this
+# removes what a crashed, cancelled or timed-out run left behind ("E2E Temp …"
+# content, retired throwaway accounts' channels and seed videos, probe comments,
+# orphaned schedule entries). Seed fixtures, the pinned CI users' data and
+# anything owned by a non-test account are kept; "unsure" items are only listed.
+# Anything younger than 2 hours is left alone, so a running E2E job is never hit.
+#
+# QA only: the script refuses any other host, worker config or bucket.
+# Token: R2 + D1 edit and Workers Scripts edit (wrangler's remote bindings) on the
+# QA account. The inventory JSON is uploaded as an artifact.
+name: QA Cleanup
+
+on:
+  schedule:
+    - cron: '41 5 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run = inventory only; apply = delete the leftovers'
+        type: choice
+        options:
+          - dry-run
+          - apply
+        default: dry-run
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: qa-cleanup
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: QA cleanup (${{ inputs.mode || 'apply' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
+        with:
+          version: 9.15.4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+
+      - name: Sweep QA
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Scheduled runs apply; a manual run applies only when asked to
+          MODE: ${{ inputs.mode || 'apply' }}
+        run: |
+          set -o pipefail
+          args=(--out "$RUNNER_TEMP/qa-cleanup.json")
+          if [ "$MODE" = apply ]; then args+=(--apply --reconcile); fi
+          pnpm -s qa:cleanup "${args[@]}" 2>&1 | grep -v 'internal error; reference' | tee qa-cleanup.txt
+          { echo "### QA cleanup ($MODE)"; echo '```'; grep -E '^\[cleanup\]|^  ' qa-cleanup.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-cleanup-inventory
+          path: ${{ runner.temp }}/qa-cleanup.json
+          retention-days: 30
+          if-no-files-found: ignore
