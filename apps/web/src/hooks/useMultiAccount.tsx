@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode, useRef } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addUserAccount,
@@ -24,6 +24,18 @@ import {
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getAuthUrl } from '@/lib/runtime-config';
+import {
+  decideAfterSignOut,
+  decideFollow,
+  fetchAuthAccounts,
+  mergeAccounts,
+  removeAuthAccount,
+  switchAuthAccount,
+  switchPlan,
+  type AuthAccount,
+} from '@/lib/auth/auth-accounts';
+import { PROBE_FLAG, loginRoutePath, probeOutcome, shouldProbe } from '@/lib/auth/silent-sign-in';
 
 // Types
 interface ChannelInfo {
@@ -51,6 +63,8 @@ interface AccountInfo {
   avatarUrl?: string;
   isActive: boolean;
   channelsCount: number;
+  /** False for an account signed in to the browser (auth server) but not to this site yet. */
+  hasLocalSession?: boolean;
 }
 
 interface MultiAccountContextValue {
@@ -84,6 +98,39 @@ function currentLocale(): 'en' | 'ar' {
   return window.location.pathname.split('/')[1] === 'ar' ? 'ar' : 'en';
 }
 
+function currentPath(): string {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
+/** sessionStorage that never throws (private mode, blocked storage). */
+const tabStorage = {
+  has(key: string): boolean {
+    try {
+      return window.sessionStorage.getItem(key) !== null;
+    } catch {
+      return false;
+    }
+  },
+  set(key: string): void {
+    try {
+      window.sessionStorage.setItem(key, String(Date.now()));
+    } catch {
+      // ignore
+    }
+  },
+};
+
+const followKey = (userId: string) => `aun_auth_follow_${userId}`;
+
+/**
+ * Sign in silently (prompt=none) as the auth server's active account and come
+ * back to this page. The callback returns here anonymous if the auth server
+ * has no session, without an error page.
+ */
+function silentSignIn(): void {
+  window.location.assign(loginRoutePath(currentPath(), currentLocale(), 'none'));
+}
+
 /**
  * Provider component for multi-account context
  */
@@ -91,7 +138,11 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { t, lang } = useLanguage();
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  // This site's own sessions (tokens held here) and the browser's accounts on
+  // the auth server; the switcher shows both, merged
+  const [localAccounts, setAccounts] = useState<Omit<AccountInfo, 'hasLocalSession'>[]>([]);
+  const [authAccounts, setAuthAccounts] = useState<AuthAccount[] | null>(null);
+  const accounts: AccountInfo[] = useMemo(() => mergeAccounts(localAccounts, authAccounts), [localAccounts, authAccounts]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadingRef = useRef(false);
@@ -120,12 +171,56 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
 
       logger.info('[MultiAccountProvider] Fetching session info...');
+      const authOrigin = getAuthUrl();
       const sessionInfo = await getActiveSessionInfo();
       logger.info('[MultiAccountProvider] Session info received:', sessionInfo ? 'Has data' : 'No data');
 
       if (!mountedRef.current) {
         logger.info('[MultiAccountProvider] Component unmounted, aborting');
         return;
+      }
+
+      if (!sessionInfo) {
+        // Client probe: signed in on another app (CMS, profile, ...)? Then sign
+        // in here too, silently. Once per tab, never on a loop.
+        if (shouldProbe({ hasAppSession: false, flagSet: tabStorage.has(PROBE_FLAG), pathname: window.location.pathname, authOrigin })) {
+          tabStorage.set(PROBE_FLAG);
+          // Anonymous visitors ask the auth server once per tab, no more
+          if (probeOutcome(await fetchAuthAccounts(authOrigin)) === 'sign-in') {
+            logger.info('[MultiAccountProvider] Signed in on the auth server, signing in here silently');
+            silentSignIn();
+            return;
+          }
+        }
+        setAuthAccounts(null);
+      } else {
+        const browserAccounts = await fetchAuthAccounts(authOrigin);
+        if (!mountedRef.current) return;
+        setAuthAccounts(browserAccounts);
+
+        // Follow an account switch made in another app
+        const follow = decideFollow({
+          authAccounts: browserAccounts,
+          localActiveUserId: sessionInfo.user?.id ?? null,
+          localUserIds: sessionInfo.accounts.map((a) => a.userId),
+          alreadyFollowed: (id) => tabStorage.has(followKey(id)),
+        });
+        if (follow.kind !== 'none') {
+          tabStorage.set(followKey(follow.userId));
+          logger.info('[MultiAccountProvider] Following the active account of the auth server', { how: follow.kind });
+          if (follow.kind === 'silent-sign-in') {
+            silentSignIn();
+            return;
+          }
+          await switchUserAccount(follow.userId, window.location.pathname);
+          const switched = await getActiveSessionInfo();
+          if (switched && mountedRef.current) {
+            setUser(switched.user);
+            setAccounts(switched.accounts);
+            router.refresh();
+            return;
+          }
+        }
       }
 
       if (sessionInfo) {
@@ -159,7 +254,9 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
       logger.info('[MultiAccountProvider] Loading complete, loading state set to false');
     }
-  }, []); // router is stable from useRouter() and doesn't need to be a dependency
+    // router is stable from useRouter()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load data on mount
   useEffect(() => {
@@ -229,6 +326,17 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       setError(null);
       setLoading(true);
 
+      // The auth server's active account follows, so every other app opens
+      // as this account too
+      await switchAuthAccount(getAuthUrl(), userId);
+      tabStorage.set(followKey(userId));
+
+      if (switchPlan(accounts, userId) === 'silent-sign-in') {
+        // Signed in to the browser but not to this site yet: get its tokens
+        silentSignIn();
+        return;
+      }
+
       // Get current pathname to pass to server action for profile check
       const currentPath = window.location.pathname;
       const result = await switchUserAccount(userId, currentPath);
@@ -256,7 +364,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [loadSessionData, router, t]);
+  }, [accounts, loadSessionData, router, t]);
 
   // Remove an account
   const removeAccount = useCallback(async (userId: string) => {
@@ -273,7 +381,9 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
       if (!confirmed) return;
 
-      await removeUserAccount(userId);
+      // Signs that account out of the browser (every app), not only here
+      await removeAuthAccount(getAuthUrl(), userId);
+      if (account.hasLocalSession) await removeUserAccount(userId);
       await loadSessionData();
 
       // Refresh the page to update server components
@@ -392,14 +502,28 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       setError(null);
+      const authOrigin = getAuthUrl();
+      const signingOut = user?.id;
+      const localUserIds = localAccounts.map((a) => a.userId).filter((id) => id !== signingOut);
+      // Sign this account out of the browser (every app), then here
+      if (signingOut) await removeAuthAccount(authOrigin, signingOut);
       const { signOutUrl } = await logoutCurrentAccount(currentLocale());
       setUser(null);
       setAccounts([]);
 
-      if (signOutUrl) {
+      const next = decideAfterSignOut({ authAccounts: await fetchAuthAccounts(authOrigin), localUserIds, signOutUrl });
+      if (next.kind === 'single-sign-out') {
         logger.info('[MultiAccountProvider] Last account logged out, starting single sign-out');
-        window.location.assign(signOutUrl);
+        window.location.assign(next.url);
         return;
+      }
+      if (next.kind === 'silent-sign-in') {
+        // Another account is still signed in to the browser: use it here
+        silentSignIn();
+        return;
+      }
+      if (next.kind === 'switch-local') {
+        await switchUserAccount(next.userId, window.location.pathname);
       }
       await loadSessionData();
       router.refresh();
@@ -407,7 +531,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to logout:', err);
       setError(t.errors.genericError);
     }
-  }, [loadSessionData, router, t]);
+  }, [user?.id, localAccounts, loadSessionData, router, t]);
 
   // Logout all accounts (and the shared sign-in)
   const logoutAll = useCallback(async (skipConfirmation = false) => {

@@ -87,13 +87,10 @@ test.describe('language and direction', () => {
 test.describe('public pages in Arabic', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('I18N-06 home and login error pages are translated', async ({ page }) => {
+  test('I18N-06 login error and not-found pages are translated', async ({ page }) => {
     await setPreferences(page, { locale: 'ar' });
-    await page.goto('/');
-    await expectDirection(page, 'ar');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('الأمة الآن');
-    await expect(page.getByRole('link', { name: 'تسجيل الدخول' })).toBeVisible();
     await page.goto('/login?error=unauthorized');
+    await expectDirection(page, 'ar');
     await expect(page.getByTestId('login-error')).toHaveText('ليست لديك صلاحية الوصول إلى لوحة الإدارة');
     await page.goto('/no-such-page');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('الصفحة غير موجودة');

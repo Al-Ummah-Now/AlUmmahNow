@@ -6,7 +6,7 @@
  * Server actions that need auth belong in a separate 'use server' module.
  */
 import { cache } from 'react';
-import { cookies as getCookies } from 'next/headers';
+import { cookies as getCookies, headers as getHeaders } from 'next/headers';
 import { createClient } from '@al-ummah-now/openauth/client';
 import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
@@ -19,6 +19,7 @@ import {
   parseSessionCookie,
   sessionCookieOptions,
 } from './session-cookie';
+import { PATH_HEADER, loginPath } from './login-flow';
 
 export { SESSION_COOKIE_NAME };
 
@@ -167,7 +168,10 @@ export async function requireAdminRole(): Promise<AdminSession> {
   const session = await getAdminSession();
 
   if (!session) {
-    redirect('/login');
+    // Straight to sign-in, back to this page afterwards (the middleware
+    // passes the path being rendered).
+    const path = (await getHeaders()).get(PATH_HEADER);
+    redirect(loginPath(path));
   }
 
   if (!hasAdminAccess(session.user.role)) {

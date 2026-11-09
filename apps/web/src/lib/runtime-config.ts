@@ -9,6 +9,8 @@ export interface RuntimeConfig {
   API_URL?: string;
   WEBSOCKET_URL?: string;
   AUTH_PROFILE_URL?: string;
+  /** Auth server origin: the page asks it for the browser's accounts. */
+  AUTH_URL?: string;
 }
 
 declare global {
@@ -33,7 +35,17 @@ export function deriveAuthProfileUrl(issuer: string | undefined, explicit?: stri
   }
 }
 
-export function getRuntimeConfig() {
+/** Origin of the auth server (issuer), '' when unset or malformed. */
+export function authOrigin(issuer: string | undefined): string {
+  if (!issuer) return '';
+  try {
+    return new URL(issuer).origin;
+  } catch {
+    return '';
+  }
+}
+
+export function getRuntimeConfig(): RuntimeConfig {
   if (typeof window === 'undefined') {
     // Server-side: read from process.env
     return {
@@ -43,6 +55,7 @@ export function getRuntimeConfig() {
         process.env.OPENAUTH_ISSUER || process.env.Issuer,
         process.env.AUTH_PROFILE_URL
       ),
+      AUTH_URL: authOrigin(process.env.OPENAUTH_ISSUER || process.env.Issuer),
     };
   }
 
@@ -64,4 +77,8 @@ export function getWebSocketUrl(): string {
 
 export function getAuthProfileUrl(): string {
   return getRuntimeConfig().AUTH_PROFILE_URL || '';
+}
+
+export function getAuthUrl(): string {
+  return getRuntimeConfig().AUTH_URL || '';
 }

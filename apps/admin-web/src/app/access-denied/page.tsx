@@ -1,6 +1,7 @@
 import { getAdminSession } from '@/lib/auth';
 import { getI18n } from '@/i18n/server';
 import { PublicShell } from '@/components/PublicShell';
+import { AccountMenu } from '@/components/AccountMenu';
 import { primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +43,13 @@ export default async function AccessDeniedPage() {
                 {t('accessDenied.currentRole', { role: session.user.role })}
               </p>
             )}
+          </div>
+        )}
+
+        {/* Another account of this browser may have the role: switch to it here */}
+        {process.env.Issuer && (
+          <div className="flex justify-center" data-testid="access-denied-accounts">
+            <AccountMenu issuer={process.env.Issuer} currentEmail={session?.user.email} />
           </div>
         )}
 

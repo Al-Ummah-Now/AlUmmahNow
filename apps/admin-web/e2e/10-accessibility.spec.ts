@@ -49,10 +49,8 @@ test.describe('axe - public pages', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   for (const variant of VARIANTS) {
-    test(`A11Y-03 home and login error [${variant.locale}/${variant.theme}]`, async ({ page }) => {
+    test(`A11Y-03 login error [${variant.locale}/${variant.theme}]`, async ({ page }) => {
       await setPreferences(page, variant);
-      await page.goto('/');
-      await expectNoAxeViolations(page, `home ${variant.locale}/${variant.theme}`);
       await page.goto('/login?error=auth_failed');
       await expectNoAxeViolations(page, `login error ${variant.locale}/${variant.theme}`);
     });

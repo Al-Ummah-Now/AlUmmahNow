@@ -3,10 +3,21 @@ import { getAuthClient, setAdminSession } from '@/lib/auth';
 import { subjects } from '@/interfaces/subjects';
 import { highestAdminRole, normalizeRole } from "@/lib/roles";
 import { logger } from '@/lib/logger';
+import { SIGN_IN_COOKIES } from '@/lib/single-sign-out';
+import { callbackErrorRedirect, returnPathFromState } from '@/lib/login-flow';
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+
+  // The auth server answered without a code. After a silent attempt
+  // (prompt=none) that only means "no browser session": show the sign-in form.
+  const authError = url.searchParams.get('error');
+  if (authError) {
+    logger.info('Sign-in returned without a code', { error: authError });
+    return NextResponse.redirect(new URL(callbackErrorRedirect(authError, state), request.url), 303);
+  }
 
   if (!code) {
     return NextResponse.redirect(new URL('/login?error=no_code', request.url));
@@ -50,7 +61,11 @@ export async function GET(request: NextRequest) {
         email: userInfo.email,
         roles: userRoles,
       });
-      return NextResponse.redirect(new URL('/access-denied', request.url), 303);
+      // Drop any session of a previously active account: after a switch to
+      // this account the admin panel must not keep acting as the other one.
+      const denied = NextResponse.redirect(new URL('/access-denied', request.url), 303);
+      for (const name of SIGN_IN_COOKIES) denied.cookies.delete(name);
+      return denied;
     }
 
     logger.info('Admin login successful', {
@@ -70,7 +85,8 @@ export async function GET(request: NextRequest) {
       refreshToken: exchanged.tokens!.refresh,
     });
 
-    return NextResponse.redirect(new URL('/dashboard', request.url), 303);
+    // Back to the page that needed the sign-in
+    return NextResponse.redirect(new URL(returnPathFromState(state), request.url), 303);
   } catch (error) {
     logger.error('Auth callback error', { error });
     return NextResponse.redirect(new URL('/login?error=auth_failed', request.url));

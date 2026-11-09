@@ -11,7 +11,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Pages that read the session. /login, /access-denied and the auth API
+  // Pages that need an admin session. /login, /access-denied and the auth API
   // routes are deliberately excluded so a sign-out redirect cannot loop.
   matcher: [
     '/',

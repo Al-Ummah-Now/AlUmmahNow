@@ -24,6 +24,7 @@ import {
   type SessionTokens,
 } from './session-cookie';
 import { REFRESH_SKEW_SECONDS, refreshTokens, shouldRefresh } from './token-refresh';
+import { PATH_HEADER, loginPath } from './login-flow';
 
 const LOG_PREFIX = '[admin-web:session-refresh]';
 
@@ -50,15 +51,28 @@ export async function refreshSessionMiddleware(
   deps: SessionMiddlewareDeps,
 ): Promise<NextResponse> {
   const log = deps.log ?? console;
+  const path = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+  // Server components cannot see the URL: hand them the path so a sign-in
+  // redirect from a render can come back to it.
+  request.headers.set(PATH_HEADER, path);
+  const next = () => NextResponse.next({ request: { headers: request.headers } });
+
   const found = readTokens(request);
-  if (!found || !deps.issuer) {
-    // No session (the page redirects to /login) or misconfigured: nothing to do.
-    return NextResponse.next();
+  if (!found) {
+    // No session: straight to sign-in (no "Please log in" page). /login sends
+    // the browser to the auth server without a prompt, which signs its active
+    // account in silently or shows the form. /login is outside the matcher.
+    const status = request.method === 'GET' || request.method === 'HEAD' ? 307 : 303;
+    return NextResponse.redirect(new URL(loginPath(path), request.url), status);
+  }
+  if (!deps.issuer) {
+    // Misconfigured: leave it to the page's own verification.
+    return next();
   }
 
   const nowSeconds = Math.floor((deps.now ?? Date.now)() / 1000);
   if (!shouldRefresh(found.tokens.accessToken, nowSeconds, REFRESH_SKEW_SECONDS)) {
-    return NextResponse.next();
+    return next();
   }
 
   const result = await refreshTokens(deps.issuer, found.tokens.refreshToken, deps.fetch ?? fetch);
@@ -80,13 +94,15 @@ export async function refreshSessionMiddleware(
   }
 
   if (result.kind === 'invalid_grant') {
-    // The refresh token is dead for good: sign in again. /login is outside
+    // The refresh token is dead for good: sign in again. /login asks the auth
+    // server without a prompt, so a live browser session gets new tokens
+    // silently and only a signed-out browser sees the form. /login is outside
     // the middleware matcher and the cookie is gone, so this cannot loop.
-    log.warn(`${LOG_PREFIX} refresh token rejected, signing out`, {
+    log.warn(`${LOG_PREFIX} refresh token rejected, signing in again`, {
       path: request.nextUrl.pathname,
       description: result.description,
     });
-    const response = NextResponse.redirect(new URL('/login', request.url), 303);
+    const response = NextResponse.redirect(new URL(loginPath(path), request.url), 303);
     response.cookies.delete(SESSION_COOKIE_NAME);
     response.cookies.delete(LEGACY_ACCESS_COOKIE);
     response.cookies.delete(LEGACY_REFRESH_COOKIE);
@@ -100,5 +116,5 @@ export async function refreshSessionMiddleware(
     path: request.nextUrl.pathname,
     reason: result.reason,
   });
-  return NextResponse.next();
+  return next();
 }

@@ -18,7 +18,7 @@ import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { NONCE_HEADER } from "@/lib/security/nonce-header";
 import { serializeForInlineScript } from "@/lib/security/csp";
-import { deriveAuthProfileUrl } from "@/lib/runtime-config";
+import { authOrigin, deriveAuthProfileUrl } from "@/lib/runtime-config";
 import { SecurityBootstrap } from "@/components/security/SecurityBootstrap";
 import { RuntimeConfigBootstrap } from "@/components/RuntimeConfigBootstrap";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
@@ -78,6 +78,7 @@ function serverRuntimeConfig() {
       process.env.OPENAUTH_ISSUER || process.env.Issuer,
       process.env.AUTH_PROFILE_URL
     ),
+    AUTH_URL: authOrigin(process.env.OPENAUTH_ISSUER || process.env.Issuer),
   };
 }
 

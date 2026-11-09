@@ -483,7 +483,7 @@ export function UnifiedNavigationRTL() {
                 const channelCount = account.channelsCount || 0;
 
                 return (
-                  <div key={account.userId} className="mb-2" data-testid="nav-account" data-active={isActive ? 'true' : 'false'}>
+                  <div key={account.userId} className="mb-2" data-testid="nav-account" data-active={isActive ? 'true' : 'false'} data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
                     {/* Account Header */}
                     <div className="group relative rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <button
@@ -505,7 +505,10 @@ export function UnifiedNavigationRTL() {
                             {account.displayName}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {channelCount} {channelCount === 1 ? 'قناة' : 'قنوات'}
+                            {/* Signed in to the browser but not here yet: its email (switching signs it in) */}
+                            {account.hasLocalSession === false
+                              ? account.email
+                              : <>{channelCount} {channelCount === 1 ? 'قناة' : 'قنوات'}</>}
                           </div>
                         </div>
                         {/* Show account avatar from fetched profile, with fallback */}

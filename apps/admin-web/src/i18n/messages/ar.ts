@@ -39,9 +39,14 @@ const ar: Messages = {
     english: 'English',
     arabic: 'العربية',
   },
-  home: {
-    welcome: 'مرحبًا، {email}',
-    pleaseLogin: 'يرجى تسجيل الدخول للوصول إلى لوحة الإدارة',
+  accounts: {
+    menu: 'الحسابات',
+    title: 'الحسابات المسجّل دخولها',
+    active: 'نشط',
+    add: 'إضافة حساب آخر',
+    signOut: 'تسجيل الخروج',
+    signOutOf: 'تسجيل الخروج من {email}',
+    signOutAll: 'تسجيل الخروج من جميع الحسابات',
   },
   login: {
     tryAgain: 'حاول مرة أخرى',

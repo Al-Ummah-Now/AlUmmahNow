@@ -132,12 +132,36 @@ describe('session cookie format', () => {
 describe('session refresh middleware', () => {
   const deps = (fetchImpl: typeof fetch) => ({ issuer: ISSUER, fetch: fetchImpl, now: () => NOW * 1000, log: silent });
 
-  it('does nothing without a session', async () => {
+  it('without a session goes straight to /login, keeping the page to come back to', async () => {
     const { impl, calls } = mockFetch(() => json(500, {}));
-    const response = await refreshSessionMiddleware(request('/dashboard', {}), deps(impl));
+    const response = await refreshSessionMiddleware(request('/moderation/ai?status=pending', {}), deps(impl));
     assert.equal(calls.length, 0);
-    assert.equal(response.headers.get('x-middleware-next'), '1');
+    assert.equal(response.status, 307);
+    assert.equal(response.headers.get('location'), `${APP}/login?return=%2Fmoderation%2Fai%3Fstatus%3Dpending`);
     assert.equal(setSession(response), null);
+  });
+
+  it('without a session on the root goes to a plain /login (no "Please log in" page)', async () => {
+    const { impl } = mockFetch(() => json(500, {}));
+    const response = await refreshSessionMiddleware(request('/', {}), deps(impl));
+    assert.equal(response.status, 307);
+    assert.equal(response.headers.get('location'), `${APP}/login`);
+  });
+
+  it('a server action without a session is redirected with 303 (no re-POST)', async () => {
+    const { impl } = mockFetch(() => json(500, {}));
+    const req = new NextRequest(`${APP}/moderation`, { method: 'POST' });
+    const response = await refreshSessionMiddleware(req, deps(impl));
+    assert.equal(response.status, 303);
+  });
+
+  it('tells the render which path it is rendering (for a sign-in redirect back to it)', async () => {
+    const { impl } = mockFetch(() => json(500, {}));
+    const req = request('/indices?tab=2', { admin_session: sessionCookie(jwt(NOW + 900)) });
+    const response = await refreshSessionMiddleware(req, deps(impl));
+    assert.equal(response.headers.get('x-middleware-next'), '1');
+    assert.match(response.headers.get('x-middleware-override-headers') ?? '', /x-admin-path/);
+    assert.equal(response.headers.get('x-middleware-request-x-admin-path'), '/indices?tab=2');
   });
 
   it('does not touch a legacy cookie holding a 30-day token', async () => {
@@ -196,14 +220,14 @@ describe('session refresh middleware', () => {
     assert.equal(cleared.length, 2);
   });
 
-  it('on invalid_grant clears the cookie and redirects to /login once', async () => {
+  it('on invalid_grant clears the cookie and signs in again via /login (silent when auth still has a session)', async () => {
     const { impl } = mockFetch(() => json(400, { error: 'invalid_grant' }));
     const response = await refreshSessionMiddleware(
       request('/dashboard', { admin_session: sessionCookie(jwt(NOW - 10)) }),
       deps(impl),
     );
     assert.equal(response.status, 303);
-    assert.equal(response.headers.get('location'), `${APP}/login`);
+    assert.equal(response.headers.get('location'), `${APP}/login?return=%2Fdashboard`);
     const cleared = response.headers.getSetCookie().find((c) => c.startsWith('admin_session='));
     assert.ok(cleared && /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(cleared), cleared);
   });
