@@ -9,6 +9,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWatchProgress } from '../useWatchProgress';
 import { WatchHistoryService } from '@/services/api/watch-history';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
+import { simulatePlayback } from '@/test/watch-playback';
 
 // Mock the service
 jest.mock('@/services/api/watch-history', () => ({
@@ -61,6 +62,8 @@ describe('useWatchProgress - Mutex Pattern', () => {
         { enableDebugLogging: true }
       )
     );
+    // Past the "played long enough" gate (#242)
+    simulatePlayback(mockPlayer, 10);
 
     // Trigger multiple saves rapidly
     await act(async () => {
@@ -96,6 +99,8 @@ describe('useWatchProgress - Mutex Pattern', () => {
         { enableDebugLogging: true }
       )
     );
+    // Past the "played long enough" gate (#242)
+    simulatePlayback(mockPlayer, 10);
 
     // Trigger multiple saves rapidly
     await act(async () => {
@@ -129,6 +134,8 @@ describe('useWatchProgress - Mutex Pattern', () => {
         { enableDebugLogging: true }
       )
     );
+    // Past the "played long enough" gate (#242)
+    simulatePlayback(mockPlayer, 10);
 
     await act(async () => {
       await result.current.saveProgress();
@@ -148,6 +155,8 @@ describe('useWatchProgress - Mutex Pattern', () => {
         { enableDebugLogging: true }
       )
     );
+    // Past the "played long enough" gate (#242)
+    simulatePlayback(mockPlayer, 10);
 
     // Start a save
     act(() => {
@@ -173,6 +182,8 @@ describe('useWatchProgress - Mutex Pattern', () => {
         { enableDebugLogging: true }
       )
     );
+    // Past the "played long enough" gate (#242)
+    simulatePlayback(mockPlayer, 10);
 
     // Simulate rapid pause/play/seek events
     await act(async () => {
@@ -205,6 +216,8 @@ describe('useWatchProgress - Mutex Pattern', () => {
         }
       )
     );
+    // Past the "played long enough" gate (#242)
+    simulatePlayback(mockPlayer, 10);
 
     await act(async () => {
       // First save (force=true by default)
@@ -259,6 +272,8 @@ describe('useWatchProgress - Race Condition Scenarios', () => {
         { enableDebugLogging: true }
       )
     );
+    // Past the "played long enough" gate (#242)
+    simulatePlayback(mockPlayer, 10);
 
     // Trigger 10 rapid saves
     await act(async () => {

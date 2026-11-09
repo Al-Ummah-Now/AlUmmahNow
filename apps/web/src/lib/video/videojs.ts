@@ -68,6 +68,16 @@ export interface ExtendedPlayer extends VideoJsPlayer {
   playbackRate(rate: number): this;
 
   /**
+   * Whether the media is seeking (video.js Player#seeking)
+   */
+  seeking(): boolean;
+
+  /**
+   * Whether playback has started at least once (video.js Player#hasStarted)
+   */
+  hasStarted(): boolean;
+
+  /**
    * Get the player's root DOM element
    * @returns The player's root HTMLElement
    */

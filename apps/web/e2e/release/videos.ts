@@ -28,6 +28,12 @@ export interface PublicVideo {
  */
 export const HISTORY_MIN_SECONDS = 40;
 
+/**
+ * Shortest video the resume spec may use: videos of 60s or less are shorts and
+ * never resume (lib/video/resume.ts), and 12s of play must stay under 95%.
+ */
+export const RESUME_MIN_VIDEO_SECONDS = 75;
+
 export const NO_PLAYABLE_VIDEO = 'no public, encoded video in this environment (seed one; see CLAUDE.md "Release regressions")';
 
 /** A public, encoded, non-live video of at least `minSeconds`, or null when the env has none. */

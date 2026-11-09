@@ -13,6 +13,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useWatchProgress } from '../useWatchProgress';
 import { WatchHistoryService } from '@/services/api/watch-history';
 import { fetchClientAuthToken } from '@/lib/auth/client-token';
+import { simulatePlayback } from '@/test/watch-playback';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 
 jest.mock('@/services/api/watch-history', () => ({
@@ -67,6 +68,7 @@ describe('useWatchProgress - periodic save', () => {
 
     // Metadata arrives and playback runs past one interval, with no pause/seek
     state.readyState = 4;
+    simulatePlayback(player, 11);
     state.currentTime = 11;
     await act(async () => {
       jest.advanceTimersByTime(10_000);

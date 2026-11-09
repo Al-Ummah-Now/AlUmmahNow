@@ -240,12 +240,10 @@ export interface VideoPlayerTranslations {
    * Resume playback modal
    */
   resume: {
-    title: string;
-    description: string;
-    resumeButton: string;
+    /** Player pill that seeks back to 0 after resuming */
     startOverButton: string;
-    autoResumeMessage: string;
-    dismissHint: string;
+    /** Polite announcement when the player opens at a saved position; {time} = m:ss */
+    resumingAt: string;
   };
 }
 

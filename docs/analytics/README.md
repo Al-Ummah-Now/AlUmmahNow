@@ -49,7 +49,7 @@ Every message uses the `QueueMessage` envelope `{ id, type: MessageType, payload
 
 | Gap | Notes |
 |---|---|
-| Resume prompt on the watch page | `useWatchProgress` loads `savedProgress`, but the `ResumePrompt` component (`components/VideoPlayer/ResumePrompt*`) is not rendered anywhere, so there is no resume UI. |
+| Resume on the watch page | Done (#242): the player opens at the saved position with a persistent "Start from beginning" pill (`player-start-over`); no prompt. A resume point is saved only after 10s of real playback (`lib/video/resume.ts`). |
 | Recommendations from history | `sections/recommended.ts` and `discovery.ts` read history. Measure their quality now that history actually fills. |
 | Legacy `/api/profiles/watch-history` | Writes to `profile.watchHistory`. No web caller. Remove it after one release. |
 | Listing cost | `list` loads up to 5,000 entries per request. Needs a D1 index (`watch_history(user_id, last_watched_at)`) for paging. |
