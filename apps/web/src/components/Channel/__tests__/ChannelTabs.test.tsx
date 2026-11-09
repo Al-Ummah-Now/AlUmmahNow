@@ -141,7 +141,7 @@ describe('ChannelTabs - Navigation', () => {
     await waitFor(() => {
       const videosTab = screen.getByText('Videos');
       const button = videosTab.closest('button');
-      expect(button).toHaveClass('border-blue-600');
+      expect(button).toHaveAttribute('data-active', 'true');
     });
   });
 
@@ -155,7 +155,7 @@ describe('ChannelTabs - Navigation', () => {
     await waitFor(() => {
       const homeTab = screen.getByText('Home');
       const button = homeTab.closest('button');
-      expect(button).toHaveClass('border-blue-600');
+      expect(button).toHaveAttribute('data-active', 'true');
     });
   });
 
@@ -169,7 +169,7 @@ describe('ChannelTabs - Navigation', () => {
     await waitFor(() => {
       const homeTab = screen.getByText('Home');
       const button = homeTab.closest('button');
-      expect(button).toHaveClass('border-transparent');
+      expect(button).toHaveAttribute('data-active', 'false');
     });
   });
 });
