@@ -154,8 +154,10 @@ test.describe('Channel Switching - English', () => {
       await showMenuView(menu, 'channel');
       await expect(option(menu, ch.id)).toHaveAttribute('aria-checked', 'false');
     }
-    // The upload shortcut needs an active channel
-    await expect(page.getByRole('banner').getByRole('link', { name: /Upload Video/ })).toHaveCount(0);
+    // Upload needs an active channel: it stays in place, disabled, with no destination
+    const upload = page.getByRole('banner').getByTestId('header-upload');
+    await expect(upload).toHaveAttribute('aria-disabled', 'true');
+    await expect(upload).not.toHaveAttribute('href', /./);
   });
 });
 

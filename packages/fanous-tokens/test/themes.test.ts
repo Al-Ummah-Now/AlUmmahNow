@@ -182,5 +182,5 @@ test('a child inherits part overrides and can replace one', () => {
   t.byId.kid = { id: 'kid', kind: 'event', extends: 'zujaj', name: { en: 'K', ar: 'ك' }, component: { light: { 'nav.bg': '#0c4c5b' } } };
   const m = themeModel('kid', t, tokens);
   assert.equal(m.components.light['nav.bg'], '#0c4c5b');
-  assert.equal(m.components.light['upload.bg'], '#f5cf92');
+  assert.equal(m.components.light['upload.border'], '#f5cf92');
 });
