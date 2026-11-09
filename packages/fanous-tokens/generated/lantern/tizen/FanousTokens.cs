@@ -61,15 +61,15 @@ namespace AlUmmahNow.Fanous
 
     public static class LightColors
     {
-        public static Color Background => new Color(0.9686f, 0.9451f, 0.9098f, 1f);
-        public static Color Surface => new Color(1f, 0.9843f, 0.9569f, 1f);
-        public static Color SurfaceRaised => new Color(1f, 1f, 1f, 1f);
-        public static Color HeroStart => new Color(0.9373f, 0.902f, 0.8392f, 1f);
-        public static Color HeroEnd => new Color(0.9686f, 0.9451f, 0.9098f, 1f);
-        public static Color TextPrimary => new Color(0.1098f, 0.102f, 0.0902f, 1f);
-        public static Color TextSecondary => new Color(0.2902f, 0.2627f, 0.2314f, 1f);
-        public static Color TextMuted => new Color(0.3725f, 0.3412f, 0.302f, 1f);
-        public static Color Link => new Color(0.6039f, 0.3098f, 0f, 1f);
+        public static Color Background => new Color(0.9373f, 0.8863f, 0.8f, 1f);
+        public static Color Surface => new Color(0.9843f, 0.9608f, 0.9137f, 1f);
+        public static Color SurfaceRaised => new Color(1f, 0.9922f, 0.9725f, 1f);
+        public static Color HeroStart => new Color(0.8941f, 0.8275f, 0.7137f, 1f);
+        public static Color HeroEnd => new Color(0.9373f, 0.8863f, 0.8f, 1f);
+        public static Color TextPrimary => new Color(0.0549f, 0.1686f, 0.2392f, 1f);
+        public static Color TextSecondary => new Color(0.1647f, 0.2745f, 0.3294f, 1f);
+        public static Color TextMuted => new Color(0.2471f, 0.3529f, 0.4078f, 1f);
+        public static Color Link => new Color(0.4784f, 0.2471f, 0.0314f, 1f);
         public static Color SuccessText => new Color(0.0863f, 0.3961f, 0.2039f, 1f);
         public static Color ErrorText => new Color(0.6902f, 0f, 0.1255f, 1f);
         public static Color Primary => new Color(0.9098f, 0.7059f, 0.4667f, 1f);
@@ -78,11 +78,11 @@ namespace AlUmmahNow.Fanous
         public static Color OnPrimaryHover => new Color(0.0353f, 0.0824f, 0.1176f, 1f);
         public static Color PrimaryPressed => new Color(0.8118f, 0.5961f, 0.3647f, 1f);
         public static Color OnPrimaryPressed => new Color(0.0353f, 0.0824f, 0.1176f, 1f);
-        public static Color PrimaryDisabled => new Color(0.9373f, 0.902f, 0.8392f, 1f);
-        public static Color OnPrimaryDisabled => new Color(0.3725f, 0.3412f, 0.302f, 1f);
+        public static Color PrimaryDisabled => new Color(0.8941f, 0.8275f, 0.7137f, 1f);
+        public static Color OnPrimaryDisabled => new Color(0.2471f, 0.3529f, 0.4078f, 1f);
         public static Color PrimaryEdge => new Color(0.5765f, 0.3804f, 0.1647f, 1f);
         public static Color PrimarySheen => new Color(0.9725f, 0.9098f, 0.7451f, 1f);
-        public static Color Motif => new Color(0.8118f, 0.5961f, 0.3647f, 1f);
+        public static Color Motif => new Color(0.7255f, 0.549f, 0.3216f, 1f);
         public static Color Secondary => new Color(0.5569f, 0.4235f, 0.3255f, 1f);
         public static Color OnSecondary => new Color(1f, 1f, 1f, 1f);
         public static Color VerifiedFill => new Color(0.0863f, 0.3961f, 0.2039f, 1f);
@@ -95,8 +95,8 @@ namespace AlUmmahNow.Fanous
         public static Color FocusRing => new Color(0.5765f, 0.3804f, 0.1647f, 1f);
         public static Color FocusGlow => new Color(0.6588f, 0.3373f, 0f, 1f);
         public static Color VerifiedIcon => new Color(0.0863f, 0.3961f, 0.2039f, 1f);
-        public static Color Outline => new Color(0.549f, 0.498f, 0.4392f, 1f);
-        public static Color Divider => new Color(0.8667f, 0.8235f, 0.7569f, 1f);
+        public static Color Outline => new Color(0.4863f, 0.4196f, 0.3216f, 1f);
+        public static Color Divider => new Color(0.8275f, 0.7529f, 0.6275f, 1f);
     }
 
     public static class BrandColors
