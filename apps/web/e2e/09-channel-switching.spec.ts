@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Locator, Page } from '@playwright/test';
 import { AUTH_STATE, readAccount } from './test-utils/auth-state';
-import { menuTrigger, openAccountMenu } from './test-utils/navigation';
+import { menuTrigger, openAccountMenu, showMenuView } from './test-utils/navigation';
 
 /**
  * Channel switching via the header account menu.
@@ -28,6 +28,7 @@ function option(menu: Locator, channelId: string): Locator {
 
 async function switchTo(page: Page, channelId: string | null) {
   const menu = await openAccountMenu(page);
+  await showMenuView(menu, 'channel');
   const target = channelId ? option(menu, channelId) : menu.getByTestId('nav-channel-option-none');
   await target.click();
   // Switching refreshes the page data; the menu can close while that happens,
@@ -57,6 +58,7 @@ async function deleteChannelsNamed(name: string) {
 /** Creates a channel through the menu form; the caller deletes it by name. */
 async function createChannelViaMenu(page: Page, name: string, placeholder: string, createLabel: string) {
   const menu = await openAccountMenu(page);
+  await showMenuView(menu, 'channel');
   await menu.getByTestId('nav-create-channel').click();
   const input = menu.getByPlaceholder(placeholder);
   const create = menu.getByRole('button', { name: createLabel, exact: true });
@@ -67,10 +69,12 @@ async function createChannelViaMenu(page: Page, name: string, placeholder: strin
   }).toPass({ timeout: 20000 });
   await create.click();
 
+  await showMenuView(menu, 'channel');
   const created = menu.getByTestId('nav-channel-option').filter({ hasText: name });
   await expect(created).toBeVisible();
   await expect(created).toHaveAttribute('data-channel-id', /.+/);
   // The form closes and can be opened again
+  await showMenuView(menu, 'channel');
   await expect(menu.getByTestId('nav-create-channel')).toBeVisible();
 }
 
@@ -99,11 +103,17 @@ test.describe('Channel Switching - English', () => {
 
     // Exact counts are avoided: the channel-creation tests below briefly add
     // channels to this user while other tests run in parallel
+    await showMenuView(menu, 'channel');
     await expect(option(menu, main.id)).toBeVisible();
+    await showMenuView(menu, 'channel');
     await expect(option(menu, other.id)).toBeVisible();
+    await showMenuView(menu, 'channel');
     await expect(option(menu, main.id)).toHaveAttribute('aria-checked', 'true');
+    await showMenuView(menu, 'channel');
     await expect(option(menu, other.id)).toHaveAttribute('aria-checked', 'false');
+    await showMenuView(menu, 'channel');
     await expect(option(menu, main.id).locator('svg.lucide-crown')).toBeVisible();
+    await showMenuView(menu, 'channel');
     await expect(option(menu, other.id).locator('svg.lucide-crown')).toHaveCount(0);
   });
 
@@ -111,10 +121,13 @@ test.describe('Channel Switching - English', () => {
     const { main, other } = multiChannels();
     const menu = await switchTo(page, other.id);
 
+    await showMenuView(menu, 'channel');
     await expect(option(menu, main.id)).toHaveAttribute('aria-checked', 'false');
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${other.id}`);
 
     await switchTo(page, main.id);
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${main.id}`);
   });
 
@@ -124,16 +137,21 @@ test.describe('Channel Switching - English', () => {
 
     await page.goto('/en/profile');
     const menu = await openAccountMenu(page);
+    await showMenuView(menu, 'channel');
     await expect(option(menu, other.id)).toHaveAttribute('aria-checked', 'true');
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toContainText(other.name!);
   });
 
   test('switches to "No Channel" mode', async ({ page }) => {
     const menu = await switchTo(page, null);
 
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/No active channel/);
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveCount(0);
     for (const ch of [multiChannels().main, multiChannels().other]) {
+      await showMenuView(menu, 'channel');
       await expect(option(menu, ch.id)).toHaveAttribute('aria-checked', 'false');
     }
     // The upload shortcut needs an active channel
@@ -151,18 +169,21 @@ test.describe('Channel Switching - Arabic', () => {
   test('switches to "No Channel" mode (RTL)', async ({ page }) => {
     const menu = await switchTo(page, null);
     await expect(menu).toHaveAttribute('dir', 'rtl');
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/لا توجد قناة نشطة/);
   });
 
   test('switches channel and links to the Arabic channel page', async ({ page }) => {
     const { other } = multiChannels();
     const menu = await switchTo(page, other.id);
+    await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/ar/channels/${other.id}`);
   });
 
   test('marks the main channel with a crown (RTL)', async ({ page }) => {
     const { main } = multiChannels();
     const menu = await openAccountMenu(page);
+    await showMenuView(menu, 'channel');
     await expect(option(menu, main.id).locator('svg.lucide-crown')).toBeVisible();
   });
 });
