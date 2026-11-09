@@ -25,6 +25,7 @@ import {
   invalidateOwnership,
   ownershipKindFor,
   syncOwnershipSafely,
+  r2Version,
   syncSearchDocument,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
@@ -79,7 +80,8 @@ export class SearchSyncQueue {
 
   constructor(private db: SearchDb, private waitUntil: (promise: Promise<unknown>) => void) {}
 
-  enqueue(type: SearchEntityType, id: string, source: ObjectSource): void {
+  /** `version`: R2 `uploaded` time of the written object, or the delete time (PR-8 order guard). */
+  enqueue(type: SearchEntityType, id: string, source: ObjectSource, version: number = Date.now()): void {
     const chainKey = `${type}:${id}`;
     const previous = this.chains.get(chainKey) ?? Promise.resolve();
     const next = previous.then(async () => {
@@ -89,7 +91,7 @@ export class SearchSyncQueue {
           // Not the entity record for this id (some other JSON stored under an entity-like key).
           return;
         }
-        const result = await syncSearchDocument(this.db, type, id, object ?? null);
+        const result = await syncSearchDocument(this.db, type, id, object ?? null, { version });
         logger.debug('[SearchSync] Index updated', { type, id, result });
       } catch (error) {
         logger.warn('[SearchSync] Failed to update search index', {
@@ -104,10 +106,10 @@ export class SearchSyncQueue {
   }
 }
 
-async function syncOwnershipInline(db: SearchDb, type: SearchEntityType, id: string, object: unknown): Promise<void> {
+async function syncOwnershipInline(db: SearchDb, type: SearchEntityType, id: string, object: unknown, version: number): Promise<void> {
   const kind = ownershipKindFor(type);
   if (!kind) return;
-  const outcome = await syncOwnershipSafely(db, kind, id, object);
+  const outcome = await syncOwnershipSafely(db, kind, id, object, Date.now(), version);
   if (outcome.ok === false) {
     logger.warn('[SearchSync] Ownership index write failed; index marked incomplete', {
       kind,
@@ -128,6 +130,8 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
           const id = searchIdForKey(type, key);
           // R2 returns null when an onlyIf precondition prevented the write.
           if (id && result !== null) {
+            // When R2 stored this write: a later write always has a later time
+            const version = r2Version(result as { uploaded?: Date } | undefined) ?? Date.now();
             let decoded = decodeValue(value);
             if (decoded === undefined && tracksOwnership) {
               // Streams/blobs cannot be re-read from the argument: read the stored object once for both indexes.
@@ -143,13 +147,13 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
                 await invalidateOwnership(db, ownershipKindFor(type)!).catch(() => undefined);
               }
             }
-            if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, type, id, decoded);
+            if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, type, id, decoded, version);
             queue.enqueue(type, id, decoded !== undefined
               ? async () => decoded
               : async () => {
                 const stored = await target.get(key);
                 return stored ? stored.json() : null;
-              });
+              }, version);
           }
           return result;
         };
@@ -157,11 +161,12 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
       if (prop === 'delete') {
         return async (keys: string | string[]) => {
           await target.delete(keys);
+          const version = Date.now();
           for (const key of Array.isArray(keys) ? keys : [keys]) {
             const id = searchIdForKey(type, key);
             if (!id) continue;
-            if (tracksOwnership) await syncOwnershipInline(db, type, id, null);
-            queue.enqueue(type, id, async () => null);
+            if (tracksOwnership) await syncOwnershipInline(db, type, id, null, version);
+            queue.enqueue(type, id, async () => null, version);
           }
         };
       }

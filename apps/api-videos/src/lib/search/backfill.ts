@@ -16,6 +16,7 @@ import {
   SearchEntityType,
   SearchSyncResult,
   pruneSearchIndex,
+  r2Version,
   syncSearchDocument,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
@@ -37,6 +38,8 @@ export interface BackfillPageResult {
   hidden: number;
   removed: number;
   unchanged: number;
+  /** A newer write was already indexed (PR-8) */
+  stale: number;
   failed: number;
   nextCursor: string | null;
   done: boolean;
@@ -63,7 +66,7 @@ export async function backfillSearchPage(
     ...(options.cursor ? { cursor: options.cursor } : {}),
     ...(entity === 'post' ? { prefix: 'posts/' } : {}),
   });
-  const counts: Record<SearchSyncResult | 'failed', number> = { indexed: 0, hidden: 0, removed: 0, unchanged: 0, failed: 0 };
+  const counts: Record<SearchSyncResult | 'failed', number> = { indexed: 0, hidden: 0, removed: 0, unchanged: 0, stale: 0, failed: 0 };
   let scanned = 0;
 
   await Promise.all(page.objects.map(async object => {
@@ -76,7 +79,10 @@ export async function backfillSearchPage(
       const stored = await bucket.get(key);
       const value = stored ? await stored.json<Record<string, unknown>>() : null;
       if (value && typeof value === 'object' && value.id !== undefined && value.id !== id) return;
+      const version = r2Version(stored);
       const result = await syncSearchDocument(db, entity, id, value, {
+        // When this copy was written (PR-8): a newer write indexed meanwhile is kept
+        ...(version !== undefined ? { version } : {}),
         force: options.mode !== 'touch',
         touch: options.mode === 'touch',
         now: options.now,

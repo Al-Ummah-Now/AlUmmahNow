@@ -22,6 +22,9 @@ import {
   SearchStatement,
   ownershipCompleteKey,
   ownershipDeleteStatement,
+  r2Version,
+  tombstoneStatement,
+  ownershipTombstone,
   ownershipInvalidatedKey,
   ownershipUpsertStatement,
   projectOwnership,
@@ -252,12 +255,14 @@ export async function backfillOwnershipPage(
       const stored = await bucket.get(object.key);
       const value = stored ? await stored.json<Record<string, unknown>>() : null;
       if (!value) {
-        statements.push(ownershipDeleteStatement(db, kind, id));
+        // Gone between list and get: a delete as of now (PR-8 order guard)
+        statements.push(tombstoneStatement(db, ownershipTombstone(kind), id, now), ownershipDeleteStatement(db, kind, id, now));
         removed++;
         return;
       }
       const row = projectOwnership(kind, id, value);
-      if (row) statements.push(ownershipUpsertStatement(db, row, now));
+      // Version = when this copy was written, so a newer write made meanwhile is kept
+      if (row) statements.push(ownershipUpsertStatement(db, row, now, r2Version(stored) ?? 0));
     } catch (error) {
       failed++;
       logger.warn('[Ownership] Failed to read object during backfill', { kind, key: object.key, error: errorText(error) });

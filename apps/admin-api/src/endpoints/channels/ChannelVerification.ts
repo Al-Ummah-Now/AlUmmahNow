@@ -122,10 +122,10 @@ export class ChannelVerificationPut extends AdminRoute {
       await c.env.REPORTS_DB.prepare(
         'INSERT INTO channel_verification_log (id, channel_id, verified, note, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       ).bind(result.log.id, channelId, result.log.verified, result.log.note, result.log.actor_id, result.log.created_at).run();
-      await repository.putObject(channelId, result.channel as ChannelRecord);
+      const version = await repository.putObject(channelId, result.channel as ChannelRecord);
       // admin-api writes R2 directly, so tell the processor to refresh the
       // channel's search row (search "verified" filter and badge).
-      await new Queue(c.env.queue).send(MessageType.SearchIndexSync, { entity: 'channel', id: channelId, object: result.channel });
+      await new Queue(c.env.queue).send(MessageType.SearchIndexSync, { entity: 'channel', id: channelId, object: result.channel, version });
       logger.info('[ChannelVerification] Verification changed', { channelId, verified: body.verified, actorId });
     }
 

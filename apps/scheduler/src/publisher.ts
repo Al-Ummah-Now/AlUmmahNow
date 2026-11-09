@@ -38,7 +38,7 @@ export async function publishVideo(
   videoData.scheduledPublishStatus = 'published';
 
   // 4. Save updated video
-  await videoBucket.put(
+  const written = await videoBucket.put(
     metadata.videoId,
     JSON.stringify(videoData),
     {
@@ -53,7 +53,8 @@ export async function publishVideo(
   // 5. Search index (Story 29.9): the video is public now
   if (queue) {
     try {
-      const payload: SearchIndexSyncPayload = { entity: 'video', id: metadata.videoId, object: videoData };
+      // version: when R2 stored this copy, so an owner edit made after it wins in the index (PR-8)
+      const payload: SearchIndexSyncPayload = { entity: 'video', id: metadata.videoId, object: videoData, version: written?.uploaded?.getTime() ?? Date.now() };
       await queue.send({ id: crypto.randomUUID(), type: MessageType.SearchIndexSync, payload, timestamp: Date.now() });
     } catch (error) {
       logger.warn(`Failed to queue search index sync for video ${metadata.videoId}`, error);
