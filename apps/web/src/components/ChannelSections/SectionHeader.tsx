@@ -1,5 +1,6 @@
 'use client';
 
+import { pickLanguage } from '@/lib/format/pick-language';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -10,11 +11,11 @@ interface SectionHeaderProps {
 }
 
 export function SectionHeader({ title, viewAllHref }: SectionHeaderProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   return (
     <div className="flex items-center justify-between mb-4">
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{pickLanguage(title, lang)}</h2>
 
       {viewAllHref && (
         <Link

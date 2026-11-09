@@ -1,5 +1,6 @@
 'use client';
 
+import { pickLanguage } from '@/lib/format/pick-language';
 import { useEffect, useState } from 'react';
 import { Playlist } from '@al-ummah/shared-types';
 import Link from 'next/link';
@@ -78,18 +79,18 @@ export function AllPlaylistsSection({ channelId }: AllPlaylistsSectionProps) {
                 className="flex-shrink-0 w-64 sm:w-72 md:w-80 group"
               >
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">
-                  <PlaylistCover playlist={playlist} alt={playlist.name}>
+                  <PlaylistCover playlist={playlist} videos={(playlist as { videoItems?: Array<{ thumbnailUrl?: string | null }> }).videoItems} alt={pickLanguage(playlist.name, locale)}>
                     <div className="absolute bottom-2 end-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
                       {t.playlist.videoCount.replace('{count}', String(playlist.videosCount || 0))}
                     </div>
                   </PlaylistCover>
                   <div className="p-3">
                     <h3 className="font-semibold line-clamp-2 text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                      {playlist.name}
+                      {pickLanguage(playlist.name, locale)}
                     </h3>
                     {playlist.description && (
                       <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mt-1">
-                        {playlist.description}
+                        {pickLanguage(playlist.description, locale)}
                       </p>
                     )}
                   </div>
