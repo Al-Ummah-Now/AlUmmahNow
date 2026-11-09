@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 @import "tw-animate-css";
-@import "../../../../packages/fanous-tokens/generated/lantern/web/tokens.css";
+@import "../theme/site-themes.css";
 /*
   ---break---
 */
