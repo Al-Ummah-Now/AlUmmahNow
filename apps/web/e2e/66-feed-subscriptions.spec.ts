@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
 
 /**
- * Subscription feed (/feed) and subscription management (/subscriptions).
+ * Subscription feed (/subscriptions) and subscription management (/subscriptions/manage).
  *
  * The multi-channel user subscribes (through the API, as its main channel) to
  * the QA seed channel that owns the "QA Lecture" videos; every test removes
@@ -52,18 +52,18 @@ test.describe('Feed and subscriptions - anonymous', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   test('FEED-001 /feed asks anonymous visitors to sign in', async ({ page }) => {
-    await page.goto('/en/feed');
+    await page.goto('/en/subscriptions');
     const prompt = page.getByTestId('sign-in-prompt');
-    await expect(prompt.getByRole('heading', { level: 1, name: 'Subscription Feed' })).toBeVisible();
+    await expect(prompt.getByRole('heading', { level: 1, name: 'Subscriptions' })).toBeVisible();
     await expect(prompt.getByRole('button', { name: 'Sign In' })).toBeVisible();
   });
 
   test('SUBS-001 /subscriptions asks anonymous visitors to sign in (en + ar)', async ({ page }) => {
-    await page.goto('/en/subscriptions');
+    await page.goto('/en/subscriptions/manage');
     await expect(page.getByTestId('sign-in-prompt').getByRole('heading', { name: 'My Subscriptions' })).toBeVisible();
     await expect(page.getByText('Please log in to manage your subscriptions.')).toBeVisible();
 
-    await page.goto('/ar/subscriptions');
+    await page.goto('/ar/subscriptions/manage');
     const prompt = page.getByTestId('sign-in-prompt');
     await expect(prompt).toHaveAttribute('dir', 'rtl');
     await expect(prompt.getByRole('heading', { name: 'اشتراكاتي' })).toBeVisible();
@@ -77,8 +77,8 @@ test.describe('Feed and subscriptions - no subscriptions', () => {
   test('FEED-002 empty feed explains how to fill it and links home', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto('/en/feed');
-    await expect(page.getByRole('heading', { level: 1, name: 'Subscription Feed' })).toBeVisible();
+    await page.goto('/en/subscriptions');
+    await expect(page.getByRole('heading', { level: 1, name: 'Subscriptions' })).toBeVisible();
     const empty = page.getByTestId('feed-empty');
     await expect(empty.getByRole('heading', { name: /^No videos in (your )?feed$/ })).toBeVisible();
     await expect(page.getByTestId('feed-last-updated')).toBeVisible();
@@ -89,19 +89,19 @@ test.describe('Feed and subscriptions - no subscriptions', () => {
   });
 
   test('FEED-003 Arabic empty feed is RTL', async ({ page }) => {
-    await page.goto('/ar/feed');
+    await page.goto('/ar/subscriptions');
     await expect(page.getByRole('heading', { level: 1, name: /^(تغذية|خلاصة) الاشتراكات$/ })).toBeVisible();
     await expect(page.getByTestId('feed-empty').getByRole('heading', { name: /^لا توجد فيديوهات في (التغذية|الخلاصة)$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'تحديث' })).toBeVisible();
   });
 
   test('SUBS-002 empty subscriptions list (en + ar)', async ({ page }) => {
-    await page.goto('/en/subscriptions');
+    await page.goto('/en/subscriptions/manage');
     await expect(page.getByRole('heading', { level: 1, name: 'My Subscriptions' })).toBeVisible();
     await expect(page.getByTestId('subscriptions-empty')).toContainText('No subscriptions yet');
     await expect(page.getByTestId('subscriptions-total')).toHaveText('0');
 
-    await page.goto('/ar/subscriptions');
+    await page.goto('/ar/subscriptions/manage');
     await expect(page.getByRole('heading', { level: 1, name: 'اشتراكاتي' })).toBeVisible();
     await expect(page.getByTestId('subscriptions-empty')).toContainText('لا توجد اشتراكات بعد');
     await expect(page.getByText('ملخص الاشتراكات')).toBeVisible();
@@ -129,7 +129,7 @@ test.describe('Feed and subscriptions - with a subscription', () => {
   });
 
   test('FEED-010 the feed shows videos from the subscribed channel', async ({ page }) => {
-    await page.goto('/en/feed');
+    await page.goto('/en/subscriptions');
     const card = page.getByTestId('video-card').filter({ hasText: channel.videoTitle });
     await expect(card.first()).toBeVisible({ timeout: 60000 });
     await expect(card.first()).toHaveAttribute('href', /^\/en\/video\?vid=/);
@@ -137,7 +137,7 @@ test.describe('Feed and subscriptions - with a subscription', () => {
   });
 
   test('FEED-011 refresh reloads the feed', async ({ page }) => {
-    await page.goto('/en/feed');
+    await page.goto('/en/subscriptions');
     await expect(page.getByTestId('video-card').first()).toBeVisible({ timeout: 60000 });
     const refresh = page.getByRole('button', { name: 'Refresh' });
     await refresh.click();
@@ -146,14 +146,14 @@ test.describe('Feed and subscriptions - with a subscription', () => {
   });
 
   test('FEED-012 Arabic feed uses RTL cards', async ({ page }) => {
-    await page.goto('/ar/feed');
+    await page.goto('/ar/subscriptions');
     const card = page.getByTestId('video-card').first();
     await expect(card).toBeVisible({ timeout: 60000 });
     await expect(card).toHaveAttribute('href', /^\/ar\/video\?vid=/);
   });
 
   test('SUBS-010 lists the subscribed channel and unsubscribes from it', async ({ page }) => {
-    await page.goto('/en/subscriptions');
+    await page.goto('/en/subscriptions/manage');
     const item = page.locator(`[data-testid="subscription-item"][data-channel-id="${channel.id}"]`);
     await expect(item).toBeVisible();
     await expect(item.getByRole('heading')).not.toBeEmpty();
@@ -167,7 +167,7 @@ test.describe('Feed and subscriptions - with a subscription', () => {
   });
 
   test('SUBS-011 Arabic list labels the unsubscribe button', async ({ page }) => {
-    await page.goto('/ar/subscriptions');
+    await page.goto('/ar/subscriptions/manage');
     const item = page.locator(`[data-testid="subscription-item"][data-channel-id="${channel.id}"]`);
     await expect(item).toBeVisible();
     await expect(item.getByRole('button', { name: /^إلغاء الاشتراك في / })).toBeVisible();
@@ -176,10 +176,19 @@ test.describe('Feed and subscriptions - with a subscription', () => {
 
   test('SUBS-012 the unsubscribe button keeps an accessible name on phones', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Text label is visible on wider screens');
-    await page.goto('/en/subscriptions');
+    await page.goto('/en/subscriptions/manage');
     const item = page.locator(`[data-testid="subscription-item"][data-channel-id="${channel.id}"]`);
     const button = item.getByRole('button', { name: /^Unsubscribe from / });
     await expect(button).toBeVisible();
     await expect(button.getByText('Unsubscribe', { exact: true })).toBeHidden();
+  });
+});
+
+test.describe('Old feed address', () => {
+  test.use({ storageState: ANONYMOUS_STATE });
+
+  test('FEED-020 /feed redirects to /subscriptions', async ({ page }) => {
+    await page.goto('/en/feed');
+    await expect(page).toHaveURL(/\/en\/subscriptions$/);
   });
 });

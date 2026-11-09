@@ -81,8 +81,8 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'profile-anon', path: '/profile', role: 'anon' },
     { id: 'profile-create-anon', path: '/profile/create', role: 'anon' },
     { id: 'settings-anon', path: '/settings', role: 'anon' },
-    { id: 'feed-anon', path: '/feed', role: 'anon' },
-    { id: 'subscriptions-anon', path: '/subscriptions', role: 'anon' },
+    { id: 'feed-anon', path: '/subscriptions', role: 'anon' },
+    { id: 'subscriptions-anon', path: '/subscriptions/manage', role: 'anon' },
     { id: 'history-anon', path: '/history', role: 'anon' },
     { id: 'analytics-anon', path: '/analytics', role: 'anon' },
     // Signed-in creator (profile + one channel)
@@ -103,8 +103,8 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'channel-settings-community-new', path: `${ch}/community/new`, role: 'single' },
     { id: 'channel-settings-videos', path: `${ch}/videos`, role: 'single' },
     { id: 'analytics', path: '/analytics', role: 'single' },
-    { id: 'feed', path: '/feed', role: 'single' },
-    { id: 'subscriptions', path: '/subscriptions', role: 'single' },
+    { id: 'feed', path: '/subscriptions', role: 'single' },
+    { id: 'subscriptions', path: '/subscriptions/manage', role: 'single' },
     { id: 'history', path: '/history', role: 'single' },
     { id: 'channels-signed-in', path: '/channels', role: 'single' },
     // Profile without a channel

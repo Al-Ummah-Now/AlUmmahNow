@@ -989,7 +989,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     mySubscriptions: 'اشتراكاتي',
     manage: 'إدارة',
     notificationSettings: 'إعدادات الإشعارات',
-    subscriptionFeed: 'تغذية الاشتراكات',
+    subscriptionFeed: 'الاشتراكات',
     noSubscriptions: 'لا توجد اشتراكات بعد',
     loginToSeeVideos: 'سجل الدخول لمشاهدة أحدث الفيديوهات من القنوات المشترك بها.',
     latestVideos: 'أحدث الفيديوهات من القنوات المشترك بها',

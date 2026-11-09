@@ -54,7 +54,7 @@ spec runs in all five projects).
 | `/[locale]/profile/create` | anon, none | PROF-020…021, 03-profile, 10/11 profile-guard, A11Y-ALL profile-create-anon |
 | `/[locale]/profile/edit` | anon, none, single | PROF-030…040, A11Y-ALL profile-edit |
 | `/[locale]/history` | anon, none, single | HIST-001…005, A11Y-ALL history* |
-| `/[locale]/feed` | anon, none, multi | FEED-001…012, A11Y-ALL feed* |
+| `/[locale]/subscriptions` (feed; `/feed` redirects) | anon, none, multi | FEED-001…012, A11Y-ALL feed* |
 | `/[locale]/subscriptions` | anon, none, multi | SUBS-001…012, A11Y-ALL subscriptions* |
 | `/[locale]/analytics` | anon, none, single | ANA-001…030, A11Y-ALL analytics* |
 | `/[locale]/search` (search v2) | anon | 21-search-v2 (search v2 workstream) |

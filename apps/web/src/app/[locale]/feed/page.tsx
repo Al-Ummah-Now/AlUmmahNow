@@ -1,6 +1,7 @@
-import React from 'react';
-import { SubscriptionFeed } from '@/components/subscription';
+import { permanentRedirect } from 'next/navigation';
 
-export default function FeedPage() {
-  return <SubscriptionFeed />;
+/** The feed lives at /subscriptions now; old links keep working. */
+export default async function FeedPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  permanentRedirect(`/${locale}/subscriptions`);
 }
