@@ -654,6 +654,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   upload: {
     uploadTitle: 'رفع فيديو',
     uploadVideo: 'رفع فيديو',
+    createChannelToUpload: 'أنشئ قناة لترفع الفيديوهات',
     selectFile: 'اختر ملف',
     dragDropFiles: 'اسحب وأفلت الملفات هنا',
     videoDetails: 'تفاصيل الفيديو',

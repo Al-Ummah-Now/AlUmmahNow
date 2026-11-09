@@ -62,15 +62,15 @@
   "button.icon.focus": "focusRing",
   "button.icon.disabledBg": "surface",
   "button.icon.disabledText": "textMuted",
-  "upload.bg": "primary",
-  "upload.text": "onPrimary",
+  "upload.bg": "surface",
+  "upload.text": "textPrimary",
   "upload.border": "primaryEdge",
-  "upload.hover": "primaryHover",
-  "upload.pressed": "primaryPressed",
+  "upload.hover": "background",
+  "upload.pressed": "heroStart",
   "upload.focus": "focusRing",
-  "upload.disabledBg": "primaryDisabled",
-  "upload.disabledText": "onPrimaryDisabled",
-  "upload.icon": "onPrimary",
+  "upload.disabledBg": "surface",
+  "upload.disabledText": "textMuted",
+  "upload.icon": "link",
   "form.sectionBg": "surface",
   "form.sectionBorder": "divider",
   "form.label": "textPrimary",
@@ -513,6 +513,16 @@
   ],
   [
    "upload.icon",
+   "upload.bg",
+   3
+  ],
+  [
+   "upload.icon",
+   "upload.hover",
+   3
+  ],
+  [
+   "upload.border",
    "upload.bg",
    3
   ],

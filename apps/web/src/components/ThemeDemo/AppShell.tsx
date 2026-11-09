@@ -12,7 +12,7 @@ import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
-import { DemoUpload } from './DemoUpload';
+import { UploadAction } from '@/components/Header/UploadAction';
 
 const L = {
   en: { browse: 'Browse', you: 'You', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
@@ -81,15 +81,14 @@ export function AppShell() {
       <header className="ah">
         <div className="ah-start">
           <button type="button" className="ic" aria-label={open ? c.close : c.menu} aria-expanded={open} data-testid="nav-drawer-toggle" onClick={() => setOpen(!open)}><Menu aria-hidden="true" /></button>
+          <UploadAction />
           <Link href={`${base}/`} className="ah-brand" aria-label={t.a11y.goToHomePage}>
             <Image src="/logo.png" alt="" width={32} height={32} className="ah-logo" />
             <span>{t.common.appName}</span>
           </Link>
-          <DemoUpload place="start" />
         </div>
         <HeaderSearch />
         <div className="ah-end">
-          <DemoUpload place="end" />
           <NotificationBell dir={rtl ? 'rtl' : 'ltr'} />
           {rtl ? <UnifiedNavigationRTL /> : <UnifiedNavigation />}
         </div>

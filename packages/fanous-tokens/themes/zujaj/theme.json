@@ -194,13 +194,15 @@
       "nav.searchBorder": "#a9cccc",
       "nav.searchText": "#ffffff",
       "nav.searchPlaceholder": "#d3e8e7",
-      "upload.bg": "#f5cf92",
-      "upload.text": "#09151e",
-      "upload.icon": "#09151e",
-      "upload.border": "#f8e8be",
-      "upload.hover": "#f8e8be",
-      "upload.pressed": "#e8b477",
-      "upload.focus": "#ffffff"
+      "upload.bg": "#0f5a6b",
+      "upload.text": "#ffffff",
+      "upload.icon": "#f5cf92",
+      "upload.border": "#f5cf92",
+      "upload.hover": "#0c4c5b",
+      "upload.pressed": "#083d45",
+      "upload.focus": "#ffffff",
+      "upload.disabledBg": "#0f5a6b",
+      "upload.disabledText": "#d3e8e7"
     }
   }
 }

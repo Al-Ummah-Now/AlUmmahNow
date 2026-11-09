@@ -6,7 +6,7 @@ import Link from "next/link";
 import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { useLanguage } from '@/hooks/useLanguage';
-import { DemoUpload } from '@/components/ThemeDemo/DemoUpload';
+import { UploadAction } from '@/components/Header/UploadAction';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) => {
@@ -26,7 +26,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
           ariaExpanded={isNavOpen}
           testId="nav-drawer-toggle"
         />
-        <DemoUpload place="start" />
+        <UploadAction />
       </div>
 
       {/* Logo Section */}
@@ -43,7 +43,6 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
 
       {/* Unified Navigation and Upload Button */}
       <div className="flex-1 flex items-center justify-end gap-2">
-        <DemoUpload place="end" />
         <NotificationBell dir="rtl" />
         <UnifiedNavigationRTL />
       </div>
