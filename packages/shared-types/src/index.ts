@@ -50,6 +50,7 @@ export * from './i18n';
 export * from './notifications';
 export * from './i18n-library';
 export * from './i18n-bulk-edit';
+export * from './i18n-studio';
 export * from './i18n-community-guidelines';
 
 // Static en/ar UI translations (web fallback + api-videos translation seed)

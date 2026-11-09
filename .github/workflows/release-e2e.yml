@@ -86,7 +86,7 @@ jobs:
       # chromium for the auth flows, branded Chrome for real H.264 playback
       - name: Install browsers
         working-directory: ${{ env.SUITE }}
-        run: npx playwright install --with-deps chromium chrome
+        run: npx playwright install --with-deps chromium chrome firefox webkit
 
       - name: Run release regressions
         working-directory: ${{ env.SUITE }}

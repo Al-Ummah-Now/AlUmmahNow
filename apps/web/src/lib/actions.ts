@@ -7,6 +7,8 @@ import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 import { startSingleSignOut } from "./auth/single-sign-out"
 import { newStateNonce, stateCookieOptions, withState, STATE_COOKIE } from "./auth/oauth-state"
+import { safeStudioReturn } from "@/lib/studio/resolve";
+import { RETURN_COOKIE } from "@/lib/auth/silent-sign-in";
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -86,7 +88,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
   }
 }
 
-export async function login(locale: string = 'en') {
+export async function login(locale: string = 'en', returnTo?: unknown) {
   // Check if already logged in via SessionManager
   try {
     const { SessionManager } = await import('./auth/session-manager');
@@ -135,6 +137,11 @@ export async function login(locale: string = 'en') {
   // An interactive sign-in: not silent, back to the locale's home
   cookieStore.delete("auth_silent")
   cookieStore.delete("auth_return")
+  // Sign-in started from a Studio page comes back to it (only ever a Studio path)
+  const studioReturn = safeStudioReturn(returnTo);
+  if (studioReturn) {
+    cookieStore.set(RETURN_COOKIE, studioReturn, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 });
+  }
   const { url } = await client.authorize(
     `${protocol}://${host}/api/callback`,
     "code",

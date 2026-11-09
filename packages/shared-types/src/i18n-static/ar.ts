@@ -9,6 +9,7 @@
 import type { AppTranslations } from '../i18n';
 import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from '../i18n-library';
 import { BULK_EDIT_AR } from '../i18n-bulk-edit';
+import { STUDIO_AR } from '../i18n-studio';
 import { COMMUNITY_GUIDELINES_AR } from '../i18n-community-guidelines';
 
 export const AR_TRANSLATIONS: AppTranslations = {
@@ -1809,4 +1810,5 @@ export const AR_TRANSLATIONS: AppTranslations = {
     signInToReact: 'سجّل الدخول لإبداء الإعجاب أو عدمه',
     watchingNow: '{count} يشاهدون الآن',
   },
+  studio: STUDIO_AR,
 };

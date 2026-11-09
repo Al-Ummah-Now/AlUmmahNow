@@ -9,6 +9,7 @@
 import type { AppTranslations } from '../i18n';
 import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from '../i18n-library';
 import { BULK_EDIT_EN } from '../i18n-bulk-edit';
+import { STUDIO_EN } from '../i18n-studio';
 import { COMMUNITY_GUIDELINES_EN } from '../i18n-community-guidelines';
 
 export const EN_TRANSLATIONS: AppTranslations = {
@@ -1814,4 +1815,5 @@ export const EN_TRANSLATIONS: AppTranslations = {
     signInToReact: 'Sign in to like or dislike',
     watchingNow: '{count} watching now',
   },
+  studio: STUDIO_EN,
 };

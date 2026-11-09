@@ -7,6 +7,7 @@ import { defineConfig, devices } from '@playwright/test';
  * admin promotion uses TEST_PROMOTE_SECRET. Needs only @playwright/test.
  */
 const PLAYER = /player\.spec\.ts$/;
+const STUDIO = /studio-.*\.spec\.ts$/;
 
 export default defineConfig({
   testDir: './e2e/release',
@@ -35,5 +36,8 @@ export default defineConfig({
       testMatch: PLAYER,
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
+    // Studio pages must work in every engine (docs/specs/CREATOR-STUDIO.md §9.5)
+    { name: 'studio-firefox', testMatch: STUDIO, use: { ...devices['Desktop Firefox'] } },
+    { name: 'studio-webkit', testMatch: STUDIO, use: { ...devices['Desktop Safari'] } },
   ],
 });
