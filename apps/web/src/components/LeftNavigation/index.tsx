@@ -91,7 +91,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                         <IcoButton
                             style="fa-bars"
                             size="text-lg"
-                            color="text-[#ffa037]  bg-transparent"
+                            color="text-[var(--fanous-color-accent)]  bg-transparent"
                             onClick={onCollapse}
                             ariaLabel={t.common.close}
                             testId="nav-drawer-close"

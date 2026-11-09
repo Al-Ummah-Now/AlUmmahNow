@@ -228,7 +228,7 @@ export function UnifiedNavigation() {
                 <form action={login.bind(null, lang)}>
                   <button
                     type="submit"
-                    className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-gray-900 font-semibold transition-all shadow-md hover:shadow-lg"
+                    className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-brand hover:bg-brand-hover text-on-brand font-semibold transition-all shadow-md hover:shadow-lg"
                     role="menuitem"
                   >
                     <User className="h-5 w-5" />
@@ -398,7 +398,7 @@ export function UnifiedNavigation() {
                       </div>
                     )}
                     {channel.isMain && (
-                      <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
+                      <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-brand-ink bg-white dark:bg-gray-900 rounded-full" />
                     )}
                   </div>
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate flex-1">
@@ -512,7 +512,7 @@ export function UnifiedNavigation() {
                       ) : (
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500 text-xs font-semibold text-white">{getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}</span>
                       )}
-                      {ch.isMain && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full bg-white text-yellow-500 dark:bg-gray-900" />}
+                      {ch.isMain && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full bg-white text-brand-ink dark:bg-gray-900" />}
                     </span>
                     <span className={`${ROW_TEXT} flex-1 min-w-0 truncate`}>{getChannelName(ch.name, ch.nameLocalized)}</span>
                     {channel?.id === ch.id && <Check className={ROW_ICON} aria-hidden="true" />}
