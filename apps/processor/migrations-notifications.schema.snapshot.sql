@@ -4,7 +4,10 @@
 --   apps/processor/migrations-notifications/0002_library_index.sql
 --   apps/processor/migrations-notifications/0003_push_devices.sql
 --   apps/processor/migrations-notifications/0004_dead_letters.sql
+--   apps/processor/migrations-notifications/0005_analytics_daily.sql
 
+CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
+CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_subscribers (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, bell TEXT NOT NULL DEFAULT 'highlights' CHECK (bell IN ('all', 'highlights', 'none')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (channel_id, user_id));
 CREATE TABLE dead_letters (id TEXT PRIMARY KEY, message_id TEXT, message_type INTEGER, type_name TEXT NOT NULL, source TEXT NOT NULL, dlq TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 1, failure_reason TEXT, body_json TEXT NOT NULL, body_truncated INTEGER NOT NULL DEFAULT 0, received_at INTEGER NOT NULL, replayed_at INTEGER);
 CREATE TABLE liked_videos (user_id TEXT NOT NULL, video_id TEXT NOT NULL, liked_at INTEGER NOT NULL, PRIMARY KEY (user_id, video_id));

@@ -359,15 +359,88 @@ export async function loadOwnedVideos(
   return videos;
 }
 
+export interface RollupSources {
+  /** D1 daily counters written by the processor (table analytics_daily) */
+  NOTIFICATIONS_DB?: D1Database;
+  /** Legacy monthly documents, until the processor has imported them into D1 */
+  analytics_rollups?: R2Bucket;
+}
+
+interface CounterRow {
+  entity_id: string;
+  day: string;
+  metric: string;
+  value: number;
+}
+
+/**
+ * Daily views / watch time of some videos or channels over `range`, as
+ * monthly rollups (one per entity and month; callers sum them).
+ *
+ * Source of truth is the processor's D1 counters (SCALABILITY-AUDIT PR-1).
+ * Legacy R2 documents (analytics/rollups/...) that the processor has not
+ * imported yet are added; imported ones are listed in
+ * analytics_rollup_imports and skipped, so nothing is counted twice.
+ */
 export async function loadRollups(
-  bucket: R2Bucket | undefined,
+  sources: RollupSources,
   entityType: 'video' | 'channel',
   entityIds: string[],
   range: DateRange
 ): Promise<MonthlyRollup[]> {
-  if (!bucket) return [];
-  const months = monthsInRange(range);
-  const keys = entityIds.flatMap(id => months.map(month => `analytics/rollups/${entityType}/${id}/${month}.json`));
-  const docs = await Promise.all(keys.map(key => readJson<MonthlyRollup>(bucket, key)));
-  return docs.filter((doc): doc is MonthlyRollup => !!doc);
+  if (entityIds.length === 0) return [];
+  const days = daysInRange(range);
+  const fromDay = days[0];
+  const toDay = days[days.length - 1];
+  const out: MonthlyRollup[] = [];
+  const db = sources.NOTIFICATIONS_DB;
+
+  let imported = new Set<string>();
+  if (db) {
+    const byEntityMonth = new Map<string, MonthlyRollup>();
+    for (let i = 0; i < entityIds.length; i += 50) {
+      const ids = entityIds.slice(i, i + 50);
+      const result = await db
+        .prepare(
+          `SELECT entity_id, day, metric, value FROM analytics_daily
+           WHERE entity_type = ? AND entity_id IN (${ids.map(() => '?').join(', ')}) AND day >= ? AND day <= ? AND metric IN ('views', 'watch_time')`
+        )
+        .bind(entityType, ...ids, fromDay, toDay)
+        .all<CounterRow>();
+      for (const row of result.results ?? []) {
+        const key = `${row.entity_id}/${row.day.slice(0, 7)}`;
+        const doc = byEntityMonth.get(key) ?? { days: {} };
+        byEntityMonth.set(key, doc);
+        const entry = (doc.days[row.day] ??= { views: 0, watchTime: 0 });
+        if (row.metric === 'views') entry.views += row.value;
+        else entry.watchTime += row.value;
+      }
+    }
+    out.push(...byEntityMonth.values());
+  }
+
+  const bucket = sources.analytics_rollups;
+  if (bucket) {
+    const months = monthsInRange(range);
+    const keys = entityIds.flatMap(id => months.map(month => `analytics/rollups/${entityType}/${id}/${month}.json`));
+    if (db) {
+      try {
+        for (let i = 0; i < keys.length; i += 50) {
+          const chunk = keys.slice(i, i + 50);
+          const result = await db
+            .prepare(`SELECT r2_key FROM analytics_rollup_imports WHERE r2_key IN (${chunk.map(() => '?').join(', ')})`)
+            .bind(...chunk)
+            .all<{ r2_key: string }>();
+          for (const row of result.results ?? []) imported.add(row.r2_key);
+        }
+      } catch (error) {
+        // Before the migration ran nothing is imported, so every document counts
+        logger.warn('[analytics] could not read rollup imports', { error: String(error) });
+        imported = new Set();
+      }
+    }
+    const docs = await Promise.all(keys.filter(key => !imported.has(key)).map(key => readJson<MonthlyRollup>(bucket, key)));
+    out.push(...docs.filter((doc): doc is MonthlyRollup => !!doc));
+  }
+  return out;
 }
