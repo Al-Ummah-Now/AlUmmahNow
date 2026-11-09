@@ -30,7 +30,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { ResendTestClient } from '../test-utils/resend-client';
 import { ApiClient } from './seed-api';
-import { loginWithPassword, registerAccount, type AuthConfig, type SessionTokens } from './seed-auth';
+import { decodeJwtPayload, loginWithPassword, registerAccount, type AuthConfig, type SessionTokens } from './seed-auth';
 import { seedLogger as log, maskSecret } from './seed-logger';
 import { ensureProfile, listOwnChannels } from './seed-users';
 
@@ -110,7 +110,10 @@ const EMAIL_DOMAIN = process.env.SEED_EMAIL_DOMAIN || 'delivered.resend.dev';
 const MEDIA_DIR = process.env.SEED_MEDIA_DIR || path.join(os.tmpdir(), 'seed-demo-media');
 const DEMO_SET_OUT = process.env.SEED_DEMO_SET_OUT || path.join(__dirname, '../../demo-content/demo-set.json');
 const PROCESSING_TIMEOUT_MS = Number(process.env.SEED_PROCESSING_TIMEOUT_SECONDS || 2400) * 1000;
-const STALE_UPLOAD_MS = 30 * 60 * 1000;
+// The seed uploads one clip at a time, so an unfinished older upload is abandoned
+const STALE_UPLOAD_MS = 10 * 60 * 1000;
+/** Access tokens last about 15 minutes; refresh well before that. */
+const TOKEN_MARGIN_S = 6 * 60;
 const MAX_CLIP_SECONDS = 120;
 const USER_AGENT = 'AlUmmahNowDemoSeed/1.0 (openly licensed clips for a private QA demo)';
 
@@ -390,6 +393,27 @@ async function ensureAccounts(): Promise<Sessions> {
   return sessions;
 }
 
+/** Re-logs in any session close to expiry, updating it in place. */
+async function freshen(sessions: Sessions): Promise<void> {
+  const soon = Date.now() / 1000 + TOKEN_MARGIN_S;
+  const expiring = manifest.channels.filter((c) => {
+    const session = sessions.get(c.key);
+    return session && Number(decodeJwtPayload(session.accessToken).exp) < soon;
+  });
+  if (expiring.length === 0) return;
+  const browser = await chromium.launch({ headless: true });
+  try {
+    for (const channel of expiring) {
+      const login = await loginWithPassword(browser, authConfig, emailFor(channel.key), PASSWORD);
+      if (!login.ok) throw new Error(`Re-login failed for ${emailFor(channel.key)}: ${login.message}`);
+      Object.assign(sessions.get(channel.key)!, login.session);
+    }
+  } finally {
+    await browser.close();
+  }
+  log.info('Refreshed tokens', { accounts: expiring.length });
+}
+
 async function ensureChannel(session: SessionTokens, def: ChannelDef): Promise<ChannelRecord | undefined> {
   const existing = (await listOwnChannels(api, session)) as ChannelRecord[];
   const found = existing.find((c) => c.name === def.name);
@@ -473,6 +497,7 @@ async function waitForEncoding(sessions: Sessions, seeded: Seeded[]): Promise<vo
   const pending = new Map(seeded.filter((s) => s.fresh).map((s) => [s.video.id, s]));
   const deadline = Date.now() + PROCESSING_TIMEOUT_MS;
   while (pending.size > 0 && Date.now() < deadline) {
+    await freshen(sessions);
     for (const [id, item] of pending) {
       const status = await uploadStatus(sessions.get(item.channelKey)!, item.video);
       if (status === 'ready') pending.delete(id);
@@ -496,6 +521,7 @@ async function waitForEncoding(sessions: Sessions, seeded: Seeded[]): Promise<vo
  */
 async function ensureUnplayable(sessions: Sessions, channels: Map<string, ChannelRecord>, seeded: Seeded[]): Promise<VideoRecord | undefined> {
   const def = manifest.unplayable;
+  await freshen(sessions);
   const session = sessions.get(def.channel);
   const channel = channels.get(def.channel);
   if (!session || !channel) return undefined;
@@ -540,6 +566,7 @@ async function ensureThumbnails(sessions: Sessions, seeded: Seeded[]): Promise<v
     const full = await fetchVideo(item.video.id);
     if (full?.thumbnailType === 'custom') continue;
     const { thumbnail } = await mediaFor(clip);
+    await freshen(sessions);
     await setThumbnail(sessions.get(item.channelKey)!, item.video, thumbnail);
     note(`thumbnail set: ${clip.slug}`);
   }
@@ -556,6 +583,7 @@ interface PlaylistRecord {
 
 async function ensurePlaylists(sessions: Sessions, channels: Map<string, ChannelRecord>, seeded: Seeded[]): Promise<string[]> {
   log.group('Playlists');
+  await freshen(sessions);
   const ids: string[] = [];
   const idOf = new Map(seeded.map((s) => [s.slug, s.video.id]));
   for (const def of manifest.playlists) {
@@ -657,6 +685,7 @@ async function main(): Promise<void> {
   for (const def of manifest.channels) {
     const session = sessions.get(def.key);
     if (!session) continue;
+    await freshen(sessions);
     if (MODE === 'apply') await ensureProfile(api, session, { email: emailFor(def.key), displayName: def.name });
     const channel = await ensureChannel(session, def);
     if (!channel) continue;
@@ -674,6 +703,7 @@ async function main(): Promise<void> {
     const existing = await listVideos(session, channel.id);
     for (const clip of manifest.clips.filter((c) => c.channel === def.key)) {
       try {
+        await freshen(sessions);
         const item = await ensureClip(session, channel.id, existing, clip);
         if (item) seeded.push(item);
       } catch (error) {
