@@ -5,6 +5,9 @@
   "compatibility_date": "2025-04-12",
   "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
   "workers_dev": true,
+  "minify": true,
+  // keepNames adds __name() to stringified functions, which breaks the next-themes inline script
+  "keep_names": false,
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "vars": {
     "Issuer": "https://auth.qa.alummahnow.net",
