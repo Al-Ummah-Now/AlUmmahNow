@@ -27,6 +27,7 @@
     "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
     "NEXTJS_ENV": "production",
     "API_URL": "https://videos.api.alummahnow.net",
+    "ADMIN_API_URL": "https://admin.api.alummahnow.net",
     "WEBSOCKET_URL": "wss://realtime.alummahnow.net/ws",
     "ClientId": "f0de3c30-0304-4ac4-86d6-1e185dec0439"
   },
@@ -53,6 +54,7 @@
         "OPENAUTH_ISSUER": "https://auth.stage.alummahnow.net",
         "NEXTJS_ENV": "stage",
         "API_URL": "https://videos.api.stage.alummahnow.net",
+        "ADMIN_API_URL": "https://admin.api.stage.alummahnow.net",
         "WEBSOCKET_URL": "wss://realtime.stage.alummahnow.net/ws",
         "ClientId": "f0de3c30-0304-4ac4-86d6-1e185dec0439"
       },

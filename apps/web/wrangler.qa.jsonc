@@ -28,6 +28,7 @@
     "OPENAUTH_ISSUER": "https://auth.qa.alummahnow.net",
     "NEXTJS_ENV": "qa",
     "API_URL": "https://videos.api.qa.alummahnow.net",
+    "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
     "WEBSOCKET_URL": "wss://realtime.qa.alummahnow.net/ws",
     "ClientId": "e0de3c30-0304-4ac4-86d6-1e185dec0439"
   },

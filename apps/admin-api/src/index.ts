@@ -5,6 +5,7 @@ import { authMiddleware, adminMiddleware } from "./middleware/auth";
 import { loggingMiddleware } from "./middleware/logging";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
+import { readSiteTheme } from './lib/siteSettings';
 
 // ==========================================
 // APP SETUP
@@ -81,6 +82,12 @@ app.use('/api/*', loggingMiddleware);
 // ==========================================
 // AUTHENTICATION MIDDLEWARE
 // ==========================================
+
+// The site theme is public and read by the web apps on every page, so it is short-lived at the edge
+app.get('/public/site-theme', async (c) => {
+  const { theme } = await readSiteTheme(c.env.REPORTS_DB);
+  return c.json({ theme }, 200, { 'Cache-Control': 'public, max-age=30' });
+});
 
 // Apply auth + admin middleware to all API routes
 app.use('/api/*', authMiddleware);

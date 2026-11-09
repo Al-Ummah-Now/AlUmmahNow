@@ -24,6 +24,7 @@ import { RuntimeConfigBootstrap } from "@/components/RuntimeConfigBootstrap";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import SkipLinks from "@/components/SkipLinks";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
+import { getSiteTheme } from "@/lib/theme/site-theme";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -98,9 +99,9 @@ function RuntimeConfigScript({ nonce }: { nonce?: string }) {
  * websocket, notifications or consent banner, and no session lookup, so an
  * embed never acts as the viewer even when the browser sent a session cookie.
  */
-function EmbedDocument({ locale, nonce, children }: { locale: string; nonce?: string; children: React.ReactNode }) {
+function EmbedDocument({ locale, nonce, theme, children }: { locale: string; nonce?: string; theme: string; children: React.ReactNode }) {
   return (
-    <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
       <head>
         <RuntimeConfigScript nonce={nonce} />
       </head>
@@ -118,15 +119,17 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   // Per-request CSP nonce set by middleware (production only).
   const nonce = requestHeaders.get(NONCE_HEADER) ?? undefined;
 
+  const theme = await getSiteTheme();
+
   if (requestHeaders.get(EMBED_REQUEST_HEADER) === '1') {
-    return <EmbedDocument locale={locale} nonce={nonce}>{children}</EmbedDocument>;
+    return <EmbedDocument locale={locale} nonce={nonce} theme={theme}>{children}</EmbedDocument>;
   }
 
   const subject = await authenticated()
   const user = subject ? subject.properties : null;
 
   return (
-    <html lang={locale} dir={getTextDirection(locale)} suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
       <head>
         {/* Font Awesome - Consider self-hosting for better performance */}
         <link
