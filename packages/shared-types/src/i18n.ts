@@ -1929,6 +1929,65 @@ export interface AppTranslations {
     pauseFailed: string;
   };
 
+  /** In-place editing on settings pages */
+  inlineEdit: {
+    editMode: string;
+    editModeHelp: string;
+    editField: string;
+    done: string;
+    cancel: string;
+    edited: string;
+    unsavedOne: string;
+    unsavedMany: string;
+    saveChanges: string;
+    saving: string;
+    discard: string;
+    saved: string;
+    saveFailed: string;
+    fixErrors: string;
+    leaveWarning: string;
+    changeBanner: string;
+    addBanner: string;
+    changeChannelPicture: string;
+    changeProfilePhoto: string;
+    changeCover: string;
+    uploading: string;
+    imageUpdated: string;
+    imageFailed: string;
+    required: string;
+    editingLanguage: string;
+    addDescription: string;
+    addBio: string;
+    addLocation: string;
+    addContactEmail: string;
+    noLinks: string;
+    viewChannel: string;
+    viewProfile: string;
+    keyboardHint: string;
+    keyboardHintMultiline: string;
+    characterCount: string;
+    settingsSections: string;
+    overview: string;
+    customize: string;
+    account: string;
+    profile: string;
+    channel: string;
+    uploadDefaults: string;
+    privacy: string;
+    notifications: string;
+    aboutHeading: string;
+    aboutHelp: string;
+    preferences: string;
+    preferencesHelp: string;
+    displayName: string;
+    firstName: string;
+    lastName: string;
+    bio: string;
+    removeLinkNamed: string;
+    tabs: string;
+    sections: string;
+  };
+
   settings?: {
     uploadDefaults?: string;
     uploadDefaultsDesc?: string;

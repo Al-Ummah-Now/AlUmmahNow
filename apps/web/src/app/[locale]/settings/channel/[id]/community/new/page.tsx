@@ -182,7 +182,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="
         border-b
         bg-card
@@ -208,9 +208,9 @@ export default function NewPostPage({ params }: NewPostPageProps) {
             >
               <ArrowLeft className={`w-4 h-4 md:w-5 md:h-5 ${isRTL ? 'rotate-180' : ''}`} />
             </Button>
-            <h1 className="text-lg md:text-2xl font-bold">
+            <h2 className="text-lg md:text-2xl font-bold">
               {isRTL ? 'منشور جديد' : 'New Post'}
-            </h1>
+            </h2>
           </div>
 
           {/* Drafts are not supported by the API (posts are published or scheduled), so only Publish is offered */}

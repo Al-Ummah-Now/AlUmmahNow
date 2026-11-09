@@ -50,19 +50,19 @@ async function openAddDialog(page: Page, label = 'Add section') {
 test.describe('Section manager', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('SECT-001 shows the localized header, usage count and breadcrumb (en)', async ({ page }) => {
+  test('SECT-001 shows the channel header, settings tabs, localized heading and usage count (en)', async ({ page }) => {
     const existing = await listSections(owner, channelId());
     await openManager(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'Channel sections' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Channel sections' })).toBeVisible();
     await expect(page.getByText('Customize your channel layout (max 10 sections)')).toBeVisible();
     await expect(page.getByTestId('sections-count')).toHaveText(`${existing.length} of 10 sections used`);
     await expect(page.getByTestId('publish-sections')).toBeDisabled();
 
-    const crumbs = page.getByTestId('channel-settings-breadcrumb');
-    await expect(crumbs).toHaveAttribute('aria-label', 'Breadcrumb');
-    await expect(crumbs.getByRole('link', { name: channelsOf(owner).main.name })).toHaveAttribute('href', `/en/channels/${channelId()}`);
-    await expect(crumbs.getByRole('link', { name: 'Channel Settings' })).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
-    await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Manage Sections');
+    await expect(page.getByTestId('channel-header').getByRole('heading', { level: 1 })).toHaveText(channelsOf(owner).main.name);
+    const nav = page.getByTestId('channel-settings-nav');
+    await expect(nav).toHaveAttribute('aria-label', 'Settings sections');
+    await expect(nav.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
+    await expect(nav.locator('[aria-current="page"]')).toHaveText('Sections');
   });
 
   test('SECT-002 adds an automatic section that then renders on the channel Home tab', async ({ page }) => {
@@ -213,10 +213,10 @@ test.describe('Section manager', () => {
   test('SECT-007 Arabic section manager is RTL and fully translated', async ({ page }) => {
     await openManager(page, 'ar');
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'أقسام القناة' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'أقسام القناة' })).toBeVisible();
     await expect(page.getByTestId('sections-count')).toContainText('من 10 أقسام');
     await expect(page.getByTestId('publish-sections')).toHaveText('نشر');
-    await expect(page.getByTestId('channel-settings-breadcrumb')).toHaveAttribute('aria-label', 'مسار التنقل');
+    await expect(page.getByTestId('channel-settings-nav')).toHaveAttribute('aria-label', 'أقسام الإعدادات');
 
     const dialog = await openAddDialog(page, 'إضافة قسم');
     await expect(dialog).toHaveAttribute('dir', 'rtl');
@@ -229,23 +229,12 @@ test.describe('Section manager', () => {
     await expect(dialog.getByRole('heading', { name: 'إضافة قسم للقناة' })).toBeVisible();
   });
 
-  test('SECT-008 breadcrumb runs right-to-left in Arabic', async ({ page }) => {
+  test('SECT-008 settings tabs run right-to-left in Arabic', async ({ page }) => {
     await openManager(page, 'ar');
-    const items = page.getByTestId('channel-settings-breadcrumb').getByRole('listitem');
-    await expect(items).toHaveCount(3);
-    const boxes = await items.evaluateAll((els) =>
-      els.map((e) => {
-        const r = e.getBoundingClientRect();
-        return { left: r.left, right: r.right, top: Math.round(r.top) };
-      })
-    );
-    const listRight = await page.getByTestId('channel-settings-breadcrumb').getByRole('list').evaluate((e) => e.getBoundingClientRect().right);
-    // The first crumb (channel) starts at the inline start, i.e. the right edge
-    expect(Math.abs(listRight - boxes[0].right)).toBeLessThan(2);
-    // Crumbs on the same line run right to left (the list may wrap on phones)
-    for (let i = 1; i < boxes.length; i++) {
-      if (boxes[i].top === boxes[i - 1].top) expect(boxes[i].right).toBeLessThanOrEqual(boxes[i - 1].left + 1);
-    }
+    const items = page.getByTestId('channel-settings-nav').getByRole('listitem');
+    const boxes = await items.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().right));
+    // The first tab (overview) sits at the inline start, i.e. furthest right
+    for (let i = 1; i < boxes.length; i++) expect(boxes[i]).toBeLessThan(boxes[i - 1]);
   });
 });
 

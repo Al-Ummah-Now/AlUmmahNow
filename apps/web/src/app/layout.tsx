@@ -147,7 +147,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
           <QueryProvider>
             <NuqsAdapter>
               <ThemeProvider
-              attribute="class"
+              // data-fanous-theme switches the Fanous token set with the theme
+              attribute={['class', 'data-fanous-theme']}
               defaultTheme="system"
               enableSystem
               nonce={nonce}

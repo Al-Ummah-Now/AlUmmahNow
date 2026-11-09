@@ -151,26 +151,33 @@ test.describe('Channel owner - handle, About and delete', () => {
     const handle = `e2e-${uniqueSuffix()}`;
     await page.goto(`/en/settings/channel/${channel!.id}/edit`);
 
+    // Handle, edited in place in the header
+    await page.getByRole('button', { name: /^Edit Handle/ }).click();
     const input = page.getByTestId('channel-handle-input');
     await expect(input).toHaveValue(channel!.handle || '');
     await input.fill('admin');
     await expect(page.getByTestId('channel-handle-status')).toHaveText('This handle is reserved');
-    await expect(page.getByTestId('channel-edit-save')).toBeDisabled();
-
     await input.fill(handle);
     await expect(page.getByTestId('channel-handle-status')).toHaveText(`@${handle} is available`);
+    await input.press('Enter');
 
+    // Links and details, edited where the About tab shows them
     await page.getByTestId('channel-add-link').click();
-    const row = page.getByTestId('channel-link-row').first();
-    await row.getByRole('textbox', { name: /Link title 1/ }).fill('Website');
-    await row.getByRole('textbox', { name: /URL .* 1/ }).fill('javascript:alert(1)');
+    const row = page.getByTestId('channel-link-row').last();
+    await row.getByRole('textbox', { name: /Link title \d+/ }).fill('Website');
+    await row.getByRole('textbox', { name: /URL .* \d+/ }).fill('javascript:alert(1)');
     await expect(page.getByTestId('channel-edit-save')).toBeDisabled();
-    await row.getByRole('textbox', { name: /URL .* 1/ }).fill('https://example.org/');
+    await row.getByRole('textbox', { name: /URL .* \d+/ }).fill('https://example.org/');
+    await row.getByRole('button', { name: 'Done' }).click();
+    await page.getByRole('button', { name: /^Edit Location/ }).click();
     await page.getByTestId('channel-location-input').fill('Cairo');
+    await page.getByTestId('channel-location-input').press('Enter');
+    await page.getByRole('button', { name: /^Edit Contact email/i }).click();
     await page.getByTestId('channel-contact-input').fill('e2e@example.org');
+    await page.getByTestId('channel-contact-input').press('Enter');
 
     await page.getByTestId('channel-edit-save').click();
-    await expect(page).toHaveURL(new RegExp(`/en/@${handle}$`), { timeout: 60000 });
+    await expect(page.getByTestId('unsaved-changes-bar')).toHaveAttribute('data-state', 'saved', { timeout: 60000 });
     await expect(page.getByTestId('channel-handle')).toHaveText(`@${handle}`);
 
     await page.goto(`/en/@${handle}?tab=about`);
