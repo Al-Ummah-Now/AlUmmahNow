@@ -20,11 +20,11 @@ const ProgressParams = z.object({
 // Response schema
 const ProgressResponseSchema = z.object({
   videoId: z.string(),
-  progress: z.number().describe("Current playback position in seconds"),
-  duration: z.number().describe("Total video duration in seconds"),
-  percentageWatched: z.number().describe("Percentage of video watched (0-100)"),
-  completed: z.boolean().describe("Whether the video has been fully watched"),
-  lastWatchedAt: z.string().describe("Timestamp of last watch"),
+  progress: z.number().nullable().describe("null when the video has never been watched. Current playback position in seconds"),
+  duration: z.number().optional().describe("Total video duration in seconds"),
+  percentageWatched: z.number().optional().describe("Percentage of video watched (0-100)"),
+  completed: z.boolean().optional().describe("Whether the video has been fully watched"),
+  lastWatchedAt: z.string().optional().describe("Timestamp of last watch"),
 });
 
 export class GetWatchProgress extends AuthenticatedRoute {
@@ -42,7 +42,7 @@ export class GetWatchProgress extends AuthenticatedRoute {
       },
       responses: {
         "200": {
-          description: "Progress retrieved successfully",
+          description: "Progress for the video; progress is null when it has never been watched",
           content: {
             "application/json": {
               schema: ProgressResponseSchema,
@@ -51,9 +51,6 @@ export class GetWatchProgress extends AuthenticatedRoute {
         },
         "401": {
           description: "Unauthorized - Authentication required",
-        },
-        "404": {
-          description: "No watch progress found for this video",
         },
         "500": {
           description: "Internal server error",
@@ -87,12 +84,8 @@ export class GetWatchProgress extends AuthenticatedRoute {
       // Get watch history entry
       const entry = await watchHistoryRepo.getObject(entryId);
       if (!entry) {
-        return c.json(
-          {
-            error: "No watch progress found for this video",
-          },
-          404
-        );
+        // Never watched is a normal answer, not a missing resource
+        return c.json({ videoId, progress: null }, 200);
       }
 
       return c.json(
