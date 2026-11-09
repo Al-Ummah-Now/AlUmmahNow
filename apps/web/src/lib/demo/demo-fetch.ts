@@ -88,6 +88,23 @@ function json(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), { status: init?.status ?? 200, headers });
 }
 
+type DemoPlaylist = { id?: string; thumbnailUrl?: string | null; cover?: unknown };
+
+/** QA's API has no derived covers yet, so a playlist without an image borrows its first video's thumbnail. */
+async function withFallbackCovers(fetcher: Fetch, rawUrl: string, body: unknown): Promise<unknown> {
+  const data = (body as { data?: DemoPlaylist[] })?.data;
+  const items: DemoPlaylist[] = Array.isArray(data) ? data : [(body as DemoPlaylist)];
+  const at = rawUrl.indexOf('/api/qa-proxy/') >= 0 ? rawUrl.indexOf('/api/qa-proxy/') + '/api/qa-proxy'.length : rawUrl.indexOf('/api/');
+  const base = rawUrl.slice(0, at);
+  await Promise.all(items.map(async (p) => {
+    if (!p?.id || p.thumbnailUrl || p.cover) return;
+    const full = await getJson<{ videoItems?: { id?: string; thumbnailUrl?: string }[]; result?: { videoItems?: { id?: string; thumbnailUrl?: string }[] } }>(fetcher, `${base}/api/playlists/${encodeURIComponent(p.id)}?includeVideos=true`);
+    const first = (full?.videoItems ?? full?.result?.videoItems)?.[0];
+    if (first?.thumbnailUrl) p.cover = { videoId: first.id, thumbnailUrl: first.thumbnailUrl };
+  }));
+  return body;
+}
+
 /** The stored count includes test comments the demo hides, so count what a viewer can actually see. */
 async function withVisibleCommentCount(fetcher: Fetch, rawUrl: string, response: Response): Promise<Response> {
   if (!response.ok || !(response.headers.get('content-type') ?? '').includes('json')) return response;
@@ -122,10 +139,12 @@ export function createDemoFetch(original: Fetch, set: DemoSet, apiUrl: () => str
     }
     if (route.kind === 'none') return original(input, init);
     if (route.kind === 'replace') return json(route.respond(await readPool()));
+    const needsCovers = /^\/api\/(playlists(\/[^/]+)?|channels\/[^/]+\/playlists)$/.test(target.pathname);
 
     const response = await original(input, init);
     if (!response.ok || !(response.headers.get('content-type') ?? '').includes('json')) return response;
-    return json(route.transform(await response.json(), await readPool()), response);
+    const transformed = route.transform(await response.json(), await readPool());
+    return json(needsCovers ? await withFallbackCovers(original, rawUrl, transformed) : transformed, response);
   };
 }
 
