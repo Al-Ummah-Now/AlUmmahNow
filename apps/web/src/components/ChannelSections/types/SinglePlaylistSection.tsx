@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 import { Playlist } from '@al-ummah/shared-types';
 import Link from 'next/link';
-import Image from 'next/image';
 import { SectionHeader } from '../SectionHeader';
 import { getPlaylistById } from '@/lib/api/playlists';
 import { useLanguage } from '@/hooks/useLanguage';
+import { PlaylistCover } from '@/components/PlaylistCover';
 import { logger } from '@/lib/logger-client';
 
 interface SinglePlaylistSectionProps {
@@ -73,19 +73,11 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
         className="block max-w-md group"
       >
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">
-          <div className="relative aspect-video bg-gray-200 dark:bg-gray-700">
-            {playlist.thumbnailUrl && (
-              <Image
-                src={playlist.thumbnailUrl}
-                alt={playlist.name}
-                fill
-                className="object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-            )}
-            <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
+          <PlaylistCover playlist={playlist} alt={playlist.name}>
+            <div className="absolute bottom-2 end-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
               {t.playlist.videoCount.replace('{count}', String(playlist.videosCount || 0))}
             </div>
-          </div>
+          </PlaylistCover>
           <div className="p-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
               {playlist.name}

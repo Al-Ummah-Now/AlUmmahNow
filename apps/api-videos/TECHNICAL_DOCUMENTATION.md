@@ -1763,3 +1763,8 @@ Events are queued for processing:
 
 **Last Updated**: December 2024  
 **API Version**: v0.0.1
+## Playlist covers
+
+`thumbnailUrl` on a playlist is only ever the creator's custom image. When it is not set, playlist responses (`GET /api/playlists`, `GET /api/playlists/:id`, `GET /api/channels/:id/playlists`, and playlist results of `GET /api/search`) include `cover: { videoId, thumbnailUrl }`: the first video in playlist order that the viewer can see and that has a thumbnail. Empty playlists have no `cover`. Clients show `thumbnailUrl`, then `cover.thumbnailUrl`, then a placeholder.
+
+Covers are derived per response and never stored (`src/lib/playlistCovers.ts`). The `cover` object carries `videoId` so the Bunny signing middleware gives its thumbnail a fresh token. Lookups use one search-index query per response, with at most 24 R2 reads for what the index cannot answer. Search results get covers once a playlist's index row has `coverVideoIds`, which the next write or reconciliation sweep adds.

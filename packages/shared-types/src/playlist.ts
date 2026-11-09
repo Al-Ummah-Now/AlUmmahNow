@@ -4,13 +4,21 @@
 
 import { Timestamps, SoftDelete, Moderation } from './common';
 
+export interface PlaylistCover {
+  videoId: string;
+  thumbnailUrl: string;
+}
+
 export interface Playlist extends Timestamps, SoftDelete, Moderation {
   id: string;
   name: string;
   description?: string;
   userId: string;
   channelId?: string;
+  /** The creator's custom image only; never derived */
   thumbnailUrl?: string;
+  /** First viewable video's freshly signed thumbnail, when there is no custom thumbnailUrl */
+  cover?: PlaylistCover;
 
   // Stats
   videosCount?: number;
