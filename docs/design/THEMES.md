@@ -130,7 +130,7 @@ release. The CI matrix overrides it with the `ACTIVE_THEME` environment variable
 | Auth admin | AlUmmahNowAuth `apps/admin` | React Router, Tailwind | `vars` in `wrangler.{qa,}.json`, read by the prebuild | prebuild CSS | no mode handling found |
 | Shared switcher | AlUmmahNowAuth `packages/ui` | React | none, inherits from its host | CSS variables only | host |
 | Sign-in fork | openauth | Library | none, receives a theme object | extend `Theme` where the current hooks fall short | `ColorScheme` values |
-| Picker and CMS pages | AlUmmahNowCMS | Worker, bknd | env `vars` in `wrangler.jsonc` | generated CSS module in `src/lib/html.ts` | light only |
+| CMS | AlUmmahNowCMS | Hono Worker around bknd 0.21 | env `vars` in `wrangler.jsonc` | see [CMS](#cms) | light only: the admin is forced with `adminOptions.theme: "light"` |
 | Site | AlUmmahNowUI | Astro, Tailwind | env `vars` in `wrangler.jsonc` | prebuild CSS | light only |
 | Android | AlUmmahNowAndroid | Compose | `gradle.properties`: `activeTheme` | synced `FanousTokens.kt` in `design` | app setting, system |
 | Apple | AlUmmahNowApple | SwiftUI | `Configs/{Base,QA,Prod}.xcconfig` | `AUNDesign` from the generated package | app setting, system |
@@ -142,10 +142,11 @@ release. The CI matrix overrides it with the `ACTIVE_THEME` environment variable
 ### Light and dark on every surface
 
 The last column above is the starting point. Surfaces with no mode handling, or with only one mode,
-gain both: Profile, the auth custom pages, Auth admin, the CMS pages and the marketing site. Any other
+gain both: Profile, the auth custom pages, Auth admin, the CMS and the marketing site. Any other
 surface found during migration is held to the same rule.
 
-These surfaces have no toggle, so their mode follows `prefers-color-scheme` in the generated CSS. Using
+Apart from the CMS admin, which is covered below, these surfaces have no toggle, so their mode follows
+`prefers-color-scheme` in the generated CSS. Using
 CSS alone means no script and no flash on load. Videos, Admin and the native apps keep their existing
 toggles and settings.
 
@@ -153,10 +154,42 @@ toggles and settings.
 
 | Surface | Why it has one mode | What it does instead |
 |---|---|---|
-| bknd admin screens in AlUmmahNowCMS | Third-party UI rendered by bknd, which the themes can't reach | Keeps its own styling |
 | Transactional emails | Mail clients control rendering and support for dark styles is unreliable | One light layout, using the theme's `email` slots |
 
 A new exception needs a row here and a reason.
+
+### CMS
+
+The CMS supports both modes and takes as much of the active theme as bknd allows. Its Worker serves two
+kinds of page:
+
+| Pages | Rendered by | Mode | Theme |
+|---|---|---|---|
+| Video picker and sign-in status pages | Our code, `src/lib/html.ts` and the routes | `prefers-color-scheme` in generated CSS | Full |
+| Admin at `/`, `/data/*`, `/media/*` and the rest | bknd's built-in UI | `adminOptions.theme: "system"` | Partial |
+
+bknd 0.21 offers one theme setting, `system`, `dark` or `light`, and no custom CSS or logo option. Its
+`logoReturnPath` only sets where the logo links.
+
+The Worker already rewrites the admin's HTML in `decorateAdminHtml`, so it also adds a generated `<style>`
+that maps bknd's surface and text variables to the active theme, in both modes: `--color-background`,
+`--color-muted`, `--color-lightest`, `--color-darkest` and `--color-primary`, set on `.bknd-admin` and
+`.bknd-admin.dark`. The existing `style-src` policy allows this.
+
+**What the admin keeps from bknd, in every theme:**
+
+- Its logo in the header and its favicon.
+- Its buttons and form controls. They are Mantine components configured inside bknd, so primary actions
+  are not gold or the theme's primary colour.
+- Its warning, error, success and info colours, and a few fixed status colours.
+- Its fonts, radius and shape.
+- No sign-in graphic, motif, banner or motion.
+
+bknd reads the system setting when the admin renders, so a system change shows on the next load. The admin
+has no toggle, because the `system` option overrides bknd's own stored choice.
+
+Those variable names are bknd internals rather than a public API, so the version stays pinned and a smoke
+test in the matrix asserts the mapped colours in both modes. A bknd upgrade that renames them fails CI.
 
 **Across repos:** the monorepo publishes `@al-ummah-now/fanous-themes` to GitHub Packages for JavaScript
 repos and attaches the same files to a tagged release for native repos. Each native repo pins a version
