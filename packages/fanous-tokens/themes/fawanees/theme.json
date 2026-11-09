@@ -88,7 +88,15 @@
       "nav.searchBorder": "#8ba3ae",
       "nav.searchText": "#fbefd0",
       "nav.searchPlaceholder": "#d6dfe2",
-      "upload.focus": "#fbc661"
+      "upload.focus": "#fbc661",
+      "upload.bg": "#0e2b3d",
+      "upload.text": "#fbefd0",
+      "upload.icon": "#f5cf92",
+      "upload.border": "#f5cf92",
+      "upload.hover": "#184456",
+      "upload.pressed": "#184456",
+      "upload.disabledBg": "#0e2b3d",
+      "upload.disabledText": "#d6dfe2"
     }
   }
 }

@@ -22,7 +22,7 @@ div.sticky.top-0.z-10:has(nav){top:64px;background:var(--m-header)!important;bor
 /* Profile banner */
 main [class*="h-48"][class*="bg-gray-3"],main [class*="rounded"][class*="h-40"][class*="bg-gray-2"]{background:var(--m-hero)!important}
 /* Settings rows */
-a[class*="bg-white"][class*="rounded"]{border:1px solid transparent;background:var(--m-card) padding-box,var(--m-border) border-box!important;box-shadow:var(--m-card-edge);border-radius:var(--r-lg)!important;transition:transform 160ms,box-shadow 160ms}@media(hover:hover){a[class*="bg-white"][class*="rounded"]:hover{transform:translateY(-1px);box-shadow:var(--m-thumb-edge)}}
+a:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]{border:1px solid transparent;background:var(--m-card) padding-box,var(--m-border) border-box!important;box-shadow:var(--m-card-edge);border-radius:var(--r-lg)!important;transition:transform 160ms,box-shadow 160ms}@media(hover:hover){a:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]:hover{transform:translateY(-1px);box-shadow:var(--m-thumb-edge)}}
 [data-testid=consent-banner] .mt-4.flex{flex-direction:row;flex-wrap:wrap;justify-content:flex-end}[data-testid=consent-banner] button{min-height:44px}
 /* Channel sections */
 .space-y-8>section,section[data-section]{margin-block-start:var(--fanous-spacing-xxl)}
