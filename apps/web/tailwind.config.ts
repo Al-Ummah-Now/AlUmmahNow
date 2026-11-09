@@ -1,4 +1,4 @@
-const fanousBrand = require("../../packages/fanous-tokens/generated/web/brand.cjs");
+const fanousBrand = require("../../packages/fanous-tokens/generated/lantern/web/brand.cjs");
 
 /** @type {import('tailwindcss').Config} */
 
