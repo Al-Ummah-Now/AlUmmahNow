@@ -139,7 +139,7 @@ export default function LiveErrorAR({ error, reset }: ErrorPageProps) {
       <div className="fixed inset-0 -z-10 opacity-30 dark:opacity-10" aria-hidden="true">
         <div className="absolute top-10 right-10 w-72 h-72 bg-red-400 rounded-full mix-blend-multiply filter blur-xl animate-blob" />
         <div className="absolute top-10 left-10 w-72 h-72 bg-orange-400 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-2000" />
-        <div className="absolute bottom-10 left-1/2 w-72 h-72 bg-yellow-400 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000" />
+        <div className="absolute bottom-10 left-1/2 w-72 h-72 bg-brand rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000" />
       </div>
 
       {/* Custom Animations */}

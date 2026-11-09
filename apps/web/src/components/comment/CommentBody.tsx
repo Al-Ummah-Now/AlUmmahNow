@@ -134,7 +134,7 @@ export function CommentBody({
             {isEdited && <span className="ms-1" data-testid="comment-edited">{t.comments.edited}</span>}
           </p>
           {isHeld && (
-            <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" data-testid="comment-held">
+            <span className="text-xs px-2 py-0.5 rounded bg-brand-soft text-brand-ink dark:bg-brand-soft dark:text-brand-ink" data-testid="comment-held">
               {t.comments.heldBadge}
             </span>
           )}
@@ -190,7 +190,7 @@ export function CommentBody({
                   // The visible count must be part of the accessible name (WCAG 2.5.3)
                   aria-label={`${t.comments.like} ${likesCount ?? 0}`}
                   title={t.comments.like}
-                  className={`flex items-center gap-1 disabled:opacity-50 ${isLiked ? 'text-yellow-600' : 'hover:text-gray-900 dark:hover:text-white'}`}
+                  className={`flex items-center gap-1 disabled:opacity-50 ${isLiked ? 'text-brand-ink' : 'hover:text-gray-900 dark:hover:text-white'}`}
                 >
                   <ThumbsUp className="w-4 h-4" aria-hidden="true" />
                   <span>{likesCount ?? 0}</span>
@@ -202,7 +202,7 @@ export function CommentBody({
                   aria-pressed={!!isDisliked}
                   aria-label={`${t.comments.dislike} ${dislikesCount ?? 0}`}
                   title={t.comments.dislike}
-                  className={`flex items-center gap-1 disabled:opacity-50 ${isDisliked ? 'text-yellow-600' : 'hover:text-gray-900 dark:hover:text-white'}`}
+                  className={`flex items-center gap-1 disabled:opacity-50 ${isDisliked ? 'text-brand-ink' : 'hover:text-gray-900 dark:hover:text-white'}`}
                 >
                   <ThumbsDown className="w-4 h-4" aria-hidden="true" />
                   <span>{dislikesCount ?? 0}</span>

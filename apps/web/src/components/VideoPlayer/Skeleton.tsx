@@ -36,7 +36,7 @@ export const VideoPlayerSkeleton: React.FC<VideoPlayerSkeletonProps> = ({
       {/* Center loading indicator */}
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 border-4 border-gray-700 border-t-[#ffa037] rounded-full animate-spin" />
+          <div className="w-12 h-12 border-4 border-gray-700 border-t-[var(--fanous-color-accent)] rounded-full animate-spin" />
           <span className="text-gray-400 text-sm animate-pulse">Loading video...</span>
         </div>
       </div>
@@ -45,7 +45,7 @@ export const VideoPlayerSkeleton: React.FC<VideoPlayerSkeletonProps> = ({
       {showControls && (
         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/80 to-transparent">
           <div className="absolute bottom-2 left-2 right-2 h-1 bg-gray-700 rounded-full overflow-hidden">
-            <div className="h-full w-1/3 bg-[#ffa037] rounded-full animate-pulse" />
+            <div className="h-full w-1/3 bg-[var(--fanous-color-accent)] rounded-full animate-pulse" />
           </div>
           <div className="absolute bottom-4 left-2 right-2 flex justify-between items-center">
             <div className="flex space-x-3">

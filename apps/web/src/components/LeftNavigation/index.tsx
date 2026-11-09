@@ -99,7 +99,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                         <IcoButton
                             style="fa-bars"
                             size="text-lg"
-                            color="text-[#ffa037]  bg-transparent"
+                            color="text-[var(--fanous-color-accent)]  bg-transparent"
                             onClick={onCollapse}
                             ariaLabel={t.common.close}
                             testId="nav-drawer-close"
@@ -121,7 +121,7 @@ const LeftNavigationWithOverlay: React.FC<LeftNavigationWithOverlayProps> = ({
                                 <div
                                     className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 ${
                                         theme === 'dark'
-                                            ? 'bg-yellow-500/10 text-yellow-500 group-hover:bg-yellow-500/20'
+                                            ? 'bg-brand-soft text-brand-ink group-hover:bg-brand-soft'
                                             : 'bg-blue-500/10 text-blue-600 group-hover:bg-blue-500/20'
                                     }`}
                                     suppressHydrationWarning

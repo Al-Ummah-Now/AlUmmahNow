@@ -254,7 +254,7 @@ export default function UploadDefaultsPage() {
                   {/* Default Badge */}
                   {isDefault && (
                     <div className="absolute top-3 end-3" data-testid="template-default-badge">
-                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-soft dark:bg-brand-soft text-brand-ink dark:text-brand-ink">
                         <Star className="w-3 h-3 fill-current" />
                         <span className="text-xs font-medium">
                           {isRTL ? 'افتراضي' : 'Default'}

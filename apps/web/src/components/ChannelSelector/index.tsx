@@ -87,7 +87,7 @@ export function ChannelSelector() {
             </span>
             {channel.isMain && (
               <span title="Main Channel">
-                <Crown className="h-3 w-3 text-yellow-500" />
+                <Crown className="h-3 w-3 text-brand-ink" />
               </span>
             )}
           </>
@@ -178,7 +178,7 @@ export function ChannelSelector() {
                       </div>
                     )}
                     {ch.isMain && (
-                      <Crown className="absolute -bottom-1 -right-1 h-3 w-3 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
+                      <Crown className="absolute -bottom-1 -right-1 h-3 w-3 text-brand-ink bg-white dark:bg-gray-900 rounded-full" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

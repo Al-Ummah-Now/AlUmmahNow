@@ -355,7 +355,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
       )}
 
       {heldNotice && (
-        <p className="text-sm text-amber-800 dark:text-amber-200" role="status" data-testid="comment-held-notice">{t.comments.heldNotice}</p>
+        <p className="text-sm text-brand-ink dark:text-brand-ink" role="status" data-testid="comment-held-notice">{t.comments.heldNotice}</p>
       )}
       {actionError && (
         <p className="text-sm text-red-600 dark:text-red-400" role="alert">{t.comments.actionFailed}</p>

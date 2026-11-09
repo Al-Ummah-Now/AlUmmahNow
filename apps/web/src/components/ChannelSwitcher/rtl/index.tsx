@@ -98,7 +98,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#ffa037] focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+        className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--fanous-color-accent)] focus:ring-offset-2 dark:focus:ring-offset-gray-900"
         aria-label="اختر قناة"
         aria-expanded={isOpen}
         aria-haspopup="true"
@@ -169,7 +169,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
                     <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate w-full">
                       {channel.name}
                       {channel.isMain && (
-                        <span className="mr-2 text-xs text-[#ffa037] font-normal">
+                        <span className="mr-2 text-xs text-[var(--fanous-color-accent)] font-normal">
                           (الرئيسية)
                         </span>
                       )}
@@ -181,7 +181,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
                     )}
                   </div>
                   {isActive && (
-                    <Check className="w-5 h-5 text-[#ffa037] flex-shrink-0" />
+                    <Check className="w-5 h-5 text-[var(--fanous-color-accent)] flex-shrink-0" />
                   )}
                 </button>
               );
@@ -192,7 +192,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
             <Link
               href="/ar/profile"
-              className="text-sm text-[#ffa037] hover:text-[#ff8c1a] transition-colors duration-150"
+              className="text-sm text-[var(--fanous-color-accent)] hover:text-[#ff8c1a] transition-colors duration-150"
               onClick={() => setIsOpen(false)}
             >
               إدارة القنوات

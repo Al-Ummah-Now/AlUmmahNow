@@ -44,7 +44,7 @@ const EMPTY_STATE_CONFIGS_AR: Record<
       label: 'تصفح القنوات',
       href: '/ar/channels'
     },
-    iconColor: 'text-amber-400 dark:text-amber-600'
+    iconColor: 'text-brand-ink dark:text-brand-ink'
   },
   'no-ended': {
     icon: Clock,

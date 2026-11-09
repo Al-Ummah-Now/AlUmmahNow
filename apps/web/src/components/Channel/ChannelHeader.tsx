@@ -107,10 +107,10 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                   disabled={authLoading || isLoading || checkingSubscription}
                   className={cn(
                     'px-4 py-1.5 text-sm font-semibold rounded-lg transition-all shadow-md hover:shadow-lg flex-shrink-0',
-                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500',
+                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand',
                     isSubscribed
                       ? 'bg-gray-200 hover:bg-gray-300 text-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white'
-                      : 'bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-gray-900',
+                      : 'bg-gradient-to-r from-brand to-brand hover:from-brand hover:to-brand text-gray-900',
                     (authLoading || isLoading || checkingSubscription) && 'opacity-50 cursor-not-allowed'
                   )}
                 >

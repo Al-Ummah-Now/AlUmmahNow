@@ -14,7 +14,7 @@ export function SavedPostCard({ post }: { post: SavedPost }) {
   return (
     <Link
       href={`/${lang}/channels/${encodeURIComponent(post.channelId)}?tab=community`}
-      className="block rounded-lg border border-gray-200 p-4 hover:border-[#ffa037] dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      className="block rounded-lg border border-gray-200 p-4 hover:border-[var(--fanous-color-accent)] dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       data-testid="library-saved-post"
       data-post-id={post.id}
     >
