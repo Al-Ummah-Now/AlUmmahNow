@@ -5,6 +5,7 @@
  * the channel's playlists.
  */
 
+import { pickLanguage } from '@/lib/format/pick-language';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Edit, ExternalLink, ListVideo, Lock, Plus, Trash2 } from 'lucide-react';
@@ -262,7 +263,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
       ) : (
         <ul className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
           {playlists.map((playlist) => {
-            const title = playlist.name || playlist.title;
+            const title = pickLanguage(playlist.name || playlist.title || '', lang);
             const count = playlist.videos?.length ?? playlist.videosCount ?? 0;
             return (
               <li key={playlist.id} className="flex items-center gap-4 p-4">
