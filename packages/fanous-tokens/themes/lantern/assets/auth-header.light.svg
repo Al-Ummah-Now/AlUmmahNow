@@ -1,0 +1,1 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 110"><path fill="var(--fanous-color-surface)" d="M0 110V92C96 92 168 66 200 6C232 66 304 92 400 92V110Z"/><path stroke="var(--fanous-color-primary-edge)" stroke-width="1.5" fill="none" d="M0 92C96 92 168 66 200 6C232 66 304 92 400 92"/><circle cx="200" cy="62" r="5" fill="var(--fanous-color-primary-hover)"/></svg>
