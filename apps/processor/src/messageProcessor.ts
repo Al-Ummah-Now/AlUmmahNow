@@ -4,7 +4,7 @@ import { handleChannelSectionEvent } from './handlers/channel-section';
 import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
 import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
-import { recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
+import { recordRetentionRollup, recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
 import { CounterBatch } from './lib/analytics-counters';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
 import {
@@ -158,6 +158,11 @@ export class MessageProcessor {
       // Analytics: played seconds (#235)
       case MessageType.VideoWatchTime:
         await this.processVideoWatchTimeMessage(message, env);
+        break;
+
+      // Analytics: retention buckets (docs/specs/CREATOR-STUDIO.md §8.4)
+      case MessageType.VideoRetention:
+        this.processVideoRetentionMessage(message);
         break;
 
       case MessageType.VideoCreate:
@@ -443,6 +448,12 @@ export class MessageProcessor {
     const payload = message.payload as { videoId?: string };
     if (!recordWatchTimeRollup(this.counters, message.payload, message.timestamp)) {
       this.logger.warn('Invalid watch-time message ignored', { videoId: payload.videoId });
+    }
+  }
+
+  private processVideoRetentionMessage(message: AlUmmahMessage): void {
+    if (!recordRetentionRollup(this.counters, message.payload, message.timestamp)) {
+      this.logger.warn('Invalid retention message ignored', { videoId: (message.payload as { videoId?: string }).videoId });
     }
   }
 

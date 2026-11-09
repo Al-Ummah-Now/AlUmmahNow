@@ -7,6 +7,7 @@ export * from './user';
 export * from './playlist';
 export * from './comment';
 export * from './analytics';
+export * from './analytics-collection';
 export * from './common';
 export * from './watch-history';
 export * from './community-post';
