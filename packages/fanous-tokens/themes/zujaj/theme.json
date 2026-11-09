@@ -7,15 +7,15 @@
   },
   "color": {
     "light": {
-      "background": "#e6f2f1",
-      "surface": "#f6fbfb",
+      "background": "#c6e4e7",
+      "surface": "#ecf8f9",
       "surfaceRaised": "#ffffff",
-      "heroStart": "#d3e8e7",
-      "heroEnd": "#e6f2f1",
-      "textPrimary": "#09151e",
-      "textSecondary": "#184456",
-      "textMuted": "#2a6975",
-      "link": "#0e6478",
+      "heroStart": "#afd8dc",
+      "heroEnd": "#c6e4e7",
+      "textPrimary": "#07303b",
+      "textSecondary": "#0f4552",
+      "textMuted": "#1d5a68",
+      "link": "#0a5366",
       "successText": "#166534",
       "errorText": "#b00020",
       "primary": "#0f5a6b",
@@ -24,8 +24,8 @@
       "onPrimaryHover": "#ffffff",
       "primaryPressed": "#093c48",
       "onPrimaryPressed": "#ffffff",
-      "primaryDisabled": "#d3e8e7",
-      "onPrimaryDisabled": "#2a6975",
+      "primaryDisabled": "#afd8dc",
+      "onPrimaryDisabled": "#1d5a68",
       "primaryEdge": "#093c48",
       "primarySheen": "#2a8fa3",
       "motif": "#1696b0",
@@ -41,32 +41,32 @@
       "focusRing": "#93612a",
       "focusGlow": "#93612a",
       "verifiedIcon": "#166534",
-      "outline": "#56808a",
-      "divider": "#c2dcdc"
+      "outline": "#3f7b86",
+      "divider": "#9fcbd1"
     },
     "dark": {
-      "background": "#0c3a45",
-      "surface": "#124854",
-      "surfaceRaised": "#185561",
-      "heroStart": "#0f4552",
-      "heroEnd": "#0c3a45",
+      "background": "#0a4f58",
+      "surface": "#0c5560",
+      "surfaceRaised": "#106270",
+      "heroStart": "#0b505b",
+      "heroEnd": "#0a4f58",
       "textPrimary": "#eff8f7",
-      "textSecondary": "#c4dede",
-      "textMuted": "#a9cccc",
-      "link": "#a6dde0",
-      "successText": "#4ade80",
-      "errorText": "#ffb3ac",
+      "textSecondary": "#d4ebeb",
+      "textMuted": "#d0e8e8",
+      "link": "#bfeaee",
+      "successText": "#86efac",
+      "errorText": "#ffc6c0",
       "primary": "#5cc4d4",
       "onPrimary": "#09151e",
       "primaryHover": "#8fd8e0",
       "onPrimaryHover": "#09151e",
       "primaryPressed": "#45b0c3",
       "onPrimaryPressed": "#09151e",
-      "primaryDisabled": "#185561",
-      "onPrimaryDisabled": "#b5d4d4",
+      "primaryDisabled": "#106270",
+      "onPrimaryDisabled": "#d5ebeb",
       "primaryEdge": "#8fd8e0",
       "primarySheen": "#c9eef1",
-      "motif": "#3e8a96",
+      "motif": "#6fc3cf",
       "secondary": "#824825",
       "onSecondary": "#ffffff",
       "verifiedFill": "#166534",
@@ -78,9 +78,9 @@
       "accent": "#5cc4d4",
       "focusRing": "#f5cf92",
       "focusGlow": "#f5cf92",
-      "verifiedIcon": "#4ade80",
-      "outline": "#8fb4ba",
-      "divider": "#1e5a66"
+      "verifiedIcon": "#86efac",
+      "outline": "#8fc0c6",
+      "divider": "#237a84"
     }
   },
   "brandColor": {
@@ -151,8 +151,8 @@
   },
   "browser": {
     "themeColor": {
-      "light": "#e6f2f1",
-      "dark": "#0c3a45"
+      "light": "#c6e4e7",
+      "dark": "#0a4f58"
     },
     "manifest": {
       "background": "#e6f2f1",
@@ -179,7 +179,7 @@
   },
   "component": {
     "dark": {
-      "nav.bg": "#0f4552"
+      "nav.bg": "#083d45"
     },
     "light": {
       "nav.bg": "#0f5a6b",
