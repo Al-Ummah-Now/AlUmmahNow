@@ -146,8 +146,8 @@ export function VariableGuide({ onInsertVariable }: VariableGuideProps) {
                             rounded
                             bg-brand-soft
                             dark:bg-brand-soft
-                            text-brand
-                            dark:text-brand
+                            text-brand-ink
+                            dark:text-brand-ink
                           ">
                             {isRTL ? 'يتطلب إدخال' : 'Requires input'}
                           </span>
