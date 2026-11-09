@@ -19,6 +19,8 @@ import { ChannelUpdate } from '../src/endpoints/channel/channelUpdate';
 import { ChannelFetch } from '../src/endpoints/channel/channelFetch';
 import {
 	importLegacySubscriptions,
+	eraseUserSubscriptions,
+	exportUserSubscriptions,
 	subscribedChannelIds,
 	subscriberCounts,
 } from '../src/lib/subscription-store';
@@ -53,8 +55,12 @@ function routes(r: any) {
 }
 
 const as = (userId: string) => buildApp(routes, { userId });
-const subscribeAs = (e: any, user: string, target = 'target') =>
-	as(user).request(`/api/channels/${target}/subscriptions`, { method: 'POST', headers: { channelId: `${user}-ch` } }, e);
+/** The subscriber's own channel (`<user>-ch`): subscribing as anyone else's is refused. */
+async function ownChannel(e: any, user: string) {
+	if (!(await e.channels.get(`${user}-ch`))) await e.channels.put(`${user}-ch`, JSON.stringify(channel(`${user}-ch`, { userId: user })));
+}
+const subscribeAs = async (e: any, user: string, target = 'target') =>
+	(await ownChannel(e, user), as(user)).request(`/api/channels/${target}/subscriptions`, { method: 'POST', headers: { channelId: `${user}-ch` } }, e);
 const unsubscribeAs = (e: any, user: string, target = 'target') =>
 	as(user).request(`/api/channels/${target}/subscriptions`, { method: 'DELETE', headers: { channelId: `${user}-ch` } }, e);
 
@@ -165,6 +171,45 @@ describe('legacy R2 subscriptions: imported once, nothing lost meanwhile', () =>
 		const expected = Array.from({ length: 250 }, (_, i) => i % 3).reduce((a, b) => a + b, 0);
 		assert.equal(e.NOTIFICATIONS_DB.rows('SELECT SUM(subscribers) AS n FROM channel_subscriber_counts')[0].n, expected);
 		assert.equal(e.NOTIFICATIONS_DB.rows('SELECT passes, cursor FROM channel_subscription_import_state')[0].passes, 1);
+	});
+});
+
+describe('subscriber identity and privacy', () => {
+	it('subscribing as a channel the caller does not own is refused', async () => {
+		const e = env(new MemoryBucket({ target: channel('target'), victim: channel('victim', { userId: 'victim' }) }));
+		const res = await as('mallory').request('/api/channels/target/subscriptions', { method: 'POST', headers: { channelId: 'victim' } }, e);
+		assert.equal(res.status, 403);
+		const ghost = await as('mallory').request('/api/channels/target/subscriptions', { method: 'POST', headers: { channelId: 'no-such-channel' } }, e);
+		assert.equal(ghost.status, 403);
+		assert.equal(rows(e), 0);
+		assert.equal(e.queue.messages.length, 0);
+	});
+
+	it('unsubscribing someone else\'s subscription changes nothing', async () => {
+		const e = env(new MemoryBucket({ target: channel('target') }));
+		await subscribeAs(e, 'alice');
+		const res = await as('mallory').request('/api/channels/target/subscriptions', { method: 'DELETE', headers: { channelId: 'alice-ch' } }, e);
+		assert.notEqual(res.status, 500);
+		assert.equal(rows(e), 1);
+		assert.equal(count(e), 1);
+	});
+
+	it('the export lists D1 subscriptions; erasure removes them and their counts exactly once', async () => {
+		const e = env(new MemoryBucket({ a: channel('a'), b: channel('b') }));
+		await Promise.all([subscribeAs(e, 'me', 'a'), subscribeAs(e, 'me', 'b'), subscribeAs(e, 'other', 'a')]);
+		const exported = await exportUserSubscriptions(e.NOTIFICATIONS_DB as any, 'me');
+		assert.deepEqual(exported.map((s) => s.subscribedToChannelId).sort(), ['a', 'b']);
+		assert.ok(exported.every((s) => s.channelId === 'me-ch' && s.userId === 'me'));
+		// The api-videos erasure and the processor's run the same derived statements: twice is harmless
+		const [first, second] = await Promise.all([
+			eraseUserSubscriptions(e.NOTIFICATIONS_DB as any, 'me'),
+			eraseUserSubscriptions(e.NOTIFICATIONS_DB as any, 'me'),
+		]);
+		assert.equal(first + second, 2);
+		assert.equal(await eraseUserSubscriptions(e.NOTIFICATIONS_DB as any, 'me'), 0);
+		assert.equal(count(e, 'a'), 1, 'the other subscriber still counts');
+		assert.equal(count(e, 'b'), 0);
+		assert.deepEqual(await exportUserSubscriptions(e.NOTIFICATIONS_DB as any, 'me'), []);
 	});
 });
 

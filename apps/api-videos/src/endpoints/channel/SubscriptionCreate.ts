@@ -46,6 +46,14 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 					},
 				},
 			},
+			"403": {
+				description: "The channelId header is not one of the caller's channels",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
 			"400": {
 				description: "Bad request - invalid input data",
 				content: {
@@ -82,6 +90,12 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 
 			if (id === channelId) {
 				return c.json({ success: false, error: "Cannot subscribe to your own channel" }, 400);
+			}
+
+			// A member subscribes as one of their own channels, never as someone else's
+			const subscriberChannel = await repository.getObject(channelId);
+			if (!subscriberChannel || subscriberChannel.userId !== userId) {
+				return c.json({ success: false, error: "You can only subscribe as one of your own channels" }, 403);
 			}
 
 			// Atomic in D1 (SCALABILITY-AUDIT AV-4): concurrent subscribers all count

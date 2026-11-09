@@ -29,6 +29,7 @@
  *   reports/report:{entityId}:{reportId}:{reporterId}  reports filed by the user
  */
 
+import { eraseUserSubscriptions, exportUserSubscriptions } from '../subscription-store';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
@@ -52,6 +53,8 @@ export interface PrivacyBuckets {
 	'upload-defaults': unknown;
 	reports: unknown;
 	subtitles?: unknown;
+	/** Channel subscriptions (lib/subscription-store.ts) */
+	NOTIFICATIONS_DB?: D1Database;
 }
 
 type Json = Record<string, any>;
@@ -382,6 +385,13 @@ export async function collectUserData(
 				if (playlist.userId === userId) out.playlists.push(playlist);
 			})(ctx),
 		(ctx) => readEach(asBucket(env.reports), (key) => key.endsWith(`:${userId}`), (r) => void out.reportsFiled.push(r))(ctx),
+		// Subscriptions stored in D1 (SCALABILITY-AUDIT AV-4)
+		(ctx) =>
+			atomically(async () => {
+				if (!env.NOTIFICATIONS_DB) return;
+				ctx.budget.spend();
+				out.subscriptions.push(...(await exportUserSubscriptions(env.NOTIFICATIONS_DB, userId)));
+			}),
 	];
 
 	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE);
@@ -671,8 +681,13 @@ export async function eraseUserData(
 			});
 		},
 
-		// Profile last
+		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), then the profile last
 		async (ctx) => {
+			if (env.NOTIFICATIONS_DB) {
+				ctx.budget.spend();
+				const removed = await eraseUserSubscriptions(env.NOTIFICATIONS_DB, userId);
+				if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
+			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();
 			if (await profiles.get(userId)) {
