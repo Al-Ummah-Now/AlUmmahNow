@@ -29,6 +29,7 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { setDemoNext } from "@/components/ThemeDemo/demoNext";
+import { CommentsSkeleton, WatchDetailsSkeleton, type WatchHint } from "@/components/video/WatchPageSkeleton";
 
 type VideoState =
   | { status: 'loading' }
@@ -40,7 +41,7 @@ type VideoState =
  * /[locale]/video?vid= route, so both render the same player, actions,
  * comments and related videos (LTR or RTL variants by language).
  */
-export default function WatchPageContent({ videoId }: { videoId: string }) {
+export default function WatchPageContent({ videoId, hint }: { videoId: string; hint?: WatchHint }) {
   const [state, setState] = useState<VideoState>({ status: 'loading' });
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(true);
@@ -138,6 +139,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
     <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
         <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
+          {!videoDetails && <WatchDetailsSkeleton hint={hint} />}
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
               <section id={VIDEO_PLAYER_ID} className="w-full" tabIndex={-1}>
@@ -197,12 +199,14 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
 
           <div className="flex flex-col w-full mt-6 gap-6 overflow-auto">
             <div id={COMMENTS_ID} tabIndex={-1} className="w-full max-w-4xl mx-auto px-4">
+              {videoDetails ? (
               <Comments
                 key={videoId}
                 videoId={videoId}
                 videoOwnerId={videoDetails?.userId}
                 user={user}
               />
+              ) : <CommentsSkeleton />}
             </div>
           </div>
         </div>

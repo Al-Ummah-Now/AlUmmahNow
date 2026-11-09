@@ -1,12 +1,7 @@
-'use client';
+import WatchPageContent from '@/components/video/WatchPageContent';
+import { loadWatchHint } from '@/lib/video/watch-hint';
 
-import React from "react";
-import { useParams } from "next/navigation";
-import WatchPageContent from "@/components/video/WatchPageContent";
-
-export default function VideoViewPage() {
-  const params = useParams();
-  const videoId = params.id as string;
-
-  return <WatchPageContent videoId={videoId} />;
+export default async function VideoViewPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <WatchPageContent videoId={id} hint={await loadWatchHint(id)} />;
 }

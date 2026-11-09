@@ -1,10 +1,9 @@
-"use client";
 import React from "react";
 
 const PLACEHOLDER_CARDS = 6;
 
 /** Placeholder cards shown while the related shelf loads (LTR and RTL). */
-export default function RelatedVideosSkeleton() {
+export function RelatedSkeletonRows() {
   return (
     <div data-testid="related-videos-skeleton" aria-hidden="true" className="space-y-4 mx-4 md:mx-0">
       {Array.from({ length: PLACEHOLDER_CARDS }, (_, index) => (
@@ -19,3 +18,5 @@ export default function RelatedVideosSkeleton() {
     </div>
   );
 }
+
+export default RelatedSkeletonRows;
