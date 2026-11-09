@@ -64,7 +64,7 @@ export function FeaturedVideosSection({ videoIds, title, channelId }: FeaturedVi
   }
 
   return (
-    <section className="space-y-4">
+    <section data-section="featured" className="space-y-4">
       <SectionHeader
         title={resolveSectionTitle(title, t.channel.featuredVideos)}
         viewAllHref={channelId && videos.length > 0 ? `/${locale}/channels/${channelId}?tab=videos` : undefined}

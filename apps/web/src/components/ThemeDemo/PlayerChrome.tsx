@@ -22,6 +22,7 @@ export function PlayerChrome({ player, lang, onShortcuts }: { player: Player; la
   const ended = useRef(false);
   const buffering = useRef(false);
   const auto = useRef(true);
+  const resumed = useRef(false);
   const manualQ = useRef('auto');
   const root = useRef<HTMLDivElement | null>(null);
 
@@ -29,7 +30,7 @@ export function PlayerChrome({ player, lang, onShortcuts }: { player: Player; la
     const r = () => bump((n) => n + 1);
     const evts = ['timeupdate', 'progress', 'durationchange', 'volumechange', 'ratechange', 'fullscreenchange', 'useractive', 'userinactive', 'loadedmetadata', 'enterpictureinpicture', 'leavepictureinpicture'];
     evts.forEach((e) => p.on(e, r));
-    const play = () => { started.current = true; ended.current = false; r(); }; const pause = () => r();
+    const play = () => { if (!started.current && (p.currentTime() || 0) > 3) resumed.current = true; started.current = true; ended.current = false; r(); }; const pause = () => r();
     const end = () => { ended.current = true; r(); };
     const wait = () => { buffering.current = true; r(); }; const ready = () => { buffering.current = false; r(); };
     p.on('play', play); p.on('pause', pause); p.on('ended', end); p.on('waiting', wait); p.on('playing', ready); p.on('canplay', ready);
@@ -76,7 +77,7 @@ export function PlayerChrome({ player, lang, onShortcuts }: { player: Player; la
     live, behindLive: live && p.liveTracker ? Math.max(0, p.liveTracker.liveCurrentTime() - (p.currentTime() || 0)) : 0, chapters, hasNext: !!next,
     qualities, quality: manualQ.current, rate: p.playbackRate() ?? 1,
     captions: subs.length ? [{ id: 'off', label: c.off }, ...subs.map((t, i) => ({ id: String(i), label: t.label || t.language }))] : [], caption: showing >= 0 ? String(showing) : 'off',
-    audio: [], audioId: '', canPip: typeof document !== 'undefined' && !!document.pictureInPictureEnabled, next: next ?? undefined,
+    audio: [], audioId: '', resumed: resumed.current, canPip: typeof document !== 'undefined' && !!document.pictureInPictureEnabled, next: next ?? undefined,
   };
   void auto;
   const a: ChromeActions = {
@@ -91,7 +92,7 @@ export function PlayerChrome({ player, lang, onShortcuts }: { player: Player; la
     setRate: (r) => p.playbackRate(r),
     setCaption: (id) => { subs.forEach((t, i) => { t.mode = String(i) === id ? 'showing' : 'disabled'; }); bump((n) => n + 1); },
     setAudio: () => undefined, shortcuts: onShortcuts,
-    replay: () => { p.currentTime(0); void p.play(); }, goLive: () => p.liveTracker?.seekToLiveEdge(),
+    replay: () => { p.currentTime(0); void p.play(); }, startOver: () => { resumed.current = false; p.currentTime(0); void p.play(); bump((n) => n + 1); }, goLive: () => p.liveTracker?.seekToLiveEdge(),
   };
   return <div ref={root} className="pc-host"><PlayerChromeView s={s} a={a} />{mini && <button type="button" className="pc-mini-x" aria-label="×" onClick={() => { p.pause(); setMini(false); }}>×</button>}</div>;
 }

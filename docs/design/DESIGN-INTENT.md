@@ -47,3 +47,15 @@ Selected means: a filled icon, a heavier label, a quiet surface in the theme's m
 on the start side, which moves to the right in Arabic. The same treatment applies in the rail, the
 expanded drawer and the phone drawer. Hover is a neutral tint with no bar or filled icon. Focus-visible
 is a ring. No decorative shapes or glows beyond a faint halo on Lantern's and Fawanees's bar.
+
+## Channel sections
+
+Each shelf has a heading over a hairline that starts in the theme's edge colour and fades out, and shelves
+fade at their far edge instead of ending in a painted block. Featured leads with a larger first item.
+Playlist shelves show the count as an opaque badge on the thumbnail. Empty sections use a dashed panel in
+the theme's material.
+
+## Resume
+
+When playback opens at a saved time, a persistent "Start from beginning" control sits in the player's
+start corner (`data-testid="player-start-over"`), in a dark pane edged with the theme's primary colour.

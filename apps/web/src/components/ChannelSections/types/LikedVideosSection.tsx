@@ -54,7 +54,7 @@ export function LikedVideosSection({ channelId, title }: LikedVideosSectionProps
   }
 
   return (
-    <section className="space-y-4">
+    <section data-section="liked" className="space-y-4">
       <SectionHeader
         title={resolveSectionTitle(title, t.channel.likedVideos)}
 

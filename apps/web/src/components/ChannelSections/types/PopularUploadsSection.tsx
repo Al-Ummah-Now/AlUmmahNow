@@ -54,7 +54,7 @@ export function PopularUploadsSection({ channelId, title }: PopularUploadsSectio
   }
 
   return (
-    <section className="space-y-4">
+    <section data-section="popular" className="space-y-4">
       <SectionHeader
         title={resolveSectionTitle(title, t.channel.popularUploads)}
         viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}?tab=videos` : undefined}

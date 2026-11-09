@@ -4,20 +4,20 @@ import { useState, type PointerEvent as RP } from 'react';
 import { Captions, Check, ChevronLeft, ChevronRight, Keyboard, Maximize, Minimize, Pause, PictureInPicture2, Play, RectangleHorizontal, RotateCcw, Settings, SkipForward, Volume1, Volume2, VolumeX } from 'lucide-react';
 
 export const PLAYER_COPY = {
-  en: { play: 'Play', pause: 'Pause', next: 'Next video', mute: 'Mute', unmute: 'Unmute', volume: 'Volume', seek: 'Seek', captions: 'Captions', settings: 'Settings', pip: 'Picture in picture', theatre: 'Theatre mode', full: 'Full screen', exitFull: 'Exit full screen', quality: 'Quality', speed: 'Speed', audio: 'Audio track', shortcuts: 'Keyboard shortcuts', auto: 'Auto', off: 'Off', normal: 'Normal', back: 'Back', upNext: 'Up next', replay: 'Watch again', playNext: 'Play now', live: 'Live', goLive: 'Go to live', behind: 'behind' },
-  ar: { play: 'تشغيل', pause: 'إيقاف مؤقت', next: 'المقطع التالي', mute: 'كتم الصوت', unmute: 'إلغاء الكتم', volume: 'مستوى الصوت', seek: 'التقديم', captions: 'الترجمة', settings: 'الإعدادات', pip: 'صورة داخل صورة', theatre: 'وضع المسرح', full: 'ملء الشاشة', exitFull: 'الخروج من ملء الشاشة', quality: 'الجودة', speed: 'السرعة', audio: 'المسار الصوتي', shortcuts: 'اختصارات لوحة المفاتيح', auto: 'تلقائي', off: 'إيقاف', normal: 'عادية', back: 'رجوع', upNext: 'التالي', replay: 'إعادة المشاهدة', playNext: 'شغّل الآن', live: 'مباشر', goLive: 'الانتقال إلى البث', behind: 'تأخير' },
+  en: { play: 'Play', pause: 'Pause', next: 'Next video', mute: 'Mute', unmute: 'Unmute', volume: 'Volume', seek: 'Seek', captions: 'Captions', settings: 'Settings', pip: 'Picture in picture', theatre: 'Theatre mode', full: 'Full screen', exitFull: 'Exit full screen', quality: 'Quality', speed: 'Speed', audio: 'Audio track', shortcuts: 'Keyboard shortcuts', auto: 'Auto', off: 'Off', normal: 'Normal', back: 'Back', upNext: 'Up next', replay: 'Watch again', playNext: 'Play now', live: 'Live', goLive: 'Go to live', behind: 'behind', startOver: 'Start from beginning' },
+  ar: { play: 'تشغيل', pause: 'إيقاف مؤقت', next: 'المقطع التالي', mute: 'كتم الصوت', unmute: 'إلغاء الكتم', volume: 'مستوى الصوت', seek: 'التقديم', captions: 'الترجمة', settings: 'الإعدادات', pip: 'صورة داخل صورة', theatre: 'وضع المسرح', full: 'ملء الشاشة', exitFull: 'الخروج من ملء الشاشة', quality: 'الجودة', speed: 'السرعة', audio: 'المسار الصوتي', shortcuts: 'اختصارات لوحة المفاتيح', auto: 'تلقائي', off: 'إيقاف', normal: 'عادية', back: 'رجوع', upNext: 'التالي', replay: 'إعادة المشاهدة', playNext: 'شغّل الآن', live: 'مباشر', goLive: 'الانتقال إلى البث', behind: 'تأخير', startOver: 'ابدأ من البداية' },
 };
 
 export interface Option { id: string; label: string }
 export interface ChromeState {
   lang: 'en' | 'ar'; playing: boolean; started: boolean; time: number; duration: number; buffered: number; volume: number; muted: boolean;
-  buffering: boolean; ended: boolean; active: boolean; full: boolean; theatre: boolean; live: boolean; behindLive: number; chapters: number[]; hasNext: boolean;
+  buffering: boolean; ended: boolean; active: boolean; full: boolean; theatre: boolean; live: boolean; behindLive: number; chapters: number[]; hasNext: boolean; resumed?: boolean;
   qualities: Option[]; quality: string; rate: number; captions: Option[]; caption: string; audio: Option[]; audioId: string; canPip: boolean;
   next?: { title: string; channel: string; thumb?: string };
 }
 export interface ChromeActions {
   toggle(): void; seek(t: number): void; setVolume(v: number): void; toggleMute(): void; onNext(): void; toggleFull(): void; toggleTheatre(): void; togglePip(): void;
-  setQuality(id: string): void; setRate(r: number): void; setCaption(id: string): void; setAudio(id: string): void; shortcuts(): void; replay(): void; goLive(): void;
+  setQuality(id: string): void; setRate(r: number): void; setCaption(id: string): void; setAudio(id: string): void; shortcuts(): void; replay(): void; goLive(): void; startOver?(): void;
 }
 
 export const fmt = (s: number) => {
@@ -50,6 +50,7 @@ export function PlayerChromeView({ s, a, initialPanel = null, hoverPct }: { s: C
       {!s.ended && <button type="button" className="pc-hit" aria-label={s.playing ? c.pause : c.play} tabIndex={-1} onClick={a.toggle} />}
       {!s.started && !s.buffering && <button type="button" className="pc-big" aria-label={c.play} onClick={a.toggle}><Play aria-hidden="true" /></button>}
       {s.buffering && <div className="pc-spin" role="status" aria-label="…"><span /><span /><span /></div>}
+      {s.resumed && !s.ended && <button type="button" className="pc-startover" data-testid="player-start-over" dir={s.lang === 'ar' ? 'rtl' : 'ltr'} onClick={a.startOver}><RotateCcw aria-hidden="true" />{c.startOver}</button>}
       {s.ended && (
         <div className="pc-end" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
           {s.next ? (

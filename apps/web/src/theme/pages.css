@@ -24,3 +24,15 @@ main [class*="h-48"][class*="bg-gray-3"],main [class*="rounded"][class*="h-40"][
 /* Settings rows */
 a[class*="bg-white"][class*="rounded"]{border:1px solid transparent;background:var(--m-card) padding-box,var(--m-border) border-box!important;box-shadow:var(--m-card-edge);border-radius:var(--r-lg)!important;transition:transform 160ms,box-shadow 160ms}@media(hover:hover){a[class*="bg-white"][class*="rounded"]:hover{transform:translateY(-1px);box-shadow:var(--m-thumb-edge)}}
 [data-testid=consent-banner] .mt-4.flex{flex-direction:row;flex-wrap:wrap;justify-content:flex-end}[data-testid=consent-banner] button{min-height:44px}
+/* Channel sections */
+.space-y-8>section,section[data-section]{margin-block-start:var(--fanous-spacing-xxl)}
+section[data-section]>.flex.items-center.justify-between.mb-4{gap:var(--fanous-spacing-md);padding-block-end:10px;margin-block-end:var(--fanous-spacing-lg);background:linear-gradient(var(--to-end),var(--fanous-color-primary-edge),color-mix(in srgb,var(--fanous-color-divider) 70%,transparent) 22%,transparent) bottom/100% 1px no-repeat}
+section[data-section] h2{font-size:20px;font-weight:700;color:var(--fanous-color-text-primary)!important}
+section[data-section] a[class*="text-blue"]{font-weight:600;border-radius:var(--r-sm)}
+.overflow-x-auto.scrollbar-hide{-webkit-mask:linear-gradient(var(--to-end),#000 calc(100% - 48px),transparent);mask:linear-gradient(var(--to-end),#000 calc(100% - 48px),transparent);padding-block-start:4px;padding-inline-start:2px}
+[class*="bg-gradient-to-l"][class*="from-white"],[class*="bg-gradient-to-r"][class*="from-white"]{display:none}
+section[data-section=featured] .flex.gap-4>:first-child{width:min(100%,560px)}section[data-section=featured] .flex.gap-4>:first-child h3{font-size:19px}
+section[data-section=playlist] a,section[data-section=playlists] a.group{border-radius:var(--r-lg)}section[data-section=playlists] .aspect-video,section[data-section=playlist] .aspect-video{background:var(--m-hero);border-radius:var(--r-lg) var(--r-lg) 0 0;overflow:hidden}
+section[data-section=playlists] [class*="bg-black/80"],section[data-section=playlist] [class*="bg-black/80"]{background:rgb(9 21 30/.95)!important;color:#fff!important;border-radius:var(--r-sm)}
+section[data-section=channels] [class*="rounded-full"]{box-shadow:0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 34%,transparent)}
+section[data-section] [class*="border-dashed"]{min-height:120px}

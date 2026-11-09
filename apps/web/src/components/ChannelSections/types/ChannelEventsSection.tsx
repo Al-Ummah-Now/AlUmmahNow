@@ -99,7 +99,7 @@ export function ChannelEventsSection({
   const liveTabHref = `/${locale}/channels/${channelId}?tab=live`;
 
   return (
-    <section className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'} data-testid={`channel-events-${status}`}>
+    <section data-section="events" className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'} data-testid={`channel-events-${status}`}>
       <SectionHeader title={title} viewAllHref={streams.length > 0 ? liveTabHref : undefined} />
 
       {loading ? (

@@ -57,7 +57,7 @@ export function MultiplePlaylistsSection({ title, playlistIds }: MultiplePlaylis
   }
 
   return (
-    <section className="space-y-4">
+    <section data-section="playlists" className="space-y-4">
       <SectionHeader title={title} />
 
       {playlists.length === 0 ? (

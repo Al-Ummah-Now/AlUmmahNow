@@ -54,6 +54,7 @@ export default function ComponentsGallery() {
       <section><h2>{t.player}</h2><div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,420px),1fr))' }}>
         <P title={t.pIdle}><PlayerChromeView s={{ ...base, playing: false, started: false, time: 0, buffered: 0 }} a={A} /></P>
         <P title={t.pHover}><PlayerChromeView s={base} a={A} hoverPct={41} /></P>
+        <P title={lang === 'ar' ? 'استكمال المشاهدة' : 'Resumed'}><PlayerChromeView s={{ ...base, resumed: true, time: 1240 }} a={A} /></P>
         <P title={t.pMenu}><PlayerChromeView s={base} a={A} initialPanel="root" /></P>
         <P title={t.pBuf}><PlayerChromeView s={{ ...base, buffering: true }} a={A} /></P>
         <P title={t.pEnd}><PlayerChromeView s={{ ...base, ended: true, playing: false }} a={A} /></P>

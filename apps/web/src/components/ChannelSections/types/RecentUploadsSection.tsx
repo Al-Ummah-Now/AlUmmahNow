@@ -54,7 +54,7 @@ export function RecentUploadsSection({ channelId, title }: RecentUploadsSectionP
   }
 
   return (
-    <section className="space-y-4">
+    <section data-section="recent" className="space-y-4">
       <SectionHeader
         title={resolveSectionTitle(title, t.channel.recentUploads)}
         viewAllHref={videos.length > 0 ? `/${locale}/channels/${channelId}?tab=videos` : undefined}
