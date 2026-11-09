@@ -185,7 +185,7 @@ export default function ReplyForm({
                 remainingChars < 0
                   ? 'text-red-600 dark:text-red-400'
                   : remainingChars < 100
-                  ? 'text-yellow-600 dark:text-yellow-400'
+                  ? 'text-brand-ink dark:text-brand-ink'
                   : 'text-gray-500 dark:text-gray-400',
                 isRTL ? 'left-0' : 'right-0'
               )}

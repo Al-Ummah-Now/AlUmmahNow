@@ -164,7 +164,7 @@ export function StorageMonitor() {
               stats.percentage > 90
                 ? 'bg-red-600'
                 : stats.percentage > 80
-                ? 'bg-yellow-500'
+                ? 'bg-brand'
                 : 'bg-green-500'
             }`}
             style={{ width: `${Math.min(stats.percentage, 100)}%` }}
@@ -174,7 +174,7 @@ export function StorageMonitor() {
         <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
           {stats.percentage.toFixed(1)}% used
           {stats.isWarning && (
-            <span className="ml-2 text-yellow-600 dark:text-yellow-400 font-medium">
+            <span className="ml-2 text-brand-ink dark:text-brand-ink font-medium">
               ⚠️ Approaching quota limit
             </span>
           )}
@@ -229,7 +229,7 @@ export function StorageMonitor() {
 
               <button
                 onClick={() => handleCleanup(true)}
-                className="px-3 py-1.5 text-sm bg-yellow-600 hover:bg-yellow-700 text-white rounded-md transition-colors"
+                className="px-3 py-1.5 text-sm bg-brand hover:bg-brand-hover text-on-brand rounded-md transition-colors"
               >
                 🧹 Aggressive Clean (7d)
               </button>
@@ -290,7 +290,7 @@ export function StorageHealthIndicator() {
         percentage > 90
           ? 'bg-red-600 text-white'
           : percentage > 80
-          ? 'bg-yellow-500 text-white'
+          ? 'bg-brand text-white'
           : 'bg-blue-600 text-white'
       }`}
     >

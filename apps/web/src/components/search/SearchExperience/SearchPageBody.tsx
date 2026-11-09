@@ -83,7 +83,7 @@ export function SearchPageBody({ model }: { model: SearchPageModel }) {
       {status === 'done' && (
         <>
           {model.relaxed && (
-            <p className="rounded-md bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-100" data-testid="search-relaxed">
+            <p className="rounded-md bg-brand-soft dark:bg-brand-soft px-3 py-2 text-sm text-brand-ink dark:text-brand-ink" data-testid="search-relaxed">
               {t.search.relaxedNotice}
             </p>
           )}

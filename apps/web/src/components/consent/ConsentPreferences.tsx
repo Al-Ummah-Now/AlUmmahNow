@@ -53,7 +53,7 @@ export function ConsentPreferences({ value, onChange, idPrefix = 'consent' }: Co
               aria-checked={value[row.key]}
               checked={value[row.key]}
               onChange={event => onChange({ ...value, [row.key]: event.target.checked })}
-              className="mt-1 h-5 w-5 shrink-0 accent-[#ffa037] cursor-pointer"
+              className="mt-1 h-5 w-5 shrink-0 accent-[var(--fanous-color-accent)] cursor-pointer"
             />
           </li>
         );

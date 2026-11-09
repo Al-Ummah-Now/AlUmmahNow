@@ -105,7 +105,7 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
     <main dir={dir} className="mx-auto max-w-3xl px-4 py-8" data-testid="notifications-page">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-3 text-2xl font-bold text-gray-900 dark:text-white">
-          <Bell className="h-7 w-7 text-[#ffa037]" aria-hidden="true" />
+          <Bell className="h-7 w-7 text-[var(--fanous-color-accent)]" aria-hidden="true" />
           {texts.title}
         </h1>
         <div className="flex items-center gap-2">

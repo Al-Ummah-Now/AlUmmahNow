@@ -99,7 +99,7 @@ export function PauseHistoryButton({ history, t }: { history: UseWatchHistoryRet
 export function PausedNotice({ history, t }: { history: UseWatchHistoryReturn; t: AppTranslations }) {
   if (!history.paused) return null;
   return (
-    <p className="mb-4 p-3 rounded-md text-sm bg-yellow-50 text-yellow-900 dark:bg-yellow-900/30 dark:text-yellow-100" role="status">
+    <p className="mb-4 p-3 rounded-md text-sm bg-brand-soft text-brand-ink dark:bg-brand-soft dark:text-brand-ink" role="status">
       {t.watchHistory.pausedNotice}
     </p>
   );
@@ -168,7 +168,7 @@ export default function WatchHistoryPage() {
           <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">{t.watchHistory.empty}</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-4">{t.watchHistory.emptyDescription}</p>
-          <Link href={`/${lang}`} className="text-yellow-700 dark:text-yellow-500 hover:underline">{t.watchHistory.browseVideos}</Link>
+          <Link href={`/${lang}`} className="text-brand-ink dark:text-brand-ink hover:underline">{t.watchHistory.browseVideos}</Link>
         </div>
       ) : (
         <>

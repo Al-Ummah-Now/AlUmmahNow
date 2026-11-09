@@ -42,10 +42,10 @@ const statusConfig: Record<ScheduledPublishStatus, {
     labelAr: 'مجدول'
   },
   publishing: {
-    color: 'text-yellow-600 dark:text-yellow-400',
-    bgColor: 'bg-yellow-50 dark:bg-yellow-900/30',
-    borderColor: 'border-l-yellow-500',
-    hoverBg: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/50',
+    color: 'text-brand-ink dark:text-brand-ink',
+    bgColor: 'bg-brand-soft dark:bg-brand-soft',
+    borderColor: 'border-l-brand-edge',
+    hoverBg: 'hover:bg-brand-soft dark:hover:bg-brand-soft',
     icon: Loader2,
     label: 'Publishing',
     labelAr: 'جاري النشر'

@@ -72,6 +72,12 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-brand: var(--fanous-color-primary);
+  --color-brand-ink: var(--fanous-color-link);
+  --color-brand-hover: var(--fanous-color-primary-hover);
+  --color-brand-edge: var(--fanous-color-primary-edge);
+  --color-brand-soft: color-mix(in srgb, var(--fanous-color-primary) 16%, transparent);
+  --color-on-brand: var(--fanous-color-on-primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);

@@ -57,7 +57,7 @@ function Section<T>({ id, title, icon, seeAllHref, empty, state, retry, render, 
     <section aria-labelledby={headingId} data-testid={`library-section-${id}`} className="mb-10">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 id={headingId} className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-          <span aria-hidden="true" className="text-[#ffa037]">{icon}</span>
+          <span aria-hidden="true" className="text-[var(--fanous-color-accent)]">{icon}</span>
           {title}
           {typeof state.total === 'number' && state.total > 0 && (
             <span className="text-sm font-normal text-gray-500">({state.total})</span>
@@ -165,7 +165,7 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
     <main dir={dir} className="mx-auto max-w-7xl px-4 py-8" data-testid="library-page">
       <header className="mb-8">
         <h1 className="flex items-center gap-3 text-3xl font-bold text-gray-900 dark:text-white">
-          <LibraryIcon className="h-8 w-8 text-[#ffa037]" aria-hidden="true" />
+          <LibraryIcon className="h-8 w-8 text-[var(--fanous-color-accent)]" aria-hidden="true" />
           {texts.title}
         </h1>
         <p className="mt-1 text-gray-600 dark:text-gray-400">{texts.description}</p>
@@ -216,7 +216,7 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
         render={(p) => (
           <Link
             href={`/${lang}/playlist/${encodeURIComponent(p.id)}`}
-            className="block rounded-lg border border-gray-200 p-3 hover:border-[#ffa037] dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="block rounded-lg border border-gray-200 p-3 hover:border-[var(--fanous-color-accent)] dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             data-testid="library-playlist"
           >
             <ListVideo className="mb-2 h-6 w-6 text-gray-500" aria-hidden="true" />

@@ -25,7 +25,7 @@ describe('StreamStatusBadge (LTR)', () => {
       const badge = screen.getByRole('status');
 
       expect(screen.getByText('SCHEDULED')).toBeInTheDocument();
-      expect(badge).toHaveClass('bg-amber-500');
+      expect(badge).toHaveClass('bg-brand-soft');
       expect(badge).not.toHaveClass('animate-pulse');
     });
 

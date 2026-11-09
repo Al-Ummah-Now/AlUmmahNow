@@ -57,7 +57,7 @@ export function CookieSizeMonitor() {
   const statusColor = sizeInfo.isOverLimit
     ? 'bg-red-500'
     : sizeInfo.isNearLimit
-    ? 'bg-yellow-500'
+    ? 'bg-brand'
     : 'bg-green-500';
 
   const statusIcon = sizeInfo.isOverLimit
@@ -75,7 +75,7 @@ export function CookieSizeMonitor() {
           sizeInfo.isOverLimit
             ? 'bg-red-600 hover:bg-red-700'
             : sizeInfo.isNearLimit
-            ? 'bg-yellow-600 hover:bg-yellow-700'
+            ? 'bg-brand hover:bg-brand-hover'
             : 'bg-gray-800 hover:bg-gray-700'
         }`}
       >
@@ -100,7 +100,7 @@ export function CookieSizeMonitor() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Usage:</span>
-              <span className={sizeInfo.isNearLimit ? 'text-yellow-400' : ''}>
+              <span className={sizeInfo.isNearLimit ? 'text-brand-ink' : ''}>
                 {sizeInfo.usagePercent}% of 4 KB
               </span>
             </div>
@@ -118,7 +118,7 @@ export function CookieSizeMonitor() {
                   sizeInfo.isOverLimit
                     ? 'bg-red-500'
                     : sizeInfo.isNearLimit
-                    ? 'bg-yellow-500'
+                    ? 'bg-brand'
                     : 'bg-green-500'
                 }`}
                 style={{ width: `${Math.min(parseFloat(sizeInfo.usagePercent), 100)}%` }}
@@ -145,7 +145,7 @@ export function CookieSizeMonitor() {
 
           {/* Warnings */}
           {sizeInfo.isNearLimit && (
-            <div className="mt-3 p-2 bg-yellow-900/50 border border-yellow-600 rounded text-yellow-200">
+            <div className="mt-3 p-2 bg-brand-soft border border-brand-edge rounded text-brand-ink">
               ⚠️ Approaching 4KB limit. Consider removing accounts.
             </div>
           )}

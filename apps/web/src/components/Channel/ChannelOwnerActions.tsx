@@ -33,7 +33,7 @@ interface ChannelOwnerActionsProps {
 const buttonClass =
   'inline-flex items-center gap-2 min-h-9 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 ' +
   'bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 ' +
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500 focus-visible:ring-offset-2';
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2';
 
 export function ChannelOwnerActions({ channel, variant = 'header', className, onDeleted, redirectAfterDelete }: ChannelOwnerActionsProps) {
   const { t, lang, isRTL, dir } = useLanguage();

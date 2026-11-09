@@ -109,7 +109,7 @@ export function SortableTabItem({
             </span>
           )}
           {isDefault && (
-            <span className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full shrink-0">
+            <span className="text-xs px-2 py-0.5 bg-brand-soft dark:bg-brand-soft text-brand-ink dark:text-brand-ink rounded-full shrink-0">
               {t.channel.tabs.default_tab}
             </span>
           )}
@@ -158,9 +158,9 @@ export function SortableTabItem({
           transition-all
           ${
             isDefault
-              ? 'text-yellow-500 dark:text-yellow-400'
+              ? 'text-brand-ink dark:text-brand-ink'
               : tab.visible
-              ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-600 hover:text-yellow-500 dark:hover:text-yellow-400'
+              ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-600 hover:text-brand-ink dark:hover:text-brand-ink'
               : 'opacity-30 cursor-not-allowed text-gray-300 dark:text-gray-700'
           }
         `}
@@ -173,7 +173,7 @@ export function SortableTabItem({
       >
         <Star
           className={`w-5 h-5 ${
-            isDefault ? 'fill-yellow-400 dark:fill-yellow-500' : ''
+            isDefault ? 'fill-brand dark:fill-brand' : ''
           }`}
         />
       </button>

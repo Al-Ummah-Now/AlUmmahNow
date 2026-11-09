@@ -144,10 +144,10 @@ export function VariableGuide({ onInsertVariable }: VariableGuideProps) {
                             px-1.5
                             py-0.5
                             rounded
-                            bg-yellow-100
-                            dark:bg-yellow-900/30
-                            text-yellow-700
-                            dark:text-yellow-400
+                            bg-brand-soft
+                            dark:bg-brand-soft
+                            text-brand
+                            dark:text-brand
                           ">
                             {isRTL ? 'يتطلب إدخال' : 'Requires input'}
                           </span>

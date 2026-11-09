@@ -56,7 +56,7 @@ export function NotificationSettingsPanel() {
       className="mt-8 rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800"
     >
       <div className="mb-4 flex items-center gap-3">
-        <Bell className="h-6 w-6 text-[#ffa037]" aria-hidden="true" />
+        <Bell className="h-6 w-6 text-[var(--fanous-color-accent)]" aria-hidden="true" />
         <div>
           <h2 id="notification-settings-heading" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {texts.settingsTitle}
@@ -96,7 +96,7 @@ export function NotificationSettingsPanel() {
                   onClick={() => void toggle(category)}
                   data-testid={`notification-setting-${category}`}
                   className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-60 ${
-                    settings[category] ? 'bg-[#ffa037]' : 'bg-gray-300 dark:bg-gray-600'
+                    settings[category] ? 'bg-[var(--fanous-color-accent)]' : 'bg-gray-300 dark:bg-gray-600'
                   }`}
                 >
                   <span
