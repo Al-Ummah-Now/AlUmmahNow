@@ -1,6 +1,7 @@
+import { THEME_DEMO } from '../theme-demo-keep.ts';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
 	PINNED_E2E_USER_TIMESTAMPS,
@@ -9,6 +10,9 @@ import {
 	assertQaTarget,
 	blockChannelDeletion,
 	classifyChannel,
+	isThemeDemoChannel,
+	classifyHandleEntry,
+	classifyTabsConfig,
 	classifyPlaylist,
 	classifyPost,
 	classifyScheduleEntry,
@@ -231,6 +235,65 @@ describe('staleProfileChannels', () => {
 		assert.deepEqual(staleProfileChannels({ email: EMAILS.owner, channels: ['gone'] }, existing, deleting), []);
 		assert.deepEqual(staleProfileChannels({ email: EMAILS.seed, channels: ['gone'] }, existing, deleting), []);
 		assert.deepEqual(staleProfileChannels({ channels: ['gone'] }, existing, deleting), []);
+	});
+});
+
+describe('theme-demo keep-list', () => {
+	const demoChannel = [...THEME_DEMO.channelIds][0];
+	const demoVideo = [...THEME_DEMO.videoIds][0];
+	const demoPlaylist = [...THEME_DEMO.playlistIds][0];
+	const demoEmail = 'demo-aswaq@delivered.resend.dev';
+	it('has the 7 channels, 47 videos and 4 playlists of the seeded demo set', () => {
+		assert.equal(THEME_DEMO.channelIds.size, 7);
+		assert.equal(THEME_DEMO.videoIds.size, 47);
+		assert.equal(THEME_DEMO.playlistIds.size, 4);
+		assert.ok(THEME_DEMO.videoIds.has('e42e5deb-c86a-40b0-b8ec-6072fc550dba'), 'Lantern Makers of Old Cairo (unplayable on purpose)');
+	});
+	it('treats the demo accounts as their own kind, not as test accounts', () => {
+		assert.equal(accountKind(demoEmail), 'demo');
+		assert.equal(accountKind('demo-nobody@delivered.resend.dev'), 'other');
+	});
+	it('keeps demo videos, channels, playlists, posts, sections, handles and tabs whatever they look like', () => {
+		const lookup = (u: string | undefined) => (u === 'd' ? demoEmail : u === 'r' ? EMAILS.release : undefined);
+		assert.equal(classifyVideo({ id: demoVideo, userId: 'r', title: 'E2E Temp x' }, lookup).action, 'keep');
+		assert.equal(classifyVideo({ id: 'other', userId: 'd', title: 'E2E Temp x' }, lookup).action, 'keep');
+		assert.equal(classifyVideo({ id: 'other', userId: 'r', channelId: demoChannel, title: 'Release E2E x' }, lookup).action, 'keep');
+		assert.equal(classifyChannel({ id: demoChannel, email: EMAILS.release, name: 'Release E2E x' }).action, 'keep');
+		assert.equal(classifyChannel({ id: 'c', email: demoEmail, name: 'E2E Temp Channel x' }).action, 'keep');
+		assert.equal(classifyPlaylist({ id: demoPlaylist, title: 'E2E Temp p' }, 'delete').action, 'keep');
+		assert.equal(classifyPlaylist({ id: 'p', channelId: demoChannel, title: 'E2E Temp p' }, 'delete').action, 'keep');
+		assert.equal(classifyPost('E2E Temp post', 'delete', demoChannel).action, 'keep');
+		assert.equal(classifySection('E2E Temp s', 'delete', demoChannel).action, 'keep');
+		assert.equal(classifyHandleEntry({ channelId: demoChannel }, EMAILS.release, new Set(), new Set()).action, 'keep');
+		assert.equal(classifyTabsConfig(`channel-tabs/${demoChannel}`, new Set(), new Set()).action, 'keep');
+		assert.ok(isThemeDemoChannel(demoChannel) && !isThemeDemoChannel(undefined));
+	});
+	it('matches apps/web/demo-content/demo-set.json once that file is on the branch', () => {
+		const file = join(ROOT, 'apps/web/demo-content/demo-set.json');
+		if (!existsSync(file)) return;
+		const set = JSON.parse(readFileSync(file, 'utf8'));
+		assert.deepEqual([...THEME_DEMO.channelIds].sort(), [...set.channels].sort());
+		assert.deepEqual([...THEME_DEMO.videoIds].sort(), [...new Set([...set.videos, ...set.shorts, ...set.extraVideos])].sort());
+		assert.deepEqual([...THEME_DEMO.playlistIds].sort(), [...set.playlists].sort());
+	});
+});
+
+describe('handles and tab configs', () => {
+	const existing = new Set(['a', 'b']);
+	const deleting = new Set(['b']);
+	it('releases dead handles of test accounts only', () => {
+		assert.equal(classifyHandleEntry({ channelId: 'gone' }, EMAILS.release, existing, deleting).action, 'delete');
+		assert.equal(classifyHandleEntry({ channelId: 'b' }, EMAILS.oldRun, existing, deleting).action, 'delete');
+		assert.equal(classifyHandleEntry({ channelId: 'a' }, EMAILS.oldRun, existing, deleting).action, 'keep');
+		assert.equal(classifyHandleEntry({ channelId: 'gone' }, EMAILS.owner, existing, deleting).action, 'unsure');
+		assert.equal(classifyHandleEntry({ channelId: 'gone' }, undefined, existing, deleting).action, 'unsure');
+		assert.equal(classifyHandleEntry(null, EMAILS.oldRun, existing, deleting).action, 'keep');
+	});
+	it('removes tab configs of channels that are gone', () => {
+		assert.equal(classifyTabsConfig('channel-tabs/gone', existing, deleting).action, 'delete');
+		assert.equal(classifyTabsConfig('channel-tabs/b', existing, deleting).action, 'delete');
+		assert.equal(classifyTabsConfig('channel-tabs/a', existing, deleting).action, 'keep');
+		assert.equal(classifyTabsConfig('channel-handles/x', existing, deleting).action, 'keep');
 	});
 });
 

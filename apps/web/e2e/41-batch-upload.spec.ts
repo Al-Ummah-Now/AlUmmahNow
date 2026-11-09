@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { AUTH_STATE } from './test-utils/auth-state';
 import { listOwnVideos, userApi } from './test-utils/e2e-videos';
-import { createTestFile, gotoUpload } from './test-utils/upload';
+import { createTestFile, gotoUpload, removeTestFiles } from './test-utils/upload';
 import { ARABIC, deleteVideosTitled, expectDarkSurface, tempName } from './test-utils/upload-studio';
 
 /**
@@ -37,7 +37,10 @@ test.afterEach(async ({ page }) => {
 });
 
 test.afterAll(async () => {
-  for (const p of prefixes) await deleteVideosTitled('single', p);
+  for (const p of prefixes) {
+    await deleteVideosTitled('single', p);
+    removeTestFiles(p);
+  }
 });
 
 async function openBatch(page: Page, locale: 'en' | 'ar' = 'en') {

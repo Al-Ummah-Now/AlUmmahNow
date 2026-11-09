@@ -13,7 +13,10 @@
  *   (test-{single,multi,none,scratch}-<E2E_USERS_TIMESTAMP>@e2e.alummahnow.net)
  *   with their channels and "E2E Seed …" videos (apps/web/e2e/test-utils/e2e-videos.ts);
  * - anything owned by an account that is not a recognisable test account, and
- *   the explicit KEEP_VIDEO_IDS.
+ *   the explicit KEEP_VIDEO_IDS;
+ * - the theme-demo content (scripts/qa/theme-demo-keep.ts): the demo-<key>
+ *   accounts and everything they own, plus the listed channel / video / playlist
+ *   ids, whatever their title or state (one demo video stays "processing" on purpose).
  *
  * What counts as junk (deleted):
  * - "E2E Temp …" / "Release E2E …" titled content (specs create it with a
@@ -28,6 +31,7 @@
  */
 
 import { SEED_ACCOUNTS, SEED_CHANNELS, VIEWER_CHANNEL } from '../../apps/web/e2e/seed/seed-config.ts';
+import { THEME_DEMO, THEME_DEMO_ACCOUNT_KEYS } from './theme-demo-keep.ts';
 
 export type Action = 'delete' | 'keep' | 'unsure';
 export interface Verdict {
@@ -70,15 +74,18 @@ const SEED_PLAYLIST_TITLES: ReadonlySet<string> = new Set(SEED_CHANNELS.map((c) 
 const PINNED_E2E_EMAIL = new RegExp(
 	`^test-(single|multi|none|scratch)-(${PINNED_E2E_USER_TIMESTAMPS.join('|')})@e2e\\.alummahnow\\.net$`,
 );
+/** The theme-demo accounts (kept with everything they own). */
+const THEME_DEMO_EMAIL = new RegExp(`^demo-(${THEME_DEMO_ACCOUNT_KEYS.join('|')})@delivered\\.resend\\.dev$`);
 /** Addresses the E2E, release and agent probe flows register (code sink or Resend test inboxes). */
 const THROWAWAY_EMAIL = /^(test|rel|probe)-[a-z0-9-]+@(e2e\.alummahnow\.net|delivered\.resend\.dev)$/;
 
-export type AccountKind = 'seed' | 'pinned-e2e' | 'throwaway' | 'other' | 'unknown';
+export type AccountKind = 'seed' | 'demo' | 'pinned-e2e' | 'throwaway' | 'other' | 'unknown';
 
 export function accountKind(email: string | null | undefined): AccountKind {
 	if (!email) return 'unknown';
 	const e = email.trim().toLowerCase();
 	if (SEED_EMAILS.has(e)) return 'seed';
+	if (THEME_DEMO_EMAIL.test(e)) return 'demo';
 	if (PINNED_E2E_EMAIL.test(e)) return 'pinned-e2e';
 	if (THROWAWAY_EMAIL.test(e)) return 'throwaway';
 	return 'other';
@@ -114,6 +121,7 @@ export function classifyVideo(video: VideoLike, ownerEmail: OwnerLookup): Verdic
 	const title = video.title ?? '';
 	const kind = accountKind(ownerEmail(video.userId));
 	if (KEEP_VIDEO_IDS.has(video.id)) return { action: 'keep', reason: 'on the keep list (owner request)' };
+	if (THEME_DEMO.videoIds.has(video.id) || kind === 'demo' || isThemeDemoChannel(video.channelId)) return { action: 'keep', reason: 'theme-demo content' };
 	if (kind === 'seed') {
 		if (SEED_VIDEO_TITLES.has(title)) return { action: 'keep', reason: 'QA seed fixture' };
 		if (TEMP_TITLE.test(title)) return { action: 'delete', reason: 'temp E2E title on a seed account' };
@@ -150,6 +158,7 @@ export function junkCommentIds(video: VideoLike): string[] {
 export function classifyChannel(channel: ChannelLike): Verdict {
 	const name = channel.name ?? '';
 	const kind = accountKind(channel.email);
+	if (THEME_DEMO.channelIds.has(channel.id) || kind === 'demo') return { action: 'keep', reason: 'theme-demo channel' };
 	if (kind === 'seed') return { action: 'keep', reason: SEED_CHANNEL_NAMES.has(name) ? 'QA seed fixture' : 'owned by a QA seed account' };
 	if (kind === 'other' || kind === 'unknown') return { action: 'keep', reason: `owned by a ${kind === 'other' ? 'non-test' : 'unidentified'} account` };
 	if (DISPOSABLE_CHANNEL_PREFIXES.some((p) => name.startsWith(p)) && !channel.isMain) {
@@ -161,8 +170,13 @@ export function classifyChannel(channel: ChannelLike): Verdict {
 		: { action: 'unsure', reason: 'throwaway test account, but the channel name is not a test marker' };
 }
 
-export function classifyPlaylist(p: { title?: string; channelId?: string }, channelVerdict: Action | undefined): Verdict {
+export function isThemeDemoChannel(channelId: string | undefined): boolean {
+	return !!channelId && THEME_DEMO.channelIds.has(channelId);
+}
+
+export function classifyPlaylist(p: { id?: string; title?: string; channelId?: string }, channelVerdict: Action | undefined): Verdict {
 	const title = p.title ?? '';
+	if ((p.id && THEME_DEMO.playlistIds.has(p.id)) || isThemeDemoChannel(p.channelId)) return { action: 'keep', reason: 'theme-demo playlist' };
 	if (SEED_PLAYLIST_TITLES.has(title)) return { action: 'keep', reason: 'QA seed fixture' };
 	if (TEMP_TITLE.test(title)) return { action: 'delete', reason: 'temp E2E playlist' };
 	if (channelVerdict === 'delete') return { action: 'delete', reason: 'playlist of a channel being deleted' };
@@ -170,13 +184,15 @@ export function classifyPlaylist(p: { title?: string; channelId?: string }, chan
 }
 
 /** Community posts are judged by their text; posts of deleted channels go with the channel. */
-export function classifyPost(text: string | undefined, channelVerdict: Action | undefined): Verdict {
+export function classifyPost(text: string | undefined, channelVerdict: Action | undefined, channelId?: string): Verdict {
+	if (isThemeDemoChannel(channelId)) return { action: 'keep', reason: 'post of a theme-demo channel' };
 	if (channelVerdict === 'delete') return { action: 'delete', reason: 'post of a channel being deleted' };
 	if (TEMP_TITLE.test((text ?? '').trim())) return { action: 'delete', reason: 'temp E2E post' };
 	return { action: 'keep', reason: 'not a test post' };
 }
 
-export function classifySection(title: string | undefined, channelVerdict: Action | undefined): Verdict {
+export function classifySection(title: string | undefined, channelVerdict: Action | undefined, channelId?: string): Verdict {
+	if (isThemeDemoChannel(channelId)) return { action: 'keep', reason: 'section of a theme-demo channel' };
 	if (channelVerdict === 'delete') return { action: 'delete', reason: 'section of a channel being deleted' };
 	if (TEMP_TITLE.test(title ?? '')) return { action: 'delete', reason: 'temp E2E channel section' };
 	return { action: 'keep', reason: 'not a test section' };
@@ -207,6 +223,34 @@ export function staleProfileChannels(
 	const kind = accountKind(profile.email);
 	if (kind !== 'throwaway' && kind !== 'pinned-e2e') return [];
 	return (profile.channels ?? []).filter((id) => !existing.has(id) || deleting.has(id));
+}
+
+/**
+ * @handle index entries (channel-tabs bucket, `channel-handles/<handle>`) and tab
+ * configs (`channel-tabs/<channelId>`) whose channel is gone. ChannelDelete
+ * releases them; a delete interrupted half-way leaves them behind, blocking the
+ * handle. Dead handles are only released for test accounts.
+ */
+export function classifyHandleEntry(
+	entry: { channelId?: string } | null,
+	ownerEmail: string | undefined,
+	existing: ReadonlySet<string>,
+	deleting: ReadonlySet<string>,
+): Verdict {
+	if (!entry?.channelId) return { action: 'keep', reason: 'unreadable handle entry' };
+	if (existing.has(entry.channelId) && !deleting.has(entry.channelId)) return { action: 'keep', reason: 'channel exists' };
+	if (isThemeDemoChannel(entry.channelId)) return { action: 'keep', reason: 'handle of a theme-demo channel' };
+	const kind = accountKind(ownerEmail);
+	if (kind === 'throwaway' || kind === 'pinned-e2e') return { action: 'delete', reason: 'handle of a deleted test channel' };
+	return { action: 'unsure', reason: `handle of a missing channel, owner is ${kind === 'unknown' ? 'unidentified' : 'not a test account'}` };
+}
+
+export function classifyTabsConfig(key: string, existing: ReadonlySet<string>, deleting: ReadonlySet<string>): Verdict {
+	const id = /^channel-tabs\/([^/]+)$/.exec(key)?.[1];
+	if (!id) return { action: 'keep', reason: 'not a tab config key' };
+	if (isThemeDemoChannel(id)) return { action: 'keep', reason: 'tab config of a theme-demo channel' };
+	if (existing.has(id) && !deleting.has(id)) return { action: 'keep', reason: 'channel exists' };
+	return { action: 'delete', reason: 'tab config of a deleted channel' };
 }
 
 /** Default for --min-age-hours: E2E jobs run up to ~110 minutes. */
