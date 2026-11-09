@@ -68,5 +68,25 @@
       "en": "Ramadan Mubarak. This year's Taraweeh series is live.",
       "ar": "رمضان مبارك. سلسلة التراويح لهذا العام متاحة الآن."
     }
+  },
+  "component": {
+    "dark": {
+      "nav.bg": "#0b1d2a"
+    },
+    "light": {
+      "nav.bg": "#0e2b3d",
+      "nav.border": "#184456",
+      "nav.text": "#fbefd0",
+      "nav.icon": "#f5cf92",
+      "nav.hover": "#184456",
+      "nav.activeBg": "#184456",
+      "nav.activeText": "#fbc661",
+      "nav.indicator": "#f4ae3a",
+      "nav.searchBg": "#184456",
+      "nav.searchBorder": "#8ba3ae",
+      "nav.searchText": "#fbefd0",
+      "nav.searchPlaceholder": "#d6dfe2",
+      "upload.focus": "#fbc661"
+    }
   }
 }
