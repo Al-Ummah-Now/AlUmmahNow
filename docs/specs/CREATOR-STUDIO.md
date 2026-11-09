@@ -448,7 +448,7 @@ What visitors see on the channel page, moved from the existing pages. Two views,
 - **Sections** (`?view=sections`, from `settings/channel/[id]/sections/page.tsx`): create, edit, delete and reorder.
 - **Tabs** (`?view=tabs`, from `settings/channel/[id]/tabs/page.tsx`): show, hide and order channel tabs.
 
-Each has a **Preview channel page** link. `ChannelTabUpdate` messages currently fall to the processor's default case and go to the DLQ (`docs/analytics/README.md` §3). That's an existing issue, but this page depends on the tabs save working.
+Each has a **Preview channel page** link.
 
 **Empty.** Sections: "Your channel page shows the default layout", with **Add section**. **Phone.** One column, with move up and down as well as drag.
 

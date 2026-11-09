@@ -93,7 +93,7 @@ Every step lists its tests first. Each UI step also has the page's E2E (spec §9
 
 **15. Playlists, Posts tab, Layout tab.** One PR each if a reviewer prefers.
 - Tests: E2E per page.
-- Build: move into the frame. Fold `PlaylistManager/rtl` into one component. Add the post edit page. Fix `ChannelTabUpdate` going to the DLQ, since saving tabs depends on it.
+- Build: move into the frame. Fold `PlaylistManager/rtl` into one component. Add the post edit page.
 
 **16. Customisation Profile tab and Settings General tab.**
 - Tests: every field, handle owner-only at the UI and API, delete channel confirmation.
