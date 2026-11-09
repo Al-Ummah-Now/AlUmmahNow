@@ -50,12 +50,12 @@ Every step lists its tests first. Each UI step also has the page's E2E (spec §9
 ### Content
 
 **6. Content backend.**
-- Tests: the tab rule, table-driven (spec §9.1). `/content` and `/content/summary`, filters, cursor, index sync and rebuild for the new columns.
+- Tests: the status rule, table-driven (spec §9.1). `/content` and `/content/summary`, filters, cursor, index sync and rebuild for the new columns.
 - Build: `SEARCH_DB` migration and snapshot, `isDraft` on the record, the two routes.
 
-**7. Content page.**
-- Tests: E2E for tabs, filters, existing bulk actions, schedule actions, calendar and list.
-- Build: the page, reusing `BulkEditDialog`, `ScheduledVideoCalendar`, `ScheduledVideosList`.
+**7. Content page, Videos tab.**
+- Tests: E2E for each status filter, other filters, existing bulk actions, schedule actions, calendar and list.
+- Build: the Content frame with its type tabs, and the Videos tab, reusing `BulkEditDialog`, `ScheduledVideoCalendar`, `ScheduledVideosList`.
 
 **8. Drafts and new bulk actions.**
 - Tests: save as draft, cancelled schedule becomes a draft, publish clears it, bulk playlist and bulk schedule with partial failures.
@@ -91,17 +91,17 @@ Every step lists its tests first. Each UI step also has the page's E2E (spec §9
 
 ### Remaining pages
 
-**15. Playlists, Layout, Community.** One PR each if a reviewer prefers.
+**15. Playlists, Posts tab, Layout tab.** One PR each if a reviewer prefers.
 - Tests: E2E per page.
 - Build: move into the frame. Fold `PlaylistManager/rtl` into one component. Add the post edit page. Fix `ChannelTabUpdate` going to the DLQ, since saving tabs depends on it.
 
-**16. Customisation and Settings.**
+**16. Customisation Profile tab and Settings General tab.**
 - Tests: every field, handle owner-only at the UI and API, delete channel confirmation.
 - Build: move the edit form. Coordinate with #441 if it merges first. The Settings page.
 
-**17. Live page.**
+**17. Content, Live tab.**
 - Tests: list, schedule, cancel, the unavailable health state, no key or ingest field.
-- Build: the page and `GET /api/live-streams/:id/health` returning unavailable.
+- Build: the tab and `GET /api/live-streams/:id/health` returning unavailable.
 
 **18. Live chat moderation.**
 - Tests: messages stored, removal reaches viewers, chat off, block shared with step 13, the 30-day purge.
@@ -118,9 +118,9 @@ Every step lists its tests first. Each UI step also has the page's E2E (spec §9
 - Tests: visual checks in all four themes, light and dark, across Chromium, Firefox, WebKit and the mobile projects. Add the specs to the Release regressions table in `CLAUDE.md`.
 - Build: fixes only.
 
-**21. Members & roles.** When #462's plan reaches step 6.
+**21. Settings, Permissions tab.** When #462's plan reaches step 6.
 - Tests: from #462 §15, at the new URL.
-- Build: the page at `studio/{channelId}/members`, and swap the helper from step 5 to #462's `can()` and `GET /api/channels/access`.
+- Build: the tab at `studio/{channelId}/settings/permissions`, and swap the helper from step 5 to #462's `can()` and `GET /api/channels/access`.
 
 ## Parallel work
 
