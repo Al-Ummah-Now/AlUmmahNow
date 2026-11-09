@@ -66,8 +66,10 @@ import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-tou
 import { showGestureHintOnce } from '@/lib/video/gesture-hint';
 import { setupAccessibility } from '@/lib/video/accessibility';
 import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
-import { ErrorDisplay } from './ErrorDisplay';
-import { BufferingIndicator } from './LoadingStates';
+import { PlayerErrorView } from '@/components/ThemeDemo/PlayerErrorView';
+import { PlayerChrome } from '@/components/ThemeDemo/PlayerChrome';
+import { mapErrorTypeToI18n } from '@/lib/video/i18n';
+
 import { ViewerCount } from './ViewerCount';
 import { KeyboardHelpModal } from './KeyboardHelpModal';
 import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
@@ -161,8 +163,8 @@ export default function CustomVideoPlayer({
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [isBuffering, setIsBuffering] = useState(false);
-  const [bufferProgress, setBufferProgress] = useState<number>(0);
+  const [, setIsBuffering] = useState(false);
+  const [, setBufferProgress] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isKeyboardHelpOpen, setIsKeyboardHelpOpen] = useState(false);
   const touchFeedbackCleanupRef = useRef<(() => void) | null>(null);
@@ -883,13 +885,16 @@ export default function CustomVideoPlayer({
   if (currentError) {
     return (
       <div className={`custom-video-player ${className}`}>
-        <ErrorDisplay
-          error={currentError}
-          lang={lang}
+        <PlayerErrorView
+          title={t.errors.title[mapErrorTypeToI18n(currentError.type)]}
+          description={t.errors.description[mapErrorTypeToI18n(currentError.type)]}
+          retryLabel={t.errors.retryButton}
           onRetry={currentError.retryable && !isRetrying ? handleRetry : undefined}
+          fallbackLabel={t.errors.fallbackButton[mapErrorTypeToI18n(currentError.type)]}
           onFallback={currentError.fallbackAvailable && !isRetrying ? handleFallback : undefined}
-          showDetails={process.env.NODE_ENV === 'development'}
-          className="aspect-video"
+          reportLabel={lang === 'ar' ? 'الإبلاغ عن مشكلة' : 'Report a problem'}
+          onReport={() => (document.querySelector('[data-report-content] button, [data-report-content]') as HTMLElement | null)?.click()}
+          dir={dir === 'rtl' ? 'rtl' : 'ltr'}
         />
       </div>
     );
@@ -920,10 +925,10 @@ export default function CustomVideoPlayer({
           tabIndex={0}
         />
 
+        {playerReady && playerRef.current && <PlayerChrome player={playerRef.current} lang={lang} onShortcuts={() => setIsKeyboardHelpOpen(true)} />}
+
         {/* Phase 4.20: Buffering indicator */}
-        {isBuffering && playerReady && (
-          <BufferingIndicator progress={bufferProgress} lang={lang} />
-        )}
+        
 
         {/* Real-time viewer count (WebSocket) */}
         {enableWebSocket && playerReady && (

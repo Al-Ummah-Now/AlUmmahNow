@@ -1,0 +1,17 @@
+/* Lantern: warm light falling off into night teal. Light is the material. */
+:root{--r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:20px;--r-pill:999px;--m-blur:none;
+--m-glow:color-mix(in srgb,var(--fanous-color-primary) 34%,transparent);
+--m-page:radial-gradient(90% 60% at 50% -10%,color-mix(in srgb,var(--fanous-color-primary) 16%,transparent),transparent 70%),linear-gradient(180deg,var(--fanous-color-hero-end),var(--fanous-color-background));
+--m-header:linear-gradient(180deg,color-mix(in srgb,var(--fanous-c-nav-bg) 88%,var(--fanous-color-primary)),var(--fanous-c-nav-bg));
+--m-header-edge:0 1px 0 color-mix(in srgb,var(--fanous-color-primary) 34%,transparent),0 10px 30px -18px var(--m-glow);
+--m-rail:linear-gradient(180deg,var(--fanous-color-surface),var(--fanous-color-background));--m-rail-edge:inset -1px 0 0 color-mix(in srgb,var(--fanous-color-primary) 16%,transparent);
+--m-card:radial-gradient(120% 90% at 50% 0%,color-mix(in srgb,var(--fanous-color-primary) 7%,transparent),transparent 62%),linear-gradient(180deg,var(--fanous-color-surface-raised),var(--fanous-color-surface));
+--m-border:linear-gradient(180deg,color-mix(in srgb,var(--fanous-color-primary) 46%,transparent),color-mix(in srgb,var(--fanous-color-divider) 70%,transparent) 55%);
+--m-card-edge:inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 14%,transparent),0 14px 34px -22px rgb(9 21 30/.5);
+--m-raised:linear-gradient(180deg,var(--fanous-color-surface-raised),var(--fanous-color-surface));--m-raised-edge:0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 26%,transparent),0 24px 48px -20px rgb(9 21 30/.55);
+--m-control:var(--fanous-color-background);--m-control-edge:inset 0 1px 2px rgb(9 21 30/.14);
+--m-primary:linear-gradient(180deg,var(--fanous-color-primary-hover),var(--fanous-color-primary) 52%,var(--fanous-color-primary-pressed));--m-primary-hover:linear-gradient(180deg,var(--fanous-color-primary-sheen),var(--fanous-color-primary-hover) 60%,var(--fanous-color-primary));--m-primary-press:var(--fanous-color-primary-pressed);
+--m-primary-edge:inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 80%,transparent),0 6px 18px -8px var(--m-glow);
+--m-active:linear-gradient(var(--to-end),color-mix(in srgb,var(--fanous-color-primary) 26%,transparent),transparent 92%);--m-active-edge:none;--m-hover:color-mix(in srgb,var(--fanous-color-primary) 12%,transparent);
+--m-ind:var(--fanous-color-primary);--m-ind-w:10px;--m-ind-h:30px;--m-ind-shadow:0 0 14px var(--m-glow);--m-ind-shape:path("M5 0C6 6 10 8 10 13V30H0V13C0 8 4 6 5 0Z");
+--m-hero:radial-gradient(70% 120% at 18% 0%,color-mix(in srgb,var(--fanous-color-primary) 26%,transparent),transparent 65%),linear-gradient(135deg,var(--fanous-color-surface-raised),var(--fanous-color-hero-start));--m-thumb-edge:0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 30%,transparent),0 14px 30px -12px var(--m-glow)}

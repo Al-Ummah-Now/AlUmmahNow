@@ -4,6 +4,8 @@ import { ThemeProvider } from "@/components/themeProvider";
 import "@/theme/active.css";
 import "@/theme/bridge.css";
 import "@/theme/demo-motion.css";
+import "@/theme/system.css";
+import "@/theme/pages.css";
 import { DemoBanner } from "@/components/ThemeDemo/DemoBar";
 import backdrops from "@/theme/demo-backdrops.json";
 import { authenticated } from "../lib/actions"

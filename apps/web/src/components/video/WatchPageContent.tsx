@@ -26,6 +26,7 @@ import { fetchRelatedVideos, fetchVideoById } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
+import { setDemoNext } from "@/components/ThemeDemo/demoNext";
 
 type VideoState =
   | { status: 'loading' }
@@ -62,6 +63,12 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
   const Player = isRTL ? VideoPlayerRTL : VideoPlayer;
   const SaveToPlaylistControl = isRTL ? SaveToPlaylistRTL : SaveToPlaylist;
   const related = relatedVideos.filter((video) => video.id !== videoId);
+  useEffect(() => {
+    const n = related[0];
+    setDemoNext(n ? { title: n.title, channel: n.channelName || '', thumb: n.thumbnail, href: `/${lang}/video?vid=${n.id}` } : null);
+    return () => setDemoNext(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relatedVideos, lang]);
   const renderRelated = (keyPrefix: string) =>
     isRTL
       ? <RelatedVideosSectionRTL relatedVideos={related} loading={relatedLoading} onRetry={retryRelated} />
@@ -180,7 +187,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
 
               {/* Report video (hidden for anonymous viewers and the owner) */}
               {!isOwnVideo && (
-                <div className={`w-full max-w-4xl mt-2 px-4 flex ${isRTL ? 'justify-start' : 'justify-end'}`}>
+                <div data-report-content className={`w-full max-w-4xl mt-2 px-4 flex ${isRTL ? 'justify-start' : 'justify-end'}`}>
                   <ReportContentButton
                     contentType="video"
                     contentId={videoId}
