@@ -63,7 +63,7 @@ function Section<T>({ id, title, icon, seeAllHref, empty, state, retry, render, 
             <span className="text-sm font-normal text-gray-500">({state.total})</span>
           )}
         </h2>
-        {seeAllHref && (
+        {seeAllHref && typeof state.total === 'number' && state.total > 0 && (
           <Link href={seeAllHref} className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300" data-testid={`library-see-all-${id}`}>
             {texts.seeAll}
           </Link>

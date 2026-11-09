@@ -883,11 +883,16 @@ export default function CustomVideoPlayer({
    * Render error display if there's an error
    */
   if (currentError) {
+    // A "network" failure while the browser is online means the video itself cannot be loaded
+    const errorCopyKey = (type: typeof currentError.type) => {
+      const key = mapErrorTypeToI18n(type);
+      return key === 'network' && typeof navigator !== 'undefined' && navigator.onLine ? 'unknown' : key;
+    };
     return (
       <div className={`custom-video-player ${className}`}>
         <PlayerErrorView
-          title={t.errors.title[mapErrorTypeToI18n(currentError.type)]}
-          description={t.errors.description[mapErrorTypeToI18n(currentError.type)]}
+          title={t.errors.title[errorCopyKey(currentError.type)]}
+          description={t.errors.description[errorCopyKey(currentError.type)]}
           retryLabel={t.errors.retryButton}
           onRetry={currentError.retryable && !isRetrying ? handleRetry : undefined}
           fallbackLabel={t.errors.fallbackButton[mapErrorTypeToI18n(currentError.type)]}

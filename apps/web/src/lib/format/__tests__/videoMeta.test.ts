@@ -1,4 +1,4 @@
-import { formatAbsoluteDate, formatRelativeTime, formatViews } from '../videoMeta';
+import { formatAbsoluteDate, formatRelativeTime, formatViews, pickLanguage } from '../videoMeta';
 
 describe('formatViews', () => {
   it('uses English singular, plural and zero', () => {
@@ -63,5 +63,16 @@ describe('formatViews with API strings', () => {
   it('reads numeric strings', () => {
     expect(formatViews('1', 'en')).toBe('1 view');
     expect(formatViews('abc', 'en')).toBe('No views');
+  });
+});
+
+describe('pickLanguage', () => {
+  it('splits piped titles', () => {
+    expect(pickLanguage('Great Mosques | مساجد كبرى', 'en')).toBe('Great Mosques');
+    expect(pickLanguage('Great Mosques | مساجد كبرى', 'ar')).toBe('مساجد كبرى');
+  });
+  it('splits mixed sentences and leaves single-language text alone', () => {
+    expect(pickLanguage('A tour of mosques. جولة في المساجد.', 'ar')).toBe('جولة في المساجد.');
+    expect(pickLanguage('Only English here.', 'ar')).toBe('Only English here.');
   });
 });

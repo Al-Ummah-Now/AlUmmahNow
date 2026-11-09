@@ -5,6 +5,7 @@
  * Owners can reorder and remove videos inline.
  */
 
+import { pickLanguage } from '@/lib/format/videoMeta';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
@@ -134,7 +135,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
     );
   }
 
-  const title = playlist.name || playlist.title;
+  const title = pickLanguage(playlist.name || playlist.title || '', lang === 'ar' ? 'ar' : 'en');
   const playAllHref = getPlayAllHref(lang, videos);
 
   return (
@@ -168,7 +169,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                 </p>
               )}
               {playlist.description && (
-                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{playlist.description}</p>
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{pickLanguage(playlist.description, lang === 'ar' ? 'ar' : 'en')}</p>
               )}
               {playAllHref && (
                 <Link
