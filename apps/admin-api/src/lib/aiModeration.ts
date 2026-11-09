@@ -6,6 +6,7 @@
  * (marked `heldBy: 'moderation'` so restore only undoes moderation holds); every action is
  * written to moderation_actions with the reviewer's id.
  */
+import { updateJson } from './r2Cas';
 import {
   AI_HIDEABLE_CATEGORIES,
   LLAMA_GUARD_CATEGORIES,
@@ -29,7 +30,7 @@ export interface D1Like {
 }
 
 export interface R2Like {
-  get(key: string): Promise<{ text(): Promise<string> } | null>;
+  get(key: string): Promise<{ text(): Promise<string>; etag: string } | null>;
   put(key: string, value: string, options?: unknown): Promise<unknown>;
 }
 
@@ -223,23 +224,28 @@ export async function setCommentHidden(
   if (!row) return { ok: false, error: 'not_found' };
   if (row.subject_type !== 'comment' || !row.parent_id) return { ok: false, error: 'unsupported' };
 
-  const video = await readJson<{ comments?: StoredComment[] } & Record<string, unknown>>(videos, row.parent_id);
-  const comment = video ? findComment(video.comments ?? [], row.subject_id) : null;
-  if (!video || !comment) return { ok: false, error: 'subject_missing' };
-
+  // Conditional write on the current video (SCALABILITY-AUDIT AA-2): a comment
+  // posted or an edit made meanwhile is kept, and cannot undo the hide.
+  let missing = false;
   let changed = false;
-  if (hidden && comment.status !== 'held') {
-    comment.status = 'held';
-    comment.heldBy = 'moderation';
-    changed = true;
-  } else if (!hidden && comment.status === 'held' && comment.heldBy === 'moderation') {
-    delete comment.status;
-    delete comment.heldBy;
-    changed = true;
-  }
-  if (changed) {
-    await videos.put(row.parent_id, JSON.stringify(video), { httpMetadata: { contentType: 'application/json' } });
-  }
+  const result = await updateJson<{ comments?: StoredComment[] } & Record<string, unknown>>(videos, row.parent_id, (video) => {
+    changed = false;
+    const comment = video ? findComment(video.comments ?? [], row.subject_id) : null;
+    missing = !video || !comment;
+    if (!video || !comment) return undefined;
+    if (hidden && comment.status !== 'held') {
+      comment.status = 'held';
+      comment.heldBy = 'moderation';
+      changed = true;
+    } else if (!hidden && comment.status === 'held' && comment.heldBy === 'moderation') {
+      delete comment.status;
+      delete comment.heldBy;
+      changed = true;
+    }
+    return changed ? video : undefined;
+  });
+  if (missing || !result) return { ok: false, error: 'subject_missing' };
+
   await actionStatement(
     db,
     { signalId, subjectType: row.subject_type, subjectId: row.subject_id, action: hidden ? 'hide' : 'restore', actorId: reviewerId, reason, details: { changed } },
