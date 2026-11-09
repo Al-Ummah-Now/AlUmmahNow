@@ -25,6 +25,7 @@
     "qa:cleanup": "tsx scripts/qa/cleanup-e2e-leftovers.ts",
     "tokens:generate": "node --experimental-strip-types --no-warnings packages/fanous-tokens/src/cli.ts && node --experimental-strip-types --no-warnings packages/fanous-tokens/src/player.ts",
     "check:tokens": "node --experimental-strip-types --no-warnings packages/fanous-tokens/src/cli.ts --check && node --experimental-strip-types --no-warnings packages/fanous-tokens/src/player.ts --check",
+    "check:theme-colors": "node --experimental-strip-types --no-warnings packages/fanous-tokens/src/color-lint-cli.ts",
     "test:tokens": "node --experimental-strip-types --no-warnings --test packages/fanous-tokens/test/*.test.ts",
     "check:config": "node --experimental-strip-types --no-warnings scripts/release/check-wrangler-config.ts",
     "check:site-theme": "node --experimental-strip-types --no-warnings scripts/release/check-site-theme.ts",
