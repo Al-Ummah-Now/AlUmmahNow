@@ -2,12 +2,8 @@
 // Prototype only: every component in every state, for review.
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useParams } from 'next/navigation';
-import { Bell, Check, CheckCircle2, Flag, Inbox, LogOut, Plus, Search, Settings, Trash2, Upload, User, XCircle } from 'lucide-react';
-import { PlayerChromeView, type ChromeActions, type ChromeState } from '@/components/ThemeDemo/PlayerChromeView';
-import { PlayerErrorView } from '@/components/ThemeDemo/PlayerErrorView';
+import { Bell, Check, CheckCircle2, Inbox, LogOut, Search, Settings, Trash2, Upload, User, XCircle } from 'lucide-react';
 
-const noop = () => undefined;
-const A: ChromeActions = { toggle: noop, seek: noop, setVolume: noop, toggleMute: noop, onNext: noop, toggleFull: noop, toggleTheatre: noop, togglePip: noop, setQuality: noop, setRate: noop, setCaption: noop, setAudio: noop, shortcuts: noop, replay: noop, goLive: noop };
 
 const T = {
   en: { h: 'Components', sub: 'Every component in every state.', buttons: 'Buttons', primary: 'Publish video', secondary: 'Save draft', ghost: 'Cancel', danger: 'Delete video', states: ['Default', 'Hover', 'Pressed', 'Focus', 'Disabled'], sizes: 'Small, medium, large', forms: 'Forms', title: 'Video title', titleH: 'Up to 100 characters.', ph: 'Name your video', err: 'Add a title to continue.', ok: 'This handle is available.', cat: 'Category', desc: 'Description', cards: 'Video and channel cards', vt: 'Understanding Surah Al-Kahf', vc: 'Masjid An-Nur', vm: '12K views, 2 days ago', ch: 'Dar Al-Ilm', chm: '48K subscribers', sub2: 'Subscribe', tabs: 'Tabs and chips', tabL: ['Home', 'Videos', 'Playlists', 'About'], chips: ['All', 'Lectures', 'Recitation', 'Travel'], badges: 'Badges', live: 'Live', dur: '42:10', st: 'Verified', overlays: 'Menus, dialogs and toasts', profile: 'Your profile', settings: 'Settings', out: 'Sign out', dlgT: 'Delete this video?', dlgB: 'This removes it for everyone and cannot be undone.', tok: 'Video published', terr: 'Upload failed. Try again.', emp: 'Empty and loading', et: 'No saved videos yet', eb: 'Save a lecture to find it here later.', ea: 'Browse videos', player: 'Player', pIdle: 'Before playing', pHover: 'Playing, seeking', pMenu: 'Settings menu', pBuf: 'Buffering', pEnd: 'Up next', pLive: 'Live', pErr: 'Could not play', errT: 'This video can\'t play right now', errB: 'Check your connection and try again.', retry: 'Try again', rep: 'Report a problem', short: 'Short', nt: 'Stories of the Prophets, part 3', sh: 'Sunrise over the dunes' },
@@ -18,9 +14,7 @@ export default function ComponentsGallery() {
   const { locale } = useParams<{ locale: string }>();
   const lang = locale === 'ar' ? 'ar' : 'en';
   const t = T[lang];
-  const base: ChromeState = { lang, playing: true, started: true, time: 86, duration: 2530, buffered: 38, volume: 0.7, muted: false, buffering: false, ended: false, active: true, full: false, theatre: false, live: false, behindLive: 0, chapters: [420, 980, 1660], hasNext: true, qualities: [{ id: 'auto', label: lang === 'ar' ? 'تلقائي' : 'Auto' }, { id: '2', label: '1080p' }, { id: '1', label: '720p' }, { id: '0', label: '360p' }], quality: 'auto', rate: 1, captions: [{ id: 'off', label: lang === 'ar' ? 'إيقاف' : 'Off' }, { id: '0', label: lang === 'ar' ? 'العربية' : 'English' }], caption: '0', audio: [], audioId: '', canPip: true, next: { title: t.nt, channel: t.ch } };
   const Variant = ({ c, l }: { c: string; l: string }) => <div className="gal-row">{['', 'is-hover', 'is-press', 'is-focus'].map((s, i) => <button key={s} type="button" className={`b ${c} ${s}`}>{l}<span className="sr-only">{t.states[i]}</span></button>)}<button type="button" className={`b ${c}`} disabled>{l}</button></div>;
-  const P = ({ title, children }: { title: string; children: React.ReactNode }) => <div className="grid gap-2"><span className="gal-note">{title}</span><div className="gal-p">{children}</div></div>;
   return (
     <main className="gal">
       <header><h1>{t.h}</h1><p className="gal-note">{t.sub}</p></header>
@@ -52,25 +46,6 @@ export default function ComponentsGallery() {
         <div className="grid gap-2"><div className="toast ok"><CheckCircle2 aria-hidden="true" />{t.tok}</div><div className="toast err"><XCircle aria-hidden="true" />{t.terr}</div></div>
       </div></section>
       <section><h2>{t.emp}</h2><div className="gal-grid"><div className="c empty"><Inbox aria-hidden="true" /><h4>{t.et}</h4><p>{t.eb}</p><button type="button" className="b b-primary b-sm"><Search aria-hidden="true" />{t.ea}</button></div><div className="grid gap-2"><div className="sk" style={{ aspectRatio: '16/9' }} /><div className="sk" style={{ height: 14 }} /><div className="sk" style={{ height: 12, width: '60%' }} /></div></div></section>
-      <section><h2>{t.player}</h2><div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,420px),1fr))' }}>
-        <div className="grid gap-3" style={{ gridColumn: '1 / -1' }}>
-          <span className="gal-note">{lang === 'ar' ? 'المشغّل في كل سمة، فوق إطار فاتح وآخر داكن' : 'The player in every theme, over a bright and a dark frame'}</span>
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,420px),1fr))' }}>
-            {(['lantern', 'zujaj', 'nahas', 'fawanees'] as const).flatMap((id) => ['#f4efe4,#d9d2c2', '#0a1016,#1b2b36'].map((bg, i) => (
-              <div key={`${id}${i}`} className={`grid gap-1 pt-${id}`}><span className="gal-note">{id}, {i ? 'dark frame' : 'bright frame'}</span><div className="gal-p" style={{ background: `linear-gradient(135deg,${bg})` }}><PlayerChromeView s={{ ...base, playing: false, started: i === 0 ? false : true }} a={A} hoverPct={41} /></div></div>
-            )))}
-          </div>
-        </div>
-        <P title={t.pIdle}><PlayerChromeView s={{ ...base, playing: false, started: false, time: 0, buffered: 0 }} a={A} /></P>
-        <P title={t.pHover}><PlayerChromeView s={base} a={A} hoverPct={41} /></P>
-        <P title={lang === 'ar' ? 'استكمال المشاهدة' : 'Resumed'}><PlayerChromeView s={{ ...base, resumed: true, time: 1240 }} a={A} /></P>
-        <P title={t.pMenu}><PlayerChromeView s={base} a={A} initialPanel="root" /></P>
-        <P title={t.pBuf}><PlayerChromeView s={{ ...base, buffering: true }} a={A} /></P>
-        <P title={t.pEnd}><PlayerChromeView s={{ ...base, ended: true, playing: false }} a={A} /></P>
-        <P title={t.pLive}><PlayerChromeView s={{ ...base, live: true, chapters: [] }} a={A} /></P>
-        <P title={t.pErr}><PlayerErrorView title={t.errT} description={t.errB} retryLabel={t.retry} onRetry={noop} reportLabel={t.rep} onReport={noop} dir={lang === 'ar' ? 'rtl' : 'ltr'} /></P>
-        <div className="grid gap-2"><span className="gal-note">{t.short}</span><div className="shorts"><div className="pc-side"><button type="button" className="pc-b" aria-label="+"><Plus aria-hidden="true" /></button><button type="button" className="pc-b" aria-label={t.rep}><Flag aria-hidden="true" /></button></div><div className="shorts-t">{t.sh}</div></div></div>
-      </div></section>
     </main>
   );
 }

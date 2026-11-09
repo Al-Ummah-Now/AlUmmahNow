@@ -36,7 +36,6 @@ const mockPlayer = {
   el: jest.fn(() => null),
 };
 
-jest.mock('@/components/ThemeDemo/PlayerChrome', () => ({ PlayerChrome: () => null }));
 jest.mock('@/lib/video/videojs-setup', () => ({
   createVideoPlayer: jest.fn(),
   disposeVideoPlayer: jest.fn(),

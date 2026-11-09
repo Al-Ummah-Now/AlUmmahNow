@@ -28,7 +28,6 @@ import { fetchRelatedVideos, fetchVideoById } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
-import { setDemoNext } from "@/components/ThemeDemo/demoNext";
 import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi } from "@/lib/video/player-ui";
 import { CommentsSkeleton, WatchDetailsSkeleton, type WatchHint } from "@/components/video/WatchPageSkeleton";
 
@@ -67,12 +66,6 @@ export default function WatchPageContent({ videoId, hint }: { videoId: string; h
   const Player = isRTL ? VideoPlayerRTL : VideoPlayer;
   const SaveToPlaylistControl = isRTL ? SaveToPlaylistRTL : SaveToPlaylist;
   const related = relatedVideos.filter((video) => video.id !== videoId);
-  useEffect(() => {
-    const n = related[0];
-    setDemoNext(n ? { title: n.title, channel: n.channelName || '', thumb: n.thumbnail, href: `/${lang}/video?vid=${n.id}` } : null);
-    return () => setDemoNext(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [relatedVideos, lang]);
 
   // Theatre, mini player and up next belong to the watch page (docs/specs/VIDEO-PLAYER.md section 5)
   const router = useRouter();
@@ -173,7 +166,7 @@ export default function WatchPageContent({ videoId, hint }: { videoId: string; h
   const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
 
   return (
-    <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
+    <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'} data-theatre={theatre || undefined}>
       <div className={`flex flex-col ${theatre ? '' : 'lg:flex-row'} gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden`} data-theatre={theatre || undefined} data-testid="watch-layout">
         <div className={`flex flex-col w-full ${theatre ? '' : 'lg:w-3/4'} overflow-hidden`}>
           {!videoDetails && <WatchDetailsSkeleton hint={hint} />}

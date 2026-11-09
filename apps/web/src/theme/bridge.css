@@ -41,13 +41,13 @@ button[class*="bg-red-"],a[class*="bg-red-"],span[class*="bg-red-5"],span[class*
 [class*="bg-green-"],[class*="bg-emerald-"]{background:color-mix(in srgb,var(--fanous-color-verified-fill) 16%,var(--fanous-color-surface))!important;color:var(--fanous-color-success-text)!important}
 [class*="bg-yellow-"],[class*="bg-amber-"],[class*="bg-orange-"]{background:color-mix(in srgb,var(--fanous-color-primary) 26%,var(--fanous-color-surface))!important;color:var(--fanous-color-text-primary)!important}
 [class*="border-red-"]{border-color:var(--fanous-color-error-text)!important}
-[class*="bg-black"]:not(.video-js *):not(.fixed){background:var(--fanous-color-surface-raised)!important}
+
 [class*="text-[#"]{color:var(--fanous-color-link)!important}
 [class*="border-[#"]{border-color:var(--fanous-c-divider-line)!important}
 html,body{background:var(--fanous-color-background)}
 #page-content,#page-content>*,[class*="min-h-screen"],main{background:transparent!important}
 #page-content{position:relative;z-index:1}.demo-layer{position:relative;z-index:1;background:transparent!important}
-.video-js,[class*="video-js"]{background:#000}
+[class*="video-js"]{background:#000}
 .theme-bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;--art:var(--fanous-color-motif);--lit:var(--fanous-color-primary);--bgc:var(--fanous-color-background)}
 .ti{position:absolute;opacity:var(--o,.16)}html.dark .ti{--o:.22}html:not(.dark) .ti{--o:.2}
 .ti-end{inset-block-end:0;inset-inline-end:2vw;height:min(54vh,520px);width:auto}.ti-start{inset-block-start:17vh;inset-inline-start:2vw;height:min(24vh,220px);width:auto}
@@ -59,11 +59,11 @@ html,body{background:var(--fanous-color-background)}
 html:has(video) .ti-top,html:has(video) .ti-lattice,html:has(video) .ti-dome,html:has(video) .ti-small{display:none}
 @media(max-width:639px){.ti-left,.ti-right{height:58vh}.ti-second,.ti-small{display:none}.ti-end{height:34vh}.ti-dome{width:92vw}}
 /* Player */
-.video-js{--vjs-primary-color:var(--fanous-c-player-progress);--vjs-progress-filled:var(--fanous-c-player-progress);--vjs-progress-bg:var(--fanous-c-player-track);--vjs-control-text:var(--fanous-c-player-control)}
-.video-js .vjs-play-progress{background:var(--fanous-c-player-progress)!important;box-shadow:none!important}.video-js .vjs-load-progress div{background:var(--fanous-c-player-buffered)!important}.video-js .vjs-volume-level{background:var(--fanous-c-player-progress)!important}
-.video-js button:focus-visible,.video-js .vjs-control:focus-visible{outline:2px solid var(--fanous-c-player-progress)!important}
-.video-js .vjs-menu li.vjs-selected,.video-js .vjs-menu li.vjs-selected:focus{background:var(--fanous-c-player-progress)!important;color:var(--fanous-c-button-primary-text)!important}
-.video-js .vjs-loading-spinner{border-top-color:var(--fanous-c-player-progress)!important}
+
+
+
+
+
 /* Drawer and nav preferences */
 [data-testid=side-nav],[data-testid=side-nav] ul{background:var(--fanous-c-drawer-bg)!important;color:var(--fanous-c-drawer-text)}@media(hover:hover){[data-testid=side-nav] ul>li:not(:has(.np)):hover{background:var(--fanous-c-drawer-active-bg)!important}}
 [data-testid=side-nav] a,[data-testid=side-nav] span:not(.np-title){color:var(--fanous-c-drawer-text)!important}[data-testid=side-nav] i{color:var(--fanous-c-drawer-icon)!important}
@@ -82,7 +82,7 @@ html:has(video) .ti-top,html:has(video) .ti-lattice,html:has(video) .ti-dome,htm
 [class*="text-orange-"],[class*="text-amber-"],[class*="text-yellow-"],[class*="text-purple-"],[class*="text-violet-"],[class*="text-indigo-"],[class*="text-pink-"],[class*="text-rose-"]{color:var(--fanous-c-link-text)!important}
 button[class*="bg-black"]{background:var(--fanous-c-button-primary-bg)!important;color:var(--fanous-c-button-primary-text)!important}
 .related-videos{background:transparent!important}
-.video-js .vjs-time-tooltip,.video-js .vjs-mouse-display .vjs-time-tooltip{color:var(--fanous-c-button-primary-text)!important;background:var(--fanous-c-player-progress)!important}
+
 header.header>div:nth-child(2){flex:0 1 auto}header.header h2{white-space:nowrap}html[lang=ar] header.header h2{font-size:1.05rem;line-height:1.4}
 .demo-banner{position:relative;z-index:60}
 .demo-bar{position:static;background:transparent;border:0;box-shadow:none;padding:0;color:inherit;width:auto}.demo-bar>.row:first-child button{border-color:currentColor;background:transparent;color:inherit!important;min-height:28px}
