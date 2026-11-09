@@ -112,6 +112,31 @@ Everything else in `ramadan` comes from Lantern. Its fonts, logo and emails are 
 
 The sizes for native launcher icons are checked per platform where a build can replace them.
 
+### Colour for each part
+
+Semantic colours such as `primary` and `surface` are not enough on their own. `tokens/components.json`
+gives every part of the interface its own colour, in each theme and mode, and pages use those part
+colours. Each part names a semantic colour by default. A theme overrides a part per mode under
+`component.<mode>`, and a child theme inherits overrides. On the web a part is `--fanous-c-<part>`.
+
+| Area | Parts |
+|---|---|
+| Header | `nav.*`: background, border, text, icon, hover, active item and indicator, search field, account menu |
+| Phone drawer | `drawer.*` |
+| Buttons | `button.primary`, `.secondary`, `.ghost`, `.destructive`, `.icon`: background, text, border, hover, pressed, focus, disabled |
+| Upload | `upload.*`, the same set plus icon |
+| Forms | `form.*`: section, label, help, input, placeholder, focus, error, success, checkbox, switch |
+| Cards | `card.video.*`, `card.channel.*` |
+| Tabs | `tabs.*`, `segment.*` |
+| Overlays | `menu.*`, `dialog.*`, `toast.*` |
+| Badges | `badge.*`: live, duration, status |
+| Player | `player.*`: controls, progress, buffered, track |
+| Other | `footer.*`, `link.text`, `divider.line`, `skeleton.*`, `empty.*` |
+
+CI checks every part pair for contrast in every theme and mode, holds text on the primary and upload
+buttons to 7:1, and applies the logo-hue rule to overrides. Part colours reach the web output today.
+Native outputs follow when those apps adopt them.
+
 ## Build-time selection
 
 `fanous-tokens build --theme <id> --app <app> --out <dir>` validates the theme, resolves its chain and

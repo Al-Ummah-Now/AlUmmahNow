@@ -176,5 +176,31 @@
     "buttonBackground": "#0f5a6b",
     "buttonText": "#ffffff",
     "buttonRadius": "4px"
+  },
+  "component": {
+    "dark": {
+      "nav.bg": "#0f4552"
+    },
+    "light": {
+      "nav.bg": "#0f5a6b",
+      "nav.border": "#0c4c5b",
+      "nav.text": "#ffffff",
+      "nav.icon": "#d3e8e7",
+      "nav.hover": "#0c4c5b",
+      "nav.activeBg": "#0c4c5b",
+      "nav.activeText": "#ffffff",
+      "nav.indicator": "#f5cf92",
+      "nav.searchBg": "#0c4c5b",
+      "nav.searchBorder": "#a9cccc",
+      "nav.searchText": "#ffffff",
+      "nav.searchPlaceholder": "#d3e8e7",
+      "upload.bg": "#f5cf92",
+      "upload.text": "#09151e",
+      "upload.icon": "#09151e",
+      "upload.border": "#f8e8be",
+      "upload.hover": "#f8e8be",
+      "upload.pressed": "#e8b477",
+      "upload.focus": "#ffffff"
+    }
   }
 }

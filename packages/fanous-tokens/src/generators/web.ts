@@ -1,6 +1,7 @@
 import { HEADER, kebab, rgb, type Model, type ThemeColor } from '../model.ts';
 
 const vars = (colors: ThemeColor[]) => colors.map((c) => `  --fanous-color-${kebab(c.name)}: ${c.hex};`).join('\n');
+const parts = (c: Record<string, string>) => Object.entries(c).map(([k, v]) => `  --fanous-c-${k.split('.').map(kebab).join('-')}: ${v};`).join('\n');
 const stack = (families: string[]) => families.map((f) => (/\s/.test(f) ? `'${f}'` : f)).join(', ');
 
 export function generateWeb(m: Model): Record<string, string> {
@@ -38,10 +39,12 @@ ${m.duration.filter((d) => d.name !== 'instant').map((d) => `    --fanous-durati
 :root,
 [data-fanous-theme='dark'] {
 ${vars(m.themes.dark)}
+${parts(m.components.dark)}
 }
 
 [data-fanous-theme='light'] {
 ${vars(m.themes.light)}
+${parts(m.components.light)}
 }
 `;
   const colors = Object.fromEntries(m.themes.dark.map((c) => [c.name, `var(--fanous-color-${kebab(c.name)})`]));

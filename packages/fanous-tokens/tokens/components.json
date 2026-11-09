@@ -1,0 +1,555 @@
+{
+ "$description": "Colour for each part of the interface. Values name a semantic colour. A theme overrides a part per mode under component.<mode>. Pairs are checked for contrast in every theme and mode.",
+ "parts": {
+  "nav.bg": "surface",
+  "nav.border": "divider",
+  "nav.text": "textPrimary",
+  "nav.icon": "textSecondary",
+  "nav.hover": "surfaceRaised",
+  "nav.activeBg": "surfaceRaised",
+  "nav.activeText": "link",
+  "nav.indicator": "accent",
+  "nav.searchBg": "background",
+  "nav.searchBorder": "outline",
+  "nav.searchText": "textPrimary",
+  "nav.searchPlaceholder": "textMuted",
+  "nav.menuBg": "surfaceRaised",
+  "nav.menuText": "textPrimary",
+  "nav.menuHover": "heroStart",
+  "drawer.bg": "surface",
+  "drawer.text": "textPrimary",
+  "drawer.icon": "textSecondary",
+  "drawer.activeBg": "surfaceRaised",
+  "drawer.activeText": "link",
+  "drawer.divider": "divider",
+  "button.primary.bg": "primary",
+  "button.primary.text": "onPrimary",
+  "button.primary.border": "primaryEdge",
+  "button.primary.hover": "primaryHover",
+  "button.primary.pressed": "primaryPressed",
+  "button.primary.focus": "focusRing",
+  "button.primary.disabledBg": "primaryDisabled",
+  "button.primary.disabledText": "onPrimaryDisabled",
+  "button.secondary.bg": "surface",
+  "button.secondary.text": "textPrimary",
+  "button.secondary.border": "outline",
+  "button.secondary.hover": "surfaceRaised",
+  "button.secondary.pressed": "heroStart",
+  "button.secondary.focus": "focusRing",
+  "button.secondary.disabledBg": "surfaceRaised",
+  "button.secondary.disabledText": "textMuted",
+  "button.ghost.bg": "surface",
+  "button.ghost.text": "link",
+  "button.ghost.border": "surface",
+  "button.ghost.hover": "surfaceRaised",
+  "button.ghost.pressed": "heroStart",
+  "button.ghost.focus": "focusRing",
+  "button.ghost.disabledBg": "surface",
+  "button.ghost.disabledText": "textMuted",
+  "button.destructive.bg": "errorFill",
+  "button.destructive.text": "onErrorFill",
+  "button.destructive.border": "errorFill",
+  "button.destructive.hover": "errorFill",
+  "button.destructive.pressed": "errorFill",
+  "button.destructive.focus": "focusRing",
+  "button.destructive.disabledBg": "surfaceRaised",
+  "button.destructive.disabledText": "textMuted",
+  "button.icon.bg": "surface",
+  "button.icon.text": "textSecondary",
+  "button.icon.border": "surface",
+  "button.icon.hover": "surfaceRaised",
+  "button.icon.pressed": "heroStart",
+  "button.icon.focus": "focusRing",
+  "button.icon.disabledBg": "surface",
+  "button.icon.disabledText": "textMuted",
+  "upload.bg": "primary",
+  "upload.text": "onPrimary",
+  "upload.border": "primaryEdge",
+  "upload.hover": "primaryHover",
+  "upload.pressed": "primaryPressed",
+  "upload.focus": "focusRing",
+  "upload.disabledBg": "primaryDisabled",
+  "upload.disabledText": "onPrimaryDisabled",
+  "upload.icon": "onPrimary",
+  "form.sectionBg": "surface",
+  "form.sectionBorder": "divider",
+  "form.label": "textPrimary",
+  "form.help": "textSecondary",
+  "form.inputBg": "background",
+  "form.inputBorder": "outline",
+  "form.inputText": "textPrimary",
+  "form.placeholder": "textMuted",
+  "form.focusRing": "focusRing",
+  "form.error": "errorText",
+  "form.success": "successText",
+  "form.checkOn": "accent",
+  "form.checkMark": "surface",
+  "form.switchOn": "accent",
+  "form.switchOff": "outline",
+  "form.switchThumb": "surface",
+  "card.video.bg": "surface",
+  "card.video.title": "textPrimary",
+  "card.video.meta": "textMuted",
+  "card.video.hover": "surfaceRaised",
+  "card.channel.bg": "surface",
+  "card.channel.name": "textPrimary",
+  "card.channel.meta": "textMuted",
+  "tabs.bg": "surface",
+  "tabs.text": "textSecondary",
+  "tabs.activeText": "link",
+  "tabs.indicator": "accent",
+  "tabs.border": "divider",
+  "segment.bg": "surfaceRaised",
+  "segment.text": "textPrimary",
+  "segment.activeBg": "primary",
+  "segment.activeText": "onPrimary",
+  "menu.bg": "surfaceRaised",
+  "menu.text": "textPrimary",
+  "menu.muted": "textMuted",
+  "menu.hover": "heroStart",
+  "menu.border": "outline",
+  "dialog.bg": "surfaceRaised",
+  "dialog.text": "textPrimary",
+  "dialog.muted": "textSecondary",
+  "dialog.border": "divider",
+  "toast.bg": "surfaceRaised",
+  "toast.text": "textPrimary",
+  "toast.success": "successText",
+  "toast.error": "errorText",
+  "toast.border": "outline",
+  "badge.liveBg": "live",
+  "badge.liveText": "onLive",
+  "badge.durationBg": "surfaceRaised",
+  "badge.durationText": "textPrimary",
+  "badge.statusBg": "verifiedFill",
+  "badge.statusText": "onVerifiedFill",
+  "player.control": "textPrimary",
+  "player.controlBg": "surface",
+  "player.progress": "accent",
+  "player.buffered": "outline",
+  "player.track": "surfaceRaised",
+  "footer.bg": "surface",
+  "footer.text": "textSecondary",
+  "footer.link": "link",
+  "footer.border": "divider",
+  "link.text": "link",
+  "divider.line": "divider",
+  "skeleton.bg": "surfaceRaised",
+  "skeleton.shine": "heroStart",
+  "empty.title": "textPrimary",
+  "empty.body": "textSecondary",
+  "empty.icon": "textMuted"
+ },
+ "pairs": [
+  [
+   "nav.text",
+   "nav.bg",
+   4.5
+  ],
+  [
+   "nav.text",
+   "nav.hover",
+   4.5
+  ],
+  [
+   "nav.activeText",
+   "nav.activeBg",
+   4.5
+  ],
+  [
+   "nav.searchText",
+   "nav.searchBg",
+   4.5
+  ],
+  [
+   "nav.searchPlaceholder",
+   "nav.searchBg",
+   4.5
+  ],
+  [
+   "nav.menuText",
+   "nav.menuBg",
+   4.5
+  ],
+  [
+   "nav.menuText",
+   "nav.menuHover",
+   4.5
+  ],
+  [
+   "drawer.text",
+   "drawer.bg",
+   4.5
+  ],
+  [
+   "drawer.activeText",
+   "drawer.activeBg",
+   4.5
+  ],
+  [
+   "form.label",
+   "form.sectionBg",
+   4.5
+  ],
+  [
+   "form.help",
+   "form.sectionBg",
+   4.5
+  ],
+  [
+   "form.inputText",
+   "form.inputBg",
+   4.5
+  ],
+  [
+   "form.placeholder",
+   "form.inputBg",
+   4.5
+  ],
+  [
+   "form.error",
+   "form.sectionBg",
+   4.5
+  ],
+  [
+   "form.success",
+   "form.sectionBg",
+   4.5
+  ],
+  [
+   "card.video.title",
+   "card.video.bg",
+   4.5
+  ],
+  [
+   "card.video.meta",
+   "card.video.bg",
+   4.5
+  ],
+  [
+   "card.video.title",
+   "card.video.hover",
+   4.5
+  ],
+  [
+   "card.channel.name",
+   "card.channel.bg",
+   4.5
+  ],
+  [
+   "card.channel.meta",
+   "card.channel.bg",
+   4.5
+  ],
+  [
+   "tabs.text",
+   "tabs.bg",
+   4.5
+  ],
+  [
+   "tabs.activeText",
+   "tabs.bg",
+   4.5
+  ],
+  [
+   "segment.text",
+   "segment.bg",
+   4.5
+  ],
+  [
+   "segment.activeText",
+   "segment.activeBg",
+   4.5
+  ],
+  [
+   "menu.text",
+   "menu.bg",
+   4.5
+  ],
+  [
+   "menu.muted",
+   "menu.bg",
+   4.5
+  ],
+  [
+   "menu.text",
+   "menu.hover",
+   4.5
+  ],
+  [
+   "dialog.text",
+   "dialog.bg",
+   4.5
+  ],
+  [
+   "dialog.muted",
+   "dialog.bg",
+   4.5
+  ],
+  [
+   "toast.text",
+   "toast.bg",
+   4.5
+  ],
+  [
+   "toast.success",
+   "toast.bg",
+   4.5
+  ],
+  [
+   "toast.error",
+   "toast.bg",
+   4.5
+  ],
+  [
+   "badge.liveText",
+   "badge.liveBg",
+   4.5
+  ],
+  [
+   "badge.durationText",
+   "badge.durationBg",
+   4.5
+  ],
+  [
+   "badge.statusText",
+   "badge.statusBg",
+   4.5
+  ],
+  [
+   "player.control",
+   "player.controlBg",
+   4.5
+  ],
+  [
+   "footer.text",
+   "footer.bg",
+   4.5
+  ],
+  [
+   "footer.link",
+   "footer.bg",
+   4.5
+  ],
+  [
+   "empty.title",
+   "form.sectionBg",
+   4.5
+  ],
+  [
+   "empty.body",
+   "form.sectionBg",
+   4.5
+  ],
+  [
+   "button.primary.text",
+   "button.primary.bg",
+   7
+  ],
+  [
+   "button.primary.text",
+   "button.primary.hover",
+   7
+  ],
+  [
+   "button.primary.text",
+   "button.primary.pressed",
+   7
+  ],
+  [
+   "button.primary.disabledText",
+   "button.primary.disabledBg",
+   4.5
+  ],
+  [
+   "button.primary.focus",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "button.secondary.text",
+   "button.secondary.bg",
+   4.5
+  ],
+  [
+   "button.secondary.text",
+   "button.secondary.hover",
+   4.5
+  ],
+  [
+   "button.secondary.text",
+   "button.secondary.pressed",
+   4.5
+  ],
+  [
+   "button.secondary.disabledText",
+   "button.secondary.disabledBg",
+   4.5
+  ],
+  [
+   "button.secondary.focus",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "button.ghost.text",
+   "button.ghost.bg",
+   4.5
+  ],
+  [
+   "button.ghost.text",
+   "button.ghost.hover",
+   4.5
+  ],
+  [
+   "button.ghost.text",
+   "button.ghost.pressed",
+   4.5
+  ],
+  [
+   "button.ghost.disabledText",
+   "button.ghost.disabledBg",
+   4.5
+  ],
+  [
+   "button.ghost.focus",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "button.destructive.text",
+   "button.destructive.bg",
+   4.5
+  ],
+  [
+   "button.destructive.text",
+   "button.destructive.hover",
+   4.5
+  ],
+  [
+   "button.destructive.text",
+   "button.destructive.pressed",
+   4.5
+  ],
+  [
+   "button.destructive.disabledText",
+   "button.destructive.disabledBg",
+   4.5
+  ],
+  [
+   "button.destructive.focus",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "button.icon.text",
+   "button.icon.bg",
+   4.5
+  ],
+  [
+   "button.icon.text",
+   "button.icon.hover",
+   4.5
+  ],
+  [
+   "button.icon.text",
+   "button.icon.pressed",
+   4.5
+  ],
+  [
+   "button.icon.disabledText",
+   "button.icon.disabledBg",
+   4.5
+  ],
+  [
+   "button.icon.focus",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "upload.text",
+   "upload.bg",
+   7
+  ],
+  [
+   "upload.text",
+   "upload.hover",
+   7
+  ],
+  [
+   "upload.text",
+   "upload.pressed",
+   7
+  ],
+  [
+   "upload.disabledText",
+   "upload.disabledBg",
+   4.5
+  ],
+  [
+   "upload.focus",
+   "nav.bg",
+   3
+  ],
+  [
+   "nav.icon",
+   "nav.bg",
+   3
+  ],
+  [
+   "nav.indicator",
+   "nav.bg",
+   3
+  ],
+  [
+   "nav.searchBorder",
+   "nav.bg",
+   3
+  ],
+  [
+   "drawer.icon",
+   "drawer.bg",
+   3
+  ],
+  [
+   "upload.icon",
+   "upload.bg",
+   3
+  ],
+  [
+   "form.inputBorder",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "form.focusRing",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "form.checkOn",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "form.switchOn",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "form.switchOff",
+   "form.sectionBg",
+   3
+  ],
+  [
+   "tabs.indicator",
+   "tabs.bg",
+   3
+  ],
+  [
+   "player.progress",
+   "player.controlBg",
+   3
+  ]
+ ]
+}
