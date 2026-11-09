@@ -6,6 +6,7 @@
  * Requires admin/moderator role.
  */
 
+import { updateJson, type CasBucket } from '../../lib/r2Cas';
 import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { AdminRoute } from '../../base/AdminRoute';
@@ -20,7 +21,7 @@ import {
 
 const SUPPORTED_LOCALES: SupportedLanguage[] = ['en', 'ar'];
 
-function computeChecksum(data: string): string {
+export function computeChecksum(data: string): string {
   let sum = 0;
   for (let i = 0; i < data.length; i++) {
     sum += data.charCodeAt(i);
@@ -47,6 +48,71 @@ function deepMerge(target: any, source: any): any {
     }
   }
   return output;
+}
+
+/**
+ * Saves one locale's translations and its checksum in metadata.json with
+ * conditional writes (SCALABILITY-AUDIT AA-5): two admins saving at once each
+ * apply their change to the other's result instead of overwriting it.
+ */
+export async function saveTranslations(
+  bucket: CasBucket,
+  locale: SupportedLanguage,
+  newTranslations: unknown,
+  merge: boolean,
+  now: string,
+): Promise<{ newVersion: string; translationJson: string }> {
+  let finalTranslations!: AppTranslations;
+  let newVersion = '1.0.1';
+  let translationJson = '';
+  await updateJson<TranslationData>(
+    bucket,
+    `translations/${locale}.json`,
+    (existing) => {
+      const existingData = merge ? existing : null;
+      const [major, minor, patch] = (existingData?.version || '1.0.0').split('.').map(Number);
+      newVersion = `${major}.${minor}.${patch + 1}`;
+      finalTranslations = merge && existingData
+        ? deepMerge(existingData.translations, newTranslations)
+        : (newTranslations as AppTranslations);
+      const translationData: TranslationData = {
+        version: newVersion,
+        locale,
+        updatedAt: now,
+        translations: finalTranslations,
+      };
+      translationJson = JSON.stringify(translationData, null, 2);
+      return translationData;
+    },
+    { pretty: true },
+  );
+
+  // Only this locale's checksum changes, on top of whatever other locales' saves wrote meanwhile.
+  // The checksum is taken from the locale file as it is now (read inside the
+  // retry loop), so a later save of the same locale can never be described
+  // by an earlier save's checksum.
+  await updateJson<I18nMetadata>(
+    bucket,
+    'translations/metadata.json',
+    async (current) => {
+      const stored = await bucket.get(`translations/${locale}.json`);
+      const storedJson = stored ? await stored.text() : translationJson;
+      const metadata: I18nMetadata = current ?? {
+        version: '1.0.0',
+        locales: SUPPORTED_LOCALES,
+        defaultLocale: 'en',
+        updatedAt: now,
+        checksums: {},
+        sections: Object.keys(finalTranslations),
+      };
+      metadata.checksums = { ...metadata.checksums, [locale]: computeChecksum(storedJson) };
+      metadata.updatedAt = now;
+      metadata.version = newVersion;
+      return metadata;
+    },
+    { pretty: true },
+  );
+  return { newVersion, translationJson };
 }
 
 export class UpdateTranslationsEndpoint extends AdminRoute {
@@ -169,79 +235,19 @@ export class UpdateTranslationsEndpoint extends AdminRoute {
       }
 
       const now = new Date().toISOString();
-      let existingData: TranslationData | null = null;
-
-      // Fetch existing translations if merging
-      if (merge) {
-        const key = `translations/${locale}.json`;
-        const object = await bucket.get(key);
-        if (object) {
-          try {
-            existingData = await object.json();
-          } catch {
-            logger.warn('Failed to parse existing translations');
-          }
-        }
-      }
-
-      // Get existing version or start at 1.0.0
-      const existingVersion = existingData?.version || '1.0.0';
-      const [major, minor, patch] = existingVersion.split('.').map(Number);
-      const newVersion = `${major}.${minor}.${patch + 1}`;
-
-      // Prepare merged or new translations
-      let finalTranslations: AppTranslations;
-      if (merge && existingData) {
-        finalTranslations = deepMerge(existingData.translations, newTranslations);
-      } else {
-        finalTranslations = newTranslations as AppTranslations;
-      }
-
-      // Prepare translation data
-      const translationData: TranslationData = {
-        version: newVersion,
-        locale,
-        updatedAt: now,
-        translations: finalTranslations,
-      };
-
-      // Upload updated translations
-      const translationJson = JSON.stringify(translationData, null, 2);
-      await bucket.put(`translations/${locale}.json`, translationJson, {
-        httpMetadata: { contentType: 'application/json' },
-      });
+      const { newVersion, translationJson } = await saveTranslations(
+        bucket as unknown as CasBucket,
+        locale as SupportedLanguage,
+        newTranslations,
+        merge,
+        now,
+      );
 
       logger.info(`Updated ${locale} translations`, {
         userId,
         locale,
         version: newVersion,
         merge,
-      });
-
-      // Update metadata
-      let metadata: I18nMetadata;
-      const metadataObject = await bucket.get('translations/metadata.json');
-      if (metadataObject) {
-        metadata = await metadataObject.json();
-      } else {
-        metadata = {
-          version: '1.0.0',
-          locales: SUPPORTED_LOCALES,
-          defaultLocale: 'en',
-          updatedAt: now,
-          checksums: {},
-          sections: Object.keys(finalTranslations),
-        };
-      }
-
-      // Update checksum for this locale
-      metadata.checksums[locale] = computeChecksum(translationJson);
-      metadata.updatedAt = now;
-      metadata.version = newVersion;
-
-      // Upload updated metadata
-      await bucket.put('translations/metadata.json', JSON.stringify(metadata, null, 2), {
-        httpMetadata: { contentType: 'application/json' },
       });
 
       // Broadcast translation update via WebSocket
@@ -264,7 +270,7 @@ export class UpdateTranslationsEndpoint extends AdminRoute {
                 locale,
                 version: newVersion,
                 updatedAt: now,
-                checksum: metadata.checksums[locale],
+                checksum: computeChecksum(translationJson),
               },
             }),
           });

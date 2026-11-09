@@ -1,10 +1,11 @@
+import { applyContentModeration } from '../../lib/contentModeration';
+import { type CasBucket } from '../../lib/r2Cas';
 import { AdminRoute, AppContext } from "../../base";
 import { Str } from "chanfana";
 import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { ResponseError, ReportSchema, Report } from "../../lib/types";
 import { logger } from "../../lib/logger";
-import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 
 const ActionInput = z.object({
@@ -143,6 +144,18 @@ export class ReportAction extends AdminRoute {
           action,
           notes
         );
+        if (result.failed) {
+          // The content was not changed (e.g. it kept changing under us): give
+          // the report back so the decision is not recorded without its effect
+          await db.prepare(`
+            UPDATE reports SET status = ?, moderator_id = NULL, action = NULL, moderator_notes = NULL, updated_at = ?, resolved_at = NULL
+            WHERE id = ? AND status = ? AND moderator_id = ? AND updated_at = ?
+          `).bind(report.status, new Date().toISOString(), reportId, newStatus, moderatorId, now).run();
+          return c.json({
+            success: false,
+            error: 'The content could not be updated; the report is open again. Try again.',
+          }, 503);
+        }
         contentAction = {
           performed: result.performed,
           action: result.action,
@@ -200,7 +213,7 @@ export class ReportAction extends AdminRoute {
     entityId: string,
     action: string,
     notes?: string
-  ): Promise<{ performed: boolean; action: string; notes?: string }> {
+  ): Promise<{ performed: boolean; action: string; notes?: string; failed?: boolean }> {
     try {
       // Get the appropriate bucket based on entity type
       const bucketMap: Record<string, R2Bucket | undefined> = {
@@ -219,10 +232,16 @@ export class ReportAction extends AdminRoute {
         };
       }
 
-      const repository = new R2Repository<any>(bucket);
-      const entity = await repository.getObject(entityId);
+      if (action !== 'removed' && action !== 'warning' && action !== 'banned') {
+        return { performed: false, action, notes: `Unknown action: ${action}` };
+      }
 
-      if (!entity) {
+      const updated = await applyContentModeration(bucket as unknown as CasBucket, entityId, action, {
+        moderatorId: this.getUserId(c),
+        notes,
+      });
+
+      if (!updated) {
         return {
           performed: false,
           action,
@@ -232,71 +251,32 @@ export class ReportAction extends AdminRoute {
 
       switch (action) {
         case 'removed':
-          // Mark content as hidden
-          const hiddenEntity = {
-            ...entity,
-            isHidden: true,
-            hiddenAt: new Date().toISOString(),
-            hiddenByUserId: this.getUserId(c),
-            hiddenReason: notes || 'Content removed by moderator',
-          };
-          await repository.putObject(entityId, hiddenEntity);
-
           logger.info(`Content hidden: ${entityType}:${entityId}`);
           return {
             performed: true,
             action: 'removed',
             notes: `Content marked as hidden: ${notes || 'Moderation action'}`,
           };
-
         case 'warning':
-          // Add warning flag to content
-          const warnedEntity = {
-            ...entity,
-            hasWarning: true,
-            warningAt: new Date().toISOString(),
-            warningReason: notes || 'Content flagged for policy violation',
-          };
-          await repository.putObject(entityId, warnedEntity);
-
           logger.info(`Warning added to content: ${entityType}:${entityId}`);
           return {
             performed: true,
             action: 'warning',
             notes: `Warning added to content: ${notes || 'Policy violation'}`,
           };
-
-        case 'banned':
-          // Mark content as permanently removed
-          const bannedEntity = {
-            ...entity,
-            isDeleted: true,
-            deletedAt: new Date().toISOString(),
-            isHidden: true,
-            hiddenAt: new Date().toISOString(),
-            hiddenByUserId: this.getUserId(c),
-            hiddenReason: notes || 'Content banned by moderator',
-          };
-          await repository.putObject(entityId, bannedEntity);
-
+        default:
           logger.info(`Content banned: ${entityType}:${entityId}`);
           return {
             performed: true,
             action: 'banned',
             notes: `Content permanently removed: ${notes || 'Severe violation'}`,
           };
-
-        default:
-          return {
-            performed: false,
-            action,
-            notes: `Unknown action: ${action}`,
-          };
       }
     } catch (error) {
       logger.error('Error performing content action:', error);
       return {
         performed: false,
+        failed: true,
         action,
         notes: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };

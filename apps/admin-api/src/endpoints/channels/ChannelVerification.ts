@@ -4,9 +4,10 @@ import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { ResponseError } from "../../lib/types";
 import { logger } from "../../lib/logger";
+import { type CasBucket } from '../../lib/r2Cas';
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
-import { applyVerification, MAX_VERIFICATION_NOTE, type VerificationLogRow } from "../../lib/channelVerification";
+import { writeVerification, MAX_VERIFICATION_NOTE, type VerificationLogRow } from "../../lib/channelVerification";
 
 const VerificationState = z.object({
   channelId: z.string(),
@@ -104,28 +105,22 @@ export class ChannelVerificationPut extends AdminRoute {
       return c.json({ success: false, error: 'Admin role required' }, 403);
     }
     const { params: { channelId }, body } = await this.getValidatedData<typeof this.schema>();
-    const repository = new R2Repository<ChannelRecord>(c.env.channels);
-    const channel = await repository.getObject(channelId);
-    if (!channel) return c.json({ success: false, error: 'Channel not found' }, 404);
-
     const actorId = this.getUserId(c);
-    const result = applyVerification(channel, {
+    const result = await writeVerification<ChannelRecord>(c.env.REPORTS_DB, c.env.channels as unknown as CasBucket, channelId, {
       verified: body.verified,
       note: body.note,
       actorId,
       now: new Date().toISOString(),
       id: crypto.randomUUID(),
     });
+    if (!result) return c.json({ success: false, error: 'Channel not found' }, 404);
 
-    if (result.changed && result.log) {
-      // Audit first: a change without its audit row must not happen
-      await c.env.REPORTS_DB.prepare(
-        'INSERT INTO channel_verification_log (id, channel_id, verified, note, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).bind(result.log.id, channelId, result.log.verified, result.log.note, result.log.actor_id, result.log.created_at).run();
-      const version = await repository.putObject(channelId, result.channel as ChannelRecord);
+    if (result.changed) {
       // admin-api writes R2 directly, so tell the processor to refresh the
       // channel's search row (search "verified" filter and badge).
-      await new Queue(c.env.queue).send(MessageType.SearchIndexSync, { entity: 'channel', id: channelId, object: result.channel, version });
+      await new Queue(c.env.queue).send(MessageType.SearchIndexSync, {
+        entity: 'channel', id: channelId, object: result.channel, version: result.version ?? Date.now(),
+      });
       logger.info('[ChannelVerification] Verification changed', { channelId, verified: body.verified, actorId });
     }
 

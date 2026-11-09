@@ -94,7 +94,7 @@ export class IndexOperations extends AdminRoute {
         case 'initialize':
           // Start initialization in background
           c.executionCtx.waitUntil(
-            initializeAllIndices(videoBucket).catch(err =>
+            initializeAllIndices(videoBucket, c.env.SEARCH_DB).catch(err =>
               logger.error("[IndexOperations] Failed to initialize indices", { error: err })
             )
           );
@@ -108,7 +108,7 @@ export class IndexOperations extends AdminRoute {
           if (indexType === 'all') {
             // Rebuild all indices
             c.executionCtx.waitUntil(
-              initializeAllIndices(videoBucket).catch(err =>
+              initializeAllIndices(videoBucket, c.env.SEARCH_DB).catch(err =>
                 logger.error("[IndexOperations] Failed to rebuild all indices", { error: err })
               )
             );
@@ -120,7 +120,7 @@ export class IndexOperations extends AdminRoute {
           } else if (indexType) {
             // Rebuild specific index
             c.executionCtx.waitUntil(
-              rebuildIndex(videoBucket, indexType, period).catch(err =>
+              rebuildIndex(videoBucket, c.env.SEARCH_DB, indexType, period).catch(err =>
                 logger.error(`[IndexOperations] Failed to rebuild ${indexType} index`, { error: err })
               )
             );
@@ -138,7 +138,7 @@ export class IndexOperations extends AdminRoute {
 
         case 'status':
           // Get current index statistics
-          const stats = await getIndexStats(videoBucket);
+          const stats = await getIndexStats(videoBucket, c.env.SEARCH_DB);
 
           return c.json({
             success: true,

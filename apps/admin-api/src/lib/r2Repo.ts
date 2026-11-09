@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { updateJson, type CasBucket, type CasResult } from './r2Cas';
 
 export interface PaginationResponse<T> {
   cursor: string;
@@ -65,6 +66,17 @@ class R2Repository<T> {
     };
     const written = await this.bucket.put(id, JSON.stringify(data), options);
     return written?.uploaded ? new Date(written.uploaded).getTime() : Date.now();
+  }
+
+  /**
+   * Conditional read-modify-write (see r2Cas.ts): `mutate` changes a copy of
+   * the current object and returns false to write nothing. Null when missing.
+   */
+  async updateObject(id: string, mutate: (data: T) => boolean | void): Promise<CasResult<T> | null> {
+    return updateJson<T>(this.bucket as unknown as CasBucket, id, (current) => {
+      if (current === null) return undefined;
+      return mutate(current) === false ? undefined : current;
+    });
   }
 
   async deleteObject(id: string): Promise<void> {
