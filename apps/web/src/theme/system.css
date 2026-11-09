@@ -210,3 +210,8 @@ html[data-theatre] .custom-video-player::after{box-shadow:none!important}
 input[class*="bg-white"]{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 .pe{aspect-ratio:auto;min-height:100%;height:100%;box-sizing:border-box}.custom-video-player:has(>.pe){aspect-ratio:16/9;min-height:280px}
 @media(max-width:639px){.custom-video-player:has(>.pe){aspect-ratio:auto;min-height:300px}.pe{min-height:300px;padding:var(--fanous-spacing-lg)}}
+/* Final review fixes */
+html:has(.custom-video-player) .ti-left,html:has(.custom-video-player) .ti-right,html:has(.custom-video-player) .ti-top,html:has(.custom-video-player) .ti-dome,html:has(.custom-video-player) .ti-small,html:has(.custom-video-player) .ti-lattice{display:none}
+.home-hero-tag{color:var(--fanous-color-text-primary);font-weight:700}
+[class*="w-16"][class*="h-16"][class*="rounded-full"][class*="bg-white"]{background:var(--m-primary)!important;color:var(--fanous-c-button-primary-text)!important;border:0!important;-webkit-backdrop-filter:none;backdrop-filter:none}
+main [data-slot=button]{max-width:100%;white-space:normal;height:auto;min-height:36px}

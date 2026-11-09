@@ -3,7 +3,7 @@
 --m-glow:color-mix(in srgb,var(--fanous-color-primary) 46%,transparent);
 --m-page:radial-gradient(38% 36% at 16% 8%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent),transparent 72%),radial-gradient(38% 36% at 84% 14%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),transparent 72%),linear-gradient(180deg,var(--fanous-color-hero-start),var(--fanous-color-background) 46%);
 --m-header:linear-gradient(90deg,var(--fanous-c-nav-bg),color-mix(in srgb,var(--fanous-c-nav-bg) 84%,var(--fanous-color-primary)) 50%,var(--fanous-c-nav-bg));
---m-header-edge:0 1px 0 color-mix(in srgb,var(--fanous-color-primary) 66%,transparent),0 12px 30px -18px var(--m-glow);
+--m-header-edge:0 1px 0 color-mix(in srgb,var(--fanous-color-primary) 66%,transparent);
 --m-rail:linear-gradient(180deg,var(--fanous-color-surface),var(--fanous-color-background));--m-rail-edge:inset -1px 0 0 color-mix(in srgb,var(--fanous-color-primary) 34%,transparent);
 --m-card:radial-gradient(80% 60% at 50% 0%,color-mix(in srgb,var(--fanous-color-primary) 11%,transparent),transparent 70%),linear-gradient(180deg,var(--fanous-color-surface-raised),var(--fanous-color-surface));
 --m-border:linear-gradient(120deg,var(--fanous-color-primary),color-mix(in srgb,var(--fanous-color-primary) 18%,transparent) 42%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent) 62%,var(--fanous-color-primary-hover));
