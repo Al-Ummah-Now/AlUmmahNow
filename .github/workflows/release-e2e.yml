@@ -121,10 +121,12 @@ jobs:
         env:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
+        # Read from the trusted checkout on stdin (-I: no imports from the
+        # workspace), so nothing from inputs.ref runs with these secrets.
         run: >-
-          python3 .ci-trusted/scripts/ci/scan-artifacts-for-secrets.py
-          --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET
+          python3 -I - --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET
           --remove "$SUITE/release-report" "$SUITE/test-results"
+          < "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
 
       - uses: actions/upload-artifact@v4
         if: failure()
