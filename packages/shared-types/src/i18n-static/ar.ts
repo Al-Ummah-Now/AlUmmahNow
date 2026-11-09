@@ -9,6 +9,7 @@
 import type { AppTranslations } from '../i18n';
 import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from '../i18n-library';
 import { BULK_EDIT_AR } from '../i18n-bulk-edit';
+import { STUDIO_AR } from '../i18n-studio';
 import { COMMUNITY_GUIDELINES_AR } from '../i18n-community-guidelines';
 import { CONTACT_AR } from '../i18n-contact';
 import { UPLOAD_STATUS_AR } from '../i18n-upload-status';
@@ -2128,4 +2129,5 @@ export const AR_TRANSLATIONS: AppTranslations = {
     deleteNotificationTitle: 'حذف الإشعار؟',
     deleteNotificationBody: 'سيُزال هذا الإشعار من قائمتك.',
   },
+  studio: STUDIO_AR,
 };

@@ -9,6 +9,7 @@ import { startSingleSignOut } from "./auth/single-sign-out"
 import { sessionRoles } from "./auth/session-roles"
 import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from "./auth/oauth-state"
 import { RETURN_COOKIE, returnPathFromReferer } from "./auth/silent-sign-in"
+import { safeStudioReturn } from "@/lib/studio/resolve"
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -91,13 +92,14 @@ export async function authenticated(): Promise<AuthSubject | false> {
   }
 }
 
-export async function login(locale: string = 'en') {
+export async function login(locale: string = 'en', returnTo?: unknown) {
   // Back to the page the sign-in started from (the action posts to that page),
   // or the locale's home when there is none
   const requestHeaders = await getHeaders()
   const host = requestHeaders.get("host")
   const protocol = host?.includes("localhost") ? "http" : "https"
-  const returnPath = host ? returnPathFromReferer(requestHeaders.get("referer"), `${protocol}://${host}`) : null
+  // A Studio sign-in names its page (only ever a Studio path); others use the referer
+  const returnPath = safeStudioReturn(returnTo) ?? (host ? returnPathFromReferer(requestHeaders.get("referer"), `${protocol}://${host}`) : null)
   const home = returnPath ?? `/${locale}`
 
   // Check if already logged in via SessionManager
