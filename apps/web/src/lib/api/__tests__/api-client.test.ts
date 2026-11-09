@@ -354,3 +354,15 @@ describe('API Client - apiRequestServer', () => {
     );
   });
 });
+
+describe('API Client - onFailure', () => {
+  it('hands an error response to the caller', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false, status: 402, statusText: 'Payment Required', headers: new Headers(), text: async () => '{"error":"upgrade_required"}',
+    });
+    const onFailure = jest.fn();
+    const result = await apiRequestServer({ method: 'POST', url: 'https://api.test/x', functionName: 'test', onFailure }, async () => null);
+    expect(result).toBeNull();
+    expect(onFailure).toHaveBeenCalledWith(402, '{"error":"upgrade_required"}');
+  });
+});

@@ -1,6 +1,6 @@
 import { Num, Str } from "chanfana";
 import { z } from "zod";
-import { STUDIO_VIDEO_STATUSES, studioVideoStatus, type StudioVideoStatus } from "@al-ummah/shared-types";
+import { STUDIO_VIDEO_STATUSES, studioFailureKind, studioVideoStatus, type StudioVideoStatus } from "@al-ummah/shared-types";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Channel as BusinessChannel, ResponseError, Video as BusinessVideo } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -88,7 +88,7 @@ export class ChannelContentList extends AuthenticatedRoute {
 		const loaded = await Promise.all(page.map((id) => repository.getObject(id)));
 		const items = loaded
 			.filter((video): video is VideoType => !!video && !video.isDeleted)
-			.map((video) => ({ ...transformVideoToView(video), isDraft: video.isDraft === true, uploadStatus: video.uploadStatus, studioStatus: studioVideoStatus(video) }));
+			.map((video) => ({ ...transformVideoToView(video), isDraft: video.isDraft === true, uploadStatus: video.uploadStatus, studioStatus: studioVideoStatus(video), failureKind: studioFailureKind(video) }));
 
 		logger.info("[ChannelContent] Listed", { channelId: params.id, status: query.status, count: items.length });
 		return { success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null } };

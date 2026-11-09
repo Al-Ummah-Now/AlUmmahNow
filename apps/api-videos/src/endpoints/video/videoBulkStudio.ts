@@ -8,6 +8,7 @@ import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { announceSchedule, applySchedule, scheduleDateProblem, scheduleRefusal } from "../../lib/videoSchedule";
 import { canOnVideo } from "../../lib/channelAccess";
+import { checkBulkScheduleAllowed } from "../../lib/studioLimits";
 
 /** At most a week between two videos. */
 const MAX_INTERVAL_MINUTES = 7 * 24 * 60;
@@ -49,6 +50,7 @@ export class VideoBulkSchedule extends AuthenticatedRoute {
 		responses: {
 			"200": { description: "Result per video", content: { "application/json": { schema: Results } } },
 			"400": { description: "Invalid input", content: { "application/json": { schema: ResponseError } } },
+			"402": { description: "Not included in the plan", content: { "application/json": { schema: z.object({ success: z.boolean(), error: z.string() }) } } },
 		},
 	};
 
@@ -56,6 +58,8 @@ export class VideoBulkSchedule extends AuthenticatedRoute {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const ids = Array.from(new Set(body.videoIds));
 		const userId = this.getUserId(c) as string;
+		const limit = await checkBulkScheduleAllowed(c.env, userId);
+		if (limit) return c.json(limit, 402);
 		const repository = new R2Repository<VideoObject>(c.env.videos);
 		const now = new Date();
 		const start = new Date(body.startAt).getTime();

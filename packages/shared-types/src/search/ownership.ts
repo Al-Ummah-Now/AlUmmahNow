@@ -112,6 +112,12 @@ export function studioVideoStatus(video: {
   return isDraft === true ? 'drafts' : 'published';
 }
 
+/** What a Retry on a failed video should do. Null when the video hasn't failed. */
+export function studioFailureKind(video: { uploadStatus?: unknown; processingStatus?: unknown; scheduledPublishStatus?: unknown }): 'upload' | 'publish' | null {
+  if (video.uploadStatus === 'failed' || video.processingStatus === 'failed') return 'upload';
+  return video.scheduledPublishStatus === 'failed' ? 'publish' : null;
+}
+
 export interface OwnershipRow {
   kind: OwnershipKind;
   id: string;
