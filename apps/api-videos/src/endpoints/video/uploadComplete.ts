@@ -3,6 +3,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
+import { patchVideo } from '../../lib/videoWrites';
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
@@ -113,16 +114,21 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 				}, 403);
 			}
 
-			// Update video status to processing
-			const updatedVideo = {
-				...video,
-				uploadStatus: 'processing' as const,
+			// Update video status to processing with a conditional write on the
+			// fresh video (SCALABILITY-AUDIT AV-3). A video that processing already
+			// marked ready keeps that status (it never goes back to processing).
+			const saved = await patchVideo(repository, videoId, (fresh) => ({
+				...(fresh.uploadStatus === 'ready' ? {} : { uploadStatus: 'processing' as const }),
 				dateModified: new Date().toISOString(),
 				...(fileSize && { fileSize }),
 				...(duration && { duration }),
-			};
-
-			await repository.putObject(videoId, updatedVideo);
+			}), { ownerId: userId });
+			if (saved.status === 'missing') {
+				return c.json({ success: false, error: "Video not found" }, 404);
+			}
+			if (saved.status === 'forbidden') {
+				return c.json({ success: false, error: "Forbidden - you can only complete uploads for your own videos" }, 403);
+			}
 
 			// Send analytics event for completed upload
 			const queue = new Queue(c.env.queue);
@@ -154,15 +160,13 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 					const bucket = c.env.videos;
 					type VideoType = z.infer<typeof BusinessVideo>;
 					const repository = new R2Repository<VideoType>(bucket);
-					const video = await repository.getObject(videoId);
+					// Conditional write; a video already processed (ready) is left alone
+					const failed = await patchVideo(repository, videoId, (fresh) => fresh.uploadStatus === 'ready' ? false : {
+						uploadStatus: 'failed' as const,
+						dateModified: new Date().toISOString(),
+					}, { ownerId: userId });
 
-					if (video && video.userId === userId) {
-						await repository.putObject(videoId, {
-							...video,
-							uploadStatus: 'failed' as const,
-							dateModified: new Date().toISOString(),
-						});
-
+					if (failed.status === 'ok' && failed.changed) {
 						// Send failure event
 						const queue = new Queue(c.env.queue);
 						await queue.send(MessageType.VideoUploadFailed, {

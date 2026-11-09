@@ -33,11 +33,17 @@ export class MemoryBucket {
 		return { key, etag: this.etag(key), json: async () => JSON.parse(raw), text: async () => raw };
 	}
 
-	/** Like R2: resolves to null when an `onlyIf.etagMatches` precondition fails. */
-	async put(key: string, value: string, options?: { onlyIf?: { etagMatches?: string } }) {
+	/**
+	 * Like R2: resolves to null when an `onlyIf` precondition fails
+	 * (`etagMatches`, or `etagDoesNotMatch: '*'` = create only).
+	 */
+	async put(key: string, value: string, options?: { onlyIf?: { etagMatches?: string; etagDoesNotMatch?: string } }) {
 		this.calls++;
 		const expected = options?.onlyIf?.etagMatches;
-		if (expected !== undefined && expected !== this.etag(key)) return null;
+		if (expected !== undefined && (!this.store.has(key) || expected !== this.etag(key))) return null;
+		const notExpected = options?.onlyIf?.etagDoesNotMatch;
+		if (notExpected === '*' && this.store.has(key)) return null;
+		if (notExpected !== undefined && notExpected !== '*' && this.store.has(key) && notExpected === this.etag(key)) return null;
 		this.store.set(key, value);
 		this.uploaded.set(key, new Date());
 		this.versions.set(key, (this.versions.get(key) ?? 0) + 1);
@@ -49,6 +55,7 @@ export class MemoryBucket {
 		for (const key of Array.isArray(keys) ? keys : [keys]) {
 			this.store.delete(key);
 			this.uploaded.delete(key);
+			// Keep the version counter so a re-created key gets a new etag (as R2 does)
 		}
 	}
 
@@ -141,4 +148,19 @@ export function commentFixture(id: string, overrides: Record<string, unknown> = 
 		isPinned: false,
 		...overrides,
 	};
+}
+
+/** A MemoryBucket whose calls take a random few ms, so parallel requests interleave like isolates. */
+export class SlowBucket extends MemoryBucket {
+	private pause() {
+		return new Promise<void>((r) => setTimeout(r, Math.floor(Math.random() * 4)));
+	}
+	async get(key: string) {
+		await this.pause();
+		return super.get(key);
+	}
+	async put(key: string, value: string, options?: { onlyIf?: { etagMatches?: string; etagDoesNotMatch?: string } }) {
+		await this.pause();
+		return super.put(key, value, options);
+	}
 }

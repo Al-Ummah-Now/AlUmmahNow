@@ -123,13 +123,27 @@ export class CommentUpdate extends AuthenticatedRoute {
 			return c.json({ success: false, error: `Comment text must be at most ${MAX_COMMENT_LENGTH} characters` }, 400);
 		}
 
-		// Update the comment in place (it lives either in video.comments or in a parent's replies)
-		const updatedComment = found.comment;
-		const changed = updatedComment.text !== text;
-		updatedComment.text = text;
-		if (changed) {
-			updatedComment.dateModified = new Date().toISOString();
-			updatedComment.isEdited = true;
+		// Conditional write (SCALABILITY-AUDIT AV-2): the edit is applied to the
+		// fresh video, so concurrent comments, likes or edits are not overwritten.
+		let updatedComment = found.comment;
+		let changed = false;
+		const { data: saved, rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string }>(id, (fresh) => {
+			const target = findStoredComment(fresh.comments as unknown as StoredComment[], cid);
+			if (!target || target.comment.isDeleted) return { reject: { status: 404, error: "Comment not found" } };
+			if (target.comment.userId !== userId) return { reject: { status: 403, error: "Forbidden" } };
+			changed = target.comment.text !== text;
+			updatedComment = target.comment;
+			if (!changed) return false;
+			target.comment.text = text;
+			target.comment.dateModified = new Date().toISOString();
+			target.comment.isEdited = true;
+			return true;
+		});
+		if (!saved) {
+			return c.json({ success: false, error: "Video not found" }, 404);
+		}
+		if (rejected) {
+			return c.json({ success: false, error: rejected.error }, rejected.status);
 		}
 
 		// Send queue message for comment edit
@@ -141,9 +155,6 @@ export class CommentUpdate extends AuthenticatedRoute {
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});
-
-		// Save updated video
-		await repository.putObject(video.id, video);
 
 		if (changed) {
 			scanInBackground(c, { surface: 'video_comment', event: 'edit', subjectId: cid, parentId: id, authorId: userId, channelId, text });

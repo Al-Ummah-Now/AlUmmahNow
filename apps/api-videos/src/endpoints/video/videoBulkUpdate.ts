@@ -78,18 +78,29 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 
 		const results = await Promise.all(videoIds.map(async (videoId) => {
 			try {
-				const video = await repository.getObject(videoId);
+				// Conditional write per video (SCALABILITY-AUDIT AV-3): the change is
+				// applied to the fresh copy, so concurrent comments, likes or view
+				// flushes are not overwritten.
+				let wasPrivate = false;
+				let changed = false;
+				const { data: video, rejected } = await repository.updateObjectOrReject<string>(videoId, (fresh) => {
+					changed = false;
+					if (!userId || fresh.userId !== userId) return { reject: ERRORS.forbidden };
+					const applied = applyBulkChanges(fresh, changes, now);
+					// 'in' narrows the union (this package compiles without strictNullChecks)
+					if ('error' in applied) return { reject: ERRORS[applied.error] };
+					if (!applied.changed) return false;
+					wasPrivate = fresh.isPublic === false;
+					Object.assign(fresh, applied.video);
+					changed = true;
+					return true;
+				});
 				if (!video) return { videoId, success: false, error: ERRORS.not_found };
-				if (!userId || video.userId !== userId) return { videoId, success: false, error: ERRORS.forbidden };
+				if (rejected) return { videoId, success: false, error: rejected };
+				if (!changed) return { videoId, success: true, changed: false };
 
-				const applied = applyBulkChanges(video, changes, now);
-				// 'in' narrows the union (this package compiles without strictNullChecks)
-				if ('error' in applied) return { videoId, success: false, error: ERRORS[applied.error] };
-				if (!applied.changed) return { videoId, success: true, changed: false };
-
-				await repository.putObject(videoId, applied.video);
-				if (video.isPublic === false && applied.video.isPublic !== false) {
-					inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...applied.video, id: videoId }));
+				if (wasPrivate && video.isPublic !== false) {
+					inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...video, id: videoId }));
 				}
 				await queue.send(MessageType.VideoEdit, { videoId, userId, channelId: headers.channelId ?? video.channelId, timestamp: now });
 				return { videoId, success: true, changed: true };

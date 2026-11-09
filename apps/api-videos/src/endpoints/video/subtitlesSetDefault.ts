@@ -9,6 +9,7 @@ import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
+import { patchVideo } from '../../lib/videoWrites';
 import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleMetadata } from '@al-ummah/shared-types';
@@ -73,28 +74,24 @@ export class SubtitlesSetDefault extends AuthenticatedRoute {
         return c.json({ success: false, error: 'You do not have permission to modify this video' }, 403);
       }
 
+      // Conditional writes (SCALABILITY-AUDIT AV-3)
       const metadataKey = `${videoId}/metadata.json`;
-      const metadataObject = await subtitleBucket.get(metadataKey);
-      if (!metadataObject) {
+      const { data: updatedMetadata, rejected } = await new R2Repository<SubtitleMetadata>(subtitleBucket).updateObjectOrReject<true>(metadataKey, (current) => {
+        if (!current.tracks.some((t) => t.language === language)) return { reject: true };
+        Object.assign(current, subtitleService.setDefaultTrack(current, language));
+        return true;
+      });
+      if (!updatedMetadata) {
         return c.json({ success: false, error: 'No subtitles found for this video' }, 404);
       }
-
-      const metadata = (await metadataObject.json()) as SubtitleMetadata;
-      if (!metadata.tracks.some((t) => t.language === language)) {
+      if (rejected) {
         return c.json({ success: false, error: `No subtitle found for language: ${language}` }, 404);
       }
 
-      const updatedMetadata = subtitleService.setDefaultTrack(metadata, language);
-
-      await subtitleBucket.put(metadataKey, JSON.stringify(updatedMetadata), {
-        httpMetadata: { contentType: 'application/json' },
-      });
-
-      await videoRepo.putObject(videoId, {
-        ...video,
+      await patchVideo(videoRepo, videoId, {
         subtitles: updatedMetadata.tracks,
         dateModified: new Date().toISOString(),
-      });
+      }, { ownerId: userId });
 
       const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {

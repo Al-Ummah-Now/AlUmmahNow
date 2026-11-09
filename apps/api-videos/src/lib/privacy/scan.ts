@@ -8,9 +8,11 @@
  * (all privacy operations are idempotent).
  */
 
+import { ConcurrentUpdateError, DEFAULT_CAS_ATTEMPTS, casBackoff } from '../r2Repo';
+
 /** Minimal R2 surface used here (satisfied by R2Bucket and the test MemoryBucket). */
 export interface BucketLike {
-	get(key: string): Promise<{ json<T = unknown>(): Promise<T> } | null>;
+	get(key: string): Promise<{ etag?: string; json<T = unknown>(): Promise<T> } | null>;
 	put(key: string, value: string, options?: unknown): Promise<unknown>;
 	delete(keys: string | string[]): Promise<void>;
 	list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
@@ -81,6 +83,43 @@ export async function readJson<T>(bucket: BucketLike, key: string, budget: Opera
 export async function writeJson(bucket: BucketLike, key: string, value: unknown, budget: OperationBudget): Promise<void> {
 	budget.spend();
 	await bucket.put(key, JSON.stringify(value), { httpMetadata: { contentType: 'application/json' } });
+}
+
+/**
+ * Read-modify-write of one JSON object with a conditional put on its etag
+ * (SCALABILITY-AUDIT AV-23): an erasure or retention rewrite never reverts a
+ * concurrent user change, and a concurrent change never reverts the erasure
+ * (the mutation is re-applied to the fresh object). `mutate` returns false
+ * when there is nothing to change. Every get and put is charged to `budget`.
+ * Resolves to the stored object, or null when the object does not exist.
+ */
+export async function updateJson<T>(
+	bucket: BucketLike,
+	key: string,
+	mutate: (value: T) => boolean | void,
+	budget: OperationBudget,
+	maxAttempts = DEFAULT_CAS_ATTEMPTS,
+): Promise<T | null> {
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		budget.spend();
+		const object = await bucket.get(key);
+		if (!object) return null;
+		let value: T;
+		try {
+			value = await object.json<T>();
+		} catch {
+			return null;
+		}
+		if (mutate(value) === false) return value;
+		budget.spend();
+		const written = await bucket.put(key, JSON.stringify(value), {
+			httpMetadata: { contentType: 'application/json' },
+			...(object.etag ? { onlyIf: { etagMatches: object.etag } } : {}),
+		});
+		if (written !== null) return value;
+		if (attempt < maxAttempts) await casBackoff(attempt);
+	}
+	throw new ConcurrentUpdateError(key, maxAttempts);
 }
 
 /** Delete keys in batches of up to 1000 (one operation per batch). */

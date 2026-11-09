@@ -7,6 +7,7 @@ import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
+import { patchVideo } from '../../lib/videoWrites';
 import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleMetadata } from '@al-ummah/shared-types';
@@ -124,32 +125,21 @@ export class SubtitlesDelete extends AuthenticatedRoute {
         );
       }
 
-      // Load subtitle metadata
+      // Remove the track with a conditional write (SCALABILITY-AUDIT AV-3). An
+      // emptied metadata file is kept (with no tracks), not deleted, so a
+      // concurrent upload of another language cannot be lost; the list
+      // endpoint answers the same for both.
       const metadataKey = `${videoId}/metadata.json`;
-      const metadataObject = await subtitleBucket.get(metadataKey);
-
-      if (!metadataObject) {
-        return c.json(
-          {
-            success: false,
-            error: 'No subtitles found for this video',
-          },
-          404
-        );
+      const { data: metadata, rejected } = await new R2Repository<SubtitleMetadata>(subtitleBucket).updateObjectOrReject<true>(metadataKey, (current) => {
+        if (!current.tracks.some((t) => t.language === language)) return { reject: true };
+        Object.assign(current, subtitleService.removeTrack(current, language));
+        return true;
+      });
+      if (!metadata) {
+        return c.json({ success: false, error: 'No subtitles found for this video' }, 404);
       }
-
-      const metadata = (await metadataObject.json()) as SubtitleMetadata;
-
-      // Check if language exists
-      const trackExists = metadata.tracks.some((t) => t.language === language);
-      if (!trackExists) {
-        return c.json(
-          {
-            success: false,
-            error: `No subtitle found for language: ${language}`,
-          },
-          404
-        );
+      if (rejected) {
+        return c.json({ success: false, error: `No subtitle found for language: ${language}` }, 404);
       }
 
       // Delete subtitle files
@@ -166,43 +156,12 @@ export class SubtitlesDelete extends AuthenticatedRoute {
         }
       }
 
-      // Update metadata
-      const updatedMetadata = subtitleService.removeTrack(metadata, language);
-
-      // Save or delete metadata
-      if (updatedMetadata.tracks.length === 0) {
-        // No more subtitles - delete metadata file
-        await subtitleBucket.delete(metadataKey);
-
-        // Update video object
-        const updatedVideo: VideoObject = {
-          ...video,
-          subtitles: [],
-          hasSubtitles: false,
-          subtitleLanguages: [],
-          dateModified: new Date().toISOString(),
-        };
-
-        await videoRepo.putObject(videoId, updatedVideo);
-      } else {
-        // Save updated metadata
-        await subtitleBucket.put(metadataKey, JSON.stringify(updatedMetadata), {
-          httpMetadata: {
-            contentType: 'application/json',
-          },
-        });
-
-        // Update video object
-        const updatedVideo: VideoObject = {
-          ...video,
-          subtitles: updatedMetadata.tracks,
-          hasSubtitles: true,
-          subtitleLanguages: updatedMetadata.tracks.map((t) => t.language),
-          dateModified: new Date().toISOString(),
-        };
-
-        await videoRepo.putObject(videoId, updatedVideo);
-      }
+      await patchVideo(videoRepo, videoId, {
+        subtitles: metadata.tracks,
+        hasSubtitles: metadata.tracks.length > 0,
+        subtitleLanguages: metadata.tracks.map((t) => t.language),
+        dateModified: new Date().toISOString(),
+      }, { ownerId: userId });
 
       // Send queue message for subtitle deletion
       const queue = new Queue(c.env.queue);

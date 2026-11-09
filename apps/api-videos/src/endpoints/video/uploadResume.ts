@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import R2Repository from "../../lib/r2Repo";
+import { patchVideo } from '../../lib/videoWrites';
 import { generateTUSConfig } from "../../lib/bunny/tus";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
@@ -169,12 +170,9 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			);
 
 			// Update video metadata to reflect resume attempt
-			const updatedVideo = {
-				...video,
-				dateModified: new Date().toISOString(),
-				lastResumeAt: new Date().toISOString(),
-			};
-			await repository.putObject(videoId, updatedVideo);
+			// (conditional write on the fresh video, SCALABILITY-AUDIT AV-3)
+			const resumedAt = new Date().toISOString();
+			await patchVideo(repository, videoId, { dateModified: resumedAt, lastResumeAt: resumedAt } as Partial<VideoType>, { ownerId: userId });
 
 			// Return TUS configuration for resuming upload
 			return c.json({

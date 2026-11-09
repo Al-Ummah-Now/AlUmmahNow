@@ -169,7 +169,7 @@ export class VideoScheduleUpdate extends AuthenticatedRoute {
         );
       }
 
-      const previousSchedule = video.scheduledPublishDate;
+      let previousSchedule = video.scheduledPublishDate;
 
       // Update scheduling information
       if (scheduledPublishDate) {
@@ -206,8 +206,29 @@ export class VideoScheduleUpdate extends AuthenticatedRoute {
         video.scheduledPublishTimezone = timezone;
       }
 
-      // Save updated video
-      await videoRepo.putObject(videoId, video);
+      // Save the new schedule on the fresh video with a conditional write
+      // (SCALABILITY-AUDIT AV-3), re-checking the schedule state there: the
+      // scheduler may have started publishing meanwhile.
+      const newSchedule = { date: video.scheduledPublishDate, timezone: video.scheduledPublishTimezone };
+      const { data: saved, rejected } = await videoRepo.updateObjectOrReject<{ status: 403 | 404 | 409; error: string }>(videoId, (fresh) => {
+        if (fresh.userId !== userId) return { reject: { status: 403, error: 'Forbidden - you do not own this video' } };
+        if (!fresh.scheduledPublishStatus || fresh.scheduledPublishStatus === 'cancelled') {
+          return { reject: { status: 404, error: 'Video is not scheduled for publication' } };
+        }
+        if (fresh.scheduledPublishStatus === 'publishing' || fresh.scheduledPublishStatus === 'published') {
+          return { reject: { status: 409, error: 'Cannot update schedule - video is already publishing or published' } };
+        }
+        previousSchedule = fresh.scheduledPublishDate;
+        fresh.scheduledPublishDate = newSchedule.date;
+        fresh.scheduledPublishTimezone = newSchedule.timezone;
+        return true;
+      });
+      if (!saved) {
+        return c.json({ success: false, error: 'Video not found' }, 404);
+      }
+      if (rejected) {
+        return c.json({ success: false, error: rejected.error }, rejected.status);
+      }
 
       // Update scheduled metadata in bucket
       const scheduledBucket = c.env.SCHEDULED_VIDEOS || c.env['scheduled-videos'];

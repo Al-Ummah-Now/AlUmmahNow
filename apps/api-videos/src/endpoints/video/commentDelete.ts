@@ -95,6 +95,22 @@ export class CommentDelete extends AuthenticatedRoute {
 			}, 403);
 		}
 
+		// Remove the comment (a top-level comment takes its replies with it) on
+		// the fresh video (SCALABILITY-AUDIT AV-2), so concurrent changes survive.
+		const { data: saved, rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string }>(id, (fresh) => {
+			const target = findStoredComment(fresh.comments as unknown as StoredComment[], cid);
+			if (!target) return { reject: { status: 404, error: "Comment not found" } };
+			if (target.comment.userId !== userId && fresh.userId !== userId) return { reject: { status: 403, error: "Forbidden" } };
+			fresh.comments = removeStoredComment(fresh.comments as unknown as StoredComment[], cid).comments as unknown as typeof fresh.comments;
+			return true;
+		});
+		if (!saved) {
+			return c.json({ success: false, error: "Video not found" }, 404);
+		}
+		if (rejected) {
+			return c.json({ success: false, error: rejected.error }, rejected.status);
+		}
+
 		// Send queue message for comment deletion
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.CommentDelete, {
@@ -104,12 +120,6 @@ export class CommentDelete extends AuthenticatedRoute {
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 		});
-
-		// Remove the comment (a top-level comment takes its replies with it)
-		video.comments = removeStoredComment(video.comments as unknown as StoredComment[], cid).comments as unknown as typeof video.comments;
-
-		// Save updated video
-		await repository.putObject(video.id, video);
 
 		broadcastInBackground(c, `video:${id}`, 'comment_deleted', {
 			videoId: id,

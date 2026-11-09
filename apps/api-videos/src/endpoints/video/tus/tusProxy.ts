@@ -421,12 +421,13 @@ export class TusProxy {
         // Update video status in R2
         const bucket = this.env.videos;
         const repository = new R2Repository<z.infer<typeof BusinessVideo>>(bucket);
-        const video = await repository.getObject(session.videoId);
-
-        if (video) {
+        // Conditional write on the fresh video (SCALABILITY-AUDIT AV-3); a
+        // video that processing already marked ready stays ready.
+        await repository.updateObject(session.videoId, (video) => {
+          if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') return false;
           video.uploadStatus = 'processing';
-          await repository.putObject(session.videoId, video);
-        }
+          return true;
+        });
 
         // Track upload completion
         const queue = new Queue(this.env.queue);
