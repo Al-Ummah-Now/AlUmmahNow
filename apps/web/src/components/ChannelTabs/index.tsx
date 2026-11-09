@@ -278,29 +278,7 @@ export function ChannelTabBar({
                 aria-selected={activeTab === tab}
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => handleTabClick(tab)}
-                className={
-                  activeTab === tab
-                    ? "flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer relative text-yellow-800 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20"
-                    : "flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer relative text-gray-600 dark:text-gray-400"
-                }
-                style={
-                  activeTab === tab
-                    ? {
-                        borderBottom: '2px solid rgb(234, 179, 8)'
-                      }
-                    : undefined
-                }
-                onMouseEnter={(e) => {
-                  if (activeTab !== tab) {
-                    e.currentTarget.style.borderBottom = '2px solid rgb(234, 179, 8)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (activeTab !== tab) {
-                    e.currentTarget.style.borderBottom = '';
-                  }
-                }}
-              >
+                className="tab-item">
                 {getTabLabel(tab)}
               </button>
             ))}

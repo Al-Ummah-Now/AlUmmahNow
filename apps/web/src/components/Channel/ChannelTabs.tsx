@@ -70,12 +70,7 @@ export function ChannelTabs({ channel, locale }: ChannelTabsProps) {
               <button
                 key={tab.id}
                 onClick={() => router.push(href)}
-                className={cn(
-                  'py-4 px-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors',
-                  isActive
-                    ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500'
-                    : 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-                )}
+                className="tab-item" data-active={isActive}
               >
                 {tab.label}
               </button>
