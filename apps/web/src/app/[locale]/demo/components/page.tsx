@@ -1,5 +1,6 @@
 'use client';
 // Prototype only: every component in every state, for review.
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useParams } from 'next/navigation';
 import { Bell, Check, CheckCircle2, Flag, Inbox, LogOut, Plus, Search, Settings, Trash2, Upload, User, XCircle } from 'lucide-react';
 import { PlayerChromeView, type ChromeActions, type ChromeState } from '@/components/ThemeDemo/PlayerChromeView';
@@ -34,7 +35,7 @@ export default function ComponentsGallery() {
         <label className="f-label">{t.title}<input className="f-input is-error" aria-invalid="true" /><span className="f-err">{t.err}</span></label>
         <label className="f-label">{t.title}<input className="f-input" defaultValue="@darilm" /><span className="f-ok">{t.ok}</span></label>
         <label className="f-label">{t.title}<input className="f-input" disabled defaultValue={t.vt} /></label>
-        <label className="f-label">{t.cat}<select className="f-input"><option>{t.chips[1]}</option><option>{t.chips[2]}</option></select></label>
+        <label className="f-label">{t.cat}<ThemedSelectField className="f-input"><option>{t.chips[1]}</option><option>{t.chips[2]}</option></ThemedSelectField></label>
         <label className="f-label">{t.desc}<textarea className="f-input" rows={3} placeholder={t.ph} /></label>
         <div className="grid gap-3"><div className="gal-row"><button type="button" role="switch" aria-checked="true" className="sw" aria-label="on" /><button type="button" role="switch" aria-checked="false" className="sw" aria-label="off" /></div><div className="gal-row"><span className="ck" data-on=""><Check aria-hidden="true" /></span><span className="ck" /><span className="rd" data-on="" /><span className="rd" /></div></div>
       </div></section>

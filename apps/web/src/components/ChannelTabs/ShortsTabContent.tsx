@@ -50,12 +50,14 @@ export function ShortsTabContent({ channelId }: ShortsTabContentProps) {
           {error}
         </div>
       ) : (
+        <div data-shorts-grid="">
         <VideoGrid
           videos={shorts}
           loading={loading}
           emptyMessage={t.video.noVideosAvailable}
           columns={{ mobile: 2, tablet: 3, desktop: 4 }}
         />
+        </div>
       )}
     </div>
   );

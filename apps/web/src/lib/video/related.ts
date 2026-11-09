@@ -28,6 +28,7 @@ export function toVideoInfo(video: ApiVideo): VideoInfo {
   return {
     id: video.id,
     title: video.title ?? '',
+    titleLocalized: (video as { titleLocalized?: Record<string, string> }).titleLocalized,
     description: video.description ?? null,
     channel: (video as { channel?: string }).channel ?? '',
     channelId: video.channelId ?? null,

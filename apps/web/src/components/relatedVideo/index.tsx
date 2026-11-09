@@ -20,7 +20,7 @@ const RelatedVideo: React.FC<VideoInfo> = (info) => {
         {duration && <span className="rv-d">{duration}</span>}
       </div>
       <div className="rv-b">
-        <h3 className="rv-title">{removeUnwantedChars(info.title)}</h3>
+        <h3 className="rv-title" dir="auto">{removeUnwantedChars(info.titleLocalized?.[lang] || info.title)}</h3>
         <p className="rv-sub">{info.channelName || info.channel}</p>
         <p className="rv-sub">{formatViews(info.views, lang)} • <RelativeDate value={info?.dateModified} lang={lang} /></p>
       </div>

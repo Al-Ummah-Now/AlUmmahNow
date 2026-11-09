@@ -271,7 +271,7 @@ html[data-theatre] .related-videos .rv-title{font-size:15px;line-height:21px}
 /* Consent: opaque compact card in the corner, never over the title or actions */
 [data-testid=consent-banner]{left:auto!important;right:0!important;width:min(420px,100vw);padding:16px!important}
 html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important}
-[data-testid=consent-banner]>div{background:var(--fanous-c-dialog-bg) padding-box,var(--m-border) border-box!important;-webkit-backdrop-filter:none;backdrop-filter:none;max-width:none;padding:16px}
+[data-testid=consent-banner]>div{background:linear-gradient(var(--fanous-c-dialog-bg),var(--fanous-c-dialog-bg)) padding-box,var(--m-border) border-box!important;-webkit-backdrop-filter:none;backdrop-filter:none;max-width:none;padding:16px}
 [data-testid=consent-banner] h2{font-size:15px;line-height:20px}[data-testid=consent-banner] p{font-size:13px;line-height:18px}
 [data-testid=consent-banner] .mt-4.flex{margin-top:12px;gap:8px;flex-direction:row;flex-wrap:nowrap;justify-content:flex-end}
 [data-testid=consent-banner] .mt-4.flex button{flex:0 1 auto;min-height:36px;padding-block:0;padding-inline:12px;font-size:14px;border-radius:var(--r-pill);white-space:nowrap}
@@ -349,7 +349,7 @@ a.group svg.lucide-chevron-right{align-self:center}
 
 /* Shelves line up with the page grid */
 [data-testid=continue-watching] ul{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;overflow:visible;padding:0}[data-testid=continue-watching] li{width:auto}
-.home-hero{background:var(--fanous-color-surface-raised) padding-box,var(--m-border) border-box}.home-hero-b{background:transparent}
+.home-hero{background:linear-gradient(var(--fanous-color-surface-raised),var(--fanous-color-surface-raised)) padding-box,var(--m-border) border-box}.home-hero-b{background:transparent}
 .video-card button{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
 @media(hover:hover){.video-card button:hover{background:var(--m-hover)!important}}
 
@@ -378,3 +378,38 @@ div:has(>a[class*="w-40"][class*="h-24"])>button{background:transparent!importan
 /* Larger screens and fullscreen */
 @media(min-width:1920px){.lg\:w-3\/4{width:78%}}
 .video-js.vjs-fullscreen .pc .pc-row{height:60px}.video-js.vjs-fullscreen .pc .pc-b{transform:scale(1.18)}.video-js.vjs-fullscreen .pc .pc-time{font-size:16px}
+
+/* Round two */
+.custom-video-player.aspect-video[data-mini]{z-index:42;position:relative}
+.ah-end [class*="absolute"][class*="w-80"]{background:linear-gradient(var(--fanous-c-dialog-bg),var(--fanous-c-dialog-bg)) padding-box,var(--m-border) border-box!important;border:1px solid transparent!important}
+.ah-end [class*="absolute"][class*="w-80"] [class*="gradient"]{background:transparent!important}
+.ah-end [class*="absolute"][class*="w-80"] [class*="gradient"] :is(div,span){color:var(--fanous-color-text-primary)!important}
+.pc .pc-next{width:min(640px,100%);grid-template-columns:minmax(0,34%) minmax(0,1fr)}.pc .pc-next-a{flex-wrap:nowrap}.pc .pc-end-b{padding:0 12px}
+@container (max-width:479px){.pc .pc-next{grid-template-columns:104px minmax(0,1fr)}}
+.nv{padding-inline:2px}.nv span{overflow-wrap:normal;word-break:normal;font-size:10.5px;line-height:13px}html[data-rail=open] .nv span{font-size:14px;line-height:20px}
+.video-card [data-testid=video-card-menu],.video-card [data-testid=video-card-menu] button,button[data-testid=video-card-menu]{background:transparent!important;background-image:none!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
+@media(hover:hover){button[data-testid=video-card-menu]:hover{background:var(--m-hover)!important}}
+.tabbar{background:var(--fanous-color-surface)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.ah .up-a{height:36px;min-height:36px;padding-inline:12px}.ah .up-opt svg{width:18px;height:18px}
+@media(max-width:1179px){.ah .up-a{width:36px;padding:0}}
+html:not(.dark) main:has(.demo-gfx) input:not([type=checkbox]):not([type=radio]):not([type=range]){background:#fff!important}
+/* Playlist rows: quiet list, not stacked cards */
+main li:has(>a[href*="/video"]),main li:has(a[href*="vid="]):has(h2){background:transparent!important;border:0!important;box-shadow:none!important;border-radius:var(--r-lg)!important}
+main li h2[class*="group-hover"]{color:var(--fanous-color-text-primary)!important;font-weight:600}
+@media(hover:hover){main li:has(h2[class*="group-hover"]):hover{background:var(--m-hover)!important}}
+/* Upload: one frame */
+main:has(input[type=file]) [class*="border-dashed"]{border-radius:var(--r-lg)}
+main:has(input[type=file]) :has(>*>[class*="border-dashed"]),main:has(input[type=file]) :has(>[class*="border-dashed"]){background:transparent!important;box-shadow:none!important;padding:0!important;border-color:transparent!important}
+/* Channel cards: slim identity band, quiet actions */
+main [class*="h-32"][class*="bg-gradient-to-br"]{height:72px!important;background:linear-gradient(135deg,color-mix(in srgb,var(--fanous-color-primary) 28%,var(--fanous-color-surface-raised)),var(--fanous-color-surface-raised))!important}
+main [class*="h-32"][class*="bg-gradient-to-br"]>*{width:44px!important;height:44px!important;font-size:18px!important}
+main div:has(>[class*="h-32"][class*="bg-gradient-to-br"]) .flex.gap-2>:is(a,button){height:36px;min-height:36px}
+main div:has(>[class*="h-32"][class*="bg-gradient-to-br"]) [class*="bg-red-"]{background:transparent!important;color:var(--fanous-c-button-destructive-bg,#c0392b)!important;box-shadow:none!important}
+/* Channel tabs and content share one edge */
+.container.mx-auto.px-4.py-6>[class*="rounded"]:first-child{background:transparent!important;border:0!important;box-shadow:none!important;padding-inline:0!important}
+.container.mx-auto.px-4.py-6{padding-block-start:24px}
+/* Profile cover: rounded, no hard edge */
+main [class*="h-48"][class*="bg-gradient"],main [class*="h-40"][class*="bg-gradient"]{border-radius:var(--r-xl)!important}
+/* Shorts tab: vertical tiles */
+[data-shorts-grid] [class*="grid"]{grid-template-columns:repeat(auto-fill,minmax(170px,200px))!important;justify-content:start;gap:16px}
+[data-shorts-grid] .video-card>:first-child,[data-shorts-grid] .vc-t{aspect-ratio:9/16!important;height:auto!important}

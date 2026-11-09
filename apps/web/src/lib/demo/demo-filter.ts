@@ -298,7 +298,14 @@ export function routeDemoRequest(set: DemoSet, req: DemoRequest): DemoRoute {
     return { kind: 'filter', transform: filterField('data', allowedChannels, (item) => item.channelId ?? item.id) };
   }
   if (path === '/api/watch-history' || path === '/api/profiles/watch-history') {
-    return { kind: 'filter', transform: filterField('entries', allowedVideos, (item) => item.videoId) };
+    return {
+      kind: 'filter',
+      transform: (body) => {
+        const filtered = filterField('entries', allowedVideos, (item) => item.videoId)(body);
+        const record = asRecord(filtered);
+        return Array.isArray(record.entries) && 'total' in record ? { ...record, total: record.entries.length } : filtered;
+      },
+    };
   }
   if (/^\/api\/videos\/[^/]+\/comments(\/[^/]+\/replies)?$/.test(path)) return { kind: 'filter', transform: filterComments };
   return { kind: 'none' };
