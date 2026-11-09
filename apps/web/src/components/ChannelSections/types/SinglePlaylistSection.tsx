@@ -1,5 +1,6 @@
 'use client';
 
+import { pickLanguage } from '@/lib/format/pick-language';
 import { useEffect, useState } from 'react';
 import { Playlist } from '@al-ummah/shared-types';
 import Link from 'next/link';
@@ -23,7 +24,7 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
 
     async function fetchPlaylist() {
       try {
-        const result = await getPlaylistById(playlistId);
+        const result = await getPlaylistById(playlistId, undefined, { includeVideos: true });
 
         logger.info('SinglePlaylistSection: API response received', {
           playlistId,
@@ -57,7 +58,7 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
   return (
     <section data-section="playlist" className="space-y-4">
       <SectionHeader
-        title={playlist?.name || t.channel.playlist}
+        title={playlist?.name ? pickLanguage(playlist.name, locale) : t.channel.playlist}
         viewAllHref={playlist ? `/${locale}/playlist/${playlist.id}` : undefined}
       />
 
@@ -73,18 +74,18 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
         className="block max-w-md group"
       >
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">
-          <PlaylistCover playlist={playlist} alt={playlist.name}>
+          <PlaylistCover playlist={playlist} videos={(playlist as { videoItems?: Array<{ thumbnailUrl?: string | null }> }).videoItems} alt={pickLanguage(playlist.name, locale)}>
             <div className="absolute bottom-2 end-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
               {t.playlist.videoCount.replace('{count}', String(playlist.videosCount || 0))}
             </div>
           </PlaylistCover>
           <div className="p-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-              {playlist.name}
+              {pickLanguage(playlist.name, locale)}
             </h3>
             {playlist.description && (
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-3">
-                {playlist.description}
+                {pickLanguage(playlist.description, locale)}
               </p>
             )}
           </div>

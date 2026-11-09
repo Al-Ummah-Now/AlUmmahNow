@@ -1,13 +1,12 @@
 'use client';
 
-import { pickLanguage } from '@/lib/format/videoMeta';
+import { pickLanguage } from '@/lib/format/pick-language';
 import React from 'react';
 import Link from 'next/link';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { Playlist } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getPlaylistDisplayName, getPlaylistVideoCount } from '@/lib/playlists/playlist-utils';
-import { RelativeDate } from '@/components/RelativeDate';
 
 export function PlaylistCard(playlist: Playlist) {
   const { lang, t, isRTL } = useLanguage();
@@ -33,15 +32,15 @@ export function PlaylistCard(playlist: Playlist) {
         {/* Playlist details */}
         <div className="p-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-2">
-            {name}
+            {pickLanguage(name, lang)}
           </h3>
           {playlist.description && (
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
-              {pickLanguage(playlist.description, lang === 'ar' ? 'ar' : 'en')}
+              {pickLanguage(playlist.description, lang)}
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            <RelativeDate value={playlist.dateCreated} lang={lang} />
+            {new Date(playlist.dateCreated).toLocaleDateString(lang)}
           </p>
         </div>
       </div>
