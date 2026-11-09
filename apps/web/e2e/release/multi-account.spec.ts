@@ -25,7 +25,7 @@ const BROWSER_COOKIE_LIMIT = 4096;
 
 /** Opens the header's account menu (retried until the header has hydrated). */
 async function openAccountMenu(page: Page): Promise<void> {
-  const accounts = page.locator('[data-testid="nav-account"]:visible');
+  const accounts = page.locator('[data-testid="nav-switch-account"]:visible');
   await expect(async () => {
     if (!(await accounts.first().isVisible())) await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
     await expect(accounts.first()).toBeVisible({ timeout: 3000 });
@@ -41,6 +41,7 @@ async function createChannelsInMenu(page: Page, prefix: string, count: number): 
   for (let i = 1; i <= count; i++) {
     await page.goto(`${target().web}/en`, { waitUntil: 'load' });
     await openAccountMenu(page);
+    await page.locator('[data-testid="nav-switch-channel"]:visible').first().click();
     await page.locator('[data-testid="nav-create-channel"]:visible').first().click();
     const nameInput = page.locator('[role="menu"] input[type="text"]:visible').first();
     await nameInput.fill(`Release E2E ${prefix} channel ${i} ${Date.now().toString(36)}`);
@@ -54,6 +55,8 @@ async function createChannelsInMenu(page: Page, prefix: string, count: number): 
 async function switcherAccounts(page: Page): Promise<Array<{ email: string; active: boolean }>> {
   await page.goto(`${target().web}/en`, { waitUntil: 'load' });
   await openAccountMenu(page);
+  const switcher = page.locator('[data-testid="nav-switch-account"]:visible').first();
+  if (await switcher.isVisible()) await switcher.click();
   return page.locator('[data-testid="nav-account"]:visible').evaluateAll((rows) =>
     rows.map((row) => ({
       // innerText keeps the name, email and channel count on separate lines
