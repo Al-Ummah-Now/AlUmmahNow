@@ -68,8 +68,19 @@ interface Clip extends LocalizedCopy {
   source: ClipSource;
 }
 
+interface SectionDef {
+  type: string;
+  title: string;
+  titleAr: string;
+  /** featured_videos: clip slugs (the shorts shelf is a featured section of vertical clips) */
+  clips?: string[];
+  /** single_playlist / multiple_playlists: playlist keys */
+  playlists?: string[];
+}
+
 interface ChannelDef {
   key: string;
+  sections: SectionDef[];
   name: string;
   nameAr: string;
   description: string;
@@ -80,6 +91,7 @@ interface ChannelDef {
 }
 
 interface PlaylistDef {
+  key: string;
   channel: string;
   title: string;
   description: string;
@@ -94,6 +106,11 @@ interface Manifest {
   unplayable: LocalizedCopy & { slug: string; channel: string; category: string; tags: string[]; language: 'en' | 'ar'; thumbnailClip: string };
   /** Existing QA videos kept in the demo as they are */
   keep: string[];
+  engagement: {
+    subscriptions: Array<{ by: string; to: string[] }>;
+    comments: Array<{ clip: string; by: string; text: string }>;
+    likes: Array<{ clip: string; by: string[] }>;
+  };
 }
 
 const manifestPath = path.join(__dirname, '../../demo-content/manifest.json');
@@ -581,10 +598,10 @@ interface PlaylistRecord {
   isDeleted?: boolean;
 }
 
-async function ensurePlaylists(sessions: Sessions, channels: Map<string, ChannelRecord>, seeded: Seeded[]): Promise<string[]> {
+async function ensurePlaylists(sessions: Sessions, channels: Map<string, ChannelRecord>, seeded: Seeded[]): Promise<Map<string, string>> {
   log.group('Playlists');
   await freshen(sessions);
-  const ids: string[] = [];
+  const ids = new Map<string, string>();
   const idOf = new Map(seeded.map((s) => [s.slug, s.video.id]));
   for (const def of manifest.playlists) {
     const session = sessions.get(def.channel);
@@ -594,7 +611,7 @@ async function ensurePlaylists(sessions: Sessions, channels: Map<string, Channel
     const all = await api.listAll<PlaylistRecord>('/api/playlists', { token: session.accessToken });
     const found = all.find((p) => p.title === def.title && p.channelId === channel.id && !p.isDeleted);
     if (found) {
-      ids.push(found.id);
+      ids.set(def.key, found.id);
       const missing = videos.filter((id) => !(found.videos || []).includes(id));
       if (MODE === 'apply') {
         for (const videoId of missing) {
@@ -613,11 +630,212 @@ async function ensurePlaylists(sessions: Sessions, channels: Map<string, Channel
       { token: session.accessToken, channelId: channel.id },
     );
     const id = res.data.result?.playlist?.id;
-    if (id) ids.push(id);
+    if (id) ids.set(def.key, id);
     note(`playlist created: ${def.title}`);
   }
   log.groupEnd();
   return ids;
+}
+
+// ---------------------------------------------------------------------------
+// Channel pages and community activity
+// ---------------------------------------------------------------------------
+
+interface SectionRecord {
+  id: string;
+  type: string;
+  title: string;
+  position?: number;
+  content?: { videoIds?: string[]; playlistId?: string; playlistIds?: string[] };
+  populatedContent?: { videos?: unknown[]; channels?: unknown[] };
+}
+
+const HIDDEN_TABS = ['live', 'community', 'channels'];
+const visibleTabs = (hasShorts: boolean) => ['home', 'videos', ...(hasShorts ? ['shorts'] : []), 'playlists', 'about'];
+const hasShorts = (key: string) => manifest.clips.some((c) => c.channel === key && c.orientation === 'portrait');
+/** The web renders section.title only, so the visible title carries both languages. */
+const sectionTitle = (def: SectionDef) => `${def.title} | ${def.titleAr}`;
+
+async function listSections(session: SessionTokens | undefined, channelId: string): Promise<SectionRecord[]> {
+  const res = await api.get<{ result?: { sections?: SectionRecord[] } }>(`/api/channels/${channelId}/sections/populated`, session ? { token: session.accessToken } : {});
+  return res.data.result?.sections ?? [];
+}
+
+async function ensureSections(sessions: Sessions, channels: Map<string, ChannelRecord>, seeded: Seeded[], playlistIds: Map<string, string>): Promise<void> {
+  log.group('Channel sections');
+  const videoOf = new Map(seeded.map((s) => [s.slug, s.video.id]));
+  for (const def of manifest.channels) {
+    await freshen(sessions);
+    const session = sessions.get(def.key);
+    const channel = channels.get(def.key);
+    if (!session || !channel) continue;
+    const existing = await listSections(session, channel.id);
+    const ordered: string[] = [];
+    for (const section of def.sections) {
+      const title = sectionTitle(section);
+      let found = existing.find((s) => s.title === title && s.type === section.type);
+      if (!found) {
+        if (MODE === 'check') {
+          failures.push(`section missing: ${def.key} / ${section.title}`);
+          continue;
+        }
+        const playlists = (section.playlists ?? []).map((key) => playlistIds.get(key)).filter((id): id is string => Boolean(id));
+        if ((section.playlists?.length ?? 0) !== playlists.length) throw new Error(`Section ${title}: playlist not seeded`);
+        const videoIds = (section.clips ?? []).map((slug) => videoOf.get(slug)).filter((id): id is string => Boolean(id));
+        if ((section.clips?.length ?? 0) !== videoIds.length) throw new Error(`Section ${title}: clip not seeded`);
+        const res = await api.post<{ result?: { section?: SectionRecord } }>(
+          `/api/channels/${channel.id}/sections`,
+          {
+            type: section.type,
+            title,
+            titleLocalized: { en: section.title, ar: section.titleAr },
+            ...(videoIds.length ? { videoIds } : {}),
+            ...(section.type === 'single_playlist' ? { playlistId: playlists[0] } : {}),
+            ...(section.type === 'multiple_playlists' ? { playlistIds: playlists } : {}),
+          },
+          { token: session.accessToken, channelId: channel.id },
+        );
+        found = res.data.result?.section;
+        if (!found?.id) throw new Error(`Section ${title} returned no id`);
+        note(`section created: ${def.key} / ${section.title}`);
+      }
+      ordered.push(found.id);
+    }
+    const current = (await listSections(session, channel.id)).map((s) => s.id);
+    if (MODE === 'apply' && JSON.stringify(current) !== JSON.stringify(ordered) && current.length === ordered.length) {
+      await api.request(`/api/channels/${channel.id}/sections/reorder`, { method: 'PATCH', token: session.accessToken, channelId: channel.id, json: { sectionIds: ordered } });
+      note(`sections reordered: ${def.key}`);
+    }
+  }
+  log.groupEnd();
+}
+
+interface TabsResponse {
+  result?: { config?: { tabs?: Array<{ id: string; visible: boolean }> } };
+}
+
+async function ensureTabs(sessions: Sessions, channels: Map<string, ChannelRecord>): Promise<void> {
+  log.group('Channel tabs');
+  for (const def of manifest.channels) {
+    await freshen(sessions);
+    const session = sessions.get(def.key);
+    const channel = channels.get(def.key);
+    if (!session || !channel) continue;
+    const wanted = new Set(visibleTabs(hasShorts(def.key)));
+    const res = await api.get<TabsResponse>(`/api/channels/${channel.id}/tabs`, { token: session.accessToken, allowStatus: [404] });
+    const tabs = res.data.result?.config?.tabs ?? [];
+    const correct = tabs.length > 0 && tabs.every((t) => t.visible === wanted.has(t.id));
+    if (correct) continue;
+    if (MODE === 'check') {
+      failures.push(`tabs not configured: ${def.key}`);
+      continue;
+    }
+    const ids = tabs.length > 0 ? tabs.map((t) => t.id) : [...wanted, ...HIDDEN_TABS, 'shorts'];
+    await api.put(
+      `/api/channels/${channel.id}/tabs`,
+      { defaultTab: 'home', tabs: [...new Set(ids)].map((id) => ({ id, visible: wanted.has(id) })) },
+      { token: session.accessToken, channelId: channel.id },
+    );
+    note(`tabs configured: ${def.key}`);
+  }
+  log.groupEnd();
+}
+
+interface CommentRecord {
+  text?: string;
+  channelId?: string;
+}
+
+async function ensureEngagement(sessions: Sessions, channels: Map<string, ChannelRecord>, seeded: Seeded[]): Promise<void> {
+  if (MODE === 'check') return;
+  log.group('Community activity');
+  const { subscriptions, comments, likes } = manifest.engagement;
+  const videoOf = new Map(seeded.map((s) => [s.slug, s.video.id]));
+  const actor = (key: string) => {
+    const session = sessions.get(key);
+    const channel = channels.get(key);
+    if (!session || !channel) throw new Error(`Demo account ${key} is unavailable`);
+    return { session, channelId: channel.id };
+  };
+
+  let created = 0;
+  for (const { by, to } of subscriptions) {
+    await freshen(sessions);
+    const { session, channelId } = actor(by);
+    for (const target of to) {
+      const res = await api.post<{ error?: string }>(`/api/channels/${channels.get(target)!.id}/subscriptions`, {}, { token: session.accessToken, channelId, allowStatus: [400, 409] });
+      if (res.status < 300 && !res.data?.error) created++;
+    }
+  }
+  note(`subscriptions created: ${created}`);
+
+  created = 0;
+  for (const { clip, by, text } of comments) {
+    await freshen(sessions);
+    const videoId = videoOf.get(clip);
+    if (!videoId) throw new Error(`Comment target ${clip} not seeded`);
+    const { session, channelId } = actor(by);
+    const res = await api.get<{ result?: { comments?: CommentRecord[] } }>(`/api/videos/${videoId}/comments?limit=100`, { token: session.accessToken });
+    if ((res.data.result?.comments ?? []).some((c) => c.text === text && c.channelId === channelId)) continue;
+    await api.post(`/api/videos/${videoId}/comments`, { text }, { token: session.accessToken, channelId });
+    created++;
+  }
+  note(`comments created: ${created}`);
+
+  created = 0;
+  for (const { clip, by } of likes) {
+    await freshen(sessions);
+    const videoId = videoOf.get(clip);
+    if (!videoId) throw new Error(`Like target ${clip} not seeded`);
+    const video = await api.get<{ likes?: Array<{ channelId?: string }> }>(`/api/videos/${videoId}`);
+    const liked = new Set((video.data.likes ?? []).map((l) => l.channelId));
+    for (const key of by) {
+      const { session, channelId } = actor(key);
+      if (liked.has(channelId)) continue;
+      const res = await api.post(`/api/videos/${videoId}/likes`, {}, { token: session.accessToken, channelId, allowStatus: [400, 409] });
+      if (res.status < 300) created++;
+    }
+  }
+  note(`likes created: ${created}`);
+  log.groupEnd();
+}
+
+/** Every section must resolve to real items, the way the channel Home tab loads them. */
+async function verifyChannelPages(channels: Map<string, ChannelRecord>): Promise<void> {
+  log.group('Channel page verification');
+  const rows: string[] = [];
+  for (const def of manifest.channels) {
+    const channel = channels.get(def.key);
+    if (!channel) continue;
+    const sections = await listSections(undefined, channel.id);
+    if (sections.length !== def.sections.length) failures.push(`${def.key}: ${sections.length} sections, expected ${def.sections.length}`);
+    for (const section of sections) {
+      let items = 0;
+      if (section.type === 'recent_uploads' || section.type === 'popular_uploads') items = section.populatedContent?.videos?.length ?? 0;
+      else if (section.type === 'subscribed_channels') items = section.populatedContent?.channels?.length ?? 0;
+      else if (section.type === 'liked_videos') items = (await api.get<{ data?: unknown[] }>(`/api/videos?channelId=${channel.id}&limit=12`)).data.data?.length ?? 0;
+      else if (section.type === 'featured_videos') {
+        for (const id of section.content?.videoIds ?? []) if (await fetchVideo(id)) items++;
+      } else {
+        const ids = section.content?.playlistIds ?? (section.content?.playlistId ? [section.content.playlistId] : []);
+        for (const id of ids) {
+          const playlist = await api.get<{ videos?: unknown[]; result?: { playlist?: { videos?: unknown[] } } }>(`/api/playlists/${id}`, { allowStatus: [404] });
+          if ((playlist.data.videos ?? playlist.data.result?.playlist?.videos ?? []).length > 0) items++;
+        }
+      }
+      rows.push(`${def.key} | ${section.position} | ${section.type} | ${section.title} | items=${items}`);
+      if (items === 0) failures.push(`${def.key}: section "${section.title}" has no items`);
+    }
+    const tabs = await api.get<TabsResponse>(`/api/channels/${channel.id}/tabs`);
+    const shown = (tabs.data.result?.config?.tabs ?? []).filter((t) => t.visible).map((t) => t.id).sort();
+    const expected = visibleTabs(hasShorts(def.key)).sort();
+    rows.push(`${def.key} | tabs | ${shown.join(',')}`);
+    if (JSON.stringify(shown) !== JSON.stringify(expected)) failures.push(`${def.key}: tabs ${shown.join(',')}, expected ${expected.join(',')}`);
+    const detail = await api.get<{ subscribersCount?: number }>(`/api/channels/${channel.id}`);
+    rows.push(`${def.key} | subscribers | ${detail.data.subscribersCount ?? 0}`);
+  }
+  log.info(`Channel pages:\n${rows.join('\n')}`);
+  log.groupEnd();
 }
 
 // ---------------------------------------------------------------------------
@@ -725,12 +943,17 @@ async function main(): Promise<void> {
     videos: [...seeded.map((s) => s.video.id), ...manifest.keep],
     shorts: seeded.filter((s) => shorts.has(s.slug)).map((s) => s.video.id),
     extraVideos: manifest.keep,
-    playlists,
+    playlists: [...playlists.values()],
   };
   fs.writeFileSync(DEMO_SET_OUT, `${JSON.stringify(demoSet, null, 2)}\n`);
   log.info('Wrote demo set', { path: DEMO_SET_OUT, videos: demoSet.videos.length });
 
+  await ensureEngagement(sessions, channels, seeded);
+  await ensureSections(sessions, channels, seeded, playlists);
+  await ensureTabs(sessions, channels);
+
   await verify(seeded, unplayable?.id);
+  await verifyChannelPages(channels);
 }
 
 main()
