@@ -1,15 +1,13 @@
 "use client";
-import { VerifiedBadge } from '@/components/VerifiedBadge';
 import React, { useMemo } from "react";
 import type { Player } from "video.js";
-import Image from "next/image";
-import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "../interface";
 import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlayerWithChapters";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
+import { VideoDetails } from "@/components/VideoPagePlayer/VideoDetails";
 import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
 
 interface WatchPlayerProps {
@@ -74,40 +72,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
           />
         </div>
       </div>
-
-      {/* Video Details */}
-      <div className="flex space-x-4 mt-4 justify-start items-center w-full" dir="rtl">
-        {(() => {
-          const href = playerChannelHref('ar', options);
-          const avatar = (
-            <Image
-              src={options.channelAvatar || '/avatar.png'}
-              alt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(playerChannelName(options)))}
-              sizes="44px"
-              className="bg-gray-500 object-cover"
-              fill
-            />
-          );
-          const avatarEl = href ? (
-            <Link href={href} data-testid="watch-channel-link" className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity">
-              {avatar}
-            </Link>
-          ) : (
-            <span className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative">{avatar}</span>
-          );
-          return options.channelVerified ? (
-            <span className="inline-flex items-center gap-1">
-              {avatarEl}
-              <VerifiedBadge />
-            </span>
-          ) : avatarEl;
-        })()}
-        <div className="mt-4">
-          <h1 className="sm:text-md md:text-xl font-semibold text-black dark:text-white">
-            {removeUnwantedChars(title)}
-          </h1>
-        </div>
-      </div>
+      <VideoDetails title={title} channelName={playerChannelName(options)} channelHref={playerChannelHref('ar', options)} options={options} avatarAlt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(playerChannelName(options)))} />
     </>
   );
 };

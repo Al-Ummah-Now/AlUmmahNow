@@ -1,4 +1,5 @@
 "use client";
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useState } from "react";
 import { Flag, X, Info } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider/authContext";
@@ -189,7 +190,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
                     <label htmlFor="report-reason" className="block text-sm font-medium mb-2">
                       {t.reportContent.whyReporting}
                     </label>
-                    <select
+                    <ThemedSelectField
                       id="report-reason"
                       value={reportForm.reason}
                       onChange={(e) => setReportForm({ ...reportForm, reason: e.target.value as ReportReason | '' })}
@@ -200,7 +201,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
                       {REASONS.map((reason) => (
                         <option key={reason} value={reason}>{t.reportContent.reasons[reason]}</option>
                       ))}
-                    </select>
+                    </ThemedSelectField>
                   </div>
 
                   {reportForm.reason === 'other' && (

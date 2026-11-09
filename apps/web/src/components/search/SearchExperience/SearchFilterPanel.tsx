@@ -6,6 +6,7 @@
  * chips for active filters. Changes apply immediately (URL state).
  */
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useId, useRef } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
 import type { SearchEntityType } from '@al-ummah/shared-types';
@@ -171,7 +172,7 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
 
           <div className="space-y-2">
             <label htmlFor={categoryId} className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t.search.category}</label>
-            <select
+            <ThemedSelectField
               id={categoryId}
               data-testid="search-filter-category"
               value={state.category ?? ''}
@@ -182,7 +183,7 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
               {VIDEO_CATEGORIES.map(category => (
                 <option key={category.value} value={category.value}>{categoryLabel(category.value, lang, category.value)}</option>
               ))}
-            </select>
+            </ThemedSelectField>
           </div>
 
           <FilterGroup title={t.search.sortBy}>

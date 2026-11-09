@@ -1,15 +1,13 @@
 "use client";
-import { VerifiedBadge } from '@/components/VerifiedBadge';
 import React, { useMemo } from "react";
 import type { Player } from "video.js";
-import Image from "next/image";
-import Link from "next/link";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "./interface";
 import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlayerWithChapters";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
+import { VideoDetails } from "@/components/VideoPagePlayer/VideoDetails";
 import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
 
 interface WatchPlayerProps {
@@ -78,49 +76,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
           />
         </div>
       </div>
-
-      {/* Video Details */}
-      <div className="mt-4 w-full">
-        {/* Video Title */}
-        <h1 className="text-lg md:text-xl font-semibold text-black dark:text-white mb-3">
-          {removeUnwantedChars(title)}
-        </h1>
-
-        {/* Channel Info */}
-        <div className="flex space-x-3 rtl:space-x-reverse items-center">
-          {channelHref ? (
-            <Link
-              href={channelHref}
-              className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative hover:opacity-80 transition-opacity"
-              tabIndex={-1}
-              aria-hidden="true"
-            >
-              <Image src={options.channelAvatar || '/avatar.png'} alt="" sizes="44px" className="bg-gray-500 object-cover" fill />
-            </Link>
-          ) : (
-            <span className="w-11 h-11 shrink-0 rounded-full overflow-hidden relative" aria-hidden="true">
-              <Image src={options.channelAvatar || '/avatar.png'} alt="" sizes="44px" className="bg-gray-500 object-cover" fill />
-            </span>
-          )}
-          <div className="min-w-0">
-            {channelHref ? (
-              <Link
-                href={channelHref}
-                data-testid="watch-channel-link"
-                className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
-              >
-                {removeUnwantedChars(channelName)}
-                {options.channelVerified && <VerifiedBadge className="ms-1" />}
-              </Link>
-            ) : (
-              <span className="inline-flex items-center min-h-11 text-sm md:text-base font-medium text-gray-700 dark:text-gray-300">
-                {removeUnwantedChars(channelName)}
-                {options.channelVerified && <VerifiedBadge className="ms-1" />}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+      <VideoDetails title={title} channelName={channelName} channelHref={channelHref} options={options} />
     </>
   );
 };

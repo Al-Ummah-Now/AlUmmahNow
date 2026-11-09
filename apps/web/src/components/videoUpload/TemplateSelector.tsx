@@ -7,6 +7,7 @@
  * Pre-fills metadata fields when a template is selected.
  */
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { FileText, ChevronDown, AlertCircle } from 'lucide-react';
@@ -194,7 +195,7 @@ export function TemplateSelector({
         </label>
 
         <div className="relative">
-          <select
+          <ThemedSelectField
             id="upload-template-select"
             data-testid="upload-template-select"
             value={selectedTemplateId}
@@ -235,7 +236,7 @@ export function TemplateSelector({
                 {template.id === defaultTemplateId && ` ${isRTL ? '(افتراضي)' : '(Default)'}`}
               </option>
             ))}
-          </select>
+          </ThemedSelectField>
 
           <ChevronDown className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
         </div>

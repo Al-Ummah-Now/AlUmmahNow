@@ -1,5 +1,6 @@
 'use client';
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -148,7 +149,7 @@ export default function CommentsSection({
             <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
             </svg>
-            <select
+            <ThemedSelectField
               value={sortBy}
               onChange={(e) => handleSortChange(e.target.value as SortBy)}
               className={cn(
@@ -160,7 +161,7 @@ export default function CommentsSection({
             >
               <option value="top">{isRTL ? 'الأكثر إعجاباً' : 'Top comments'}</option>
               <option value="newest">{isRTL ? 'الأحدث أولاً' : 'Newest first'}</option>
-            </select>
+            </ThemedSelectField>
           </div>
         )}
       </div>

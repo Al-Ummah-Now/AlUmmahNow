@@ -1,5 +1,6 @@
 "use client";
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Search, UploadCloud, Trash2, Eye, Edit } from 'lucide-react';
@@ -255,7 +256,7 @@ export default function ChannelVideosPage() {
 
             {/* Filters Row */}
             <div className="flex flex-wrap gap-4">
-              <select
+              <ThemedSelectField
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
                 aria-label={t.video.filterByStatus || t.video.allStatus}
@@ -266,9 +267,9 @@ export default function ChannelVideosPage() {
                 <option value="processing">{t.video.processing}</option>
                 <option value="uploading">{t.video.uploading}</option>
                 <option value="failed">{t.video.failed}</option>
-              </select>
+              </ThemedSelectField>
 
-              <select
+              <ThemedSelectField
                 value={privacyFilter}
                 onChange={(e) => setPrivacyFilter(e.target.value as FilterPrivacy)}
                 aria-label={t.video.filterByPrivacy}
@@ -277,9 +278,9 @@ export default function ChannelVideosPage() {
                 <option value="all">{t.video.filterByPrivacy}</option>
                 <option value="public">{t.video.public}</option>
                 <option value="private">{t.video.private}</option>
-              </select>
+              </ThemedSelectField>
 
-              <select
+              <ThemedSelectField
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
                 aria-label={t.search.sortBy}
@@ -288,7 +289,7 @@ export default function ChannelVideosPage() {
                 <option value="date">{t.video.sortByDate}</option>
                 <option value="views">{t.video.sortByViews}</option>
                 <option value="title">{t.video.sortByTitle}</option>
-              </select>
+              </ThemedSelectField>
             </div>
 
             {/* Bulk Actions */}

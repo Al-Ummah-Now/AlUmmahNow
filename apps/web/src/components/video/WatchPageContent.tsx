@@ -1,5 +1,7 @@
 'use client';
 
+import { formatViews } from '@/lib/format/videoMeta';
+import { RelativeDate } from '@/components/RelativeDate';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Player } from "video.js";
@@ -147,7 +149,7 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
                 />
               </section>
 
-              <div className="w-full max-w-4xl mt-4 px-4">
+              <div className="watch-actions">
                 <VideoMetricsDisplay
                   key={videoDetails.id}
                   videoId={videoId}
@@ -162,9 +164,6 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
                     logger.debug('[WatchPage] Video metrics updated', { metrics });
                   }}
                 />
-              </div>
-
-              <div className="w-full max-w-4xl mt-4 px-4 flex flex-wrap items-center gap-3">
                   <ShareDialog
                     videoId={videoId}
                     title={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
@@ -183,18 +182,16 @@ export default function WatchPageContent({ videoId }: { videoId: string }) {
                       <span>{t.video.editVideo}</span>
                     </Link>
                   )}
-              </div>
-
-              {/* Report video (hidden for anonymous viewers and the owner) */}
-              {!isOwnVideo && (
-                <div data-report-content className={`w-full max-w-4xl mt-2 px-4 flex ${isRTL ? 'justify-start' : 'justify-end'}`}>
-                  <ReportContentButton
+                  {!isOwnVideo && <div data-report-content><ReportContentButton
                     contentType="video"
                     contentId={videoId}
                     contentTitle={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
-                  />
-                </div>
-              )}
+                  /></div>}
+              </div>
+              <details className="watch-desc" open={false}>
+                <summary><span>{formatViews(videoDetails.views, lang)}</span> <RelativeDate value={videoDetails.dateCreated} lang={lang} /></summary>
+                {videoDetails.description && <p>{videoDetails.description}</p>}
+              </details>
             </div>
           )}
 

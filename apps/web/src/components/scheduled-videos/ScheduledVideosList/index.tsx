@@ -6,6 +6,7 @@
  */
 
 'use client';
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState } from 'react';
@@ -157,7 +158,7 @@ export function ScheduledVideosList({
         <label htmlFor="scheduled-status-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">
           {t.schedule?.filterByStatus ?? 'Filter by status'}:
         </label>
-        <select
+        <ThemedSelectField
           id="scheduled-status-filter"
           data-testid="scheduled-status-filter"
           value={filterStatus}
@@ -170,7 +171,7 @@ export function ScheduledVideosList({
           <option value="published">{t.schedule?.statusPublished || 'Published'}</option>
           <option value="failed">{t.schedule?.statusFailed || 'Failed'}</option>
           <option value="cancelled">{t.schedule?.statusCancelled || 'Cancelled'}</option>
-        </select>
+        </ThemedSelectField>
       </div>
 
       {/* Loading State */}
