@@ -225,7 +225,7 @@ export function UnifiedNavigationRTL() {
                 <form action={login.bind(null, 'ar')}>
                   <button
                     type="submit"
-                    className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-brand to-brand hover:from-brand hover:to-brand text-gray-900 font-semibold transition-all shadow-md hover:shadow-lg"
+                    className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-gray-900 font-semibold transition-all shadow-md hover:shadow-lg"
                     role="menuitem"
                   >
                     <User className="h-5 w-5" />
@@ -427,7 +427,7 @@ export function UnifiedNavigationRTL() {
                       </div>
                     )}
                     {channel.isMain && (
-                      <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-brand-ink bg-white dark:bg-gray-900 rounded-full" />
+                      <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
                     )}
                   </div>
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate flex-1">
@@ -609,7 +609,7 @@ export function UnifiedNavigationRTL() {
                                 </div>
                               )}
                               {ch.isMain && (
-                                <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-brand-ink bg-white dark:bg-gray-900 rounded-full" />
+                                <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-yellow-500 bg-white dark:bg-gray-900 rounded-full" />
                               )}
                             </div>
                           </button>
