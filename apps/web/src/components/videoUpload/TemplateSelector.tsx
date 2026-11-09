@@ -7,6 +7,7 @@
  * Pre-fills metadata fields when a template is selected.
  */
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -262,7 +263,7 @@ export function TemplateSelector({
 
       {/* Variable Input Modal */}
       {showVariablePrompt && pendingTemplate && (
-        <div
+        <BodyPortal><div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -434,7 +435,7 @@ export function TemplateSelector({
               </button>
             </div>
           </div>
-        </div>
+        </div></BodyPortal>
       )}
     </>
   );

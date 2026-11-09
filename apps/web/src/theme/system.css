@@ -413,3 +413,11 @@ main [class*="h-48"][class*="bg-gradient"],main [class*="h-40"][class*="bg-gradi
 /* Shorts tab: vertical tiles */
 [data-shorts-grid] [class*="grid"]{grid-template-columns:repeat(auto-fill,minmax(170px,200px))!important;justify-content:start;gap:16px}
 [data-shorts-grid] .video-card>:first-child,[data-shorts-grid] .vc-t{aspect-ratio:9/16!important;height:auto!important}
+
+/* Layer scale: page < header < popovers < modals < toasts */
+html{--z-header:50;--z-popover:1000;--z-modal:1100;--z-toast:1200}
+[data-body-portal]{position:relative;z-index:var(--z-modal)}
+[data-radix-popper-content-wrapper]{z-index:var(--z-popover)!important}
+body>[role=dialog],body>[role=alertdialog],body>[data-state].fixed.inset-0{z-index:var(--z-modal)!important}
+[data-sonner-toaster]{z-index:var(--z-toast)!important}
+[data-body-portal]>.fixed.inset-0{background:rgb(0 0 0/.6);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}

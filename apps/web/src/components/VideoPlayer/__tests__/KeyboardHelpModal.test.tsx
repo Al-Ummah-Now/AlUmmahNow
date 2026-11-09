@@ -37,11 +37,11 @@ describe('KeyboardHelpModal', () => {
     opener.focus();
     fireEvent.click(opener);
 
-    const [headerClose, footerClose] = screen.getAllByRole('button', { name: 'Close' });
+    const headerClose = screen.getByRole('button', { name: 'Close' });
     expect(document.activeElement).toBe(headerClose);
 
-    footerClose.focus();
-    fireEvent.keyDown(footerClose, { key: 'Tab' });
+    headerClose.focus();
+    fireEvent.keyDown(headerClose, { key: 'Tab' });
     expect(document.activeElement).toBe(headerClose);
 
     fireEvent.keyDown(document, { key: 'Escape' });

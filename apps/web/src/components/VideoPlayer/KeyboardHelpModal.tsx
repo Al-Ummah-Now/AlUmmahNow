@@ -25,6 +25,7 @@
 
 'use client';
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useEffect, useRef } from 'react';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import type { SupportedLanguage } from '@/lib/video/i18n';
@@ -167,7 +168,7 @@ export function KeyboardHelpModal({
   ];
 
   return (
-    <div
+    <BodyPortal><div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={handleBackdropClick}
       role="dialog"
@@ -178,18 +179,18 @@ export function KeyboardHelpModal({
     >
       <div
         ref={modalRef}
-        className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-background rounded-lg shadow-xl m-4"
+        data-testid="keyboard-help" className="relative flex w-full max-w-4xl max-h-[min(80vh,720px)] flex-col overflow-hidden bg-background rounded-xl shadow-xl m-4"
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b bg-background">
+        <div className="flex shrink-0 items-center justify-between px-5 py-3 border-b">
           <div>
             <h2
               id="keyboard-help-title"
-              className="text-2xl font-bold text-foreground"
+              className="text-lg font-semibold text-foreground"
             >
               {t.keyboard.title}
             </h2>
-            <p id="keyboard-help-description" className="text-sm text-muted-foreground mt-1">
+            <p id="keyboard-help-description" className="text-sm text-muted-foreground">
               {t.keyboard.description}
             </p>
           </div>
@@ -197,12 +198,12 @@ export function KeyboardHelpModal({
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="inline-flex items-center justify-center min-w-11 min-h-11 p-2 rounded-lg hover:bg-muted active:bg-muted transition-colors"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted active:bg-muted transition-colors"
             aria-label={t.keyboard.closeButton}
           >
             <svg
               aria-hidden="true"
-              className="w-6 h-6"
+              className="w-[18px] h-[18px]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -218,26 +219,26 @@ export function KeyboardHelpModal({
         </div>
 
         {/* Content */}
-        <div className="px-6 py-4 space-y-6">
+        <div className="overflow-y-auto px-5 py-3 md:columns-2 md:gap-8">
           {shortcuts.map((category, categoryIndex) => (
-            <section key={categoryIndex} aria-labelledby={`keyboard-help-section-${categoryIndex}`}>
-              <h3 id={`keyboard-help-section-${categoryIndex}`} className="text-lg font-semibold text-foreground mb-3">
+            <section key={categoryIndex} className="mb-4 break-inside-avoid" aria-labelledby={`keyboard-help-section-${categoryIndex}`}>
+              <h3 id={`keyboard-help-section-${categoryIndex}`} className="text-sm font-semibold text-muted-foreground mb-1">
                 {category.section}
               </h3>
-              <dl className="space-y-2">
+              <dl>
                 {category.items.map((shortcut, shortcutIndex) => (
                   <div
                     key={shortcutIndex}
-                    className="flex items-center justify-between gap-4 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                    className="flex min-h-10 items-center justify-between gap-4 border-b border-border/50 last:border-b-0"
                   >
-                    <dt className="text-sm text-foreground flex-1">
+                    <dt className="min-w-0 flex-1 text-sm text-foreground">
                       {shortcut.description}
                     </dt>
-                    <dd className="flex items-center gap-2" dir="ltr">
+                    <dd className="flex shrink-0 items-center gap-1" dir="ltr">
                       {splitShortcutKeys(shortcut.keys).map((key, keyIndex) => (
                         <kbd
                           key={keyIndex}
-                          className="px-3 py-1.5 text-sm font-semibold text-foreground bg-background border border-border rounded-md shadow-sm min-w-[2.5rem] text-center"
+                          className="inline-flex h-6 min-w-6 items-center justify-center whitespace-nowrap rounded border border-border px-1.5 text-xs font-semibold text-foreground"
                         >
                           {key}
                         </kbd>
@@ -249,18 +250,7 @@ export function KeyboardHelpModal({
             </section>
           ))}
         </div>
-
-        {/* Footer */}
-        <div className="sticky bottom-0 px-6 py-4 border-t bg-background">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full min-h-11 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 active:bg-primary/80 transition-colors"
-          >
-            {t.keyboard.closeButton}
-          </button>
-        </div>
       </div>
-    </div>
+    </div></BodyPortal>
   );
 }

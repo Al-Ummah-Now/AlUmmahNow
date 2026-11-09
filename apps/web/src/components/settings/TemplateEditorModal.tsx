@@ -7,6 +7,7 @@
  * Supports bilingual fields (EN/AR) and template variables.
  */
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useState, useEffect } from 'react';
 import { X, Save, AlertCircle } from 'lucide-react';
@@ -193,7 +194,7 @@ export function TemplateEditorModal({
   if (!isOpen) return null;
 
   return (
-    <div
+    <BodyPortal><div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -700,6 +701,6 @@ export function TemplateEditorModal({
           </div>
         </form>
       </div>
-    </div>
+    </div></BodyPortal>
   );
 }

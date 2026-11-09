@@ -1,4 +1,5 @@
 "use client";
+import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useState } from "react";
 import { Flag, X, Info } from "lucide-react";
@@ -145,7 +146,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
 
       {/* Modal/Overlay */}
       {isOpen && (
-        <div
+        <BodyPortal><div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           role="dialog"
           aria-modal="true"
@@ -267,7 +268,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </div></BodyPortal>
       )}
     </>
   );
