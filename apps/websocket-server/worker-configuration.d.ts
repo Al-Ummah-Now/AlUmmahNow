@@ -7,7 +7,6 @@ interface SecretStoreSecret {
 
 interface Env {
 	WEBSOCKET_DO: DurableObjectNamespace;
-	PRESENCE_KV: KVNamespace;
 	// Video JSON objects; the view counter flushes counts into them (view-counter.ts)
 	VIDEOS?: R2Bucket;
 	TOKEN_REVOCATIONS?: KVNamespace;
@@ -31,6 +30,12 @@ interface Env {
 	RATE_LIMIT_MESSAGES?: number;
 	RATE_LIMIT_WINDOW_MS?: number;
 
-	// Connection limits
+	// Connection limits (per socket shard)
 	MAX_CONNECTIONS_PER_DO?: number;
+	// Number of socket shards `sockets:<n>` (default 8, see src/shards.ts)
+	SOCKET_SHARDS?: number | string;
+
+	// Workers Rate Limiting: socket opens per IP, client messages per user or IP
+	WS_CONNECT_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
+	WS_MESSAGE_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
