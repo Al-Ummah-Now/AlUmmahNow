@@ -6,16 +6,11 @@ import Link from "next/link";
 import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useAuth } from "@/components/AuthProvider/authContext";
-import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { DemoUpload } from '@/components/ThemeDemo/DemoUpload';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) => {
   const { t, lang: locale } = useLanguage();
-  const { user } = useAuth();
-  const { user: multiAccountUser } = useMultiAccount();
-  const activeChannel = multiAccountUser?.channel;
   return (
     // Fixed height (h-14): the account menu swaps a skeleton for the avatar
     // after hydration, which must not push the page content down (layout shift)

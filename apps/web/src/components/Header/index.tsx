@@ -5,16 +5,11 @@ import Link from "next/link";
 import { HeaderProps } from "./interfaces";
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useAuth } from "@/components/AuthProvider/authContext";
-import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { DemoUpload } from '@/components/ThemeDemo/DemoUpload';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) => {
   const { t, lang: locale } = useLanguage();
-  const { user } = useAuth();
-  const { user: multiAccountUser } = useMultiAccount();
-  const activeChannel = multiAccountUser?.channel;
 
   return (
     // Fixed height (h-14): the account menu swaps a skeleton for the avatar
