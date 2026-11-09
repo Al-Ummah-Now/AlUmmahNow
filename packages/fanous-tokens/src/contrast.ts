@@ -4,6 +4,7 @@ import { rgb, type Model, type ThemeColor } from './model.ts';
 
 export const AA_TEXT = 4.5;
 export const AA_NON_TEXT = 3;
+export const AA_TEXT_ON_PRIMARY = 7;
 
 export interface Pair { theme: string; fg: string; bg: string; fgHex: string; bgHex: string; ratio: number; required: number; pass: boolean }
 
@@ -46,3 +47,6 @@ export function contrastPairs(model: Model): Pair[] {
 }
 
 export const contrastFailures = (model: Model) => contrastPairs(model).filter((p) => !p.pass);
+
+/** Text on the primary action is held to 7:1 in every state a person can press. */
+export const primaryTextFailures = (model: Model) => contrastPairs(model).filter((p) => ['onPrimary', 'onPrimaryHover', 'onPrimaryPressed'].includes(p.fg) && p.ratio < AA_TEXT_ON_PRIMARY);

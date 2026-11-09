@@ -1,0 +1,186 @@
+{
+  "id": "lantern",
+  "kind": "base",
+  "name": {
+    "en": "Lantern",
+    "ar": "الفانوس"
+  },
+  "color": {
+    "dark": {
+      "background": "{color.brand.night}",
+      "surface": "{color.derived.nightRaised}",
+      "surfaceRaised": "{color.derived.nightHigh}",
+      "heroStart": "{color.brand.nightDeep}",
+      "heroEnd": "{color.brand.nightShallow}",
+      "textPrimary": "{color.brand.parchment}",
+      "textSecondary": "{color.derived.mist}",
+      "textMuted": "{color.derived.mistMuted}",
+      "link": "{color.brand.glow}",
+      "successText": "{color.derived.verifiedBright}",
+      "errorText": "{color.derived.errorBright}",
+      "primary": "{color.derived.gold}",
+      "onPrimary": "{color.derived.inkNight}",
+      "primaryHover": "{color.derived.goldLight}",
+      "onPrimaryHover": "{color.derived.inkNight}",
+      "primaryPressed": "{color.derived.goldPressed}",
+      "onPrimaryPressed": "{color.derived.inkNight}",
+      "primaryDisabled": "{color.derived.nightHigh}",
+      "onPrimaryDisabled": "{color.derived.mistMuted}",
+      "primaryEdge": "{color.derived.goldLight}",
+      "primarySheen": "{color.derived.goldFlame}",
+      "motif": "{color.derived.tealDeep}",
+      "secondary": "{color.brand.earth}",
+      "onSecondary": "{color.derived.white}",
+      "verifiedFill": "{color.derived.verifiedDeep}",
+      "onVerifiedFill": "{color.derived.white}",
+      "errorFill": "{color.brand.error}",
+      "onErrorFill": "{color.derived.white}",
+      "live": "{color.brand.glow}",
+      "onLive": "{color.brand.night}",
+      "accent": "{color.brand.lantern}",
+      "focusRing": "{color.derived.goldLight}",
+      "focusGlow": "{color.brand.glow}",
+      "verifiedIcon": "{color.derived.verifiedBright}",
+      "outline": "{color.derived.outlineDark}",
+      "divider": "{color.derived.dividerDark}"
+    },
+    "light": {
+      "background": "{color.brand.parchment}",
+      "surface": "{color.derived.parchmentRaised}",
+      "surfaceRaised": "{color.derived.parchmentHigh}",
+      "heroStart": "{color.derived.parchmentDeep}",
+      "heroEnd": "{color.brand.parchment}",
+      "textPrimary": "{color.derived.ink}",
+      "textSecondary": "{color.derived.inkSecondary}",
+      "textMuted": "{color.derived.inkMuted}",
+      "link": "{color.derived.lanternInk}",
+      "successText": "{color.derived.verifiedDeep}",
+      "errorText": "{color.brand.error}",
+      "primary": "{color.derived.gold}",
+      "onPrimary": "{color.derived.inkNight}",
+      "primaryHover": "{color.derived.goldLight}",
+      "onPrimaryHover": "{color.derived.inkNight}",
+      "primaryPressed": "{color.derived.goldPressed}",
+      "onPrimaryPressed": "{color.derived.inkNight}",
+      "primaryDisabled": "{color.derived.parchmentDeep}",
+      "onPrimaryDisabled": "{color.derived.inkMuted}",
+      "primaryEdge": "{color.derived.goldEdge}",
+      "primarySheen": "{color.derived.goldFlame}",
+      "motif": "{color.derived.goldPressed}",
+      "secondary": "{color.brand.earth}",
+      "onSecondary": "{color.derived.white}",
+      "verifiedFill": "{color.derived.verifiedDeep}",
+      "onVerifiedFill": "{color.derived.white}",
+      "errorFill": "{color.brand.error}",
+      "onErrorFill": "{color.derived.white}",
+      "live": "{color.brand.glow}",
+      "onLive": "{color.brand.night}",
+      "accent": "{color.derived.lanternDeep}",
+      "focusRing": "{color.derived.goldEdge}",
+      "focusGlow": "{color.derived.lanternDeep}",
+      "verifiedIcon": "{color.derived.verifiedDeep}",
+      "outline": "{color.derived.outlineLight}",
+      "divider": "{color.derived.dividerLight}"
+    }
+  },
+  "brandColor": {
+    "night": "#093041",
+    "nightDeep": "#07425a",
+    "nightShallow": "#083f58",
+    "lantern": "#ffa037",
+    "glow": "#ffc46b",
+    "earth": "#8e6c53",
+    "parchment": "#f7f1e8",
+    "verified": "#16a34a",
+    "error": "#b00020"
+  },
+  "font": "system",
+  "shape": {
+    "radius": {
+      "none": "0px",
+      "sm": "4px",
+      "md": "8px",
+      "lg": "12px",
+      "xl": "20px",
+      "full": "999px"
+    },
+    "elevation": {
+      "low": {
+        "color": "#00000033",
+        "offsetX": "0px",
+        "offsetY": "1px",
+        "blur": "3px",
+        "spread": "0px"
+      },
+      "medium": {
+        "color": "#00000040",
+        "offsetX": "0px",
+        "offsetY": "4px",
+        "blur": "12px",
+        "spread": "0px"
+      },
+      "high": {
+        "color": "#00000059",
+        "offsetX": "0px",
+        "offsetY": "12px",
+        "blur": "32px",
+        "spread": "0px"
+      }
+    },
+    "borderStyle": "solid"
+  },
+  "motif": {
+    "pattern": "assets/pattern.svg",
+    "loader": "assets/loader.svg"
+  },
+  "brand": {
+    "wordmark": {
+      "light": "assets/wordmark.png",
+      "dark": "assets/wordmark.png"
+    },
+    "logo": {
+      "light": "assets/logo.png",
+      "dark": "assets/logo.png"
+    },
+    "favicon": "assets/favicon.ico",
+    "icon192": "assets/icon-192.png",
+    "icon512": "assets/icon-512.png",
+    "iconMaskable512": "assets/icon-maskable-512.png",
+    "appleTouchIcon": "assets/apple-touch-icon.png",
+    "ogImage": "assets/og.jpg"
+  },
+  "browser": {
+    "themeColor": {
+      "light": "#ffffff",
+      "dark": "#111827"
+    },
+    "manifest": {
+      "background": "#ffffff",
+      "theme": "#ffffff"
+    }
+  },
+  "auth": {
+    "background": {
+      "light": [
+        "https://images.alummahnow.net/background_1.jpg",
+        "https://images.alummahnow.net/background_3.jpg"
+      ],
+      "dark": [
+        "https://images.alummahnow.net/background_1.jpg",
+        "https://images.alummahnow.net/background_3.jpg"
+      ]
+    },
+    "headerGraphic": {
+      "light": "assets/auth-header.light.svg",
+      "dark": "assets/auth-header.dark.svg"
+    }
+  },
+  "email": {
+    "headerImage": "assets/wordmark.png",
+    "background": "#ffffff",
+    "text": "#1c1a17",
+    "buttonBackground": "#e8b477",
+    "buttonText": "#09151e",
+    "buttonRadius": "10px"
+  }
+}

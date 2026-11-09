@@ -5,11 +5,13 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { contrastFailures, contrastPairs, contrastRatio } from '../src/contrast.ts';
 import { generateAll } from '../src/generate.ts';
-import { buildModel, kebab, loadModel, TOKENS_URL, type Model } from '../src/model.ts';
+import { buildModel, kebab, TOKENS_URL, type Model } from '../src/model.ts';
+import { composeTokens, loadThemes, loadTokens, resolveTheme } from '../src/themes.ts';
 
 const GENERATED = fileURLToPath(new URL('../generated', import.meta.url));
-const raw = () => JSON.parse(readFileSync(TOKENS_URL, 'utf8'));
-const model = loadModel();
+const themes = loadThemes();
+const raw = () => composeTokens(loadTokens(), resolveTheme('lantern', themes));
+const model = buildModel(raw());
 const files = generateAll(model);
 
 test('contrast formula matches known WCAG values', () => {
@@ -82,7 +84,7 @@ test('both themes define the same colour names', () => {
 
 test('D6 is open: the system pair is active and both candidate pairs are offered', () => {
   assert.equal(model.activePair, 'system');
-  assert.deepEqual(model.fontPairs.map((p) => p.name), ['system', 'plexSans', 'notoKufiInter']);
+  assert.deepEqual(model.fontPairs.map((p) => p.name), ['system', 'plexSans', 'notoKufiInter', 'sourceSerifAmiri']);
   assert.ok(!readFileSync(TOKENS_URL, 'utf8').includes('Farsi'));
 });
 
@@ -95,7 +97,7 @@ test('Arabic styles never set letter-spacing and are taller than Latin', () => {
 
 test('generated files match the committed snapshots', () => {
   for (const [path, content] of Object.entries(files)) {
-    assert.equal(readFileSync(join(GENERATED, path), 'utf8'), content, `${path} is stale, run pnpm tokens:generate`);
+    assert.equal(readFileSync(join(GENERATED, 'lantern', path), 'utf8'), content, `${path} is stale, run pnpm tokens:generate`);
   }
 });
 
@@ -130,5 +132,5 @@ test('reduced motion zeroes web durations', () => {
 });
 
 test('generation is deterministic', () => {
-  assert.deepEqual(generateAll(loadModel()), files);
+  assert.deepEqual(generateAll(buildModel(raw())), files);
 });
