@@ -34,6 +34,8 @@ const mockPlayer = {
   readyState: jest.fn(() => 4),
   hasStarted: jest.fn(() => false),
   el: jest.fn(() => null),
+  // Native playback by default; a `vhs` handle means MSE (Video.js HTTP Streaming)
+  tech: jest.fn((): { vhs?: object } | undefined => undefined),
 };
 
 jest.mock('@/lib/video/videojs-setup', () => ({
@@ -164,6 +166,7 @@ describe('CustomVideoPlayer resume (#242)', () => {
     });
     mockPlayer.hasStarted.mockReturnValue(false);
     mockPlayer.readyState.mockReturnValue(4);
+    mockPlayer.tech.mockReturnValue(undefined);
     mockCreateVideoPlayer.mockReturnValue(mockPlayer);
     mockVideoAnalytics.mockImplementation(() => ({
       trackReady: mockTrackReady, trackPlay: mockTrackPlay, trackPause: mockTrackPause,
@@ -219,7 +222,7 @@ describe('CustomVideoPlayer resume (#242)', () => {
     expect(screen.getByTestId('player-resume-announcement')).toHaveTextContent('الاستئناف من 3:42');
   });
 
-  it('waits for metadata before seeking', async () => {
+  it('natively, waits for metadata before seeking', async () => {
     mockPlayer.readyState.mockReturnValue(0);
     renderWith(progress(222));
     await act(async () => undefined);
@@ -228,6 +231,28 @@ describe('CustomVideoPlayer resume (#242)', () => {
     const onMeta = mockPlayer.one.mock.calls.filter(([event]) => event === 'loadedmetadata').pop()?.[1];
     expect(onMeta).toBeDefined();
     act(() => onMeta());
+    expect(mockPlayer.currentTime).toHaveBeenCalledWith(222);
+    expect(startOver()).toBeInTheDocument();
+  });
+
+  // iOS buffers no frame before the first play, so native playback seeks on metadata alone
+  it('natively, seeks as soon as metadata is known', async () => {
+    mockPlayer.readyState.mockReturnValue(1);
+    renderWith(progress(222));
+    await act(async () => undefined);
+    expect(mockPlayer.currentTime).toHaveBeenCalledWith(222);
+  });
+
+  // WebKitGTK's MSE fails a seek made while nothing is buffered ("Failed to push buffer")
+  it('through MSE, waits for the first buffered frame before seeking', async () => {
+    mockPlayer.tech.mockReturnValue({ vhs: {} });
+    mockPlayer.readyState.mockReturnValue(1);
+    renderWith(progress(222));
+    await act(async () => undefined);
+    expect(mockPlayer.currentTime).not.toHaveBeenCalledWith(222);
+    const onData = mockPlayer.one.mock.calls.filter(([event]) => event === 'loadeddata').pop()?.[1];
+    expect(onData).toBeDefined();
+    act(() => onData());
     expect(mockPlayer.currentTime).toHaveBeenCalledWith(222);
     expect(startOver()).toBeInTheDocument();
   });
