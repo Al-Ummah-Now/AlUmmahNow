@@ -13,5 +13,5 @@ const FONTS = {
 const pick = FONTS[process.env.ACTIVE_THEME];
 if (pick) {
   const faces = pick.files.map(([f, w, n]) => `@font-face{font-family:'${f}';font-weight:${w};font-display:swap;src:url('/fonts/${n}-normal.woff2') format('woff2')}`).join('');
-  writeFileSync(new URL('active.css', here), `${css}\n${faces}\nhtml body,html body *{font-family:'${pick.latin}','${pick.arabic}',system-ui,sans-serif}\nhtml[lang=ar] body,html[lang=ar] body *,[dir=rtl],[dir=rtl] *{font-family:'${pick.arabic}','${pick.latin}',system-ui,sans-serif}\n.video-js .vjs-icon-placeholder,.video-js [class*=vjs-icon],.fa,.fas,.far,.fab,.fa-solid,.fa-regular,[class*=fa-]{font-family:revert-layer}\n`);
+  writeFileSync(new URL('active.css', here), `${css}\n${faces}\nhtml body,html body button,html body input,html body textarea,html body select,html body .font-inter{font-family:'${pick.latin}','${pick.arabic}',system-ui,sans-serif}\nhtml[lang=ar] body,html[lang=ar] body button,html[lang=ar] body input,html[lang=ar] body textarea,html[lang=ar] body select,html[lang=ar] body .font-inter{font-family:'${pick.arabic}','${pick.latin}',system-ui,sans-serif}\n`);
 }

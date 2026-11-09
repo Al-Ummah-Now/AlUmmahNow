@@ -14,6 +14,7 @@ export function DemoBanner() {
       <strong>Theme demo, QA data</strong>
       <span>Theme: {THEME}</span>
       <Link href={`/${lang}/demo/sign-in`}>Sign-in page</Link>
+      <DemoBar />
     </div>
   );
 }
@@ -38,7 +39,7 @@ export function DemoBar() {
         <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>Demo options</button>
       </div>
       {open && (
-        <>
+        <div className="demo-panel">
           <div className="row">
             <strong>Mode</strong>
             <button type="button" aria-pressed={resolvedTheme !== 'dark'} onClick={() => setTheme('light')}>Light</button>
@@ -50,7 +51,7 @@ export function DemoBar() {
               <button key={v} type="button" aria-pressed={opt === v} onClick={() => choose(v)}>{l}</button>
             ))}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
