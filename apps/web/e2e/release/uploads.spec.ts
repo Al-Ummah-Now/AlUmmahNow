@@ -12,6 +12,10 @@ import { test, expect } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 
+// This file signs users in through the auth server: its traces would hold the
+// typed password and email code (fillSecret args, form POST bodies). Trace off.
+test.use({ trace: 'off' });
+
 const FIXTURES = path.join(__dirname, '..', 'test-fixtures');
 const IMAGE = path.join(FIXTURES, 'e2e-thumbnail.jpg');
 const VIDEO = path.join(FIXTURES, 'e2e-sample.mp4');

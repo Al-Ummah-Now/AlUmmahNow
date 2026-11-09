@@ -3,6 +3,7 @@
  * sink user through the real UI and OAuth round trip; nothing is seeded.
  */
 import { expect, type Page } from '@playwright/test';
+import { fillSecret } from './secret-fill';
 import { readSinkCode } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 
@@ -54,11 +55,11 @@ export async function completeRegistration(page: Page, email: string): Promise<v
   // By href: the link text is Arabic when the auth pages follow the site language (#293).
   await page.click('a[href*="register"]');
   await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', TEST_PASSWORD);
-  await page.fill('input[name="repeat"]', TEST_PASSWORD);
+  await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
+  await fillSecret(page.locator('input[name="repeat"]'), TEST_PASSWORD);
   await page.click('button[data-component="button"]');
   await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20000 });
-  await page.fill('input[name="code"]', await readSinkCode(email));
+  await fillSecret(page.locator('input[name="code"]'), await readSinkCode(email));
   await page.click('button[data-component="button"]');
 }
 
@@ -86,7 +87,7 @@ export async function signInAgain(page: Page, email: string, locale: Locale = 'e
   await page.context().clearCookies();
   await startSignIn(page, locale);
   await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', TEST_PASSWORD);
+  await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
   await page.click('button[data-component="button"]');
   await expectSignedIn(page, locale);
   return { email, ...(await webAccessToken(page)) };

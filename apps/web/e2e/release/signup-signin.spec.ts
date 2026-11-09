@@ -9,6 +9,11 @@
 import { test, expect } from '@playwright/test';
 import { sinkEmail, TEST_PASSWORD } from './targets';
 import { completeRegistration, expectNoErrorHop, expectSignedIn, recordNavigations, startSignIn } from './web-session';
+import { fillSecret } from './secret-fill';
+
+// This file signs users in through the auth server: its traces would hold the
+// typed password and email code (fillSecret args, form POST bodies). Trace off.
+test.use({ trace: 'off' });
 
 test.describe('Release R1: web sign-up and sign-in', () => {
   for (const locale of ['en', 'ar'] as const) {
@@ -25,7 +30,7 @@ test.describe('Release R1: web sign-up and sign-in', () => {
       await context.clearCookies();
       await startSignIn(page, locale);
       await page.fill('input[name="email"]', email);
-      await page.fill('input[name="password"]', TEST_PASSWORD);
+      await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
       await page.click('button[data-component="button"]');
       await expectSignedIn(page, locale);
       expect(page.url()).not.toContain('/auth/error');

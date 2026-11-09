@@ -13,6 +13,10 @@ import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, expectNoErrorHop, signUpOnWeb } from './web-session';
 import { expectProfileSignedOut, signInToProfileSilently } from './profile-app';
 
+// This file signs users in through the auth server: its traces would hold the
+// typed password and email code (fillSecret args, form POST bodies). Trace off.
+test.use({ trace: 'off' });
+
 /** The web app's same-origin token endpoint: 200 with a token only while signed in. */
 async function webSignedIn(page: Page): Promise<boolean> {
   if (new URL(page.url()).origin !== target().web) await page.goto(`${target().web}/en`);

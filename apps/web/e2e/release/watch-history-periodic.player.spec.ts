@@ -13,6 +13,10 @@ import type { Page } from '@playwright/test';
 import { findPlayableVideo, HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, RESUME_MIN_VIDEO_SECONDS, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 
+// This file signs users in through the auth server: its traces would hold the
+// typed password and email code (fillSecret args, form POST bodies). Trace off.
+test.use({ trace: 'off' });
+
 /** Saved resume position for the user, 0 when nothing is stored. */
 async function savedProgress(user: WebUser, videoId: string): Promise<number> {
   const res = await apiFetch(user, `/api/watch-history/${videoId}/progress`);

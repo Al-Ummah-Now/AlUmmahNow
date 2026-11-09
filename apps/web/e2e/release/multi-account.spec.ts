@@ -21,6 +21,10 @@ import { test, expect, type Page } from '@playwright/test';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, expectNoErrorHop, recordNavigations, signUpOnWeb, webAccessToken } from './web-session';
 
+// This file signs users in through the auth server: its traces would hold the
+// typed password and email code (fillSecret args, form POST bodies). Trace off.
+test.use({ trace: 'off' });
+
 const BROWSER_COOKIE_LIMIT = 4096;
 
 /** Opens the header's account menu (retried until the header has hydrated). */
