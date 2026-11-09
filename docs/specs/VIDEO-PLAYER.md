@@ -183,7 +183,7 @@ Built to the theme-demo design agent's spec (from the owner's review of the prot
 shows.
 
 **Layout.** A centred block at most 640px wide. A muted "Up next" (13px, regular) sits 8px above the
-card, on the text column's start edge. The card has two columns: the thumbnail (42%, 16:9) and a text
+card, on the text column's start edge. The card has two columns: the thumbnail (36%, 16:9) and a text
 column of the same height. The title (16px semibold, two lines at most) meets the thumbnail's top, the
 channel (13px, muted) sits 4px below it, and the buttons meet the thumbnail's bottom.
 
@@ -274,7 +274,7 @@ Members:
 |---|---|
 | Settings menu | As above |
 | Progress tooltip | Replaces Video.js's time tooltip and the chapter markers' tips. The chapter title (when the video has chapters) over the time, in the `tip` colours; centred on the pointer 10px above the progress bar, kept 4px inside the frame's width, following the pointer while scrubbing; live streams show the distance behind the edge (`-0:42`). It ignores the pointer |
-| Keyboard shortcuts | A centred card, at most 760 by 680px, in the menu surface with a 16px radius: title and description with a 40px close X; then the groups in two columns (one under 680px wide) that scroll inside the card. Each row is one compact line, at least 32px, of label and key chips: 24px chips with a hairline edge, one chip per key, `+` between the keys of a combination ("Shift + Tab"), alternatives side by side. It closes with the X or Escape only (no footer button, the scrim does not close it); focus starts on the X, is trapped, and returns to the opener |
+| Keyboard shortcuts | A centred card, at most 840 by 680px, in the menu surface with a 16px radius: title and description with a 40px close X; then the groups in two columns (one under 680px wide) that scroll inside the card. Each row is one compact line, at least 32px, of label and key chips: 24px chips with a hairline edge, one chip per key, `+` between the keys of a combination ("Shift + Tab"), alternatives side by side. It closes with the X or Escape only (no footer button, the scrim does not close it); focus starts on the X, is trapped, and returns to the opener |
 | Caption style | Video.js's text track settings dialog, moved into a layer on `beforemodalopen` and back on `modalclose`, restyled in the menu surface (at most 640px wide). Video.js only moves focus in when it was inside the player and listens for Escape on the dialog itself, so the layer focuses the dialog on open and returns focus to the gear on close |
 
 Firefox draws its own Picture-in-Picture toggle on the video's edge and takes presses there before the

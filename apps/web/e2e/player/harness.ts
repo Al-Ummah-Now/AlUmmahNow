@@ -99,8 +99,38 @@ function themeCss(theme: string): string {
   return fs.readFileSync(path.join(THEMES_CSS, `${theme}.css`), 'utf8').replace(/:root\s*\{/g, ':root:root {');
 }
 
+/**
+ * next dev reloads open pages when another worker's request compiles a new entry, or when its hot
+ * reload socket reconnects to a changed build. The page needs the socket's first sync to finish
+ * loading; after that the specs want no hot reload, so later build messages never reach the page.
+ */
+const DEV_RELOAD_ACTIONS = new Set(['building', 'built', 'reloadPage', 'serverComponentChanges']);
+
+async function keepDevBuildStill(page: Page): Promise<void> {
+  let synced = false;
+  await page.routeWebSocket(/\/_next\/webpack-hmr/, (ws) => {
+    const server = ws.connectToServer();
+    server.onMessage((message) => {
+      let action: unknown;
+      try {
+        action = typeof message === 'string' ? (JSON.parse(message) as { action?: unknown }).action : undefined;
+      } catch {
+        action = undefined;
+      }
+      if (action === 'sync') {
+        if (synced) return;
+        synced = true;
+      } else if (typeof action === 'string' && DEV_RELOAD_ACTIONS.has(action)) {
+        return;
+      }
+      ws.send(message);
+    });
+  });
+}
+
 export async function openHarness(page: Page, opts: HarnessOptions = {}): Promise<Locator> {
   await routeFixtures(page);
+  await keepDevBuildStill(page);
   // A recorded consent choice keeps the consent banner out of the frame (lib/consent/consent-cookie.ts)
   const origin = new URL(process.env.PLAYER_BASE_URL || `http://localhost:${process.env.PLAYER_PORT || 3101}`).origin;
   await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: origin }]);

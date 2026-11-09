@@ -502,6 +502,20 @@
   color: var(--fanous-player-icon);
 }
 
+/* Trim the figures' line box to cap height and baseline so the centred box centres the digits in
+   any font: the untrimmed box puts them where the font's ascent and descent fall (1.4px high in
+   DejaVu Sans). The rounded figures overshoot the baseline more than the cap line, so their ink
+   sits a little low in the trimmed box: lift them half a pixel, as the countdown does. Browsers
+   without text-box keep the even 16px line box above */
+@supports (text-box: trim-both cap alphabetic) {
+  .video-js.vjs-fanous .vjs-current-time-display,
+  .video-js.vjs-fanous .vjs-duration-display {
+    position: relative;
+    top: -0.5px;
+    text-box: trim-both cap alphabetic;
+  }
+}
+
 .video-js.vjs-fanous .vjs-time-control.vjs-current-time {
   padding-inline-start: 8px;
 }
@@ -511,11 +525,25 @@
   color: var(--fanous-player-dim);
 }
 
+/* The slash is drawn, not set: a font's slash runs from above the cap line to below the baseline by
+   its own design (1.7px high in DejaVu Sans in Chrome, 1.1px low in Firefox), so no nudge centres
+   it in every font. The glyph stays, transparent, for its width; a hairline at the slash's slant
+   is centred on the row in its place */
 .video-js.vjs-fanous .vjs-time-control.vjs-time-divider > div {
-  display: inline;
-  /* The slash runs below the baseline, so its ink sits about 1px under the digits' centre line */
   position: relative;
-  top: -1px;
+  color: transparent;
+}
+
+.video-js.vjs-fanous .vjs-time-control.vjs-time-divider > div::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.5px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--fanous-player-dim);
+  transform: translate(-50%, -50%) rotate(18deg);
 }
 
 .video-js.vjs-fanous .vjs-time-control.vjs-duration {
@@ -825,7 +853,9 @@
 .vjs-fanous-layer .vjs-fanous-dialog {
   display: flex;
   flex-direction: column;
-  width: min(760px, 100%);
+  /* 840px keeps the longest row ("Move between player controls" and three chips) on one line in
+     wide fallback fonts */
+  width: min(840px, 100%);
   max-height: min(680px, 100%);
   overflow: hidden;
   border-radius: 16px;
@@ -1241,7 +1271,9 @@
 .video-js.vjs-fanous .vjs-fanous-next-card {
   --vjs-fanous-next-gap: 16px;
   display: grid;
-  grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+  /* The text column holds the three labelled buttons on one line: about 380px in wide fallback
+     fonts (DejaVu Sans on Linux), which 64% of the 640px block leaves room for */
+  grid-template-columns: minmax(0, 36fr) minmax(0, 64fr);
   grid-template-rows: auto auto;
   grid-template-areas: ". kicker" "thumb text";
   column-gap: var(--vjs-fanous-next-gap);

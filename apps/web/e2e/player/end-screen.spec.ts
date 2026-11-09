@@ -188,7 +188,10 @@ for (const dpr of [1, 2]) {
         await freeze(page);
         const ring = await layoutBox(end.getByTestId('player-next-ring'));
         const digits = await inkBox(page, count(end), 'self', 2);
-        near(digits.cx, ring.cx, 'seconds centred in the ring');
+        // Across: the figure's box on the ring's centre; its ink may sit up to half a pixel more
+        // to one side, by the font's own side bearings (DejaVu Sans's figures are not symmetric)
+        near((await layoutBox(count(end))).cx, ring.cx, 'seconds box centred in the ring');
+        expect(Math.abs(digits.cx - ring.cx), `seconds ink across the ring: ${digits.cx.toFixed(2)} vs ${ring.cx.toFixed(2)}`).toBeLessThanOrEqual(1.5);
         near(digits.cy, ring.cy, 'seconds centred in the ring (vertical)');
         await checkLayout(page, end, dir, 'wide');
       });
