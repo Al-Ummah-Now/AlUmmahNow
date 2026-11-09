@@ -29,7 +29,7 @@
 
   // Daily notification retention sweep (90 days)
   "triggers": {
-    "crons": ["41 3 * * *"]
+    "crons": ["41 3 * * *", "17 * * * *"]
   },
 
   "r2_buckets": [

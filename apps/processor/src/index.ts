@@ -7,6 +7,7 @@ import { purgeExpiredModerationData } from './moderation/store';
 import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
 import { listDeadLetters, purgeExpiredDeadLetters, replayDeadLetter } from './dlq/store';
 import { getApiKey } from './lib/websocket-notify';
+import { importLegacyRollups } from './lib/analytics-rollup';
 
 interface QueueMessage<T> {
   /** Queue message id (Cloudflare Queues). */
@@ -141,6 +142,30 @@ async function checkDLQHealth(_env: QueueEnvironment): Promise<{ status: string;
 /**
  * Daily cron (wrangler `triggers.crons`): 90-day notification retention (Story 29.10).
  */
+/** Hourly: move legacy R2 rollup documents into the D1 counters (see lib/analytics-rollup.ts). */
+export const ROLLUP_IMPORT_CRON = '17 * * * *';
+
+export async function runRollupImport(env: QueueEnvironment, now = Date.now()) {
+  const logger = createLogger('processor', {
+    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+    forceHttpLogging: true,
+  });
+  if (!env.NOTIFICATIONS_DB) {
+    logger.warn('[Rollups] NOTIFICATIONS_DB not bound; legacy rollup import skipped');
+    return null;
+  }
+  try {
+    const result = await importLegacyRollups(env.MESSAGES_BUCKET, env.NOTIFICATIONS_DB, { now });
+    if (result.imported || result.alreadyImported || result.failed || result.more) {
+      logger.info('[Rollups] Legacy rollup documents imported', result);
+    }
+    return result;
+  } catch (error) {
+    logger.error('[Rollups] Legacy rollup import failed', error);
+    return null;
+  }
+}
+
 export async function runScheduled(env: QueueEnvironment, now = Date.now()): Promise<number> {
   const logger = createLogger('processor', {
     logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
@@ -173,7 +198,11 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
 }
 
 export default {
-  async scheduled(_controller: unknown, env: QueueEnvironment, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {
+  async scheduled(controller: { cron?: string } | undefined, env: QueueEnvironment, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {
+    if (controller?.cron === ROLLUP_IMPORT_CRON) {
+      ctx.waitUntil(runRollupImport(env));
+      return;
+    }
     ctx.waitUntil(runScheduled(env));
   },
 
@@ -193,7 +222,8 @@ export default {
       return;
     }
 
-    const processor = new MessageProcessor(logger);
+    // One processor per batch: it collects the batch's analytics increments (flushed below)
+    const processor = new MessageProcessor(logger, undefined, { batchCounters: true });
 
     logger.info(`Processing batch of ${batch.messages.length} messages`);
 
@@ -235,6 +265,9 @@ export default {
         }
       })
     );
+
+    // One D1 transaction for the whole batch's analytics increments
+    await processor.flushCounters(env);
 
     // Log summary of processing results
     const successful = results.filter((r: PromiseSettledResult<unknown>) => r.status === 'fulfilled').length;

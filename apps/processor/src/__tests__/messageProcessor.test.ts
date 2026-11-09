@@ -1,6 +1,7 @@
 import { MessageProcessor } from '../messageProcessor';
 import { createLogger } from '@al-ummah/logger';
 import { AlUmmahMessage, MessageType, QueueEnvironment } from '../types';
+import { createSqliteD1 } from './sqlite-d1';
 
 describe('MessageProcessor', () => {
   let processor: MessageProcessor;
@@ -250,21 +251,36 @@ describe('MessageProcessor', () => {
       expect(result.success).toBe(true);
     });
 
-    it('consumes VideoWatchTime and adds the seconds to the video rollup (#235)', async () => {
+    it('consumes VideoWatchTime and adds the seconds to the video counters (#235)', async () => {
+      const db = createSqliteD1();
       const message: AlUmmahMessage = {
         id: 'wt-1',
         type: MessageType.VideoWatchTime,
         timestamp: Date.now(),
         payload: { videoId: 'v1', videoChannelId: null, seconds: 20, sessionId: 's-12345678', timestamp: '2026-11-08T10:00:00.000Z' },
       } as AlUmmahMessage;
-      (mockEnv.MESSAGES_BUCKET as unknown as { get: jest.Mock }).get = jest.fn(async () => null);
-      const result = await processor.processMessage(message, mockEnv);
+      const result = await processor.processMessage(message, { ...mockEnv, NOTIFICATIONS_DB: db });
       expect(result.success).toBe(true);
-      expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
-        'analytics/rollups/video/v1/2026-11.json',
-        expect.stringContaining('"watchTime":20'),
-        expect.anything()
-      );
+      expect(db.raw.prepare("SELECT value FROM analytics_daily WHERE entity_id = 'v1' AND metric = 'watch_time' AND day = '2026-11-08'").get()).toEqual({ value: 20 });
+    });
+
+    it('in batch mode writes the analytics of all messages in one D1 transaction', async () => {
+      const db = createSqliteD1();
+      const batchSpy = jest.spyOn(db, 'batch');
+      const batched = new MessageProcessor(createLogger('test'), undefined, { batchCounters: true });
+      const env = { ...mockEnv, NOTIFICATIONS_DB: db };
+      for (let i = 0; i < 10; i++) {
+        await batched.processMessage({
+          id: `view-${i}`,
+          type: MessageType.VideoView,
+          timestamp: Date.now(),
+          payload: { videoId: 'v1', videoChannelId: 'c1', trackedView: true, timestamp: '2026-11-08T10:00:00.000Z' },
+        } as AlUmmahMessage, env);
+      }
+      expect(batchSpy).not.toHaveBeenCalled();
+      await batched.flushCounters(env);
+      expect(batchSpy).toHaveBeenCalledTimes(1);
+      expect(db.raw.prepare("SELECT SUM(value) AS n FROM analytics_daily WHERE metric = 'views'").get()).toEqual({ n: 20 });
     });
 
     it('rejects the legacy { type: "WatchHistory", data } shape (why history events never landed)', async () => {

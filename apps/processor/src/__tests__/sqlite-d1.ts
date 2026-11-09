@@ -30,7 +30,10 @@ export function createSqliteD1(migrationsDir: string = MIGRATIONS_DIR): D1Databa
 
   const prepare = (sql: string): D1PreparedStatement => {
     let params: unknown[] = [];
-    const statement: D1PreparedStatement = {
+    const statement: D1PreparedStatement & { runSync(): void } = {
+      runSync: () => {
+        raw.prepare(sql).run(...params);
+      },
       bind: (...values: unknown[]) => {
         params = values;
         return statement;
@@ -52,10 +55,17 @@ export function createSqliteD1(migrationsDir: string = MIGRATIONS_DIR): D1Databa
   return {
     raw,
     prepare,
+    // Like D1: a batch is one transaction (all or nothing) and batches never interleave
     batch: async <T>(statements: D1PreparedStatement[]) => {
-      const results = [];
-      for (const s of statements) results.push(await s.run());
-      return results as never as import('../types').D1Result<T>[];
+      raw.exec('BEGIN');
+      try {
+        for (const s of statements) (s as unknown as { runSync(): void }).runSync();
+        raw.exec('COMMIT');
+      } catch (error) {
+        raw.exec('ROLLBACK');
+        throw error;
+      }
+      return statements.map(() => ({ success: true, meta: {} })) as never as import('../types').D1Result<T>[];
     },
     exec: async (sql: string) => {
       raw.exec(sql);

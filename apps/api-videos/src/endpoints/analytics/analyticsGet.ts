@@ -166,7 +166,7 @@ export class AnalyticsGet extends AuthenticatedRoute {
 			videos = [video];
 			// Subscribers belong to channels, not videos
 			channels = [];
-			rollups = await loadRollups(c.env.analytics_rollups, 'video', [video.id], spanning);
+			rollups = await loadRollups(c.env, 'video', [video.id], spanning);
 		} else {
 			if (entityType === 'channel' && entityId) {
 				const match = ownedChannels.find(ch => ch.id === entityId);
@@ -176,7 +176,7 @@ export class AnalyticsGet extends AuthenticatedRoute {
 			videos = channels.length
 				? await loadOwnedVideos(c.env.videos, userId, new Set(channels.map(ch => ch.id)), undefined, lookup)
 				: [];
-			rollups = await loadRollups(c.env.analytics_rollups, 'channel', channels.map(ch => ch.id), spanning);
+			rollups = await loadRollups(c.env, 'channel', channels.map(ch => ch.id), spanning);
 		}
 
 		const currentSeries = buildDailySeries(range, videos, channels, rollups);
