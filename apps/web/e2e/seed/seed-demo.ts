@@ -941,7 +941,8 @@ async function main(): Promise<void> {
   const demoSet = {
     channels: [...channels.values()].map((c) => c.id),
     // manifest.keep is only checked for playback: those uploads are never listed in the demo
-    videos: seeded.map((s) => s.video.id),
+    // The unplayable video is for reviewing the error state by direct link; it is never listed
+    videos: seeded.filter((s) => s.slug !== manifest.unplayable.slug).map((s) => s.video.id),
     shorts: seeded.filter((s) => shorts.has(s.slug)).map((s) => s.video.id),
     extraVideos: [],
     playlists: [...playlists.values()],
