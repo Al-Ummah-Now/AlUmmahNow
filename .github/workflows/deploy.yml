@@ -73,6 +73,7 @@ jobs:
         run: |
           pnpm test:tokens
           pnpm check:tokens
+          pnpm check:theme-colors
 
       - name: Wrangler config check
         run: pnpm check:config
