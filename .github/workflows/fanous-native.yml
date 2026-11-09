@@ -1,0 +1,56 @@
+# Fanous tokens on every PR that touches them, whatever its base, and a compile of each native registry.
+# deploy.yml runs the same token checks for PRs into main; this also covers PRs stacked on a feature branch.
+name: Fanous native registry
+on:
+  pull_request:
+    paths: ['packages/fanous-tokens/**', '.github/workflows/fanous-native.yml']
+  push:
+    branches: [main]
+    paths: ['packages/fanous-tokens/**']
+permissions: {contents: read}
+concurrency:
+  group: fanous-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tokens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with: {node-version: '22'}
+      - name: Tests, contrast and generated outputs are current
+        working-directory: packages/fanous-tokens
+        run: |
+          node --experimental-strip-types --no-warnings --test test/*.test.ts
+          node --experimental-strip-types --no-warnings src/cli.ts --check
+  swift:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcrun swiftc -typecheck -swift-version 6 packages/fanous-tokens/generated/native/swift/FanousThemes.swift
+  kotlin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: 21}
+      - name: Compile with kotlinc
+        run: |
+          curl -fsSL -o /tmp/kotlinc.zip https://github.com/JetBrains/kotlin/releases/download/v2.2.21/kotlin-compiler-2.2.21.zip
+          unzip -q /tmp/kotlinc.zip -d /tmp
+          /tmp/kotlinc/bin/kotlinc -Werror packages/fanous-tokens/generated/native/kotlin/net/alummahnow/fanous/FanousThemes.kt -d /tmp/out
+  csharp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: {dotnet-version: '9.0.x'}
+      - name: Build for netstandard2.0 with warnings as errors
+        run: |
+          mkdir -p /tmp/cs && cp packages/fanous-tokens/generated/native/csharp/FanousThemes.cs /tmp/cs/
+          printf '%s' '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>netstandard2.0</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup></Project>' > /tmp/cs/cs.csproj
+          dotnet build /tmp/cs/cs.csproj

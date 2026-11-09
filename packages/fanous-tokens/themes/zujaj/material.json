@@ -1,0 +1,42 @@
+{
+  "$description": "zujaj material: the depth of each surface, as CSS values over the theme's colours.",
+  "radius": {
+    "sm": "3px",
+    "md": "6px",
+    "lg": "8px",
+    "xl": "12px",
+    "pill": "8px"
+  },
+  "blur": "blur(18px) saturate(1.35)",
+  "material": {
+    "glow": "color-mix(in srgb,var(--fanous-color-motif) 40%,transparent)",
+    "page": "radial-gradient(70% 70% at 100% 0%,color-mix(in srgb,var(--fanous-color-motif) 26%,transparent),transparent 70%),radial-gradient(60% 60% at 0% 100%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),transparent 70%),linear-gradient(160deg,var(--fanous-color-hero-start),var(--fanous-color-background))",
+    "header": "linear-gradient(180deg,color-mix(in srgb,var(--fanous-c-nav-bg) 92%,white 8%),color-mix(in srgb,var(--fanous-c-nav-bg) 86%,transparent))",
+    "headerEdge": "inset 0 -1px 0 color-mix(in srgb,white 18%,transparent),0 8px 28px -18px rgb(5 40 48/.7)",
+    "rail": "color-mix(in srgb,var(--fanous-color-surface) 76%,transparent)",
+    "railEdge": "inset -1px 0 0 color-mix(in srgb,white 22%,transparent)",
+    "card": "linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 46%),color-mix(in srgb,var(--fanous-color-surface) 84%,transparent)",
+    "border": "linear-gradient(transparent,transparent)",
+    "cardEdge": "inset 0 0 0 1px color-mix(in srgb,white 26%,transparent),inset 0 1px 0 color-mix(in srgb,white 46%,transparent),0 18px 36px -24px rgb(5 40 48/.6)",
+    "raised": "linear-gradient(135deg,color-mix(in srgb,white 14%,transparent),transparent 50%),color-mix(in srgb,var(--fanous-color-surface-raised) 92%,transparent)",
+    "raisedEdge": "inset 0 0 0 1px color-mix(in srgb,white 30%,transparent),0 24px 44px -18px rgb(5 40 48/.6)",
+    "control": "color-mix(in srgb,var(--fanous-color-background) 72%,transparent)",
+    "controlEdge": "inset 0 0 0 1px color-mix(in srgb,white 14%,transparent)",
+    "primary": "linear-gradient(180deg,color-mix(in srgb,var(--fanous-color-primary-hover) 62%,var(--fanous-color-primary)),var(--fanous-color-primary))",
+    "primaryHover": "var(--fanous-color-primary-hover)",
+    "primaryPress": "var(--fanous-color-primary-pressed)",
+    "primaryEdge": "inset 0 1px 0 color-mix(in srgb,white 44%,transparent),inset 0 0 0 1px color-mix(in srgb,white 14%,transparent)",
+    "active": "linear-gradient(135deg,color-mix(in srgb,white 18%,transparent),color-mix(in srgb,var(--fanous-color-motif) 22%,transparent))",
+    "activeEdge": "inset 0 0 0 1px color-mix(in srgb,white 28%,transparent)",
+    "hover": "color-mix(in srgb,var(--fanous-color-motif) 16%,transparent)",
+    "hero": "linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 42%),linear-gradient(120deg,var(--fanous-color-hero-start),var(--fanous-color-surface-raised))",
+    "thumbEdge": "0 0 0 1px color-mix(in srgb,white 42%,transparent),0 0 26px -6px var(--m-glow)",
+    "sel": "color-mix(in srgb,white 16%,transparent)",
+    "selEdge": "inset 0 0 0 1px color-mix(in srgb,white 24%,transparent)",
+    "selBar": "var(--fanous-color-link)",
+    "selGlow": "none",
+    "player": "0 0 0 1px color-mix(in srgb,white 34%,transparent)",
+    "playerInner": "inset 0 0 0 1px color-mix(in srgb,white 16%,transparent)",
+    "playerRing": "inset 0 0 0 1px color-mix(in srgb,white 42%,transparent),inset 0 1px 0 1px color-mix(in srgb,white 18%,transparent)"
+  }
+}
