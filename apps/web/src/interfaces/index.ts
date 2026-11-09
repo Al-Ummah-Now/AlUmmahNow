@@ -58,6 +58,7 @@ export type ResponseError = {
 
 export interface VideoInfo {
     id: string;
+    duration?: number;
     title: string;
     description: string | null;
     channel: string;

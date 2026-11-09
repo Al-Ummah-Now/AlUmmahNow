@@ -33,6 +33,7 @@ export function toVideoInfo(video: ApiVideo): VideoInfo {
     channelId: video.channelId ?? null,
     channelName: video.channelName ?? '',
     thumbnail: video.thumbnailUrl ?? '',
+    duration: (video as { duration?: number }).duration,
     video: video.videoUrl ?? video.playUrl ?? '',
     views: `${video.views || 0}`,
     width: video.width,
