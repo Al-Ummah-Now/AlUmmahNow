@@ -119,10 +119,11 @@ test.describe('Release: single sign-out', () => {
     await completeRegistration(page, sinkEmail('rel-sso-admin'));
     await expect(page).toHaveURL(`${target().adminWeb}/access-denied`, { timeout: 30000 });
 
-    // The shared sign-in also signs the videos site in, without a form
+    // The shared sign-in also signs the videos site in: its probe does it on load, without a form
     const callback = page.waitForResponse((r) => r.url().startsWith(`${target().web}/api/callback`), { timeout: 30000 });
-    await clickWebSignIn(page);
+    await page.goto(`${target().web}/en`);
     await callback;
+    await page.waitForLoadState('load');
     expect(await webSignedIn(page)).toBe(true);
 
     await page.goto(`${target().adminWeb}/access-denied`);
