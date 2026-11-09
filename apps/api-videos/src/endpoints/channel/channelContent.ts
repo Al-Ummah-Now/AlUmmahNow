@@ -21,7 +21,7 @@ const errors = {
  * Checks the caller may see this channel's private content. Until channel roles
  * ship (PR #462) only the owner can; a site role never grants it.
  */
-async function requireContentAccess(c: AppContext, channelId: string, userId: string): Promise<Response | null> {
+export async function requireContentAccess(c: AppContext, channelId: string, userId: string): Promise<Response | null> {
 	type ChannelType = z.infer<typeof BusinessChannel>;
 	const channel = await new R2Repository<ChannelType>(c.env.channels).getObject(channelId);
 	if (!channel || channel.isDeleted) return c.json({ success: false, error: "Channel not found" }, 404);
@@ -29,13 +29,13 @@ async function requireContentAccess(c: AppContext, channelId: string, userId: st
 	return null;
 }
 
-function healRows(c: AppContext, channelId: string): Promise<boolean> {
+export function healRows(c: AppContext, channelId: string): Promise<boolean> {
 	type VideoType = z.infer<typeof BusinessVideo>;
 	const repository = new R2Repository<VideoType>(c.env.videos);
 	return healChannelContentRows(c.env as never, channelId, (id) => repository.getObject(id));
 }
 
-function rebuilding(c: AppContext): Response {
+export function rebuilding(c: AppContext): Response {
 	scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "video");
 	return c.json({ success: false, error: "index_rebuilding" }, 503);
 }
