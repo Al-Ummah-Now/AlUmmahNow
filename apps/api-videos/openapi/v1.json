@@ -30999,7 +30999,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Progress retrieved successfully",
+            "description": "Progress for the video; progress is null when it has never been watched",
             "content": {
               "application/json": {
                 "schema": {
@@ -31009,8 +31009,11 @@
                       "type": "string"
                     },
                     "progress": {
-                      "type": "number",
-                      "description": "Current playback position in seconds"
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "null when the video has never been watched. Current playback position in seconds"
                     },
                     "duration": {
                       "type": "number",
@@ -31031,11 +31034,7 @@
                   },
                   "required": [
                     "videoId",
-                    "progress",
-                    "duration",
-                    "percentageWatched",
-                    "completed",
-                    "lastWatchedAt"
+                    "progress"
                   ]
                 }
               }
@@ -31060,9 +31059,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "No watch progress found for this video"
           },
           "500": {
             "description": "Internal server error"
@@ -31185,9 +31181,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Watch history entry not found"
           },
           "500": {
             "description": "Internal server error"
