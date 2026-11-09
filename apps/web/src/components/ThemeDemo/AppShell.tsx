@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, Search, Settings, ShieldCheck, Sun, Tv, Upload, BookOpen, X, type LucideIcon } from 'lucide-react';
+import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, Search, ShieldCheck, Sun, Tv, BookOpen, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -54,9 +54,7 @@ export function AppShell() {
       { label: c.watchLater, href: `${base}/library/watch-later`, icon: Clock },
       { label: c.liked, href: `${base}/library/liked`, icon: Heart },
     ] },
-    { title: c.create, items: [{ label: t.navigation.upload, href: `${base}/upload`, icon: Upload }] },
     { title: c.more, items: [
-      { label: c.settings, href: `${base}/settings`, icon: Settings },
       { label: t.navigation.privacyAndCookies, href: `${base}/settings/privacy`, icon: ShieldCheck },
       { label: t.communityGuidelines.navLabel, href: `${base}/community-guidelines`, icon: BookOpen },
     ] },
