@@ -8,6 +8,7 @@ import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
 import { listDeadLetters, purgeExpiredDeadLetters, replayDeadLetter } from './dlq/store';
 import { getApiKey } from './lib/websocket-notify';
 import { importLegacyRollups } from './lib/analytics-rollup';
+import { resumeStalledImports } from './lib/post-counters';
 
 interface QueueMessage<T> {
   /** Queue message id (Cloudflare Queues). */
@@ -158,6 +159,13 @@ export async function runRollupImport(env: QueueEnvironment, now = Date.now()) {
     const result = await importLegacyRollups(env.MESSAGES_BUCKET, env.NOTIFICATIONS_DB, { now });
     if (result.imported || result.alreadyImported || result.failed || result.more) {
       logger.info('[Rollups] Legacy rollup documents imported', result);
+    }
+    // Community post likes / votes whose legacy import stalled (lib/post-counters.ts)
+    try {
+      const posts = await resumeStalledImports(env.NOTIFICATIONS_DB, env.community_posts, now);
+      if (posts.resumed) logger.info('[Posts] Stalled legacy post counter imports resumed', posts);
+    } catch (error) {
+      logger.error('[Posts] Resuming legacy post counter imports failed', error);
     }
     return result;
   } catch (error) {

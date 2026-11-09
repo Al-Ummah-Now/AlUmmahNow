@@ -8,6 +8,7 @@ import {
   VoteRecord,
 } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from '../../base';
+import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 
 const querySchema = z.object({
@@ -139,6 +140,9 @@ export class ListCommunityPosts extends OptionalAuthRoute {
         if (!a.pinned && b.pinned) return 1;
         return 0;
       });
+
+      // Like / vote totals live in D1 (the processor no longer writes them into the document)
+      await withPostCounts(c.env.NOTIFICATIONS_DB, posts);
 
       // Attach per-viewer state (liked / poll vote) for authenticated requests
       const viewerId = this.getUserId(c);

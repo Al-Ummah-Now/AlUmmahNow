@@ -7,6 +7,7 @@ import {
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateUpdatePost } from '../../validation/community-posts';
+import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 import Queue, { MessageType } from '../../lib/queue';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
@@ -164,6 +165,8 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         scanInBackground(c, { surface: 'community_post', event: 'edit', subjectId: postId, authorId: userId, channelId: postChannelId, text: communityPostScanText(post) });
       }
 
+      // Like / vote totals live in D1 (the document's may be stale)
+      await withPostCounts(c.env.NOTIFICATIONS_DB, [post]);
       return c.json({ success: true, post });
     } catch (error) {
       logger.error('Error updating community post:', error);

@@ -5,6 +5,7 @@
 --   apps/processor/migrations-notifications/0003_push_devices.sql
 --   apps/processor/migrations-notifications/0004_dead_letters.sql
 --   apps/processor/migrations-notifications/0005_analytics_daily.sql
+--   apps/processor/migrations-notifications/0006_post_interactions.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
@@ -13,6 +14,9 @@ CREATE TABLE dead_letters (id TEXT PRIMARY KEY, message_id TEXT, message_type IN
 CREATE TABLE liked_videos (user_id TEXT NOT NULL, video_id TEXT NOT NULL, liked_at INTEGER NOT NULL, PRIMARY KEY (user_id, video_id));
 CREATE TABLE notification_settings (user_id TEXT NOT NULL, category TEXT NOT NULL, enabled INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, category));
 CREATE TABLE notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, category TEXT NOT NULL, notification_type TEXT NOT NULL, notification_key TEXT NOT NULL, params_json TEXT NOT NULL DEFAULT '{}', action_url TEXT, actor_id TEXT, entity_id TEXT, dedupe_key TEXT, is_read INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, read_at INTEGER);
+CREATE TABLE poll_votes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, option_ids TEXT NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;
+CREATE TABLE post_counter_imports (post_id TEXT NOT NULL, kind TEXT NOT NULL, cursor TEXT, done INTEGER NOT NULL DEFAULT 0, lease_owner TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, kind)) WITHOUT ROWID;
+CREATE TABLE post_likes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, liked INTEGER NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;
 CREATE TABLE push_devices (install_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, provider TEXT NOT NULL CHECK (provider IN ('apns', 'fcm', 'wns', 'webpush')), token TEXT NOT NULL, locale TEXT, app_version TEXT, categories TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE saved_posts (user_id TEXT NOT NULL, post_id TEXT NOT NULL, channel_id TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (user_id, post_id));
 CREATE INDEX idx_channel_subscribers_user ON channel_subscribers(user_id);
@@ -24,6 +28,8 @@ CREATE INDEX idx_notifications_created ON notifications(created_at);
 CREATE UNIQUE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC, id DESC);
 CREATE INDEX idx_notifications_user_unread ON notifications(user_id, is_read);
+CREATE INDEX idx_poll_votes_user ON poll_votes(user_id);
+CREATE INDEX idx_post_likes_user ON post_likes(user_id);
 CREATE UNIQUE INDEX idx_push_devices_token ON push_devices(provider, token);
 CREATE INDEX idx_push_devices_user ON push_devices(user_id, updated_at DESC);
 CREATE INDEX idx_saved_posts_user ON saved_posts(user_id, saved_at DESC, post_id);
