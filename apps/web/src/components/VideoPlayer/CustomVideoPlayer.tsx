@@ -45,8 +45,9 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
+import { isSameMediaUrl } from '@/lib/video/media-url';
 import { VideoAnalytics } from '@/services/analytics/video-analytics';
 import {
   createVideoErrorHandler,
@@ -69,7 +70,11 @@ import { showGestureHintOnce } from '@/lib/video/gesture-hint';
 import { setupAccessibility } from '@/lib/video/accessibility';
 import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
-import { BufferingIndicator } from './LoadingStates';
+import { SettingsMenu } from './SettingsMenu';
+import { ProgressTooltip } from './ProgressTooltip';
+import { EndScreen, MiniPlayerButtons } from './PlayerOverlays';
+import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
+import { applyBuiltInIcons } from '@/lib/video/components';
 import { ViewerCount } from './ViewerCount';
 import { KeyboardHelpModal } from './KeyboardHelpModal';
 import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
@@ -77,7 +82,9 @@ import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
 import { useWatchProgress } from '@/hooks/useWatchProgress';
 import { formatResumeTime, resumePosition, startOverStillRelevant } from '@/lib/video/resume';
+import '@fanous/player-tokens.css';
 import '@/styles/video-player.css';
+import '@/styles/player-skin.css';
 import '@/styles/keyboard-feedback.css';
 import type { Player } from 'video.js';
 import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
@@ -161,8 +168,12 @@ export default function CustomVideoPlayer({
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [isBuffering, setIsBuffering] = useState(false);
-  const [bufferProgress, setBufferProgress] = useState<number>(0);
+  const [ended, setEnded] = useState(false);
+  const [mini, setMini] = useState(false);
+  const [portrait, setPortrait] = useState(false);
+  const miniDismissedRef = useRef(false);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const playerUi = useSyncExternalStore(subscribePlayerUi, getPlayerUi, getPlayerUi);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isKeyboardHelpOpen, setIsKeyboardHelpOpen] = useState(false);
   const touchFeedbackCleanupRef = useRef<(() => void) | null>(null);
@@ -349,7 +360,8 @@ export default function CustomVideoPlayer({
 
   /**
    * Attach subtitle tracks. Previously added remote tracks are removed first so
-   * switching videos (or reloading the track list) never duplicates tracks.
+   * switching videos (or reloading the track list) never duplicates tracks. The
+   * tracks follow this list, not the source, so a source reset keeps them.
    */
   useEffect(() => {
     const player = playerRef.current;
@@ -375,7 +387,9 @@ export default function CustomVideoPlayer({
             default: track.default,
             mode: track.default ? 'showing' : 'disabled',
           },
-          false
+          // This effect removes them itself; left to Video.js they would be dropped whenever the
+          // source is set again (Safari's HLS path sets it twice), losing captions there
+          true
         );
         if (element) addedTextTracksRef.current.push(element);
       } catch (err) {
@@ -521,6 +535,15 @@ export default function CustomVideoPlayer({
 
         // Phase 2.6: Setup fullscreen and PiP
         setupFullscreenPiP(player as ExtendedPlayer);
+        applyBuiltInIcons(player.el());
+
+        // Shorts: a portrait video gets a portrait frame. Safari's native HLS can report no
+        // dimensions at loadedmetadata and fills them in later with the media resize event.
+        const extendedForAspect = player as ExtendedPlayer;
+        const updateAspect = () => setPortrait(extendedForAspect.videoHeight() > extendedForAspect.videoWidth());
+        player.on('loadedmetadata', updateAspect);
+        player.on('resize', updateAspect);
+        if (extendedForAspect.readyState() >= 1) updateAspect();
 
         // Phase 2.3: Setup keyboard shortcuts
         keyboardShortcutsCleanupRef.current = setupKeyboardShortcuts(player as ExtendedPlayer, {
@@ -573,6 +596,7 @@ export default function CustomVideoPlayer({
 
         // Phase 1.5: Basic event tracking
         player.on('play', () => {
+          setEnded(false);
           analyticsRef.current?.trackPlay();
           setCurrentError(null); // Clear error on successful play
           setIsPlaying(true);
@@ -583,7 +607,10 @@ export default function CustomVideoPlayer({
           setIsPlaying(false);
         });
 
+        player.on('seeking', () => setEnded(false));
+        player.on('loadstart', () => setEnded(false));
         player.on('ended', () => {
+          if (!(player as ExtendedPlayer).loop()) setEnded(true);
           analyticsRef.current?.trackComplete();
           setIsPlaying(false);
         });
@@ -694,48 +721,14 @@ export default function CustomVideoPlayer({
         });
 
         // Phase 4.20: Buffering events - track buffer start and end times
+        // Phase 4.20: buffering metrics. The themed Video.js spinner shows the state.
         player.on('waiting', () => {
-          // Video is buffering (waiting for data)
-          setIsBuffering(true);
           analyticsRef.current?.trackBufferStart();
         });
 
         player.on('canplay', () => {
-          // Video can resume playback after buffering
-          setIsBuffering(false);
           // trackBufferEnd() automatically calculates duration since trackBufferStart()
           analyticsRef.current?.trackBufferEnd();
-        });
-
-        player.on('playing', () => {
-          // Video is playing - clear buffering state
-          setIsBuffering(false);
-        });
-
-        // Phase 4.20: Track buffer progress (throttled to 500ms)
-        let lastBufferUpdate = 0;
-        const BUFFER_UPDATE_INTERVAL = 500; // 500ms
-
-        player.on('progress', () => {
-          const now = Date.now();
-          if (now - lastBufferUpdate < BUFFER_UPDATE_INTERVAL) {
-            return;
-          }
-          lastBufferUpdate = now;
-
-          const extPlayer = player as ExtendedPlayer;
-          // Use proper type-safe buffered() method
-          if (typeof extPlayer.buffered === 'function') {
-            const buffered = extPlayer.buffered();
-            const duration = extPlayer.duration ? extPlayer.duration() : 0;
-
-            if (buffered.length > 0 && duration > 0) {
-              // Calculate percentage of video buffered
-              const bufferedEnd = buffered.end(buffered.length - 1);
-              const percentage = (bufferedEnd / duration) * 100;
-              setBufferProgress(Math.min(100, percentage));
-            }
-          }
         });
 
         // Quality change tracking (if quality selector is available)
@@ -797,11 +790,12 @@ export default function CustomVideoPlayer({
     if (!playerRef.current || !videoId) return;
 
     const player = playerRef.current as ExtendedPlayer;
-    const currentSrc = player.currentSrc();
+    // The source Video.js was given (the element reports a blob or an absolute URL instead)
+    const currentSrc = (player as ExtendedPlayer & { currentSource?: () => { src?: string } | undefined }).currentSource?.()?.src || player.currentSrc();
     const newSrc = sources[0]?.src;
 
     // Only update if the source actually changed
-    if (currentSrc && newSrc && currentSrc !== newSrc) {
+    if (currentSrc && newSrc && !isSameMediaUrl(currentSrc, newSrc)) {
       logger.debug(`[CustomVideoPlayer] Video ID changed, updating source to ${videoId}`);
 
       // Reset quartiles for new video
@@ -919,12 +913,65 @@ export default function CustomVideoPlayer({
   }, []);
 
   /**
+   * Whole-pixel frame (docs/specs/VIDEO-PLAYER.md section 3): a 16:9 box often has a fractional
+   * height, which antialiases the bottom edge differently from the top. The frame's height is
+   * set from its width and rounded.
+   */
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || typeof ResizeObserver === 'undefined') return undefined;
+    const fit = () => {
+      const width = frame.getBoundingClientRect().width;
+      if (width > 0) frame.style.height = `${Math.round(width * (portrait ? 16 / 9 : 9 / 16))}px`;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(frame);
+    return () => ro.disconnect();
+  }, [portrait, currentError]);
+
+  /**
+   * Mini player: on pages that offer it, while playing and the frame is almost scrolled away,
+   * the video floats in the end corner. Closing pauses it until the frame is seen again.
+   */
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || !playerUi.miniPlayerAvailable || typeof IntersectionObserver === 'undefined') {
+      setMini(false);
+      return undefined;
+    }
+    const io = new IntersectionObserver(([entry]) => {
+      const away = !entry.isIntersecting || entry.intersectionRatio < 0.15;
+      if (!away) miniDismissedRef.current = false;
+      setMini(away && isPlaying && !miniDismissedRef.current && window.innerWidth >= 640);
+    }, { threshold: [0, 0.15, 0.5] });
+    io.observe(frame);
+    return () => io.disconnect();
+  }, [playerUi.miniPlayerAvailable, isPlaying]);
+
+  const closeMini = useCallback(() => {
+    miniDismissedRef.current = true;
+    setMini(false);
+    playerRef.current?.pause();
+  }, []);
+  const returnFromMini = useCallback(() => {
+    setMini(false);
+    frameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+  const replay = useCallback(() => {
+    setEnded(false);
+    playerRef.current?.currentTime(0);
+    void playerRef.current?.play();
+  }, []);
+
+  /**
    * Render error display if there's an error
    */
   if (currentError) {
     return (
-      <div className={`custom-video-player ${className}`}>
+      <div ref={frameRef} className={`custom-video-player ${className}`}>
         <ErrorDisplay
+          onReport={playerUi.reportProblem ?? undefined}
           error={currentError}
           lang={lang}
           onRetry={currentError.retryable && !isRetrying ? handleRetry : undefined}
@@ -938,8 +985,12 @@ export default function CustomVideoPlayer({
 
   return (
     <div
+      ref={frameRef}
       className={`custom-video-player aspect-video ${className}`}
       dir={dir}
+      data-portrait={portrait || undefined}
+      data-mini={mini || undefined}
+      data-ended={ended || undefined}
     >
       {/* Accessibility: Hidden live region for screen reader announcements */}
       <div
@@ -980,10 +1031,8 @@ export default function CustomVideoPlayer({
           </button>
         )}
 
-        {/* Phase 4.20: Buffering indicator */}
-        {isBuffering && playerReady && (
-          <BufferingIndicator progress={bufferProgress} lang={lang} />
-        )}
+        {ended && <EndScreen upNext={playerUi.upNext} onReplay={replay} t={t} dir={dir === 'rtl' ? 'rtl' : 'ltr'} />}
+        {mini && <MiniPlayerButtons onClose={closeMini} onReturn={returnFromMini} t={t} />}
 
         {/* Real-time viewer count (WebSocket) */}
         {enableWebSocket && playerReady && (
@@ -998,10 +1047,16 @@ export default function CustomVideoPlayer({
         )}
       </div>
 
+      {playerReady && playerRef.current && (
+        <SettingsMenu player={playerRef.current} lang={lang} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
+      )}
+      {playerReady && playerRef.current && <ProgressTooltip player={playerRef.current} dir={dir === 'rtl' ? 'rtl' : 'ltr'} />}
+
       <KeyboardHelpModal
         isOpen={isKeyboardHelpOpen}
         onClose={() => setIsKeyboardHelpOpen(false)}
         lang={lang}
+        playerElement={playerReady ? (playerRef.current?.el?.() as HTMLElement | undefined) : undefined}
       />
     </div>
   );

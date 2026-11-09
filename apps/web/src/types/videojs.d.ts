@@ -63,9 +63,9 @@ declare module 'video.js' {
     playbackRates?: number[];
     html5?: {
       nativeTextTracks?: boolean;
-      hls?: {
+      /** Video.js HTTP Streaming options (VHS 3 reads `vhs`; there is no `hls` key) */
+      vhs?: {
         enableLowInitialPlaylist?: boolean;
-        smoothQualityChange?: boolean;
         overrideNative?: boolean;
       };
     };

@@ -122,6 +122,30 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     volume: 'الصوت',
   },
 
+  chrome: {
+    next: 'الفيديو التالي',
+    theatre: 'وضع المسرح',
+    exitTheatre: 'الخروج من وضع المسرح',
+    off: 'إيقاف',
+    back: 'رجوع',
+    audioTrack: 'المسار الصوتي',
+    shortcuts: 'اختصارات لوحة المفاتيح',
+    captionStyle: 'نمط الترجمة',
+    live: 'مباشر',
+    goToLive: 'الانتقال إلى البث المباشر',
+    behind: 'متأخر {time}',
+    upNext: 'التالي',
+    playNow: 'شغّل الآن',
+    watchAgain: 'شاهد مرة أخرى',
+    cancel: 'إلغاء',
+    autoAdvance: 'الفيديو التالي بعد {seconds} ثوانٍ',
+    playTitle: 'شغّل {title}',
+    closeMiniPlayer: 'إغلاق المشغّل المصغّر',
+    backToVideo: 'العودة إلى الفيديو',
+    reportProblem: 'الإبلاغ عن مشكلة',
+    seekValue: '{current} من {total}',
+  },
+
   quality: {
     auto: 'تلقائي',
     high: 'عالية',
@@ -177,7 +201,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
         description: 'تشغيل/إيقاف مؤقت',
       },
       rewind5: {
-        keys: '→',
+        keys: '←',
         description: 'الرجوع ٥ ثوانٍ',
       },
       rewind10: {
@@ -185,7 +209,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
         description: 'الرجوع ١٠ ثوانٍ',
       },
       forward5: {
-        keys: '←',
+        keys: '→',
         description: 'التقديم ٥ ثوانٍ',
       },
       forward10: {
@@ -239,6 +263,18 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
       closeDialog: {
         keys: 'Esc',
         description: 'إغلاق القوائم والنوافذ',
+      },
+      captions: {
+        keys: 'C',
+        description: 'تشغيل الترجمة أو إيقافها',
+      },
+      theatre: {
+        keys: 'T',
+        description: 'وضع المسرح',
+      },
+      next: {
+        keys: 'N',
+        description: 'الفيديو التالي',
       },
     },
     closeButton: 'إغلاق',
