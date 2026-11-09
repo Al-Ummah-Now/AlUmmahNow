@@ -5,6 +5,11 @@
  * This allows environment-specific values without rebuilding.
  */
 
+import { installDemoFetch } from './demo/demo-fetch';
+
+// Prototype only: inert unless NEXT_PUBLIC_DEMO_CONTENT=1 (theme demo builds).
+installDemoFetch();
+
 export interface RuntimeConfig {
   API_URL?: string;
   WEBSOCKET_URL?: string;
