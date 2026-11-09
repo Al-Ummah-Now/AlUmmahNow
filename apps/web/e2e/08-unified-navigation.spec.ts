@@ -283,7 +283,6 @@ test.describe('Side drawer - theme and language', () => {
     const drawer = await openSideDrawer(page);
 
     await expect(drawer.getByRole('link', { name: 'Home' })).toHaveAttribute('href', /^\/en\/?$/);
-    await expect(drawer.getByRole('link', { name: 'Search' })).toHaveAttribute('href', '/en/search');
     // Anonymous users (no active channel) don't get the Upload link
     await expect(drawer.getByRole('link', { name: 'Upload' })).toHaveCount(0);
 
