@@ -424,7 +424,7 @@ export function UnifiedNavigation() {
               </button>
               <button type="button" onClick={() => setView('accounts')} data-testid="nav-switch-account" className={ROW} role="menuitem" aria-haspopup="menu">
                 <Users className={ROW_ICON} aria-hidden="true" />
-                <span className={`${ROW_TEXT} flex-1`}>{t.navigation.switchAccount}</span>
+                <span className={`${ROW_TEXT} flex-1`}>{t.header.switchAccount}</span>
                 <ChevronRight className={`${ROW_ICON} rtl:rotate-180`} aria-hidden="true" />
               </button>
             </div>
@@ -582,8 +582,8 @@ export function UnifiedNavigation() {
             )}
 
             {view === 'accounts' && (
-              <div className="p-2" role="group" aria-label={t.navigation.switchAccount}>
-                {backRow(t.navigation.switchAccount)}
+              <div className="p-2" role="group" aria-label={t.header.switchAccount}>
+                {backRow(t.header.switchAccount)}
                 {accounts.map((account) => {
                   const avatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
                   const name = account.displayName || account.email;
