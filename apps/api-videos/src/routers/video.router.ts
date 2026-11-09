@@ -12,6 +12,7 @@ import { VideosList } from '../endpoints/video/videoList';
 import { VideoSearch } from '../endpoints/video/videoSearch';
 import { VideoView } from '../endpoints/video/videoView';
 import { VideoWatchTime } from '../endpoints/video/videoWatchTime';
+import { VideoRetention } from '../endpoints/video/videoRetention';
 import { VideoUploadStatus } from '../endpoints/video/videoUploadStatus';
 import { VideoThumbnailUpload } from '../endpoints/video/videoThumbnailUpload';
 
@@ -224,6 +225,7 @@ videoRouter.delete('/:id/comments/:cid/dislikes', CommentDislikeDelete);
 // Track video view (public - for analytics)
 videoRouter.post('/:id/view', VideoView);
 videoRouter.post('/:id/watch-time', VideoWatchTime);
+videoRouter.post('/:id/retention', VideoRetention);
 
 // Export as default and named export
 export default videoRouter;

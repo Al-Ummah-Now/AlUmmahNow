@@ -27882,6 +27882,155 @@
         }
       }
     },
+    "/api/v1/videos/{id}/retention": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Report retention buckets",
+        "description": "🔓 **Authentication Optional**: Report the retention buckets one playback session newly reached.",
+        "operationId": "post_VideoRetention",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "buckets": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 19
+                    },
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "description": "Buckets newly reached by this session"
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 128,
+                    "description": "Playback session id (one per player load)"
+                  }
+                },
+                "required": [
+                  "buckets",
+                  "sessionId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Report accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid buckets or session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many reports for this session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{id}/schedule": {
       "get": {
         "tags": [
@@ -29327,6 +29476,30 @@
                       "embed"
                     ],
                     "description": "Playback surface: the watch page (default) or the embed player on another site"
+                  },
+                  "trafficSource": {
+                    "type": "string",
+                    "enum": [
+                      "home",
+                      "search",
+                      "subscriptions",
+                      "channel",
+                      "playlist",
+                      "up_next",
+                      "explore",
+                      "library",
+                      "notification",
+                      "embed",
+                      "external",
+                      "direct",
+                      "unknown"
+                    ],
+                    "description": "Where the view came from (docs/specs/CREATOR-STUDIO.md §8.4)"
+                  },
+                  "referrerHost": {
+                    "type": "string",
+                    "maxLength": 253,
+                    "description": "External only: the host of the referring site"
                   },
                   "embedOrigin": {
                     "type": "string",
