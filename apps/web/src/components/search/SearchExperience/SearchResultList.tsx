@@ -70,6 +70,7 @@ export function SearchResultCard({ item }: { item: SearchResultItem }) {
             name: item.playlist.name,
             description: item.playlist.description,
             thumbnailUrl: item.playlist.thumbnailUrl,
+            cover: item.playlist.cover,
             videosCount: item.playlist.videosCount,
             channelId: item.playlist.channelId,
             userId: item.playlist.userId ?? '',

@@ -37,6 +37,14 @@ async function openManager(page: Page, locale: 'en' | 'ar' = 'en') {
   await expect(page.getByText(locale === 'ar' ? 'جاري التحميل...' : 'Loading...')).toHaveCount(0);
 }
 
+/** Loaded and actually occupying space: a collapsed 0px box must fail this */
+async function expectImageShown(image: Locator) {
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+  const box = await image.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThan(20);
+}
+
 function managedRow(page: Page, title: string): Locator {
   return page.getByRole('listitem').filter({ has: page.getByRole('heading', { level: 3, name: title, exact: true }) });
 }
@@ -155,9 +163,20 @@ test.describe('Playlist page - visitor', () => {
       await expect(list.getByRole('listitem').nth(i).getByRole('heading', { level: 2 })).toHaveText(item.title);
     }
     await expect(page.getByRole('link', { name: 'Play all' })).toHaveAttribute('href', `/en/video?vid=${items[0].id}`);
+    await expectImageShown(page.locator('aside img').first());
+    await expectImageShown(list.getByRole('listitem').first().locator('img'));
     // Visitors get no owner controls
     await expect(page.getByRole('button', { name: 'Move up' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Remove from playlist' })).toHaveCount(0);
+  });
+
+  test('PLAY-013 channel Playlists tab cards show a cover image', async ({ page }) => {
+    const lectures = await findQaLecturesChannel();
+    await page.goto(`/en/channels/${lectures.id}?tab=playlists`);
+    await page.getByTestId('tab-playlists').click().catch(() => undefined);
+    const card = page.getByTestId('playlist-card').first();
+    await expect(card).toBeVisible();
+    await expectImageShown(card.locator('img'));
   });
 
   test('PLAY-011 Arabic playlist page is RTL with Arabic labels', async ({ page }) => {

@@ -118,6 +118,8 @@ export const PlaylistView = z.object({
     videosCount: z.number(),
     isPublic: z.boolean(),
     name: Str().optional(), // Alias of title (shared-types Playlist uses `name`)
+    // Derived at read time when there is no custom thumbnailUrl (lib/playlistCovers.ts)
+    cover: z.object({ videoId: Str(), thumbnailUrl: Str() }).optional(),
     videos: z.array(Str()).optional(), // Ordered video IDs
     ...SoftDeleteFields,
     ...ModerationFields,

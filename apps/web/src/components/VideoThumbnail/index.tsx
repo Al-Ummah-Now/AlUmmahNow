@@ -9,16 +9,14 @@ export interface VideoThumbnailProps {
   alt: string;
   sizes?: string;
   className?: string;
+  /** Replaces the default play icon when there is no image to show */
+  placeholder?: React.ReactNode;
   /** Inline style of the wrapper, e.g. THUMBNAIL_16_9 */
   style?: CSSProperties;
   children?: React.ReactNode;
 }
 
-/**
- * 16:9 thumbnail box. Inline because the @tailwindcss/aspect-ratio plugin
- * replaces the theme's aspect scale: `aspect-video` produces no CSS at all, and
- * with `fill` images the wrapper then collapses to height 0.
- */
+/** 16:9 thumbnail box. `fill` images need a sized wrapper or it collapses to height 0. */
 export const THUMBNAIL_16_9 = { aspectRatio: "16 / 9" } as const;
 
 /**
@@ -33,6 +31,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   alt,
   sizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
   className = "",
+  placeholder,
   style,
   children,
 }) => {
@@ -63,14 +62,16 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
           role="img"
           aria-label={alt}
         >
-          <svg
-            className="h-12 w-12 text-gray-400 dark:text-gray-700"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l10.6-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" />
-          </svg>
+          {placeholder ?? (
+            <svg
+              className="h-12 w-12 text-gray-400 dark:text-gray-700"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l10.6-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" />
+            </svg>
+          )}
         </div>
       )}
       {children}

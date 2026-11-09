@@ -5,6 +5,7 @@ import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { transformVideoToView } from "../../lib/transformations";
 import { toPlaylistResponse, canViewPlaylist, canViewVideo, PlaylistType, VideoType } from "../../lib/playlists";
+import { resolvePlaylistCovers, type PlaylistCover } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 
 // Upper bound on videos resolved for a single playlist page
@@ -78,6 +79,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
 
         const response: ReturnType<typeof toPlaylistResponse> & {
             channelName?: string;
+            cover?: PlaylistCover;
             videoItems?: ReturnType<typeof transformVideoToView>[];
         } = toPlaylistResponse(playlist);
 
@@ -108,6 +110,13 @@ export class PlaylistFetch extends OptionalAuthRoute {
                 requested: ids.length,
                 returned: response.videoItems.length,
             });
+
+            // The expanded list is already filtered for this viewer
+            const first = playlist.thumbnailUrl ? undefined : response.videoItems.find((video) => video.thumbnailUrl);
+            if (first?.thumbnailUrl) response.cover = { videoId: first.id, thumbnailUrl: first.thumbnailUrl };
+        } else {
+            const cover = (await resolvePlaylistCovers(c.env, [playlist], userId)).get(id);
+            if (cover) response.cover = cover;
         }
 
         return response;

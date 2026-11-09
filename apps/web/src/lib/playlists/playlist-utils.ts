@@ -60,6 +60,28 @@ export function getPlaylistVideoCount(playlist: { videosCount?: number | null; v
   return Array.isArray(playlist.videos) ? playlist.videos.length : 0;
 }
 
+export interface PlaylistCoverFields {
+  thumbnailUrl?: string | null;
+  cover?: { thumbnailUrl?: string | null } | null;
+}
+
+/**
+ * Image to show for a playlist: the custom thumbnail, then the API-derived
+ * cover, then the first loaded video that has a thumbnail. Null means the
+ * placeholder should be shown.
+ */
+export function getPlaylistCoverUrl(
+  playlist: PlaylistCoverFields,
+  videos?: Array<{ thumbnailUrl?: string | null }>
+): string | null {
+  return (
+    playlist.thumbnailUrl ||
+    playlist.cover?.thumbnailUrl ||
+    videos?.find((video) => video?.thumbnailUrl)?.thumbnailUrl ||
+    null
+  );
+}
+
 /** Validate a playlist title from a form. Returns the trimmed title or null. */
 export function normalizePlaylistTitle(input: string, maxLength = 150): string | null {
   const title = input.trim().replace(/\s+/g, ' ');

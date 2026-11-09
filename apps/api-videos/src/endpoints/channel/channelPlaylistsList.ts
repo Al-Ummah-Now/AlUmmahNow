@@ -3,6 +3,8 @@ import { string, z } from "zod";
 import { Playlist as BusinessPlaylist, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
+import { toPlaylistResponse } from "../../lib/playlists";
+import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { OptionalAuthRoute, AppContext } from "../../base";
 
 export class ChannelPlaylistsList extends OptionalAuthRoute {
@@ -171,10 +173,10 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			const hasMore = channelPlaylists.length > limit;
 			const nextCursor = hasMore ? playlists.cursor : "";
 
-			const response: PaginationResponse<PlaylistType> = {
+			const response = {
 				cursor: nextCursor || "",
 				limit,
-				data: limitedPlaylists,
+				data: await withPlaylistCovers(c.env, limitedPlaylists.map(toPlaylistResponse), userId),
 			};
 
 			const duration = Date.now() - startTime;
