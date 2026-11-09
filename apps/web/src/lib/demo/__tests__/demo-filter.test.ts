@@ -40,7 +40,7 @@ function filtered(request: DemoRequest, body: unknown): Record<string, any> {
 }
 
 describe('isTestComment', () => {
-  it.each(['ws probe 1794', 'release live comment 179', 'E2E comment', 'hello [qa-seed]', 'a test comment'])('flags %s', (text) => {
+  it.each(['ws probe 1794', 'release live comment 179', 'E2E comment', 'hello [qa-seed]', 'a test comment', 'tres'])('flags %s', (text) => {
     expect(isTestComment(text)).toBe(true);
   });
   it.each(['ما شاء الله', 'Beautiful recitation', 'I tested my patience', undefined])('keeps %s', (text) => {

@@ -70,9 +70,11 @@ export type DemoRoute =
 const TEST_COMMENT =
   /(^|[^a-z])(ws probe|release (live )?comment|e2e|qa[- ]?seed|test comment|smoke[- ]test|playwright|automated test)([^a-z]|$)/i;
 
-/** True for comments left behind by automated test runs. */
+const KEYBOARD_TEST = /^\s*(test|tres|asdf|abc|hello)\s*\d*\s*$/i;
+
+/** True for comments left behind by automated test runs or typed to try the form. */
 export function isTestComment(text: unknown): boolean {
-  return typeof text === 'string' && TEST_COMMENT.test(text);
+  return typeof text === 'string' && (TEST_COMMENT.test(text) || KEYBOARD_TEST.test(text));
 }
 
 /** A set with no videos means the demo has not been seeded: leave the API alone. */
