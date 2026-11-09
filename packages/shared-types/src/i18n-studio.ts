@@ -51,6 +51,7 @@ export const STUDIO_EN = {
     bulkSchedule: 'Your plan doesn\'t include scheduling several videos at once. Schedule them one at a time.',
     other: 'Your plan doesn\'t include this.',
   },
+  editor: { back: 'Back to videos', details: 'Details', analytics: 'Analytics' },
   videos: {
     statusLabel: 'Status',
     statuses: { published: 'Published', scheduled: 'Scheduled', drafts: 'Drafts', processing: 'Processing', failed: 'Failed' },
@@ -185,6 +186,7 @@ export const STUDIO_AR: StudioTranslations = {
     bulkSchedule: 'لا تشمل خطتك جدولة عدة فيديوهات دفعة واحدة. يمكنك جدولتها واحدًا تلو الآخر.',
     other: 'لا تشمل خطتك هذا.',
   },
+  editor: { back: 'العودة إلى الفيديوهات', details: 'التفاصيل', analytics: 'التحليلات' },
   videos: {
     statusLabel: 'الحالة',
     statuses: { published: 'منشور', scheduled: 'مجدول', drafts: 'مسودات', processing: 'قيد المعالجة', failed: 'فشل' },
