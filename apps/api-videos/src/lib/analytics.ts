@@ -15,6 +15,7 @@
 import { logger } from './logger';
 import { OwnershipEnv, ownerContentIds, scheduleOwnershipHeal } from './search/ownership';
 import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
+import { RETENTION_BUCKET_COUNT } from '@al-ummah/shared-types';
 
 export interface AnalyticsVideo {
   id: string;
@@ -42,6 +43,8 @@ export interface AnalyticsChannel {
 export interface DailyRollupEntry {
   views: number;
   watchTime: number;
+  traffic?: Record<string, number>;
+  externalHosts?: Record<string, number>;
 }
 
 export interface MonthlyRollup {
@@ -374,6 +377,7 @@ interface CounterRow {
   entity_id: string;
   day: string;
   metric: string;
+  dim?: string;
   value: number;
 }
 
@@ -406,8 +410,8 @@ export async function loadRollups(
       const ids = entityIds.slice(i, i + 50);
       const result = await db
         .prepare(
-          `SELECT entity_id, day, metric, value FROM analytics_daily
-           WHERE entity_type = ? AND entity_id IN (${ids.map(() => '?').join(', ')}) AND day >= ? AND day <= ? AND metric IN ('views', 'watch_time')`
+          `SELECT entity_id, day, metric, dim, value FROM analytics_daily
+           WHERE entity_type = ? AND entity_id IN (${ids.map(() => '?').join(', ')}) AND day >= ? AND day <= ? AND metric IN ('views', 'watch_time', 'traffic', 'external_host')`
         )
         .bind(entityType, ...ids, fromDay, toDay)
         .all<CounterRow>();
@@ -416,8 +420,11 @@ export async function loadRollups(
         const doc = byEntityMonth.get(key) ?? { days: {} };
         byEntityMonth.set(key, doc);
         const entry = (doc.days[row.day] ??= { views: 0, watchTime: 0 });
+        const dim = row.dim || 'unknown';
         if (row.metric === 'views') entry.views += row.value;
-        else entry.watchTime += row.value;
+        else if (row.metric === 'watch_time') entry.watchTime += row.value;
+        else if (row.metric === 'traffic') (entry.traffic ??= {})[dim] = (entry.traffic[dim] ?? 0) + row.value;
+        else if (row.metric === 'external_host') (entry.externalHosts ??= {})[dim] = (entry.externalHosts[dim] ?? 0) + row.value;
       }
     }
     out.push(...byEntityMonth.values());
@@ -447,4 +454,103 @@ export async function loadRollups(
     out.push(...docs.filter((doc): doc is MonthlyRollup => !!doc));
   }
   return out;
+}
+
+/** Below this many starts a curve would be noise, and could point at individual viewers. */
+export const MIN_RETENTION_STARTS = 10;
+/** External sites returned with the traffic sources. */
+const MAX_EXTERNAL_HOSTS_SHOWN = 10;
+
+export interface RetentionDay {
+  starts: number;
+  buckets: number[];
+}
+
+export interface RetentionDocument {
+  days: Record<string, RetentionDay>;
+}
+
+export interface RetentionCurve {
+  starts: number;
+  /** Share of starts that reached each bucket; null below MIN_RETENTION_STARTS */
+  points: Array<{ bucket: number; share: number }> | null;
+}
+
+/** A video's retention counters (processor: 'retention_start', 'retention' per bucket) over `range`, by day. */
+export async function loadRetention(sources: RollupSources, videoId: string, range: DateRange): Promise<RetentionDocument[]> {
+  const db = sources.NOTIFICATIONS_DB;
+  if (!db) return [];
+  const days = daysInRange(range);
+  const { results } = await db
+    .prepare(
+      `SELECT day, metric, dim, value FROM analytics_daily
+       WHERE entity_type = 'video' AND entity_id = ? AND day >= ? AND day <= ? AND metric IN ('retention_start', 'retention')`,
+    )
+    .bind(videoId, days[0], days[days.length - 1])
+    .all<{ day: string; metric: string; dim: string; value: number }>();
+  const doc: RetentionDocument = { days: {} };
+  for (const row of results ?? []) {
+    const entry = (doc.days[row.day] ??= { starts: 0, buckets: new Array<number>(RETENTION_BUCKET_COUNT).fill(0) });
+    if (row.metric === 'retention_start') entry.starts += row.value;
+    else {
+      const bucket = Number(row.dim);
+      if (Number.isInteger(bucket) && bucket >= 0 && bucket < RETENTION_BUCKET_COUNT) entry.buckets[bucket] = (entry.buckets[bucket] ?? 0) + row.value;
+    }
+  }
+  return [doc];
+}
+
+export function buildRetentionCurve(docs: RetentionDocument[], range: DateRange): RetentionCurve {
+  const inRange = new Set(daysInRange(range));
+  let starts = 0;
+  const reached = new Array<number>(RETENTION_BUCKET_COUNT).fill(0);
+  for (const doc of docs) {
+    for (const [day, entry] of Object.entries(doc?.days || {})) {
+      if (!inRange.has(day)) continue;
+      starts += entry.starts || 0;
+      entry.buckets?.forEach((count, bucket) => {
+        if (bucket < RETENTION_BUCKET_COUNT) reached[bucket] = (reached[bucket] ?? 0) + (count || 0);
+      });
+    }
+  }
+  if (starts < MIN_RETENTION_STARTS) return { starts, points: null };
+  return {
+    starts,
+    points: reached.map((count, bucket) => ({ bucket, share: Math.min(1, Math.round((count / starts) * 10000) / 10000) })),
+  };
+}
+
+export interface TrafficBreakdown {
+  totalViews: number;
+  /** Views per source. Views from before collection began count as unknown, so the rows add up. */
+  sources: Record<string, number>;
+  externalHosts: Array<{ host: string; views: number }>;
+}
+
+export function buildTraffic(rollups: MonthlyRollup[], range: DateRange): TrafficBreakdown {
+  const inRange = new Set(daysInRange(range));
+  const sources: Record<string, number> = {};
+  const hosts: Record<string, number> = {};
+  let totalViews = 0;
+  for (const rollup of rollups) {
+    for (const [day, entry] of Object.entries(rollup?.days || {})) {
+      if (!inRange.has(day)) continue;
+      totalViews += entry.views || 0;
+      let counted = 0;
+      for (const [source, views] of Object.entries(entry.traffic || {})) {
+        sources[source] = (sources[source] || 0) + views;
+        counted += views;
+      }
+      const uncounted = (entry.views || 0) - counted;
+      if (uncounted > 0) sources.unknown = (sources.unknown || 0) + uncounted;
+      for (const [host, views] of Object.entries(entry.externalHosts || {})) {
+        hosts[host] = (hosts[host] || 0) + views;
+      }
+    }
+  }
+  const externalHosts = Object.entries(hosts)
+    .map(([host, views]) => ({ host, views }))
+    .sort((a, b) => b.views - a.views || a.host.localeCompare(b.host))
+    .slice(0, MAX_EXTERNAL_HOSTS_SHOWN);
+  return { totalViews, sources, externalHosts };
 }

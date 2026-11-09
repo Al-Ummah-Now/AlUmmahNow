@@ -539,6 +539,43 @@
                           "watchTime"
                         ]
                       }
+                    },
+                    "traffic": {
+                      "type": "object",
+                      "properties": {
+                        "totalViews": {
+                          "type": "number"
+                        },
+                        "sources": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          }
+                        },
+                        "externalHosts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "host": {
+                                "type": "string"
+                              },
+                              "views": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "host",
+                              "views"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "totalViews",
+                        "sources",
+                        "externalHosts"
+                      ]
                     }
                   },
                   "required": [
@@ -551,7 +588,8 @@
                     "avgViewsPerVideo",
                     "avgEngagementRate",
                     "topPerformingVideos",
-                    "recentMetrics"
+                    "recentMetrics",
+                    "traffic"
                   ]
                 }
               }
@@ -1257,6 +1295,43 @@
                     },
                     "thumbnailUrl": {
                       "type": "string"
+                    },
+                    "traffic": {
+                      "type": "object",
+                      "properties": {
+                        "totalViews": {
+                          "type": "number"
+                        },
+                        "sources": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          }
+                        },
+                        "externalHosts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "host": {
+                                "type": "string"
+                              },
+                              "views": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "host",
+                              "views"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "totalViews",
+                        "sources",
+                        "externalHosts"
+                      ]
                     }
                   },
                   "required": [
@@ -1271,7 +1346,176 @@
                     "avgViewDuration",
                     "clickThroughRate",
                     "engagementRate",
-                    "dateCreated"
+                    "dateCreated",
+                    "traffic"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/videos/{videoId}/retention": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Video retention curve",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Owner only. Share of viewers still watching at each 5% of the video. No curve below the minimum number of starts.",
+        "operationId": "get_AnalyticsRetentionGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO start date (default: 28 days ago)"
+            },
+            "required": false,
+            "description": "ISO start date (default: 28 days ago)",
+            "name": "dateFrom",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO end date (default: now)"
+            },
+            "required": false,
+            "description": "ISO end date (default: now)",
+            "name": "dateTo",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retention curve",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "starts": {
+                      "type": "number"
+                    },
+                    "points": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "bucket": {
+                            "type": "number"
+                          },
+                          "share": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "bucket",
+                          "share"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "starts",
+                    "points"
                   ]
                 }
               }

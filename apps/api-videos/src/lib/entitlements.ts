@@ -22,6 +22,8 @@ export const ENTITLEMENTS: ReadonlyArray<EntitlementDeclaration> = [
 	{ key: 'comments.replies', type: 'boolean', free: true, story: '29.2', description: 'Replies (one level) on video comments', atLimit: 'n/a (all plans)' },
 	{ key: 'comments.settings', type: 'boolean', free: true, story: '29.2', description: 'Per-video comment settings: on / off', atLimit: 'n/a (all plans)' },
 	{ key: 'comments.heldForReview', type: 'boolean', free: true, story: '29.2', description: 'Per-video "hold comments for review" setting', atLimit: 'n/a (all plans)' },
+	{ key: 'analytics.retentionCurve', type: 'boolean', free: true, story: 'Creator Studio', description: 'Retention chart per video', atLimit: 'The chart is replaced by a note about the plan' },
+	{ key: 'analytics.trafficSources', type: 'boolean', free: true, story: 'Creator Studio', description: 'Traffic sources in analytics', atLimit: 'The section is replaced by a note about the plan' },
 ];
 
 export const FREE_DEFAULTS: Readonly<Record<string, boolean | number>> = Object.fromEntries(

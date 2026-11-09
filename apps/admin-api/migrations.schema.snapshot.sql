@@ -14,6 +14,7 @@
 --   apps/admin-api/migrations/0012_error_groups.sql
 --   apps/admin-api/migrations/0013_admin_soft_delete.sql
 --   apps/admin-api/migrations/0014_creator_invites.sql
+--   apps/admin-api/migrations/0015_seed_analytics_entitlements.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
