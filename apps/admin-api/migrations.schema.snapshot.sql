@@ -6,7 +6,9 @@
 --   apps/admin-api/migrations/0004_plans_entitlements.sql
 --   apps/admin-api/migrations/0005_seed_plans.sql
 --   apps/admin-api/migrations/0006_site_settings.sql
+--   apps/admin-api/migrations/0007_ai_budget.sql
 
+CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
 CREATE TABLE channel_verification_log (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, verified INTEGER NOT NULL, note TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE entitlement_overrides (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, expires_at TEXT, reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE (subject_type, subject_id, key));

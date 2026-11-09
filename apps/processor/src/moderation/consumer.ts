@@ -14,7 +14,7 @@ import { decide } from './decide';
 import { MODELS } from './pricing';
 import { writeSignal } from './store';
 import { arabicLetterCount, detectLanguage, latinLetterCount, normalizeText } from './text';
-import { neuronsUsedToday } from './usage';
+import { estimateScanNeurons, reserveBudget, settleBudget } from './budget';
 
 export interface ModerationConsumerEnv {
   REPORTS_DB: D1Database;
@@ -61,9 +61,13 @@ export async function handleModerationScan(
     return { status: 'done', decision: 'skipped:empty' };
   }
 
-  const used = await neuronsUsedToday(db, now);
-  if (config.dailyNeuronCap !== null && used >= config.dailyNeuronCap) {
-    logger.warn('[Moderation] Daily neuron cap reached, scan skipped', { used, cap: config.dailyNeuronCap, subjectId: payload.subjectId });
+  // Reserve the scan's worst case before any AI call (PR-9): concurrent scans
+  // cannot all pass a check that only counts finished ones.
+  const arabic = arabicLetterCount(text);
+  const latin = latinLetterCount(text);
+  const estimate = estimateScanNeurons(text, { arabic: arabic > 0, latin: latin > 0, extensions: config.extensionsEnabled });
+  if (!(await reserveBudget(db, config.dailyNeuronCap, estimate, now))) {
+    logger.warn('[Moderation] Daily neuron cap reached, scan skipped', { cap: config.dailyNeuronCap, subjectId: payload.subjectId });
     const signalId = await writeSignal(db, { ...base, decision: 'skipped', skipReason: 'budget' }, now);
     return { status: 'done', signalId, decision: 'skipped:budget' };
   }
@@ -78,8 +82,6 @@ export async function handleModerationScan(
     // Llama Guard does not list Arabic, so any Arabic is translated (not only Arabic-majority
     // text: otherwise a few English words could carry Arabic abuse past it). Mixed text is also
     // checked as-is; the stricter verdict wins.
-    const arabic = arabicLetterCount(text);
-    const latin = latinLetterCount(text);
     const guardInputs: string[] = [];
     if (arabic > 0) {
       translation = await translateToEnglish(ctx, text);
@@ -103,6 +105,7 @@ export async function handleModerationScan(
       models.push(MODELS.extensions);
     }
   } catch (error) {
+    await settleBudget(db, estimate, ctx.spent, now);
     const message = error instanceof Error ? error.message : String(error);
     if (!opts.lastAttempt) {
       logger.warn('[Moderation] AI call failed, will retry', { subjectId: payload.subjectId, error: message });
@@ -112,6 +115,8 @@ export async function handleModerationScan(
     const signalId = await writeSignal(db, { ...base, models, decision: 'skipped', skipReason: 'error' }, now);
     return { status: 'done', signalId, decision: 'skipped:error' };
   }
+
+  await settleBudget(db, estimate, ctx.spent, now);
 
   // Trust score arrives with story 28.2; until then nobody is "low trust", so charity_scam can only flag.
   const result = decide(scores, config.policies, { lowTrust: false, autoHideAvailable: false });
