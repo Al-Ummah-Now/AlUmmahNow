@@ -1,4 +1,5 @@
 import { OpenAPIRoute, Str } from "chanfana";
+import { TRAFFIC_SOURCES, normalizeReferrerHost } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -28,6 +29,8 @@ export class VideoView extends OptionalAuthRoute {
 							referrer: z.string().optional().describe("Where the user came from (e.g., 'search', 'channel', 'recommendation')"),
 							deviceType: z.enum(["desktop", "mobile", "tablet", "tv"]).optional().describe("Type of device used"),
 							source: z.enum(["watch", "embed"]).optional().describe("Playback surface: the watch page (default) or the embed player on another site"),
+							trafficSource: z.enum(TRAFFIC_SOURCES).optional().describe("Where the view came from (docs/specs/CREATOR-STUDIO.md §8.4)"),
+							referrerHost: z.string().max(253).optional().describe("External only: the host of the referring site"),
 							embedOrigin: z.string().max(300).optional().describe("Embed only: origin of the page that embeds the player (never a path)"),
 							location: z.object({
 								country: z.string().optional(),
@@ -162,6 +165,10 @@ export class VideoView extends OptionalAuthRoute {
 			// docs/embeds §6: the processor rolls these into per-day source / embed-origin counts
 			source: viewData.source === "embed" ? "embed" : "watch",
 			embedOrigin: viewData.source === "embed" ? normalizeEmbedOrigin(viewData.embedOrigin) : null,
+			trafficSource: viewData.trafficSource ?? "unknown",
+			...(viewData.trafficSource === "external" && normalizeReferrerHost(viewData.referrerHost)
+				? { referrerHost: normalizeReferrerHost(viewData.referrerHost) as string }
+				: {}),
 			deviceType: viewData.deviceType,
 			location: viewData.location,
 			timestamp: new Date().toISOString(),
