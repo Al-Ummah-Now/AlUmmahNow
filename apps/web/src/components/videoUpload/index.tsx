@@ -666,11 +666,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 lang="en"
                 data-testid="upload-lang-tab-en"
                 onClick={() => setActiveTab('en')}
-                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
-                  activeTab === 'en'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
+                className="tab-item"
                 disabled={uploadProgress?.state === 'uploading'}
               >
                 English
@@ -682,11 +678,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 lang="ar"
                 data-testid="upload-lang-tab-ar"
                 onClick={() => setActiveTab('ar')}
-                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
-                  activeTab === 'ar'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
+                className="tab-item"
                 disabled={uploadProgress?.state === 'uploading'}
               >
                 العربية

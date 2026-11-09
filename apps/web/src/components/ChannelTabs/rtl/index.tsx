@@ -234,14 +234,7 @@ export function ChannelTabBar({
                 aria-selected={activeTab === tab}
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => handleTabClick(tab)}
-                className={`
-                  flex-shrink-0 px-6 py-3 text-sm font-medium whitespace-nowrap
-                  border-b-2 transition-colors duration-200
-                  ${activeTab === tab
-                    ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-gray-300 dark:hover:border-gray-600'
-                  }
-                `}
+                className="tab-item"
               >
                 {getTabLabel(tab)}
               </button>

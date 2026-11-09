@@ -137,9 +137,7 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
             aria-selected={filter === value}
             onClick={() => setFilter(value)}
             data-testid={`notifications-filter-${value}`}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              filter === value ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-            }`}
+            className="tab-item"
           >
             {value === 'all' ? texts.all : texts.unread}
             {value === 'unread' && unreadCount > 0 && <span className="ms-1">({unreadCount.toLocaleString(lang)})</span>}

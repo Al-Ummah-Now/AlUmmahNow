@@ -155,18 +155,7 @@ export const TabNavigation = React.memo<TabNavigationProps>(
               tabIndex={isActive ? 0 : -1}
               onClick={() => handleClick(tab)}
               onKeyDown={(e) => handleKeyDown(e, tab)}
-              className={cn(
-                'flex items-center gap-2',
-                'px-4 py-3 md:px-6 md:py-4',
-                'text-sm md:text-base font-medium',
-                'transition-all duration-200',
-                'border-b-2 -mb-px',
-                'whitespace-nowrap',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-                isActive
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary hover:border-gray-300 dark:hover:border-gray-600'
-              )}
+              className="tab-item"
             >
               {/* Icon */}
               {Icon && (

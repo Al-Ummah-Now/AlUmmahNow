@@ -264,3 +264,42 @@
   border-radius: 0.5rem;
   text-decoration: underline;
 }
+
+/*
+ * Tab rows. Selected and hover are one rule, so a tab can only ever show one
+ * bar: a full-width square bar on the row's divider, over a light tile.
+ */
+.tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--fanous-c-tabs-text, var(--fanous-color-text-secondary));
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+.tab-item[aria-selected='true'],
+.tab-item[data-state='active'],
+.tab-item[data-active='true'] {
+  border-bottom-color: var(--fanous-c-tabs-indicator, var(--fanous-color-primary));
+  background-color: color-mix(in srgb, var(--fanous-c-tabs-indicator, var(--fanous-color-primary)) 12%, transparent);
+  color: var(--fanous-c-tabs-active-text, var(--fanous-color-text-primary));
+}
+@media (hover: hover) {
+  .tab-item:hover:not(:disabled) {
+    border-bottom-color: var(--fanous-c-tabs-indicator, var(--fanous-color-primary));
+    background-color: color-mix(in srgb, var(--fanous-c-tabs-indicator, var(--fanous-color-primary)) 12%, transparent);
+    color: var(--fanous-c-tabs-active-text, var(--fanous-color-text-primary));
+  }
+}
+.tab-item:focus-visible {
+  outline: 2px solid var(--fanous-color-focus-ring, currentColor);
+  outline-offset: -2px;
+}
