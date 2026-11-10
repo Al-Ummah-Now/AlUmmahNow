@@ -184,6 +184,12 @@ export interface ChannelVideoQuery {
 }
 
 /**
+ * The index form of lib/visibility.ts isVideoReady: no upload status (older
+ * videos) or ready. Every public list and count uses it.
+ */
+export const READY_SQL = "(upload_status IS NULL OR upload_status = 'ready')";
+
+/**
  * One page of a channel's videos from the index (never deleted or hidden).
  * Fetches `limit + 1` ids so the caller knows if more exist.
  */
@@ -216,10 +222,10 @@ export function channelVideoIds(
     // Videos still uploading/processing (or failed) are listed only to their
     // owner: the playlist does not exist yet (2026-11-10 incident)
     if (typeof query.privateFor === 'string') {
-      where.push("(upload_status IS NULL OR upload_status = 'ready' OR owner_id = ?)");
+      where.push(`(${READY_SQL} OR owner_id = ?)`);
       params.push(query.privateFor);
     } else if (!query.privateFor) {
-      where.push("(upload_status IS NULL OR upload_status = 'ready')");
+      where.push(READY_SQL);
     }
     const { results } = await db.prepare(
       `SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`,
@@ -250,7 +256,7 @@ export function channelTotalsFromIndex(env: OwnershipEnv, channelId: string): Pr
   return whenComplete(env, 'video', async db => {
     const row = await db.prepare(
       `SELECT COUNT(*) AS videos, COALESCE(SUM(views), 0) AS views FROM ${OWNERSHIP_TABLE}
-       WHERE kind = 'video' AND channel_id = ? AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1
+       WHERE kind = 'video' AND channel_id = ? AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1 AND ${READY_SQL}
          AND (schedule_status IS NULL OR schedule_status = 'published')`,
     ).bind(channelId).first<{ videos: number; views: number }>();
     return { totalViews: Number(row?.views) || 0, videosCount: Number(row?.videos) || 0, partial: false };
@@ -273,7 +279,7 @@ export function channelVideoCountsFromIndex(env: OwnershipEnv, channelIds: strin
       const placeholders = chunk.map(() => '?').join(', ');
       const { results } = await db.prepare(
         `SELECT channel_id, COUNT(*) AS videos FROM ${OWNERSHIP_TABLE}
-         WHERE kind = 'video' AND channel_id IN (${placeholders}) AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1
+         WHERE kind = 'video' AND channel_id IN (${placeholders}) AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1 AND ${READY_SQL}
            AND (schedule_status IS NULL OR schedule_status = 'published')
          GROUP BY channel_id`,
       ).bind(...chunk).all<{ channel_id: string; videos: number }>();

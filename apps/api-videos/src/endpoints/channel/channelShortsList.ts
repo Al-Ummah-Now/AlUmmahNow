@@ -1,5 +1,7 @@
 import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
+import { publicVideoFields } from '../../lib/transformations';
+import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
@@ -126,11 +128,8 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				// Shared rule: ≤ 3 min and vertical/square, or the uploader's choice; never live
 				if (!isShort(video)) return false;
 				if (video.isLive) return false;
-				// Private videos only for the channel owner; public or unset counts as public
-				// Not ready yet (uploading, processing, failed): only the owner sees it
-				if (video.uploadStatus && video.uploadStatus !== 'ready') return isOwner;
-				if (video.isPublic === false) return isOwner;
-				return true;
+				// Not ready, private or scheduled: only the channel owner (lib/visibility.ts)
+				return isVideoPubliclyVisible(video) || isOwner;
 			};
 
 			const byDate = (a: VideoType, b: VideoType) =>
@@ -181,7 +180,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 
 			// Transform business videos to view models
 			const transformToView = (video: VideoType) => ({
-				...video,
+				...publicVideoFields(video),
 				channelName: channel.name || "",
 				channelAvatarUrl: channel.avatarUrl || undefined,
 				likesCount: video.likes?.length || 0,

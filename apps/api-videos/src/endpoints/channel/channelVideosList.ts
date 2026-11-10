@@ -1,5 +1,7 @@
 import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
+import { publicVideoFields } from '../../lib/transformations';
+import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
@@ -155,8 +157,9 @@ export class ChannelVideosList extends OptionalAuthRoute {
 					return false;
 				}
 
-				// Not ready yet (uploading, processing, failed): only the owner sees it, with its status
-				if (video.uploadStatus && video.uploadStatus !== 'ready') {
+				// Not ready (uploading, processing, failed), private or scheduled: only the
+				// channel owner sees it, with its status (lib/visibility.ts, one rule for every list)
+				if (!isVideoPubliclyVisible(video)) {
 					return isOwner;
 				}
 
@@ -166,11 +169,6 @@ export class ChannelVideosList extends OptionalAuthRoute {
 				}
 				if (video.isLive) {
 					return false;
-				}
-
-				// If video is explicitly private (false), only show if user is channel owner
-				if (video.isPublic === false) {
-					return isOwner;
 				}
 
 				// If video is public (true) or undefined/null (default to public), show it
@@ -236,7 +234,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 
 			// Transform business videos to view models
 			const transformToView = (video: VideoType) => ({
-				...video,
+				...publicVideoFields(video),
 				channelName: channel.name || "",
 				channelAvatarUrl: channel.avatarUrl || undefined,
 				likesCount: video.likes?.length || 0,

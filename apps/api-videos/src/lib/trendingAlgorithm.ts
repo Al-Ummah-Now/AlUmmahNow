@@ -4,6 +4,7 @@
  */
 
 import { VideoObject } from '@al-ummah/shared-types';
+import { publicVideoFields } from './transformations';
 import { logger } from './logger';
 import { isVideoPubliclyVisible } from './visibility';
 
@@ -239,7 +240,7 @@ export function processTrendingVideos(
 
   // Add rank and limit results
   const rankedVideos = trendingVideos.slice(0, limit).map((video, index) => ({
-    ...video,
+    ...publicVideoFields(video),
     rank: index + 1,
   }));
 
