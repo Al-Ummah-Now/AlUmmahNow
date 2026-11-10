@@ -3,7 +3,14 @@
  * through the same authorize -> password -> code -> token flow the admin app
  * uses. Used for API-side fixtures (creating and cleaning up reports).
  */
+import { createHash, randomBytes } from 'node:crypto';
 import { ADMIN_CLIENT_ID, CALLBACK_URL, OPENAUTH_URL, type Account } from './env';
+
+/** PKCE S256: the auth server only redeems this client's codes with the verifier (AlUmmahNowAuth#302). */
+function pkcePair(): { verifier: string; challenge: string } {
+  const verifier = randomBytes(32).toString('base64url');
+  return { verifier, challenge: createHash('sha256').update(verifier).digest('base64url') };
+}
 
 class CookieJar {
   private cookies = new Map<string, string>();
@@ -33,10 +40,15 @@ async function step(jar: CookieJar, url: string, init: RequestInit = {}): Promis
 
 export async function getAccessToken(account: Account): Promise<string> {
   const jar = new CookieJar();
+  const pkce = pkcePair();
+  const state = randomBytes(16).toString('hex');
   const authorize = new URL(`${OPENAUTH_URL}/authorize`);
   authorize.searchParams.set('client_id', ADMIN_CLIENT_ID);
   authorize.searchParams.set('redirect_uri', CALLBACK_URL);
   authorize.searchParams.set('response_type', 'code');
+  authorize.searchParams.set('state', state);
+  authorize.searchParams.set('code_challenge', pkce.challenge);
+  authorize.searchParams.set('code_challenge_method', 'S256');
 
   // Follow the authorize redirects on the auth host until the password form.
   let response = await step(jar, authorize.toString());
@@ -59,7 +71,9 @@ export async function getAccessToken(account: Account): Promise<string> {
     throw new Error(`Login for ${account.email} did not reach the callback (status ${response.status})`);
   }
 
-  const code = new URL(location).searchParams.get('code');
+  const callback = new URL(location);
+  if (callback.searchParams.get('state') !== state) throw new Error(`State mismatch on the callback for ${account.email}`);
+  const code = callback.searchParams.get('code');
   if (!code) throw new Error(`No authorization code for ${account.email}`);
 
   const tokenResponse = await fetch(`${OPENAUTH_URL}/token`, {
@@ -70,10 +84,12 @@ export async function getAccessToken(account: Account): Promise<string> {
       code,
       redirect_uri: CALLBACK_URL,
       client_id: ADMIN_CLIENT_ID,
+      code_verifier: pkce.verifier,
     }).toString(),
   });
   if (!tokenResponse.ok) {
-    throw new Error(`Token exchange failed for ${account.email}: ${tokenResponse.status}`);
+    const reason = ((await tokenResponse.json().catch(() => ({}))) as { error?: string }).error ?? '';
+    throw new Error(`Token exchange failed for ${account.email}: ${tokenResponse.status} ${reason}`);
   }
   const body = (await tokenResponse.json()) as { access_token?: string };
   if (!body.access_token) throw new Error(`No access token for ${account.email}`);
