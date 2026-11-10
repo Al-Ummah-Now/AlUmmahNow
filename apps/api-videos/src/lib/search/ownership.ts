@@ -380,8 +380,14 @@ export async function reconcileOwnershipIndex(
   return summary;
 }
 
-/** Take the heal lease; false when another heal holds it. */
+/**
+ * Take the heal lease; false when another heal holds it. Every reader that
+ * falls back to a scan asks for it, so a held lease is seen with a read first
+ * and only a free (or expired) one costs a write (SCALABILITY-AUDIT AV-17).
+ */
 async function acquireHealLease(db: SearchDb, kind: OwnershipKind, now: number): Promise<boolean> {
+  const held = await db.prepare('SELECT updated_at FROM search_meta WHERE key = ?').bind(leaseKey(kind)).first<{ updated_at: number }>();
+  if (held && Number(held.updated_at) >= now - OWNERSHIP_HEAL_LEASE_MS) return false;
   const outcome = await db.prepare(
     `INSERT INTO search_meta (key, value, updated_at) VALUES (?, 'lease', ?)
      ON CONFLICT(key) DO UPDATE SET updated_at = excluded.updated_at WHERE search_meta.updated_at < ?`,
