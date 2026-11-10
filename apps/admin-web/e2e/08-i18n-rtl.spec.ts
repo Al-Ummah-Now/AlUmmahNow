@@ -87,13 +87,31 @@ test.describe('language and direction', () => {
 test.describe('public pages in Arabic', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('I18N-06 login error and not-found pages are translated', async ({ page }) => {
+  test('I18N-06 the login error is translated; unknown pages ask a visitor to sign in', async ({ page }) => {
     await setPreferences(page, { locale: 'ar' });
     await page.goto('/login?error=unauthorized');
     await expectDirection(page, 'ar');
     await expect(page.getByTestId('login-error')).toHaveText('ليست لديك صلاحية الوصول إلى لوحة الإدارة');
+    // Every path but /login and /access-denied needs a session (middleware.ts):
+    // a signed-out visitor never sees the not-found page, so the admin app
+    // does not tell outsiders which routes exist. The request carries no
+    // cookies, so we read the redirect itself rather than the auth server's page.
+    const res = await page.request.get('/no-such-page', { maxRedirects: 0 });
+    expect(res.status()).toBe(307);
+    expect(res.headers()['location']).toMatch(/\/login\?return=%2Fno-such-page$/);
+  });
+});
+
+test.describe('not found in Arabic', () => {
+  test('I18N-06b the not-found page is translated', async ({ page }) => {
+    await setPreferences(page, { locale: 'ar' });
     await page.goto('/no-such-page');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('الصفحة غير موجودة');
+    await expectDirection(page, 'ar');
+    const main = page.getByRole('main');
+    await expect(main.getByTestId('not-found')).toBeVisible();
+    await expect(main.getByRole('heading', { level: 1 })).toHaveText('الصفحة غير موجودة');
+    // The page's own title is its only h1
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   });
 });
 
