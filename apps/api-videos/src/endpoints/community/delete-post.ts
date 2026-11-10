@@ -4,7 +4,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
-import R2Repository from '../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 
 export class DeleteCommunityPost extends AuthenticatedRoute {
   schema = addAuthToSchema({
@@ -115,6 +115,7 @@ export class DeleteCommunityPost extends AuthenticatedRoute {
         message: 'Post deleted successfully'
       });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Error deleting community post:', error);
       return c.json({ error: 'Failed to delete post' }, 500);
     }

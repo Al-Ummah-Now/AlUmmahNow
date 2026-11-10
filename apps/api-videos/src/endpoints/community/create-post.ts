@@ -13,7 +13,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateCreatePost } from '../../validation/community-posts';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
-import R2Repository from '../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { getChannelObject } from './post-comment-helpers';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
 
@@ -231,6 +231,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
 
       return c.json({ success: true, post });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Error creating community post:', error);
       return c.json({ error: 'Failed to create post' }, 500);
     }

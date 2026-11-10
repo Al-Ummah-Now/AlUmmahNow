@@ -6,7 +6,7 @@ import {
 	Channel as BusinessChannel,
 	ResponseError
 } from "../../lib/types";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -195,6 +195,7 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 				},
 			}));
 		} catch (error) {
+			rethrowBusy(error);
 			logger.error(`[ChannelTabsUpdate] Failed to save tab config for channel ${id}:`, error);
 			return c.json({
 				success: false,

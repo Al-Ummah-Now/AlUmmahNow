@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppContext } from "../../base/types";
 import BunnyStorageClient from "../../lib/bunny/storage";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { Profile as BusinessProfile } from '../../lib/types';
 import { z } from "zod";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
@@ -81,6 +81,7 @@ const handleCoverUpdate = async (c: AppContext) => {
 
         return c.json(profile, 200);
     } catch (error) {
+        rethrowBusy(error);
         logger.error("Error updating avatar photo:", error);
         return c.json(
             {

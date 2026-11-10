@@ -1,5 +1,5 @@
 import { withPostViews } from '../../lib/post-views';
-import R2Repository from '../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { z } from 'zod';
 import {
   CommunityPost,
@@ -179,6 +179,7 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
       await withPostViews(c.env.NOTIFICATIONS_DB, [post]);
       return c.json({ success: true, post });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Error updating community post:', error);
       return c.json({ error: 'Failed to update post' }, 500);
     }

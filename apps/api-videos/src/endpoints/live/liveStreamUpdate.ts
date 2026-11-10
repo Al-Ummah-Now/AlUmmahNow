@@ -4,7 +4,7 @@ import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamUpdateInput } from "../../lib/model/input";
 import { LiveStreamView } from "../../lib/model/view";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
@@ -185,6 +185,7 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 				result: { stream: streamView },
 			};
 		} catch (error) {
+			rethrowBusy(error);
 			logger.error("Error updating live stream:", error);
 			return c.json(
 				{

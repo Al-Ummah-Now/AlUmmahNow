@@ -6,7 +6,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
-import R2Repository from '../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { patchVideo } from '../../lib/videoWrites';
 import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
@@ -179,6 +179,7 @@ export class SubtitlesDelete extends AuthenticatedRoute {
         message: `Subtitle for language ${language} deleted successfully`,
       });
     } catch (error: any) {
+      rethrowBusy(error);
       logger.error('Failed to delete subtitle:', error);
       return c.json(
         {

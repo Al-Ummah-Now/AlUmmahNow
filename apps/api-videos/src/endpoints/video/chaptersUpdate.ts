@@ -6,7 +6,7 @@
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from 'chanfana';
 import { z } from 'zod';
-import R2Repository from '../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { patchVideo } from '../../lib/videoWrites';
 import { validateChapters } from '../../lib/chapters/parser';
 import { VideoChapterSchema, VideoChapterDataSchema } from '@al-ummah/shared-types';
@@ -188,6 +188,7 @@ export class VideoChaptersUpdate extends AuthenticatedRoute {
         chapters: chapterData,
       });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Error updating chapters', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,

@@ -152,6 +152,10 @@ export function errorHandler(err: Error, c: Context) {
 		isDevelopment: isDev,
 	});
 
+	// Transient errors (a lost write race, ConcurrentUpdateError) say when to retry
+	const retryAfter = (err as { retryAfterSeconds?: unknown })?.retryAfterSeconds;
+	if (typeof retryAfter === 'number' && retryAfter > 0) c.header('Retry-After', String(retryAfter));
+
 	// Format and return error response
 	const response = formatErrorResponse(err, isDev);
 	return c.json(response, statusCode as any);

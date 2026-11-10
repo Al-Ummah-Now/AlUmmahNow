@@ -6,7 +6,7 @@
 import { OpenAPIRoute, Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { clearDefaultTemplate, isDefaultTemplate, readDefaultPointer, setDefaultTemplate } from '../../lib/uploadDefaultPointer';
-import R2Repository from '../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { getAuthContext } from '../../middleware/auth';
 import { UploadTemplate, UpdateTemplateRequest } from '@al-ummah/shared-types';
@@ -127,6 +127,7 @@ export class GetUploadDefaultEndpoint extends OpenAPIRoute {
         },
       });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Get upload default error:', error);
       return c.json(
         {
@@ -368,6 +369,7 @@ export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
         },
       });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Update upload default error:', error);
       return c.json(
         {
@@ -516,6 +518,7 @@ export class DeleteUploadDefaultEndpoint extends OpenAPIRoute {
 
       return new Response(null, { status: 204 });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Delete upload default error:', error);
       return c.json(
         {
@@ -669,6 +672,7 @@ export class SetDefaultTemplateEndpoint extends OpenAPIRoute {
         success: true,
       });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Set default template error:', error);
       return c.json(
         {

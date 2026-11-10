@@ -11,7 +11,7 @@ import { Str } from "chanfana";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { patchVideo } from '../../lib/videoWrites';
 import BunnyStorageClient from "../../lib/bunny/storage";
 import { validateImageBuffer, detectMimeType } from "../../lib/thumbnail/validator";
@@ -159,6 +159,7 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 				result: { thumbnailUrl, thumbnailSizes },
 			});
 		} catch (error) {
+			rethrowBusy(error);
 			logger.error('[VideoThumbnailUpload] Failed', {
 				videoId: id,
 				userId,

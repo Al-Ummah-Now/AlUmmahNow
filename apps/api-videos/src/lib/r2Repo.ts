@@ -12,12 +12,27 @@ export const DEFAULT_CAS_ATTEMPTS = 10;
 /** R2 precondition that only lets a put through when the key does not exist. */
 export const CREATE_ONLY: R2Conditional = { etagDoesNotMatch: '*' };
 
-/** Thrown when `updateObject` lost every attempt to concurrent writers (the change was not made). */
+/**
+ * Thrown when `updateObject` lost every attempt to concurrent writers (the
+ * change was not made). It is transient, so the API answers 503 with
+ * Retry-After (error-handler.ts) and clients retry; the key stays out of the
+ * message (it can name a user) and is logged from the property.
+ */
 export class ConcurrentUpdateError extends Error {
+  readonly status = 503;
+  readonly retryAfterSeconds = 1;
   constructor(readonly key: string, readonly attempts: number) {
-    super(`Concurrent updates to ${key}: gave up after ${attempts} attempts`);
+    super(`Busy: concurrent updates, retry shortly (gave up after ${attempts} attempts)`);
     this.name = 'ConcurrentUpdateError';
   }
+}
+
+/**
+ * For handlers that turn any failure into a 500: rethrows a lost write race so
+ * the global error handler answers 503 with Retry-After instead.
+ */
+export function rethrowBusy(error: unknown): void {
+  if (error instanceof ConcurrentUpdateError) throw error;
 }
 
 /** Full-jitter exponential backoff: up to 10, 20, 40 … 320 ms. */
