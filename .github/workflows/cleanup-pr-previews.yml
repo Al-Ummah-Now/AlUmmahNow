@@ -1,10 +1,18 @@
 name: Cleanup PR Preview Deployments
 
+# Deletes the preview workers a PR's `deploy-preview` label created
+# (deploy.yml: al-ummah-{web,api,processor,comms,admin-api,admin-web}-pr-<N>).
+# Runs when a PR closes; by hand for older PRs. A preview that owns a custom
+# domain is never deleted: deleting it would detach that hostname (on 2026-11-09
+# a preview owned admin.api.alummahnow.net; the release re-attaches such domains).
+
 on:
+  pull_request:
+    types: [closed]
   workflow_dispatch:
     inputs:
       pr_numbers:
-        description: 'Comma-separated PR numbers to clean up (leave empty for all merged PRs)'
+        description: 'Comma-separated PR numbers to clean up (leave empty for every closed PR with a preview worker)'
         required: false
         type: string
       dry_run:
@@ -17,139 +25,63 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: cleanup-pr-previews
+  cancel-in-progress: false
+
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    # Same-repo PRs only: fork PRs get no secrets and never had previews
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 9.15.4
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Get PR numbers to clean up
-        id: get-prs
-        run: |
-          if [ -n "${{ inputs.pr_numbers }}" ]; then
-            echo "pr_list=${{ inputs.pr_numbers }}" >> $GITHUB_OUTPUT
-          else
-            # Get all merged PRs from the last 30 days
-            PR_LIST=$(gh pr list --state merged --limit 50 --json number --jq '.[].number' | tr '\n' ',' | sed 's/,$//')
-            echo "pr_list=$PR_LIST" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Cleanup preview deployments
-        run: |
-          set +e  # Disable errexit for arithmetic operations
-          IFS=',' read -ra PRS <<< "${{ steps.get-prs.outputs.pr_list }}"
-
-          echo "🧹 Cleaning up preview deployments..."
-          echo "Dry run: ${{ inputs.dry_run }}"
-          echo "PRs to process: ${#PRS[@]}"
-          echo ""
-
-          DELETED=0
-          FAILED=0
-          SKIPPED=0
-
-          for pr_num in "${PRS[@]}"; do
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "Processing PR #${pr_num}"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-            # Web preview
-            WEB_NAME="al-ummah-web-pr-${pr_num}"
-            echo "  Checking: $WEB_NAME"
-            if [ "${{ inputs.dry_run }}" = "true" ]; then
-              echo "  [DRY RUN] Would delete: $WEB_NAME"
-              ((SKIPPED++))
-            else
-              cd apps/web
-              if pnpm wrangler delete "$WEB_NAME" --force 2>&1 | tee /tmp/delete.log | grep -q "successfully deleted\|not found\|does not exist"; then
-                if grep -q "successfully deleted" /tmp/delete.log; then
-                  echo "  ✅ Deleted: $WEB_NAME"
-                  ((DELETED++))
-                else
-                  echo "  ⚪ Already removed: $WEB_NAME"
-                  ((SKIPPED++))
-                fi
-              else
-                echo "  ❌ Failed: $WEB_NAME"
-                ((FAILED++))
-              fi
-              cd - > /dev/null
-            fi
-
-            # API preview
-            API_NAME="al-ummah-api-pr-${pr_num}"
-            echo "  Checking: $API_NAME"
-            if [ "${{ inputs.dry_run }}" = "true" ]; then
-              echo "  [DRY RUN] Would delete: $API_NAME"
-              ((SKIPPED++))
-            else
-              cd apps/api-videos
-              if pnpm wrangler delete "$API_NAME" --force 2>&1 | tee /tmp/delete.log | grep -q "successfully deleted\|not found\|does not exist"; then
-                if grep -q "successfully deleted" /tmp/delete.log; then
-                  echo "  ✅ Deleted: $API_NAME"
-                  ((DELETED++))
-                else
-                  echo "  ⚪ Already removed: $API_NAME"
-                  ((SKIPPED++))
-                fi
-              else
-                echo "  ❌ Failed: $API_NAME"
-                ((FAILED++))
-              fi
-              cd - > /dev/null
-            fi
-
-            # Processor preview
-            PROCESSOR_NAME="al-ummah-processor-pr-${pr_num}"
-            echo "  Checking: $PROCESSOR_NAME"
-            if [ "${{ inputs.dry_run}}" = "true" ]; then
-              echo "  [DRY RUN] Would delete: $PROCESSOR_NAME"
-              ((SKIPPED++))
-            else
-              cd apps/processor
-              if pnpm wrangler delete "$PROCESSOR_NAME" --force 2>&1 | tee /tmp/delete.log | grep -q "successfully deleted\|not found\|does not exist"; then
-                if grep -q "successfully deleted" /tmp/delete.log; then
-                  echo "  ✅ Deleted: $PROCESSOR_NAME"
-                  ((DELETED++))
-                else
-                  echo "  ⚪ Already removed: $PROCESSOR_NAME"
-                  ((SKIPPED++))
-                fi
-              else
-                echo "  ❌ Failed: $PROCESSOR_NAME"
-                ((FAILED++))
-              fi
-              cd - > /dev/null
-            fi
-
-            echo ""
-          done
-
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ Cleanup Summary"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  Deleted: $DELETED workers"
-          echo "  Already removed: $SKIPPED workers"
-          if [ $FAILED -gt 0 ]; then
-            echo "  Failed: $FAILED workers"
-          fi
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      - name: Delete preview workers
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_INPUT: ${{ inputs.pr_numbers }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
+          cf() { curl -sS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$@"; }
+
+          scripts=$(cf "$api/workers/scripts" | jq -r '.result[].id')
+          domains=$(cf "$api/workers/domains?per_page=500" | jq -r '.result[] | "\(.service) \(.hostname)"')
+          previews=$(grep -E '^al-ummah-(web|api|processor|comms|admin-api|admin-web)-pr-[0-9]+$' <<<"$scripts" || true)
+
+          if [ "$EVENT" = "pull_request" ]; then
+            prs="$PR_NUMBER"
+          elif [ -n "$PR_INPUT" ]; then
+            prs=$(tr ',' ' ' <<<"$PR_INPUT")
+          else
+            # Every PR that still has a preview worker, if that PR is closed
+            prs=""
+            for n in $(sed -E 's/.*-pr-//' <<<"$previews" | sort -un); do
+              [ "$(gh pr view "$n" -R "$GITHUB_REPOSITORY" --json state -q .state)" != "OPEN" ] && prs="$prs $n"
+            done
+          fi
+          echo "PRs: ${prs:-none}"
+
+          failed=0
+          for n in $prs; do
+            for w in $(grep -E -- "-pr-${n}\$" <<<"$previews" || true); do
+              owned=$(awk -v w="$w" '$1 == w { print $2 }' <<<"$domains")
+              if [ -n "$owned" ]; then
+                echo "::error::$w owns custom domain(s) $(tr "\n" " " <<<"$owned"); not deleting it (re-attach them to the right worker first)"
+                failed=1
+                continue
+              fi
+              if [ "$DRY_RUN" = "true" ]; then echo "[dry run] would delete $w"; continue; fi
+              if cf -X DELETE "$api/workers/scripts/$w?force=true" | jq -e '.success' >/dev/null; then
+                echo "deleted $w"
+              else
+                echo "::error::could not delete $w"
+                failed=1
+              fi
+            done
+          done
+          exit $failed

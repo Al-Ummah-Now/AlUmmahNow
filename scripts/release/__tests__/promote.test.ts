@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import { currentVersion, isMissingWorker, parseVersionId, promote, releaseApps, ReleaseError, type PromoteDeps, type ReleaseApp } from '../promote.ts';
 import { parseRollbackArgs, rollbackCommands, rollbackTarget } from '../rollback.ts';
 import { runSmoke, type CheckResult } from '../smoke.ts';
+import { ensureCustomDomains, expectedDomains, type DomainRecord } from '../custom-domains.ts';
+import { CfApiError } from '../cf-api.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const V = (n: number) => `${String(n).padStart(8, "0")}-0000-4000-8000-000000000000`;
@@ -76,6 +78,7 @@ const deps = (run: PromoteDeps['run'], smoke: PromoteDeps['smoke'] = async () =>
 	smoke,
 	waitForVersions: async () => {},
 	waitForHosts: async () => {},
+	ensureDomains: async () => {},
 	log: () => {},
 });
 
@@ -235,5 +238,84 @@ describe('d1-migrate', () => {
 				assert.equal(argv.includes('--env'), env === 'stage');
 			}
 		}
+	});
+});
+
+describe('custom domains', () => {
+	it('expects each public host on its env worker, only for the apps released', () => {
+		assert.deepEqual(expectedDomains('production', ['admin-api', 'api-videos', 'processor']), {
+			'videos.api.alummahnow.net': 'videos',
+			'admin.api.alummahnow.net': 'al-ummah-admin-api',
+		});
+		assert.equal(expectedDomains('stage', ['admin-api'])['admin.api.stage.alummahnow.net'], 'al-ummah-admin-api-stage');
+	});
+
+	const fakeCf = (records: DomainRecord[], opts: { refusePut?: boolean } = {}) => {
+		const calls: string[] = [];
+		const cf = {
+			async request<T>(method: string, path: string, body?: { hostname: string; service: string; zone_id: string }): Promise<T> {
+				calls.push(`${method} ${path}${body ? ` ${body.hostname}->${body.service}@${body.zone_id}` : ''}`);
+				if (method === 'GET') return records.map((r) => ({ ...r })) as T;
+				if (method === 'PUT') {
+					const rec = records.find((r) => r.hostname === body!.hostname)!;
+					if (opts.refusePut && rec.service !== body!.service && records.includes(rec)) throw new CfApiError(409, 'hostname in use');
+					rec.service = body!.service;
+					return {} as T;
+				}
+				if (method === 'DELETE') {
+					const rec = records.find((r) => path.endsWith(r.id))!;
+					records.splice(records.indexOf(rec), 1, { ...rec, service: '' });
+					opts.refusePut = false;
+					return {} as T;
+				}
+				throw new Error(method);
+			},
+		};
+		return { cf, calls };
+	};
+	const rec = (hostname: string, service: string): DomainRecord => ({ id: `id-${hostname}`, hostname, service, zone_id: 'zone1' });
+
+	it('re-attaches a prod hostname a PR preview took, keeping the zone', async () => {
+		const { cf, calls } = fakeCf([rec('admin.api.alummahnow.net', 'al-ummah-admin-api-pr-466'), rec('videos.api.alummahnow.net', 'videos')]);
+		const moved = await ensureCustomDomains(cf, expectedDomains('production', ['admin-api', 'api-videos']), () => {});
+		assert.deepEqual(moved, ['admin.api.alummahnow.net']);
+		assert.deepEqual(calls.filter((c) => !c.startsWith('GET')), ['PUT /workers/domains admin.api.alummahnow.net->al-ummah-admin-api@zone1']);
+	});
+
+	it('changes nothing when every hostname is on its worker, and leaves unattached ones alone', async () => {
+		const { cf, calls } = fakeCf([rec('videos.api.alummahnow.net', 'videos')]);
+		const lines: string[] = [];
+		assert.deepEqual(await ensureCustomDomains(cf, expectedDomains('production', ['admin-api', 'api-videos']), (l) => lines.push(l)), []);
+		assert.deepEqual(calls, ['GET /workers/domains?per_page=500']);
+		assert.match(lines.join('\n'), /admin\.api\.alummahnow\.net: not attached/);
+	});
+
+	it('detaches then attaches when the API refuses to move an attached hostname', async () => {
+		const { cf, calls } = fakeCf([rec('admin.api.alummahnow.net', 'al-ummah-admin-api-pr-466')], { refusePut: true });
+		await ensureCustomDomains(cf, expectedDomains('production', ['admin-api']), () => {});
+		assert.deepEqual(calls.filter((c) => !c.startsWith('GET')), [
+			'PUT /workers/domains admin.api.alummahnow.net->al-ummah-admin-api@zone1',
+			'DELETE /workers/domains/id-admin.api.alummahnow.net',
+			'PUT /workers/domains admin.api.alummahnow.net->al-ummah-admin-api@zone1',
+		]);
+	});
+
+	it('promote fixes domains after uploading and before the 0% version check', async () => {
+		const order: string[] = [];
+		const run: PromoteDeps['run'] = (_cwd, args) => {
+			order.push(args.slice(0, 2).join(' '));
+			if (args[0] === 'deployments') return status([V(1), 100]);
+			if (args[0] === 'versions' && args[1] === 'upload') return `Worker Version ID: ${V(9)}`;
+			return '';
+		};
+		await promote(twoApps('production'), 'production', 'r', {
+			...deps(run),
+			ensureDomains: async (env, apps) => void order.push(`domains ${env} ${apps.join(',')}`),
+			waitForVersions: async (_e, _w, override) => void order.push(`wait ${override}`),
+		});
+		const domains = order.indexOf('domains production api-videos,web');
+		assert.ok(domains > order.lastIndexOf('versions upload'), order.join(' | '));
+		assert.ok(domains < order.indexOf('versions deploy'), order.join(' | '));
+		assert.ok(domains < order.indexOf('wait true'));
 	});
 });

@@ -18,6 +18,8 @@
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { createCfClient } from './cf-api.ts';
+import { ensureCustomDomains, expectedDomains } from './custom-domains.ts';
 import { runSmoke, HOSTS, VERSIONED_HEALTH, WORKERS, type CheckResult, type SmokeEnv } from './smoke.ts';
 
 export type ReleaseEnv = 'stage' | 'production';
@@ -110,6 +112,8 @@ export interface PromoteDeps {
 	waitForVersions: (env: ReleaseEnv, wanted: Record<string, string>, override: boolean) => Promise<void>;
 	/** Resolves when every host of the env answers over HTTPS (new custom domains need minutes for DNS + a certificate) */
 	waitForHosts: (env: ReleaseEnv) => Promise<void>;
+	/** Re-attaches each public hostname of `apps` that another worker owns (custom-domains.ts) */
+	ensureDomains: (env: ReleaseEnv, apps: string[]) => Promise<void>;
 	log: (line: string) => void;
 }
 
@@ -157,6 +161,10 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 		log('Bootstrapped workers: waiting for their custom domains to answer');
 		await deps.waitForHosts(env);
 	}
+	// Every worker exists now. Before checking which version a host serves, make sure
+	// the host is attached to this env's worker (a PR preview once took a prod domain).
+	// Nothing serves the candidates yet, so a failure here needs no rollback.
+	await deps.ensureDomains(env, apps.map((a) => a.app));
 
 	// Every worker is attempted even if one rollback fails; the failures are reported together
 	const rollback = (reason: string) => {
@@ -266,6 +274,7 @@ if (isMain) {
 			smoke: (e, overrides) => runSmoke({ env: e, overrides }),
 			waitForVersions,
 			waitForHosts,
+			ensureDomains: async (e, list) => void (await ensureCustomDomains(createCfClient(), expectedDomains(e, list), log)),
 			log,
 		});
 		writeResult({ env, status: 'promoted', released });
