@@ -32,6 +32,7 @@ import {
   newInviteId,
   newLinkToken,
   newUserId,
+  syncInvitesOnRead,
   requestInvitePurge,
   restoreInvite,
   InviteStateError,
@@ -116,7 +117,10 @@ async function lookup(c: C, email: string) {
 
 app.get('/', async (c) => {
   const q = c.req.query();
-  return ok(c, await listInvites(c.env.REPORTS_DB, { status: q.status as InviteListStatus | undefined, q: q.q, cursor: q.cursor, limit: q.limit ? Number(q.limit) : undefined }));
+  const page = await listInvites(c.env.REPORTS_DB, { status: q.status as InviteListStatus | undefined, q: q.q, cursor: q.cursor, limit: q.limit ? Number(q.limit) : undefined });
+  // Open invites on screen get a fresh status read from auth through the queue (seconds, not the 5-minute cron)
+  await syncInvitesOnRead(queueEnv(c), page.items.map((i) => i.id));
+  return ok(c, page);
 });
 
 app.get('/lookup', async (c) => {
@@ -125,7 +129,11 @@ app.get('/lookup', async (c) => {
   return ok(c, await lookup(c, email));
 });
 
-app.get('/:id', async (c) => ok(c, toView(await requireInvite(c))));
+app.get('/:id', async (c) => {
+  const row = await requireInvite(c);
+  await syncInvitesOnRead(queueEnv(c), [row.id]);
+  return ok(c, toView(row));
+});
 
 interface ChannelPlan {
   create: Array<{ name: string; handle: string | null }>;

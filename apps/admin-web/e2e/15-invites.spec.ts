@@ -91,6 +91,8 @@ test.describe('invite creators', () => {
   });
 
   test('INV-02 copy invite link: shown once in an in-app dialog', async ({ page }, testInfo) => {
+    // Waits up to 60 s for the queue to create the auth account: above the suite's 90 s default
+    test.setTimeout(150_000);
     test.skip(!state.inviteId, 'INV-01 did not run');
     // The account reaches auth through the queue within seconds
     await expect.poll(async () => (await adminApi<{ status: string }>(`/api/invites/${state.inviteId}`)).body.result?.status, { timeout: 60_000 }).toBe('invited');
@@ -106,6 +108,8 @@ test.describe('invite creators', () => {
   });
 
   test('INV-03 first sign-in lands in the invited account with its channel', async ({ browser, page: adminPage }, testInfo) => {
+    // Link activation (≤60 s) + sign-up + the Signed in status (≤90 s): every wait fits inside this
+    test.setTimeout(5 * 60_000);
     test.skip(!state.link, 'INV-02 did not run');
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await context.newPage();
@@ -127,6 +131,8 @@ test.describe('invite creators', () => {
       await fillSecret(page.locator('input[name="code"]'), await sinkCode(EMAIL));
       await page.click('button[data-component="button"]');
       await expect(page).toHaveURL(/videos\.[^/]*alummahnow\.net\/en/, { timeout: 30_000 });
+      // The home page fills in after the redirect: settle before the screenshot
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
       await shot(page, testInfo, '7-signed-in');
 
       const token = await page.evaluate(async () => (await (await fetch('/api/auth/token', { credentials: 'same-origin' })).json()) as { accessToken?: string; userId?: string });
@@ -144,7 +150,8 @@ test.describe('invite creators', () => {
     } finally {
       await context.close();
     }
-    await expect.poll(async () => (await adminApi<{ status: string }>(`/api/invites/${state.inviteId}`)).body.result?.status, { timeout: 7 * 60_000, intervals: [15_000] }).toBe('active');
+    // Each read of the invite queues a status read from auth (at most every 15 s), so Signed in shows within seconds
+    await expect.poll(async () => (await adminApi<{ status: string }>(`/api/invites/${state.inviteId}`)).body.result?.status, { timeout: 90_000, intervals: [3_000] }).toBe('active');
     await adminPage.goto(`/users/invites?q=${encodeURIComponent(EMAIL)}`);
     await expect(adminPage.locator(`[data-testid="invite-row"][data-invite-id="${state.inviteId}"]`)).toHaveAttribute('data-status', 'active');
     await shot(adminPage, testInfo, '9-invites-list-signed-in');

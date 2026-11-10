@@ -59,6 +59,10 @@ function fakeVideos(state: { authUsers: Array<{ id: string; email: string; name:
           state.channels.get(transfer[1]).ownerId = body.newOwnerId;
           return reply({ job: { id: `job_${transfer[1]}` } });
         }
+        const userDetail = /^\/users\/(usr_[0-9a-f]+)$/.exec(path);
+        if (userDetail && method === 'GET') return reply({ id: userDetail[1], displayName: '', channels: [] });
+        if (method === 'GET' && path === '/videos') return reply({ items: [], total: 0, page: 1, pageSize: 100 });
+        if (method === 'GET' && path === '/jobs') return reply({ items: [] });
         if (method === 'GET' && path === '/users') return reply({ items: [...state.profiles.values()].map((p) => ({ id: p.id })), total: state.profiles.size, page: 1, pageSize: 20 });
         return reply({ ok: true });
       },
@@ -271,6 +275,38 @@ describe('the queue to auth', () => {
     const now = await t.call('GET', `/api/invites/${inv.id}`);
     assert.equal(now.body.result.status, 'active');
     assert.equal(await scheduleInviteSyncs(t.env as never, Date.now() + 120_000), 0, 'accepted invites are not read again');
+  });
+
+  it('reading an invite asks auth again (queued, at most every 15 s): Signed in shows within seconds, not at the next cron', async () => {
+    const t = setup();
+    const inv = (await t.call('POST', '/api/invites', invite())).body.result.invite;
+    await t.drain();
+    Object.assign(t.auth.invites.get(inv.id), { status: 'active', acceptedAt: Date.now() });
+    // Opening it queues a status read; the next read shows Signed in
+    assert.equal((await t.call('GET', `/api/invites/${inv.id}`)).body.result.status, 'invited');
+    assert.deepEqual(t.queue.messages.map((m) => m.op), ['sync']);
+    // A second look right away does not queue another read (throttled)
+    await t.call('GET', `/api/invites/${inv.id}`);
+    await t.call('GET', '/api/invites');
+    assert.equal(t.queue.messages.length, 1);
+    await t.drain();
+    assert.equal((await t.call('GET', `/api/invites/${inv.id}`)).body.result.status, 'active');
+    // Accepted invites are never read again
+    await t.db.prepare('UPDATE creator_invites SET sync_requested_at = NULL WHERE id = ?').bind(inv.id).run();
+    await t.call('GET', `/api/invites/${inv.id}`);
+    assert.equal(t.queue.messages.length, 0);
+  });
+
+  it('an invited user\'s page and the invites list queue the read too', async () => {
+    const t = setup();
+    const inv = (await t.call('POST', '/api/invites', invite())).body.result.invite;
+    await t.drain();
+    await t.call('GET', `/api/content/users/${inv.userId}`);
+    assert.deepEqual(t.queue.messages.map((m) => [m.op, m.id]), [['sync', inv.id]]);
+    await t.drain();
+    await t.db.prepare('UPDATE creator_invites SET sync_requested_at = NULL WHERE id = ?').bind(inv.id).run();
+    await t.call('GET', '/api/invites');
+    assert.deepEqual(t.queue.messages.map((m) => [m.op, m.id]), [['sync', inv.id]]);
   });
 
   it('user lists carry the invite status (the Invited badge)', async () => {

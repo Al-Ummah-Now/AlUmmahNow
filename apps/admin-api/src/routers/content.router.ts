@@ -39,7 +39,7 @@ import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '
 import { dropAudit, readAudit, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { logger } from '../lib/logger';
-import { inviteStatusByUser } from '../lib/invites';
+import { inviteStatusByUser, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings & VideosClientEnv; Variables: { auth?: AuthContext } };
@@ -364,6 +364,8 @@ app.get('/users/:id', async (c) => {
     jobsFor(c, 'user', id),
   ]);
   const [withInvite] = await withInvites(c, [user]);
+  // An invited user's page reads the invite's status again (queued; "Signed in" within seconds)
+  if (withInvite.invite) await syncInvitesOnRead(c.env as unknown as InviteQueueEnv, [withInvite.invite.id]);
   return ok(c, { ...withInvite, reports, audit, jobs });
 });
 
