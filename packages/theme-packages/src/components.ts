@@ -82,8 +82,9 @@ export const MATERIAL_VARS: [string, string][] = [
 /** Names a {material.*} reference may use: the --m-* properties above, without the prefix. */
 export const MATERIAL_NAMES = new Set(MATERIAL_VARS.map(([, v]) => v).filter((v) => v.startsWith('--m-')).map((v) => v.slice(4)));
 
+/** Player chrome fields. `bar-pad-compact` is optional (packages made before it fall back to `bar-pad`). */
 export const PLAYER_TOKENS = [
-  'bar', 'bar-edge', 'bar-pad', 'bar-inset', 'bar-radius', 'blur',
+  'bar', 'bar-edge', 'bar-pad', 'bar-pad-compact', 'bar-inset', 'bar-radius', 'blur',
   'icon', 'dim',
   'track', 'track-edge', 'buffered', 'played', 'glow',
   'handle', 'handle-edge',

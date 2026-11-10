@@ -607,6 +607,7 @@
         "bar": "linear-gradient(180deg,#6a3d1a,#3d210d 42%,#2a1508)",
         "bar-edge": "inset 0 1px 0 rgb(255 211 154/.5),inset 0 2px 0 rgb(0 0 0/.3),inset 0 -1px 0 rgb(0 0 0/.45)",
         "bar-pad": "8px 12px 2px",
+        "bar-pad-compact": "6px 8px 2px",
         "bar-inset": "0",
         "bar-radius": "0",
         "blur": "none",

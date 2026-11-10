@@ -1025,6 +1025,10 @@ export const SCHEMA: Record<string, any> = {
                 "bar-pad": {
                   "$ref": "#/$defs/cssValue"
                 },
+                "bar-pad-compact": {
+                  "$ref": "#/$defs/cssValue",
+                  "description": "Control bar padding on players under 540px wide. Optional: bar-pad is used when it is absent."
+                },
                 "bar-inset": {
                   "$ref": "#/$defs/cssValue"
                 },

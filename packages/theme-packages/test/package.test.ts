@@ -172,3 +172,16 @@ test('duplicate and versions', () => {
   assert.equal(nextVersion([]), '1.0.0');
   assert.equal(nextVersion(['1.0.0', '1.2.0', '1.10.0']), '1.11.0');
 });
+
+test('player chrome: bar-pad-compact is optional, so packages made before it still load and compile', () => {
+  const { theme, assets } = fawanees();
+  const t = clone(theme) as ThemePackage;
+  assert.equal((t.components.player.chrome as Record<string, string>)['bar-pad-compact'], '14px 8px 2px');
+  delete (t.components.player.chrome as Record<string, string>)['bar-pad-compact'];
+  assert.deepEqual(messages(validatePackage(t, { assets, builtIn: true })), []);
+  const css = compilePackage(t).player;
+  // Left out rather than written as "undefined": the skin falls back to bar-pad
+  assert.ok(!css.includes('bar-pad-compact'), css);
+  assert.ok(!css.includes('undefined'), css);
+  assert.ok(css.includes('--fanous-player-bar-pad: 44px 12px 6px;'), css);
+});
