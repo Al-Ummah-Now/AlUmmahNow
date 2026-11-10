@@ -139,6 +139,7 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       channelId: null,
       isPublic: true,
       isLive: false,
+      isShort: false,
       duration: null,
       scheduleStatus: null,
       uploadStatus: null,
