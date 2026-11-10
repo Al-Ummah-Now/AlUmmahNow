@@ -1431,6 +1431,7 @@ const ar: Messages = {
     deleteDataProgress: 'جارٍ الحذف… {count} فيديو حتى الآن',
     deleteDataDone: 'حُذفت بياناته على الفيديوهات.',
     deleteDataQueued: 'أُضيف إلى قائمة الانتظار. تُحذف بياناته على الفيديوهات في الخلفية.',
+  },
   errorsPage: {
     title: 'الأخطاء',
     subtitle: 'ما تعطّل في تطبيقات الفيديو مجمّعاً، وما يحتاج إلى تدخّل مشرف',

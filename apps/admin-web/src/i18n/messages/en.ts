@@ -1432,6 +1432,7 @@ const en = {
     deleteDataProgress: 'Deleting… {count} videos so far',
     deleteDataDone: 'Their videos data was deleted.',
     deleteDataQueued: 'Queued. Their videos data is being deleted in the background.',
+  },
   errorsPage: {
     title: 'Errors',
     subtitle: 'What went wrong across the videos apps, grouped, and what needs an admin',
