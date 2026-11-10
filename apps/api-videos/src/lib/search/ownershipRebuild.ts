@@ -25,7 +25,12 @@ export const OWNERSHIP_REBUILD_TARGET = 'ownership-index';
 /** Bucket pages (100 objects) one job delivery walks. */
 export const REBUILD_PAGES_PER_STEP = 20;
 
-const TARGET_KIND: Record<OwnershipKind, AdminJobTarget> = { video: 'video', channel: 'channel', profile: 'user' };
+const TARGET_KIND: Record<OwnershipKind, AdminJobTarget> = { video: 'video', channel: 'channel', profile: 'user', playlist: 'channel', stream: 'video' };
+
+/** Target id of the kind's rebuild jobs (playlists and streams share a target kind with channels and videos). */
+function rebuildTargetId(kind: OwnershipKind): string {
+  return kind === 'playlist' || kind === 'stream' ? `${OWNERSHIP_REBUILD_TARGET}:${kind}` : OWNERSHIP_REBUILD_TARGET;
+}
 
 export function isOwnershipKind(value: unknown): value is OwnershipKind {
   return typeof value === 'string' && (ALL_OWNERSHIP_KINDS as readonly string[]).includes(value);
@@ -35,7 +40,7 @@ export type OwnershipRebuildEnv = JobEnv & OwnershipEnv;
 
 /** The kind's latest rebuild jobs, newest first. */
 export function ownershipRebuildJobs(env: OwnershipRebuildEnv, kind: OwnershipKind, limit = 5): Promise<AdminJob[]> {
-  return listJobs(env, { targetKind: TARGET_KIND[kind], targetId: OWNERSHIP_REBUILD_TARGET, limit });
+  return listJobs(env, { targetKind: TARGET_KIND[kind], targetId: rebuildTargetId(kind), limit });
 }
 
 /**
@@ -49,7 +54,7 @@ export async function startOwnershipRebuild(env: OwnershipRebuildEnv, kind: Owne
   const job = await createJob(env, {
     kind: OWNERSHIP_REBUILD_JOB,
     targetKind: TARGET_KIND[kind],
-    targetId: OWNERSHIP_REBUILD_TARGET,
+    targetId: rebuildTargetId(kind),
     params: { kind, fresh: options.fresh !== false },
     actorId,
   });

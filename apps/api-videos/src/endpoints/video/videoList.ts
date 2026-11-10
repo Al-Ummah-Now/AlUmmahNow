@@ -10,7 +10,7 @@ import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
 import { isInternalRecord, isVideoListedFor } from "../../lib/visibility";
 import { waitUntilOf } from "../../lib/search/ownership";
-import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { channelVideosFromIndex, isIndexCursor } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
 import { FIRST_PAGE_TTL_SECONDS, videoListGeneration } from "../../lib/videoListCache";
@@ -229,7 +229,8 @@ export class VideosList extends OptionalAuthRoute {
 			// private, processing or internal records (stage, limit=1, 2026-11-11).
 			const page = await scanFill<VideoType>({
 				bucket,
-				cursor: nextCursor,
+				// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
+				cursor: isIndexCursor(nextCursor) ? null : nextCursor,
 				limit,
 				load: key => repository.getObject(key),
 				isListed: (video): video is VideoType => !!video && Boolean(isVisible(video)),

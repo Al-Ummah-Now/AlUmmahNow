@@ -10,6 +10,8 @@ import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { isSystemPlaylist } from "../../lib/library";
 import { scanFill } from "../../lib/listFill";
+import { playlistListIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+import { isIndexPageCursor, pageFromIndex } from "../../lib/search/indexPage";
 import { normalizeTitleQuery } from "../video/videoList";
 
 // Bounds for scanning the playlists bucket when filtering by channel
@@ -110,17 +112,39 @@ export class PlaylistsList extends OptionalAuthRoute {
         }
 
         if (channelFilter) {
-            // R2 has no secondary index, so scan pages and filter by channel.
-            const matches: PlaylistType[] = [];
             // The channel's managers (owner, admin, editor) see its private playlists too
             const manages = await canManagePlaylist(c.env as never, { channelId: channelFilter }, userId);
+            const listedForChannel = (playlist: PlaylistType | null): playlist is PlaylistType =>
+                !!playlist && playlist.channelId === channelFilter && !isSystemPlaylist(playlist)
+                && (canViewPlaylist(playlist, userId) || (manages && !playlist.isDeleted && !playlist.isHidden));
+            if (!query) {
+                // By last change, one keyset page of the ownership index (kind 'playlist'): the
+                // scan below stopped after 2000 playlists and read every one of them per request
+                const indexed = await pageFromIndex<PlaylistType>({
+                    cursor,
+                    sort: 'updated',
+                    limit,
+                    fetch: (after, pageLimit, offset) => playlistListIds(c.env as never, {
+                        channelId: channelFilter, sort: 'updated', limit: pageLimit, after, offset, privateFor: manages ? true : (userId || null),
+                    }),
+                    load: (id) => repository.getObject(id),
+                    isListed: listedForChannel,
+                });
+                if (indexed) {
+                    logger.debug('[PlaylistsList] Channel playlists listed', { channelId: channelFilter, count: indexed.items.length, source: 'index' });
+                    return { cursor: indexed.cursor, limit, data: await withPlaylistCovers(c.env, indexed.items.map(toPlaylistResponse), userId) };
+                }
+                // Index unavailable: the scan below answers and the rebuild is queued (never run here)
+                if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
+            }
+            // R2 has no secondary index, so scan pages and filter by channel (title searches,
+            // and while the index is unavailable).
+            const matches: PlaylistType[] = [];
             let scanCursor: string | undefined;
             for (let page = 0; page < CHANNEL_SCAN_MAX_PAGES; page++) {
                 const result = await repository.listObjects(CHANNEL_SCAN_PAGE_SIZE, scanCursor);
                 for (const playlist of result.items || []) {
-                    if (playlist.channelId === channelFilter && (canViewPlaylist(playlist, userId) || (manages && !playlist.isDeleted && !playlist.isHidden)) && !isSystemPlaylist(playlist)) {
-                        matches.push(playlist);
-                    }
+                    if (listedForChannel(playlist)) matches.push(playlist);
                 }
                 if (!result.cursor) break;
                 scanCursor = result.cursor;
@@ -141,15 +165,31 @@ export class PlaylistsList extends OptionalAuthRoute {
             };
         }
 
-        // Fill the page: filtering a cut R2 page returned empty pages with a
-        // cursor when the first keys were private or system playlists (lib/listFill.ts).
+        // System playlists (Watch later) are listed in the Library, not with user playlists
+        const listed = (playlist: PlaylistType | null): playlist is PlaylistType => Boolean(playlist) && canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist);
+        // Newest first, one keyset page of the ownership index (kind 'playlist')
+        const indexed = await pageFromIndex<PlaylistType>({
+            cursor,
+            sort: 'latest',
+            limit,
+            fetch: (after, pageLimit, offset) => playlistListIds(c.env as never, { channelId: null, sort: 'latest', limit: pageLimit, after, offset, privateFor: userId || null }),
+            load: (id) => repository.getObject(id),
+            isListed: listed,
+        });
+        if (indexed) {
+            return { cursor: indexed.cursor, limit, data: await withPlaylistCovers(c.env, indexed.items.map(toPlaylistResponse), userId) };
+        }
+        if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
+
+        // Index unavailable: fill the page from the bucket. Filtering a cut R2 page returned
+        // empty pages with a cursor when the first keys were private or system playlists (lib/listFill.ts).
         const scan = await scanFill<PlaylistType>({
             bucket: c.env.playlists,
-            cursor,
+            // An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
+            cursor: isIndexPageCursor(cursor) ? null : cursor,
             limit,
             load: key => repository.getObject(key),
-            // System playlists (Watch later) are listed in the Library, not with user playlists
-            isListed: (playlist): playlist is PlaylistType => Boolean(playlist) && canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist),
+            isListed: listed,
             label: 'PlaylistsList',
         });
 

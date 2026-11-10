@@ -8,15 +8,23 @@ import { DatabaseSync } from 'node:sqlite';
 
 const MIGRATIONS_DIR = join(__dirname, '..', 'migrations', 'search');
 
+/** A statement as it ran (SqliteD1.trace), to check query plans in scale tests. */
+export interface TracedQuery {
+	sql: string;
+	params: unknown[];
+}
+
 class Statement {
-	constructor(private db: DatabaseSync, private sql: string, private values: unknown[] = []) {}
+	constructor(private db: DatabaseSync, private sql: string, private values: unknown[] = [], private trace?: TracedQuery[] | null) {}
 
 	bind(...values: unknown[]) {
-		return new Statement(this.db, this.sql, values);
+		return new Statement(this.db, this.sql, values, this.trace);
 	}
 
 	private params() {
-		return this.values.map(v => (typeof v === 'boolean' ? (v ? 1 : 0) : v === undefined ? null : v)) as any[];
+		const params = this.values.map(v => (typeof v === 'boolean' ? (v ? 1 : 0) : v === undefined ? null : v)) as any[];
+		this.trace?.push({ sql: this.sql, params });
+		return params;
 	}
 
 	async first<T = Record<string, unknown>>(): Promise<T | null> {
@@ -44,6 +52,8 @@ class Statement {
 export class SqliteD1 {
 	db = new DatabaseSync(':memory:');
 	queries = 0;
+	/** When set, every statement run is appended (sql and bound values). */
+	trace: TracedQuery[] | null = null;
 
 	constructor() {
 		for (const file of readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort()) {
@@ -53,7 +63,12 @@ export class SqliteD1 {
 
 	prepare(sql: string) {
 		this.queries++;
-		return new Statement(this.db, sql);
+		return new Statement(this.db, sql, [], this.trace);
+	}
+
+	/** SQLite's plan of one traced statement: its detail lines. */
+	plan(query: TracedQuery): string[] {
+		return (this.db.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...(query.params as any[])) as Array<{ detail: string }>).map(r => r.detail);
 	}
 
 	async batch(statements: Statement[]) {

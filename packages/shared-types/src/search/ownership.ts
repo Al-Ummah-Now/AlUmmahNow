@@ -1,5 +1,5 @@
 /**
- * Ownership index for videos and channels.
+ * Ownership index for videos, channels, playlists, live streams and profiles.
  *
  * The search tables only hold public content. Owner- and channel-scoped
  * listings ("my channels", a channel's videos and totals, channel-filtered
@@ -23,14 +23,33 @@ import { channelMembersOf } from '../channel-roles';
 import { hasOpenFormatIssue } from '../video-format-ops';
 import { resolveDisplayName, type NameFields } from '../display-name';
 
-export type OwnershipKind = 'video' | 'channel' | 'profile';
+export type OwnershipKind = 'video' | 'channel' | 'profile' | 'playlist' | 'stream';
 
 /**
  * Kinds the public endpoints read. Profiles are indexed for the admin's user
  * list only (apps/api-videos/migrations/search/0005_admin_content.sql).
+ * Playlists and live streams (`livestream:<id>` in the videos bucket) back
+ * the channel Playlists and Live tabs (migrations/search/0013_list_indexes.sql).
  */
-export const OWNERSHIP_KINDS: ReadonlyArray<OwnershipKind> = ['video', 'channel'];
-export const ALL_OWNERSHIP_KINDS: ReadonlyArray<OwnershipKind> = ['video', 'channel', 'profile'];
+export const OWNERSHIP_KINDS: ReadonlyArray<OwnershipKind> = ['video', 'channel', 'playlist', 'stream'];
+export const ALL_OWNERSHIP_KINDS: ReadonlyArray<OwnershipKind> = ['video', 'channel', 'profile', 'playlist', 'stream'];
+
+/**
+ * Where each kind is stored: its R2 binding and, for live streams, the key
+ * prefix inside the videos bucket (`livestream:<id>`; the row id is `<id>`).
+ */
+export const OWNERSHIP_SOURCES: Readonly<Record<OwnershipKind, { bucket: string; prefix?: string }>> = {
+  video: { bucket: 'videos' },
+  channel: { bucket: 'channels' },
+  profile: { bucket: 'profiles' },
+  playlist: { bucket: 'playlists' },
+  stream: { bucket: 'videos', prefix: 'livestream:' },
+};
+
+/** R2 key of an ownership row's object. */
+export function ownershipObjectKey(kind: OwnershipKind, id: string): string {
+  return `${OWNERSHIP_SOURCES[kind].prefix ?? ''}${id}`;
+}
 
 /**
  * Version of the admin columns (title, handle, email, verified, suspended,
@@ -129,6 +148,8 @@ export interface OwnershipRow {
   studioStatus: StudioVideoStatus | null;
   category: string | null;
   language: string | null;
+  /** Live stream status: scheduled | live | ended | cancelled (kind 'stream'; migration 0070). */
+  status?: string | null;
   views: number;
   createdAt: number | null;
   updatedAt: number | null;
@@ -165,9 +186,9 @@ function finite(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** The ownership table covers videos and channels (profiles are synced separately). */
+/** The ownership kind of a search entity type (profiles and streams are synced separately; posts have none). */
 export function ownershipKindFor(type: SearchEntityType | string): OwnershipKind | null {
-  return type === 'video' || type === 'channel' ? type : null;
+  return type === 'video' || type === 'channel' || type === 'playlist' ? type : null;
 }
 
 function count(value: unknown): number {
@@ -218,6 +239,48 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       title: name,
       handle: text(obj.userName),
       email: text(obj.email),
+      isVerified: false,
+      isSuspended: false,
+      subscribers: 0,
+    };
+  }
+  if (kind === 'playlist') {
+    return {
+      ...common,
+      channelId: text(obj.channelId),
+      isPublic: obj.isPublic !== false,
+      isLive: false,
+      isShort: false,
+      needsFormat: false,
+      duration: null,
+      scheduleStatus: null,
+      uploadStatus: null,
+      // Watch later and other system playlists are listed in the Library only
+      status: typeof obj.systemType === 'string' || id.startsWith('watch-later-') ? 'system' : null,
+      title: text(obj.name) ?? text(obj.title),
+      handle: null,
+      email: null,
+      isVerified: false,
+      isSuspended: false,
+      subscribers: 0,
+    };
+  }
+  if (kind === 'stream') {
+    const status = text(obj.status) ?? 'scheduled';
+    return {
+      ...common,
+      channelId: text(obj.channelId),
+      isPublic: obj.isPrivate !== true,
+      isLive: status === 'live',
+      isShort: false,
+      needsFormat: false,
+      duration: null,
+      scheduleStatus: null,
+      uploadStatus: null,
+      status,
+      title: text(obj.title),
+      handle: null,
+      email: null,
       isVerified: false,
       isSuspended: false,
       subscribers: 0,
@@ -292,25 +355,28 @@ export function ownershipTombstone(kind: OwnershipKind): string {
 const OWNERSHIP_CHANGED = `(${[
   'owner_id', 'channel_id', 'is_public', 'is_hidden', 'is_deleted', 'is_live', 'duration', 'schedule_status', 'upload_status',
   'views', 'created_at', 'updated_at', 'admin_title', 'handle', 'email', 'is_verified', 'is_suspended', 'subscribers',
-  'admin_cols', 'is_short', 'needs_format', 'studio_status', 'category', 'language',
+  'admin_cols', 'is_short', 'needs_format', 'studio_status', 'category', 'language', 'status',
 ].map((c) => `${OWNERSHIP_TABLE}.${c} IS NOT excluded.${c}`).join(' OR ')})`;
 
 export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number, version = now): SearchStatement {
+  // views only rise: the view counter raises them between object writes
+  // (websocket-server view-counter.ts), and an object read before its flush is not newer.
   return db.prepare(
     `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version,
        admin_title, handle, email, is_verified, is_suspended, subscribers, admin_cols, is_short, needs_format,
-       studio_status, category, language)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       studio_status, category, language, status)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
      WHERE ${NOT_TOMBSTONED}
      ON CONFLICT(kind, id) DO UPDATE SET
        owner_id = excluded.owner_id, channel_id = excluded.channel_id, is_public = excluded.is_public,
        is_hidden = excluded.is_hidden, is_deleted = excluded.is_deleted, is_live = excluded.is_live,
        duration = excluded.duration, schedule_status = excluded.schedule_status, upload_status = excluded.upload_status,
-       views = excluded.views, created_at = excluded.created_at, updated_at = excluded.updated_at,
+       created_at = excluded.created_at, updated_at = excluded.updated_at,
        indexed_at = excluded.indexed_at, source_version = excluded.source_version,
        admin_title = excluded.admin_title, handle = excluded.handle, email = excluded.email, is_verified = excluded.is_verified,
        is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols, is_short = excluded.is_short, needs_format = excluded.needs_format,
-       studio_status = excluded.studio_status, category = excluded.category, language = excluded.language
+       studio_status = excluded.studio_status, category = excluded.category, language = excluded.language, status = excluded.status,
+       views = max(excluded.views, ${OWNERSHIP_TABLE}.views)
      WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version
        AND (excluded.source_version > ${OWNERSHIP_TABLE}.source_version OR ${OWNERSHIP_CHANGED})`,
   ).bind(
@@ -318,7 +384,7 @@ export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: n
     int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now, version,
     row.title ?? null, row.handle ?? null, row.email ?? null, int(row.isVerified === true), int(row.isSuspended === true),
     row.subscribers ?? 0, OWNERSHIP_ADMIN_COLS_VERSION, int(row.isShort), int(row.needsFormat),
-    row.studioStatus, row.category, row.language,
+    row.studioStatus, row.category, row.language, row.status ?? null,
     ownershipTombstone(row.kind), row.id, version,
   );
 }
