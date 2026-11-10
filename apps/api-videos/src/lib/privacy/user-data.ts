@@ -30,6 +30,8 @@
  */
 
 import { eraseUserSubscriptions, exportUserSubscriptions } from '../subscription-store';
+import { defaultPointerPrefix } from '../uploadDefaultPointer';
+import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
@@ -505,7 +507,12 @@ export async function eraseUserData(
 
 	const phases: Phase[] = [
 		deletePrefixPages(asBucket(env.watch_history), `${userId}:`, 'watchHistory'),
-		deletePrefixPages(asBucket(env['upload-defaults']), `${userId}/`, 'uploadDefaults'),
+		async (ctx) => {
+			const uploadDefaults = asBucket(env['upload-defaults']);
+			await deletePrefixPages(uploadDefaults, `${userId}/`, 'uploadDefaults')(ctx);
+			// The default-template pointers (lib/uploadDefaultPointer.ts)
+			await deleteKeys(uploadDefaults, await allKeys(uploadDefaults, defaultPointerPrefix(userId), ctx.budget), ctx.budget);
+		},
 
 		// Channels: remember owned ones (deleted later), remove the user's subscriptions from others
 		(ctx) => {
@@ -544,6 +551,7 @@ export async function eraseUserData(
 			const sections = asBucket(env.channel_sections);
 			for (const channelId of ctx.checkpoint.o) {
 				bump(summary.deleted, 'channelSections', await deleteKeys(sections, await allKeys(sections, `${channelId}/`, ctx.budget), ctx.budget));
+				await deleteKeys(sections, [sectionOrderKey(channelId)], ctx.budget);
 				await deleteKeys(asBucket(env.channel_tabs), [`channel-tabs/${channelId}`], ctx.budget);
 			}
 		},

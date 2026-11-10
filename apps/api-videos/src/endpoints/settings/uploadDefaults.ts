@@ -5,6 +5,7 @@
 
 import { Str, Bool, Num } from 'chanfana';
 import { z } from 'zod';
+import { isDefaultTemplate, pointerCache, setDefaultTemplate } from '../../lib/uploadDefaultPointer';
 import R2Repository from '../../lib/r2Repo';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -120,8 +121,16 @@ export class ListUploadDefaultsEndpoint extends AuthenticatedRoute {
         }
       }
 
-      // Find default template
-      const defaultTemplate = templates.find((t) => t.isDefault);
+      // Default per scope from its pointer document (SCALABILITY-AUDIT AV-20);
+      // scopes without one still use the templates' own flags
+      const pointerFor = pointerCache(bucket, userId);
+      for (const template of templates) {
+        template.isDefault = isDefaultTemplate(template, await pointerFor(template.channelId));
+      }
+      const queriedPointer = await pointerFor(channelId);
+      const defaultTemplate = queriedPointer
+        ? templates.find((t) => t.id === queriedPointer.defaultTemplateId)
+        : templates.find((t) => t.isDefault);
 
       const response = {
         success: true,
@@ -262,11 +271,6 @@ export class CreateUploadDefaultEndpoint extends AuthenticatedRoute {
       // Generate template ID
       const templateId = crypto.randomUUID();
 
-      // If setting as default, unset other defaults
-      if (requestData.isDefault) {
-        await this.unsetOtherDefaults(userId, requestData.channelId, bucket);
-      }
-
       // Create template object
       const now = new Date().toISOString();
       const template: UploadTemplate = {
@@ -293,6 +297,12 @@ export class CreateUploadDefaultEndpoint extends AuthenticatedRoute {
       // Save to R2
       await repo.putObject(key, template);
 
+      // Becoming the default replaces the scope's previous default in one
+      // conditional write (SCALABILITY-AUDIT AV-20)
+      if (template.isDefault) {
+        await setDefaultTemplate(bucket, userId, template);
+      }
+
       return c.json(
         {
           success: true,
@@ -311,36 +321,6 @@ export class CreateUploadDefaultEndpoint extends AuthenticatedRoute {
         },
         500
       );
-    }
-  }
-
-  /**
-   * Unset default flag on other templates
-   */
-  private async unsetOtherDefaults(
-    userId: string,
-    channelId: string | undefined,
-    bucket: R2Bucket
-  ): Promise<void> {
-    try {
-      const repo = new R2Repository<UploadTemplate>(bucket);
-      const prefix = channelId ? `${userId}/${channelId}/` : `${userId}/`;
-
-      const result = await bucket.list({ prefix });
-
-      for (const object of result.objects) {
-        if (!object.key) continue;
-
-        const template = await repo.getObject(object.key);
-        if (template && template.isDefault) {
-          template.isDefault = false;
-          template.updatedAt = new Date().toISOString();
-          await repo.putObject(object.key, template);
-        }
-      }
-    } catch (error) {
-      logger.error('Error unsetting other defaults:', error);
-      // Don't fail the request if this fails
     }
   }
 }

@@ -1,6 +1,7 @@
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { withResolvedPosition } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import {
   Channel,
@@ -196,24 +197,33 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
       );
     }
 
-    // Update section (partial)
-    const updatedSection: ChannelSection = {
-      ...section,
-      ...(input.title !== undefined && { title: input.title }),
-      ...(input.titleLocalized !== undefined && { titleLocalized: input.titleLocalized }),
-      ...(input.style !== undefined && { style: input.style }),
-      ...(input.videoIds !== undefined && { videoIds: input.videoIds }),
-      ...(input.playlistId !== undefined && { playlistId: input.playlistId }),
-      ...(input.playlistIds !== undefined && { playlistIds: input.playlistIds }),
-      ...(input.channelIds !== undefined && { channelIds: input.channelIds }),
-      ...(input.itemCount !== undefined && { itemCount: input.itemCount }),
-      ...(input.showTimestamp !== undefined && { showTimestamp: input.showTimestamp }),
-      ...(input.showChannelName !== undefined && { showChannelName: input.showChannelName }),
-      dateModified: new Date().toISOString(),
-    };
-
-    // Save updated section
-    await sectionsRepo.putObject(`${channelId}/${sectionId}`, updatedSection);
+    // Apply the partial update to the fresh section with a conditional write
+    // (SCALABILITY-AUDIT AV-20); a section deleted meanwhile is not re-created
+    const saved = await sectionsRepo.updateObject(`${channelId}/${sectionId}`, (fresh) => {
+      Object.assign(fresh, {
+        ...(input.title !== undefined && { title: input.title }),
+        ...(input.titleLocalized !== undefined && { titleLocalized: input.titleLocalized }),
+        ...(input.style !== undefined && { style: input.style }),
+        ...(input.videoIds !== undefined && { videoIds: input.videoIds }),
+        ...(input.playlistId !== undefined && { playlistId: input.playlistId }),
+        ...(input.playlistIds !== undefined && { playlistIds: input.playlistIds }),
+        ...(input.channelIds !== undefined && { channelIds: input.channelIds }),
+        ...(input.itemCount !== undefined && { itemCount: input.itemCount }),
+        ...(input.showTimestamp !== undefined && { showTimestamp: input.showTimestamp }),
+        ...(input.showChannelName !== undefined && { showChannelName: input.showChannelName }),
+        dateModified: new Date().toISOString(),
+      });
+    });
+    if (!saved) {
+      return c.json(
+        {
+          success: false,
+          error: 'Section not found',
+        },
+        404
+      );
+    }
+    const updatedSection = await withResolvedPosition(c.env.channel_sections, channelId, saved);
 
     // Queue analytics event
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionUpdate, {
