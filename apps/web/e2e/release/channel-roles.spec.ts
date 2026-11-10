@@ -107,11 +107,19 @@ test('a channel role shows under "Channels you manage" live, and disappears when
     await expect(member.page.locator('[data-testid="nav-channel-group-owned"]')).toContainText('Your channels');
 
     // Switching to the managed channel works. The switch is a Server Action
-    // whose response sets the session cookie: wait for the menu to mark the
-    // channel active before loading another page, or the navigation aborts the
-    // request and the cookie never arrives.
+    // whose response sets the session cookie: see it take effect on this page
+    // first (the menu reloads and closes), without navigating, which would
+    // abort the request so the cookie never arrives. Then it holds on a new load.
     await option.click();
-    await expect(option).toHaveAttribute('aria-checked', 'true', { timeout: 30000 });
+    const activeChannel = member.page.locator('[data-testid="nav-active-channel"]:visible').first();
+    await expect(async () => {
+      if (!(await activeChannel.isVisible())) {
+        const back = member.page.locator('[data-testid="nav-menu-back"]:visible').first();
+        if (await back.isVisible()) await back.click();
+        else await member.page.locator('[data-testid="nav-menu-trigger"]:visible').first().click({ timeout: 3000 });
+      }
+      await expect(activeChannel).toHaveAttribute('href', new RegExp(`/channels/${ownerChannel}$`), { timeout: 3000 });
+    }).toPass({ timeout: 45000 });
     await expect(async () => {
       await member.page.goto(`${target().web}/en`, { waitUntil: 'load' });
       const trigger = member.page.locator('[data-testid="nav-menu-trigger"]:visible').first();

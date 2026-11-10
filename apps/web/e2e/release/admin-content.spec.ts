@@ -71,8 +71,8 @@ const publicStatus = async (path: string) => (await fetch(`${target().api}${path
 
 /**
  * Waits until the page's jobs panel stops re-reading the page (no job in
- * progress). Navigating away while it does (router.refresh every 3s) crashed
- * WebKit's page ("page.goto: Page crashed", and earlier on page.reload).
+ * progress, so no router.refresh every 3s): the next page load is not
+ * raced by a refresh of the page being left.
  */
 async function jobsIdle(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="jobs-panel"] [data-active="true"]'), 'a job is still running on this page').toHaveCount(0, { timeout: JOB_TIMEOUT });
@@ -135,7 +135,13 @@ test.describe('Release: admin content management', () => {
     const tag = `${testInfo.project.name}-${Date.now().toString(36)}`;
 
     const creatorContext = await browser.newContext();
-    const creator = await signUpOnWeb(await creatorContext.newPage(), 'rel-content-owner');
+    const creatorPage = await creatorContext.newPage();
+    const creator = await signUpOnWeb(creatorPage, 'rel-content-owner');
+    // The creator works through the API (bearer token) from here on. Its page sat
+    // on the videos home, whose hero and card previews keep playing video for
+    // the whole test: on Linux WebKit the admin page then crashed on navigation
+    // ("page.goto: Page crashed", earlier "page.reload: Page crashed").
+    await creatorPage.close();
     await createProfile(creator);
     const channelId = await createChannel(creator, `Release E2E content ${tag}`);
     const videoTitle = `Release E2E content video ${tag}`;
