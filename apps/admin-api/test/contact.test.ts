@@ -117,7 +117,8 @@ describe('contact permissions (RBAC)', () => {
       assert.equal(hasPermission(roles, 'contact:read'), false, String(roles));
       assert.equal(hasPermission(roles, 'contact:manage'), false, String(roles));
     }
-    assert.deepEqual(permissionsFor(['Admin']), ['contact:manage', 'contact:read']);
+    assert.deepEqual(permissionsFor(['Admin']), ['contact:manage', 'contact:read', 'videos:processing']);
+    assert.deepEqual(permissionsFor(['Moderator']), []);
   });
 });
 
