@@ -4,7 +4,7 @@ import { withAuthorizeLocale } from '@/lib/auth/authorize-locale';
 import { isLocaleSupported } from '@/lib/i18n/utils';
 import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 import { RETURN_COOKIE, SILENT_COOKIE, parsePrompt, safeReturnPath } from '@/lib/auth/silent-sign-in';
-import { STATE_COOKIE, newStateNonce, stateCookieOptions, withState } from '@/lib/auth/oauth-state';
+import { PKCE_COOKIE, STATE_COOKIE, newStateNonce, pkceCookieValue, stateCookieOptions, withState } from '@/lib/auth/oauth-state';
 
 /**
  * GET /api/auth/login?prompt=none|login&return=/en/watch/...&locale=en
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   const host = req.headers.get('host') ?? url.host;
   const protocol = host.includes('localhost') ? 'http' : 'https';
-  const { url: authorizeUrl } = await getOpenAuthClient().authorize(`${protocol}://${host}/api/callback`, 'code');
+  const { url: authorizeUrl, challenge } = await getOpenAuthClient().authorize(`${protocol}://${host}/api/callback`, 'code', { pkce: true });
   // Bind the callback to this browser (login CSRF)
   const nonce = newStateNonce();
   const target = new URL(withAuthorizeLocale(withState(authorizeUrl, nonce), locale));
@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
   const cookie = { httpOnly: true, sameSite: 'lax' as const, secure: protocol === 'https', path: '/', maxAge: 600 };
   response.cookies.set('auth_locale', locale, cookie);
   response.cookies.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === 'https'));
+  if (challenge.verifier) response.cookies.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === 'https'));
   if (returnPath) response.cookies.set(RETURN_COOKIE, returnPath, cookie);
   else response.cookies.delete(RETURN_COOKIE);
   if (prompt === 'none') response.cookies.set(SILENT_COOKIE, '1', cookie);

@@ -69,13 +69,13 @@ describe('GET /api/callback', () => {
     const res = await GET(request(`https://videos.example/api/callback?code=abc&locale=en&state=${NONCE}`, BOUND));
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/en/auth/error' });
     // An authorize from an older build carried ?locale= in redirect_uri (#209)
-    expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback?locale=en');
+    expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback?locale=en', undefined);
   });
 
   it('exchanges with the exact redirect_uri used at authorize (bare callback; locale is in a cookie)', async () => {
     exchange.mockResolvedValue({ err: new Error('invalid_grant') });
     await GET(request(`https://videos.example/api/callback?code=abc&state=${NONCE}`, { auth_locale: 'ar', ...BOUND }));
-    expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback');
+    expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback', undefined);
   });
 
   describe('silent sign-in (prompt=none from the client probe or an account switch)', () => {
@@ -147,10 +147,18 @@ describe('GET /api/callback', () => {
       expect(exchange).not.toHaveBeenCalled();
     });
 
+    it('sends the PKCE verifier stored for this state, never one bound to another state', async () => {
+      exchange.mockResolvedValue({ err: new Error('invalid_grant') });
+      await GET(request(`https://videos.example/api/callback?code=abc&state=${NONCE}`, { ...BOUND, auth_pkce: `${NONCE}.ver-1` }));
+      expect(exchange).toHaveBeenLastCalledWith('abc', 'https://videos.example/api/callback', 'ver-1');
+      await GET(request(`https://videos.example/api/callback?code=abc&state=${NONCE}`, { ...BOUND, auth_pkce: `${'e'.repeat(64)}.ver-x` }));
+      expect(exchange).toHaveBeenLastCalledWith('abc', 'https://videos.example/api/callback', undefined);
+    });
+
     it('a matching state proceeds to the code exchange', async () => {
       exchange.mockResolvedValue({ err: new Error('invalid_grant') });
       await GET(request(`https://videos.example/api/callback?code=abc&state=${NONCE}`, BOUND));
-      expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback');
+      expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback', undefined);
     });
   });
 });

@@ -6,7 +6,7 @@ import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 import { startSingleSignOut } from "./auth/single-sign-out"
-import { newStateNonce, stateCookieOptions, withState, STATE_COOKIE } from "./auth/oauth-state"
+import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from "./auth/oauth-state"
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -135,13 +135,15 @@ export async function login(locale: string = 'en') {
   // An interactive sign-in: not silent, back to the locale's home
   cookieStore.delete("auth_silent")
   cookieStore.delete("auth_return")
-  const { url } = await client.authorize(
+  const { url, challenge } = await client.authorize(
     `${protocol}://${host}/api/callback`,
     "code",
+    { pkce: true },
   )
-  // Bind the callback to this browser (login CSRF)
+  // Bind the callback to this browser (login CSRF), with its PKCE verifier
   const nonce = newStateNonce()
   cookieStore.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === "https"))
+  if (challenge.verifier) cookieStore.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === "https"))
   redirect(withAuthorizeLocale(withState(url, nonce), locale))
 }
 

@@ -1,4 +1,4 @@
-import { newStateNonce, stateCookieOptions, stateMatches, withState } from '../oauth-state';
+import { newStateNonce, pkceCookieValue, pkceVerifierFor, stateCookieOptions, stateMatches, withState } from '../oauth-state';
 
 describe('oauth state', () => {
   it('nonces are long, URL-safe and unique', () => {
@@ -22,5 +22,17 @@ describe('oauth state', () => {
   });
   it('cookie: httpOnly, SameSite=Lax, 10 minutes, scoped to the callbacks', () => {
     expect(stateCookieOptions(true)).toEqual({ httpOnly: true, secure: true, sameSite: 'lax', path: '/api/callback', maxAge: 600 });
+  });
+});
+
+describe('PKCE verifier cookie', () => {
+  const nonce = 'a'.repeat(64);
+  it('returns the verifier only for the state it was bound to', () => {
+    const cookie = pkceCookieValue(nonce, 'verifier-1');
+    expect(pkceVerifierFor(nonce, cookie)).toBe('verifier-1');
+    expect(pkceVerifierFor('b'.repeat(64), cookie)).toBeUndefined();
+    expect(pkceVerifierFor(nonce, undefined)).toBeUndefined();
+    expect(pkceVerifierFor(null, cookie)).toBeUndefined();
+    expect(pkceVerifierFor(nonce, 'no-dot')).toBeUndefined();
   });
 });

@@ -59,7 +59,7 @@ describe('GET /api/callback/multi-account', () => {
     exchange.mockResolvedValue({ err: new Error('invalid_grant') });
     const res = await GET(request(`https://videos.example/api/callback/multi-account?code=abc&locale=ar&state=${NONCE}`, { auth_state: NONCE }));
     expect(res).toEqual({ kind: 'redirect', url: 'https://videos.example/ar/auth/error' });
-    expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback/multi-account');
+    expect(exchange).toHaveBeenCalledWith('abc', 'https://videos.example/api/callback/multi-account', undefined);
   });
 
   it('refuses an add-account callback this browser did not start: no exchange, no account added', async () => {
