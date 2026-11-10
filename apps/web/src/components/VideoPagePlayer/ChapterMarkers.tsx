@@ -49,7 +49,7 @@ export function ChapterMarkers({
 }: ChapterMarkersProps) {
   const { lang } = useLanguage();
 
-  const handleMarkerClick = useCallback((e: React.MouseEvent, chapter: VideoChapter) => {
+  const handleMarkerClick = useCallback((e: React.MouseEvent<HTMLSpanElement>, chapter: VideoChapter) => {
     e.stopPropagation();
     onSeek(chapter);
   }, [onSeek]);
@@ -60,6 +60,8 @@ export function ChapterMarkers({
 
   // The progress bar runs left to right in both languages (docs/specs/VIDEO-PLAYER.md
   // section 5), so markers are placed from the left; chapter titles follow the language.
+  // Markers are plain spans: they sit inside the seek slider, which may not hold anything
+  // focusable (axe nested-interactive), and keyboard users reach chapters from the chapter list.
   return (
     <div className={`vjs-fanous-chapters ${className}`} dir="ltr" aria-hidden="true">
       {chapters.map((chapter) => {
@@ -70,15 +72,13 @@ export function ChapterMarkers({
         const isCurrent = currentChapter?.id === chapter.id;
 
         return (
-          <button
+          <span
             key={chapter.id}
-            type="button"
-            tabIndex={-1}
             onClick={(e) => handleMarkerClick(e, chapter)}
             className="vjs-fanous-chapter-mark"
             data-current={isCurrent || undefined}
+            data-chapter={`${formatTime(chapter.startTime)} ${title}`}
             style={{ left: `${position}%` }}
-            aria-label={`${formatTime(chapter.startTime)} ${title}`}
           />
         );
       })}

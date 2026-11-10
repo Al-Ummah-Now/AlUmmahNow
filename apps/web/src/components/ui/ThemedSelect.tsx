@@ -33,7 +33,8 @@ export function ThemedSelect({ label, value, options, onChange, icon, dir, testI
     <Menu.Root dir={dir}>
       <Menu.Trigger className="ts-trigger" data-testid={testId} aria-label={`${label}: ${current}`}>
         {icon}
-        <span>{label}</span>
+        {/* The space keeps the visible text "label value" inside the accessible name "label: value" */}
+        <span>{label}</span>{' '}
         <span className="ts-value">{current}</span>
       </Menu.Trigger>
       <Menu.Portal>
