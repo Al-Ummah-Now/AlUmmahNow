@@ -32,6 +32,16 @@ describe('Bunny name prefix (stage shares the QA library)', () => {
     ]);
   });
 
+  it('a user title can never pass for another env prefix (the reaper keys orphans on it)', async () => {
+    const bodies = captureBodies();
+    await new BunnyStreamClient('k').forEnv({}).createVideo(1, { title: '[stage] Lecture' });
+    await new BunnyStreamClient('k').forEnv({ BUNNY_NAME_PREFIX: '' }).updateVideo(1, 'v', { title: ' [qa]  [x] Talk' });
+    await new BunnyStreamClient('k').forEnv({ BUNNY_NAME_PREFIX: '[stage] ' }).createVideo(1, { title: '[prod] Lecture' });
+    await new BunnyStreamClient('k').forEnv({}).createVideo(1, { title: '[stage] ' });
+    await new BunnyStreamClient('k').forEnv({}).createVideo(1, { title: '[Part 1]Lecture' });
+    assert.deepEqual(bodies, [{ title: 'Lecture' }, { title: 'Talk' }, { title: '[stage] Lecture' }, { title: 'stage ' }, { title: '[Part 1]Lecture' }]);
+  });
+
   it('leaves names alone when the env sets no prefix (QA, production)', async () => {
     const bodies = captureBodies();
     await new BunnyStreamClient('k').forEnv({ BUNNY_NAME_PREFIX: '' }).createVideo(1, { title: 'Lecture' });
