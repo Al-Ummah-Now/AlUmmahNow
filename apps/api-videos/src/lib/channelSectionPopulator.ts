@@ -8,6 +8,7 @@
  * - subscribed_channels: Public channels the channel owner is subscribed to
  */
 
+import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { subscribedChannelIds } from './subscription-store';
 import R2Repository from './r2Repo';
 import { VideoObject, ChannelSection, ChannelSectionView, Channel, Profile } from '@al-ummah/shared-types';
@@ -156,7 +157,7 @@ async function getChannelUploads(
     if (indexed) return indexed.videos;
 
     logger.info('[SectionPopulator] Ownership index unavailable; scanning bucket', { channelId, sort });
-    const listResult = await env.videos.list({ limit: 1000 });
+    const listResult = await env.videos.list({ limit: FALLBACK_SCAN_OBJECTS });
     const keys: string[] = (listResult.objects || []).map((obj: { key: string }) => obj.key);
     const videos: VideoObject[] = [];
     for (let i = 0; i < keys.length; i += SCAN_CONCURRENCY) {

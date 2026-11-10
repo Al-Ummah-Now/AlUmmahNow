@@ -22,9 +22,11 @@ import {
   COMMUNITY_POST_KEY,
   SearchDb,
   SearchEntityType,
+  MessageType,
+  SearchIndexSyncPayload,
   invalidateOwnership,
   ownershipKindFor,
-  syncOwnershipSafely,
+  syncOwnership,
   r2Version,
   syncSearchDocument,
 } from '@al-ummah/shared-types';
@@ -106,21 +108,40 @@ export class SearchSyncQueue {
   }
 }
 
-async function syncOwnershipInline(db: SearchDb, type: SearchEntityType, id: string, object: unknown, version: number): Promise<void> {
+/** Queue producer binding (the processor applies SearchIndexSync messages, with retries). */
+type QueueBinding = { send(message: unknown): Promise<unknown> };
+
+/**
+ * Write the ownership row inline. When that write fails, the item is handed to
+ * the processor as a SearchIndexSync message (retried by the queue) instead of
+ * marking the whole index incomplete, which sent every reader in every isolate
+ * to bucket scans at once (SCALABILITY-AUDIT AV-16). Only when the message
+ * cannot be sent either is the index marked incomplete.
+ */
+async function syncOwnershipInline(db: SearchDb, queue: QueueBinding | undefined, type: SearchEntityType, id: string, object: unknown, version: number): Promise<void> {
   const kind = ownershipKindFor(type);
   if (!kind) return;
-  const outcome = await syncOwnershipSafely(db, kind, id, object, Date.now(), version);
-  if (outcome.ok === false) {
-    logger.warn('[SearchSync] Ownership index write failed; index marked incomplete', {
-      kind,
-      id,
-      error: outcome.error,
-      invalidated: outcome.invalidated,
-    });
+  try {
+    await syncOwnership(db, kind, id, object, Date.now(), version);
+    return;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (queue) {
+      try {
+        const payload: SearchIndexSyncPayload = { entity: type, id, object: object ?? null, version };
+        await queue.send({ id: crypto.randomUUID(), type: MessageType.SearchIndexSync, payload, timestamp: Date.now() });
+        logger.warn('[SearchSync] Ownership index write failed; queued for the processor', { kind, id, error: reason });
+        return;
+      } catch (sendError) {
+        logger.warn('[SearchSync] Could not queue the ownership write', { kind, id, error: sendError instanceof Error ? sendError.message : String(sendError) });
+      }
+    }
+    await invalidateOwnership(db, kind).catch(() => undefined);
+    logger.warn('[SearchSync] Ownership index write failed; index marked incomplete', { kind, id, error: reason });
   }
 }
 
-function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQueue, db: SearchDb): R2Bucket {
+function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQueue, db: SearchDb, producer?: QueueBinding): R2Bucket {
   const tracksOwnership = ownershipKindFor(type) !== null;
   return new Proxy(bucket, {
     get(target, prop) {
@@ -147,7 +168,7 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
                 await invalidateOwnership(db, ownershipKindFor(type)!).catch(() => undefined);
               }
             }
-            if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, type, id, decoded, version);
+            if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, producer, type, id, decoded, version);
             queue.enqueue(type, id, decoded !== undefined
               ? async () => decoded
               : async () => {
@@ -165,7 +186,7 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
           for (const key of Array.isArray(keys) ? keys : [keys]) {
             const id = searchIdForKey(type, key);
             if (!id) continue;
-            if (tracksOwnership) await syncOwnershipInline(db, type, id, null, version);
+            if (tracksOwnership) await syncOwnershipInline(db, producer, type, id, null, version);
             queue.enqueue(type, id, async () => null, version);
           }
         };
@@ -187,7 +208,7 @@ export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionCont
   const wrapped: Record<string, unknown> = { ...(env as Record<string, unknown>) };
   for (const [binding, type] of Object.entries(SEARCH_BUCKETS)) {
     const bucket = wrapped[binding] as R2Bucket | undefined;
-    if (bucket && typeof bucket.put === 'function') wrapped[binding] = wrapBucket(bucket, type, queue, db);
+    if (bucket && typeof bucket.put === 'function') wrapped[binding] = wrapBucket(bucket, type, queue, db, (env as { queue?: QueueBinding }).queue);
   }
   return wrapped as E;
 }

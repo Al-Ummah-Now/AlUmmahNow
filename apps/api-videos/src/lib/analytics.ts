@@ -14,6 +14,7 @@
 
 import { logger } from './logger';
 import { OwnershipEnv, ownerContentIds, scheduleOwnershipHeal } from './search/ownership';
+import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 
 export interface AnalyticsVideo {
   id: string;
@@ -313,14 +314,17 @@ export async function loadOwnedChannels(bucket: R2Bucket, userId: string, lookup
     const channels = await Promise.all(ids.map(id => readJson<AnalyticsChannel>(bucket, id)));
     return channels.filter(isOwned);
   }
+  // Fallback while the ownership index is incomplete: bounded (SCALABILITY-AUDIT AV-16)
   const owned: AnalyticsChannel[] = [];
   let cursor: string | undefined;
+  let scanned = 0;
   do {
     const page = await bucket.list({ limit: 100, cursor });
+    scanned += page.objects.length;
     const channels = await Promise.all(page.objects.map(o => readJson<AnalyticsChannel>(bucket, o.key)));
     owned.push(...channels.filter(isOwned));
     cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
+  } while (cursor && scanned < FALLBACK_SCAN_OBJECTS);
   return owned;
 }
 
@@ -333,7 +337,7 @@ export async function loadOwnedVideos(
   bucket: R2Bucket,
   userId: string,
   channelIds: Set<string>,
-  maxObjects = 2000,
+  maxObjects = FALLBACK_SCAN_OBJECTS,
   lookup?: OwnershipLookup
 ): Promise<AnalyticsVideo[]> {
   const isOwned = (video: AnalyticsVideo | null): video is AnalyticsVideo =>

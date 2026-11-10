@@ -102,7 +102,9 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
     // Validation stays outside the try: invalid input is a 400 from chanfana
     const data = await this.getValidatedData<typeof this.schema>();
     try {
-      const { limit, cursor, strategy = 'popular', excludeWatched = false, seedVideoId } = data.query;
+      const { limit: requested, cursor, strategy = 'popular', excludeWatched = false, seedVideoId } = data.query;
+      // 1–50 as documented; list sizes below are multiples of it (SCALABILITY-AUDIT AV-16)
+      const limit = Math.min(50, Math.max(1, Math.trunc(requested) || 12));
       const userId = this.getUserId(c);
 
       // Initialize managers

@@ -6,6 +6,8 @@ import { ResponseError } from '../../lib/types';
 import R2Repository from '../../lib/r2Repo';
 import type { VideoObject, ScheduledVideoInfo } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { ownerScheduledVideoIds } from '../../lib/search/ownership';
+import { FALLBACK_SCAN_OBJECTS } from '../../lib/scanBudget';
 
 const ScheduledVideoInfoSchema = z.object({
   videoId: Str(),
@@ -97,12 +99,16 @@ export class VideoScheduleList extends OptionalAuthRoute {
       // Validate limit
       const validLimit = Math.min(Math.max(1, limit), 100);
 
-      // Fetch all videos for user
+      // The user's scheduled videos from the ownership index (SCALABILITY-AUDIT AV-16);
+      // a bounded scan only while the index is unavailable
       const videoRepo = new R2Repository<VideoObject>(c.env.videos);
-      const allVideos = await videoRepo.listObjects(1000); // Get up to 1000 videos
+      const ids = userId ? await ownerScheduledVideoIds(c.env as never, userId, { channelId, status }) : [];
+      const candidates: VideoObject[] = ids
+        ? (await Promise.all(ids.map((id) => videoRepo.getObject(id)))).filter((v): v is VideoObject => v !== null)
+        : (await videoRepo.listObjects(FALLBACK_SCAN_OBJECTS)).items;
 
       // Filter videos
-      let scheduledVideos: VideoObject[] = allVideos.items.filter((video) => {
+      let scheduledVideos: VideoObject[] = candidates.filter((video) => {
         // Must belong to user
         if (video.userId !== userId) return false;
 

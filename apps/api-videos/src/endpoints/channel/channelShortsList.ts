@@ -1,4 +1,5 @@
 import { Num, Str } from "chanfana";
+import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
@@ -169,7 +170,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 			} else {
 				// Index incomplete (or a legacy R2 cursor): one bounded slice of the
 				// bucket, as before (the helper schedules an index heal).
-				const videos = await repository.listObjects(limit * 10, cursor);
+				const videos = await repository.listObjects(Math.min(limit * 10, FALLBACK_SCAN_OBJECTS), cursor);
 				const channelShorts = (videos.items || []).filter(isListed).sort(compare);
 				limitedShorts = channelShorts.slice(0, limit);
 				nextCursor = channelShorts.length > limit ? (videos.cursor || "") : "";

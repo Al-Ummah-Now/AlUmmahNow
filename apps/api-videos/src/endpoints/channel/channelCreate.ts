@@ -14,7 +14,9 @@ import { ownerContentIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/s
 type StoredChannel = z.infer<typeof BusinessChannel>;
 
 /** Pages of the bucket scan used while the ownership index is incomplete. */
-const DUPLICATE_SCAN_MAX_PAGES = 50;
+// A uniqueness guard, so it gets more of the budget than other fallbacks; still
+// bounded below the subrequest limit (SCALABILITY-AUDIT AV-16)
+const DUPLICATE_SCAN_MAX_PAGES = 8;
 
 function sameName(channel: StoredChannel | null, userId: string, wantedName: string): boolean {
 	return !!channel && channel.userId === userId && !channel.isDeleted

@@ -21,6 +21,7 @@ import { OwnershipBackfillPost } from '../src/endpoints/search/searchBackfill';
 import { AnalyticsChannelGet, AnalyticsSummaryGet } from '../src/endpoints/analytics/analyticsOwner';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
+import { MessageType } from '../src/lib/queue';
 
 const NOW = Date.parse('2026-11-06T12:00:00.000Z');
 
@@ -134,15 +135,31 @@ describe('ownership index sync on R2 writes', () => {
 		assert.equal(db.count('content_ownership'), 0);
 	});
 
-	it('marks the index incomplete instead of failing the write when D1 rejects the row', async () => {
+	it('hands a write D1 rejects to the processor and keeps the index complete (AV-16)', async () => {
 		const { db, raw, env } = ownershipEnv();
 		await env.channels.put('c1', JSON.stringify(channel('c1')));
 		await runOwnershipPass(raw as never, 'channel');
 		assert.equal(await isOwnershipComplete(db, 'channel'), true);
 
-		db.db.exec('DROP TABLE content_ownership');
+		db.db.exec('ALTER TABLE content_ownership RENAME TO content_ownership_away');
 		await env.channels.put('c2', JSON.stringify(channel('c2')));
 		assert.ok(raw.channels.read('c2'), 'the R2 write still happened');
+		db.db.exec('ALTER TABLE content_ownership_away RENAME TO content_ownership');
+		assert.equal(await isOwnershipComplete(db, 'channel'), true, 'readers keep using the index');
+		const queued = raw.queue.messages.filter((m: any) => m.type === MessageType.SearchIndexSync);
+		assert.equal(queued.length, 1);
+		assert.deepEqual({ entity: queued[0].payload.entity, id: queued[0].payload.id, name: queued[0].payload.object.name }, { entity: 'channel', id: 'c2', name: channel('c2').name });
+		assert.ok(queued[0].payload.version > 0, 'with the version, so the processor applies it in order');
+	});
+
+	it('marks the index incomplete when the write cannot be queued either', async () => {
+		const { db, raw, env } = ownershipEnv();
+		await env.channels.put('c1', JSON.stringify(channel('c1')));
+		await runOwnershipPass(raw as never, 'channel');
+		raw.queue.send = async () => { throw new Error('queue unavailable'); };
+		db.db.exec('ALTER TABLE content_ownership RENAME TO content_ownership_away');
+		await env.channels.put('c2', JSON.stringify(channel('c2')));
+		db.db.exec('ALTER TABLE content_ownership_away RENAME TO content_ownership');
 		assert.equal(await isOwnershipComplete(db, 'channel'), false);
 	});
 });
@@ -362,7 +379,9 @@ describe('endpoints served from the ownership index', () => {
 		const app = buildApp(r => r.get('/api/channels/:id/about', ChannelAbout), null);
 		const before = await (await app.request('/api/channels/mine1/about', {}, scan)).json() as any;
 		const after = await (await app.request('/api/channels/mine1/about', {}, indexed)).json() as any;
-		assert.deepEqual(after, before);
+		// The scan fallback reads at most FALLBACK_SCAN_OBJECTS and says its totals may be partial (AV-16)
+		assert.equal(before.result.statsPartial, true);
+		assert.deepEqual({ ...after, result: { ...after.result, statsPartial: true } }, before);
 		assert.equal(after.result.videosCount, 4, 'm-a, m-b, m-d (short) and m-g count; private, hidden and scheduled do not');
 		assert.equal(after.result.totalViews, 1055);
 		assert.equal(after.result.statsPartial, false);
