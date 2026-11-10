@@ -11,6 +11,7 @@
  */
 
 import { z } from 'zod';
+import { DEFAULT_CAS_ATTEMPTS } from '../../lib/r2Repo';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
@@ -208,7 +209,9 @@ export class PrivacyConsentPut extends AuthenticatedRoute {
 			return c.json({ success: false, code: 'invalid_consent', error: 'Invalid consent record' }, 400);
 		}
 
-		const budget = new OperationBudget(12);
+		// A get and a put per attempt: the retry bound, not the budget, ends a lost race
+		// (ConcurrentUpdateError, a 503 with Retry-After; 12 ran out after 6 attempts as a 500)
+		const budget = new OperationBudget(2 * DEFAULT_CAS_ATTEMPTS);
 		const profiles = asBucket(c.env.profiles);
 		const record: ConsentRecord = { ...parsed.data, recordedAt: new Date().toISOString() };
 		// Conditional write on the fresh profile (SCALABILITY-AUDIT AV-23), so a

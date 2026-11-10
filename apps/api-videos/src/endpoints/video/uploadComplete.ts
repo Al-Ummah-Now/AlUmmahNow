@@ -2,7 +2,7 @@ import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { patchVideo } from '../../lib/videoWrites';
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
@@ -152,6 +152,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 			});
 
 		} catch (error) {
+			rethrowBusy(error);
 			logger.error("Upload complete error:", error);
 
 			// Try to update video status to failed if we have the videoId

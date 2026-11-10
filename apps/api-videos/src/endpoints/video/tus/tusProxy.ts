@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { getAuthContext } from '../../../middleware/auth';
 import { requireSecret } from '../../../lib/env-helpers';
 import { generateTUSSignature } from '../../../lib/bunny/tus';
-import R2Repository from '../../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../../lib/r2Repo';
 import { Video as BusinessVideo } from '../../../lib/types';
 import Queue, { MessageType } from '../../../lib/queue';
 import { logger } from '../../../lib/logger';
@@ -260,6 +260,7 @@ export class TusProxy {
       });
 
     } catch (error) {
+      rethrowBusy(error);
       logger.error('[TUS Proxy] POST error', error);
       return c.json({ error: 'Failed to create upload' }, 500);
     }
@@ -323,6 +324,7 @@ export class TusProxy {
       });
 
     } catch (error) {
+      rethrowBusy(error);
       logger.error('[TUS Proxy] HEAD error', { uploadId, error });
       return new Response(null, { status: 500 });
     }
@@ -456,6 +458,7 @@ export class TusProxy {
       });
 
     } catch (error) {
+      rethrowBusy(error);
       logger.error('[TUS Proxy] PATCH error', {
         uploadId,
         errorMessage: error instanceof Error ? error.message : String(error),
@@ -521,6 +524,7 @@ export class TusProxy {
       });
 
     } catch (error) {
+      rethrowBusy(error);
       logger.error('[TUS Proxy] DELETE error', { uploadId, error });
       return new Response(null, { status: 500 });
     }

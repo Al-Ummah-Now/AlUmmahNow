@@ -7,7 +7,7 @@
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Str } from "chanfana";
 import { z } from "zod";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type {
   WatchHistoryEntry,
@@ -163,6 +163,7 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         200
       );
     } catch (error) {
+      rethrowBusy(error);
       logger.error("Error updating watch progress:", error);
       return c.json(
         {

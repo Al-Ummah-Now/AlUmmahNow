@@ -3,7 +3,7 @@ import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
-import R2Repository from '../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
@@ -307,6 +307,7 @@ export class VideoScheduleUpdate extends AuthenticatedRoute {
         },
       });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('Failed to update video schedule:', error);
       return c.json(
         {

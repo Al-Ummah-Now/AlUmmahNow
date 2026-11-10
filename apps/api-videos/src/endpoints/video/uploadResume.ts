@@ -3,7 +3,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { patchVideo } from '../../lib/videoWrites';
 import { generateTUSConfig } from "../../lib/bunny/tus";
 import { requireSecret } from "../../lib/env-helpers";
@@ -194,6 +194,7 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			});
 
 		} catch (error) {
+			rethrowBusy(error);
 			logger.error("Upload resume error:", error);
 			return c.json({
 				success: false,

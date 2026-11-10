@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppContext } from "../../base/types";
 import BunnyStorageClient from "../../lib/bunny/storage";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { patchOwnedRecord } from '../../lib/videoWrites';
 import { Channel } from "../../lib/types";
 import { z } from "zod";
@@ -92,6 +92,7 @@ const handleAvatarUpdate = async (c: AppContext) => {
 
         return c.json(channel, 200);
     } catch (error) {
+        rethrowBusy(error);
         return c.json(
             {
                 success: false,

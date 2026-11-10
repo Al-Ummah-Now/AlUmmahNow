@@ -67,18 +67,28 @@ const profile = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('profile: parallel writers all stick (AV-6)', () => {
-	// 22 writers on one profile: within the bounded retry budget (DEFAULT_CAS_ATTEMPTS) even on a
-	// loaded machine; 42 at once could exhaust it, which is the bound working, not a lost write
-	it('an edit, 20 history entries and a consent decision at once all land', async () => {
+	// Retries are bounded, so a burst on one key can refuse some writes; the
+	// guarantee is that none is lost: every request either lands (200) or is
+	// refused with 503 + Retry-After, and the refused ones land when retried.
+	it('an edit, 40 history entries and a consent decision at once: each lands or is refused with Retry-After, none lost', async () => {
 		const e = env({ profiles: { [ME]: profile({ subscribedTo: ['keep-me'] }) } });
-		const ids = videoIds(20);
+		const ids = videoIds(40);
 		const decision = { version: 1, analytics: false, experiments: false, performance: true, decidedAt: '2026-11-06T10:00:00.000Z', source: 'banner' };
-		const statuses = await Promise.all([
-			send(e, 'PUT', '/api/profile', { displayName: 'New name', bio: 'Bio' }).then((r) => r.status),
-			...ids.map((videoId) => send(e, 'POST', '/api/profiles/watch-history', { videoId, watchTime: 5 }).then((r) => r.status)),
-			send(e, 'PUT', '/api/privacy/consent', decision).then((r) => r.status),
-		]);
-		assert.ok(statuses.every((s) => s === 200), `all succeeded: ${statuses.join(',')}`);
+		const requests: Array<() => Promise<Response>> = [
+			() => send(e, 'PUT', '/api/profile', { displayName: 'New name', bio: 'Bio' }),
+			...ids.map((videoId) => () => send(e, 'POST', '/api/profiles/watch-history', { videoId, watchTime: 5 })),
+			() => send(e, 'PUT', '/api/privacy/consent', decision),
+		];
+		let pending = requests;
+		for (let round = 0; round < 5 && pending.length > 0; round++) {
+			const responses = await Promise.all(pending.map((r) => r()));
+			for (const res of responses) {
+				assert.ok(res.status === 200 || res.status === 503, `status ${res.status}: ${await res.clone().text()}`);
+				if (res.status === 503) assert.equal(res.headers.get('Retry-After'), '1');
+			}
+			pending = pending.filter((_, i) => responses[i].status === 503);
+		}
+		assert.equal(pending.length, 0, 'every refused write landed when retried');
 		const stored = e.profiles.read(ME);
 		assert.equal(stored.displayName, 'New name');
 		assert.equal(stored.bio, 'Bio');
@@ -86,6 +96,42 @@ describe('profile: parallel writers all stick (AV-6)', () => {
 		assert.equal(stored.privacyConsent.history.length, 1, 'the consent record landed');
 		assert.equal(stored.privacyConsent.current.performance, true);
 		assert.deepEqual(stored.subscribedTo, ['keep-me'], 'fields nobody edited are kept');
+	});
+
+	it('a write that keeps losing the race is a 503 with Retry-After, and nothing of it is stored', async () => {
+		const e = env({ profiles: { [ME]: profile() } });
+		// Every conditional put loses (another writer always got there first)
+		const put = e.profiles.put.bind(e.profiles);
+		e.profiles.put = (async (key: string, value: string, options?: any) => (options?.onlyIf ? null : put(key, value, options))) as typeof e.profiles.put;
+		const res = await send(e, 'POST', '/api/profiles/watch-history', { videoId: 'v1', watchTime: 5 });
+		assert.equal(res.status, 503);
+		assert.equal(res.headers.get('Retry-After'), '1');
+		const body = (await res.json()) as { error: string };
+		assert.ok(!body.error.includes(ME), 'the key (a user id) is not in the response');
+		assert.equal(e.profiles.read(ME).watchHistory, undefined);
+	});
+
+	it('a consent decision that loses the race 7 times still lands; one that always loses is a 503', async () => {
+		const decision = { version: 1, analytics: true, experiments: false, performance: true, decidedAt: '2026-11-06T10:00:00.000Z', source: 'banner' };
+		const losing = (e: ReturnType<typeof env>, losses: number) => {
+			const put = e.profiles.put.bind(e.profiles);
+			let lost = 0;
+			e.profiles.put = (async (key: string, value: string, options?: any) => {
+				if (options?.onlyIf && lost < losses) { lost++; return null; }
+				return put(key, value, options);
+			}) as typeof e.profiles.put;
+		};
+		const e = env({ profiles: { [ME]: profile() } });
+		losing(e, 7); // the old budget (12 operations) ran out after 6 attempts: a 500
+		assert.equal((await send(e, 'PUT', '/api/privacy/consent', decision)).status, 200);
+		assert.equal(e.profiles.read(ME).privacyConsent.history.length, 1);
+
+		const always = env({ profiles: { [ME]: profile() } });
+		losing(always, Infinity);
+		const res = await send(always, 'PUT', '/api/privacy/consent', decision);
+		assert.equal(res.status, 503);
+		assert.equal(res.headers.get('Retry-After'), '1');
+		assert.equal(always.profiles.read(ME).privacyConsent, undefined);
 	});
 
 	it('creating a profile that already exists keeps its channels, history and consent', async () => {

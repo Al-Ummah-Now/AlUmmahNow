@@ -3,6 +3,7 @@
  * mirrors the production auth context wiring.
  */
 import { Hono } from 'hono';
+import { errorHandler } from '../src/middleware/error-handler';
 import { fromHono } from 'chanfana';
 
 export class MemoryBucket {
@@ -114,6 +115,8 @@ export function buildApp(
 	auth?: { userId: string; roles?: string[] } | null,
 ) {
 	const app = new Hono();
+	// The production error handler (index.ts): status mapping, Retry-After on a lost write race
+	app.onError(errorHandler);
 	app.use('*', async (c, next) => {
 		if (auth) {
 			c.set('auth' as never, { userId: auth.userId, email: `${auth.userId}@test.local`, payload: auth.roles ? { roles: auth.roles } : {} } as never);

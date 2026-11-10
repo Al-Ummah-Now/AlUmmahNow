@@ -5,7 +5,7 @@
  */
 
 import { z } from "zod";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import type {
   WatchHistoryEntry,
@@ -190,6 +190,7 @@ export class RecordWatchHistory extends AuthenticatedRoute {
 
       return c.json(watchEntry, 201);
     } catch (error) {
+      rethrowBusy(error);
       logger.error("Error recording watch history:", error);
       return c.json(
         {

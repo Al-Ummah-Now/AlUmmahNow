@@ -3,7 +3,7 @@ import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
-import R2Repository from '../../lib/r2Repo';
+import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
@@ -184,6 +184,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
         },
       });
     } catch (error) {
+      rethrowBusy(error);
       logger.error('[VideoSchedulePublishNow] Error publishing video', {
         error: error instanceof Error ? error.message : String(error),
         videoId: id,
