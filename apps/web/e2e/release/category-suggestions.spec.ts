@@ -50,7 +50,7 @@ async function openUploadForm(page: Page, locale: Locale): Promise<void> {
 
 async function fillTitle(page: Page, locale: Locale, title: string): Promise<void> {
   if (locale === 'ar') {
-    await page.getByRole('button', { name: 'العربية' }).first().click();
+    await page.getByTestId('upload-lang-tab-ar').click();
     await page.getByTestId('upload-title-ar').fill(title);
   } else {
     await page.getByTestId('upload-title-en').fill(title);
