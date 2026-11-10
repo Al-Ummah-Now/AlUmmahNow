@@ -75,6 +75,7 @@ test.describe('Release: upload processing', () => {
     await page.getByTestId('upload-is-public').uncheck();
     await page.getByTestId('upload-submit').click();
     await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
+    const uploadedAt = Date.now();
 
     let videoId = '';
     try {
@@ -109,9 +110,13 @@ test.describe('Release: upload processing', () => {
         .poll(async () => (await videoState(user, videoId)).uploadStatus, {
           message: 'the video did not become ready by itself (processing-check loop)',
           timeout: READY_TIMEOUT_MS,
-          intervals: [15_000],
+          intervals: [5_000],
         })
         .toBe('ready');
+      // Reported for the incident follow-up: upload complete → ready (first playable resolution)
+      const readyAfter = Math.round((Date.now() - uploadedAt) / 1000);
+      test.info().annotations.push({ type: 'ready-after-upload', description: `${readyAfter}s` });
+      process.stdout.write(`[processing] ready ${readyAfter}s after the upload completed\n`);
       const ready = await videoState(user, videoId);
       expect(ready.availableResolutions?.length ?? 0, 'ready video has resolutions').toBeGreaterThan(0);
 
