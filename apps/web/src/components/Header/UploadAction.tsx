@@ -1,5 +1,5 @@
 'use client';
-// The one Upload action: in the top bar beside the menu button, outlined, and a 44px icon button on phones.
+// The one Upload action: in the top bar after the logo, before the search box, outlined, and a 44px icon button on phones.
 import Link from 'next/link';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';

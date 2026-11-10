@@ -2,6 +2,31 @@ import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
 import { openSideDrawer } from './test-utils/navigation';
+import type { Page } from '@playwright/test';
+
+const HOME_LINK = { en: 'Al Ummah Now home', ar: 'الصفحة الرئيسية للأمة الآن' } as const;
+
+/**
+ * The top bar reads: menu button, logo, Upload, search, then bell and account.
+ * Upload sits after the logo link and before the search box (the search button
+ * on phones): to the right of the logo in LTR, to its left in RTL.
+ */
+async function expectUploadAfterLogo(page: Page, lang: 'en' | 'ar', rtl: boolean): Promise<void> {
+  const banner = page.getByRole('banner');
+  const logo = await banner.getByRole('link', { name: HOME_LINK[lang], exact: true }).boundingBox();
+  const upload = await banner.getByTestId('header-upload').boundingBox();
+  const searchInput = banner.getByTestId('header-search-input');
+  const search = await ((await searchInput.isVisible()) ? searchInput : banner.getByTestId('header-search-open')).boundingBox();
+  if (!logo || !upload || !search) throw new Error('header controls not laid out');
+  if (rtl) {
+    expect(upload.x + upload.width, 'Upload follows the logo (RTL)').toBeLessThanOrEqual(logo.x + 1);
+    expect(search.x + search.width, 'search follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);
+  } else {
+    expect(upload.x, 'Upload follows the logo').toBeGreaterThanOrEqual(logo.x + logo.width - 1);
+    expect(search.x, 'search follows Upload').toBeGreaterThanOrEqual(upload.x + upload.width - 1);
+  }
+  expect(Math.abs(upload.y + upload.height / 2 - (logo.y + logo.height / 2)), 'Upload and the logo share a line').toBeLessThanOrEqual(2);
+}
 
 /**
  * Header, side drawer (theme / language / main links) and skip links.
@@ -37,7 +62,7 @@ test.describe('Header', () => {
     expect(direction).toBe('rtl');
   });
 
-  test('NAV-003 signed-out visitors see Upload once, beside the menu button, in both directions', async ({ page, isMobile }) => {
+  test('NAV-003 signed-out visitors see Upload once, after the logo and before search, in both directions', async ({ page, isMobile }) => {
     for (const [lang, rtl] of [['en', false], ['ar', true]] as const) {
       await page.goto(`/${lang}`);
       await expect(page.getByTestId('nav-menu-trigger')).toBeVisible();
@@ -46,15 +71,10 @@ test.describe('Header', () => {
       const upload = page.getByRole('banner').getByTestId('header-upload');
       await expect(upload).toHaveAttribute('href', `/${lang}/upload`);
       await expect(upload).toHaveAttribute('data-state', 'signed-out');
-      const toggle = await page.getByTestId('nav-drawer-toggle').boundingBox();
-      const box = await upload.boundingBox();
-      if (!toggle || !box) throw new Error('header controls not laid out');
-      // Start side, right after the menu button: to its right in LTR, to its left in RTL
-      if (rtl) expect(box.x + box.width).toBeLessThanOrEqual(toggle.x + 1);
-      else expect(box.x).toBeGreaterThanOrEqual(toggle.x + toggle.width - 1);
-      expect(Math.abs(box.y + box.height / 2 - (toggle.y + toggle.height / 2))).toBeLessThanOrEqual(1);
+      await expectUploadAfterLogo(page, lang, rtl);
       if (isMobile) {
         // A 44px icon button; the label stays its accessible name
+        const box = (await upload.boundingBox())!;
         expect(Math.round(box.width)).toBe(44);
         expect(Math.round(box.height)).toBe(44);
       }
@@ -65,12 +85,17 @@ test.describe('Header', () => {
 test.describe('Header - channel owner', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('NAV-004 shows the upload shortcut (text hidden on phones)', async ({ page, isMobile }) => {
+  test('NAV-004 shows the upload shortcut after the logo (text hidden on phones)', async ({ page, isMobile }) => {
     await page.goto('/en');
     const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
     await expect(upload).toHaveAttribute('href', '/en/upload');
     await expect(upload).toHaveAttribute('data-state', 'ready');
     await expect(page.getByTestId('header-upload')).toHaveCount(1);
+    // Signed in it keeps its place: after the logo, before search, mirrored in Arabic
+    await expectUploadAfterLogo(page, 'en', false);
+    await page.goto('/ar');
+    await expect(page.getByRole('banner').getByTestId('header-upload')).toHaveAttribute('data-state', 'ready');
+    await expectUploadAfterLogo(page, 'ar', true);
     if (isMobile) {
       await expect(upload.getByText('Upload Video')).toBeHidden();
     } else {
