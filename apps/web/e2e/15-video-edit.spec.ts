@@ -89,6 +89,27 @@ test.describe('Video Edit - read only', () => {
     await expect(page.getByTestId('video-edit-title-ar')).toHaveValue('تعديل غير محفوظ');
   });
 
+  test('typing in the form keeps every key: the preview player does not take Space, F or M', async ({ page }) => {
+    await openEditor(page, seed[SEED_TITLES.singleVideo]);
+    const title = page.getByTestId('video-edit-title-en');
+    const description = page.getByTestId('video-edit-description-en');
+
+    // Real keystrokes, as a person types (fill() sets the value without keys)
+    await title.click();
+    await title.press('ControlOrMeta+A');
+    await title.pressSequentially('Fresh film of my mosque');
+    await expect(title).toHaveValue('Fresh film of my mosque');
+    await description.click();
+    await description.press('ControlOrMeta+A');
+    await description.pressSequentially('A full moon over the minaret');
+    await expect(description).toHaveValue('A full moon over the minaret');
+
+    // "f" did not take the page fullscreen and "m" did not mute the preview
+    expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+    expect(await page.locator('video').first().evaluate((v: HTMLVideoElement) => v.muted)).toBe(false);
+    await expect(page.getByTestId('video-edit-unsaved')).toBeVisible();
+  });
+
   test('should flag unsaved changes and clear the flag when reverted', async ({ page }) => {
     await openEditor(page, seed[SEED_TITLES.singleVideo]);
     const description = page.getByTestId('video-edit-description-en');

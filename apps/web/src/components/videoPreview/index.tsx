@@ -3,6 +3,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { previewOwnsKey } from './shortcut-scope';
 
 interface VideoPreviewProps {
   videoUrl: string;
@@ -92,6 +93,8 @@ export default function VideoPreview({ videoUrl, posterUrl, className = '' }: Vi
     if (!video) return;
 
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Keys typed into the page's form fields (or aimed at other controls) are not ours
+      if (!previewOwnsKey(e, video.parentElement)) return;
       switch (e.key) {
         case ' ':
           e.preventDefault();
