@@ -12,7 +12,7 @@ import path from 'path';
 const src = path.join(__dirname, '../../..');
 const siteCss = [
   'app/globals.css',
-  ...['theme', 'theme/materials'].flatMap((dir) =>
+  ...['theme'].flatMap((dir) =>
     fs.readdirSync(path.join(src, dir)).filter((f) => f.endsWith('.css')).map((f) => `${dir}/${f}`),
   ),
 ];
