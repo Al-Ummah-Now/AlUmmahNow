@@ -62,16 +62,22 @@ test.describe('Release: hot paths under parallel load', () => {
     await createProfile(user);
     const channelId = await createChannel(user);
 
-    // A private video: only its owner can count views on it
-    const created = await apiFetch(user, '/api/videos', {
+    // A private video: only its owner can count views on it. Created the way
+    // the upload page does (the record exists from initiate on; no file needed)
+    const created = await apiFetch(user, '/api/videos/upload/initiate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', channelId },
-      body: JSON.stringify({ title: `Release E2E load ${Date.now().toString(36)}`, isPublic: false }),
+      body: JSON.stringify({
+        title: `Release E2E load ${Date.now().toString(36)}`,
+        fileSize: 1024,
+        mimeType: 'video/mp4',
+        isPublic: false,
+      }),
     });
     const createdText = await created.text();
-    expect(created.status, `POST /api/videos: ${createdText}`).toBeLessThan(300);
-    const videoId = (JSON.parse(createdText) as { result?: { video?: { id?: string } } }).result?.video?.id ?? '';
-    expect(videoId, 'video create returned no id').toBeTruthy();
+    expect(created.status, `POST /api/videos/upload/initiate: ${createdText}`).toBeLessThan(300);
+    const videoId = (JSON.parse(createdText) as { result?: { videoId?: string } }).result?.videoId ?? '';
+    expect(videoId, 'upload initiate returned no video id').toBeTruthy();
 
     try {
       const started = new Date();
