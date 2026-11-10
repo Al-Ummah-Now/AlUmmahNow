@@ -171,7 +171,7 @@ Automatic rules (§7) were approved when they were created, by someone with `soc
 
 Every social action is written to `social_audit` in `SOCIAL_DB` (§12), in the same D1 batch as the change, so a change and its record can't disagree. It is a separate table from #462's `channel_audit` because the two live in different databases (`CHANNEL_ROLES_DB` and `SOCIAL_DB`) and D1 can't batch across databases. The Studio **Settings → Permissions → Activity** tab reads both and merges them by time, with a filter for Social.
 
-Actions: `account_connected`, `account_reconnected`, `account_disconnected`, `account_revoked_by_network`, `account_expired`, `post_created`, `post_edited`, `post_submitted`, `post_approved`, `post_rejected`, `post_scheduled`, `post_unscheduled`, `post_published`, `post_failed`, `post_deleted_on_network`, `rule_created`, `rule_changed`, `rule_paused`, `rule_deleted`, `inbox_reply`, `inbox_hidden`, `inbox_deleted`, `settings_changed`, `beta_invited`, `beta_agreement_accepted`, `beta_removed`, `platform_suspended`, `platform_unsuspended`, `post_blocked_by_moderation`.
+Actions: `account_connected`, `account_reconnected`, `account_disconnected`, `account_revoked_by_network`, `account_expired`, `post_created`, `post_edited`, `post_submitted`, `post_approved`, `post_rejected`, `post_scheduled`, `post_unscheduled`, `post_published`, `post_failed`, `post_deleted_on_network`, `rule_created`, `rule_changed`, `rule_paused`, `rule_deleted`, `inbox_reply`, `inbox_hidden`, `inbox_deleted`, `settings_changed`, `job_retried_by_admin`, `flag_acknowledged`, `flag_resolved`, `beta_invited`, `beta_agreement_accepted`, `beta_removed`, `platform_suspended`, `platform_unsuspended`, `post_blocked_by_moderation`.
 
 Each row has `actor_id` (or `system` for rules and the scheduler), `account_id`, `post_id`, and a `detail_json` that never contains tokens, message text from strangers, or email addresses. Rows are kept for one year, like #462 §10.
 
@@ -235,6 +235,8 @@ sequenceDiagram
   participant A as api-videos
   participant K as KV SOCIAL_OAUTH
   participant N as Network
+  participant Q as Queue al-ummah-now-social
+  participant P as processor
   participant D as SOCIAL_DB
   B->>A: POST /api/channels/:id/social/connect {network}
   A->>A: requireChannelAccess(social.connect), network enabled?, limit?
@@ -245,10 +247,14 @@ sequenceDiagram
   B->>A: GET callback
   A->>K: get + delete state (single use)
   A->>A: same user? channel still exists? role still has social.connect?
-  A->>N: exchange code (+ PKCE verifier)
-  A->>N: fetch identity and pickable targets (Pages, channels, orgs)
-  A->>K: put pick session {encrypted tokens, targets} TTL 10 min
-  A-->>B: 302 /studio/{channelId}/social/accounts?pick={pickId}
+  A->>K: put pending exchange {encrypted code, PKCE verifier} TTL 10 min
+  A->>Q: SocialConnectExchange {pickId}
+  A-->>B: 302 /studio/{channelId}/social/accounts?pick={pickId} ("Finishing connection…")
+  Q->>P: processor job
+  P->>N: exchange code (+ PKCE verifier)
+  P->>N: fetch identity and pickable targets (Pages, channels, orgs)
+  P->>K: put pick session {encrypted tokens, targets} TTL 10 min
+  P-->>B: social_connect_ready {pickId} over the realtime socket
   B->>A: POST /api/channels/:id/social/connect/pick {pickId, targetIds}
   A->>D: batch: insert social_accounts + social_tokens (encrypted) + social_audit
   A-->>B: connections
@@ -258,6 +264,7 @@ Rules:
 
 - `state` is 32 random bytes, bound to the user id and channel id, single use, 10 minutes. The callback refuses a state created by another user, a channel the user lost access to in the meantime, or a network that was switched off.
 - PKCE (S256) is used everywhere the network supports it (X, Google, TikTok, Bluesky, Mastodon, LinkedIn where available), even for confidential clients.
+- The callback does no network call itself: it stores the code (encrypted, 10 minutes) and queues a `SocialConnectExchange` job (§7.4), like every other network operation. Authorization codes are short-lived (seconds to minutes depending on the network), so this job retries fast (1, 2, 5 s) and the accounts page shows "Finishing connection…" until the socket event arrives, or "Couldn't finish connecting: {reason}. [Try again]" if the job fails.
 - The callback is on api-videos so the client secret never reaches the browser. Redirect URIs are fixed per environment (§15.2). No wildcard or user-supplied redirect.
 - Scopes are requested **per feature the channel turned on**. A channel that never uses the inbox never grants message scopes. Turning the inbox on later triggers a reconnect with the extra scopes (incremental authorization where the network supports it: Google `include_granted_scopes`, Meta re-request).
 - The pick step exists because one login can return many targets (all of a person's Pages). Nothing is stored until the person picks. Tokens for unpicked targets are discarded.
@@ -312,7 +319,7 @@ The bot token is a platform secret, not per channel. A channel's connection stor
 - Only one refresh happens at a time. This matters for networks with **rotating, single-use refresh tokens** (X, TikTok, Bluesky): two Workers refreshing in parallel would invalidate each other.
 - Access tokens are refreshed when they have under 10% of their life left, or after a 401 that the network documents as expiry.
 - Meta long-lived user tokens (60 days) and Instagram Login tokens are re-extended by the daily sweep when they are older than 7 days and have been used in the last 60. Page tokens derived from a long-lived user token don't expire, but are re-derived on each sweep to catch revoked permissions.
-- The scheduler's daily sweep (§10.2) also calls each network's token introspection or a cheap "who am I" call for connections idle for 30 days, so a dead connection is found before a scheduled post needs it.
+- Proactive refreshes are `SocialTokenRefresh` jobs (§7.4) sent by the DO's alarm, never done inline by a request. The scheduler's daily sweep (§10.2) also queues a check (each network's token introspection or a cheap "who am I" call) for connections idle for 30 days, so a dead connection is found before a scheduled post needs it.
 
 **States** of a connection: `active`, `needs_reconnect` (refresh failed, a scope was removed, password changed on the network, or Meta's 90-day re-consent), `revoked` (the network or the person revoked it), `disconnected` (by us, tokens destroyed), `suspended` (by platform staff). Posts targeting a non-active connection don't go out; they move to `failed` with the reason, and the channel is notified once (§9), not once per post.
 
@@ -531,7 +538,33 @@ Each rule has, **per account in the rule, a format**: Whole video, Short or Link
 
 **Unpublish.** If a video is made private or deleted before its auto-post goes out, the post is cancelled. If it's already out, the channel gets a notification offering to delete the post on the networks (one click, `social.publish`). It is never deleted automatically, because the network post may have its own discussion.
 
-### 7.4 Publishing and retries
+### 7.4 Jobs, publishing and retries
+
+**Standing owner rule: always async, queues, retry; errors flag the admin for action.** No request from Studio, a webhook or a cron calls a network, renders media or refreshes a token inline. Each of these is a **job**: a message on the `al-ummah-now-social` queue, recorded in `social_jobs` (§12), processed by the processor, idempotent, retried with backoff, and dead-lettered when its attempts run out. API routes that start work return `202 Accepted` with the job or target id, and the result reaches Studio over the realtime socket. Retries use the queue's own delayed retry (`message.retry({ delaySeconds })`), so no Worker sleeps.
+
+| Job | Message (§10.2) | Idempotency key | Attempts and backoff (with ±20% jitter; `Retry-After` and rate-limit reset headers win when later) | The channel sees | Flags the admin (§11.6) |
+|---|---|---|---|---|---|
+| Publish a target | `SocialPublish` | `target_id` (+ `attempt_id` for the no-double-post check below) | 7: now, then 1, 2, 5, 15, 30, 60 min | Target "Failed — Retry" with the network's reason and a fix action | When a `retryable` or `quota` failure exhausts its attempts, or on a systemic pattern |
+| Export media (whole video, fit cut, short, image) | `SocialMediaJob` | `(video_id, kind, spec_hash, range)` | 4: now, then 1, 5, 15 min | Export card "Export failed — Retry"; waiting targets fail with **Retry** / **Switch format** | On exhaustion (renderer or Bunny problems are ours, not the channel's) |
+| Finish a connect (code exchange) | `SocialConnectExchange` | `pick_id` | 4: now, then 1, 2, 5 s | "Couldn't finish connecting: {reason}. Try again" | On a systemic pattern |
+| Refresh or check a token | `SocialTokenRefresh` (proactive, sweep) | `(account_id, token_generation)` | 6: now, then 30 s, 2, 10, 30, 60 min | Connection `needs_reconnect` and the reconnect notification, once a day | On exhaustion of a `retryable` failure, or when > 5% of one network's connections fail in an hour (an app-level problem, not the creators') |
+| Pull metrics | `SocialMetricsPull` | `(account_id, day, pull_kind)` | 5: now, then 5, 30, 120, 360 min | "Metrics delayed" on the post and dashboard; the gap is filled by the next pull | On exhaustion or a systemic pattern |
+| Sync the inbox (poll or webhook item) | `SocialInboxSync`, `SocialWebhookItem` | `(account_id, cursor)` / `(network, external_item_id)` | 6: now, then 1, 5, 15, 30, 60 min | "Inbox for {account} is delayed" | Same |
+| Send an inbox reply, hide, delete | `SocialInboxAction` | `inbox_action_id` | 5: now, then 30 s, 2, 10, 30 min | Reply "Not sent — Retry" with the reason | On exhaustion of `retryable` |
+| Delete a post on the network | `SocialDeletePost` | `target_id` | 5: now, then 1, 5, 15, 60 min | "Couldn't delete on {network} — Retry" | On exhaustion |
+| Match a trigger to rules | `SocialTrigger` | `(rule_id, source_id, trigger)` (unique index) | 6: now, then 1, 2, 5, 15, 30 min | The rule's activity shows "Auto-post not created: {reason}" | Always on exhaustion (the channel can't fix it) |
+| Revoke on the network | `SocialRevoke` | `revoke_handle` | Hourly for 24 h | Nothing (tokens are already destroyed on our side) | On exhaustion |
+| Sweeps, cleanup, recurrence expansion | `SocialCleanup`, `SocialTokenSweep` | `(kind, day)` / `(account_id, day)` | 5: now, then 5, 30, 120, 360 min | Nothing | Always on exhaustion |
+
+Rules for every job:
+
+- **Idempotent.** The consumer first claims the job in `social_jobs` with a guarded update (`WHERE status IN ('queued','retrying') AND attempt = ?`); a duplicate delivery, or a delivery for a job that already succeeded, is acknowledged and dropped. Side effects are keyed by the idempotency key (unique indexes in §12), so a retry after a crash never creates a second post, export, reply or inbox row.
+- **Classified.** Each failure gets a class (table below). Only `retryable` and `quota` failures are retried; `auth` and `content` failures stop at once, because only the channel can fix them (reconnect, change the caption), and they surface to the channel with the reason.
+- **Exhausted means dead-lettered.** When a job runs out of attempts, the consumer marks it `dead` in `social_jobs` and sends the message to the existing DLQ, `al-ummah-now-dlq` (producer binding `DLQ`), where the existing DLQ consumer (`apps/processor/src/dlq/`) logs `[DLQ] Message dead-lettered` and stores it in `dead_letters` for replay. The queue's own `max_retries` (§10.2) is a backstop for crashes that never reach our code.
+- **Errors flag the admin.** A dead job, and any systemic pattern (§11.6), opens or bumps a flag in `social_admin_flags`, shown on the videos admin **Errors** page with the action to take. Failures that only the channel can fix are listed there too, as information, and become a flag when the same error code hits many channels (which usually means our bug, for example a validation rule that's out of date).
+- **Never a silent downgrade.** A failed job never switches format, drops media, or posts somewhere else on its own (§6.1.1).
+
+Publishing a target, step by step:
 
 1. The scheduler's minute cron (§10.2) selects posts due in the next minute and sends one `SocialPublish` message per **target** (a post to five accounts is five targets) to the `al-ummah-now-social` queue.
 2. The processor's handler calls the target's `SocialAccount` Durable Object, which re-validates, gets a fresh token, prepares media (or waits for the media job), and calls the network.
@@ -540,13 +573,14 @@ Each rule has, **per account in the rule, a format**: Whole video, Short or Link
 
 | Class | Examples | Action |
 |---|---|---|
-| `retryable` | 5xx, timeouts, 429, Meta "temporarily unavailable", media still processing on the network | Retry with exponential backoff and jitter: 1, 2, 5, 15, 30, 60 min, then fail. Respect `Retry-After` and rate-limit reset headers |
-| `auth` | 401 expired, revoked, scope missing | Try one refresh; if it fails, connection → `needs_reconnect`, target fails with "Reconnect {account}" |
+| `retryable` | 5xx, timeouts, 429, Meta "temporarily unavailable", media still processing on the network, our own renderer or Bunny unavailable | Retry on the job's schedule above, then fail, dead-letter and flag the admin |
+| `auth` | 401 expired, revoked, scope missing | One refresh inside the job (the token is already in the `SocialAccount` DO this job is using); if it fails, connection → `needs_reconnect`, target fails with "Reconnect {account}" |
 | `content` | Caption too long, media rejected, duplicate post (X), policy rejection | Fail at once with the network's message translated to a known reason where possible |
-| `quota` | YouTube daily quota exhausted, X credits exhausted, Instagram 24-hour publishing limit | Reschedule to the time the quota resets if within 24 h of the planned time, otherwise fail. Platform admins are alerted (§11.5) |
+| `quota` | YouTube daily quota exhausted, X credits or monthly cap exhausted, Instagram 24-hour publishing limit | Re-queued with a delay to the time the quota resets if within 24 h of the planned time, otherwise fail. Flags the admin (§11.6) the first time a platform-level budget is hit |
 
 5. **No double posts.** Before each attempt, the DO writes `attempt_id` and state `sending` for the target. If a Worker dies after the network accepted the post but before we stored the id, the next attempt first looks for the post on the network (by our UTM `utm_content` token in the link, or the network's idempotency key where one exists: Telegram has none, X none, so the lookup is a "recent posts" read limited to 15 minutes) before sending again. Where a network offers no way to look, the target is marked `unknown` and the person is asked to check, rather than risk a duplicate.
-6. **Container networks** (Instagram, Threads, TikTok, YouTube processing): the DO creates the container, then polls its status with an alarm (every 10 s for 5 min, then every minute up to the network's limit) before the publish call. No Worker waits in a loop.
+6. **Container networks** (Instagram, Threads, TikTok, YouTube processing): the DO creates the container, then polls its status with an alarm (every 10 s for 5 min, then every minute up to the network's limit) before the publish call. No Worker waits in a loop. The alarm belongs to the publish job: its polls don't count as attempts, and the job fails (and is retried as `retryable`) only if the network's own processing limit passes.
+7. **Alarms only enqueue.** DO alarms that start periodic work (inbox polling, proactive refresh) send a job message; they don't do the work themselves, so every unit of work has a row, a retry policy and a dead-letter path.
 
 ### 7.5 Failure notifications
 
@@ -638,9 +672,9 @@ Metric retention follows the plan entitlement `analytics.retentionDays` like the
 ### 9.2 How it works
 
 - **Push first.** Networks with webhooks (Meta: Page `feed`, Instagram `comments`, `mentions`, `messages`; Threads replies; YouTube has none; X account activity is paid) deliver to `POST /api/social/webhooks/{network}`, verified by signature (`X-Hub-Signature-256` for Meta). The handler stores the item and returns 200 within the network's deadline, doing nothing slow inline.
-- **Poll the rest**, with the `SocialAccount` DO's alarm: every 5 minutes for accounts with activity in the last day, hourly otherwise, within each network's quota (YouTube comment reads cost 1 unit per call; budgeted in §11.5).
+- **Poll the rest**, with the `SocialAccount` DO's alarm, which queues a `SocialInboxSync` job (§7.4): every 5 minutes for accounts with activity in the last day, hourly otherwise, within each network's quota (YouTube comment reads cost 1 unit per call; budgeted in §11.5).
 - Items are threads (a post and its comments, or a DM conversation), with states `open`, `done`, `spam`. Assignment to a team member is supported (`assigned_to`).
-- **Replies** go out through the same DO as posts, as the connected account. A reply to a DM honours the network's window (Instagram and Messenger: 24 hours after the person's last message; replies outside the window are refused with that reason).
+- **Replies**, hides and deletes are `SocialInboxAction` jobs (§7.4) that go out through the same DO as posts, as the connected account; the reply shows "Sending…" until the job succeeds, or "Not sent — Retry" with the reason. A reply to a DM honours the network's window (Instagram and Messenger: 24 hours after the person's last message; replies outside the window are refused with that reason).
 - **Hide and delete** comments on the network where the API allows (Facebook, Instagram, YouTube "hold for review" / reject, Threads hide, Telegram delete in the discussion group). Mastodon and Bluesky can't delete others' replies; the inbox offers mute/block instead.
 - **Saved replies:** a per-channel library of canned replies, in both languages.
 - **Moderation assist:** incoming items go through the same Workers AI classifier as on-platform comments (`AI-MODERATION.md`) to tag likely spam, scams and abuse; tagged items are sorted into a Filtered view, never auto-deleted.
@@ -716,7 +750,7 @@ No new Worker is added. Each existing app takes the part that matches what it al
 
 ### 10.2 Queue and scheduler
 
-**Queue** `al-ummah-now-social` (and `-stage`, `-qa`), consumer in processor, `max_batch_size` 10, `max_batch_timeout` 5 s, `max_retries` 6, DLQ `al-ummah-now-dlq` (existing). Separate from `al-ummah-now-videos` so a network outage backing up social retries can never delay video processing.
+**Queue** `al-ummah-now-social` (and `-stage`, `-qa`), consumer in processor, `max_batch_size` 10, `max_batch_timeout` 5 s, `max_retries` 8 (a backstop above every job's own attempt count, §7.4), DLQ `al-ummah-now-dlq` (existing, consumed by `apps/processor/src/dlq/`). Separate from `al-ummah-now-videos` so a network outage backing up social retries can never delay video processing.
 
 Message types (added to `MessageType` in shared-types):
 
@@ -730,6 +764,13 @@ Message types (added to `MessageType` in shared-types):
 | `SocialRevoke` | `{network, revokeHandle}` (handle is an opaque id of an encrypted row kept 24 h for retry, never a token) | api-videos |
 | `SocialWebhookItem` | `{network, accountId, itemRef}` | api-videos webhooks |
 | `SocialCleanup` | `{kind}` | scheduler |
+| `SocialConnectExchange` | `{pickId}` | api-videos (OAuth callback) |
+| `SocialTokenRefresh` | `{accountId, generation}` | `SocialAccount` alarm, `SocialTokenSweep` |
+| `SocialInboxSync` | `{accountId, cursor?}` | `SocialAccount` alarm |
+| `SocialInboxAction` | `{inboxActionId}` | api-videos (reply, hide, delete) |
+| `SocialDeletePost` | `{targetId}` | api-videos |
+
+Every message carries `jobId` as well; the job's kind, attempt count, next delay and idempotency key live in `social_jobs` (§12), so the retry policy is data, not scattered code.
 
 **Scheduling query.** Due targets are in D1 with an index on `(status, scheduled_at)`. The scheduler reads `status='scheduled' AND scheduled_at <= now + 60s` in pages of 200, flips them to `queued` with a guarded update (`WHERE status='scheduled'`), and sends a message per row. The guard is the lock; the existing `SchedulerLock` DO is not needed for this.
 
@@ -837,6 +878,25 @@ The admin Social page shows, per network and environment:
 - Meta, TikTok, Threads app-level usage headers (percent of limit).
 - Cloudflare: Media Transformations usage, R2 `social-media` storage, queue operations, DO requests and duration.
 - Alerts (existing `cost-monitoring` patterns, `docs/cost-monitoring/`) at 70% and 90% of any budget. For X: at 90% of the cap, posts with a URL pause (the composer offers the same post without the link, and the reason is shown); at 100%, all X posts queue until next month or until an admin raises the cap. Native posts are never paused before link posts.
+
+### 11.6 Errors page (admin flags)
+
+A new **Errors** page in admin-web (`/errors`, permission `social:manage`; the page is built here and is meant to take other apps' sources later). It has two sources:
+
+1. **Flags** from `social_admin_flags` (§12): one row per problem, not per failure. A flag's dedupe key is `(kind, network, error_code, channel_id or '*')`, so 400 failed publishes from one X outage are one flag with a count of 400.
+2. **Dead letters** from the existing `dead_letters` table (NOTIFICATIONS_DB), filtered to social message types by default, with the existing replay (`POST /dlq/replay`).
+
+| Flag kind | Raised when | Suggested action shown |
+|---|---|---|
+| `job_exhausted` | A job is dead-lettered (§7.4) | Retry the jobs (one click retries every dead job under the flag), or open the channel |
+| `network_degraded` | The circuit breaker opens, or the publish success rate for a network drops below 95% over 1 h (§14.1) | Check the network's status page; pause the network (§11.1) if it keeps failing |
+| `auth_wave` | More than 5% of one network's connections fail refresh in an hour, or deauthorize callbacks spike | Check the network app (revoked permission, expired app secret, failed review) |
+| `same_error_many_channels` | The same `content` or `auth` error code from one network hits 10 or more channels in 24 h | Usually our validation rules are out of date (§6.3 data); fix the rule |
+| `quota_or_budget` | A platform budget passes 90% or is exhausted (YouTube units, X cap, Meta app usage) | Raise the cap, file the quota extension, or wait for the reset |
+| `renderer_down` | `ClipRenderer` or `TelegramBotApi` fail to start or time out repeatedly | Check Containers; exports and Telegram whole-video posts wait meanwhile |
+| `dead_letter` | A social message lands in the DLQ for any other reason | Inspect and replay |
+
+States: `open` → `acknowledged` (someone is on it, with their name) → `resolved` (with a note). A resolved flag that recurs reopens with its history. Opening a flag, and every tenth bump of an open one, notifies admins with `social:manage` through the alert channel §14.1 uses, and admin-web shows a count badge on **Errors** in its nav. Each flag links to its jobs (id, channel, network, attempts, last error, next retry), and from a job to the post or connection in the admin channel view (§13.3). Actions are audited in `social_audit` as `platform:{adminId}`.
 
 ## 12. Data model
 
@@ -1078,6 +1138,64 @@ CREATE TABLE social_meta_beta (         -- §11.1, only used while Meta is role_
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE social_jobs (               -- every unit of async work (§7.4); the retry policy is data here
+  id TEXT PRIMARY KEY,                    -- sjb_...
+  kind TEXT NOT NULL CHECK (kind IN ('publish','media_export','connect_exchange','token_refresh','metrics_pull','inbox_sync','webhook_item','inbox_action','delete_post','trigger','revoke','token_sweep','cleanup')),
+  idempotency_key TEXT NOT NULL,          -- per kind, as in the §7.4 table
+  channel_id TEXT,                        -- NULL for platform jobs (cleanup)
+  network TEXT,
+  entity_id TEXT,                         -- target, media job, account, inbox action, rule...
+  status TEXT NOT NULL CHECK (status IN ('queued','running','retrying','succeeded','failed','dead')),
+  attempt INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL,
+  next_attempt_at TEXT,                   -- when the delayed retry is due
+  last_error_class TEXT CHECK (last_error_class IN ('retryable','auth','content','quota')),
+  last_error_code TEXT,                   -- network or internal code, for flag dedupe
+  last_error TEXT,                        -- truncated 500 chars, no tokens, no message text from strangers
+  flag_id TEXT,                           -- the admin flag this job raised or bumped
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  finished_at TEXT
+);
+CREATE UNIQUE INDEX idx_sjb_idem ON social_jobs (kind, idempotency_key);  -- duplicate deliveries collapse
+CREATE INDEX idx_sjb_status ON social_jobs (status, next_attempt_at);
+CREATE INDEX idx_sjb_channel ON social_jobs (channel_id, status, updated_at);
+CREATE INDEX idx_sjb_flag ON social_jobs (flag_id);
+
+CREATE TABLE social_admin_flags (        -- §11.6 Errors page
+  id TEXT PRIMARY KEY,                    -- sfl_...
+  kind TEXT NOT NULL CHECK (kind IN ('job_exhausted','network_degraded','auth_wave','same_error_many_channels','quota_or_budget','renderer_down','dead_letter')),
+  dedupe_key TEXT NOT NULL,               -- kind|network|error_code|channel_id-or-*
+  network TEXT,
+  channel_id TEXT,
+  error_code TEXT,
+  summary TEXT NOT NULL,
+  suggested_action TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 1,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('open','acknowledged','resolved')),
+  acknowledged_by TEXT,
+  resolved_by TEXT,
+  resolution_note TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX idx_sfl_open ON social_admin_flags (dedupe_key) WHERE status != 'resolved';  -- one live flag per problem
+CREATE INDEX idx_sfl_status ON social_admin_flags (status, last_seen_at);
+
+CREATE TABLE social_inbox_actions (      -- replies, hides, deletes sent as jobs
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('reply','hide','delete')),
+  item_id TEXT,
+  text TEXT,
+  status TEXT NOT NULL CHECK (status IN ('sending','sent','failed')),
+  error TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE social_audit (
   id TEXT PRIMARY KEY,
   channel_id TEXT NOT NULL,
@@ -1091,6 +1209,8 @@ CREATE TABLE social_audit (
 CREATE INDEX idx_sau_channel ON social_audit (channel_id, created_at);
 CREATE INDEX idx_sau_actor ON social_audit (actor_id);
 ```
+
+**Status columns and jobs.** Entity rows keep the state the channel sees (`social_targets.status`, `social_media_jobs.status`, `social_accounts.status`, `social_inbox_actions.status`); `social_jobs` keeps the attempt history behind them. Both are updated in the same D1 batch, so a target can't show `published` while its job shows `retrying`. `social_jobs` rows are kept 90 days after they finish (dead ones until their flag is resolved, then 90 days).
 
 Short-link resolution reads `social_targets.short_code` (unique index). Hot codes are cached in the edge cache for 5 minutes (the destination never changes for a code).
 
@@ -1199,6 +1319,11 @@ Errors use the existing error envelope. Validation errors are per target: `{ "ta
 | `GET /admin/social/channels/:channelId` | `social:manage` | Connections (no tokens), recent posts, audit |
 | `GET/PUT /admin/social/deny-lists` | `social:manage` | Instances, chats, domains |
 | `GET/PUT /admin/social/x-budget` `{monthlyCapUsd}` | `social:manage` | X monthly cap (§11.5) |
+| `GET /admin/errors?status&kind&network` | `social:manage` | Flags (§11.6) |
+| `GET /admin/errors/:flagId` | `social:manage` | Flag with its jobs |
+| `POST /admin/errors/:flagId/acknowledge` / `resolve` `{note}` | `social:manage` | Triage |
+| `POST /admin/errors/:flagId/retry` | `social:manage` | Re-queue every dead job under the flag (new attempt budget, same idempotency keys) |
+| `POST /admin/social/jobs/:jobId/retry` | `social:manage` | Re-queue one job |
 | `GET/POST/DELETE /admin/social/meta-beta[/:channelId]` | `social:manage` | Meta closed-beta list (§11.1) |
 
 admin-api reads `SOCIAL_DB` (bound read-write for review status and suspension only).
@@ -1214,6 +1339,8 @@ admin-api reads `SOCIAL_DB` (bound read-write for review status and suspension o
 | Inbox | 90 days after done, 180 days inactive |
 | Media in R2 | §12.2 |
 | Audit | 1 year |
+| Jobs (`social_jobs`) | 90 days after finishing; dead jobs until their flag is resolved, then 90 days |
+| Admin flags | 1 year after resolution |
 | OAuth state, pick sessions, link codes | Minutes (KV TTL) |
 
 ## 14. Security and privacy
@@ -1233,7 +1360,7 @@ admin-api reads `SOCIAL_DB` (bound read-write for review status and suspension o
 - **Logs** with the shared logger, prefixes `[SOCIAL:CONNECT]`, `[SOCIAL:PUBLISH]`, `[SOCIAL:DO]`, `[SOCIAL:WEBHOOK]`, `[SOCIAL:MEDIA]`, `[SOCIAL:INBOX]`, carrying `channelId`, `accountId`, `targetId`, `network`, `attempt` and the error class. Never tokens or message text.
 - **Metrics** (Analytics Engine, existing client telemetry dataset from #432 or a new `social_ops` dataset): publish attempts, successes, failures by class and network; latency from scheduled time to published; refresh failures; webhook verification failures; queue backlog; DO alarm lag.
 - **Circuit breaker per network:** more than 50% failures of class `retryable` over 5 minutes with at least 20 attempts opens the breaker for 10 minutes; targets are delayed, not failed, and the admin page shows it.
-- **Alerts:** publish success rate below 95% over 1 h (per network), scheduled-to-published p95 above 5 minutes, DLQ messages from the social queue, token-refresh failures above 5% in a day, any budget above 90%.
+- **Alerts:** publish success rate below 95% over 1 h (per network), scheduled-to-published p95 above 5 minutes, DLQ messages from the social queue, token-refresh failures above 5% in a day, any budget above 90%. Each alert also opens (or bumps) a flag on the admin Errors page (§11.6), so it has an owner and a resolution, not only a log line.
 - **Status for creators:** each failed target shows the exact reason and a fix ("Reconnect", "Shorten caption", "Retry"), and a network-level incident shows a banner in Social ("Instagram is having problems; posts will retry").
 
 ## 15. Configuration and rollout
@@ -1318,6 +1445,9 @@ Meta, TikTok and Google app review is done against the **production** app with a
 - Each adapter against a **local mock server** that replays recorded, scrubbed responses from the real API (fixtures recorded once from sandbox/test accounts, stored in `apps/processor/test/fixtures/social/{network}/`), including rate-limit headers, 429s, container polling, chunked upload resumes and token rotation.
 - `SocialAccount` DO: concurrent refresh requests produce one refresh; a Worker killed mid-upload resumes from the last chunk; alarm-driven container polling; budget reservations from `SocialPlatformBudget`.
 - Publish idempotency: duplicate `SocialPublish` messages produce one post; a crash after the network accepted produces no second post (`findRecent`).
+- **Every job kind** in §7.4: a duplicate delivery is dropped; a `retryable` failure is retried on that kind's schedule (asserted from the `delaySeconds` passed to `message.retry`); `auth` and `content` failures stop at once and surface to the channel; exhaustion marks the job `dead`, sends it to the DLQ (stored by the existing DLQ consumer) and opens one flag; 50 exhausted jobs with the same error open one flag with count 50; a resolved flag reopens when the problem recurs.
+- No route calls a network: every Studio route that starts work returns 202 and enqueues (asserted with the network mock server recording zero calls during the request).
+- Systemic flags: breaker open → `network_degraded`; refresh failures over 5% of a network's connections → `auth_wave`; the same content error from 10 channels → `same_error_many_channels`.
 - Webhooks: valid and invalid signatures for Meta, Telegram secret, TikTok; deauthorize destroys tokens.
 - Channel deletion and privacy erasure revoke and destroy tokens and delete media (asserted by reading D1 and R2 after).
 - `ClipRenderer` against short fixture videos: a fit cut ends on the end card in the post's language (Arabic shaped correctly), an X export meets the X spec (probed with ffprobe), and two jobs with the same `(video_id, kind, spec_hash, range)` render once.
@@ -1353,6 +1483,7 @@ Each spec asserts what the creator sees (status chips, permalink opens, metrics 
 5. Disconnect cancels scheduled posts and shows them as drafts.
 6. Moderator sees only Inbox and Calendar, replies to a comment, can't open Compose (route returns no-access).
 7. Platform admin turns a network off; the connect button disappears and scheduled posts pause.
+7a. With the mock network failing, a post shows "Failed — Retry" with the network's reason after its attempts; the admin Errors page shows one flag with the count; **Retry** on the flag re-queues the jobs and the post goes out once the mock recovers.
 8. RTL screenshots of every Social page (visual snapshots, Linux, like the existing suite).
 
 **Release suite on stage** runs the mock-mode Studio specs plus Telegram real-post (cheap, harmless) and one Bluesky post, so every production release proves publishing end to end.
@@ -1627,12 +1758,15 @@ What changed: native video makes X about five times cheaper per post, and moves 
 
 ### 19.1 Owner decisions, 2026-11-09 (US Eastern)
 
+Decisions 1–4 answer the earlier open questions; decision 5 is a standing owner rule for all async work.
+
 | # | Question | Decision | Where the spec applies it |
 |---|---|---|---|
 | 1 | Network priority | **Facebook and X first**, then the rest in the order recommended earlier: Telegram, Instagram, YouTube, TikTok, Threads, LinkedIn, Bluesky, Mastodon (share kits for WhatsApp Channels and Snapchat) | §2.2 row order, §5.1 connect order, §15.3 build order and review plan, §17.2 connect list |
 | 2 | X link-post cost | *"Why links? Export whole video, make short export if need be and so on."* The default on X, and everywhere, is the **video itself posted natively**: the whole video where the network allows it (X: 20 min, 125 min for Premium accounts), an automatic fit cut when it doesn't, shorts when wanted. On X the watch link is an opt-in reply that shows its $0.20 price. One platform-wide monthly X cap in admin (default $500); the per-channel 20-link-post allowance is dropped. X inbox reads stay off by default and count against the same cap when an admin turns them on | §6.1.1, §6.3, §6.6, §10.3, §11.2, §11.5, §18 |
 | 3 | Default for auto-posts | *"Both, and the user can choose."* Every rule and every manual post offers **Whole video, Short and Link post** per account, with a per-network preselection (the video itself wherever the network takes video) and channel-level defaults. No hidden bias toward links: equal controls, no automatic fallback to a link | §6.1.1, §7.3, §12 (`format`, `default_formats_json`), §17.3, §17.9 |
 | 4 | Legal entity | **No entity exists.** The spec ships everything that works without one: X, Telegram, YouTube, TikTok (public after its audit, which needs no company), LinkedIn member profiles, Bluesky and Mastodon for every channel. Facebook, Instagram and Threads publish for Al Ummah Now's own accounts and a closed beta of up to 50 channels, with a share kit for every other channel. The Meta review material is prepared so that an entity only needs verifying | §2.2, §2.4, §6.8, §11.1, §15.2, §15.3 |
+| 5 | Async work and errors (standing rule) | *"Always async, queues, retry, errors should flag admin for action."* Every publish, export, connect, token refresh, metrics pull and inbox sync is a queued, idempotent job with retry and backoff, then the DLQ. Failures surface to the channel with the network's reason and a Retry; exhausted or systemic failures flag the videos admin on the Errors page | §5.2, §5.6, §7.4, §9.2, §10.2, §11.6, §12 (`social_jobs`, `social_admin_flags`), §13.3, §16 |
 
 ### 19.2 Open question
 
