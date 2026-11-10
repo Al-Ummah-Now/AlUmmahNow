@@ -1,179 +1,256 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { useRealTimeNotifications, Notification } from '@/hooks/useRealTimeNotifications';
-import { X, Bell, Heart, MessageCircle, UserPlus, Video, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+/**
+ * Real-time notification toasts, bottom-end (above the phone tab bar and the
+ * mini player), layered under the header so its open menus stay on top.
+ *
+ * Same-kind notifications arriving together become one toast ("3 videos
+ * finished processing", View all); at most MAX_VISIBLE_GROUPS toasts show and
+ * the rest collapse into "+N more"; repeats are dropped (lib/notifications/toast-queue).
+ * Nothing here touches the notification center or the bell count: the bell
+ * counts every notification on its own subscription.
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { AlertCircle, Bell, Heart, MessageCircle, Radio, UserPlus, Video, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAuth } from '@/components/AuthProvider/authContext';
+import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
+import { resolveNotificationText } from '@/lib/websocket/notification-text';
+import { localizeActionUrl } from '@/lib/notifications/render';
+import { publishUploadResult, videoIdFromActionUrl } from '@/lib/notifications/upload-results';
+import {
+  EMPTY_QUEUE,
+  TOAST_TTL_MS,
+  contentKey,
+  dismissGroup,
+  enqueueToast,
+  expireGroups,
+  groupText,
+  isAlreadyOnScreen,
+  pluralText,
+  resumeGroups,
+  visibleToasts,
+  type ToastGroup,
+  type ToastQueue,
+} from '@/lib/notifications/toast-queue';
+import { logger } from '@/lib/logger-client';
+import type { NotificationEvent } from '@/interfaces/websocket';
+import './realtime-toasts.css';
 
-interface NotificationToastProps {
-  notification: Notification;
-  onClose: (id: string) => void;
-  onAction?: (notification: Notification) => void;
-}
+/** Bulk arrivals settle into one screen-reader announcement after this long. */
+const ANNOUNCE_DELAY_MS = 1200;
 
-function NotificationToast({ notification, onClose, onAction }: NotificationToastProps) {
-  const { t } = useLanguage();
-  const [isExiting, setIsExiting] = useState(false);
-
-  const handleClose = useCallback(() => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onClose(notification.id);
-    }, 300); // Match animation duration
-  }, [notification.id, onClose]);
-
-  useEffect(() => {
-    // Auto-close after 5 seconds
-    const timer = setTimeout(() => {
-      handleClose();
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [handleClose]);
-
-  const getIcon = () => {
-    switch (notification.type) {
-      case 'like':
-        return <Heart className="w-5 h-5 text-red-500" />;
-      case 'comment':
-        return <MessageCircle className="w-5 h-5 text-blue-500" />;
-      case 'subscription':
-        return <UserPlus className="w-5 h-5 text-green-500" />;
-      case 'upload':
-        return <Video className="w-5 h-5 text-purple-500" />;
-      case 'system':
-        return <AlertCircle className="w-5 h-5 text-orange-500" />;
-      default:
-        return <Bell className="w-5 h-5 text-gray-500" />;
-    }
-  };
-
-  return (
-    <div
-      className={`
-        fixed top-4 right-4 z-50 bg-white dark:bg-gray-800 
-        border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg 
-        p-4 min-w-[320px] max-w-[400px]
-        transform transition-all duration-300 ease-in-out
-        ${isExiting ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'}
-      `}
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 mt-0.5">
-          {getIcon()}
-        </div>
-        
-        <div className="flex-1">
-          <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-            {notification.title}
-          </h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {notification.message}
-          </p>
-          
-          {notification.actionUrl && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => onAction?.(notification)}
-            >
-              {t.notifications.view}
-            </Button>
-          )}
-        </div>
-        
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex-shrink-0 h-auto p-1"
-          onClick={handleClose}
-          aria-label={t.common.close}
-        >
-          <X className="w-4 h-4" aria-hidden="true" />
-        </Button>
-      </div>
-      
-      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-        {notification.timestamp.toLocaleTimeString()}
-      </div>
-    </div>
-  );
+function KindIcon({ kind }: { kind: string }) {
+  const props = { className: 'rt-icon', 'aria-hidden': true } as const;
+  switch (kind) {
+    case 'uploadReady':
+    case 'upload':
+    case 'newVideo':
+      return <Video {...props} />;
+    case 'uploadFailed':
+      return <AlertCircle {...props} />;
+    case 'newComment':
+    case 'commentReply':
+    case 'comment':
+      return <MessageCircle {...props} />;
+    case 'newSubscriber':
+    case 'subscription':
+      return <UserPlus {...props} />;
+    case 'liveStarted':
+      return <Radio {...props} />;
+    case 'like':
+      return <Heart {...props} />;
+    default:
+      return <Bell {...props} />;
+  }
 }
 
 export function NotificationCenter() {
-  const { t } = useLanguage();
-  const {
-    notifications,
-    unreadCount,
-    markAsRead
-  } = useRealTimeNotifications({
-    maxNotifications: 10,
-    autoRemoveAfter: 10000 // 10 seconds
-  });
+  const { t, lang } = useLanguage();
+  const { user } = useAuth();
+  const pathname = usePathname() ?? '';
+  const texts = t.notificationCenter.toasts;
 
-  const [visibleToasts, setVisibleToasts] = useState<string[]>([]);
+  const [queue, setQueue] = useState<ToastQueue>(EMPTY_QUEUE);
+  const [announcement, setAnnouncement] = useState('');
+  const [paused, setPaused] = useState(false);
+  const pausedAtRef = useRef<number | null>(null);
+  const regionRef = useRef<HTMLElement>(null);
 
-  // Show toasts for new unread notifications
+  // The socket callback is subscribed once; it reads the latest values through refs
+  const live = useRef({ t, lang, pathname });
   useEffect(() => {
-    const newUnreadNotifications = notifications
-      .filter(n => !n.read && !visibleToasts.includes(n.id))
-      .slice(0, 3); // Limit to 3 simultaneous toasts
+    live.current = { t, lang, pathname };
+  }, [t, lang, pathname]);
 
-    if (newUnreadNotifications.length > 0) {
-      const newToastIds = newUnreadNotifications.map(n => n.id);
-      setVisibleToasts(prev => [...prev, ...newToastIds]);
+  const onEvent = useCallback((data: unknown) => {
+    if (!data || typeof data !== 'object' || (data as { type?: unknown }).type !== 'notification') return;
+    const event = data as NotificationEvent;
+    const { t: tNow, lang: langNow, pathname: path } = live.current;
+    const kind = event.notificationKey ?? event.notificationType;
+
+    if (kind === 'uploadReady' || kind === 'uploadFailed') {
+      const videoId = videoIdFromActionUrl(event.actionUrl);
+      if (videoId) publishUploadResult(videoId, kind === 'uploadReady' ? 'ready' : 'failed');
     }
-  }, [notifications, visibleToasts]);
 
-  const handleCloseToast = (notificationId: string) => {
-    setVisibleToasts(prev => prev.filter(id => id !== notificationId));
-    markAsRead(notificationId);
-  };
-
-  const handleNotificationAction = (notification: Notification) => {
-    if (notification.actionUrl) {
-      // Navigate to the action URL
-      window.location.href = notification.actionUrl;
+    const href = localizeActionUrl(event.actionUrl, langNow);
+    if (isAlreadyOnScreen(kind, href, path)) {
+      logger.debug('[NotificationCenter] No toast: already on screen', { kind, path });
+      return;
     }
-    handleCloseToast(notification.id);
-  };
+    const { title, message } = resolveNotificationText(event, tNow);
+    const at = Date.now();
+    const id = event.notificationId || contentKey({ kind, href, message });
+    setQueue((q) => enqueueToast(q, { id, kind, title, message, href, at }));
+  }, []);
+
+  // Every signed-in session is subscribed to `user:<id>`; notifications reach all subscribers
+  useWebSocketSubscription(user?.id ? `user:${user.id}` : '', onEvent, [user?.id]);
+
+  // Signing out (or switching account) drops the previous user's toasts
+  useEffect(() => {
+    setQueue(EMPTY_QUEUE);
+  }, [user?.id]);
+
+  // Expire groups on their own timers; paused while the pointer or focus is on a toast
+  useEffect(() => {
+    if (paused || queue.groups.length === 0) return;
+    const next = Math.min(...queue.groups.map((g) => g.lastAt)) + TOAST_TTL_MS - Date.now();
+    const timer = setTimeout(() => setQueue((q) => expireGroups(q, Date.now())), Math.max(0, next));
+    return () => clearTimeout(timer);
+  }, [queue.groups, paused]);
+
+  // The region unmounts with its last toast (no blur/mouseleave then): start unpaused next time
+  useEffect(() => {
+    if (queue.groups.length > 0) return;
+    pausedAtRef.current = null;
+    setPaused(false);
+  }, [queue.groups.length]);
+
+  const pause = useCallback(() => {
+    if (pausedAtRef.current === null) pausedAtRef.current = Date.now();
+    setPaused(true);
+  }, []);
+  const resume = useCallback(() => {
+    // Still hovered or focused: stay paused
+    const region = regionRef.current;
+    if (region && (region.matches(':hover') || region.contains(document.activeElement))) return;
+    const since = pausedAtRef.current;
+    pausedAtRef.current = null;
+    if (since !== null) setQueue((q) => resumeGroups(q, Date.now() - since));
+    setPaused(false);
+  }, []);
+
+  const { visible, hiddenCount } = visibleToasts(queue);
+  const newest: ToastGroup | undefined = queue.groups[0];
+  const newestText = newest ? groupText(newest, texts, lang) : null;
+  const announceKey = newest ? `${newest.id}:${newest.entries.length}` : '';
+
+  // One polite announcement per burst: a bulk upload is announced once, with the final count
+  useEffect(() => {
+    if (!announceKey || !newestText) return;
+    const text = `${newestText.title}. ${newestText.message}`;
+    const timer = setTimeout(() => setAnnouncement(text), ANNOUNCE_DELAY_MS);
+    return () => clearTimeout(timer);
+    // newestText follows announceKey
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [announceKey]);
+
+  const dismiss = useCallback((groupId: string, moveFocus: boolean) => {
+    if (moveFocus) {
+      // Keep keyboard users in the region: focus the next toast's close button
+      const buttons = [...(regionRef.current?.querySelectorAll<HTMLButtonElement>('.rt-close') ?? [])];
+      const index = buttons.findIndex((b) => b.dataset.group === groupId);
+      const target = buttons[index + 1] ?? buttons[index - 1];
+      target?.focus();
+    }
+    setQueue((q) => dismissGroup(q, groupId));
+  }, []);
+
+  const timeFormat = new Intl.DateTimeFormat(lang, { hour: 'numeric', minute: '2-digit' });
 
   return (
     <>
-      {/* Notification badge (for header integration) */}
-      {unreadCount > 0 && (
-        <div className="fixed top-4 left-4 z-40">
-          <div className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1 rounded-full text-sm">
-            <Bell className="w-4 h-4" />
-            <span>{unreadCount} {t.notifications.new}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Toast notifications */}
-      <div className="fixed top-0 right-0 z-50 space-y-2 p-4 pointer-events-none">
-        {notifications
-          .filter(n => visibleToasts.includes(n.id))
-          .slice(0, 3) // Only show 3 toasts at a time
-          .map((notification, index) => (
-            <div
-              key={notification.id}
-              className="pointer-events-auto"
-              style={{
-                transform: `translateY(${index * 10}px)`,
-                zIndex: 50 - index
-              }}
-            >
-              <NotificationToast
-                notification={notification}
-                onClose={handleCloseToast}
-                onAction={handleNotificationAction}
-              />
-            </div>
-          ))}
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" data-testid="realtime-toast-announcer">
+        {announcement}
       </div>
+      {visible.length > 0 && (
+        <section
+          ref={regionRef}
+          className="rt-toasts"
+          aria-label={texts.region}
+          data-testid="realtime-toasts"
+          onMouseEnter={pause}
+          onMouseLeave={resume}
+          onFocus={pause}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) resume();
+          }}
+        >
+          <ul className="rt-list">
+            {visible.map((group) => {
+              const text = groupText(group, texts, lang);
+              const count = group.entries.length;
+              return (
+                <li
+                  key={group.id}
+                  className={`rt-toast toast${group.kind === 'uploadFailed' ? ' err' : ''}`}
+                  data-testid="realtime-toast"
+                  data-kind={group.kind}
+                  data-count={count}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      dismiss(group.id, true);
+                    }
+                  }}
+                >
+                  <KindIcon kind={group.kind} />
+                  <div className="rt-body">
+                    <p className="rt-title">{text.title}</p>
+                    <p className="rt-message" data-testid="realtime-toast-message">{text.message}</p>
+                    <div className="rt-foot">
+                      {text.href && (
+                        <Link
+                          href={text.href}
+                          className="rt-action"
+                          data-testid="realtime-toast-action"
+                          onClick={() => dismiss(group.id, false)}
+                        >
+                          {text.action}
+                        </Link>
+                      )}
+                      <time className="rt-time" dateTime={new Date(group.lastAt).toISOString()}>
+                        {timeFormat.format(group.lastAt)}
+                      </time>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="rt-close"
+                    data-group={group.id}
+                    data-testid="realtime-toast-close"
+                    aria-label={texts.dismiss}
+                    title={texts.dismiss}
+                    onClick={(e) => dismiss(group.id, e.detail === 0)}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {hiddenCount > 0 && (
+            <Link href={`/${lang}/notifications`} className="rt-more" data-testid="realtime-toast-more">
+              {pluralText(texts.more, hiddenCount, lang)}
+            </Link>
+          )}
+        </section>
+      )}
     </>
   );
 }
