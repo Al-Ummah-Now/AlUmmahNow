@@ -4,9 +4,10 @@ import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
-import { IndexManager, INDEX_STALENESS_THRESHOLD } from "../../lib/indexManager";
+import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
+import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
 
 const VideoResponseSchema = z.object({
   id: z.string(),
@@ -107,12 +108,25 @@ export class PopularVideosSection extends PublicRoute {
       const indexManager = new IndexManager(videoBucket);
       const videoRepo = new R2Repository<VideoObject>(videoBucket);
 
-      // Try to get from index first
+      // From the D1 search index when it is bound (SCALABILITY-AUDIT AV-15)
+      const since = period === 'all' ? undefined : Date.now() - PERIOD_DAYS[period] * 24 * 60 * 60 * 1000;
+      const page = await sectionFromIndex(c.env, { sort: 'popular', limit, offset: decodeOffset(cursor), category, minViews, since });
+      if (page) {
+        return c.json({
+          success: true,
+          data: page.videos.map(v => transformVideoForResponse(v, engagementRateOf(v))),
+          cursor: page.nextOffset !== undefined ? encodeOffset(page.nextOffset) : undefined,
+          metadata: { totalCount: page.total, lastUpdated: new Date().toISOString(), period, fromIndex: true },
+        });
+      }
+
+      // Without it: the stored R2 index even when stale, else one page of the bucket;
+      // never a rebuild on the request path
       const popularIndex = await indexManager.getPopularVideosIndex(period);
       let videos: VideoObject[] = [];
       let fromIndex = false;
 
-      if (popularIndex && !indexManager.isIndexStale(popularIndex.lastUpdated, INDEX_STALENESS_THRESHOLD.popular)) {
+      if (popularIndex) {
         // Use index data
         logger.info("Using popular videos index", { period, indexVideos: popularIndex.videos.length });
         fromIndex = true;
@@ -179,7 +193,7 @@ export class PopularVideosSection extends PublicRoute {
         fromIndex = false;
 
         // List all videos (limited for performance)
-        const listResult = await videoRepo.listObjects(200, cursor);
+        const listResult = await videoRepo.listObjects(100, cursor);
         videos = listResult.items || [];
 
         // Filter by time period
@@ -213,12 +227,6 @@ export class PopularVideosSection extends PublicRoute {
         }).sort((a, b) => (b.views || 0) - (a.views || 0))
           .slice(0, limit);
 
-        // Trigger index rebuild in background (fire and forget)
-        c.executionCtx.waitUntil(
-          rebuildPopularIndex(videoBucket, period).catch(err =>
-            logger.error("Failed to rebuild popular index", { error: err, period })
-          )
-        );
       }
 
       return c.json({
@@ -236,6 +244,13 @@ export class PopularVideosSection extends PublicRoute {
       return emptyShelf(c, "popular", error);
     }
   }
+}
+
+const PERIOD_DAYS = { daily: 1, weekly: 7, monthly: 30 } as const;
+
+function engagementRateOf(video: VideoObject): number {
+  const views = video.views || 0;
+  return views > 0 ? ((video.likesCount || 0) + (video.commentsCount || 0)) / views : 0;
 }
 
 /**
@@ -261,32 +276,4 @@ function transformVideoForResponse(video: VideoObject, engagementRate?: number) 
     isPublic: video.isPublic !== false,
     engagementRate: engagementRate || 0,
   };
-}
-
-/**
- * Rebuild popular videos index
- */
-async function rebuildPopularIndex(videoBucket: R2Bucket, period: 'all' | 'monthly' | 'weekly' | 'daily'): Promise<void> {
-  logger.info("Starting popular index rebuild", { period });
-
-  const indexManager = new IndexManager(videoBucket);
-  const videoRepo = new R2Repository<VideoObject>(videoBucket);
-
-  // Fetch videos for index
-  const allVideos: VideoObject[] = [];
-  let cursor: string | undefined;
-  let iterations = 0;
-
-  while (iterations < 10) { // More iterations for popular videos
-    const result = await videoRepo.listObjects(100, cursor);
-    allVideos.push(...(result.items || []));
-
-    if (!result.cursor) break;
-    cursor = result.cursor;
-    iterations++;
-  }
-
-  // Update the index
-  await indexManager.updatePopularVideosIndex(allVideos, period);
-  logger.info("Popular index rebuilt", { period, totalVideos: allVideos.length });
 }

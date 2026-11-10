@@ -4,9 +4,10 @@ import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
-import { IndexManager, INDEX_STALENESS_THRESHOLD } from "../../lib/indexManager";
+import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
+import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
 
 const VideoResponseSchema = z.object({
   id: z.string(),
@@ -104,12 +105,24 @@ export class RecentVideosSection extends PublicRoute {
       const indexManager = new IndexManager(videoBucket);
       const videoRepo = new R2Repository<VideoObject>(videoBucket);
 
-      // Try to get from index first
+      // From the D1 search index when it is bound (SCALABILITY-AUDIT AV-15)
+      const page = await sectionFromIndex(c.env, { sort: 'recent', limit, offset: decodeOffset(cursor), category, channelId, excludeChannels });
+      if (page) {
+        return c.json({
+          success: true,
+          data: page.videos.map(transformVideoForResponse),
+          cursor: page.nextOffset !== undefined ? encodeOffset(page.nextOffset) : undefined,
+          metadata: { totalCount: page.total, lastUpdated: new Date().toISOString(), fromIndex: true },
+        });
+      }
+
+      // Without it: the stored R2 index even when stale, else one page of the bucket;
+      // never a rebuild on the request path
       const recentIndex = await indexManager.getRecentVideosIndex();
       let videos: VideoObject[] = [];
       let fromIndex = false;
 
-      if (recentIndex && !indexManager.isIndexStale(recentIndex.lastUpdated, INDEX_STALENESS_THRESHOLD.recent)) {
+      if (recentIndex) {
         // Use index data
         logger.info("Using recent videos index", { indexVideos: recentIndex.videos.length });
         fromIndex = true;
@@ -191,12 +204,6 @@ export class RecentVideosSection extends PublicRoute {
           })
           .slice(0, limit);
 
-        // Trigger index rebuild in background (fire and forget)
-        c.executionCtx.waitUntil(
-          rebuildRecentIndex(videoBucket).catch(err =>
-            logger.error("Failed to rebuild recent index", { error: err })
-          )
-        );
       }
 
       return c.json({
@@ -237,32 +244,4 @@ function transformVideoForResponse(video: VideoObject) {
     category: video.category,
     isPublic: video.isPublic !== false,
   };
-}
-
-/**
- * Rebuild recent videos index
- */
-async function rebuildRecentIndex(videoBucket: R2Bucket): Promise<void> {
-  logger.info("Starting recent index rebuild");
-
-  const indexManager = new IndexManager(videoBucket);
-  const videoRepo = new R2Repository<VideoObject>(videoBucket);
-
-  // Fetch up to 500 videos for index
-  const allVideos: VideoObject[] = [];
-  let cursor: string | undefined;
-  let iterations = 0;
-
-  while (iterations < 5) { // Limit iterations to prevent runaway
-    const result = await videoRepo.listObjects(100, cursor);
-    allVideos.push(...(result.items || []));
-
-    if (!result.cursor) break;
-    cursor = result.cursor;
-    iterations++;
-  }
-
-  // Update the index
-  await indexManager.updateRecentVideosIndex(allVideos);
-  logger.info("Recent index rebuilt", { totalVideos: allVideos.length });
 }

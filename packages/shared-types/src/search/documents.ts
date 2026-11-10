@@ -35,6 +35,8 @@ export interface SearchVideoPayload {
   duration?: number;
   views: number;
   likesCount: number;
+  commentsCount: number;
+  dislikesCount: number;
   category?: string;
   language?: string;
   tags: string[];
@@ -250,6 +252,9 @@ export function projectVideo(raw: unknown): SearchRow<'video'> | null {
       duration: duration ?? undefined,
       views,
       likesCount,
+      // Counters the home sections' trending score uses (api-videos lib/sections/sectionIndex.ts)
+      commentsCount: countOf(obj.comments, obj.commentsCount),
+      dislikesCount: countOf(obj.dislikes, obj.dislikesCount),
       category,
       language: language ?? undefined,
       tags: tags.slice(0, 10),

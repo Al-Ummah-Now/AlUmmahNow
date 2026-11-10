@@ -4,9 +4,10 @@ import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
-import { IndexManager, INDEX_STALENESS_THRESHOLD } from "../../lib/indexManager";
+import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
+import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
 
 const VideoResponseSchema = z.object({
   id: z.string(),
@@ -131,12 +132,24 @@ export class CategoryVideosSection extends PublicRoute {
       const indexManager = new IndexManager(videoBucket);
       const videoRepo = new R2Repository<VideoObject>(videoBucket);
 
-      // Try to get from category index first
+      // From the D1 search index when it is bound (SCALABILITY-AUDIT AV-15)
+      const page = await sectionFromIndex(c.env, { sort, limit, offset: decodeOffset(cursor), category });
+      if (page) {
+        return c.json({
+          success: true,
+          data: page.videos.map(transformVideoForResponse),
+          cursor: page.nextOffset !== undefined ? encodeOffset(page.nextOffset) : undefined,
+          metadata: { category, totalCount: page.total, lastUpdated: new Date().toISOString(), sortBy: sort, fromIndex: true },
+        });
+      }
+
+      // Without it: the stored R2 index even when stale, else one page of the bucket;
+      // never a rebuild on the request path
       const categoryIndex = await indexManager.getCategoryVideosIndex(category);
       let videos: VideoObject[] = [];
       let fromIndex = false;
 
-      if (categoryIndex && !indexManager.isIndexStale(categoryIndex.lastUpdated, INDEX_STALENESS_THRESHOLD.category)) {
+      if (categoryIndex) {
         // Use index data
         logger.info("Using category videos index", { category, indexVideos: categoryIndex.videos.length });
         fromIndex = true;
@@ -214,7 +227,7 @@ export class CategoryVideosSection extends PublicRoute {
         let fetchCursor: string | undefined;
         let iterations = 0;
 
-        while (iterations < 5 && allVideos.length < 200) { // Limit iterations and results
+        while (iterations < 1) { // One page: a bounded fallback while the search index is unavailable
           const result = await videoRepo.listObjects(100, fetchCursor);
           const categoryVideos = (result.items || []).filter(v =>
             v.category === category && isVideoPubliclyVisible(v)
@@ -251,12 +264,6 @@ export class CategoryVideosSection extends PublicRoute {
         // Apply pagination
         videos = allVideos.slice(0, limit);
 
-        // Trigger index rebuild in background (fire and forget)
-        c.executionCtx.waitUntil(
-          rebuildCategoryIndex(videoBucket, category).catch(err =>
-            logger.error("Failed to rebuild category index", { error: err, category })
-          )
-        );
       }
 
       return c.json({
@@ -328,35 +335,4 @@ function transformVideoForResponse(video: VideoObject) {
     category: video.category,
     isPublic: video.isPublic !== false,
   };
-}
-
-/**
- * Rebuild category videos index
- */
-async function rebuildCategoryIndex(videoBucket: R2Bucket, category: string): Promise<void> {
-  logger.info("Starting category index rebuild", { category });
-
-  const indexManager = new IndexManager(videoBucket);
-  const videoRepo = new R2Repository<VideoObject>(videoBucket);
-
-  // Fetch all videos in the category
-  const categoryVideos: VideoObject[] = [];
-  let cursor: string | undefined;
-  let iterations = 0;
-
-  while (iterations < 10) { // Limit iterations
-    const result = await videoRepo.listObjects(100, cursor);
-    const filtered = (result.items || []).filter(v =>
-      v.category === category && isVideoPubliclyVisible(v)
-    );
-    categoryVideos.push(...filtered);
-
-    if (!result.cursor || categoryVideos.length >= 100) break;
-    cursor = result.cursor;
-    iterations++;
-  }
-
-  // Update the index
-  await indexManager.updateCategoryVideosIndex(categoryVideos, category);
-  logger.info("Category index rebuilt", { category, totalVideos: categoryVideos.length });
 }
