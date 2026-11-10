@@ -56,6 +56,7 @@ function bunnyStub() {
 		failList: 0,
 		deleteDelayMs: 0,
 		fail429: 0,
+		refuse: new Set<string>(),
 		inFlight: 0,
 		maxInFlight: 0,
 	};
@@ -68,6 +69,7 @@ function bunnyStub() {
 			s.maxInFlight = Math.max(s.maxInFlight, s.inFlight);
 			await new Promise((r) => setTimeout(r, s.deleteDelayMs));
 			s.inFlight--;
+			if (s.refuse.has(one[1])) return new Response('internal error', { status: 500 });
 			if (s.fail429 > 0) {
 				s.fail429--;
 				return new Response('slow down', { status: 429 });
@@ -347,6 +349,20 @@ describe('test-library purge run', () => {
 		const stageLeft = bunny.videos.filter((v) => v.title.startsWith('[stage] '));
 		assert.equal(stageLeft.length, 10);
 		assert.ok(Object.values(after!.otherEnvByStatus ?? {}).reduce((a, b) => a + b, 0) >= 10);
+	});
+
+	it('a video Bunny refuses to delete (HTTP 500) is recorded and skipped; the run still finishes', async () => {
+		const { bunny, env } = await seed();
+		const stuck = bunny.videos.find((v) => v.title === 'E2E leaked')!.guid;
+		bunny.refuse.add(stuck);
+		await startPurge(env, { actor: 'a', dryRun: false, concurrency: 40 });
+		await drain(env);
+		const state = await readPurgeState(env);
+		assert.equal(state?.status, 'finished');
+		assert.equal(state?.deleted, 129);
+		assert.deepEqual(state?.deleteFailed?.map((f) => f.videoId), [stuck]);
+		assert.match(state!.deleteFailed![0].error, /HTTP 500/);
+		assert.ok(bunny.videos.some((v) => v.guid === stuck));
 	});
 
 	it('Bunny 429: the video is retried after a back-off, and the next page runs with half the concurrency', async () => {

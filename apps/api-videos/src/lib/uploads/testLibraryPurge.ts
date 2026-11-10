@@ -85,6 +85,8 @@ export interface PurgeState {
 	deletedByStatus?: Record<string, number>;
 	/** Other environments' videos (never deleted) seen per Bunny status, counted on each listing */
 	otherEnvByStatus?: Record<string, number>;
+	/** Videos Bunny refused to delete (5xx / 4xx other than 404 and 429): skipped so they never block a page */
+	deleteFailed?: { videoId: string; status?: number; error: string; at: string }[];
 }
 
 export interface PurgeMessage {
@@ -251,6 +253,7 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 	let throttled = 0;
 	const byStatus: Record<string, number> = {};
 	const otherEnv: Record<string, number> = {};
+	const failedNow: NonNullable<PurgeState['deleteFailed']> = [];
 	const listed = await listBunnyVideos(env, message.page, pageSize);
 	const lives = listed.items.length ? await liveStreamTexts(env) : [];
 	const kept: Record<string, number> = {};
@@ -285,8 +288,16 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 				await deleteBunnyVideo(env, id);
 				break;
 			} catch (error) {
-				// Bunny's API rate limit: back off and retry this video; anything else fails the page
-				if (!/HTTP 429/.test(error instanceof Error ? error.message : String(error)) || attempt >= PURGE_429_RETRIES) throw error;
+				const text = error instanceof Error ? error.message : String(error);
+				// Bunny refuses this one video (e.g. HTTP 500 on a stuck upload, QA 2026-11-10): record it
+				// and move on, so one undeletable video never stalls the whole run
+				if (/HTTP (5\d\d|4(?!04|29)\d\d)/.test(text)) {
+					failedNow.push({ videoId: id, status: video.status, error: text.slice(0, 200), at: now.toISOString() });
+					kept['delete-failed'] = (kept['delete-failed'] ?? 0) + 1;
+					return;
+				}
+				// Bunny's API rate limit: back off and retry this video; anything else (network) fails the page
+				if (!/HTTP 429/.test(text) || attempt >= PURGE_429_RETRIES) throw error;
 				throttled++;
 				await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
 			}
@@ -319,6 +330,10 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 		fresh.updatedAt = now.toISOString();
 		fresh.attempts = undefined;
 		fresh.lastError = undefined;
+		if (failedNow.length) {
+			const known = new Set((fresh.deleteFailed ?? []).map((f) => f.videoId));
+			fresh.deleteFailed = [...(fresh.deleteFailed ?? []), ...failedNow.filter((f) => !known.has(f.videoId))].slice(-200);
+		}
 		for (const [k, n] of Object.entries(byStatus)) (fresh.deletedByStatus ??= {})[k] = (fresh.deletedByStatus[k] ?? 0) + n;
 		for (const [k, n] of Object.entries(otherEnv)) (fresh.otherEnvByStatus ??= {})[k] = (fresh.otherEnvByStatus[k] ?? 0) + n;
 		if (throttled) {
