@@ -108,6 +108,9 @@ describe('scrubbing', () => {
     assert.deepEqual(e.action?.retry, { kind: 'service', service: 'processor', path: '/dlq/replay', body: { id: 'm1' } });
     assert.equal(scrubEvent({ app: 'processor', kind: 'action', ref: newErrorRef(), message: 'x' }), null, 'an action needs its item');
     assert.equal(scrubEvent({ app: 'web', kind: 'action', ref: newErrorRef(), action: { key: 'k', source: 'email', title: 'T', itemUrl: '/contact/1' } })!.action?.itemUrl, '/contact/1');
+    for (const bad of ['//evil.example/x', '/\\evil.example', '/\\/evil', 'javascript:alert(1)', 'https://alummahnow.net.evil.example/']) {
+      assert.equal(scrubEvent({ app: 'web', kind: 'action', ref: newErrorRef(), action: { key: 'k', source: 'email', title: 'T', itemUrl: bad } })!.action?.itemUrl, undefined, bad);
+    }
   });
 });
 
@@ -300,10 +303,18 @@ describe('needs-action items', () => {
     assert.equal(await openActionCount(db), 2);
   });
 
-  it('drops retry specs from browser batches', async () => {
-    await ingestErrorEvents(db, [action('dlq:m9')], ctx({ trustedRetry: false }));
+  it('browser batches: no retry, own key namespace, admin-api environment', async () => {
+    await ingestErrorEvents(db, [action('dlq:m9')], ctx());
+    const spoof = { ...action('dlq:m9', { itemUrl: '/evil', title: 'Queue message dead-lettered' }), environment: 'stage' };
+    await ingestErrorEvents(db, [spoof], ctx({ trustedRetry: false }));
     const gid = (await listErrorGroups(db, { limit: 1, offset: 0 })).groups[0].id;
-    assert.equal((await listGroupActions(db, gid))[0].retry_json, null);
+    const items = await listGroupActions(db, gid);
+    const worker = items.find((i) => i.item_key === 'dlq:m9')!;
+    const browser = items.find((i) => i.item_key === 'browser:dlq:m9')!;
+    assert.ok(worker.retry_json, 'the Worker item keeps its retry');
+    assert.equal(worker.item_url, null, 'and is not overwritten by the browser report');
+    assert.equal(browser.retry_json, null);
+    assert.equal(browser.environment, 'production');
   });
 
   it('resolved by the feature, then reopened (with the group) when it fails again', async () => {

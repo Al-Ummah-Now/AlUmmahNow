@@ -110,7 +110,7 @@ export interface IngestContext {
   now: Date;
   /** Environment of this admin-api (events that do not name one get it) */
   environment: string;
-  /** Salted hash of the reporting client's IP (client events), for the rate limit and anonymous user counts */
+  /** Keyed hash of the reporting client's IP + browser (client events), for anonymous user counts */
   clientKey?: string;
   browser?: string;
   os?: string;
@@ -187,7 +187,13 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
   const nowIso = now.toISOString();
   const random = ctx.random ?? Math.random;
 
-  for (const e of events) {
+  for (const original of events) {
+    // Browser batches are untrusted: admin-api's own environment, and their item keys live in a
+    // separate "browser:" namespace so they can never update an item a Worker reported
+    const e =
+      ctx.trustedRetry === false
+        ? { ...original, environment: undefined, action: original.action ? { ...original.action, key: `browser:${original.action.key}`.slice(0, 160), retry: undefined } : undefined }
+        : original;
     const environment = e.environment || ctx.environment;
     const occurredAt = e.occurredAt && Math.abs(Date.parse(e.occurredAt) - now.getTime()) < 86400_000 ? e.occurredAt : nowIso;
     const count = e.count ?? 1;

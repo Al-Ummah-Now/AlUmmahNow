@@ -140,7 +140,9 @@ export const ACTION_KEY = /^[A-Za-z0-9][A-Za-z0-9:._@/-]{0,159}$/;
 /** Admin-web path or an https URL on alummahnow.net; anything else is dropped. */
 export function cleanItemUrl(raw: unknown): string | undefined {
   if (typeof raw !== 'string' || raw.length > 500) return undefined;
-  if (/^\/(?!\/)[^\s]*$/.test(raw)) return raw;
+  // Admin-web path: starts with / and a letter or digit, no backslashes (some browsers read \ as /)
+  if (raw.includes('\\')) return undefined;
+  if (/^\/[A-Za-z0-9][^\s]*$/.test(raw)) return raw;
   try {
     const u = new URL(raw);
     if (u.protocol === 'https:' && (u.hostname === 'alummahnow.net' || u.hostname.endsWith('.alummahnow.net'))) return u.toString();

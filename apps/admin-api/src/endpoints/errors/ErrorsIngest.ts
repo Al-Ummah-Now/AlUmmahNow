@@ -151,13 +151,15 @@ export async function errorsIngest(c: Context<{ Bindings: AdminBindings }>): Pro
   if (events.length === 0 && resolved.length === 0) return c.json({ success: false, error: 'no valid events' }, 400);
 
   const userAgent = c.req.header('X-Client-User-Agent') || undefined;
-  // Anonymous visitors are counted (and rate limited) by a keyed hash of IP + browser; the IP is never stored
+  // Rate limit per IP (a changing user agent must not reset it); anonymous visitors are counted by a
+  // keyed hash of IP + browser. Neither the IP nor the user agent is stored.
+  const rateKey = ip ? (await hashIp(ip, key)).slice(0, 24) : undefined;
   const clientKey = ip ? (await hashIp(`${ip}|${userAgent ?? ''}`, key)).slice(0, 24) : undefined;
 
   let rateLimited = 0;
   try {
-    if (clientKey && events.length) {
-      const allowed = await allowClientEvents(env.REPORTS_DB, clientKey, events.length, new Date());
+    if (rateKey && events.length) {
+      const allowed = await allowClientEvents(env.REPORTS_DB, rateKey, events.length, new Date());
       rateLimited = events.length - allowed;
       events = events.slice(0, allowed);
       if (events.length === 0 && resolved.length === 0) return c.json({ success: false, error: 'rate_limited' }, 429, { 'Retry-After': '60' });
