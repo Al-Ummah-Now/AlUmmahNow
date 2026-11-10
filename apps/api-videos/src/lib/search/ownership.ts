@@ -20,6 +20,7 @@
  * to R2 scans.
  */
 
+import { keysetArms } from './keyset';
 import {
   CHANNEL_ACCESS_TABLE,
   OWNERSHIP_TABLE,
@@ -196,30 +197,6 @@ export interface KeysetPageQuery {
 }
 
 /**
- * The keyset condition "after `values` in `columns` order", as one condition
- * per arm: arm i fixes the first i columns to the position's values and
- * takes column i past it. Every arm is a full seek of the list's index
- * (equalities, then one range), and the arms cover disjoint, consecutive
- * runs of the order, deepest first. One row-value comparison
- * `(c0, c1) < (?, ?)` would say the same, but SQLite only seeks a row value
- * on plain columns: over the COALESCE(created_at, 0) indexes it seeks
- * `kind = ?` alone and walks every row before the position (a deep page
- * then costs as much as the catalogue).
- */
-export function keysetArms(columns: string[], direction: 'DESC' | 'ASC', values: unknown[]): Array<{ where: string; params: unknown[]; orderBy: string }> {
-  const op = direction === 'DESC' ? '<' : '>';
-  const arms: Array<{ where: string; params: unknown[]; orderBy: string }> = [];
-  for (let i = columns.length - 1; i >= 0; i--) {
-    const parts = columns.slice(0, i).map(c => `${c} = ?`);
-    parts.push(`${columns[i]} ${op} ?`);
-    // Only the free columns: SQLite does not treat `COALESCE(...) = ?` as a
-    // constant of the order and would sort the arm's rows
-    arms.push({ where: parts.join(' AND '), params: values.slice(0, i + 1), orderBy: columns.slice(i).map(c => `${c} ${direction}`).join(', ') });
-  }
-  return arms;
-}
-
-/**
  * One page of rows in `sort` order after `after`. Fetches `limit + 1` so the
  * caller knows if more exist. Rows inserted meanwhile before the position are
  * not repeated, and none after it is skipped.
@@ -237,7 +214,7 @@ export async function keysetPage(db: SearchDb, q: KeysetPageQuery): Promise<{ id
   const orderBy = columns.map(c => `${c} ${direction}`).join(', ');
   let rowsAll: Array<Record<string, number | string>>;
   if (q.after && q.after.sort === q.sort) {
-    const arms = keysetArms(columns, direction, q.after.values);
+    const arms = keysetArms(columns, direction, q.after.values); // see keyset.ts
     const sql = arms.map((arm, i) =>
       `SELECT * FROM (SELECT ${i} AS arm, ${select} FROM ${OWNERSHIP_TABLE} WHERE ${[...where, arm.where].join(' AND ')} ORDER BY ${arm.orderBy} LIMIT ?)`,
     ).join(' UNION ALL ');

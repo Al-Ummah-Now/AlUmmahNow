@@ -129,12 +129,20 @@ export const ADMIN_PAGE_SIZES = [20, 50, 100] as const;
 
 export interface AdminPage<T> {
   items: T[];
+  /** Matching rows, counted up to ADMIN_TOTAL_CAP (see totalCapped). */
   total: number;
   page: number;
   pageSize: number;
   /** False while the admin index is still being (re)built: the list may be partial. */
   indexComplete: boolean;
+  /** Next page (pass back as `cursor`); empty or absent at the end. Pages are keyset seeks however deep. */
+  cursor?: string;
+  /** True when more than ADMIN_TOTAL_CAP rows match (`total` is the cap: show "cap+"). */
+  totalCapped?: boolean;
 }
+
+/** Admin list totals are counted up to this many rows (a bounded count per request). */
+export const ADMIN_TOTAL_CAP = 1000;
 
 export type AdminChannelSort = 'newest' | 'oldest' | 'name' | 'views';
 export const ADMIN_CHANNEL_SORTS: readonly AdminChannelSort[] = ['newest', 'oldest', 'name', 'views'];
@@ -149,6 +157,8 @@ export interface AdminChannelQuery {
   createdTo?: string;
   ownerId?: string;
   sort?: AdminChannelSort;
+  /** Keyset cursor of the previous page (AdminPage.cursor); takes precedence over `page`. */
+  cursor?: string;
   page?: number;
   pageSize?: number;
 }
@@ -199,6 +209,8 @@ export interface AdminVideoQuery {
   createdFrom?: string;
   createdTo?: string;
   sort?: AdminVideoSort;
+  /** Keyset cursor of the previous page (AdminPage.cursor); takes precedence over `page`. */
+  cursor?: string;
   page?: number;
   pageSize?: number;
 }
@@ -257,6 +269,8 @@ export interface AdminCommentQuery {
   q?: string;
   videoId?: string;
   userId?: string;
+  /** Keyset cursor of the previous page (AdminPage.cursor); takes precedence over `page`. */
+  cursor?: string;
   page?: number;
   pageSize?: number;
 }
@@ -297,6 +311,8 @@ export interface AdminUserQuery {
   q?: string;
   banned?: 'yes' | 'no';
   sort?: AdminUserSort;
+  /** Keyset cursor of the previous page (AdminPage.cursor); takes precedence over `page`. */
+  cursor?: string;
   page?: number;
   pageSize?: number;
 }

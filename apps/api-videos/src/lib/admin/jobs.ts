@@ -12,6 +12,7 @@
  *
  * Rows live in SEARCH_DB.admin_jobs (migration search/0006).
  */
+import { decodeCursor, encodeCursor, keysetQuery } from '../search/keyset';
 import { ADMIN_JOB_MAX_RETRIES, MessageType, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
@@ -92,6 +93,18 @@ export async function getJob(env: JobEnv, id: string): Promise<AdminJob | null> 
 }
 
 export async function listJobs(env: JobEnv, query: { status?: string; targetKind?: string; targetId?: string; limit?: number }): Promise<AdminJob[]> {
+	return (await listJobsPage(env, query)).items;
+}
+
+/**
+ * One page of jobs, newest first, after `cursor` (the previous page's): a
+ * keyset seek of idx_admin_jobs_feed / _status_feed / _target_feed
+ * (migration 0014), however far back the page is.
+ */
+export async function listJobsPage(
+	env: JobEnv,
+	query: { status?: string; targetKind?: string; targetId?: string; limit?: number; cursor?: string },
+): Promise<{ items: AdminJob[]; cursor: string }> {
 	const where: string[] = [];
 	const args: unknown[] = [];
 	if (query.status) {
@@ -103,11 +116,17 @@ export async function listJobs(env: JobEnv, query: { status?: string; targetKind
 		args.push(query.targetKind, query.targetId);
 	}
 	const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
-	const { results } = await db(env)
-		.prepare(`SELECT ${COLUMNS} FROM admin_jobs ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC, id DESC LIMIT ?`)
-		.bind(...args, limit)
-		.all<JobRow>();
-	return (results ?? []).map(toJob);
+	const result = await keysetQuery<JobRow & Record<string, unknown>>(db(env), {
+		from: 'admin_jobs',
+		select: COLUMNS,
+		where,
+		params: args,
+		columns: ['created_at', 'id'],
+		direction: 'DESC',
+		after: decodeCursor(query.cursor, 'jobs', ['string', 'string']),
+		limit,
+	});
+	return { items: result.rows.map(toJob), cursor: result.hasMore && result.last ? encodeCursor('jobs', result.last) : '' };
 }
 
 export async function countJobs(env: JobEnv, status: AdminJobStatus): Promise<number> {

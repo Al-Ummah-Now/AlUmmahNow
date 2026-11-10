@@ -6,8 +6,8 @@ import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
-import { Chip, EmptyState, Notice, PageHeader, Pager } from '@/components/content/parts';
-import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
+import { Chip, EmptyState, Notice, PageHeader, CursorPager } from '@/components/content/parts';
+import { PAGE_SIZE, hrefWith, pickParams, type SearchParams, withoutPaging } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 import { VideoTable } from './VideoTable';
 
@@ -27,9 +27,11 @@ export default async function VideosPage({ searchParams }: { searchParams: Promi
     createdTo: 'date',
     sort: ADMIN_VIDEO_SORTS,
     page: 'page',
+    cursor: 'cursor',
   });
   const { t } = await getI18n();
   const page = Number(params.page ?? 1);
+  const filters = withoutPaging(params);
 
   let data: AdminPage<AdminVideoRow> | null = null;
   let permissions: AdminContentPermission[] = [];
@@ -53,7 +55,7 @@ export default async function VideosPage({ searchParams }: { searchParams: Promi
 
   return (
     <div>
-      <PageHeader title={t('videos.title')} subtitle={t('videos.subtitle')} total={data?.total} t={t}>
+      <PageHeader title={t('videos.title')} subtitle={t('videos.subtitle')} total={data?.total} totalCapped={data?.totalCapped} t={t}>
         {counts && (
           <nav aria-label={t('videos.statusSummary')} className="flex flex-wrap gap-2" data-testid="video-status-summary">
             <Link href={hrefWith('/videos', {}, { status: 'processing' })} className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" aria-current={params.status === 'processing' ? 'true' : undefined}>
@@ -102,7 +104,13 @@ export default async function VideosPage({ searchParams }: { searchParams: Promi
       {data && data.items.length > 0 && (
         <>
           <VideoTable rows={data.items} permissions={permissions} />
-          <Pager page={page} pageSize={PAGE_SIZE} total={data.total} t={t} href={(p) => hrefWith('/videos', params, { page: p > 1 ? String(p) : undefined })} />
+          <CursorPager
+            hasCursor={!!params.cursor || page > 1}
+            nextHref={data.cursor ? hrefWith('/videos', filters, { cursor: data.cursor }) : null}
+            firstHref={hrefWith('/videos', filters)}
+            labels={{ first: t('content.firstPage'), next: t('content.nextPage') }}
+            t={t}
+          />
         </>
       )}
     </div>

@@ -445,10 +445,20 @@ describe('internal processing endpoints', () => {
 
 	it('errors lists failed and flagged videos with the reconciler run', async () => {
 		const env = makeEnv();
-		await env.videos.put(ID, JSON.stringify(stuck({ uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', reason: 'x', at: NOW.toISOString() } })));
-		await env.videos.put('ok-1', JSON.stringify(videoFixture({ id: 'ok-1', uploadStatus: 'ready' })));
+		const db = new SqliteD1();
+		env.SEARCH_DB = db;
+		const objects = [
+			stuck({ uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', reason: 'x', at: NOW.toISOString() } }),
+			videoFixture({ id: 'ok-1', uploadStatus: 'ready' }),
+		];
+		for (const video of objects) {
+			await env.videos.put(video.id, JSON.stringify(video));
+			await ownershipUpsertStatement(db as never, projectOwnership('video', video.id, video)!, Date.now(), Date.now()).run();
+		}
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipCompleteKey('video'), '1', Date.now());
 		const res = await (await createProcessingInternalRouter().request('/errors', {}, env)).json() as any;
 		assert.deepEqual(res.result.videos.map((v: any) => v.id), [ID]);
+		assert.equal(res.result.indexComplete, true);
 		assert.deepEqual(res.result.deadLetters, []);
 		assert.deepEqual(res.result.erasureDeadLetters, []);
 	});

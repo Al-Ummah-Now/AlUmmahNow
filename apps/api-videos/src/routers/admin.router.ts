@@ -20,7 +20,7 @@ import {
 import { listChannels, listComments, listUsers, listVideos } from '../lib/admin/directory';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
-import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
+import { countJobs, getJob, listJobsPage, retryJob } from '../lib/admin/jobs';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { logger } from '../lib/logger';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
@@ -31,7 +31,11 @@ type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 const app = new Hono<Env>();
 
 const yesNo = z.enum(['yes', 'no']).optional();
-const page = { page: z.coerce.number().int().min(1).optional(), pageSize: z.coerce.number().int().min(1).max(100).optional() };
+const page = {
+	page: z.coerce.number().int().min(1).optional(),
+	pageSize: z.coerce.number().int().min(1).max(100).optional(),
+	cursor: z.string().max(2000).optional(),
+};
 const ids = z
 	.string()
 	.optional()
@@ -271,8 +275,9 @@ const JobQuery = z.object({
 	targetKind: z.enum(['channel', 'video', 'user']).optional(),
 	targetId: z.string().max(200).optional(),
 	limit: z.coerce.number().int().min(1).max(100).optional(),
+	cursor: z.string().max(2000).optional(),
 });
-app.get('/jobs', async (c) => ok(c, { items: await listJobs(c.env, parse(JobQuery, c.req.query())) }));
+app.get('/jobs', async (c) => ok(c, await listJobsPage(c.env, parse(JobQuery, c.req.query()))));
 app.get('/jobs/counts', async (c) => ok(c, { failed: await countJobs(c.env, 'failed'), retrying: await countJobs(c.env, 'retrying') }));
 app.get('/jobs/:id', async (c) => {
 	const job = await getJob(c.env, c.req.param('id'));

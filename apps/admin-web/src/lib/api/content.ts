@@ -177,7 +177,13 @@ export async function deleteUserData(id: string): Promise<ActionResult<JobResult
 // Admin jobs (heavy actions run from a queue; failed ones wait here for Retry)
 
 export async function listJobs(params: ListParams): Promise<AdminJob[]> {
-  return (await fetchAdmin<{ items: AdminJob[] }>(withQuery('/jobs', params))).items;
+  return (await listJobsPage(params)).items;
+}
+
+/** One page of jobs, newest first; `cursor` (from the previous page) continues however far back. */
+export async function listJobsPage(params: ListParams): Promise<{ items: AdminJob[]; cursor: string }> {
+  const page = await fetchAdmin<{ items: AdminJob[]; cursor?: string }>(withQuery('/jobs', params));
+  return { items: page.items, cursor: page.cursor ?? '' };
 }
 
 export async function getJob(id: string): Promise<AdminJob> {

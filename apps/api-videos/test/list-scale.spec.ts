@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+	OWNERSHIP_ADMIN_COLS_VERSION,
 	ownershipCompleteKey,
 	ownershipUpsertStatement,
 	projectOwnership,
@@ -17,7 +18,8 @@ import { runOwnershipPass } from '../src/lib/search/ownership';
 import { sectionFromIndex, TRENDING_CANDIDATES } from '../src/lib/sections/sectionIndex';
 import { withSearchSync } from '../src/lib/search/sync';
 import { MemoryBucket, buildApp, videoFixture } from './helpers';
-import { SqliteD1, type TracedQuery } from './search-sqlite-d1';
+import { SqliteD1 } from './search-sqlite-d1';
+import { assertSeeks } from './plan-assert';
 
 /**
  * Public lists on a large synthetic catalogue (30k videos): each request is
@@ -74,37 +76,6 @@ async function page(app: ReturnType<typeof buildApp>, url: string, env: unknown)
 	const body = (await res.json()) as any;
 	const result = body.result ?? body;
 	return { ids: (result.data as Array<{ id: string }>).map((v) => v.id), cursor: result.cursor as string };
-}
-
-/**
- * Plans of the traced reads of content_ownership: each must seek an index,
- * never sort the table. A continued page (`continued`) must also seek to the
- * cursor's position: every index search ends on a range of the sort key, and
- * one of them reaches the id. A plan that seeks only the equalities
- * (`kind=?`) walks every row before the position, so a deep page would cost
- * as much as the catalogue.
- */
-function assertSeeks(db: SqliteD1, traced: TracedQuery[], options: { continued?: boolean; table?: string } = {}) {
-	const table = options.table ?? 'content_ownership';
-	const reads = traced.filter((q) => /^\s*SELECT/i.test(q.sql) && q.sql.includes(table) && /ORDER BY/i.test(q.sql));
-	assert.ok(reads.length > 0, 'the request read the index');
-	let continuedReads = 0;
-	for (const q of reads) {
-		const steps = db.plan(q);
-		const plan = steps.join(' | ');
-		assert.match(plan, /USING (COVERING )?INDEX/, `${q.sql}\n${plan}`);
-		assert.doesNotMatch(plan, /TEMP B-TREE FOR ORDER BY/, `sorts instead of seeking:\n${q.sql}\n${plan}`);
-		if (!options.continued) continue;
-		const searches = steps.filter((s) => s.startsWith(`SEARCH ${table} `));
-		if (!searches.length) continue;
-		continuedReads++;
-		for (const s of searches) {
-			const constraints = /\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*$/.exec(s)?.[1] ?? '';
-			assert.match(constraints, /[<>]\?$|[<>]\(\?/, `seeks the equalities only, not the position:\n${q.sql}\n${plan}`);
-		}
-		assert.ok(searches.some((s) => /\bid[<>]\?/.test(s)), `no arm seeks to the cursor's id:\n${q.sql}\n${plan}`);
-	}
-	if (options.continued) assert.ok(continuedReads > 0, 'a continued page read the index from its position');
 }
 
 describe('home feed on a 30k-video catalogue', () => {
@@ -233,7 +204,7 @@ describe('home feed on a 30k-video catalogue', () => {
 		assert.deepEqual(indexed.ids, publicIds(objects).filter((id) => (objects[id] as any).category === 'fiqh').slice(0, 10));
 		assertSeeks(db, db.trace);
 		const upgraded = db.db.prepare(`SELECT admin_cols, video_category, is_public FROM content_ownership WHERE kind = 'video' AND id = 'v000003'`).get() as any;
-		assert.deepEqual({ ...upgraded }, { admin_cols: 2, video_category: 'fiqh', is_public: 0 }, 'columns filled, visibility kept');
+		assert.deepEqual({ ...upgraded }, { admin_cols: OWNERSHIP_ADMIN_COLS_VERSION, video_category: 'fiqh', is_public: 0 }, 'columns filled, visibility kept');
 	});
 });
 

@@ -89,8 +89,13 @@ export function commentIndexStatements(db: SearchDb, videoId: string, video: unk
 		statements.push(
 			db
 				.prepare(
-					`INSERT OR REPLACE INTO admin_comments (video_id, comment_id, parent_id, user_id, channel_id, text, is_hidden, status, created_at)
-					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					// An upsert, not INSERT OR REPLACE: the comment text index is kept by
+					// triggers (migration 0014), and a REPLACE deletes the old row without
+					// its delete trigger unless recursive triggers are on
+					`INSERT INTO admin_comments (video_id, comment_id, parent_id, user_id, channel_id, text, is_hidden, status, created_at)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+					 ON CONFLICT(video_id, comment_id) DO UPDATE SET parent_id = excluded.parent_id, user_id = excluded.user_id, channel_id = excluded.channel_id,
+					   text = excluded.text, is_hidden = excluded.is_hidden, status = excluded.status, created_at = excluded.created_at`,
 				)
 				.bind(videoId, row.commentId, row.parentId, row.userId, row.channelId, row.text, row.isHidden ? 1 : 0, row.status, row.createdAt),
 		);

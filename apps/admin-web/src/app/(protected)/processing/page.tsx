@@ -10,6 +10,8 @@ import { logger } from '@/lib/logger';
 import { FILTER_LABEL, PROCESSING_FILTERS, parseFilter } from './labels';
 import { ProcessingTable } from './ProcessingTable';
 import { ThumbnailRepairPanel } from './ThumbnailRepairPanel';
+import { CursorPager, Notice } from '@/components/content/parts';
+import { hrefWith, pickParams } from '@/components/content/query';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +23,14 @@ interface PageProps {
 export default async function ProcessingHealthPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const filter = parseFilter(params.status);
+  const { cursor } = pickParams(params, { cursor: 'cursor' });
   const { t, locale } = await getI18n();
   const session = await getAdminSession();
   if (!canUseProcessing(session?.user.role)) {
     return <ErrorAlert testId="processing-no-access">{t('processing.noAccess')}</ErrorAlert>;
   }
 
-  const [videos, thumbs] = await Promise.allSettled([listProcessingVideos({ status: filter }), listThumbnailRuns()]);
+  const [videos, thumbs] = await Promise.allSettled([listProcessingVideos({ status: filter, cursor }), listThumbnailRuns()]);
   const data: ProcessingVideosResponse | null = videos.status === 'fulfilled' ? videos.value : null;
   if (videos.status === 'rejected') {
     logger.error('[processing] Failed to load', { error: videos.reason instanceof Error ? videos.reason.message : String(videos.reason) });
@@ -79,7 +82,17 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
       {data && data.items.length === 0 && (
         <div className={`${cardClass} text-center text-fg-muted`} data-testid="processing-empty">{t('processing.empty')}</div>
       )}
+      {data && data.indexComplete === false && <Notice tone="warn">{t('content.indexBuilding')}</Notice>}
       {data && data.items.length > 0 && <ProcessingTable rows={data.items} locale={locale} />}
+      {data && (
+        <CursorPager
+          hasCursor={!!cursor}
+          nextHref={data.cursor ? hrefWith('/processing', { status: filter }, { cursor: data.cursor }) : null}
+          firstHref={hrefWith('/processing', { status: filter })}
+          labels={{ first: t('content.firstPage'), next: t('content.nextPage') }}
+          t={t}
+        />
+      )}
     </div>
   );
 }

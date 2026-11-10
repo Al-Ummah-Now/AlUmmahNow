@@ -43,7 +43,22 @@ export const smallButtonClass =
 export const dangerButtonClass =
   'inline-flex items-center justify-center px-3 py-2 rounded border border-danger-border bg-danger-bg text-danger-fg text-sm font-medium hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:cursor-not-allowed';
 
-export function PageHeader({ title, subtitle, total, t, children }: { title: string; subtitle: string; total?: number; t: Translator; children?: React.ReactNode }) {
+export function PageHeader({
+  title,
+  subtitle,
+  total,
+  totalCapped,
+  t,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  total?: number;
+  /** More rows match than were counted (`total` is the count cap). */
+  totalCapped?: boolean;
+  t: Translator;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap justify-between items-end gap-4 mb-6">
       <div>
@@ -53,8 +68,8 @@ export function PageHeader({ title, subtitle, total, t, children }: { title: str
           {total !== undefined && (
             <>
               {' · '}
-              <span data-testid="content-total" data-total={total}>
-                {t('content.total', { count: total })}
+              <span data-testid="content-total" data-total={total} data-capped={totalCapped ? 'true' : undefined}>
+                {totalCapped ? t('content.totalCapped', { count: total }) : t('content.total', { count: total })}
               </span>
             </>
           )}
@@ -90,7 +105,7 @@ export function Pager({ page, pageSize, total, href, t }: { page: number; pageSi
   );
 }
 
-/** Cursor lists (playlists, posts) move forward only; "first page" starts over. */
+/** Cursor lists move forward only (each page is a keyset seek); "first page" starts over. */
 export function CursorPager({ hasCursor, nextHref, firstHref, labels, t }: { hasCursor: boolean; nextHref: string | null; firstHref: string; labels: { first: string; next: string }; t: Translator }) {
   if (!hasCursor && !nextHref) return null;
   return (
