@@ -616,6 +616,7 @@ global setup. Passwords are random per run, so the accounts left behind
 | `watch-history.player.spec.ts` | a signed-in watch reaches `GET /api/watch-history` and the `/history` page (#234) |
 | `watch-history-periodic.player.spec.ts` | a watch is saved while it plays without pausing; a watched video reopens at the saved time with the "Start from beginning" pill, which goes back to 0; a video opened (even at `?t=`) but never played saves nothing and shows no pill (#242) |
 | `uploads.spec.ts` | profile and channel avatar uploads store a served image (#229); a channel created in the account menu, then a video uploaded on `/upload` (TUS through the api-videos proxy), is listed in the owner's search and dashboard, then deleted. Encoding is not awaited |
+| `load-hot-paths.spec.ts` | the two hottest write paths under parallel load: a new user's new private video takes 200 parallel `POST /api/videos/:id/view` and 120 parallel watch-time reports; the video JSON's `views` reaches exactly 200 within the view counter's flush window and stays there (#504), and `GET /api/analytics` (the processor's `analytics_daily` D1 counters) reports exactly 200 views and 600 s of watch time (#505). The video is deleted afterwards; about 330 writes per run |
 
 Playback specs (`*player.spec.ts`) run in the `player` project on branded
 Chrome (`channel: 'chrome'`): Playwright's bundled Chromium cannot decode the
