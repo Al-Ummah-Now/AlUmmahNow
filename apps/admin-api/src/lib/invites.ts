@@ -485,6 +485,39 @@ export async function scheduleInviteSyncs(env: InviteQueueEnv, now = Date.now())
   return ids.length;
 }
 
+/** An open invite's status is read again at most this often when an admin looks at it. */
+export const READ_SYNC_INTERVAL_MS = 15_000;
+
+/**
+ * Reads ask too: when an admin opens an invite, the invites list or an invited
+ * user's page, each open invite shown gets a status read through the queue
+ * (at most every READ_SYNC_INTERVAL_MS), so "Signed in" shows within seconds of
+ * the first sign-in instead of waiting for the 5-minute cron. Still no call to
+ * auth inside the request: only a queue message. Never fails the read.
+ */
+export async function syncInvitesOnRead(env: InviteQueueEnv, ids: string[], now = Date.now()): Promise<number> {
+  const wanted = [...new Set(ids)].slice(0, 100);
+  if (!env.AUTH_REQUESTS_QUEUE || !wanted.length) return 0;
+  try {
+    const { results } = await env.REPORTS_DB.prepare(
+      `SELECT id FROM creator_invites
+       WHERE id IN (SELECT value FROM json_each(?))
+         AND delivery_status = 'sent' AND deleted_at IS NULL AND accepted_at IS NULL AND COALESCE(status, 'invited') IN ('invited', 'expired')
+         AND (sync_requested_at IS NULL OR sync_requested_at < ?)`
+    )
+      .bind(JSON.stringify(wanted), new Date(now - READ_SYNC_INTERVAL_MS).toISOString())
+      .all<{ id: string }>();
+    const due = (results ?? []).map((r) => r.id);
+    if (!due.length) return 0;
+    await env.REPORTS_DB.prepare('UPDATE creator_invites SET sync_requested_at = ? WHERE id IN (SELECT value FROM json_each(?))').bind(new Date(now).toISOString(), JSON.stringify(due)).run();
+    await env.AUTH_REQUESTS_QUEUE.sendBatch(due.map((id) => ({ body: { type: 'invite', id, op: 'sync' }, contentType: 'json' })));
+    return due.length;
+  } catch (error) {
+    logger.warn('[Invites] Status read on view not queued', { count: wanted.length, error: errorText(error) });
+    return 0;
+  }
+}
+
 /** The DLQ: the handler kept failing. */
 export async function deadLetterInvite(env: InviteQueueEnv, msg: InviteMessage): Promise<void> {
   const row = await getInvite(env.REPORTS_DB, msg.id);

@@ -84,8 +84,11 @@ All confirmations use in-app `<dialog>`s.
 
 Invited users appear in the users list, on their user page, and in every user
 picker (`/api/suggest/user`) with an **Invited** badge. The invites search box
-autocompletes (suggest kind `invite`). A 5-minute cron reads the status of open
-invites from auth, so "Signed in" appears within minutes of the first sign-in.
+autocompletes (suggest kind `invite`). Opening an invite, the invites list or an
+invited user's page queues a status read from auth for each open invite shown
+(at most every 15 s per invite; still only a queue message, never a call to
+auth inside the request), so "Signed in" shows within seconds of the first
+sign-in. A 5-minute cron reads the rest as a backstop.
 
 ## Security
 
