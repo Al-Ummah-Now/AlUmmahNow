@@ -1,6 +1,7 @@
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { changeSectionOrder } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
@@ -122,36 +123,13 @@ export class ChannelSectionDelete extends AuthenticatedRoute {
       );
     }
 
-    const deletedPosition = section.position;
-
-    // Delete the section
+    // Delete the section, then take it out of the channel's order document
+    // with one conditional write (SCALABILITY-AUDIT AV-20). The remaining
+    // sections' positions follow from the order; no section is rewritten.
     await sectionsRepo.deleteObject(`${channelId}/${sectionId}`);
-
-    // Update positions of remaining sections
-    const listResult = await c.env.channel_sections.list({
-      prefix: `${channelId}/`,
-      limit: 1000,
-    });
-
-    // Fetch and update positions for sections that were after the deleted one
-    const updatePromises: Promise<void>[] = [];
-
-    for (const obj of listResult.objects) {
-      const remainingSection = await sectionsRepo.getObject(obj.key);
-      if (remainingSection && remainingSection.position > deletedPosition) {
-        const updatedSection: ChannelSection = {
-          ...remainingSection,
-          position: remainingSection.position - 1,
-          dateModified: new Date().toISOString(),
-        };
-        updatePromises.push(
-          sectionsRepo.putObject(obj.key, updatedSection)
-        );
-      }
-    }
-
-    // Wait for all position updates
-    await Promise.all(updatePromises);
+    await changeSectionOrder<never>(c.env.channel_sections, channelId, (ids) =>
+      ids.includes(sectionId) ? ids.filter((id) => id !== sectionId) : false,
+    );
 
     // Queue analytics event
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionDelete, {

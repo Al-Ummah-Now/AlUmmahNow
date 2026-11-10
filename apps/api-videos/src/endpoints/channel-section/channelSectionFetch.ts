@@ -1,6 +1,7 @@
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { withResolvedPosition } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { transformChannelSectionToView } from '../../lib/transformations';
@@ -134,7 +135,8 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
     }
 
     // Transform to view model
-    const sectionView = transformChannelSectionToView(section);
+    // Position from the channel's order document (SCALABILITY-AUDIT AV-20)
+    const sectionView = transformChannelSectionToView(await withResolvedPosition(c.env.channel_sections, channelId, section));
 
     logger.info(`Successfully fetched section ${sectionId} for channel ${channelId}`);
 

@@ -14,6 +14,7 @@
  * runs after the response (waitUntil).
  */
 
+import { sectionOrderKey } from './channelSectionOrder';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
 
@@ -113,6 +114,7 @@ export async function removeChannelContent(env: ContentBuckets, channelId: strin
 	const playlists = await softDeleteMatching(env.playlists, channelId, maxObjects * 2, now, counter);
 	const posts = await deletePrefix(env.community_posts, `posts/${channelId}/`);
 	const sections = await deletePrefix(env.channel_sections, `${channelId}/`);
+	await env.channel_sections?.delete(sectionOrderKey(channelId));
 	const result = { videos, playlists, posts, sections, scanned: counter.scanned };
 	logger.info('[ChannelDeletion] Channel content removed', { channelId, ...result });
 	return result;

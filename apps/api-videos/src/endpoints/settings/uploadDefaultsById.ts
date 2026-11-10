@@ -5,6 +5,7 @@
 
 import { OpenAPIRoute, Str, Bool } from 'chanfana';
 import { z } from 'zod';
+import { clearDefaultTemplate, isDefaultTemplate, readDefaultPointer, setDefaultTemplate } from '../../lib/uploadDefaultPointer';
 import R2Repository from '../../lib/r2Repo';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { getAuthContext } from '../../middleware/auth';
@@ -115,6 +116,9 @@ export class GetUploadDefaultEndpoint extends OpenAPIRoute {
           404
         );
       }
+
+      // Default from the scope's pointer document (SCALABILITY-AUDIT AV-20)
+      template.isDefault = isDefaultTemplate(template, await readDefaultPointer(bucket, userId, template.channelId));
 
       return c.json({
         success: true,
@@ -312,34 +316,11 @@ export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
         );
       }
 
-      // Update template
-      const updatedTemplate: UploadTemplate = {
-        ...template,
-        name: requestData.name !== undefined ? requestData.name : template.name,
-        nameLocalized:
-          requestData.nameLocalized !== undefined
-            ? requestData.nameLocalized
-            : template.nameLocalized,
-        description:
-          requestData.description !== undefined
-            ? requestData.description
-            : template.description,
-        isDefault:
-          requestData.isDefault !== undefined
-            ? requestData.isDefault
-            : template.isDefault,
-        isActive:
-          requestData.isActive !== undefined
-            ? requestData.isActive
-            : template.isActive,
-        template: requestData.template
-          ? { ...template.template, ...requestData.template }
-          : template.template,
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Check template size
-      const sizeValidation = validateTemplateSize(updatedTemplate.template);
+      // Check template size of the merged result before writing
+      const mergedTemplate = requestData.template
+        ? { ...template.template, ...requestData.template }
+        : template.template;
+      const sizeValidation = validateTemplateSize(mergedTemplate);
       if (!sizeValidation.isValid) {
         return c.json(
           {
@@ -350,19 +331,35 @@ export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
         );
       }
 
-      // If setting as default, unset other defaults
-      if (requestData.isDefault && !template.isDefault) {
-        await this.unsetOtherDefaults(
-          userId,
-          template.channelId,
-          id,
-          bucket
+      // Apply the update to the fresh template with a conditional write
+      // (SCALABILITY-AUDIT AV-20); a template deleted meanwhile is not re-created
+      const repo = new R2Repository<UploadTemplate>(bucket);
+      const updatedTemplate = await repo.updateObject(key, (fresh) => {
+        if (requestData.name !== undefined) fresh.name = requestData.name;
+        if (requestData.nameLocalized !== undefined) fresh.nameLocalized = requestData.nameLocalized;
+        if (requestData.description !== undefined) fresh.description = requestData.description;
+        if (requestData.isDefault !== undefined) fresh.isDefault = requestData.isDefault;
+        if (requestData.isActive !== undefined) fresh.isActive = requestData.isActive;
+        if (requestData.template) fresh.template = { ...fresh.template, ...requestData.template };
+        fresh.updatedAt = new Date().toISOString();
+      });
+      if (!updatedTemplate) {
+        return c.json(
+          {
+            success: false,
+            error: 'Template not found',
+          },
+          404
         );
       }
 
-      // Save updated template
-      const repo = new R2Repository<UploadTemplate>(bucket);
-      await repo.putObject(key, updatedTemplate);
+      // The scope's default lives in its pointer document: one conditional write
+      if (requestData.isDefault === true) {
+        await setDefaultTemplate(bucket, userId, updatedTemplate);
+      } else if (requestData.isDefault === false) {
+        await clearDefaultTemplate(bucket, userId, template);
+      }
+      updatedTemplate.isDefault = isDefaultTemplate(updatedTemplate, await readDefaultPointer(bucket, userId, updatedTemplate.channelId));
 
       return c.json({
         success: true,
@@ -417,40 +414,6 @@ export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
     return { template: null, key: null };
   }
 
-  /**
-   * Unset default flag on other templates
-   */
-  private async unsetOtherDefaults(
-    userId: string,
-    channelId: string | undefined,
-    excludeTemplateId: string,
-    bucket: R2Bucket
-  ): Promise<void> {
-    try {
-      const repo = new R2Repository<UploadTemplate>(bucket);
-      const prefix = channelId ? `${userId}/${channelId}/` : `${userId}/`;
-
-      const result = await bucket.list({ prefix });
-
-      for (const object of result.objects) {
-        if (!object.key) continue;
-
-        const template = await repo.getObject(object.key);
-        if (
-          template &&
-          template.isDefault &&
-          template.id !== excludeTemplateId
-        ) {
-          template.isDefault = false;
-          template.updatedAt = new Date().toISOString();
-          await repo.putObject(object.key, template);
-        }
-      }
-    } catch (error) {
-      logger.error('Error unsetting other defaults:', error);
-      // Don't fail the request if this fails
-    }
-  }
 }
 
 /**
@@ -547,6 +510,9 @@ export class DeleteUploadDefaultEndpoint extends OpenAPIRoute {
       // Delete template
       const repo = new R2Repository<UploadTemplate>(bucket);
       await repo.deleteObject(key);
+
+      // A deleted template is no longer its scope's default (SCALABILITY-AUDIT AV-20)
+      await clearDefaultTemplate(bucket, userId, template);
 
       return new Response(null, { status: 204 });
     } catch (error) {
@@ -695,15 +661,9 @@ export class SetDefaultTemplateEndpoint extends OpenAPIRoute {
         );
       }
 
-      // Unset other defaults
-      await this.unsetOtherDefaults(userId, template.channelId, id, bucket);
-
-      // Set this template as default
-      template.isDefault = true;
-      template.updatedAt = new Date().toISOString();
-
-      const repo = new R2Repository<UploadTemplate>(bucket);
-      await repo.putObject(key, template);
+      // Set this template as its scope's default: one conditional write of the
+      // scope's pointer replaces any other default (SCALABILITY-AUDIT AV-20)
+      await setDefaultTemplate(bucket, userId, template);
 
       return c.json({
         success: true,
@@ -755,38 +715,4 @@ export class SetDefaultTemplateEndpoint extends OpenAPIRoute {
     return { template: null, key: null };
   }
 
-  /**
-   * Unset default flag on other templates
-   */
-  private async unsetOtherDefaults(
-    userId: string,
-    channelId: string | undefined,
-    excludeTemplateId: string,
-    bucket: R2Bucket
-  ): Promise<void> {
-    try {
-      const repo = new R2Repository<UploadTemplate>(bucket);
-      const prefix = channelId ? `${userId}/${channelId}/` : `${userId}/`;
-
-      const result = await bucket.list({ prefix });
-
-      for (const object of result.objects) {
-        if (!object.key) continue;
-
-        const template = await repo.getObject(object.key);
-        if (
-          template &&
-          template.isDefault &&
-          template.id !== excludeTemplateId
-        ) {
-          template.isDefault = false;
-          template.updatedAt = new Date().toISOString();
-          await repo.putObject(object.key, template);
-        }
-      }
-    } catch (error) {
-      logger.error('Error unsetting other defaults:', error);
-      // Don't fail the request if this fails
-    }
-  }
 }

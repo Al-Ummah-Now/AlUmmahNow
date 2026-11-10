@@ -121,23 +121,6 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 		const tabsBucket = c.env.channel_tabs;
 		type ChannelTabConfigType = z.infer<typeof BusinessChannelTabConfig>;
 		const tabsRepository = new R2Repository<ChannelTabConfigType>(tabsBucket);
-		let config = await tabsRepository.getObject(`channel-tabs/${id}`);
-
-		// Store expected version for optimistic locking
-		const expectedVersion = config?.version || 0;
-
-		if (!config) {
-			// Create default config if doesn't exist
-			const now = new Date().toISOString();
-			config = {
-				channelId: id,
-				defaultTab: 'home',
-				tabs: DEFAULT_CHANNEL_TABS,
-				version: 1,
-				dateCreated: now,
-				dateModified: now,
-			};
-		}
 
 		// Validate tab positions before applying updates (P2 fix)
 		const MAX_TABS = 20;
@@ -152,63 +135,65 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 			}
 		}
 
-		// Update tabs if provided
-		if (tabsUpdateInput.tabs && tabsUpdateInput.tabs.length > 0) {
-			// Create a map of updates for efficient lookup
-			const updateMap = new Map(tabsUpdateInput.tabs.map(t => [t.id, t]));
-
-			// Apply updates to existing tabs
-			config.tabs = config.tabs.map(tab => {
-				const update = updateMap.get(tab.id);
-				if (!update) return tab;
-
-				return {
-					...tab,
-					...(update.visible !== undefined && { visible: update.visible }),
-					...(update.position !== undefined && { position: update.position }),
-					...(update.nameLocalized !== undefined && { nameLocalized: update.nameLocalized }),
-				};
-			});
-
-			// Sort tabs by position
-			config.tabs.sort((a, b) => a.position - b.position);
-
-			// Normalize positions to be 0-based and sequential
-			config.tabs.forEach((tab, index) => {
-				tab.position = index;
-			});
-		}
-
-		// Update default tab if provided
-		if (tabsUpdateInput.defaultTab) {
-			// Validate that the default tab exists and is visible
-			const defaultTab = config.tabs.find(t => t.id === tabsUpdateInput.defaultTab);
-
-			if (!defaultTab) {
-				return c.json({
-					success: false,
-					error: `Tab '${tabsUpdateInput.defaultTab}' does not exist`,
-				}, 400);
-			}
-
-			if (!defaultTab.visible) {
-				return c.json({
-					success: false,
-					error: 'Default tab must be a visible tab',
-				}, 400);
-			}
-
-			config.defaultTab = tabsUpdateInput.defaultTab;
-		}
-
-		// Update metadata
-		config.version = (config.version || 1) + 1;
-		config.lastModifiedBy = userId;
-		config.dateModified = new Date().toISOString();
-
-		// Save updated configuration with explicit error handling (P2 fix)
+		// Apply the update to the fresh configuration with a conditional write
+		// (SCALABILITY-AUDIT AV-20): two edits at once (e.g. from two tabs) both
+		// land instead of the later one silently reverting the earlier one.
+		let config: ChannelTabConfigType | null;
+		let rejected: string | undefined;
 		try {
-			await tabsRepository.putObject(`channel-tabs/${id}`, config);
+			({ data: config, rejected } = await tabsRepository.updateObjectOrReject<string>(`channel-tabs/${id}`, (fresh) => {
+				// Update tabs if provided
+				if (tabsUpdateInput.tabs && tabsUpdateInput.tabs.length > 0) {
+					// Create a map of updates for efficient lookup
+					const updateMap = new Map(tabsUpdateInput.tabs.map(t => [t.id, t]));
+
+					// Apply updates to existing tabs
+					fresh.tabs = fresh.tabs.map(tab => {
+						const update = updateMap.get(tab.id);
+						if (!update) return tab;
+
+						return {
+							...tab,
+							...(update.visible !== undefined && { visible: update.visible }),
+							...(update.position !== undefined && { position: update.position }),
+							...(update.nameLocalized !== undefined && { nameLocalized: update.nameLocalized }),
+						};
+					});
+
+					// Sort tabs by position, then normalize positions to be 0-based and sequential
+					fresh.tabs.sort((a, b) => a.position - b.position);
+					fresh.tabs.forEach((tab, index) => {
+						tab.position = index;
+					});
+				}
+
+				// Update default tab if provided: it must exist and be visible
+				if (tabsUpdateInput.defaultTab) {
+					const defaultTab = fresh.tabs.find(t => t.id === tabsUpdateInput.defaultTab);
+					if (!defaultTab) return { reject: `Tab '${tabsUpdateInput.defaultTab}' does not exist` };
+					if (!defaultTab.visible) return { reject: 'Default tab must be a visible tab' };
+					fresh.defaultTab = tabsUpdateInput.defaultTab;
+				}
+
+				// Update metadata
+				fresh.version = (fresh.version || 1) + 1;
+				fresh.lastModifiedBy = userId;
+				fresh.dateModified = new Date().toISOString();
+				return true;
+			}, {
+				// Default config if the channel has none yet (create-only)
+				initial: () => {
+					const now = new Date().toISOString();
+					return {
+						channelId: id,
+						defaultTab: 'home',
+						tabs: DEFAULT_CHANNEL_TABS.map((tab) => ({ ...tab })),
+						version: 1,
+						dateCreated: now,
+						dateModified: now,
+					} as ChannelTabConfigType;
+				},
+			}));
 		} catch (error) {
 			logger.error(`[ChannelTabsUpdate] Failed to save tab config for channel ${id}:`, error);
 			return c.json({
@@ -216,15 +201,8 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 				error: 'Failed to save tab configuration. Please try again.',
 			}, 500);
 		}
-
-		// Verify write succeeded with optimistic locking (P1 fix)
-		const savedConfig = await tabsRepository.getObject(`channel-tabs/${id}`);
-		if (savedConfig && expectedVersion > 0 && savedConfig.version !== config.version) {
-			// Conflict detected - another request modified the config
-			return c.json({
-				success: false,
-				error: 'Configuration was modified by another request. Please refresh and try again.',
-			}, 409); // 409 Conflict
+		if (rejected) {
+			return c.json({ success: false, error: rejected }, 400);
 		}
 
 		// No queue message: tabs are frontend-only and the processor has no tab handler

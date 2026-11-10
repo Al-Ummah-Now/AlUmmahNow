@@ -1,6 +1,7 @@
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { applySectionOrder, changeSectionOrder } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import {
   Channel,
@@ -227,25 +228,16 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
       );
     }
 
-    // Update positions
-    const updatedSections: ChannelSection[] = [];
-    for (let i = 0; i < sectionIds.length; i++) {
-      const section = filteredSections.find((s) => s.id === sectionIds[i])!;
-      const updatedSection = {
-        ...section,
-        position: i,
-        dateModified: new Date().toISOString(),
-      };
-      updatedSections.push(updatedSection);
-    }
-
-    // Save all sections (atomic operation)
+    // Store the new order with one conditional write (SCALABILITY-AUDIT
+    // AV-20). A section created meanwhile (in the fresh order but not in the
+    // list this request validated against) keeps its place at the end.
+    let updatedSections: ChannelSection[];
     try {
-      await Promise.all(
-        updatedSections.map((section) =>
-          sectionsRepo.putObject(`${channelId}/${section.id}`, section)
-        )
-      );
+      const { order } = await changeSectionOrder<never>(c.env.channel_sections, channelId, (ids) => {
+        const requested = new Set(sectionIds);
+        return [...sectionIds, ...ids.filter((id) => !requested.has(id) && !existingIds.has(id))];
+      });
+      updatedSections = applySectionOrder(filteredSections, order);
     } catch (error) {
       logger.error('Failed to save reordered sections', { error });
       return c.json(
@@ -257,8 +249,6 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
       );
     }
 
-    // Sort by new position for response
-    updatedSections.sort((a, b) => a.position - b.position);
 
     // Queue analytics event
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionReorder, {

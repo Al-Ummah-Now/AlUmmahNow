@@ -1,6 +1,7 @@
 import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { applySectionOrder, readSectionOrder } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { transformChannelSectionsToView } from '../../lib/transformations';
@@ -199,8 +200,17 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
       filteredSections = filteredSections.filter((s) => s.type === type);
     }
 
-    // Sort by position (ascending)
-    filteredSections.sort((a, b) => a.position - b.position);
+    // Order from the channel's order document (SCALABILITY-AUDIT AV-20);
+    // a position is the index among all of the channel's sections
+    const positions = new Map(
+      applySectionOrder(
+        sections.filter((s): s is ChannelSection => s !== null),
+        await readSectionOrder(c.env.channel_sections, channelId),
+      ).map((s) => [s.id, s.position]),
+    );
+    filteredSections = filteredSections
+      .map((s) => ({ ...s, position: positions.get(s.id) ?? s.position }))
+      .sort((a, b) => a.position - b.position);
 
     // Transform to view models with optional content population
     let sectionViews: any[];

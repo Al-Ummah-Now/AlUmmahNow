@@ -1,6 +1,7 @@
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { changeSectionOrder } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import {
   Channel,
@@ -193,15 +194,16 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
       );
     }
 
-    // Get existing sections to calculate position
-    const listResult = await c.env.channel_sections.list({
-      prefix: `${channelId}/`,
-      limit: 1000, // Get all to determine position
-    });
-    const nextPosition = listResult.objects.length;
+    // Reserve the next slot in the channel's order document with a
+    // conditional write (SCALABILITY-AUDIT AV-20): parallel creates get
+    // distinct positions and the section limit holds under concurrency
+    const sectionId = crypto.randomUUID();
+    const { order, rejected } = await changeSectionOrder<'full'>(c.env.channel_sections, channelId, (ids) =>
+      ids.length >= CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL ? { reject: 'full' } : [...ids, sectionId],
+    );
 
     // Check max sections limit
-    if (nextPosition >= CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL) {
+    if (rejected || !order) {
       logger.warn(`Maximum sections limit reached for channel ${channelId}`);
       return c.json(
         {
@@ -211,10 +213,11 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
         400
       );
     }
+    const nextPosition = order.sectionIds.indexOf(sectionId);
 
     // Create section object
     const section: ChannelSection = {
-      id: crypto.randomUUID(),
+      id: sectionId,
       channelId,
       userId: userId,
       type: input.type,
@@ -235,7 +238,13 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
 
     // Save to R2 with composite key
     const sectionsRepo = new R2Repository<ChannelSection>(c.env.channel_sections);
-    await sectionsRepo.putObject(`${channelId}/${section.id}`, section);
+    try {
+      await sectionsRepo.putObject(`${channelId}/${section.id}`, section);
+    } catch (error) {
+      // Give the reserved slot back so the order holds no section that does not exist
+      await changeSectionOrder<never>(c.env.channel_sections, channelId, (ids) => ids.filter((id) => id !== section.id)).catch(() => undefined);
+      throw error;
+    }
 
     // Queue analytics event
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionCreate, {
