@@ -42,7 +42,11 @@ export function TierChangeDialog({ open, title, body, warning, confirmLabel, dan
   return (
     <dialog
       ref={ref}
-      onClose={() => open && onCancel()}
+      // Escape: move to closed synchronously (`close` arrives a task later, after a quick reopen)
+      onCancel={() => onCancel()}
+      onClose={() => {
+        if (open && !ref.current?.open) onCancel();
+      }}
       aria-labelledby={`${ids}-title`}
       aria-describedby={`${ids}-body`}
       className="m-auto bg-surface text-fg border border-border rounded-lg p-0 w-[min(32rem,calc(100vw-2rem))] backdrop:bg-fg/50"
