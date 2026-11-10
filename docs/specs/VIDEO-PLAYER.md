@@ -232,9 +232,10 @@ column at the start; the selected row has the check and the theme's selected fil
 menu's treatment). Choosing an option applies it and returns to the root. The panel's height animates to
 its content (padding included: the panel is border-box) and scrolls only when the frame is shorter
 than that, inside the frame's height less the bar and 16px, so it is never clipped and never covers the
-progress bar. A frame with room for fewer than three rows above the bar (a small player, whose bar
-wraps to two rows) is the exception: there the panel fills the frame, 8px in from each edge, over the
-controls, and scrolls; it never rises out of the player. It is portalled to the player layer (see Layers) and placed over the frame by measurement:
+progress bar. A small player is the exception: a frame under 480px wide (a phone), or one with room for
+fewer than three rows above the bar (its bar wraps to two rows). There the panel fills the frame, 8px in
+from every edge (a 358 x 201 phone frame gives a 342 x 185 panel), over the controls, and scrolls; it is
+never a 280px box half over the progress bar, and it never rises out of the player. It is portalled to the player layer (see Layers) and placed over the frame by measurement:
 8px above the bar, 12px in from the end edge (8px under 360px), 280px wide or the frame less 16px, and
 it follows the frame on scroll and resize. Reduced motion turns the slide into an instant swap.
 
